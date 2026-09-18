@@ -1,5 +1,24 @@
 # UX and browser verification — working evidence
 
+After15:30UTC: independent exact-criterion review accepts AC3 in its bounded
+local scope. Clean install remains applicable because package manifests/lock
+are unchanged; exact-source frontend591units/72mock browser/TS/lint/bothbuild
+stages plus separate artifact proof and current117real-API cases cover the
+required critical flows, tenant negatives and tested adverse/keyboard/focus
+states. That does not claim all-page accessibility or current immutable-image
+proof. Six additional login/finance screenshots show no observed overlap;
+60observations have zero page errors/overflow on historicalf0ccbackend.
+
+Latest18September15:16UTC: exact272794a4 native backend with source/manifest-
+verified unchanged frontend passes117/117 across desktop/laptop/mobile,
+capture261.027621s exit0/untruncated. Only3compiled-runner cases excluded and
+remain the separately historical proof below. Initial114pass3fail was temporary
+maps-source omission; canonical yandex_maps plus static preview fixes launcher,
+not app/tests. The owner reviews/finance console filter still hardcodes18000,
+so dynamic-port run does not establish global absence of console errors;
+uncaught page errors and other existing suite assertions remain exercised.
+No real provider writes; no final immutable image, demo or capacity claim.
+
 Latest local check18September10:39UTC: reviewed20431224 frontend over isolated
 f0cc backend completes **120passed**,227.301s,exit0/no timeout. It includes
 real stored publication receipt, duplicate-confirmation protection, bounded
@@ -74,4 +93,4 @@ Initial native attempt36pass78fail153.249s is retained in `raw/native-pg-real-ap
 
 UX-SVC-01, UX-CONTENT-01 and UX-OP-01 cross-business state-overwrite hypotheses were **NO_BUG_PROVEN**: actual DashboardLayout's keyed Outlet unmounts the old business page. A test reusing a page under new props would bypass the real route contract. This does not prove same-business races or uncertain external-send retries safe.
 
-Still required: exact final release/browser aggregate after the pending social-publication package; broader keyboard/focus/error/loading/large-data coverage; controlled slow-network measurements; deterministic same-business concurrency/provider uncertainty; rehearsed partner demo. The real compiled runner/profile gate passed at the checkpoint above. No all-pages/accessibility or production-ready sign-off.
+Still required for broader release closure: exact current immutable-image/compiled-runtime proof, large-data and controlled slow-network measurements beyond the tested states, broader same-business concurrency/provider uncertainty, and rehearsed partner demo. Current272native117 and historical120 already include social-publication receipt/reconciliation; that integration is not pending. Required critical-flow keyboard/focus/error/empty/slow contracts have scoped AC3PASS; this is not all-pages accessibility or production-ready sign-off.

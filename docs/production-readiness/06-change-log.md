@@ -1,5 +1,61 @@
 # Production-readiness change log
 
+## SEC-RBAC-06 / SUB-MOBILE-01 — stored role and subscription admission
+
+Reviewed `272794a4` uses canonical write access on five review mutation routes
+while preserving read-only preview. Common stored-action confirmation validates
+the complete target list and requires current write permission for every target
+before entering any of nineteen mutation executors. Missing/malformed/duplicate
+targets fail closed. Completed cached results remain idempotent and do not
+execute again. Actual `review_replies.` actions now use existing `maps.reviews`
+subscription admission at both preview and confirm; the old alias remains.
+
+Native PostgreSQL RED proves10direct-route viewer failures, four common-confirm
+failures (including mixed targets and real synthetic finance deletion), and two
+subscription failures. Corrected initial pending-state fixture expectation is
+recorded separately; no denied-action assertion was weakened. Combined root
+GREEN passes **104 tests in156.03s**, capture160.365553s exit0/untruncated, with
+51native role/subscription cases,36adjacent action/review and17subscription
+checks. Independent final review/hash and fixture-catalog checks pass. No real
+model/provider call or production action. Later current272full aggregate4728
+and native117browser pass; current immutable image remains separate. UI does
+not yet hide every read-only-only control.
+
+## TEST-E2E-01 — isolated real-API CI job, execution not yet proven
+
+Reviewed `3ac13d87` adds a separate GitHub-hosted scheduled/manual job for
+three existing real-API journey specs, unique synthetic Compose resources,
+credential-free child environments, exact owned fixture target and fail-closed
+cleanup. Existing default/nightly gates are unchanged. Signals leave the
+current phase through cleanup; the outer workflow timeout still owns hard
+process termination. No broad prune or local developer target is accepted.
+
+Root source-frozen fake-command contracts pass **11 tests in 17.08s**, capture
+18.168537s, exit 0, no timeout/truncation (`ci-real-api-contract-root.json`).
+Review corrected signal continuation and mismatched Chromium install/run
+paths before commit. This proves script contracts, not a GitHub Docker build,
+migration, browser journey or real resource cleanup. No workflow was pushed,
+activated or manually dispatched by this audit.
+
+## OPS-IMAGE-01 / OPS-MIG-01 — opt-in application release profile
+
+Reviewed `a00ac558` adds `docker-compose.release.yml` without changing the
+default deployment. App/worker/operator-worker and the separate Telegram image
+use explicit repository+digest references, inherited builds/code bind mounts
+are removed, and application data uses named volumes. Ordinary app workers
+check schema only; one profile-gated migrator owns upgrades with explicit
+required DB inputs and Flask configuration. PostgreSQL/Redis image tags are
+unchanged and are not covered by the application immutability claim.
+
+The first draft's missing migrator configuration and host-only test discovery
+were rejected in review and corrected before commit. Root's actual daemon-free
+Compose rendering plus existing migration startup contracts pass **13 tests in
+3.68s** (capture 4.301181s, exit 0, no skips/timeout/truncation), independently
+reconciled. Raw: `release-profile-contract-root.json`. No container, image,
+database or production changes occurred. Fresh image startup, migration/rollback,
+data transfer into initially empty volumes and release rollout remain unproven.
+Only the base+release merge is covered; other Compose fragments need review.
+
 ## FIN-UPLOAD-01 — bounded finance file admission
 
 Reviewed015b4ebc adds a10MiB in-process stream/parser limit and dedicated413

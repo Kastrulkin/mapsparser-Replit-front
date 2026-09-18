@@ -18,21 +18,33 @@ writes require the documented human approval or manual boundary.
   provider callbacks, several stored-role and business-boundary checks, safer
   outbound lookup, and transaction/replay protection for internal changes.
   These reviewed fixes are not yet deployed by this audit.
-- The latest isolated-browser checkpoint passed **120 of 120** scenarios in
-  **227.301 seconds** with frontend `20431224` over the isolated `f0cc` backend.
-  This is local synthetic evidence from a separately synced frontend artifact,
-  not a final immutable image, customer or production run.
-- A clean backend aggregate at `3dca5fda` recorded **4,655 passed, 7 skipped**
-  tests in481.71seconds, including native and Docker PostgreSQL integration.
+- A further104-test native/adjacent package verifies review mutations and
+  mobile-action confirmation against stored roles and subscription state.
+  Read-only users cannot enter mutation executors; legitimate member controls
+  and idempotent replay are preserved in reviewed local272794a4.
+- An opt-in digest-referenced application release profile and separate isolated
+  real-API CI job are implemented and contract-tested. They have not been
+  deployed or run as a hosted workflow; configuration checks are not runtime
+  release evidence.
+- The current-backend browser checkpoint passed **117 of 117** scenarios with
+  backend `272794a4` and byte-verified unchanged frontend artifacts, in a
+  261.028-second command capture. Three compiled-runner cases remain covered
+  only by the earlier **120 of 120** checkpoint (227.301 seconds, `20431224`
+  frontend over `f0cc` backend). Neither is a final current immutable image,
+  customer or production run. A fixed-port console filter limits the newer
+  suite's console-error coverage; page-error checks are still active.
+- A clean backend aggregate at current `272794a4` recorded **4,728 passed,
+  7 skipped** tests in656.63seconds, including native and Docker PostgreSQL integration.
   Only live-provider checks were intentionally skipped. Earlier environment
-  failures were reproduced and corrected without product changes; final image
-  and broader role/tool coverage remain separate gates.
+  failures were reproduced and corrected without product changes. Independent
+  review accepts AC4 in its isolated local scope; current image and broader
+  security inventory remain separate gates.
 - Frontend checkpoint3dca5fda passes591unit tests,72mocked browser scenarios,
   full TypeScript and lint with0errors/1existingwarning. Both builds passed;
   the original capture then failed a wrong artifact-path assertion. A separate
   reviewed source/HTML/asset proof passes; the original exit1 is retained, not
   relabeled as an all-green aggregate. Current cleanf0cc
-  Docker image builds both frontends with Node22 and passes nonroot/offline/
+  historical Docker image builds both frontends with Node22 and passes nonroot/offline/
   read-only Chromium and Python dependency-consistency smoke checks.
 - A controlled synthetic recovery exercise compared all 288 tables, data,
   schema objects, grants and sequence state after restore. It demonstrates a
@@ -52,6 +64,12 @@ writes require the documented human approval or manual boundary.
   so these results do not establish a general speedup or production capacity.
   A later bounded prepared dashboard profile also passes44/44requests; its
   in-process local scope is explicitly not HTTP server capacity evidence.
+- A bounded current-backend HTTP profile passed **240 of 240** semantic reads
+  over 64.28 seconds, with four synthetic tenants and ten resource snapshots.
+  Browser observations add 60 successful local page loads, with median visible-
+  control readiness of 325–372 ms. That browser profile uses the historical
+  backend and unchanged frontend. Both profiles have independent count/quantile
+  review; neither establishes production capacity or a general speedup.
 - Accessibility work closed the observed agents-label contrast failure in the
   local browser checkpoint. The product still needs broader slow-network,
   large-data and demo rehearsal coverage.
@@ -77,11 +95,14 @@ provider send or publication occurred in this work.
 - Confirm revocation status for historically exposed credentials without using
   or disclosing them.
 - Finish the current-source, dependency, image and log scan/triage work.
-- Complete same-revision aggregate testing and sustained-load measurements.
-  Tiny-fixture query plans are captured, not capacity proof. A genuine fresh
+- Complete current immutable-image/compiled-runtime testing and realistic
+  capacity/queue measurements. Current native real-API tests and a bounded
+  sustained HTTP profile now pass; tiny-fixture plans are not capacity proof.
+  A genuine fresh
   whole-diff review found further social-role/approval-boundary gaps, now fixed
-  in independently reviewed local packages; final combined verification and
-  another whole-diff review remain necessary.
+  in independently reviewed local packages. Fresh whole-diff review at272794a4
+  found no additional reproduced P0/P1 regression in its stated coverage;
+  broader release verification still remains incomplete.
 - Rehearse the partner demo and retain only its synthetic, manually controlled
   path and fallbacks.
 - Complete final release verification of the locally reviewed publication-

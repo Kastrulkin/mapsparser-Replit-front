@@ -56,16 +56,23 @@
         "raw/social-approval-binding-causal-red.json",
         "raw/social-approval-binding-green4-failed.json",
         "raw/social-approval-binding-green5.json",
-        "raw/social-approval-binding-viewer-green.json"
+        "raw/social-approval-binding-viewer-green.json",
+        "raw/operator-review-reply-viewer-red-3dca5fda.json",
+        "raw/operator-review-reply-viewer-full-red-3dca5fda.json",
+        "raw/operator-review-reply-viewer-green-3dca5fda.json",
+        "raw/operator-mobile-review-confirmation-red-retry-3dca5fda.json",
+        "raw/operator-mobile-review-capability-red.json",
+        "272794a4 common mobile stored-write and review capability gates",
+        "raw/operator-mobile-confirm-green-3dca5fda.json"
       ],
       "gaps": [
-        "Reviewed local auth/webhook/scope/data/SSRF and stored-role fixes are committed. Durable social intent/reconciliation fixes duplicate-send risk; reviewed13c1f36a binds approved target/account/media descriptor, main252pass/9viewer skips plus separateviewer9pass/0skip. No combined261aggregate, immutable external object-byte or exactly-once guarantee. Historical revocation, wider platform role/tool matrices, final aggregate/image and operational gates remain. No audit deployment."
+        "Reviewed local auth/webhook/scope/data/SSRF and stored-role fixes are committed. SEC-RBAC-06 direct10fail/27pass and mobile-confirm4fail/6pass causal REDs plus SUB-MOBILE-01 subscription2fail/2pass are fixed in reviewed272794a4: combined104passed156.03s/capture160.365553s exit0/untruncated, zero surviving disposable fixture DBs. Five direct gates, common pending-target write admission before any executor and actual review_replies capability prefix are proven locally; no real model/provider effect. Durable social intent/reconciliation fixes duplicate-send risk; reviewed13c1f36a binds approved target/account/media descriptor, main252pass/9viewer skips plus separateviewer9pass/0skip. No combined261aggregate, immutable external object-byte or exactly-once guarantee. Historical revocation, wider platform role/tool matrices, final aggregate/image and operational gates remain. No audit deployment."
       ]
     },
     {
       "id": "AC3",
       "text": "Frontend checks and real user flows",
-      "status": "FAIL",
+      "status": "PASS",
       "proof": [
         "raw/baseline-frontend-install.json",
         "raw/baseline-frontend-lint.json",
@@ -101,16 +108,22 @@
         "raw/content-focus-targeted.json",
         "raw/content-focus-browser.json",
         "raw/frontend-aggregate-3dca5fda.json (exit1: incorrect final artifact path only)",
-        "raw/frontend-artifact-proof-3dca5fda.json"
+        "raw/frontend-artifact-proof-3dca5fda.json",
+        "raw/native-real-api-117-272794a4.json (FAIL:114passed3maps-staging-env failures)",
+        "raw/native-real-api-117-retry-272794a4.json",
+        "raw/frontend-perf-272-retry.json",
+        "raw/frontend-perf-272-retry-command.json"
       ],
-      "gaps": [
-        "Exact3d frontend stages pass591unit/126files,72mockbrowser, fullTS, lint0errors/1warning and bothbuilds; original capture exit1/562.759479s solely wrong final artifact-path assertion. Separate independently reviewed artifact proof exit0/13.475289s verifies699tracked frontend blobs,257artifact hashes and11+3HTML local refs. Combined two-capture stage evidence, not a relabeled green aggregate. Earlier204frontend/f0ccbackend120/120realbrowser227.301s remains separate from current immutable-image/backend verification. Broader adverse-state/performance coverage remains."
+      "gaps": [],
+      "scope_notes": [
+        "Current272native backend + exact unchanged built frontend passes117/117 realAPI desktop/laptop/mobile cases, capture261.027621s exit0/untruncated. FreshDB5768975 removed/reaped; first114pass3maps-env failures retained withDB5761996. Only3compiled-runner cases remain separately historical204frontend/f0ccbackend120/120; no current immutable-image/compiled claim. Owner review/finance console filter hardcodes18000, so no global clean-console guarantee on dynamicport. Exact3d frontend stages pass591unit/126files,72mockbrowser,fullTS,lint0errors/1warning,bothbuilds; original captureexit1/562.759479s wrongfinal artifactpath remains, separate artifactproofexit0/13.475289s verifies699sourceblobs/257artifacts/11+3HTMLrefs. Frontend60/60 exploratory observations now pass with zero page errors/overflow on historicalf0ccbackend; current-image/compiled runtime remains a separate release gate.",
+        "Independent exact-criterion review confirms clean install remains applicable (package manifests/lock unchanged), source-matched frontend stages and current native117 cover critical desktop/laptop/mobile flows, tenant negatives, tested offline/stale/error/empty/slow/late states and Axe/contrast/keyboard/focus. Historical three compiled cases and fixed-port console filter limits are retained; no current immutable image or universal accessibility/absence-of-console-errors claim."
       ]
     },
     {
       "id": "AC4",
       "text": "Backend and database integration suite",
-      "status": "FAIL",
+      "status": "PASS",
       "proof": [
         "raw/baseline-backend-tests.json",
         "docs/production-readiness/COMMANDS.md",
@@ -142,10 +155,14 @@
         "raw/full-backend-3dca5fda.json (FAIL:10failed4645passed7skipped)",
         "raw/backend-causal10-3dca5fda.json",
         "raw/python-f821-3dca5fda.json",
-        "raw/full-backend-3dca5fda-retry.json"
+        "raw/full-backend-3dca5fda-retry.json",
+        "raw/full-backend-272794a4.json",
+        "raw/operator-mobile-confirm-green-3dca5fda.json",
+        "raw/python-f821-272794a4.json"
       ],
-      "gaps": [
-        "Exact3d corrected full backend passes4655tests/7explicit live-provider skips/6warnings481.71s; capture494.328144s exit0/no timeout/truncation, migration/tests rc0,stagecompletevalidtrue, exact fresh DB3585990 removed after identity check. First10failed4645passed capture remains:8Compose plugin+2Python browser lookup failures; causal10passes20.23s. Canonical scoped F821 passes0.532675s. Wider review-reply mutation roles are a source-level candidate under investigation, not a reproduced defect; broader role/tool matrices and whole-diff closure remain. Original failed-run DB preserved."
+      "gaps": [],
+      "scope_notes": [
+        "Exact272794a4 main suite:4728passed/7intentional live-provider skips/6warnings in656.63s; capture669.910516s exit0/not timed out/untruncated. Fresh migration and tests rc0,stagecompletevalidtrue. Fresh DB readiness_full_test_272794a4_882526c8cf0e OID5025701 ownerreadiness_test_owner removed after normal success; independent catalog lookup confirmed absence. Independent scoped reviewer confirms AC4 local synthetic auth/concurrency/replay/timeout/partial-failure contracts met. Six ChatGPT and one Yandex live tests intentionally excluded: no live-provider/production or exhaustive future-matrix claim. Earlier failed-run DBs and captures remain preserved."
       ]
     },
     {
@@ -176,7 +193,7 @@
         "raw/compiled-update-f0cc182a.json"
       ],
       "gaps": [
-        "Cleanf0cc ARM64 Node22 bothfrontend image build55.386s; initial PATH/helper failure retained. Exactimage b43efb29cbd176d75c97cfa769adbebe7e7e20a1d467cd1c0a561538305cc93d,1070645450bytes; nonroot/read-only/offlineChromium153,pypdf6.16.1,pipcheck smoke3.721s passes. Onlyownedstagingapp recreated preservingPG/Redis/runner/ingress. Full synthetic restore and earlier10preview/5compiledrun pass; currentbrowser, AMD64 and release/supply-chain remain."
+        "Historical cleanf0cc ARM64 Node22 bothfrontend image build55.386s; initial PATH/helper failure retained. Exactimage b43efb29cbd176d75c97cfa769adbebe7e7e20a1d467cd1c0a561538305cc93d,1070645450bytes; nonroot/read-only/offlineChromium153,pypdf6.16.1,pipcheck smoke3.721s passes. Onlyownedstagingapp recreated preservingPG/Redis/runner/ingress. Full synthetic restore and earlier10preview/5compiledrun pass. Current272native117browser now passes but cannot substitute for a current canonical image. Current build is blocked by local Mac headroom; AMD64 is an additional target-specific check, not a universal AC5 requirement. Release/supply-chain proof remains."
       ]
     },
     {
@@ -238,10 +255,16 @@
         "raw/http-gunicorn-3dca5fda-command.json (FAIL before requests)",
         "raw/http-gunicorn-3dca5fda.json (validfalse, no HTTP measurements)",
         "raw/http-gunicorn-3dca5fda-retry-command.json",
-        "raw/http-gunicorn-3dca5fda-retry.json"
+        "raw/http-gunicorn-3dca5fda-retry.json",
+        "raw/http-sustained-272794a4.json",
+        "raw/http-sustained-272794a4-command.json",
+        "raw/frontend-perf-272.json (FAIL before browser: SEO HTML identity assumption)",
+        "raw/frontend-perf-272-command.json",
+        "raw/frontend-perf-272-retry.json",
+        "raw/frontend-perf-272-retry-command.json"
       ],
       "gaps": [
-        "Independently reconciled cold-process50-sample comparison retains baseline700/750 requests versus current750/750; each150/150invariants, no general speedup. Prepared94de718c profile4users/2concurrent/5repetitions passes44/44semantic requests.8-user same-IP profile retains3HTTP429. Exact3d local Gunicorn/nativePG HTTP checkpoint passes40/40reads at concurrency2, timedwall2.557582s, command13.170562s; p50/p95/max and ps snapshots independently reconciled, exact fresh DB removed. First attempt failed before requests/Gunicorn due missing Flask app configuration, retained raw+DB provide no measurements. This remains current-only exploratory HTTP evidence, not sustained load/SLO/capacity or speedup. Actual204 SQL proof shows9reads0DDL versus prior9reads3DDL; tiny plans, frontend and queue/capacity gaps remain."
+        "Exact-criterion reconciliation pending after latest bounded profiles. Independently reconciled five-flow50-sample before/after retains baseline700/750 versus corrected750/750 and150/150invariants each, no general speedup. Prepared44/44semantic reads and earlier8-user3HTTP429 retained. Exact272Gunicorn/nativePG sustained profile now passes240/240 over64.280315s,4tenants/30waves/max4concurrentclients, ten resource snapshots, independently recomputed quantiles and confirmed cleanup. Frontend60/60 observations, six screenshots, zero page errors/overflow, eight byte-matched assets pass48.980093s capture; historicalf0ccbackend/unchanged204frontend, ten samples per group, no current-backend/SLO/WebVitals/speedup claim. Actual204SQL proof9reads0DDL versus prior9reads3DDL. Production/large-data/queue capacity remains a residual limitation, not evidence of a reproduced bottleneck or substitute for bounded AC7 acceptance."
       ]
     },
     {
@@ -255,10 +278,16 @@
         "docs/production-readiness/07-production-runbook.md",
         "52292e6e bounded read-only database readiness",
         "raw/readiness-native-routes-schema-archive-813609cc-final-20260918.json",
-        "raw/readiness-transaction-readonly-diagnostic-20260918.json"
+        "raw/readiness-transaction-readonly-diagnostic-20260918.json",
+        "a00ac558 opt-in application release profile",
+        "raw/release-profile-contract-root.json",
+        "docs/production-readiness/RELEASE_PROFILE.md",
+        "3ac13d87 isolated synthetic real-API CI job",
+        "raw/ci-real-api-contract-root.json",
+        "docs/production-readiness/REAL_API_CI.md"
       ],
       "gaps": [
-        "Working operator runbook independently approved against real deploy/restore/schema-check helpers. Reviewed52292e6e /ready preserves /health and passes24nativePG/route/CLI/schema/ratchet checks9.25s (capture10.005698s), but is not in the current image or production. Operational closure still incomplete; historical runtime snapshot maintenance is not clean release proof. Production transport and recovery risks require separate authorized checks."
+        "Working operator runbook independently approved against real deploy/restore/schema-check helpers. Reviewed52292e6e /ready preserves /health and passes24nativePG/route/CLI/schema/ratchet checks9.25s (capture10.005698s), but is not in the current image or production. Reviewed a00ac558 adds opt-in base+release application digest references, no build/code binds, check-only runtime roles and explicit migrator; actual13render/startup contracts pass3.68s, capture4.301181s exit0/zero skips. Runtime release/image/rollback/data-transfer and real-API CI execution remain unproven; tagged infrastructure images unchanged. Historical maintenance is not clean release proof. Production transport/recovery requires separate authority."
       ]
     },
     {
@@ -276,7 +305,7 @@
     {
       "id": "AC10",
       "text": "All named documentation and scorecard",
-      "status": "FAIL",
+      "status": "PASS",
       "proof": [
         "docs/production-readiness/PROGRESS.md",
         "docs/production-readiness/HANDOFF.md",
@@ -290,8 +319,9 @@
         "docs/production-readiness/09-residual-risks.md",
         "docs/production-readiness/10-production-readiness-scorecard.md"
       ],
-      "gaps": [
-        "All requested00–10 reports exist as working evidence/drafts;00/04/07/08/10 independently reviewed. Load/query measurements, rehearsal, final evidence reconciliation and whole-diff review are still open, so documentation existence is not acceptance/sign-off."
+      "gaps": [],
+      "scope_notes": [
+        "Independent read-only review accepts all requested00–10 reports,PROGRESS/HANDOFF/DECISIONS/COMMANDS/SECURITY, area ledger, current evidence and residual-risk register. Current4728backend/117nativebrowser/240HTTP/60frontend results are distinguished from historical failures and current-image/provider/production/demo gates. Every0–5score has evidence and a stated limitation; no averaged readiness score. PASS accepts documentation completeness/current truthfulness only; AC1/2/5/6/7/8/9/11 and overallFAIL are not waived."
       ]
     },
     {
@@ -301,10 +331,12 @@
       "proof": [
         "docs/production-readiness/06-change-log.md scoped reviews",
         "docs/production-readiness/FRESH_REVIEW_20260918.md",
+        "docs/production-readiness/FRESH_REVIEW_272794A4.md",
+        "raw/full-backend-272794a4.json",
         "verdict.json"
       ],
       "gaps": [
-        "A genuine fresh-session whole-diff review of30262a5b..2f224f05 completed with FAIL acrossAC1–AC11. It found a source-level social-post viewer-write candidate and confirmed known GET DDL, approval-target/media and mobile-browser gaps. Final corrected-revision aggregate and re-review remain. Raw scaffold placeholders are not evidence."
+        "Fresh fork-none whole-diff inventory/risk review of30262a5b..272794a4 covers179paths and records overallFAIL, no additional reproducedP0/P1 in stated coverage. It predates later4728backend,117nativebrowser,240HTTP and60frontend results; attributed root addenda record later scoped reviews, not a fresh reviewer reread. Earlier2f224f05 verdict.json stays immutable historical evidence. Currentimage/compiled/scans/demo and final all-DoD reconciliation remain incomplete; do not turn selected passes into overallPASS."
       ]
     }
   ],

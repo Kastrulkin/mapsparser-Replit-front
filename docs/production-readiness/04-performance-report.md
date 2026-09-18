@@ -5,6 +5,72 @@ dashboard profile and tiny-fixture SQL plans are measured; capacity remains open
 Build/test wall times are engineering feedback measurements, not user latency.
 All measurements are local/synthetic; none describe production capacity.
 
+## Browser observations — 18 September 15:30 UTC
+
+Two routes × three viewports × ten fresh browser contexts: **60/60 samples**,
+zero page errors and zero horizontal document overflow. The measured gate is
+the visible email field on `/login` or the visible `Проверить файл` control on
+`/dashboard/finance?tab=import`; visible does not mean above the viewport fold.
+Synthetic login is outside finance timing. Request interception disables HTTP
+cache, blocks external origins and browser mutations; no CPU/network throttling.
+Navigation, first paint and resource observations are retained in the raw file.
+
+| Viewport | Route | p50 / p95 / p99 ready time, ms |
+| --- | --- | ---: |
+| Desktop | Login |372.250 /1110.769 /1539.851|
+| Desktop | Finance import |354.108 /709.685 /930.429|
+| Laptop | Login |356.948 /372.533 /378.554|
+| Laptop | Finance import |354.007 /376.659 /383.456|
+| Mobile | Login |324.730 /441.329 /469.528|
+| Mobile | Finance import |349.054 /382.444 /399.238|
+
+Independent review recomputed counts and quantiles and accepted the bounded
+capture. Root inspected all six initial-viewport screenshots: login controls
+and finance empty-state layout are readable, without observed overlap. The
+finance import control is below the initial fold; these screenshots are not a
+complete-page accessibility or import-interaction audit.
+
+Scope: already-running **historical f0cc backend** and `20431224` built frontend
+(frontend Git tree unchanged through `272794a4`). Eight referenced JS/CSS assets
+were byte-matched between ingress and the pinned container. This is not current
+272 backend/image, Web Vitals, SLO, capacity, a before/after comparison or a
+speedup claim; ten samples per group make tail quantiles exploratory. Desktop
+outliers remain in the data, without an invented causal explanation.
+
+Raw `frontend-perf-272-retry.json` and `frontend-perf-272-retry-command.json`:
+valid true, exit 0, 48.980093 seconds, no timeout/disk abort/truncation. Helper
+`0d6407af`, shell `94690117`, outer `0e0528e1` are frozen. The first capture
+(`frontend-perf-272*.json`, without `retry`) remains exit 1 in 4.144076 seconds,
+zero browser samples: an incorrect harness HTML-hash comparison ignored Flask's
+SEO injection. The retry compares exact served assets, not transformed HTML.
+No application code changed, and the first failure is not a product defect.
+
+## Bounded sustained localhost reads — 18 September 15:18 UTC
+
+Exact272794a4 clean archive, nativePG15 and Gunicorn one worker/two threads:
+four synthetic tenants,30waves, two sequential reads per client, at most four
+clients concurrently. Two seconds after each completed wave; not a strict
+4requests/second arrival cap. **240/240 semantic reads pass**, timed wall
+64.280315s (including pacing), command73.497287s,exit0/no timeout/truncation.
+Login/migrations/setup are outside the timed phase. This is current-only,
+not a before/after, production-capacity, queue-load, proxy or SLO result.
+
+| Route | Successful samples | p50 / p95 / p99, ms |
+| --- | ---: | ---: |
+| `/api/auth/me` |120/120|78.638 /118.355 /134.497|
+| `/api/business/<id>/data` |120/120|80.003 /104.552 /117.980|
+
+Quantiles use linear interpolation of observed successful samples. Ten periodic
+`ps` snapshots supplement before/after observations; sampled total Gunicorn RSS
+ranges62,640–208,368KiB (before208,304,after69,616). This is not true peak usage,
+instantaneous CPU, a leak test or evidence of memory optimization. OS/process
+memory accounting can change under pressure; no causal explanation is claimed.
+Gunicorn exits0 onSIGTERM and is reaped; fresh synthetic DB OID5775953 is
+removed after identity verification; root and independent reviewer confirmed
+catalog absence. Independent review recomputed counts and quantiles and accepted
+the bounded result. Raw: `http-sustained-272794a4.json` and its
+`-command.json`; reviewed helper5ca74c29,outere4826e78. No production writes.
+
 ## Bounded localhost HTTP checkpoint — 18 September 13:18 UTC
 
 Exact3dca5fda clean source, native PostgreSQL15 and a local Gunicorn child

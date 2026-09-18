@@ -1,5 +1,157 @@
 # Production-readiness progress
 
+15:49 UTC: independent current-document review accepts AC10PASS. Required
+reports00–10 plus operational/security records, original-area ledger, residual
+risks and evidence-backed0–5scorecard are present and truthfully distinguish
+current/historical/local/release evidence. AC3/AC4/AC10 nowPASS; overallFAIL and
+other criteria are not waived. Runtime source remains272794a4, no app edits.
+
+15:44 UTC: independent exact-criterion reconciliation accepts AC3PASS in its
+bounded critical-flow scope; AC4 remainsPASS. Current native117, frontend
+591/72/TS/lint/build and clean-install provenance support this without claiming
+universal accessibility, perfect console coverage or a current immutable image.
+AC2 remainsFAIL for incomplete P1 image/reproducibility findings; AC7 still lacks
+successful auth-journey baseline quantiles because original302fails50/50. A
+separate paired post-correctness2d→272 comparison is being prepared, not run.
+AC10 documentation consistency corrections are under final independent review.
+Supervised view-only demo helper is being prepared; no rehearsal has started.
+
+15:30 UTC: frontend timing retry PASS60/60, exit0/48.980093s, no timeout,
+disk abort or truncation. Independent review recomputed all six groups of ten
+samples, zero page errors/overflow; root inspected six screenshots. Eight
+served JS/CSS assets match pinned container bytes. Historicalf0ccbackend,
+unchanged204frontend only; no current272image/SLO/capacity/speedup claim.
+First attempt remains FAIL4.144076s/zero samples due harness HTML-identity
+assumption ignoring Flask SEO injection; corrected retry changes no app code.
+The sustained240-read profile also has independent count/quantile/resource/
+catalog reconciliation PASS. No heavy job remains running. Reports updated;
+AC2/3/7/10 exact-criterion reconciliation and real partner rehearsal are next.
+
+Historical checkpoints below retain their original state at the recorded time.
+
+15:18 UTC: bounded sustained HTTP PASS240/240 semantic reads,4synthetic
+tenants/30waves/max4concurrent clients; timed64.280315s,capture73.497287s,
+exit0/no timeout/truncation. Ten periodic resource snapshots, Gunicorn
+SIGTERM/rc0/reaped, freshDB5775953 reportedremoved. Independent quantile/
+catalog reconciliation requested. Scope/pacing/limits recorded in report04;
+not strict4rps, production/SLO/capacity or a memory-optimization claim.
+No heavy test now running. Prepared frontend timing helper/outer awaiting
+final outer review; targets existing historical compiled staging explicitly.
+
+15:16 UTC: native117 retry **PASS117/117** (Playwright3.8min,
+capture261.027621s,exit0/no timeout/truncation). Exact272 backend and verified
+unchanged frontend artifacts; static Vite preview. Summarycomplete/success1,
+Gunicorn reaped, fresh DB OID5768975 dropped after normal success; rootcatalog
+confirms absence and preserved firstfailedOID5761996. No app/test changes.
+Three compiled-runner cases remain separately historical, and owner review/
+finance console listener retains its documented fixed-port limitation.
+15:17 UTC: reviewed sustained240-read wrapper e4826e78 launched in tmux
+readiness-http-sustained-272; serial after browser. Current-only bounded
+localhost HTTP/resource observations, not production/capacity/SLO proof.
+
+15:06 UTC: first current-backend native117 completed **114passed/3failed**,
+capture293.833473s,exit1/no timeout. All three failures are maps refresh409
+`operator_apify_refresh_disabled`: temporary launcher omitted canonical
+staging `OPERATOR_MAP_REFRESH_SOURCE=yandex_maps`. APIFY=false is preserved;
+the staged workflow queues a synthetic job, completed by the existing fixture,
+not a provider worker. No product bug demonstrated by this environment failure.
+The launcher also served built files through Vite dev import transforms;
+retry will use static Vite preview/proxy with unchanged tests/artifacts.
+Separate retry files are being frozen/reviewed, not modifying first evidence.
+Failed DB localos_staging_272794a4_e8a97b1949d8test/OID5761996/readiness_test_owner
+is preserved (catalog confirmed); Gunicorn is reaped. Local free space2.4GiB.
+
+14:58 UTC: proof bundle structural validation returns valid=true, no missing
+files/errors; git diff --check clean. This checks schema/completeness only,
+not correctness or a release PASS. Historical verdict.json remains the frozen
+2f224f05 review; current evidence.json records AC4PASS and later272fresh report.
+
+14:46 UTC: exact272794a4 full backend aggregate PASS:4728passed,7explicit
+live-provider skips,6warnings in656.63s; capture669.910516s exit0/not timed
+out/untruncated. Fresh migration/test phases return0,stagecompletevalidtrue.
+Disposable DB readiness_full_test_272794a4_882526c8cf0e/OID5025701 removed
+after normal success; independent catalog check confirms absence. AC4 PASS
+in the specified local synthetic scope; broader release remains FAIL.
+Native117 inner launcher d0cd5e32 now has independent STATIC PASS; outer
+watchdog/capture is being prepared. No current117 browser result yet.
+Sustained240-read helper5ca74c29 also STATIC PASS, queued after browser only.
+Fresh whole-diff report FRESH_REVIEW_272794A4.md predates this aggregate;
+later root-attributed addendum records the independently reviewed new evidence.
+
+Historical checkpoints follow; RUNNING entries are not current state.
+
+14:36 UTC: exact272794a4 full backend aggregate RUNNING in tmux
+readiness-backend-272794a4, output raw/full-backend-272794a4.json pending.
+Reviewed v4 bd3be8ff pins the earlier lifecycle harness, fresh task directory,
+native nonce DB, cached local PG16 images, no-dotenv/no-provider environments,
+Compose plugin and browser cache. Native start/archive minimum2GiB and runtime
+1.5GiB guards retained. Temporary supervisor corrections passed actual
+transformed-source process-only proof; observed-group polling is not a formal
+anti-daemon guarantee. This is preparation evidence, not test-suite success.
+New fork-none reviewer independently examines baseline..272794a4 full diff.
+Native117 browser wrapper remains under review; no browser/DB launch yet.
+Canonical F821 gate passes0.208327s on unchanged272tracked source. Strict
+Gitleaks34618037..272794a4 scans4commits/91659bytes with zero findings,
+exit0/2.550695s; does not replace historical revocation or image/log scans.
+
+14:26 UTC: SEC-RBAC-06 and SUB-MOBILE-01 committed locally as 272794a4 after
+104/104 GREEN in156.03s (capture160.365553s exit0/untruncated), exact seven-file
+hash reconciliation and independent final review PASS. Disposable fixture DB
+catalog is empty. Viewers are denied before direct/mixed-target mutation;
+inactive subscription is denied before review preview/confirm; legitimate
+owner/member and completed-replay controls pass. No provider/model action.
+Full aggregate preparation now targets exact272794a4; frontend Git tree is
+identical to tested3dca5fda (`73c488b4d9e145ebe19910eb19d99b8eadb72528`).
+Current-source native real-API browser117 preparation excludes only three
+compiled-runner cases; no browser or new DB launched yet. Image build is still
+blocked by local headroom, not by the server disk expansion.
+
+14:17 UTC: CI package committed locally as 3ac13d87. Root frozen fake-command
+capture passes 11 tests in 17.08s, capture 18.168537s, exit 0, no timeout or
+truncation. Review caught and corrected both cancellation advancing to the
+browser phase and Chromium install/run path mismatch. The isolated hosted
+real-API workflow is implemented, not executed; no push or remote CI action.
+
+The separate mobile-confirmation RED proves 4 failures / 6 controls (32.02s):
+viewers reach generation, a mixed-target batch invokes both generators, and a
+viewer deletes a synthetic finance row. Capability RED proves 2 failures / 2
+controls (15.12s): inactive subscription admits preview and confirm for the
+actual review_replies.generate action. Both captures are untruncated and use
+stored roles/subscription state; no model/provider calls. Common write gate
+and additive maps.reviews mapping have static review PASS; final 104-test
+native/adjacent GREEN is being frozen. Last full tested source remains 3dca5fda.
+Local free space is about 2.84 GiB; Docker build remains below its 4 GiB gate.
+
+13:52 UTC: reviewed release-profile package committed locally as a00ac558.
+Root actual daemon-free Compose render and startup contracts: 13 passed in
+3.68s, capture 4.301181s, exit 0, no skips/timeout/truncation. The previous
+migrator environment and test portability review blockers are corrected.
+Only base+release application image/mount/migration ownership configuration is
+proven; no running containers, migration, image build, push or deploy occurred.
+Named runtime data volumes initially start empty; existing-data transfer,
+infrastructure image pins and release startup/rollback remain separate gates.
+TEST-E2E-01 real-API CI design is next, prepare-only before implementation.
+
+13:46 UTC: SEC-RBAC-06 direct-route correction passes 70 checks in 106.93s
+(capture 110.904479s, exit 0, no timeout/truncation). Independent review confirms
+the five scoped write gates, unchanged viewer preview, negative/positive role
+controls and zero surviving temporary fixture DBs. This is PARTIAL: the normal
+Telegram UI uses a separate mobile action preview/confirm route, where source
+review found no write-role recheck before its executor. A separate causal test
+is being prepared before any further product change. No real provider action.
+
+In parallel, an opt-in application-release Compose profile is being prepared.
+It does not modify default deployment or running containers. First independent
+review found the new migrator lacked DB/Flask configuration; correction and
+actual daemon-free Compose rendering are pending. Two skipped render tests
+are not accepted as profile proof. Local disk still prevents a safe image build.
+
+13:36 UTC: full review-reply RED proves all 10 direct/network viewer mutation
+failures with explicit local effects; 27 controls pass in 104.57s. Capture
+109.002213s is untruncated. This supersedes the first two-case reproduction
+below, which remains historical evidence. Five-route patch then passed static
+review; the later 70-case GREEN above is the current scoped result.
+
 13:23 UTC review-reply first causal RED:1failed/1owner control passed8.25s,
 capture11.165518s,exit1/no timeout/truncation. Actual registered web manual-mark
 route returns200 for stored direct viewer instead of403; owner control verifies

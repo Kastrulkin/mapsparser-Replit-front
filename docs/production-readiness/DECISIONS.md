@@ -1,5 +1,52 @@
 # Readiness decisions
 
+## D-024 — Separate measured local behavior from release and capacity claims
+
+Keep the exact272native117 browser suite,240-read paced HTTP profile and
+historicalf0ccbackend/unchangedfrontend60-load browser profile separately
+identified. They answer different questions; combining counts cannot create a
+current immutable-image or production-capacity result. Preserve failed harness
+captures and correct only the harness assumption: Flask injects SEO into HTML,
+so ingress identity requires referenced asset byte matching, not HTML equality.
+Visible-control timings and sampled ps observations do not imply Web Vitals,
+true peak memory, a memory leak test or general speedup. Acceptance follows the
+written criterion, with production capacity separately retained as a risk.
+
+## D-022 — Reauthorize stored mobile-action targets before any executor
+
+Direct endpoint gates alone do not protect the normal Telegram preview/confirm
+flow. Prefer one required target-authorizer at the existing common confirmation
+boundary over nineteen scattered executor checks or a new authorization layer.
+Validate the complete stored target set first, using current canonical write
+roles; no partial batch effects may precede denial. Preserve read-only preview
+and the already-completed result replay, which must not execute again.
+Capability admission independently uses the real `review_replies.` prefix and
+retains the old `reviews.` alias. Native causal RED and final GREEN are required;
+static review or a model stub alone is not evidence of real provider behavior.
+
+## D-023 — Keep synthetic CI separate from production and local Docker
+
+Select a fresh hosted-runner job rather than silently broadening every PR gate
+or accepting arbitrary developer targets. Unique numeric run identity, empty
+inventory preflight, exact labels/names and cleaned child environments constrain
+resource ownership. Fake-command tests verify the contract including refusal
+and cancellation; actual GitHub execution remains a separate acceptance gate.
+Browser install and execution must share the same explicit cache path. Local
+commit is not authority to push, schedule or dispatch the remote workflow.
+
+## D-021 — Prove an opt-in release contract without changing deployment
+
+Changing the base Compose defaults would alter an existing deployment before
+runtime/data-transfer rehearsal; retaining only a written runbook would not
+test the merged configuration. Selected a separate base+release override in
+a00ac558: digest-pinned application images, no code binds/builds, check-only
+runtime roles and one explicit migrator. The actual merged-config/startup
+contract passes 13 tests. It is not activated and must not be applied to live
+data without backup and approved transfer into the new named runtime volumes.
+Other Compose fragments, tagged infrastructure images, image startup/rollback
+and operational credentials remain separate gates. A Compose configuration
+pass neither starts a service nor proves its runtime behavior.
+
 ## D-020 — Constrain the observed app closure without claiming a universal lock
 
 2e121912 projects101application versions from the audited104-distribution

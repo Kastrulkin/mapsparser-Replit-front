@@ -8,6 +8,14 @@ Assets are business/network membership, sessions, provider credentials, private 
 
 Relevant actors include an anonymous API caller, a valid user attempting a foreign-tenant or higher-role action, a former/revoked member, an attacker controlling a retrieved website or uploaded document, a compromised provider credential, and a mistaken operator targeting the wrong deployment or database. No historical exploitation is asserted by this model.
 
+Latest scoped checkpoint272794a4 adds canonical write permission to review
+mutations and to every stored target before common mobile-action execution.
+Native tests cover direct/network viewers, mixed targets, membership revocation,
+legitimate writers, completed replay and inactive subscription at preview or
+confirm. Combined104checks pass156.03s with independent review. This corrects
+the reproduced authorization/capability admission failures, not all platform
+objects or actual model/provider behavior. All audit patches remain local.
+
 ## Trust boundaries and acceptance evidence
 
 | Boundary | Required invariant | Current evidence and limitation |
@@ -36,6 +44,11 @@ Relevant actors include an anonymous API caller, a valid user attempting a forei
 Offline historical scanning confirmed former privileged credential material; revocation is unknown. Values are intentionally absent from tracked reports. Current f0cc tracked-source scan has98candidates versus94baseline: all4new candidates are inspected report prose, not credentials. Post-remediation28commit history delta has1prose false positive. This does not establish absence from image layers, resolved dependencies or logs; those final scans remain incomplete. No key was tested against a provider, rotated, or removed from history by this audit.
 
 ## Exact-image Python inventory — 18 September
+
+Later strict history delta34618037..272794a4 scans4commits/91659bytes and finds
+zero secrets (exit0,2.550695s), with inline allow comments ignored and100%
+redaction. This is new-source history evidence only, not a replacement for
+historical credential revocation, dirty/untracked files, image layers or logs.
 
 Read-only, network-disabled, nonroot container from immutable f0cc/b43 image
 reports104installed Python distributions; this replaces neither the older

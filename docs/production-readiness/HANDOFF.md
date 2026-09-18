@@ -1,5 +1,129 @@
 # Readiness handoff
 
+## Current continuation — 18 September after 15:30 UTC
+
+Latest completed evidence: sustained HTTP240/240 (73.497287s capture,
+64.280315s timed) and frontend observations60/60 (48.980093s capture), both
+independently reconciled PASS in their bounded scopes. HTTP DB5775953 absence
+confirmed by root/reviewer; Gunicorn reaped. Frontend has zero page errors and
+horizontal overflow, eight byte-matched served assets and six screenshots
+inspected by root. It targets historicalf0ccbackend + unchanged204frontend,
+not current272backend/image, capacity, Web Vitals or speedup. Report04 contains
+the exact methods/distributions. No heavy job is running; do not replay wrappers.
+
+First frontend attempt is retained FAIL (4.144076s, zero samples): the harness
+incorrectly equated SEO-injected ingress HTML with static dist/index.html.
+Retry fixes asset identity checks only. Frozen retry outer0e0528e1,
+shell94690117,helper0d6407af; raw/frontend-perf-272-retry{-command,}.json.
+Older frontend wrappers9ed7f7/79bbca75/836a0a92 are historical, not launchable
+continuation steps. All raw filenames are single-use.
+
+After15:49UTC independent reconciliation: AC3/AC4/AC10PASS; overallFAIL.
+AC2 still has partial confirmed P1 image/reproducibility findings. AC7 needs a
+successful earlier-working-reference distribution: original302auth baseline
+fails50/50 with null successful quantiles, so retain it and supplement with a
+separate2d→272 paired comparison (prepared only). Next: scoped local docs
+commit, supervised safe partner rehearsal, then serial performance comparison.
+View-only rehearsal is feasible on the existing synthetic staging; uploading/
+applying CSV or running providers is not part of that read-only variant.
+Demo is NOT complete merely because117browser cases and60timing samples pass.
+
+Current backend source is272794a4; full suite4728passed/7intentional provider
+skips/6warnings, capture669.910516s, independentAC4PASS. Production, providers
+and user Docker volumes remain untouched. Branchcodex/production-readiness-20260917,
+baseline30262a5b. Unrelated untrackeddocs/VR_ENGELSA_MAPS_ANALYSIS_20260918.md
+must remain untouched. Last Mac headroom~3.1GiB; do not lower Docker4GiB start
+guard (practically8–10GiB additional space requested). Owner disk-space,
+historical credential revocation and PyMuPDF license-basis inputs are pending.
+
+Native117retry PASS117/117, raw/native-real-api-117-retry-272794a4.json
+exit0/261.027621s/no timeout/truncation; exact272backend with hash-verified
+unchanged built frontend. DB localos_staging_272794a4_a0fa5b8d4481test/OID5768975
+removed after normal success, root catalog confirms absence; Gunicorn reaped.
+Original failed DB5761996 remains preserved. This closes native functional
+checkpoint, not three compiled-runner cases or a clean current Docker image.
+Do not overlap heavy browser/HTTP jobs; no production or provider effects.
+
+## Earlier native preparation/attempt snapshots (historical)
+
+15:06 UTC current browser result: raw/native-real-api-117-272794a4.json
+exit1/293.833473s/no timeout,114pass3fail. All failures are canonical staging
+map source omitted from temp env; maps refresh409 rather than200. Add
+OPERATOR_MAP_REFRESH_SOURCE=yandex_maps with APIFY=false and replace Vite dev
+with preview/static proxy in a SEPARATE reviewed retry package. No product
+change or weakened assertion. Original DB localos_staging_272794a4_e8a97b1949d8test
+OID5761996/readiness_test_owner preserved, root catalog confirmed25,850,671bytes.
+First Gunicorn reaped; no concurrent heavy job running now. Worker finishing
+retry package; only launch after final independent GO. Free space~2.4GiB,
+native2GiB pre/postarchive and1.5GiB runtime guards unchanged.
+
+Exact272794a4 full backend completed:4728passed/7intentional live-provider
+skips/6warnings656.63s, capture669.910516s,exit0/no timeout/truncation.
+raw/full-backend-272794a4.json is authoritative; fresh migration/tests rc0,
+summarycompletevalidtrue. Fresh DBOID5025701 removed after success and
+independent catalog absence check. AC4 is PASS for local synthetic contracts;
+all broader release gates remain separate. Do not replay completed wrapper.
+
+Earlier preparation: compiled_staging_packaging prepared outer native117 wrapper.
+Inner launcher d0cd5e3219dd47dd02f056fcff8b11ff702701d7381c8d0e5105164157c34c52
+had independent STATIC PASS; first runtime now failed as recorded above. Root-owned sustained240-read
+helper5ca74c29 is static PASS, queued after browser, no overlapping heavy jobs.
+New fresh whole-diff report predates backend completion; root-attributed
+addendum records later scoped review without claiming a second fresh review.
+
+## Previous preparation snapshot — 18 September 14:36 UTC
+
+RUNNING: tmux readiness-backend-272794a4, outer one-shot wrapper
+/private/tmp/localos-readiness-backend-272794a4-capture.sh; expected new raw
+full-backend-272794a4.json. Launcher v4 SHA
+bd3be8ff3d967bade2490feaf91d4712b8d510f482c94a90a9808226291d9be3
+is independently reviewed and process-proof tested (normal escaped-child
+invalidation and timeout cleanup). Earlier failed helper proofs are retained;
+initial partial-transform proof was invalid, and final reaping-order fix avoids
+the observed unreaped-leader query problem. Process supervision is bounded
+observed-tree polling, not an arbitrary daemon-capture guarantee. Do not mutate
+the frozen launcher or start competing native/DB/Docker loads during aggregate.
+
+New independent fork-none reviewer fresh_whole_diff_272 owns ONLY new report
+docs/production-readiness/FRESH_REVIEW_272794A4.md. Operator reviewer handles
+scoped launcher/raw checks; compiled worker finishes native117 temp wrapper.
+Strict secret delta4commits/91659bytes passes2.550695s; canonicalF821 passes
+0.208327s. Full current-source/backend/browser/image claims are still pending.
+
+Branch codex/production-readiness-20260917; baseline30262a5b;
+HEAD272794a439a76204536480f158e79276ccd7b318. Last full-suite source remains
+3dca5fda until the prepared final aggregate actually passes.
+
+Three new local packages: a00ac558 opt-in release profile (13 actual Compose
+render/startup contracts);3ac13d87 isolated real-API CI job (11 fake-command
+contracts, no hosted execution);272794a4 stored mobile write-role/subscription
+admission (104checks156.03s/capture160.365553s,exit0/untruncated). All have
+independent scoped PASS. No audit push/deploy or production mutation.
+Current frontend tree exactly matches tested3dca5fda:
+73c488b4d9e145ebe19910eb19d99b8eadb72528. This is not current image proof.
+
+SEC-RBAC-06 direct RED10fail/27pass plus common-confirm RED4fail/6pass prove
+the previously missed direct/viewer/mixed-target/finance mutation cases.
+SUB-MOBILE-01 RED2fail/2pass proves inactive subscription admission for the
+actual review_replies.generate action. Combined104GREEN includes51native,
+36adjacent and17subscription checks. Fixture catalog is empty. No actual
+model/provider call. Root's seven-file source matches the frozen tested hashes.
+
+Next after aggregate: inspect child result/timeout/truncation and exact
+DB OID/owner cleanup before accepting PASS. Worker compiled_staging_packaging prepares TEMP-ONLY native
+real-API117 launcher with current backend/frontend and fresh owned DB; only
+three compiled-runner scenarios excluded explicitly. Do not launch concurrently
+with full backend, replay old scripts or point tests at preserved failed DBs.
+
+Root owns current uncommitted evidence/backlog/progress documentation. Preserve
+unrelated untracked docs/VR_ENGELSA_MAPS_ANALYSIS_20260918.md. Local space last
+3.6GiB, below4GiB Docker build gate; practical extra8–10GiB requested. Owner
+Mac-space, credential revocation and license-basis questions remain pending.
+Release profile named data volumes start empty and must not be applied to live
+services casually. Historical entries below describe earlier checkpoints only.
+
+## Historical checkpoints
+
 Latest13:23UTC RED completed: raw/operator-review-reply-viewer-red-3dca5fda.json
 1failed/1owner controlpass8.25s,exit1/11.165518s/no timeout/truncation. Direct
 viewer webmanual route200vs403, owner persisted effect positive. No fixture

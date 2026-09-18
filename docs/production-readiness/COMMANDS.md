@@ -1,5 +1,128 @@
 # Verified commands and evidence
 
+## Browser performance retry — completed 18 September 15:30 UTC
+
+Named tmux `readiness-frontend-perf-272-retry` ran ARM64 workspace Python with
+sanitized environment and the one-shot command
+`/private/tmp/localos-readiness-frontend-perf-272-retry-root-capture.py --execute`.
+Frozen outer SHA256 `0e0528e17bdf599881e364b26a195d97f5227b2a292d540a13b9c1f5444b05b7`,
+shell `94690117024e52d33f653f9cb481d7554d08ee8e154c4963ad4059252bf9cc1e`,
+helper `0d6407af96750beea19e15a5768584cd206e95f95891ed0972743a75a1e1ea41`.
+Raw/frontend-perf-272-retry.json and its -command.json are valid/exit0,
+48.980093s/no timeout/disk abort/truncation. Independent count/quantile review
+accepts60/60 samples; root viewed all six screenshots. Pinned historicalf0cc
+backend, unchanged204frontend, existing ingress127.0.0.1:38019; no restart,
+reseed or external effects. Only fixed synthetic login may POST.
+
+First frontend-perf-272 attempt (without retry) remains exit1/4.144076s/zero
+samples: HTML hash assumption ignored Flask SEO injection. Retry pins original
+container index and compares all eight referenced served JS/CSS assets bytewise.
+Report04 records limitations. Do not replay either completed wrapper.
+
+## Sustained localhost reads — completed 18 September 15:18 UTC
+
+Named tmux `readiness-http-sustained-272` ran ARM64 workspace Python with
+`/private/tmp/localos-readiness-http-sustained-272794a4-root-capture.py --execute`.
+Frozen outer SHA256 `e4826e78d47ee3ad7ec38e5624334cb585768b5ad414221b894706869356441d`,
+shell `df7aa3c8537c6104fd9f9873cb2bfa1f4ca58e35541ccb4a49cef61022e73830`,
+helper `5ca74c29f4655d65fd104439016f341bdd4af780808512c29cd4a6ddc409297b`.
+Current272clean archive, four synthetic tenants,30waves/240semantic reads,
+64.280315s timed/73.497287s captured, exit0/no timeout/truncation. Independent
+counts/quantiles match;10periodic ps snapshots. Gunicorn reaped and owned DB
+OID5775953 independently absent. This is bounded local load, not capacity/SLO
+or memory optimization. Raw/http-sustained-272794a4{,-command}.json; do not replay.
+
+## Native browser retry — completed 18 September 15:16 UTC
+
+`readiness-native117-272-retry` completed one-shot outer
+`/private/tmp/localos-readiness-native-real-api-117-retry-capture.py --execute`,
+SHA86151240272cceb85ed758ca3dd4383c4fcb9b46853473c80a7befb457d8ff3d;
+inner406e7b91, preview-config7e63822e. Canonical maps source added with APIFY
+stillfalse; Vite preview root/outDir corrected before runtime. Full unchanged
+117-case suite passes3.8min/capture261.027621s exit0/no timeout/truncation.
+Initial curl connection refusal occurred during startup polling; readiness
+later passed. No Vite development transform warnings in retry. DB5768975
+removed/reaped, root catalog confirms absence. Firstfailed DB/raw preserved.
+This is not a compiled-runner/current-image or clean-console guarantee.
+
+## Native current-backend browser — first attempt, 18 September 15:06 UTC
+
+Completed tmux `readiness-native117-272`; root ran hash-pinned
+`/private/tmp/localos-readiness-native-real-api-117-capture.py --execute`
+using ARM64 workspace Python. Outer SHA df96df88993a1f23af56fe93b8f23846e3cacb5d6c582ee2745be30b8818d18f;
+inner d0cd5e32. Raw/native-real-api-117-272794a4.json:114passed/3maps failures,
+exit1/293.833473s/no timeout. Failure is missing canonical yandex_maps source
+in isolated environment (APIFY remains disabled), not demonstrated productbug.
+Fresh failed DB OID5761996 preserved; Gunicorn reaped. Vite dev additionally
+transformed built JS and warned about dependency scanning; static preview is
+required for retry. Do not replay original one-shot wrapper or overwrite raw.
+
+## Exact272794a4 aggregate / static checks — completed 18 September 14:46 UTC
+
+Full suite PASS:4728passed/7explicit live-provider skips/6warnings656.63s,
+capture669.910516s,exit0/no timeout/truncation. New DBOID5025701 removed after
+normal success; independent catalog check confirms absence. Named tmux
+readiness-backend-272794a4 invoked (completed; do not replay)
+`/private/tmp/localos-readiness-backend-272794a4-capture.sh`, pinning reviewed
+v4 launcher bd3be8ff and exact272794a439a76204536480f158e79276ccd7b318.
+Fresh nonce DB and clean archive;1800s test bound/2400s outer capture; preserved
+2GiB archive and1.5GiB runtime disk guards. Oldb43 app supplies only pypdf6.16.1,
+not a current image. Destination raw/full-backend-272794a4.json is single-use.
+
+`python-f821-272794a4.json`:exit0/0.208327s, standard scoped gate/exclusions,
+tracked source matched HEAD and no untrackedsrc before the read-only check.
+`secret-delta-346-to-272794a4.json`:strict Gitleaks --ignore-gitleaks-allow,
+100%redaction,4commits/91659bytes,zero findings,exit0/2.550695s. No provider
+validity test; historical credential revocation and finalimage/log scans remain.
+
+## Stored mobile-action and subscription boundary — 18 September 14:26 UTC
+
+Completed tmux `readiness-mobile-confirm-green`, paired one-shot wrapper
+`/private/tmp/localos-readiness-mobile-confirm-green-capture-3dca5fda.sh`
+SHA `51b17c465d95e0f84987777876e1454ccd1d5171945201ef1be5df6e6a11d307`.
+Launcher `78bc1f2b81c031fd0223597ad3099be299cfcc5add3dd2b55ae6e62759b1e4fe`
+creates clean3d archive plus explicit pinned source/test overlay. This overlay
+is now exactly committed272794a4; raw filename retains base revision by design.
+`operator-mobile-confirm-green-3dca5fda.json`:104passed156.03s,160.365553s
+capture,exit0/untruncated. All disposable fixture DBs absent afterward.
+Do not replay completed wrapper. Earlier corrected RED4fail/6pass and
+capability RED2fail/2pass are in their separate immutable raw captures.
+
+## CI contract check — 18 September 14:17 UTC
+
+Completed one-shot tmux `readiness-ci-contract-root`, root wrapper
+`/private/tmp/localos-readiness-ci-contract-root-capture.sh`; source script
+`/private/tmp/localos-readiness-ci-contract-root.sh` hash
+`f7980d46d7b3717d65dcaa1b360d7b2f06b64ab7a752aa82fe94822a0a0e93bd`.
+It pins copies of only the workflow, launcher and contract test in a clean
+temporary source with sanitized env/no-egress guard. No real Docker/browser
+command is invoked. `raw/ci-real-api-contract-root.json`: 11 passed in 17.08s,
+18.168537s capture, exit 0, no timeout/truncation. Committed as 3ac13d87.
+Do not replay one-shot wrappers or treat this as a hosted runtime result.
+
+## Release-profile and review-role checks — 18 September 13:52 UTC
+
+- `release-profile-contract-root.json`: actual daemon-free Compose config plus
+  migration startup contracts, 13 passed in 3.68s; capture 4.301181s, exit 0,
+  no skips/timeout/truncation. Exact plugin supplied through
+  `LOCALOS_COMPOSE_BINARY`; `env -i`, dotenv disabled, synthetic required DB
+  inputs, `--env-file /dev/null`, no configuration/credential dump. The tested
+  sources are committed in a00ac558. This is not a release startup or rollback.
+- `operator-review-reply-viewer-full-red-3dca5fda.json`: 10 failed / 27 passed,
+  104.57s; capture 109.002213s exit 1/untruncated. Both stored viewer types can
+  mutate through five routes. Synthetic state diagnostics show the effects.
+- `operator-review-reply-viewer-green-3dca5fda.json`: exact 3d archive plus
+  fd70ef… API and 63cf2d… regression overlays passes 70 tests in 106.93s;
+  capture 110.904479s exit 0/untruncated. New 37-case matrix plus 33 adjacent
+  checks, not a whole-project aggregate. Fixture DB absence independently
+  confirmed. Normal Telegram mobile-action confirmation is a separate pending
+  causal check; no full feature-security closure is claimed yet.
+
+Named tmux wrappers are one-shot and refuse an existing output/task directory.
+Do not replay completed wrappers or overwrite earlier RED/failed captures.
+
+## Historical command checkpoints
+
 `operator-review-reply-viewer-red-3dca5fda.json`: first causal2case run,
 1failed/1passed8.25s,exit1/11.165518s,no timeout/truncation. Stored direct viewer
 webmanual route200vs403; owner persists intended manual status/review reply.

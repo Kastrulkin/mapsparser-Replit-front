@@ -1,12 +1,25 @@
 # Problems and non-PASS criteria
 
-Updated 18 September 2026, 13:11 UTC. Maintained gap register, not a fresh
+Updated 18 September 2026, after 15:30 UTC. Maintained gap register, not a fresh
 independent verifier's verdict. Goal active; audit changes local only.
 Production, provider effects and user Docker volumes are out of scope.
 Historical failed captures are retained, not rewritten as green.
 
 ## Verified checkpoints, not whole-goal acceptance
 
+- Current native272real-API117/117 and bounded HTTP240/240 pass, independently
+ reconciled; successful DB cleanup verified. Frontend observations60/60 use
+ historicalf0ccbackend/unchangedfrontend; zero page errors/overflow, six initial
+ screenshots inspected. Quantiles are exploratory, not production capacity.
+
+- Current272794a4 full backend:4728passed/7intentional live-provider skips/
+ 6warnings656.63s; capture669.910516s exit0/no timeout/truncation. Fresh
+ migration and tests return0; exact DBOID5025701 removed, independently checked.
+ AC4 PASS for isolated local/synthetic contracts; no production/provider claim.
+- Combined mobile/direct-role/subscription GREEN:104passed156.03s,
+ capture160.365553s exit0/untruncated. Independent finalPASS/committed272794a4;
+ the following full3d aggregate predates the7-file source/test overlay.
+- ReviewedCI3ac13d87:11fake-command contracts pass17.08s; no hosted CI execution.
 - Exact3d corrected full backend:4655passed/7live-provider skips/6warnings,
  481.71s pytest/494.328144s capture,exit0; clean migration and exact fresh DB
  cleanup confirmed. First environment-failed full capture and DB retained.
@@ -19,7 +32,7 @@ Historical failed captures are retained, not rewritten as green.
   DockerPG16 and Python/browser regressions.
 - Same frontend: TypeScript passes, lint0errors/1existingwarning,588 unit tests
   and72 mocked browser scenarios pass;495.068 seconds captured.
-- Current real-API checkpoint:120/120browser cases onf0ccbackend/20431224frontend,
+- Historical compiled real-API checkpoint:120/120browser cases onf0ccbackend/20431224frontend,
   exit0/no timeout,227.301s. Prior116/117overflow and117/120focus-return failures
   are retained. Separately synced dist is not final immutable-image proof.
 - Reviewed125900b2 service/content stored-role fix: realPG red and27focusedgreen,
@@ -59,13 +72,29 @@ capture was false-green and is not evidence of no writes.
 
 ## AC3 / AC4 — Current aggregate and real API
 
+Current AC4 is PASS after exact272794a4 aggregate above. Native117 real-API
+browser now passes117/117, capture261.027621s exit0/untruncated. First
+114pass3map-source environment failures remain retained with DB5761996;
+successful retryDB5768975 removed. Three compiled-runner cases remain
+separately historical. Dynamic-port review/finance console filter limitation
+is documented; no blanket clean-console claim.
+The following source checkpoints explain earlier progress, not current AC4 gaps.
+
 f0cc includes service/content role and query-harness changes after green6c.
 Required: final same-source backend/frontend/image aggregate after remaining
 corrections;120real-API cases now pass at the scoped checkpoint. Mocked UI is not stored-role/DB/provider
 proof. Wider mutation-role and adversarial AI/tool matrices remain incomplete.
-The3d backend checkpoint now passes, but current combined image/real-API proof
-does not. Review-reply draft generation/edit/manual-mark routes reuse role-blind
-business access: a concrete source-level candidate, not yet causally reproduced.
+The 3d backend checkpoint passes, but current combined image/real-API proof
+does not. SEC-RBAC-06 direct RED10fail/27pass and mobile-confirm RED4fail/6pass
+prove missing write-role admission; capability RED2fail/2pass proves inactive
+subscription bypass for the actual review action name. Combined104GREEN now
+passes156.03s with no skipped cases; final scoped reviewPASS/commit272794a4.
+Actual local edits/manual marks/finance deletion and stored roles/subscription
+are exercised; only model-backed generation is counted/stubbed. No real
+model charge or provider publication is claimed. The3d full aggregate predates
+this patch and must not certify the new source.
+Existing UI displays backend rejection text but lacks a per-business write
+entitlement to pre-disable these controls; that is a separate UX limitation.
 
 ## AC5 — Image, migration and restore
 
@@ -105,19 +134,20 @@ Broader AI/tool matrix remains; missing fixture-table500s were not product bugs.
 
 ## AC7 — Performance
 
-Exact3d local Gunicorn/nativePG HTTP checkpoint now passes40/40semantic reads
-with bounded concurrency2, timedwall2.557582s/capture13.170562s; all counts and
-quantiles independently checked, clean shutdown and exact new DB removal.
-First attempt exit1/3.080768s had0requests and Gunicornnotstarted, preserving
-DBOID3967104; no measurements from that failure. The retry is current-only,
-not a sustained-capacity/SLO/speedup or frontend/queue performance result.
+Current272 bounded sustained HTTP passes240/240 over64.280315s with four
+tenants,30waves and10resource snapshots. Frontend60/60 observations cover two
+routes/three viewports on historicalf0ccbackend with unchanged frontend; zero
+page errors/overflow. Independent counts/quantiles/cleanup pass. Follow-up204
+SQL proof shows9business reads/0DDL versus9reads/3DDL. These are valid bounded
+local observations, not realistic production/queue capacity or a speedup.
 
-Five-flow measurements retain baseline business-data errors; comparable medians
-nearly unchanged. Prepared4user/2pair/5cycle44/44 is in-process Flask/SQL, not
-HTTP/Gunicorn throughput. Eight-user run correctly failed the unchanged same-IP
-login limiter. Follow-up204SQL proof passes:4authreads, business9reads0DDL
-versus9reads3DDL before; tinyfixtureplans and exact disposable DB removal verified.
-Frontend/sustainedserver/queue capacity remain open.
+The exact remaining AC7 issue is the literal five-successful-distributions
+wording: original302auth/tenant baseline has50/50 business-data failures and
+null successful-journey quantiles. That failed baseline is genuine evidence and
+must not be relabeled green or removed. Four other comparable journey medians
+are nearly unchanged. Assess a separately identified working pre-optimization
+reference for the authentication journey; retain original baseline failures.
+No production-capacity requirement is silently added to bounded-local AC7.
 
 ## AC8 / AC9 — Operations and demo
 
@@ -130,9 +160,11 @@ scenarios support but do not replace that rehearsal.
 
 ## AC10 / AC11 — Reports and review
 
-Reports00–10 exist as working documents; final reconciliation/current commands
-remain. Fresh-session reviewer (fork_turns=none) completed30262a5b..2f224f05
-with FAIL forAC1–AC11 and a new social-role candidate. Earlier thread-limit
-obstacle is resolved. Final corrected-revision aggregate/re-review remains.
+Reports00–10, scorecard and operational documents now reflect4728backend,
+117native browser,240HTTP and60frontend results with revision/scope limits.
+Current-document consistency review accepts AC10PASS, independently of
+overall release readiness. Fresh fork-none272whole-diff report exists with
+root-attributed later scoped-review addenda; older2fverdict is preserved.
+Current-image/security/demo and final all-DoD reconciliation remain for AC11.
 Placeholder proof files are not acceptance evidence; structural validator
 success only confirms file presence. Overall FAIL remains until criteria met.

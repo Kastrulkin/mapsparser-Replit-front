@@ -2,6 +2,65 @@
 
 Status: **FAIL / incomplete whole-goal evidence**, updated 2026-09-18 UTC. This is a progress checkpoint, not final independent sign-off.
 
+15:49UTC: independent current-document review accepts AC10PASS alongside
+AC3/AC4. All required reports reflect current evidence with residual risks and
+evidence-backed scores. This is documentation acceptance, not release approval;
+overallFAIL and all remaining criteria are unchanged.
+
+After15:44UTC exact-criterion review: AC3PASS (critical frontend/real-API and
+tested adverse/accessibility states), AC4PASS. AC2 remains incomplete for P1
+image/reproducibility findings. AC7 needs a successful earlier-working-reference
+distribution for auth/tenant; original302failed baseline remains unchanged.
+
+15:30 UTC: current272backend + verified unchanged frontend passes117/117
+native real-API cases (261.027621s capture). Only three compiled-runner cases
+remain historical. Bounded current HTTP240/240 over64.280315s and frontend
+60/60 over48.980093s command time have independent scoped PASS; frontend uses
+historicalf0ccbackend. Zero browser page errors/overflow; six screenshots viewed.
+Methods and exploratory limits are in report04. Successful native DBs5025701,
+5768975,5775953 independently absent; failed capture/DB evidence preserved.
+No runtime source changes, production effects or blanket capacity/image claim.
+
+14:46 UTC: exact `272794a4` full backend passes **4728 tests**, 7 intentional
+live-provider skips and 6 warnings in 656.63s. Capture 669.910516s, exit0,
+no timeout/truncation; fresh migration and suite return0. New DB OID5025701
+was dropped after normal success, absence independently confirmed. AC4 is
+now PASS for isolated local/synthetic integration contracts; not production,
+live-provider or current-image proof. Overall verdict remains FAIL.
+
+Historical checkpoints below retain the status known at their recorded time.
+
+14:22 UTC: combined mobile/direct role and subscription GREEN passes **104
+tests in 156.03s**, capture160.365553s exit0/no timeout/truncation/stderr.
+Exact source-frozen 3d archive plus pinned current 7-file overlay; not a full
+current-source aggregate. Covers51native stored-role/subscription cases,
+36adjacent action/review cases and17subscription cases. Corrected mobile RED
+4fail/6pass32.02s and capability RED2fail/2pass15.12s remain evidence; initial
+mobile RED5fail/5pass included one test-only pending vs pending_approval
+expectation error, corrected without weakening the required denial/effects.
+No actual model/provider effect. Final independent reconciliation PASS,
+zero surviving fixture DBs; exact seven files committed272794a4 at14:26UTC.
+
+Reviewed CI3ac13d87 has root11fake-command PASS17.08s/18.168537s capture,
+not a real hosted workflow/build/browser run. Release profile a00ac558 remains
+config-contract proof only. At this checkpoint all AC statuses remained FAIL;
+the later exact-head full run above closes AC4 only.
+
+13:46 UTC: direct-route GREEN passes 70 checks in 106.93s, capture 110.904479s,
+exit 0, no timeout/truncation. Independent scoped PASS and catalog absence of
+all disposable fixture DBs. SEC-RBAC-06 remains PARTIAL: the normal Telegram
+mobile-actions confirmation is a separate role-blind source candidate now
+being causally tested. Do not reuse the 3d full aggregate for this newer source.
+
+13:36 UTC: SEC-RBAC-06 full RED is independently verified: 10 failed / 27
+passed in 104.57s (capture 109.002213s, exit 1, no timeout/truncation).
+The 10 failures are direct/network viewer × five mutations: 4 counted generator
+calls, 4 persisted manual-publication effects and 2 persisted edits. The 27
+controls cover revoked/foreign denial, allowed owner/member actions and two
+read-only viewer previews. All disposable fixture DBs were confirmed absent
+afterward. Minimal write-gate patch is statically reviewed; GREEN pending.
+No real provider was called. The full 3d aggregate below predates this patch.
+
 13:18UTC: local HTTP retry passes40/40semantic reads,4synthetic tenants,
 concurrency2, timedwall2.557582s/capture13.170562s,exact3d source. Gunicorn exits0
 after SIGTERM and is reaped; fresh DB OID3967105 removed, absence independently

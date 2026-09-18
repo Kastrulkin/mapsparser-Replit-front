@@ -64,3 +64,23 @@ Credentials, session tokens, provider keys, business finances, private knowledge
 ## Deployment reality / unresolved gaps
 
 Compose defines app, worker, operator-worker, Telegram, PostgreSQL, Redis and ancillary services. Base Compose bind-mounts host code over image contents, so image identity alone is not a release attestation. The isolated staging override removes code/env mounts and suppresses integrations. Docker recovery was explicitly approved without reset, prune or volume deletion; recovered task-owned storage evidence does not certify prior user volumes. Alembic has an advisory lock, but multiple startup actors remain a configuration concern. These are audit findings, not instructions to mutate production now.
+
+## Bounded architecture inspection — current `272794a4`
+
+Read-only follow-up checked the source boundaries, not just this diagram.
+`main.py` is726lines and `worker.py`7851lines at this revision; size alone
+does not establish a correctness defect or justify a rewrite.
+
+| Surface inspected | Observation and disposition |
+| --- | --- |
+| App construction/registrations (`main.py:230,296`) | Central Flask composition and blueprint registration agree with the runtime map. No contradictory entrypoint found in this scoped check. |
+| Legacy route binding (`main.py:691`, `_bind_runtime_namespace`) | Route chunks receive a runtime namespace and are rebound by wrappers. Dependency direction is implicit; ordinary import-graph inspection cannot prove the absence of dynamic cycles. Recorded maintainability debt, not a reproduced request defect. |
+| Worker import/configuration (`worker.py:21,128`) | Import-time dotenv/configuration and process-global browser/orchestrator/timing state exist. Audit children explicitly disable dotenv. No import-order or cross-request failure was reproduced by this read-only inspection. |
+| Transient caches | Bounded Redis-client/readiness/public-route caches exist, including maxsize2,1,1024 surfaces. Dynamic configuration/cache invalidation is not globally certified; no stale-cache incident was reproduced here. |
+| Durable job boundary (`worker.py:5159`, sheet executor/outreach services) | SQL locking/`SKIP LOCKED` claim paths support the map. Multiple domain loops share a large process and transaction boundaries; scoped concurrency/replay tests, not this inspection, establish their tested behavior. |
+| Tenant/approval boundaries | Actual stored-role, object-target and approval tests are linked in the backlog. This architecture check does not extend their scope to every route. |
+
+Disposition: keep the current stack and explicit approval boundary. Any worker
+or legacy-route extraction should isolate one measured maintenance/failure
+surface, preserve its contracts, and run adjacent regression tests. There is
+no evidence here supporting a microservice split or a broad rewrite.
