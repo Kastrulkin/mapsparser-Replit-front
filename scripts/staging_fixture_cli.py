@@ -10,7 +10,7 @@ import json
 import os
 import time
 import uuid
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from database_manager import get_db_connection
 
@@ -24,6 +24,11 @@ FINANCE_FIXTURE_FILE = "localos-e2e-finance.csv"
 OWNER_NETWORK_NAME = "[E2E] Сеть салонов"
 FOREIGN_BUSINESS_NAME = "[E2E] Чужая точка"
 FOREIGN_NETWORK_NAME = "[E2E] Чужая сеть"
+SOCIAL_RECONCILIATION_PLAN_LABEL = "social-publication-reconciliation-plan"
+SOCIAL_RECONCILIATION_ITEM_LABEL = "social-publication-reconciliation-item"
+SOCIAL_RECONCILIATION_POST_LABEL = "social-publication-reconciliation-post"
+SOCIAL_RECONCILIATION_APPROVAL_LABEL = "social-publication-reconciliation-approval"
+SOCIAL_RECONCILIATION_ATTEMPT_LABEL = "social-publication-reconciliation-attempt"
 
 
 def fixture_id(label: str) -> str:
@@ -34,6 +39,37 @@ def require_isolated_staging() -> None:
     database_url = os.getenv("DATABASE_URL", "")
     if os.getenv("APP_ENV") != "staging" or "localos_staging" not in database_url:
         raise RuntimeError("Fixture controls are available only in isolated staging")
+
+
+def require_social_publication_reconciliation_fixture() -> None:
+    if os.getenv("LOCALOS_STAGING_FIXTURE_MODE") != "1":
+        raise RuntimeError("Social publication reconciliation fixture requires explicit staging fixture mode")
+    if any(os.getenv(key) for key in ("PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE", "PGOPTIONS")):
+        raise RuntimeError("Social publication reconciliation fixture refuses libpq overrides")
+    database_url = os.getenv("DATABASE_URL", "")
+    parsed = urlsplit(database_url)
+    if parsed.scheme not in {"postgresql", "postgres"} or parsed.query or parsed.fragment:
+        raise RuntimeError("Social publication reconciliation fixture requires an exact isolated staging database URL")
+    try:
+        port = parsed.port
+    except ValueError:
+        raise RuntimeError("Social publication reconciliation fixture requires an exact isolated staging database URL")
+    database_name = parsed.path.lstrip("/")
+    docker_target = (
+        parsed.hostname == "postgres"
+        and port == 5432
+        and parsed.username == "localos_staging"
+        and database_name == "localos_staging"
+    )
+    native_target = (
+        parsed.hostname in {"127.0.0.1", "::1"}
+        and port is not None
+        and port >= 32768
+        and database_name.startswith("localos_staging_")
+        and database_name.endswith("test")
+    )
+    if not docker_target and not native_target:
+        raise RuntimeError("Social publication reconciliation fixture requires an exact isolated staging database URL")
 
 
 def verification_token(email: str) -> None:
@@ -110,6 +146,184 @@ def reset_finance() -> None:
     conn.commit()
     conn.close()
     print(business_id)
+
+
+def social_publication_reconciliation_ids() -> dict[str, str]:
+    return {
+        "plan_id": fixture_id(SOCIAL_RECONCILIATION_PLAN_LABEL),
+        "item_id": fixture_id(SOCIAL_RECONCILIATION_ITEM_LABEL),
+        "post_id": fixture_id(SOCIAL_RECONCILIATION_POST_LABEL),
+        "approval_id": fixture_id(SOCIAL_RECONCILIATION_APPROVAL_LABEL),
+        "attempt_id": fixture_id(SOCIAL_RECONCILIATION_ATTEMPT_LABEL),
+    }
+
+
+def is_social_publication_reconciliation_metadata(value: object) -> bool:
+    if isinstance(value, dict):
+        return value.get("fixture") == "social-publication-reconciliation"
+    try:
+        parsed = json.loads(str(value or "{}"))
+    except (TypeError, ValueError):
+        return False
+    return isinstance(parsed, dict) and parsed.get("fixture") == "social-publication-reconciliation"
+
+
+def reset_social_publication_reconciliation() -> None:
+    require_social_publication_reconciliation_fixture()
+    business_id = owner_business_id()
+    user_id = owner_user_id()
+    ids = social_publication_reconciliation_ids()
+    metadata = {
+        "fixture": "social-publication-reconciliation",
+        "publish_attempt": {
+            "id": ids["attempt_id"],
+            "state": "uncertain",
+            "actor_id": user_id,
+            "approval_id": ids["approval_id"],
+            "content_business_fingerprint": "staging-fixture-content-business-fingerprint",
+            "intent_committed_at": "2026-09-18T00:00:00+00:00",
+            "source": "staging_fixture_cli",
+        },
+    }
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT business_id, title, input_snapshot_json FROM contentplans WHERE id = %s",
+            (ids["plan_id"],),
+        )
+        existing_plan = cursor.fetchone()
+        if existing_plan and str(existing_plan[0] or "") != business_id:
+            raise RuntimeError("Synthetic social publication reconciliation plan belongs to another business")
+        if existing_plan and (
+            str(existing_plan[1] or "") != "E2E publication reconciliation"
+            or not is_social_publication_reconciliation_metadata(existing_plan[2])
+        ):
+            raise RuntimeError("Synthetic social publication reconciliation plan fixture identity does not match")
+        cursor.execute(
+            "SELECT business_id, plan_id, source_kind, source_ref FROM contentplanitems WHERE id = %s",
+            (ids["item_id"],),
+        )
+        existing_item = cursor.fetchone()
+        if existing_item and str(existing_item[0] or "") != business_id:
+            raise RuntimeError("Synthetic social publication reconciliation item belongs to another business")
+        if existing_item and (
+            str(existing_item[1] or "") != ids["plan_id"]
+            or str(existing_item[2] or "") != "e2e_fixture"
+            or str(existing_item[3] or "") != "social-publication-reconciliation"
+        ):
+            raise RuntimeError("Synthetic social publication reconciliation item fixture identity does not match")
+        cursor.execute(
+            "SELECT business_id, content_plan_id, content_plan_item_id, metadata_json FROM social_posts WHERE id = %s",
+            (ids["post_id"],),
+        )
+        existing_post = cursor.fetchone()
+        if existing_post and str(existing_post[0] or "") != business_id:
+            raise RuntimeError("Synthetic social publication reconciliation ID belongs to another business")
+        if existing_post and (
+            str(existing_post[1] or "") != ids["plan_id"]
+            or str(existing_post[2] or "") != ids["item_id"]
+            or not is_social_publication_reconciliation_metadata(existing_post[3])
+        ):
+            raise RuntimeError("Synthetic social publication reconciliation post fixture identity does not match")
+        cursor.execute(
+            "SELECT id, business_id, content_plan_id, metadata_json FROM social_posts "
+            "WHERE content_plan_item_id = %s AND platform = 'telegram'",
+            (ids["item_id"],),
+        )
+        existing_item_platform = cursor.fetchone()
+        if existing_item_platform and (
+            str(existing_item_platform[0] or "") != ids["post_id"]
+            or str(existing_item_platform[1] or "") != business_id
+            or str(existing_item_platform[2] or "") != ids["plan_id"]
+            or not is_social_publication_reconciliation_metadata(existing_item_platform[3])
+        ):
+            raise RuntimeError("Synthetic social publication reconciliation item platform belongs to another post")
+        cursor.execute(
+            """
+            INSERT INTO contentplans (
+                id, business_id, scope_type, title, period_days, period_start, period_end,
+                plan_status, generation_mode, input_snapshot_json, created_by
+            ) VALUES (%s, %s, 'single_business', 'E2E publication reconciliation', 14, CURRENT_DATE,
+                      CURRENT_DATE + 13, 'draft', 'journey', %s::jsonb, %s)
+            ON CONFLICT (id) DO UPDATE SET business_id = EXCLUDED.business_id,
+                title = EXCLUDED.title, created_at = NOW(), updated_at = NOW()
+            """,
+            (ids["plan_id"], business_id, json.dumps({"fixture": "social-publication-reconciliation"}), user_id),
+        )
+        cursor.execute(
+            """
+            INSERT INTO contentplanitems (
+                id, plan_id, business_id, scheduled_for, content_type, theme, goal,
+                source_kind, source_ref, draft_text, status, metadata_json
+            ) VALUES (%s, %s, %s, CURRENT_DATE, 'news', 'E2E сверка публикации',
+                      'Проверить подтверждённую публикацию', 'e2e_fixture',
+                      'social-publication-reconciliation', 'Синтетический текст для сверки публикации.',
+                      'approved', %s::jsonb)
+            ON CONFLICT (id) DO UPDATE SET plan_id = EXCLUDED.plan_id,
+                business_id = EXCLUDED.business_id, scheduled_for = EXCLUDED.scheduled_for,
+                draft_text = EXCLUDED.draft_text, status = 'approved', updated_at = NOW()
+            """,
+            (ids["item_id"], ids["plan_id"], business_id, json.dumps({"fixture": "social-publication-reconciliation"})),
+        )
+        cursor.execute(
+            """
+            INSERT INTO social_posts (
+                id, business_id, content_plan_id, content_plan_item_id, platform, publish_mode,
+                status, scheduled_for, approved_at, approval_id, base_text, platform_text,
+                media_json, metadata_json, created_by, provider_post_id, provider_post_url, last_error
+            ) VALUES (%s, %s, %s, %s, 'telegram', 'api', 'publishing', NOW(), NOW(), %s,
+                      'Синтетический текст для сверки публикации.', 'Синтетический текст для сверки публикации.',
+                      '[]'::jsonb, %s::jsonb, %s, NULL, NULL, 'Synthetic uncertain provider outcome')
+            ON CONFLICT (content_plan_item_id, platform) DO UPDATE SET
+                status = 'publishing', scheduled_for = NOW(), approved_at = NOW(),
+                approval_id = EXCLUDED.approval_id, base_text = EXCLUDED.base_text,
+                platform_text = EXCLUDED.platform_text, media_json = EXCLUDED.media_json,
+                metadata_json = EXCLUDED.metadata_json, created_by = EXCLUDED.created_by,
+                provider_post_id = NULL, provider_post_url = NULL,
+                last_error = 'Synthetic uncertain provider outcome', updated_at = NOW()
+            """,
+            (
+                ids["post_id"], business_id, ids["plan_id"], ids["item_id"], ids["approval_id"],
+                json.dumps(metadata, ensure_ascii=False), user_id,
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    print(json.dumps({"business_id": business_id, **ids}, ensure_ascii=False))
+
+
+def inspect_social_publication_reconciliation() -> None:
+    require_social_publication_reconciliation_fixture()
+    ids = social_publication_reconciliation_ids()
+    business_id = owner_business_id()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT id, business_id, status, provider_post_id, provider_post_url, metadata_json
+            FROM social_posts
+            WHERE id = %s
+            """,
+            (ids["post_id"],),
+        )
+        row = cursor.fetchone()
+        columns = [description[0] for description in cursor.description or []]
+    finally:
+        conn.close()
+    if not row:
+        raise RuntimeError("Synthetic social publication reconciliation post was not found")
+    payload = {column: row[index] for index, column in enumerate(columns)}
+    if str(payload.get("business_id") or "") != business_id:
+        raise RuntimeError("Synthetic social publication reconciliation post is outside the owner business")
+    payload["post_id"] = ids["post_id"]
+    payload["attempt_id"] = ids["attempt_id"]
+    print(json.dumps(payload, ensure_ascii=False, default=str))
 
 
 def network_fixture() -> None:
@@ -385,6 +599,8 @@ def main() -> None:
     subparsers.add_parser("owner-business-id")
     subparsers.add_parser("owner-user-id")
     subparsers.add_parser("reset-finance")
+    subparsers.add_parser("reset-social-publication-reconciliation")
+    subparsers.add_parser("inspect-social-publication-reconciliation")
     subparsers.add_parser("network-fixture")
     subparsers.add_parser("telegram-init-data")
     subparsers.add_parser("cleanup-admin-journeys")
@@ -405,6 +621,12 @@ def main() -> None:
         return
     if args.command == "reset-finance":
         reset_finance()
+        return
+    if args.command == "reset-social-publication-reconciliation":
+        reset_social_publication_reconciliation()
+        return
+    if args.command == "inspect-social-publication-reconciliation":
+        inspect_social_publication_reconciliation()
         return
     if args.command == "network-fixture":
         network_fixture()

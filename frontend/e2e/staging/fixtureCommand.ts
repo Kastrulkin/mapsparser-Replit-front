@@ -4,10 +4,19 @@ import { resolve } from 'node:path';
 
 export const fixtureCommand = (...args: string[]) => {
   const repositoryRoot = resolve(process.cwd(), '..');
+  const socialPublicationFixture = args.some((argument) => (
+    argument === 'reset-social-publication-reconciliation'
+    || argument === 'inspect-social-publication-reconciliation'
+  ));
   const stagingContainer = process.env.JOURNEY_STAGING_CONTAINER;
   if (stagingContainer) {
+    const dockerArgs = ['exec'];
+    if (socialPublicationFixture) {
+      dockerArgs.push('-e', 'LOCALOS_STAGING_FIXTURE_MODE=1');
+    }
+    dockerArgs.push(stagingContainer, 'python', '/app/scripts/staging_fixture_cli.py', ...args);
     return execFileSync('docker', [
-      'exec', stagingContainer, 'python', '/app/scripts/staging_fixture_cli.py', ...args,
+      ...dockerArgs,
     ], { cwd: repositoryRoot, encoding: 'utf8' }).trim();
   }
   const nativeDatabaseUrl = process.env.JOURNEY_STAGING_DATABASE_URL;
@@ -43,6 +52,7 @@ export const fixtureCommand = (...args: string[]) => {
           ...fixtureEnv,
           APP_ENV: 'staging',
           DATABASE_URL: nativeDatabaseUrl,
+          ...(socialPublicationFixture ? { LOCALOS_STAGING_FIXTURE_MODE: '1' } : {}),
           PYTHON_DOTENV_DISABLED: '1',
           // Keep any caller-provided sitecustomize network guard first.
           PYTHONPATH: [process.env.PYTHONPATH, resolve(repositoryRoot, 'src'), repositoryRoot].filter(Boolean).join(':'),
@@ -56,7 +66,9 @@ export const fixtureCommand = (...args: string[]) => {
       'compose', '-p', 'localos-staging',
       '-f', 'docker-compose.yml',
       '-f', 'docker-compose.staging.yml',
-      'exec', '-T', 'app', 'python', '/app/scripts/staging_fixture_cli.py',
+      'exec', '-T',
+      ...(socialPublicationFixture ? ['-e', 'LOCALOS_STAGING_FIXTURE_MODE=1'] : []),
+      'app', 'python', '/app/scripts/staging_fixture_cli.py',
       ...args,
     ],
     { cwd: repositoryRoot, encoding: 'utf8' },
