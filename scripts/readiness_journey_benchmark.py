@@ -249,6 +249,8 @@ def remove_external_provider_environment() -> None:
 
 def sitecustomize_provenance(pythonpath: str) -> dict[str, str] | None:
     for entry in pythonpath.split(os.pathsep):
+        if not entry:
+            continue
         candidate = Path(entry) / "sitecustomize.py"
         if candidate.is_file():
             return {

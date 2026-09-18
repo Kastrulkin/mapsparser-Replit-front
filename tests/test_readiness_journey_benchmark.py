@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -145,6 +146,14 @@ def test_sitecustomize_provenance_hashes_the_active_guard(tmp_path):
     assert provenance["path"] == str(guard)
     assert len(provenance["sha256"]) == 64
     assert benchmark.sitecustomize_provenance("") is None
+
+
+def test_empty_pythonpath_does_not_treat_working_directory_guard_as_provenance(tmp_path, monkeypatch):
+    (tmp_path / "sitecustomize.py").write_text("# unrelated local file\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    assert benchmark.sitecustomize_provenance("") is None
+    assert benchmark.sitecustomize_provenance(os.pathsep) is None
 
 
 def test_drop_guard_refuses_non_owned_database():
