@@ -1,0 +1,73 @@
+# Opt-in immutable application release profile. It never builds from this checkout.
+# Required variables are deliberately split so every rendered application image
+# contains the literal digest separator. Docker rejects a non-hex digest rather
+# than resolving a mutable tag.
+services:
+  app:
+    image: ${LOCALOS_RELEASE_IMAGE_REPOSITORY:?Set LOCALOS_RELEASE_IMAGE_REPOSITORY}@sha256:${LOCALOS_RELEASE_IMAGE_DIGEST:?Set LOCALOS_RELEASE_IMAGE_DIGEST}
+    build: !reset null
+    environment:
+      LOCALOS_MIGRATION_MODE: schema-check-only
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+    volumes: !override
+      - release_debug_data:/app/debug_data
+      - release_media_uploads:/app/debug_data/media_uploads
+      - release_operator_audio:/app/operator_audio
+
+  worker:
+    image: ${LOCALOS_RELEASE_IMAGE_REPOSITORY:?Set LOCALOS_RELEASE_IMAGE_REPOSITORY}@sha256:${LOCALOS_RELEASE_IMAGE_DIGEST:?Set LOCALOS_RELEASE_IMAGE_DIGEST}
+    build: !reset null
+    environment:
+      LOCALOS_MIGRATION_MODE: schema-check-only
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+    volumes: !override
+      - release_debug_data:/app/debug_data
+      - release_media_uploads:/app/debug_data/media_uploads
+      - release_operator_audio:/app/operator_audio
+
+  operator-worker:
+    image: ${LOCALOS_RELEASE_IMAGE_REPOSITORY:?Set LOCALOS_RELEASE_IMAGE_REPOSITORY}@sha256:${LOCALOS_RELEASE_IMAGE_DIGEST:?Set LOCALOS_RELEASE_IMAGE_DIGEST}
+    build: !reset null
+    environment:
+      LOCALOS_MIGRATION_MODE: schema-check-only
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+    volumes: !override
+      - release_debug_data:/app/debug_data
+      - release_media_uploads:/app/debug_data/media_uploads
+      - release_operator_audio:/app/operator_audio
+
+  telegram-bot:
+    image: ${LOCALOS_TELEGRAM_RELEASE_IMAGE_REPOSITORY:?Set LOCALOS_TELEGRAM_RELEASE_IMAGE_REPOSITORY}@sha256:${LOCALOS_TELEGRAM_RELEASE_IMAGE_DIGEST:?Set LOCALOS_TELEGRAM_RELEASE_IMAGE_DIGEST}
+    build: !reset null
+    volumes: !override
+      - release_media_uploads:/app/debug_data/media_uploads
+      - release_operator_audio:/app/operator_audio
+
+  migrator:
+    image: ${LOCALOS_RELEASE_IMAGE_REPOSITORY:?Set LOCALOS_RELEASE_IMAGE_REPOSITORY}@sha256:${LOCALOS_RELEASE_IMAGE_DIGEST:?Set LOCALOS_RELEASE_IMAGE_DIGEST}
+    build: !reset null
+    profiles: [release-migrate]
+    restart: "no"
+    environment:
+      LOCALOS_MIGRATION_MODE: migrate-only
+      DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+      FLASK_APP: src.main:app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["true"]
+    volumes: !override []
+
+volumes:
+  release_debug_data:
+  release_media_uploads:
+  release_operator_audio:
