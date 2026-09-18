@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from flask import Blueprint, jsonify, request
 
 from auth_system import create_session
-from core.auth_helpers import require_auth_from_request, verify_business_access
+from core.auth_helpers import require_auth_from_request, verify_business_access, verify_business_write_access
 from database_manager import DatabaseManager
 from services.operator_audit import list_operator_events, record_operator_event
 from services.operator_capabilities import (
@@ -1312,7 +1312,7 @@ def operator_chat():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        has_access, owner_id = verify_business_write_access(cursor, business_id, user_data)
         if not has_access:
             status_code = 403 if owner_id else 404
             message_text = "Нет доступа" if owner_id else "Бизнес не найден"
