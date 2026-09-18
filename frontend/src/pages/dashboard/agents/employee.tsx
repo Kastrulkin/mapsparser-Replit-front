@@ -1363,7 +1363,7 @@ export const EmployeeWorkspaceSection = ({
     tone === 'attention' ? 'bg-amber-50 text-amber-950 shadow-[0_1px_2px_rgba(120,53,15,0.05),0_0_0_1px_rgba(245,158,11,0.25)]' : '',
     tone === 'error' ? 'bg-rose-50 text-rose-950 shadow-[0_1px_2px_rgba(127,29,29,0.05),0_0_0_1px_rgba(244,63,94,0.24)]' : '',
   )}>
-    <div className="text-xs font-semibold uppercase tracking-wide opacity-60">{title}</div>
+    <div className="text-xs font-semibold uppercase tracking-wide opacity-80">{title}</div>
     <div className="mt-2">{children}</div>
   </section>
 );
