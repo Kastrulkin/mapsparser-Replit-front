@@ -99,10 +99,12 @@
         "raw/content-focus-build.json",
         "raw/content-focus-sync.json",
         "raw/content-focus-targeted.json",
-        "raw/content-focus-browser.json"
+        "raw/content-focus-browser.json",
+        "raw/frontend-aggregate-3dca5fda.json (exit1: incorrect final artifact path only)",
+        "raw/frontend-artifact-proof-3dca5fda.json"
       ],
       "gaps": [
-        "Full6c frontend:588unit/126files,72mockbrowser, fullTS and lint0errors/1warning pass495.068s. Reviewed20431224 layout+focus fix passes fullTS/lint/22targetedunits/bothbuilds84.350s,6/6focused realbrowser25.178s and full120/120realbrowser227.301s. Earlier116/117 and layout-only117/120 failures retained. Servedfrontend artifact is separately synced overf0cc backend, no immutable-image or final whole-source aggregate claim. Broader adverse-state/performance coverage remains."
+        "Exact3d frontend stages pass591unit/126files,72mockbrowser, fullTS, lint0errors/1warning and bothbuilds; original capture exit1/562.759479s solely wrong final artifact-path assertion. Separate independently reviewed artifact proof exit0/13.475289s verifies699tracked frontend blobs,257artifact hashes and11+3HTML local refs. Combined two-capture stage evidence, not a relabeled green aggregate. Earlier204frontend/f0ccbackend120/120realbrowser227.301s remains separate from current immutable-image/backend verification. Broader adverse-state/performance coverage remains."
       ]
     },
     {
@@ -136,10 +138,14 @@
         "raw/full-backend-6c96192c.json",
         "raw/services-content-viewer-rbac-final.json",
         "raw/business-data-preauth-green.json",
-        "raw/social-posts-viewer-rbac-expanded-green-20260918.json"
+        "raw/social-posts-viewer-rbac-expanded-green-20260918.json",
+        "raw/full-backend-3dca5fda.json (FAIL:10failed4645passed7skipped)",
+        "raw/backend-causal10-3dca5fda.json",
+        "raw/python-f821-3dca5fda.json",
+        "raw/full-backend-3dca5fda-retry.json"
       ],
       "gaps": [
-        "Clean6c full backend4538pass/7live-provider skips/5warnings395.49s with nativePG15 and DockerPG16 groups. Later125900b2 role package27focusedpass;2d875357 GET15realPGpass;813609cc social roles254pass0skips42.39s including13critical realPG lifecycle/concurrent/manual cases, independently reviewed. Final same-source aggregate after remaining approval/readiness work and wider role/tool matrices remain."
+        "Exact3d corrected full backend passes4655tests/7explicit live-provider skips/6warnings481.71s; capture494.328144s exit0/no timeout/truncation, migration/tests rc0,stagecompletevalidtrue, exact fresh DB3585990 removed after identity check. First10failed4645passed capture remains:8Compose plugin+2Python browser lookup failures; causal10passes20.23s. Canonical scoped F821 passes0.532675s. Wider review-reply mutation roles are a source-level candidate under investigation, not a reproduced defect; broader role/tool matrices and whole-diff closure remain. Original failed-run DB preserved."
       ]
     },
     {
@@ -199,7 +205,7 @@
         "raw/finance-upload-admission-root.json",
         "raw/finance-upload-admission-root-retry.json",
         "raw/post-cleanup-disk-during-backend.json",
-        "raw/full-backend-3dca5fda.json (FAIL:10failed4645passed7skipped)",
+        "raw/secret-delta-24e-to-34618037.json",
         "raw/trivy-vulnerability-db.json"
       ],
       "gaps": [
@@ -228,10 +234,14 @@
         "raw/query-proof-f0cc182a.json",
         "raw/query-proof-f0cc182a-command.json",
         "raw/query-proof-20431224.json",
-        "raw/query-proof-20431224-command.json"
+        "raw/query-proof-20431224-command.json",
+        "raw/http-gunicorn-3dca5fda-command.json (FAIL before requests)",
+        "raw/http-gunicorn-3dca5fda.json (validfalse, no HTTP measurements)",
+        "raw/http-gunicorn-3dca5fda-retry-command.json",
+        "raw/http-gunicorn-3dca5fda-retry.json"
       ],
       "gaps": [
-        "Independently reconciled cold-process50-sample comparison retains baseline700/750 requests versus current750/750; each150/150invariants, no general speedup. Prepared94de718c profile4users/2concurrent/5repetitions passes44/44semantic requests with child CPU/max-RSS and descriptive quantiles.8-user same-IP profile truthfully fails after5login successes/3HTTP429; limiter unchanged. Actual20431224 SQL proof passes7.933s: auth4reads/business9reads0DDL versus prior9reads3DDL; three tiny-fixture representative plans and exactownedDBcleanup confirmed. Frontend and sustained HTTP/server/queue capacity remain pending; bounded Flask test-client dispatch is not production capacity proof."
+        "Independently reconciled cold-process50-sample comparison retains baseline700/750 requests versus current750/750; each150/150invariants, no general speedup. Prepared94de718c profile4users/2concurrent/5repetitions passes44/44semantic requests.8-user same-IP profile retains3HTTP429. Exact3d local Gunicorn/nativePG HTTP checkpoint passes40/40reads at concurrency2, timedwall2.557582s, command13.170562s; p50/p95/max and ps snapshots independently reconciled, exact fresh DB removed. First attempt failed before requests/Gunicorn due missing Flask app configuration, retained raw+DB provide no measurements. This remains current-only exploratory HTTP evidence, not sustained load/SLO/capacity or speedup. Actual204 SQL proof shows9reads0DDL versus prior9reads3DDL; tiny plans, frontend and queue/capacity gaps remain."
       ]
     },
     {

@@ -22,12 +22,16 @@ writes require the documented human approval or manual boundary.
   **227.301 seconds** with frontend `20431224` over the isolated `f0cc` backend.
   This is local synthetic evidence from a separately synced frontend artifact,
   not a final immutable image, customer or production run.
-- A clean backend aggregate at `6c96192c` recorded **4,538 passed, 7 skipped**
-  tests in395.49seconds, including native and Docker PostgreSQL integration.
-  Only live-provider checks were intentionally skipped. Later scoped changes
-  have their own tests and still require a final same-revision aggregate.
-- Frontend checkpoint6c96192c passes588unit tests,72mocked browser scenarios,
-  full TypeScript and lint with0errors/1existingwarning. Current cleanf0cc
+- A clean backend aggregate at `3dca5fda` recorded **4,655 passed, 7 skipped**
+  tests in481.71seconds, including native and Docker PostgreSQL integration.
+  Only live-provider checks were intentionally skipped. Earlier environment
+  failures were reproduced and corrected without product changes; final image
+  and broader role/tool coverage remain separate gates.
+- Frontend checkpoint3dca5fda passes591unit tests,72mocked browser scenarios,
+  full TypeScript and lint with0errors/1existingwarning. Both builds passed;
+  the original capture then failed a wrong artifact-path assertion. A separate
+  reviewed source/HTML/asset proof passes; the original exit1 is retained, not
+  relabeled as an all-green aggregate. Current cleanf0cc
   Docker image builds both frontends with Node22 and passes nonroot/offline/
   read-only Chromium and Python dependency-consistency smoke checks.
 - A controlled synthetic recovery exercise compared all 288 tables, data,

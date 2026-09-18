@@ -2,6 +2,33 @@
 
 Status: **FAIL / incomplete whole-goal evidence**, updated 2026-09-18 UTC. This is a progress checkpoint, not final independent sign-off.
 
+13:18UTC: local HTTP retry passes40/40semantic reads,4synthetic tenants,
+concurrency2, timedwall2.557582s/capture13.170562s,exact3d source. Gunicorn exits0
+after SIGTERM and is reaped; fresh DB OID3967105 removed, absence independently
+confirmed. Reviewer recomputes counts/quantiles; ps snapshots are diagnostic,
+not capacity/SLO/speedup or peak-resource evidence. First13:13attempt exit1/
+3.080768s had0requests/Gunicornnotstarted; OID3967104 preserved, no measurements.
+Temporary launcher gained explicit Flask app config; application unchanged.
+
+13:11UTC: full3d backend retry PASS4655/7live-provider skips/6warnings,
+481.71s pytest/494.328144s capture,exit0/no timeout/truncation. Fresh migration
+and tests pass, validtrue/stagecomplete, exact DB OID3585990 removed after
+identity verification. Earlier first-run environment failures/capture/DB retained.
+Broader review-reply mutation roles are a source-level candidate under causal
+investigation; no confirmed new defect or product edit yet. Image and overall
+AC1–11 closure remain incomplete despite this full-suite checkpoint.
+
+13:07UTC: exact3d frontend stages pass591units/126files,72mockbrowser,fullTS,
+lint0errors/1warning,bothbuilds. Original aggregate exit1/562.759479s remains:
+final helper checked wrong public asset directory. Independent second-stage
+artifact proof exit0/13.475289s verifies699sourceblobs/257artifacts/11+3HTMLrefs;
+two-capture evidence, not an all-green original aggregate. First exact3d backend
+10fail4645pass7live-provider skips502.58s was8Compose+2browser environment
+lookup failures. Corrected causal10 passes20.23s; full fresh-DB retry RUNNING
+since13:02UTC. Scoped F821 passes, latest4commit secret delta zero findings.
+No new Docker image or production action. Additional cache cleanup not justified
+by ownership evidence; current local headroom remains below4GiB build-start gate.
+
 12:13UTC: exact2e build safely aborted at disk guard, exit75/264.590877s,
 free1420404KiB<1.5GiB during Chromium download. No completed image, smoke or
 inventory/advisory refresh. No production/user container/volume/image deletion.

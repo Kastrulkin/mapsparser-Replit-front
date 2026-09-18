@@ -1,6 +1,64 @@
 # Readiness handoff
 
-## Current continuation — 18 September 12:47 UTC
+Latest13:23UTC RED completed: raw/operator-review-reply-viewer-red-3dca5fda.json
+1failed/1owner controlpass8.25s,exit1/11.165518s/no timeout/truncation. Direct
+viewer webmanual route200vs403, owner persisted effect positive. No fixture
+errors and no src change. Worker adding synthetic before/after failure context
+and preparing fresh full35case RED; do not overwrite/replay original capture.
+
+Latest HTTP retry13:18UTC PASS: raw/http-gunicorn-3dca5fda-retry-command.json
+exit0/13.170562s; raw/http-gunicorn-3dca5fda-retry.json validtrue/40successes,
+timedwall2.557582s, cleanGunicornSIGTERM/rc0/reaped, exactnewDBOID3967105 removed.
+Independent read-only catalog confirms absence and preserves firstfailed DB
+OID3967104. Temporaryhelper597948... only fixes explicitFlaskapp+phasecodes;
+source remains3d. No remaining HTTP work for this bounded checkpoint; do not
+repeat wrappers. Current-only exploration, not production/sustainedcapacity.
+Next: guarded2case review-reply RED; worker owns newtest, no product fix yet.
+
+Latest HTTP attempt13:13UTC failed: raw/http-gunicorn-3dca5fda-command.json
+exit1/3.080768s, raw/http-gunicorn-3dca5fda.json validfalse/0timedrequests/
+Gunicornnotstarted. Fresh DBlocalos_readiness_http_d73a7da00a3e4b929823d800a55c2bf2
+OID3967104/readiness_test_owner intentionally retained; do not reuse/migrate/drop.
+Root observed migration child lacks explicit Flask app config; worker owns
+temp-only diagnosis/fix, no new run until reviewed. Original raw stays unchanged.
+
+## Current continuation — 18 September 13:11 UTC
+
+Exact3d full retry PASS:4655tests/7live-provider skips/6warnings481.71s,
+capture494.328144s,exit0/notimeout/untruncated,stagecompletevalidtrue.
+raw/full-backend-3dca5fda-retry.json records fresh DB
+readiness_full_test_3dca5fda_acc3e129b8c0/OID3585990/readiness_test_owner dropped
+after normal success and exact identity check. Previous v2failed DB preserved.
+No new final image; oldb43 supplied only pypdf overlay. Full-suite checkpoint
+does not close broader role/tool/adversarial or whole-goal criteria.
+HTTP checkpoint next after final wrapper review; reviewed probe1b95ffd3...
+fixes static `_version.py` inspection and real-overlay pure preflight passed.
+Read-only review-reply mutation audit identified a concrete role-blind gate
+candidate; worker owns ONLY a new causal test file, no src edits or DB runs yet.
+All user/unrelated changes preserved; no audit push/deploy.
+
+## Historical continuation — 18 September 13:07 UTC
+
+HEAD34618037 is docs-only; runtime source remains3dca5fda. Backend retry RUNNING
+since13:02UTC, tmuxreadiness-backend-3dca5fda-retry; hash-pinned root wrapper
+/private/tmp/localos-readiness-docker-resume.NsmVen/capture-full-backend-3dca5fda-retry.sh
+calls reviewed v3 launcher9e02baec... with new archive/nonce DB. Do not replay.
+Raw full-backend-3dca5fda-retry.json appears on completion; inspect child status,
+valid flag, timeout/truncation and exact DB cleanup. Previous v2 DB retained.
+Prior causal10 now passes10/20.23s (22.197591s capture); F821 passes0.532675s.
+
+Frontend finished:591units,72mockbrowser,fullTS,lint0errors/1warning,bothbuilds
+pass, but original aggregate capture exit1 due ONLY wrong final assets path.
+Do not call original capture green. Independent supplemental artifact proof
+raw/frontend-artifact-proof-3dca5fda.json exit0/13.475289s verifies699sourceblobs,
+11+3HTML refs and257artifacts, manifest9e7fa5450d245b6b6aecb990955b2cde08b6529cab541ee53bf0c0db21a557e8.
+No source rebuild/mutation during that read-only proof. Strict latest4commit
+secret delta passes0findings. All raw failures retained; AC1–11 still FAIL.
+Additional cache inventory lacks strong ownership, so no additional deletion.
+HTTP temp checkpoint remains prepare-only; serialize after backend, final
+pypdf overlay validator correction/re-review pending. No production changes.
+
+## Historical continuation — 18 September 12:47 UTC
 
 Full exact3d backend FAILED:10failed4645passed7live-provider skips6warnings,
 502.58s pytest/515.906761s capture,exit1,no timeout/truncation. Raw

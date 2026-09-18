@@ -1,5 +1,56 @@
 # Verified commands and evidence
 
+`operator-review-reply-viewer-red-3dca5fda.json`: first causal2case run,
+1failed/1passed8.25s,exit1/11.165518s,no timeout/truncation. Stored direct viewer
+webmanual route200vs403; owner persists intended manual status/review reply.
+Before/after values are not in the first denial failure text; fullmatrix with
+explicit synthetic state context is next. No new product fix or global RBAC claim.
+
+HTTP corrected command/proof: `http-gunicorn-3dca5fda-retry-command.json`
+exit0/13.170562s/no timeout/truncation; helper proofvalidtrue/40semantic successes
+(4tenants×5rounds×2routes),timedwall2.557582s. New DB OID3967105 removed after
+cleanGunicornSIGTERM/rc0/reap; independent catalog/quantile reconciliationPASS.
+Helper597948... sets explicitFlaskapp; original capture/DB remain intact.
+Report04 records20samples/route and diagnosticps snapshots without capacity,
+SLO,mean/peakCPU/RSS or speedup claims. No source or production changes.
+
+HTTP initial command/proof: `http-gunicorn-3dca5fda-command.json` exit1/3.080768s,
+no timeout/truncation; `http-gunicorn-3dca5fda.json` validfalse,0requests,
+Gunicornnotstarted, fresh synthetic DBOID3967104 preserved after setup error.
+No latency/resource/capacity result. Child migration lacks explicit Flask app
+configuration; exact diagnosis/correction remains in progress. Do not replay
+the first wrapper or overwrite either raw destination.
+
+## Full backend checkpoint — 18 September 13:11 UTC
+
+`full-backend-3dca5fda-retry.json`:4655passed,7explicit live-provider skips,
+6warnings,481.71s pytest/494.328144s capture;exit0/no timeout/truncation.
+Migration/tests rc0,stagecompletevalidtrue,database_policy=dropped_after_normal_success.
+Fresh database readiness_full_test_3dca5fda_acc3e129b8c0/OID3585990 owned by
+readiness_test_owner removed only after exact identity validation and absence
+confirmed. Failed first capture/DB remain separate. This is one full aggregate,
+not a sum of causal/scoped results; nativePG15 plus cachedDockerPG16 groups.
+
+## Historical frozen-source checks — 18 September 13:07 UTC
+
+- `backend-causal10-3dca5fda.json`: exact10former failures pass20.23s,
+ capture22.197591s,exit0,no timeout/truncation; no DB/migration/provider work.
+- `full-backend-3dca5fda-retry.json`: RUNNING since13:02UTC, own tmux/fresh3d
+ archive/nonce DB; reviewed v3 launcher9e02baec... pins plugin/cache locations.
+ Original failed full capture and its DB remain untouched. Runtime verdict pending.
+- `python-f821-3dca5fda.json`: canonical script on exact3d archive,exit0,
+ 0.532675s, no timeout/truncation. Script's declared fragment exclusions remain.
+- `frontend-aggregate-3dca5fda.json`: exit1/562.759479s after successful lint
+ (0errors/1warning),fullTS,591units/126files,72mockbrowser,bothbuilds12.60s/9.03s.
+ Sole final failure is wrong helper assertion public-dist/public-audit/assets.
+- `frontend-artifact-proof-3dca5fda.json`: separate read-only exit0/13.475289s,
+ verifies699tracked3dfrontend blobs,257artifact files,11+3existing HTML refs.
+ Manifest9e7fa5450d245b6b6aecb990955b2cde08b6529cab541ee53bf0c0db21a557e8.
+ Source/build mtimes and original capture link this to the completed builds.
+ Independent review PASS for two-capture stage evidence, not original aggregate.
+- `secret-delta-24e-to-34618037.json`:4commits/50047bytes,zero findings,
+ exit0/2.391691s; fully redacted strict delta, not final image/log/revocation proof.
+
 ## Frozen backend result — 18 September 12:47 UTC
 
 `full-backend-3dca5fda.json`:10failed4645passed7live-provider skips6warnings,

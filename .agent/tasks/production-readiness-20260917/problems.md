@@ -1,12 +1,19 @@
 # Problems and non-PASS criteria
 
-Updated 18 September 2026, 12:13 UTC. Maintained gap register, not a fresh
+Updated 18 September 2026, 13:11 UTC. Maintained gap register, not a fresh
 independent verifier's verdict. Goal active; audit changes local only.
 Production, provider effects and user Docker volumes are out of scope.
 Historical failed captures are retained, not rewritten as green.
 
 ## Verified checkpoints, not whole-goal acceptance
 
+- Exact3d corrected full backend:4655passed/7live-provider skips/6warnings,
+ 481.71s pytest/494.328144s capture,exit0; clean migration and exact fresh DB
+ cleanup confirmed. First environment-failed full capture and DB retained.
+- Exact3d frontend:591units/126files,72mockbrowser,fullTS,lint0errors/1warning,
+ bothbuilds pass; original capture exit1 only wrong final asset-path assertion.
+ Separate read-only artifact proof verifies699sourceblobs/257files/11+3HTMLrefs.
+ This is combined stage proof, not a relabeled green original aggregate.
 - Clean6c96192c backend:4538 passed,7 disabled live-provider skips,5 upstream
   SWIG warnings;395.49 seconds pytest /403.727 captured. Includes nativePG15,
   DockerPG16 and Python/browser regressions.
@@ -16,7 +23,7 @@ Historical failed captures are retained, not rewritten as green.
   exit0/no timeout,227.301s. Prior116/117overflow and117/120focus-return failures
   are retained. Separately synced dist is not final immutable-image proof.
 - Reviewed125900b2 service/content stored-role fix: realPG red and27focusedgreen,
-  not yet in a full aggregate.
+  now included in the full3d aggregate above.
 - Synthetic full-schema/data/ACL PG16 restore and migration guards pass;
   not a production-backup recovery rehearsal.
 - Five-journey50-sample and prepared44/44 dashboard-read load results have
@@ -56,6 +63,9 @@ f0cc includes service/content role and query-harness changes after green6c.
 Required: final same-source backend/frontend/image aggregate after remaining
 corrections;120real-API cases now pass at the scoped checkpoint. Mocked UI is not stored-role/DB/provider
 proof. Wider mutation-role and adversarial AI/tool matrices remain incomplete.
+The3d backend checkpoint now passes, but current combined image/real-API proof
+does not. Review-reply draft generation/edit/manual-mark routes reuse role-blind
+business access: a concrete source-level candidate, not yet causally reproduced.
 
 ## AC5 — Image, migration and restore
 
@@ -94,6 +104,13 @@ foreign apply403/no effects, owner target-only writes, no providers/SQL errors.
 Broader AI/tool matrix remains; missing fixture-table500s were not product bugs.
 
 ## AC7 — Performance
+
+Exact3d local Gunicorn/nativePG HTTP checkpoint now passes40/40semantic reads
+with bounded concurrency2, timedwall2.557582s/capture13.170562s; all counts and
+quantiles independently checked, clean shutdown and exact new DB removal.
+First attempt exit1/3.080768s had0requests and Gunicornnotstarted, preserving
+DBOID3967104; no measurements from that failure. The retry is current-only,
+not a sustained-capacity/SLO/speedup or frontend/queue performance result.
 
 Five-flow measurements retain baseline business-data errors; comparable medians
 nearly unchanged. Prepared4user/2pair/5cycle44/44 is in-process Flask/SQL, not

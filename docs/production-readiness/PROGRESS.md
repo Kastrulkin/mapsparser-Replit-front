@@ -1,5 +1,50 @@
 # Production-readiness progress
 
+13:23 UTC review-reply first causal RED:1failed/1owner control passed8.25s,
+capture11.165518s,exit1/no timeout/truncation. Actual registered web manual-mark
+route returns200 for stored direct viewer instead of403; owner control verifies
+persisted manual_published/review text. Viewer before/after is computed by the
+test but not included in the first failure output, so further exact effect
+proof and full5-route/role matrix precede the scoped fix. No product edit yet.
+
+13:18 UTC HTTP retry PASS40/40semantic reads,4tenants/concurrency2, same3d code.
+Timedwall2.557582s,command13.170562s,exit0/untruncated. GunicornSIGTERM/rc0/reaped;
+fresh DBOID3967105 removed, independently confirmed absent. Original failed DB
+OID3967104 preserved. Reviewer recomputed quantiles; report04 records scope and
+ps snapshots, no capacity/SLO/speedup claim. Temporary Flask app setup corrected;
+no application source change. Review-reply role RED preparation is next.
+
+HTTP attempt13:13UTC failed before Gunicorn/timed requests: command capture
+exit1/3.080768s, helpervalidfalse with phase_errorRuntimeError. Fresh synthetic
+DBlocalos_readiness_http_d73a7da00a3e4b929823d800a55c2bf2/OID3967104 preserved,
+no measurements claimed. Migration child has no explicit Flask app setting;
+launcher-only diagnosis/correction pending, no product regression established.
+
+13:11 UTC: exact3d full backend retry PASS4655tests/7explicit live-provider
+skips/6warnings,481.71s pytest/494.328144s capture,exit0/no timeout/truncation.
+Migration and tests rc0; stagecompletevalidtrue. Fresh DB
+readiness_full_test_3dca5fda_acc3e129b8c0/OID3585990/readiness_test_owner removed
+after identity check; first failed-run DB intentionally preserved. This closes
+the3d full-suite checkpoint, not broader role/tool/image/whole-goal gates.
+New read-only audit identifies role-blind review-reply draft mutation gates;
+source-level candidate only, real-PG causal matrix being prepared. No new src
+change, production mutation, provider publication or credit charge.
+
+13:07 UTC: causal10 former environment failures PASS10/20.23s, capture22.197591s,
+exit0/untruncated; no product changes or DB actions. Full3d backend retry RUNNING
+since13:02UTC in readiness-backend-3dca5fda-retry, reviewed v3 SHA9e02baec...,
+fresh source and new nonce DB. Canonical scoped F821 gate passes0.532675s.
+Frontend stages:591units/126files,72mockbrowser,fullTS,lint0errors/1warning,
+bothbuilds pass. Original aggregate exit1/562.759479s is retained: wrong final
+assertion expected public-dist/public-audit/assets, real path public-dist/assets.
+Separate artifact proof exit0/13.475289s verifies699tracked3d frontend blobs,
+257built files and11+3local HTML asset refs; independent review PASS. This is
+two-capture stage proof, not a retrospectively relabeled aggregate PASS.
+Strict Gitleaks delta24e..34618037 checks4commits/50047bytes,zero findings,
+exit0/2.391691s. Additional read-only cache inventory gives no strongly owned
+deletion candidates; no further pruning. Local free space remains below4GiB
+Docker-start gate; HTTP checkpoint is being prepared without provider calls.
+
 12:47 UTC: full backend3dca5fda completed FAIL:10failed,4645passed,7live-provider
 skips,6warnings,502.58s pytest/515.906761s capture,exit1/no timeout/untruncated.
 Migration succeeded; failed-run DB readiness_full_test_3dca5fda_c57379241521

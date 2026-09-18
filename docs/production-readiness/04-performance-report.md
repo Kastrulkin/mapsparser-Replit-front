@@ -5,6 +5,36 @@ dashboard profile and tiny-fixture SQL plans are measured; capacity remains open
 Build/test wall times are engineering feedback measurements, not user latency.
 All measurements are local/synthetic; none describe production capacity.
 
+## Bounded localhost HTTP checkpoint — 18 September 13:18 UTC
+
+Exact3dca5fda clean source, native PostgreSQL15 and a local Gunicorn child
+(one worker/two threads): four synthetic tenants log in sequentially outside
+timing, then five rounds of two authenticated read routes, concurrency at most
+two and150ms between waves. All40timed reads pass status and expected
+user/business/service identity checks; timed wall2.557582s includes pacing.
+This is a current checkpoint only, not a before/after comparison, Docker/proxy
+measurement, sustained-load test, SLO, production-capacity or speedup claim.
+
+| Route | Successful samples | p50 / p95 / max, ms |
+| --- | ---: | ---: |
+| `/api/auth/me` |20/20|66.979 /102.234 /104.456|
+| `/api/business/<id>/data` |20/20|41.897 /64.486 /64.594|
+
+Quantiles are linearly interpolated and exploratory at20samples per route;
+no p99 or throughput extrapolation. Two `ps` snapshots report total Gunicorn
+RSS193728→184448KiB and %CPU57.4→7.5. These are diagnostic snapshots, not peak
+RSS, timed-phase mean CPU or evidence of a memory improvement. The raw method
+identifier includes `instant`, but no stronger CPU sampling semantics are
+claimed here. Gunicorn terminated with SIGTERM/exit0 and was reaped; exact
+new DB OID3967105 was removed and its absence independently confirmed.
+
+Proof: `raw/http-gunicorn-3dca5fda-retry.json` plus command capture exit0,
+13.170562s/no timeout/truncation; independent review recomputed all counts and
+quantiles. First attempt exit1/3.080768s stopped before Gunicorn/requests because
+its migration command omitted explicit Flask app configuration. Its raw files
+and fresh DB OID3967104 remain preserved; it supplies no latency measurement.
+Only the temporary launcher changed; application source remained3dca5fda.
+
 ## Measured storage improvement
 
 The reviewed Docker change6eb2d185 removes `/ms-playwright` only from the final
