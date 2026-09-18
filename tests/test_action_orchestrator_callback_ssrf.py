@@ -47,12 +47,16 @@ class DispatchCursor:
     def __init__(self, rows=None):
         self.rows = rows or []
         self.executed = []
+        self.rowcount = 1
 
     def execute(self, query, params):
         self.executed.append((query, params))
 
     def fetchall(self):
         return self.rows
+
+    def fetchone(self):
+        return (1,)
 
 
 class DispatchConnection:
@@ -88,6 +92,7 @@ def test_callback_dispatch_does_not_follow_redirects(monkeypatch):
                 0,
                 5,
                 "action-1:completed",
+                "claimed-lock",
             )
         ]
     )

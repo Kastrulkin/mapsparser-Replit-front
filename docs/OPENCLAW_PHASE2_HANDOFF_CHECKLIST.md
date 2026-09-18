@@ -70,11 +70,18 @@ From UI (`Настройки -> Integrations -> Связь ИИ-агентов �
   2) `POST /api/capabilities/callbacks/dispatch` (tenant-scoped)
   3) refresh health + trend + billing reconciliation
 
-From CLI:
+From CLI (smoke/diagnostics, not automatic replay):
 
 ```bash
+cd /opt/seo-app
 OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/openclaw_ops_smoke_recover.sh
 ```
+
+The local audit correction removes alert-triggered replay/re-dispatch. Persistent
+alerts require explicit manual reconciliation, especially uncertain delivery;
+strict mode exits2. This is not a read-only chain: the nested capability/outbox
+smokes still create test actions and dispatch normal pending/retry callbacks.
+Production invocation requires separate approval and a verified deployed revision.
 
 ## Incident Triage (Support)
 

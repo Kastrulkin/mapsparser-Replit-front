@@ -146,32 +146,44 @@ python3 scripts/repair_openclaw_missing_settle.py \
 
 ## 8) DLQ replay / outbox cleanup
 
-Повторно отправить `dlq` (или `dlq+retry`) в очередь:
+Повторно отправить `dlq` (или `dlq+retry`) в очередь можно только после
+явного разрешения и сверки receipt получателя. Маркер
+`callback_delivery_uncertain_after_interrupted_claim` означает неизвестный
+результат, а не доказанную недоставку. Replay выбирает старейшие записи tenant
+до лимита, поэтому согласовать нужно весь затрагиваемый batch.
 
 ```bash
+cd /opt/seo-app
 OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ACTION=replay INCLUDE_RETRY=true ./scripts/manage_openclaw_outbox.sh
 ```
 
 Удалить старые `sent` записи из outbox:
 
 ```bash
+cd /opt/seo-app
 OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ACTION=cleanup OLDER_THAN_MINUTES=1440 LIMIT=1000 ./scripts/manage_openclaw_outbox.sh
 ```
 
-## 9) One-Click Smoke + Recovery
+## 9) Smoke + диагностика восстановления
 
-Для быстрого прогона и самовосстановления callback-контура (smoke + metrics + replay/re-dispatch + diagnose):
+Локальная audit-версия helper больше не выполняет автоматический replay и
+re-dispatch по алерту: метрики и snapshots нужны для отдельного решения о
+ручном восстановлении. Это не делает весь smoke read-only: вложенные capability
+и outbox проверки создают тестовое action и могут отправлять обычные pending/
+retry callbacks. Запуск на production требует отдельного разрешения; этот
+документ не подтверждает, что исправление уже выложено.
 
 ```bash
+cd /opt/seo-app
 OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/openclaw_ops_smoke_recover.sh
 ```
 
 Параметры:
+
 - `WINDOW_MINUTES` (default `60`) — окно метрик callback
-- `RECOVERY_ATTEMPTS` (default `2`) — число попыток replay+dispatch
-- `STRICT` (default `1`) — если алерты остались после recovery, скрипт завершится с `exit 2`
+- `STRICT` (default `1`) — если алерты остались после диагностики, скрипт завершится с `exit 2`
 - `SNAPSHOT_LIMIT` (default `2`) — сколько проблемных `action_id` показывать в before/after snapshot
-- `SEND_TELEGRAM_REPORT=1` — после recovery отправить краткий ops-report суперадмину через `./scripts/send_openclaw_ops_report.sh`
+- `SEND_TELEGRAM_REPORT=1` — отдельно разрешённая отправка ops-report суперадмину через `./scripts/send_openclaw_ops_report.sh`; по умолчанию выключена
 
 Прямой вызов sender:
 

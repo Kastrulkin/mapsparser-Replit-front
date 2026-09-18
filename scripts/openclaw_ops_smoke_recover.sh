@@ -7,7 +7,6 @@ BASE_URL="${BASE_URL:-http://localhost:8000}"
 TENANT_ID="${TENANT_ID:-}"
 OPENCLAW_TOKEN="${OPENCLAW_TOKEN:-}"
 WINDOW_MINUTES="${WINDOW_MINUTES:-60}"
-RECOVERY_ATTEMPTS="${RECOVERY_ATTEMPTS:-2}"
 STRICT="${STRICT:-1}"
 SNAPSHOT_LIMIT="${SNAPSHOT_LIMIT:-2}"
 SEND_TELEGRAM_REPORT="${SEND_TELEGRAM_REPORT:-0}"
@@ -28,7 +27,7 @@ REPORT_PATH="${TMP_DIR}/ops_recovery_report.txt"
 pick_problem_action_ids() {
   curl -fsS -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
     "${BASE_URL}/api/openclaw/callbacks/outbox?tenant_id=${TENANT_ID}&limit=50&offset=0" \
-    | python3 - "${SNAPSHOT_LIMIT}" <<'PY'
+    | python3 -c '
 import json, sys
 
 limit = max(1, min(int(sys.argv[1]), 5))
@@ -55,7 +54,7 @@ for item in sorted(items, key=priority):
         break
 
 print("\n".join(picked))
-PY
+' "${SNAPSHOT_LIMIT}"
 }
 
 print_incident_snapshot() {
@@ -144,23 +143,11 @@ if [[ -n "${PROBLEM_ACTION_IDS}" ]]; then
 fi
 
 if [[ "${ALERTS_COUNT}" -gt 0 ]]; then
-  echo "[ops] alerts detected: ${ALERTS_COUNT}. Starting recovery..."
-  for ((i=1; i<=RECOVERY_ATTEMPTS; i++)); do
-    echo "[ops][recovery] attempt ${i}/${RECOVERY_ATTEMPTS}: replay dlq+retry -> dispatch"
-    BASE_URL="${BASE_URL}" OPENCLAW_TOKEN="${OPENCLAW_TOKEN}" TENANT_ID="${TENANT_ID}" \
-      ACTION=replay INCLUDE_RETRY=true LIMIT=500 ./scripts/manage_openclaw_outbox.sh
-
-    curl -fsS -X POST \
-      -H "Content-Type: application/json" \
-      -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
-      -d "{\"tenant_id\":\"${TENANT_ID}\",\"batch_size\":100}" \
-      "${BASE_URL}/api/openclaw/callbacks/dispatch" >/tmp/openclaw_dispatch_recover.json || true
-    cat /tmp/openclaw_dispatch_recover.json || true
-    sleep 2
-  done
+  echo "[ops] alerts detected: ${ALERTS_COUNT}. Recovery is manual; no alert-triggered replay or recovery dispatch will run."
+  echo "[ops] Review incident snapshots, then use an explicitly authorized manual replay/reconciliation operation if needed."
 fi
 
-echo "[ops] 4/5 post-recovery callbacks metrics"
+echo "[ops] 4/5 post-diagnostics callbacks metrics"
 POST_JSON="$(curl -fsS -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   "${BASE_URL}/api/openclaw/callbacks/metrics?tenant_id=${TENANT_ID}&window_minutes=${WINDOW_MINUTES}")"
 echo "${POST_JSON}" | python3 -m json.tool
@@ -180,12 +167,15 @@ if [[ -n "${PROBLEM_ACTION_IDS}" ]]; then
 fi
 
 cat > "${REPORT_PATH}" <<EOF
-🚑 OpenClaw ops recovery summary
+🚑 OpenClaw ops diagnostics summary
 Tenant: ${TENANT_ID}
 Base URL: ${BASE_URL}
 Window minutes: ${WINDOW_MINUTES}
 Alerts before: ${ALERTS_COUNT}
 Alerts after: ${POST_ALERTS_COUNT}
+Recovery mode: manual; no alert-triggered replay or recovery dispatch.
+Smoke scope: capability/outbox sub-smokes may create actions and dispatch ordinary pending/retry callbacks.
+Manual reconciliation: review incident snapshots, then use an explicitly authorized manual replay operation if needed.
 Problem action_ids:
 $(if [[ -n "${PROBLEM_ACTION_IDS}" ]]; then printf '%s\n' "${PROBLEM_ACTION_IDS}"; else echo "-"; fi)
 EOF
@@ -209,7 +199,7 @@ BASE_URL="${BASE_URL}" OPENCLAW_TOKEN="${OPENCLAW_TOKEN}" TENANT_ID="${TENANT_ID
   ./scripts/diagnose_openclaw_integration.sh
 
 if [[ "${POST_ALERTS_COUNT}" -gt 0 ]]; then
-  echo "[ops] alerts remain after recovery: ${POST_ALERTS_COUNT}"
+  echo "[ops] alerts remain after diagnostics: ${POST_ALERTS_COUNT}"
   if [[ "${STRICT}" == "1" ]]; then
     exit 2
   fi

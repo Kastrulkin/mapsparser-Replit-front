@@ -289,6 +289,36 @@ class ActionOrchestrator:
             batch_size = max(1, min(int(batch_size or 50), 500))
 
             tenant_clause = "AND tenant_id = %s" if tenant_id else ""
+            # 500 callbacks can consume up to about 42 minutes at five seconds
+            # each; one hour is a conservative abandonment threshold, not proof
+            # that delivery failed.
+            stale_query = f"""
+                WITH stale AS (
+                    SELECT id
+                    FROM action_callback_outbox
+                    WHERE status = 'sending'
+                      AND locked_at <= (CURRENT_TIMESTAMP - INTERVAL '1 hour')
+                      {tenant_clause}
+                    ORDER BY locked_at ASC
+                    LIMIT %s
+                    FOR UPDATE SKIP LOCKED
+                )
+                UPDATE action_callback_outbox o
+                SET status='dlq',
+                    last_error='callback_delivery_uncertain_after_interrupted_claim',
+                    locked_at=NULL,
+                    updated_at=CURRENT_TIMESTAMP
+                FROM stale
+                WHERE o.id = stale.id
+                RETURNING o.id
+            """
+            stale_params = [batch_size]
+            if tenant_id:
+                stale_params = [str(tenant_id), batch_size]
+            cursor.execute(stale_query, tuple(stale_params))
+            cursor.fetchall()
+            db.conn.commit()
+
             query = f"""
                 WITH picked AS (
                     SELECT id
@@ -304,7 +334,7 @@ class ActionOrchestrator:
                 SET status='sending', locked_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
                 FROM picked
                 WHERE o.id = picked.id
-                RETURNING o.id, o.action_id, o.tenant_id, o.callback_url, o.event_type, o.payload_json, o.attempts, o.max_attempts, o.dedupe_key
+                RETURNING o.id, o.action_id, o.tenant_id, o.callback_url, o.event_type, o.payload_json, o.attempts, o.max_attempts, o.dedupe_key, o.locked_at
             """
             params = [batch_size]
             if tenant_id:
@@ -326,6 +356,20 @@ class ActionOrchestrator:
                 attempts = int(self._row_value(row, 6, "attempts", 0) or 0)
                 max_attempts = int(self._row_value(row, 7, "max_attempts", 5) or 5)
                 dedupe_key = self._row_value(row, 8, "dedupe_key") or f"{outbox_id}"
+                claim_locked_at = self._row_value(row, 9, "locked_at")
+
+                cursor.execute(
+                    """
+                    SELECT 1
+                    FROM action_callback_outbox
+                    WHERE id=%s AND status='sending' AND locked_at=%s
+                    """,
+                    (outbox_id, claim_locked_at),
+                )
+                claim_is_current = cursor.fetchone()
+                db.conn.commit()
+                if not claim_is_current:
+                    continue
 
                 ok = True
                 error_text = ""
@@ -367,36 +411,15 @@ class ActionOrchestrator:
                 db2 = DatabaseManager()
                 cur2 = db2.conn.cursor()
                 try:
-                    cur2.execute(
-                        """
-                        INSERT INTO action_callback_attempts
-                        (id, outbox_id, action_id, tenant_id, event_type, attempt_no, success, http_status, duration_ms, error_text, response_excerpt)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """,
-                        (
-                            str(uuid.uuid4()),
-                            str(outbox_id),
-                            str(action_id),
-                            str(tenant_id),
-                            str(event_type),
-                            attempts + 1,
-                            bool(ok),
-                            http_status,
-                            duration_ms,
-                            (error_text or "")[:1000] if not ok else None,
-                            response_excerpt,
-                        ),
-                    )
                     if ok:
                         cur2.execute(
                             """
                             UPDATE action_callback_outbox
                             SET status='sent', sent_at=CURRENT_TIMESTAMP, locked_at=NULL, updated_at=CURRENT_TIMESTAMP
-                            WHERE id=%s
+                            WHERE id=%s AND status='sending' AND locked_at=%s
                             """,
-                            (outbox_id,),
+                            (outbox_id, claim_locked_at),
                         )
-                        sent += 1
                     else:
                         new_attempts = attempts + 1
                         if new_attempts >= max_attempts:
@@ -404,11 +427,10 @@ class ActionOrchestrator:
                                 """
                                 UPDATE action_callback_outbox
                                 SET status='dlq', attempts=%s, last_error=%s, locked_at=NULL, updated_at=CURRENT_TIMESTAMP
-                                WHERE id=%s
+                                WHERE id=%s AND status='sending' AND locked_at=%s
                                 """,
-                                (new_attempts, (error_text or "")[:1000], outbox_id),
+                                (new_attempts, (error_text or "")[:1000], outbox_id, claim_locked_at),
                             )
-                            dlq += 1
                         else:
                             backoff_sec = self._retry_delay_seconds(new_attempts)
                             cur2.execute(
@@ -417,10 +439,37 @@ class ActionOrchestrator:
                                 SET status='retry', attempts=%s, last_error=%s,
                                     next_attempt_at=(CURRENT_TIMESTAMP + (%s || ' seconds')::interval),
                                     locked_at=NULL, updated_at=CURRENT_TIMESTAMP
-                                WHERE id=%s
+                                WHERE id=%s AND status='sending' AND locked_at=%s
                                 """,
-                                (new_attempts, (error_text or "")[:1000], backoff_sec, outbox_id),
+                                (new_attempts, (error_text or "")[:1000], backoff_sec, outbox_id, claim_locked_at),
                             )
+                    finalized = cur2.rowcount == 1
+                    if finalized:
+                        cur2.execute(
+                            """
+                            INSERT INTO action_callback_attempts
+                            (id, outbox_id, action_id, tenant_id, event_type, attempt_no, success, http_status, duration_ms, error_text, response_excerpt)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            """,
+                            (
+                                str(uuid.uuid4()),
+                                str(outbox_id),
+                                str(action_id),
+                                str(tenant_id),
+                                str(event_type),
+                                attempts + 1,
+                                bool(ok),
+                                http_status,
+                                duration_ms,
+                                (error_text or "")[:1000] if not ok else None,
+                                response_excerpt,
+                            ),
+                        )
+                        if ok:
+                            sent += 1
+                        elif new_attempts >= max_attempts:
+                            dlq += 1
+                        else:
                             retried += 1
                     db2.conn.commit()
                 finally:
@@ -2347,6 +2396,32 @@ class ActionOrchestrator:
             stuck_row = cursor.fetchone()
             stuck_retry_count = int(self._row_value(stuck_row, 0, "stuck_retry", 0) or 0)
 
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS stuck_sending
+                FROM action_callback_outbox
+                WHERE tenant_id = %s
+                  AND status = 'sending'
+                  AND locked_at <= (CURRENT_TIMESTAMP - INTERVAL '1 hour')
+                """,
+                (str(tenant_id),),
+            )
+            stuck_sending_row = cursor.fetchone()
+            stuck_sending_count = int(self._row_value(stuck_sending_row, 0, "stuck_sending", 0) or 0)
+
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS uncertain_delivery
+                FROM action_callback_outbox
+                WHERE tenant_id = %s
+                  AND status = 'dlq'
+                  AND last_error = 'callback_delivery_uncertain_after_interrupted_claim'
+                """,
+                (str(tenant_id),),
+            )
+            uncertain_delivery_row = cursor.fetchone()
+            uncertain_delivery_count = int(self._row_value(uncertain_delivery_row, 0, "uncertain_delivery", 0) or 0)
+
             sent = int(counts.get("sent", 0))
             retry = int(counts.get("retry", 0))
             dlq = int(counts.get("dlq", 0))
@@ -2376,6 +2451,22 @@ class ActionOrchestrator:
                         "message": f"Stuck retries: {stuck_retry_count} (threshold={stuck_threshold})",
                     }
                 )
+            if stuck_sending_count >= 1:
+                alerts.append(
+                    {
+                        "code": "STUCK_SENDING",
+                        "severity": "high",
+                        "message": f"Stuck callback claims: {stuck_sending_count}",
+                    }
+                )
+            if uncertain_delivery_count >= 1:
+                alerts.append(
+                    {
+                        "code": "UNCERTAIN_DELIVERY",
+                        "severity": "high",
+                        "message": f"Callbacks requiring manual reconciliation: {uncertain_delivery_count}",
+                    }
+                )
             if delivery_success_rate < low_success_threshold:
                 alerts.append(
                     {
@@ -2397,6 +2488,8 @@ class ActionOrchestrator:
                     "pending": pending,
                     "sending": sending,
                     "stuck_retry": stuck_retry_count,
+                    "stuck_sending": stuck_sending_count,
+                    "uncertain_delivery": uncertain_delivery_count,
                     "total_recent": total_recent,
                     "delivery_success_rate": delivery_success_rate,
                 },

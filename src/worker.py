@@ -3024,9 +3024,16 @@ def _load_problematic_action_ids_for_tenant(tenant_id: str, *, limit: int = 2) -
             SELECT action_id
             FROM action_callback_outbox
             WHERE tenant_id = %s
-              AND status IN ('dlq', 'retry')
+              AND (
+                    status IN ('dlq', 'retry')
+                    OR (status = 'sending' AND locked_at <= (CURRENT_TIMESTAMP - INTERVAL '1 hour'))
+              )
             ORDER BY
-              CASE WHEN status = 'dlq' THEN 0 ELSE 1 END,
+              CASE
+                  WHEN status = 'dlq' THEN 0
+                  WHEN status = 'sending' THEN 1
+                  ELSE 2
+              END,
               updated_at DESC,
               created_at DESC
             LIMIT %s
@@ -3407,7 +3414,14 @@ def _check_openclaw_callback_alerts_if_due() -> None:
             SELECT DISTINCT tenant_id
             FROM action_callback_outbox
             WHERE tenant_id IS NOT NULL
-              AND created_at >= (CURRENT_TIMESTAMP - (%s || ' minutes')::interval)
+              AND (
+                    created_at >= (CURRENT_TIMESTAMP - (%s || ' minutes')::interval)
+                    OR (status = 'sending' AND locked_at <= (CURRENT_TIMESTAMP - INTERVAL '1 hour'))
+                    OR (
+                        status = 'dlq'
+                        AND last_error = 'callback_delivery_uncertain_after_interrupted_claim'
+                    )
+              )
             ORDER BY tenant_id
             LIMIT %s
             """,
