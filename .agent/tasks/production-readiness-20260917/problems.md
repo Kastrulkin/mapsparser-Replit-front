@@ -134,6 +134,12 @@ Broader AI/tool matrix remains; missing fixture-table500s were not product bugs.
 
 ## AC7 — Performance
 
+Supplemental2d→272 attempt failed in outer process supervision with
+PermissionError/errno1 before final inner output (16:05:23UTC). No accepted
+50/ref distribution. Partial sources/samples and own syntheticDB5999213 remain;
+target process checks show no running job. Cause unknown, no silent permission
+bypass. New launches also blocked by~1.90GiB host headroom (<2GiB start guard).
+
 Current272 bounded sustained HTTP passes240/240 over64.280315s with four
 tenants,30waves and10resource snapshots. Frontend60/60 observations cover two
 routes/three viewports on historicalf0ccbackend with unchanged frontend; zero
@@ -155,7 +161,10 @@ Reviewed52292e6e adds bounded read-only `/ready` separately from `/health`, with
 24native/route/schema/CLI checks9.25s. Live image integration is still pending.
 Deliberate migration ownership, immutable release/rollback, CI, observability
 and provider recovery remain. Synthetic
-10–15minute demo script exists but is not rehearsed end to end. Automated
+10–15minute demo script exists but is not rehearsed end to end. First observed
+probe stopped after154.774s: default content plan was newer test data rather
+than original seed. Read-only SQL confirmed the original plan/item remain;
+explicit plan_id plus loaded-context retry is prepared but not run. Automated
 scenarios support but do not replace that rehearsal.
 
 ## AC10 / AC11 — Reports and review

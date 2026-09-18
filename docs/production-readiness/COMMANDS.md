@@ -1,5 +1,27 @@
 # Verified commands and evidence
 
+## Later failed probes — 18 September 16:08 UTC
+
+Demo one-shot outer `/private/tmp/localos-readiness-demo-272-root-capture.py
+--execute` in tmux `readiness-demo-272` completed exit1/154.773944s with no
+timeout/disk abort/truncation/page errors. Exact pins outer22354a8b,
+shellc9a740c0,helperf1c4aeb2. First context captured loading; reviews confirmed
+synthetic draft/manual boundary; content expected seed theme was not selected.
+`demo-272{,-command}.json` remains FAIL, not a10–15min rehearsal. Targeted
+process checks find no leftovers. Read-only exact synthetic DB check establishes
+newer reconciliation plan selection, original seed still exists; no productbug,
+reseed, deletion or provider effect. Separate retry package is only prepared.
+
+Supplemental earlier-working-reference benchmark outer
+`/private/tmp/localos-readiness-journey-measure-postfix-272794a4-root-capture.py
+--execute`, SHA8c7a101a, launchere153907a, ran in tmux
+`readiness-journey-postfix-272`. It failed at16:05:23 with PermissionError/errno1
+before final inner output. Outer `-command.json` is invalid, not latency proof.
+Partial archive/samples and residual syntheticDBOID5999213 are retained; target
+process/session checks find none running. Supervisor failure cause is unknown;
+do not replay or ignore permission errors. Headroom~1.90GiB blocks further
+native/browser/Docker starts under unchanged guards.
+
 ## Browser performance retry — completed 18 September 15:30 UTC
 
 Named tmux `readiness-frontend-perf-272-retry` ran ARM64 workspace Python with

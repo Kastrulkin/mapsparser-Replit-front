@@ -1,5 +1,30 @@
 # Production-readiness progress
 
+16:08 UTC: supplemental benchmark is no longer running. Its outer capture
+failed with PermissionError/errno1 at16:05:23 before final inner output, so
+there is NO accepted50-sample result. Exact matching process/session checks
+find none remaining; source archives and partial samples are retained at
+`/private/tmp/localos-readiness-measure-3vfs52tm`. Fresh residual synthetic DB
+OID5999213 (24,638,255bytes,readiness_test_owner) is preserved for diagnosis;
+native cluster identity verified. Root cause of supervisor permission failure
+is not proven; do not silently ignore it or replay the wrapper. Native WAL is
+only64MiB. Host available space~1.90GiB, below the unchanged2GiB native/browser
+start guard and4GiB Docker guard. No further heavy launches.
+Separate demo retry helper245cf379 /shell25bf15e8 /outerc53a20a6 prepared but
+NOT run; explicit original plan plus loaded-context waits, first failure intact.
+
+16:01 UTC: first supervised demo probe stopped FAIL after154.773944s,
+exit1/no timeout/disk abort/truncation. Reviews show the real synthetic draft
+and manual-publication boundary; first context screenshot is a loading state,
+not completed context proof. Content theme wait failed: a newer reconciliation
+test plan is selected by default. Read-only SELECT on exact synthetic staging
+confirms both plans and the intended original planned item still exist.
+No product defect demonstrated; no reseed/reset/mutations beyond synthetic login.
+AC9 remainsFAIL. Prepare a separate retry with explicit original plan_id and
+loaded-business/map markers, preserving first raw/snapshots. Meanwhile the
+approved serial2d→272 benchmark is running in tmuxreadiness-journey-postfix-272;
+no browser workload overlaps it. Do not start a competing heavy job.
+
 15:49 UTC: independent current-document review accepts AC10PASS. Required
 reports00–10 plus operational/security records, original-area ledger, residual
 risks and evidence-backed0–5scorecard are present and truthfully distinguish

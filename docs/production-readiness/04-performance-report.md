@@ -5,6 +5,19 @@ dashboard profile and tiny-fixture SQL plans are measured; capacity remains open
 Build/test wall times are engineering feedback measurements, not user latency.
 All measurements are local/synthetic; none describe production capacity.
 
+## Supplemental comparison interrupted — 18 September 16:05 UTC
+
+The original302 auth baseline fails50/50, leaving successful auth quantiles
+null. A separate paired comparison of working post-correctness2d875357 and
+272794a4 was attempted (five warmups and50 serial samples per reference).
+Its outer wrapper failed with PermissionError/errno1 before the final inner
+result. Raw `journey-measure-postfix-272794a4-command.json` is invalid;
+31 completed child files are diagnostic partial data, not an accepted comparison.
+The process controller loses failure phase/traceback, so stale process-group
+reuse is only a hypothesis, not a proven cause. No speedup or successful
+before/after result follows. Source copies, partial samples and the interrupted
+synthetic DB are preserved; no matching benchmark process/session remains.
+
 ## Browser observations — 18 September 15:30 UTC
 
 Two routes × three viewports × ten fresh browser contexts: **60/60 samples**,
@@ -340,6 +353,8 @@ for subsequent runs without rewriting this captured artifact.
 
 ## Still required
 
-Sustained/server/queue capacity and frontend performance observations. Do not
-add speculative indexes, caches or structural rewrites before measurements
-identify a reachable bottleneck.
+Complete the supplemental paired five-flow comparison after fixing the process
+controller and restoring local disk headroom. Sustained localhost HTTP and
+bounded frontend observations are now recorded above; production/large-data/
+queue capacity remains unmeasured. Do not add speculative indexes, caches or
+structural rewrites before measurements identify a reachable bottleneck.

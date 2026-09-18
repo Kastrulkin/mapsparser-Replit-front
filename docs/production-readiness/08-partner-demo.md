@@ -3,6 +3,17 @@
 Status: **to be rehearsed by the release owner**. This is a safe walkthrough,
 not evidence that a production provider or customer workflow has run.
 
+18 September observed preparation issue: a view-only rehearsal probe stopped
+after154.774seconds at Content; it is not a completed10–15minute rehearsal.
+The retained synthetic staging had a newer publication-reconciliation test
+plan, so `/dashboard/content` selected that plan rather than the original seed.
+Read-only database checks confirm the original planned item still exists.
+Select the intended demo plan explicitly via the supported `plan_id` URL
+parameter; never clear the other plan or reseed an existing environment merely
+to make a demo pass. Also wait for the named business/map data, not just the
+card-page heading: the first screenshot captured a loading state.
+Seeded reviews and manual-publication text were observed successfully.
+
 Use only an already-running, release-owner-verified isolated LocalOS staging
 project and the deterministic accounts from
 [`scripts/seed_journey_staging.py`](../../scripts/seed_journey_staging.py):

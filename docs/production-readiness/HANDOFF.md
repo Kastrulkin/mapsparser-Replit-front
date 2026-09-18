@@ -2,6 +2,46 @@
 
 ## Current continuation — 18 September after 15:30 UTC
 
+LATEST16:08UTC: no heavy job running. Benchmark outer
+`journey-measure-postfix-272794a4-command.json` is invalid/PermissionError
+errno1 at16:05:23, no final inner result. Escalated targeted ps and tmux checks
+find no driver/helper/session. Do NOT replay completed failedwrapper. Preserve
+partial archive `/private/tmp/localos-readiness-measure-3vfs52tm` (217560KiB),
+baseline through serial10/current throughserial9 and both5warmups. Residual
+DB `localos_readiness_measure_863e4e163d7548fb9f826d5c9e8da0bb`,OID5999213,
+ownerreadiness_test_owner,24,638,255bytes; native datadir verified. No accepted
+comparison/latency claim. Operator reviewer is diagnosing supervisor failure
+read-only; stalePGID reuse is only a hypothesis, not established cause.
+
+Hostfree~1.90GiB; native/browser2GiBstart and1.5GiBruntime guards remain.
+Docker4GiBstart remains below practical8–10GiBadditional request. NativeWAL
+64MiB, not a meaningful cleanup candidate. No user images/volumes/data removed.
+Demo retry prepared-only: helper245cf37971c4d7046e76b1acafd561051ebac14706dae2e1153373d6a10aaf9b,
+shell25bf15e89480b146092b9e3f074622b55d4a385d54ddaf4a7238801ad34e2ade,
+outerc53a20a6fe77347aaeb7a84bef7328fa3e58105f41caadc790eafe041e720b30;
+all `/private/tmp/localos-readiness-demo-272-retry...`. Needs final independent
+package GO and fresh headroom before any launch. Uses explicit originalplan,
+loadedbusiness/Yandex markers and failure screenshot; never reseed existingDB.
+
+The RUNNING snapshot immediately below is historical and superseded by this
+failed-supervisor checkpoint. Source272 and docs60b30f32 remain the last commits.
+
+CURRENT16:01UTC: HEAD60b30f32 docs-only commit; runtime source272794a4
+unchanged. AC3/4/10PASS, othercriteria/overallFAIL. tmux
+`readiness-journey-postfix-272` RUNNING supplemental2d→272 ABBA5warmups/50perref
+full-five-flow measurement. Outer8c7a101a /launchere153907a are independently
+reviewed; raw/journey-measure-postfix-272794a4{,-command}.json pending.
+Serial-only;1800s/2GiBstart/1.5runtime guards. Do not overlap browser/build.
+
+Firstdemo raw/demo-272{,-command}.json FAIL154.773944s due content selection:
+default newest plan013420ff-ba8b-544e-8f25-c24318c4bd3d is reconciliation test;
+originalplan cfe86779-4a27-5222-a5c4-3c2fc76d206c still contains planned theme
+Как выбрать услугу впервые (syntheticSQLreadverified). Frontend supports exact
+plan_id query. First context shot caught loading, reviews shot confirms seeded
+draft/manual boundary. Needs separate retry with explicitplan and loadedmap/
+business waits; no reset/reseed/sourceproductfix. First wrappers/rraw remain
+immutable. Do not count partial2.58min as a10–15min rehearsal.
+
 Latest completed evidence: sustained HTTP240/240 (73.497287s capture,
 64.280315s timed) and frontend observations60/60 (48.980093s capture), both
 independently reconciled PASS in their bounded scopes. HTTP DB5775953 absence

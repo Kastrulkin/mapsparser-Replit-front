@@ -2,6 +2,13 @@
 
 Status: **FAIL / incomplete whole-goal evidence**, updated 2026-09-18 UTC. This is a progress checkpoint, not final independent sign-off.
 
+16:08UTC: later demo probe fails content selection after154.773944s; reviews
+work but no completed rehearsal. Supplemental2d→272 comparison outer fails
+PermissionError before final inner result; partial samples do not meet50/ref
+acceptance. Own residualDB5999213 and partial archive preserved, no matching
+job remains. Available host space~1.90GiB blocks next heavy launch. AC7/9 and
+overallFAIL remain; prior completed4728/117/240/60evidence is not overwritten.
+
 15:49UTC: independent current-document review accepts AC10PASS alongside
 AC3/AC4. All required reports reflect current evidence with residual risks and
 evidence-backed scores. This is documentation acceptance, not release approval;
