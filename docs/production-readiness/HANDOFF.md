@@ -1,6 +1,78 @@
 # Readiness handoff
 
-## Current continuation — 18 September 11:25 UTC
+## Current continuation — 18 September 12:13 UTC
+
+Exact2e build aborted safely at12:08:47UTC: exit75/264.590877s,
+free1420404KiB<1.5GiB during Playwright download. Source capture
+/private/tmp/localos-readiness-image-2e121912.abQZFx/build-capture.json,
+SHA79d7245ffe1238bcb7bf9237ac376c312108306e63f4c0f64b2f824d860ee5bb.
+No image completion, smoke, inventory or container update. Compiled worker
+now owns read-only exact task-cache inventory only; no retry/prune authorized.
+Do not run heavy backend/browser/Trivy jobs below their original disk guards.
+Owner asked about additional local8–10GB, distinct from server expansion.
+
+## Historical continuation — 18 September 12:07 UTC
+
+HEAD24e0d4cd adds only the independently reviewed AC6 test. Frozen SHA
+d3014cad8d7eb8586d789281eedf4ac7b3ecb7443fd37aa4168f5b085973ae39;
+raw/agent-finance-untrusted-rows-root.json is authoritative:1pass0.79s,
+capture2.743835s, exact guard/data_directory preflight, no timeout/truncation.
+Prior worker capture with a misspelled PYTHONPATH is not authoritative.
+Fixture-only missing agent_integrations/externalbusinessaccounts caused the
+initial500s; NO_BUG_PROVEN in product. Final observer asserts no SQL errors.
+Add LOCALOS_AGENT_FINANCE_UNTRUSTED_ROWS_TEST_DATABASE_URL and
+LOCALOS_AGENT_FINANCE_UNTRUSTED_ROWS_GUARD_SHA256 to the final aggregate.
+
+Compiled worker received GO for exact2e121912 build from clean git archive;
+temp /private/tmp/localos-readiness-image-2e121912.abQZFx. It owns the heavy
+window. No existing containers/tags/volumes or production may be changed.
+Build tag localos-readiness-20260918-app:2e121912, both frontends/browser enabled,
+then nonroot/read-only/network-none smoke and104installed-package comparison.
+Root keeps other heavy work stopped. Journey worker prepares (does not run)
+a new final backend launcher; old full-backend-reviewed.sh is historical,
+not replayable setup. Final source archive commit will be supplied after this
+evidence checkpoint. Constraints source/static reviewed; runtime pending.
+
+## Historical continuation — 18 September 11:50 UTC
+
+HEAD13c1f36a commits12reviewed social approval-binding source/test files. No
+frontend/migration/production change. Main `social-approval-binding-green5.json`
+is252pass/9viewer skips60.62s (61.291018s capture); exact9viewer tests execute
+separately in `social-approval-binding-viewer-green.json`,9pass2.43s. Do not
+report one261-test aggregate. Independent final scopedPASS plus36pure/ratchet
+checks0.38s. Legacy facade names restored; real approved descriptor replaces
+old raw-approved fixture; assertions retained. CausalRED and failed integration/
+collection checkpoints remain. Media bytes outside DB/storage metadata are
+not immutable: out-of-band object/URL changes remain a separate candidate.
+
+Root completed archive creation/extraction/hash/mode/symlink verification for
+nine closed temporary source snapshots, but first captureexit1/143.631s
+stopped before any source removal because measuredgain643MiB<700MiB estimate.
+Archive root `/private/tmp/localos-readiness-completed-snapshots-20260918`,
+manifestSHA0c95fb50bc89335cdd162e6ceee94584a41e740e13a586991c059e06060f14d7.
+Originals remained after the first capture. Explicit --complete-verified mode
+pins that manifest, rechecks source/archive/ref identity and measurednetgain
+includingmanifest>=600MiB plus unchanged4GiB build guard passed independent
+safety review and completed: exit0/100.868564s, net660267008bytes (~630MiB),
+free4500156KiB (~4.3GiB),9recoverable archives. All9original duplicate source
+trees are now removed; old raw paths remain historical, mapping is in pinned
+manifest. Script `/private/tmp/localos-readiness-compress-completed-snapshots-20260918.js`.
+No Docker cache/image/container/volume/DB removal. Preserve activecontent-focus,
+final853shareddeps, image4amount, a025restore source and all raw evidence.
+
+Journey worker owns ONLY new `tests/test_agent_finance_untrusted_rows_pg.py`;
+real policy/runner/executor hostile-row harness is source-only. Review fixes
+canonical blueprint_version_id, separate no-approval blocked run, per-tenant
+entry/batch counts; staticPASS and native window granted after compression;
+first captured run is ongoing, no runtime verdict yet. Compiled worker owns
+requirements.release.constraints.txt + DockerfileCOPY/-c + newtests only;
+app-only104exact-image constraints candidate is being implemented, no install/
+build/commit yet. Telegram adds PTB20.8/httpx~=0.26 separately; b43 has
+httpx2/httpcore2, not httpx0.28, so the suspected direct conflict was disproved.
+Separate bot closure and ARM64/AMD64 resolution still need actual evidence.
+No push/deploy/production/provider sends. Overall AC1–11 remain FAIL.
+
+## Historical continuation — 18 September 11:25 UTC
 
 HEAD65ca8836 contains reviewed pip26.2 Docker pin before requirements; Telegram
 inherits the app image, so no duplicate change. Unique finding ID DEP-PIP-02

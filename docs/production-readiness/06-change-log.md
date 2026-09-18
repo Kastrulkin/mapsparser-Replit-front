@@ -1,5 +1,51 @@
 # Production-readiness change log
 
+## AC6 proof — retrieved finance data cannot supply execution authority
+
+Test-only24e0d4cd exercises real Runner→ActionOrchestrator→policy/handler and
+post-approval finance apply with isolated synthetic PostgreSQL rows. Attacker
+business/tenant/capability/approval fields remain nested data: no stored
+approval blocks all action/finance effects; approved execution retains trusted
+run business and pinned capability. Foreign apply403 changes nothing; owner
+apply creates exactly one target entry/batch, zero foreign entries/batches.
+Provider/model seams have zero calls; SQL error observer stays empty. Root
+capture1passed0.79s/2.743835s and independent final review PASS. Initial500s
+were omitted canonical fixture tables, not product bugs. One scenario is not
+the entire AI/tool security matrix; no real provider or production effect.
+
+## DEP-LOCK-01 partial mitigation — constrain the observed app resolution
+
+Reviewed2e121912 adds101application version constraints and Docker COPY/-c
+consumption; three packaging tools retain their separate Docker pins. Exact
+source104map versus projected104map differs only in pip24.0→26.2. Requirements
+intent is unchanged. Eleven static tests pass0.14s/0.428670s. Clean image build,
+installed map comparison and advisory refresh remain pending. Version pins are
+not artifact hashes or a universal architecture/bot/offline lock.
+
+## SEC-APPROVAL-06 — publication approvals bind the actual target and media
+
+Reviewed13c1f36a stores a nonsecret v1 descriptor of approval/business/platform/
+mode/text hash, provider recipient/sender/account and ordered media IDs/version/
+hash/storage/public URL/MIME. Queue/claim validate it; durable intent freezes
+it for the actual adapter. Missing/malformed/stale authority moves to review;
+postclaim configuration cannot redirect the payload to a newly chosen target.
+Telegram bot identity uses its numeric ID, not persisted credentials; provider
+account refresh retains the approved identity. Manual channels are unchanged.
+Unconfigured API text remains approvable/queueable per current UI, but cannot
+send; a later connection requires fresh approval. SEND-AMB lock/CAS/uncertainty
+and stored write-role boundaries remain tested. Media DB descriptors are
+bound, not an assertion that arbitrary remote URL/object bytes are immutable.
+
+CausalRED7fail/1positive20.22s and its truncated output are retained. Initial
+integration failed13/38pass/9skip; two missing-facade collection errors and
+green4 unbound-queue failure1/251pass/9skip63.04s are also retained. Corrections
+restore compatibility names and exact prior queue behavior; fixtures create
+real approved snapshots/valid-format synthetic bot identity. No assertion is
+removed to conceal a product failure. Finalmain capture252pass/9viewer skips
+60.62s, then separately configured viewer9pass/0skip2.43s. Independent final
+review PASS and36pure/ratchet checks pass0.38s. This is not a combined261-test
+aggregate, live provider run or final whole-source release proof.
+
 ## DEP-PIP-02 — pin the image installer before dependency resolution
 
 Commit65ca8836 pins pip26.2 in the app Dockerfile before requirements, retaining

@@ -75,13 +75,15 @@ provider send or publication occurred in this work.
 - Finish the current-source, dependency, image and log scan/triage work.
 - Complete same-revision aggregate testing and sustained-load measurements.
   Tiny-fixture query plans are captured, not capacity proof. A genuine fresh
-  whole-diff review found further social-role/approval-boundary gaps; fixes
-  and another final review remain necessary.
+  whole-diff review found further social-role/approval-boundary gaps, now fixed
+  in independently reviewed local packages; final combined verification and
+  another whole-diff review remain necessary.
 - Rehearse the partner demo and retain only its synthetic, manually controlled
   path and fallbacks.
 - Complete final release verification of the locally reviewed publication-
-  reconciliation package; its approval fingerprint does
-  not yet establish actual provider-recipient or media binding.
+  reconciliation and approval-binding packages. Commit13c1f36a binds actual
+  provider recipient/account and media metadata; arbitrary remote object-byte
+  immutability and final release proof are not established.
 - Obtain separate authority and proof before any production backup-restore
   rehearsal, release, migration or provider configuration change.
 
@@ -92,7 +94,7 @@ summary or a numerical score.
 ## Investment focus
 
 Near-term investment should prioritize reliable release/recovery evidence,
-publication integration and approval-target binding, supply-chain scanning and measured performance
+publication release verification, supply-chain scanning and measured performance
 before broad feature expansion. Once those gates close, the next product-value
 work is a rehearsed owner-facing demo and incremental simplification of the
 largest work areas, protected by their existing regression coverage.

@@ -1,5 +1,52 @@
 # Production-readiness progress
 
+12:13 UTC correction: exact2e build started but stopped at its disk guard,
+exit75/264.590877s, no timeout/truncation. Chromium download left1420404KiB
+local free space below1.5GiB. No image/smoke/inventory success; no user
+container/volume/image removed. Safe own-cache inventory is read-only;
+no duplicate retry or lowered threshold. Server expansion does not add Mac
+space. Final aggregates wait for local headroom; source/static reviews continue.
+
+12:07 UTC: AC6 real runner/policy/finance proof independently passes and is
+committed as24e0d4cd. Root exact-environment capture records1passed0.79s,
+exit0/2.743835s, no SQL errors, no provider/model calls. Hostile retrieved rows
+cannot supply approval/tenant/capability; foreign apply403 has zero effects,
+owner apply writes only the trusted business. Initial500s were missing fixture
+tables, not proven product defects. Broader adversarial coverage remains.
+
+Reviewed2e121912 adds101application version constraints projected from the
+audited104-package image; Docker separately pins pip26.2/setuptools84/wheel0.48.
+Eleven static checks pass0.14s. Exact2e archive Docker build is now authorized
+in the serialized heavy window, with unchanged4GiB start/1.5GiB abort guards.
+No runtime inventory/advisory verdict yet; no production/container update.
+Historical checkpoints below retain their original results. Overall FAIL.
+
+11:50 UTC: reversible snapshot transfer completed,exit0/100.868564s. Nine
+duplicate completed temp source trees removed only after archive extraction,
+full SHA/mode/symlink verification and fresh idle checks. All9archives retained;
+net gain includingmanifest660267008bytes (~630MiB), hostfree4.3GiB. Original
+700MiB estimate failure remains in a separate rawcapture; no build headroom
+threshold was lowered. No Docker/DB/image/volume/user-source cleanup.
+AC6 real-runner/finance hostile-row harness has staticPASS; worker owns native
+slot for first captured run. App-only104package constraints candidate is now
+being implemented/reviewed, no new dependency resolution or build yet.
+
+11:45 UTC: reviewed approval binding committed13c1f36a. Main real-PG/social
+capture252pass/9viewer skips60.62s; separate correctly configured viewer
+capture9pass/0skip2.43s. These are two captures, not one261-test aggregate.
+Independent final review and36extra pure/ratchet checks pass. Descriptor binds
+the approved target/account/text and media identities/metadata; drift rejects
+before effect or uses frozen approved target. Unconfigured text can still be
+approved/queued, but connecting later requires new approval before sending.
+Earlier integration/collection failures retained; no live provider execution.
+
+Completed-source compression verified9archives but safely stopped before
+removing duplicate sources: gain643MiB was below initial700MiB estimate.
+All originals remain; explicit verified-transfer continuation under review
+uses measured net>=600MiB while preserving4GiB build headroom. No Docker prune.
+AI/finance hostile-row real-chain test is source-only under review. App-only
+release constraints design is pending; no package installation or new build.
+
 11:25 UTC: `/ready` committed as52292e6e after independent review and24native/
 route/schema tests (9.25s pytest,10.005698s capture). `/health` is unchanged;
 the probe uses a bounded read-only transaction and generic200/503 responses.

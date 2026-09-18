@@ -1,6 +1,6 @@
 # Problems and non-PASS criteria
 
-Updated 18 September 2026, 10:58 UTC. Maintained gap register, not a fresh
+Updated 18 September 2026, 12:13 UTC. Maintained gap register, not a fresh
 independent verifier's verdict. Goal active; audit changes local only.
 Production, provider effects and user Docker volumes are out of scope.
 Historical failed captures are retained, not rewritten as green.
@@ -26,8 +26,8 @@ Historical failed captures are retained, not rewritten as green.
 
 System map/backlog cover major surfaces and reproduced fixes, not exhaustive
 certification. Wider role/object and approval-target coverage remain partial.
-Social durable intent fixes the reproduced retry defect locally, but approval
-fingerprint does not bind provider recipient/media. Historical privileged
+Social durable intent fixes the reproduced retry defect locally; reviewed
+13c1f36a now binds provider recipient/account/media descriptor. Historical privileged
 exposure needs owner/provider revocation evidence. No live key testing,
 rotation or history rewrite. That item does not block other safe local work.
 
@@ -37,7 +37,13 @@ prepare, while6controls pass. The first fixture-failure capture is retained.
 Reviewed mutation-boundary correction813609cc passes254checks/0skips42.39s,
 including13real-PG lifecycle cases. Earlier233/21legacy-fake failures retained.
 Approval-binding realPG RED now shows changed fake destination before/after
-claim;7fail/1unchanged positive pass. Frozen-descriptor correction remains.
+claim;7fail/1unchanged positive pass. Frozen-descriptor correction13c1f36a
+passes252main tests with9viewer skips, plus separateviewer9/0pass; independent
+final review PASS. Final whole-source/image/provider-boundary proof remains.
+First integration of that correction failed13/38pass/9skip69.93s; two further
+collection errors expose missing compatibility exports. Minimal helper/fixture
+repairs preserve facade and assertion contracts. Those failures are historical,
+superseded by the explicitly separate green captures above, not one aggregate.
 GET business-data causal RED3 independently proves DDL attempts before denied
 403 and owner-only rejection of legitimate member/viewer readers. Reviewed
 2d875357 removes request-time schema maintenance and preserves canonical read
@@ -53,6 +59,11 @@ proof. Wider mutation-role and adversarial AI/tool matrices remain incomplete.
 
 ## AC5 — Image, migration and restore
 
+Exact2e121912 replacement build stopped at1.5GiB local disk guard during
+Chromium download: exit75/264.590877s, free1420404KiB. No image/smoke/inventory
+completion. Restore local headroom before any heavy retry; no threshold bypass,
+user-volume/image deletion or production action.
+
 Node22 builder correction ba891be4 now has actual f0cc clean image proof:
 bothfrontends build55.386s, ARM64 nonroot/read-only/offlineChromium/pypdf/pipcheck
 smoke3.721s passes. First attempt failed before compilation because sanitized
@@ -67,9 +78,20 @@ isolated restore requires separate authority; synthetic full restore passes.
 Current f0cc tracked-source and post-remediation history delta scans found only
 triaged prose false positives. Final image, resolved runtime dependencies,
 licenses and redacted logs need scanning/triage. Floating Python resolution/
-base tags remain. Source scans cannot prove historical key validity or runtime
+base tags were partially mitigated by reviewed2e121912 app101version constraints
+plus3separate Docker pins; base tags/artifact hashes and bot/AMD64 closure remain.
+Eleven static checks pass; exact image build/inventory/audit pending.
+Source scans cannot prove historical key validity or runtime
 advisory closure. AI/tool coverage distinguishes realPG, fake adapters and
 mocked cursors; no full attacker-prompt/sandbox attack claim.
+The exactb43 Python advisory audit is complete:104packages/0skips,12records/
+6unique findings only in pip24.0. Reviewed65ca8836 pin26.2 passes8static tests,
+but needs image rebuild/version/re-audit. PyMuPDF commercial-license basis is
+unknown and requested; metadata is not a legal-violation finding.
+Test-only24e0d4cd now proves a real runner/policy/finance hostile-row chain:
+1pass0.79s, scoped independent PASS; no row-supplied approval/tenant/capability,
+foreign apply403/no effects, owner target-only writes, no providers/SQL errors.
+Broader AI/tool matrix remains; missing fixture-table500s were not product bugs.
 
 ## AC7 — Performance
 
@@ -82,8 +104,10 @@ Frontend/sustainedserver/queue capacity remain open.
 
 ## AC8 / AC9 — Operations and demo
 
-Liveness is not dependency readiness. Deliberate migration ownership, immutable
-release/rollback, CI, observability and provider recovery remain. Synthetic
+Reviewed52292e6e adds bounded read-only `/ready` separately from `/health`, with
+24native/route/schema/CLI checks9.25s. Live image integration is still pending.
+Deliberate migration ownership, immutable release/rollback, CI, observability
+and provider recovery remain. Synthetic
 10–15minute demo script exists but is not rehearsed end to end. Automated
 scenarios support but do not replace that rehearsal.
 

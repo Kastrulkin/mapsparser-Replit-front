@@ -2,6 +2,41 @@
 
 Status: **FAIL / incomplete whole-goal evidence**, updated 2026-09-18 UTC. This is a progress checkpoint, not final independent sign-off.
 
+12:13UTC: exact2e build safely aborted at disk guard, exit75/264.590877s,
+free1420404KiB<1.5GiB during Chromium download. No completed image, smoke or
+inventory/advisory refresh. No production/user container/volume/image deletion.
+Further heavy jobs wait for local headroom; thresholds are unchanged.
+
+12:07UTC: test-only24e0d4cd independently proves one real runner/policy/finance
+untrusted-row boundary. Exact root capture1pass0.79s/2.743835s, zero SQL errors,
+no external calls. Missing fixture-table500 diagnostics are NO_BUG_PROVEN in
+product. Reviewed2e121912 constrains101application versions plus3Docker pins;
+11static tests pass0.14s. Exact2e Docker build is starting under preserved disk
+guards, no image/advisory verdict yet. Recoverable9snapshot transfer completed
+100.868564s/net660267008bytes; no user data/image/volume cleanup. Overall FAIL.
+
+11:45UTC delta: approval binding now reviewed/committed13c1f36a. Maincapture
+252pass/9viewer skips60.62s; separate correct-DSN viewer capture9pass0skips
+2.43s. Independent finalPASS plus36pure/ratchet checks. Frozen target/account/
+media descriptor prevents the reproduced recipient drift while preserving
+unbound text approval/queue semantics and uncertain-send safeguards. Earlier
+integration/collection failures below remain historical, not current blockers.
+External object-byte immutability, final aggregate/image/live rollout remain
+separate. No production or live provider execution.
+
+11:25UTC delta: reviewed52292e6e `/ready` passes24native/route/CLI/schema
+checks9.25s/10.005698s capture; no DB writes or change to `/health`. Actual
+transaction-mode diagnostic is `on`, so the implicit-BEGIN suspicion is not
+a reproduced bug. The endpoint is not yet in the current runtime image.
+Exactb43 pinnedPython audit checks104packages/0skips and returns12records/
+6unique advisories only in pip24.0. Reviewed65ca8836 pins26.2 before dependency
+resolution;8static tests pass. Image rebuild/version/re-audit are still needed.
+Initial root command typo ran no tests and is retained. PyMuPDF license basis
+awaits owner confirmation; no legal violation claim. Binding native checkpoint
+fails13/38pass/9skip69.93s plus two subsequent facade collection errors;
+At that historical checkpoint repairs/rerun remained pending, not FIX_PROVEN;
+the reviewed13c1f36a and separate green captures at11:45 supersede that status.
+
 Latest10:58UTC evidence supersedes historical checkpoints below: clean6c96192c
 backend **4538passed/7live-provider skips/5warnings**,395.49s, exit0; frontend
 588unit/126files,72mockbrowser,fullTS,lint0errors/1warning PASS495.068s.

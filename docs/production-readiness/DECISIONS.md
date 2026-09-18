@@ -1,5 +1,16 @@
 # Readiness decisions
 
+## D-020 — Constrain the observed app closure without claiming a universal lock
+
+2e121912 projects101application versions from the audited104-distribution
+ARM64 image. Three packaging tools remain separately pinned in Dockerfile;
+only pip changes24.0→26.2. Existing requirements intent and indexes remain.
+The source pins-text SHA and normalized-map SHA are distinct provenance
+values. Static tests verify projection, count and Docker consumption; a new
+image must independently match the projected104-package map and pass audit.
+This is not a hash-locked/offline/AMD64/Telegram dependency closure; base tags,
+artifact bytes and bot-only dependencies remain separate verification gaps.
+
 ## D-017 — Ambiguous publication is a durable hold, not a retry
 
 18 September: commit a compare-and-set publication intent before provider I/O.

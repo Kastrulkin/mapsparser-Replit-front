@@ -51,10 +51,15 @@
         "raw/business-data-preauth-green.json",
         "813609cc social publication stored write-role boundary",
         "raw/social-posts-viewer-rbac-red2-20260918.json",
-        "raw/social-posts-viewer-rbac-expanded-green-20260918.json"
+        "raw/social-posts-viewer-rbac-expanded-green-20260918.json",
+        "13c1f36a social approval recipient/account/media binding",
+        "raw/social-approval-binding-causal-red.json",
+        "raw/social-approval-binding-green4-failed.json",
+        "raw/social-approval-binding-green5.json",
+        "raw/social-approval-binding-viewer-green.json"
       ],
       "gaps": [
-        "Reviewed local auth/webhook/scope/data/SSRF and finance/blueprint/Operator/services/content stored-role fixes are committed. Durable social intent/reconciliation fixes the reproduced duplicate-send defect, not provider recipient/media approval binding or exactly-once delivery. Historical revocation, wider platform role/tool matrices and operational gates remain. No audit deployment."
+        "Reviewed local auth/webhook/scope/data/SSRF and stored-role fixes are committed. Durable social intent/reconciliation fixes duplicate-send risk; reviewed13c1f36a binds approved target/account/media descriptor, main252pass/9viewer skips plus separateviewer9pass/0skip. No combined261aggregate, immutable external object-byte or exactly-once guarantee. Historical revocation, wider platform role/tool matrices, final aggregate/image and operational gates remain. No audit deployment."
       ]
     },
     {
@@ -180,10 +185,19 @@
         "docs/production-readiness/03-security-threat-model.md",
         "raw/audit-commit-secret-scan-through-0fdd.json",
         "raw/image-dependencies-f0cc182a.json",
+        "raw/image-python-advisories-f0cc182a.json",
+        "65ca8836 image pip26.2 pin (runtime confirmation pending)",
+        "raw/dep-engine-static-root-retry-20260918.json",
+        "2e121912 audited application version constraints",
+        "raw/release-constraints-static-rerun.json",
+        "24e0d4cd real runner/policy/finance untrusted-row proof",
+        "raw/agent-finance-untrusted-rows-root.json",
+        "raw/secret-delta-f0cc-to-24e.json",
+        "raw/docker-build-2e121912-disk-abort.json",
         "raw/trivy-vulnerability-db.json"
       ],
       "gaps": [
-        "Finalf0cc tracked-source98vs94baseline candidates:4delta prose false positives; post-remediation28commit delta1prose false positive. Historical privileged exposure/revocation unknown. Exactimmutableb43 strict PyPI audit checked104Python distributions/0skips,12records/6unique advisories only in pip24.0. Reviewed65ca8836 pin26.2 before requirements passes8static checks but image rebuild/version/re-audit remain. PyMuPDF AGPL/commercial metadata needs ownerlicense confirmation, not a violation claim. TrivyDB safely refused insufficientstartingheadroom before download. Finalimage/log/OS/native/npm/license scans pending. AI/tool realPG versus doubles evidence remains scoped."
+        "Finalf0cc tracked-source98vs94baseline candidates:4delta prose false positives; post-remediation28commit delta1prose false positive. Historical privileged exposure/revocation unknown. Exactimmutableb43 strict PyPI audit checked104Python distributions/0skips,12records/6unique advisories only in pip24.0. Reviewed65ca8836 pins26.2;2e121912 app101constraints plus3Docker pins pass11static checks, image/version/re-audit pending. PyMuPDF license confirmation and finalimage/log/OS/native/npm/license scans pending. Real runner/policy/finance hostile-row test24e0d4cd independently passes1/0.79s with exact root capture2.743835s, no row-supplied approval/tenant/capability, foreign403/no effects and owner target-only writes, no providers/SQL errors. Broader AI/tool matrix remains; fixture omissions were not product bugs."
       ]
     },
     {
@@ -222,10 +236,13 @@
         "faefef25",
         "docs/production-readiness/DECISIONS.md",
         "docs/RUNTIME_RELEASE_20260917.md",
-        "docs/production-readiness/07-production-runbook.md"
+        "docs/production-readiness/07-production-runbook.md",
+        "52292e6e bounded read-only database readiness",
+        "raw/readiness-native-routes-schema-archive-813609cc-final-20260918.json",
+        "raw/readiness-transaction-readonly-diagnostic-20260918.json"
       ],
       "gaps": [
-        "Working operator runbook independently approved against real deploy/restore/schema-check helpers. Operational closure still incomplete; historical runtime snapshot maintenance is not clean release proof. Production transport and recovery risks require separate authorized checks."
+        "Working operator runbook independently approved against real deploy/restore/schema-check helpers. Reviewed52292e6e /ready preserves /health and passes24nativePG/route/CLI/schema/ratchet checks9.25s (capture10.005698s), but is not in the current image or production. Operational closure still incomplete; historical runtime snapshot maintenance is not clean release proof. Production transport and recovery risks require separate authorized checks."
       ]
     },
     {

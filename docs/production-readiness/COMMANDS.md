@@ -1,5 +1,76 @@
 # Verified commands and evidence
 
+## Latest Docker build — 18 September 12:13 UTC
+
+Exact2e121912 credential-free archive started successfully; build stopped
+at its own unchanged1.5GiB disk threshold during Chromium download.
+`/private/tmp/localos-readiness-image-2e121912.abQZFx/build-capture.json`:
+exit75/264.590877s/no timeout/no truncation, free1420404KiB. This is a safe
+resource abort, not a compiler/test verdict or completed image. No smoke or
+installed-map comparison ran; no user container/volume/image was removed.
+Retain capture and source; retry requires restored>=4GiB after archive.
+Byte-identical durable copy: `raw/docker-build-2e121912-disk-abort.json`.
+
+`secret-delta-f0cc-to-24e.json`: Gitleaks f0cc182a..24e0d4cd checks11commits,
+270636bytes, no findings, exit0/3.104201s (scanner2.04s), no timeout/truncation.
+Full redaction and ignore-gitleaks-allow keep this a strict local delta scan;
+the private JSON report is empty. Historical revocation/image/log scans remain.
+
+## Current local checks — 18 September 12:07 UTC
+
+- `agent-finance-untrusted-rows-root.json`: exact guarded nativePG runner→
+  policy→finance→approval apply proof,1passed0.79s, exit0/2.743835s, untruncated.
+  Root wrapper derives PYTHONPATH from the actual CWD, pins guardSHA534a36...
+  and SHOW data_directory before pytest. Final file SHA d3014cad... was saved
+  before capture start. Independently reviewed, test-only commit24e0d4cd.
+  Initial missing-table diagnostics and worker PYTHONPATH typo are retained;
+  no product defect is inferred from those fixture errors.
+- `release-constraints-static-rerun.json`:11passed0.14s, exit0/0.428670s,
+  no timeout/truncation. Source/static review PASS; commit2e121912.
+  101application pins plus3Docker packaging pins project104distributions.
+  The image build and exact installed-map comparison are pending, not passed.
+
+## Verified reversible source-copy transfer — 18 September 11:50 UTC
+
+`completed-snapshot-transfer-20260918.json`: exit0/100.868564s, no timeout or
+truncation. Exact9completed source directories replaced by verified archives,
+not image/container/volume/user data removal. SHA256-pinned manifest:
+`/private/tmp/localos-readiness-completed-snapshots-20260918/manifest.json`,
+`0c95fb50bc89335cdd162e6ceee94584a41e740e13a586991c059e06060f14d7`.
+Net savings includingmanifest660267008bytes; free4500156KiB after transfer.
+Every archive was extracted and full file hashes/modes/symlinks compared,
+then its SHA and original manifest were rechecked before exact duplicate
+removal. Active paths, nativePG, current/restore images and raw repo evidence
+were excluded. Earlier below-estimate failure retained;4GiB build guard stays.
+
+Old raw source paths are historical, not currently extracted directories.
+Example recovery of one retained snapshot (only if original path is absent):
+
+```sh
+test ! -e /private/tmp/localos-readiness-query-20431224.wJNhxf
+tar -xzpf /private/tmp/localos-readiness-completed-snapshots-20260918/localos-readiness-query-20431224.wJNhxf.tar.gz -C /private/tmp
+```
+
+Verify its recorded archive SHA against the manifest first. Do not replay old
+startup/deploy scripts just because their source snapshot has been restored.
+
+## Current local checks — 18 September 11:45 UTC
+
+- `social-approval-binding-green5.json`: all8social modules,252passed/
+  9viewer skips60.62s, exit0/61.291018s/no timeout/truncation. Skips caused by
+  absent explicit viewer DSN, not deliberate external-provider exclusions.
+  `social-approval-binding-viewer-green.json` separately pins migrated
+  readiness_full_test_reviewed_20260918/35418 and guardSHA534a36...;9passed
+  0skips2.43s. Source independently reviewed/committed13c1f36a. No261aggregate.
+- `social-approval-binding-green4-failed.json`:1failed/251passed/9skipped
+  63.04s; unbound text queue incorrectly returned needs_manual_publish.
+  Source corrected to preserve approvable/queueable but non-sendable text.
+  Initial13/38/9skip integration log and two collection errors remain retained.
+- `completed-snapshot-compression-20260918.json`:9source snapshots archived,
+  extracted and SHA/mode/symlink verified; exit1/143.631204s because measured
+  projectedgain673988608bytes was below initial700MiB estimate. All originals
+  retained, no removal. Explicit verified continuation is pending at this time.
+
 ## Current local checks — 18 September 11:25 UTC
 
 - `readiness-native-routes-schema-archive-813609cc-final-20260918.json`:

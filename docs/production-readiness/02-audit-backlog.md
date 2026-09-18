@@ -19,7 +19,7 @@ Updated 2026-09-18 UTC. All file evidence refers to the baseline or current loca
 | DEP-PDF-01 | P1 / before prod | Host pypdf6.13.2 matches parser DoS advisories and accepts uploaded PDFs | Resolved121pin scan; source ingestion PdfReader after10MB cap, before page cap; upstream advisories | Potential parser resource exhaustion; no live exploit claimed | Pin6.16.1 with upload compatibility tests; verify final image | S–M / medium, document parsing | Normal/malformed upload tests pass; resolved package/advisory no longer affected; final image scanned | Local advisory mitigation committedee777f59,58focused tests and4319full native pass; current f0cc image smoke confirms pypdf6.16.1. Final image vulnerability/license/secret scan remains pending. |
 | OPS-IMAGE-01 | P1 / before prod | Code bind mounts override release image | `docker-compose.yml` app/worker/bot mounts | Image rollback does not reproduce running code | Locally tested immutable release profile, data-only mounts | M / high rollout, no deployment now | Fresh release and rollback match file/image manifests with no code overrides | CONFIG_GAP |
 | OPS-RESTORE-01 | P1 / before prod | Original restore helper targets live DB with unsafe defaults | Baseline `scripts/postgres-restore-latest.sh:17,36` | Wrong DB restore/data loss; no deliberate target/verification boundary | Explicit local-owned fresh target/trusted archive/confirmation; no ambient .env | M / high if misused | Unsafe invocations denied; reviewed helper restore and full schema verification | FIX_PROVEN for guarded local synthetic recovery: a04686de, independent11fake tests and full-schema synthetic restore comparison (tables, data, indexes, triggers, views, functions, sequences, ACL/default ACL). This is not a production-backup or production-restore proof. |
-| DEP-LOCK-01 | P1 / before prod | Python runtime resolution and base images not reproducible | `requirements.txt`, `Dockerfile` floating packages/base tags | Build drift/supply-chain change; missing audited lock | Capture/audit compatible pinned resolution; build and integration checks | M / medium compatibility | Fresh repeat builds use verified dependencies and digest references | CONFIG_GAP |
+| DEP-LOCK-01 | P1 / before prod | Python runtime resolution and base images not reproducible | `requirements.txt`, `Dockerfile` floating packages/base tags | Build drift/supply-chain change; missing audited lock | Capture/audit compatible pinned resolution; build and integration checks | M / medium compatibility | Fresh repeat builds use verified dependencies and digest references | PARTIAL: reviewed2e121912 constrains101app versions plus3Docker pins;11static checks pass. Exact installed-map/build pending; artifact/base digests and bot/AMD64 closure remain |
 | TEST-E2E-01 | P2 / before prod | Nightly root spec glob excludes real staging journeys | `scripts/ci_gate_nightly.sh`, `frontend/e2e/staging` | Mock-green UI may conceal API/tenant defects | Isolated real-API CI job with credential-free fixtures | M / medium CI resources | Staging journey/tenant negatives execute in CI and fail on deliberate contract regression | CONFIG_GAP |
 | OPS-MIG-01 | P2 / before prod | More than one service can own startup migrations | Compose defaults and entrypoint; advisory lock exists | Restart/DDL coupling despite serialized execution | Explicit migrator plus check-only runtime default | M / medium deployment | Concurrent startup cannot implicitly perform migration; clear schema mismatch readiness | CONFIG_GAP |
 | OPS-READY-01 | P2 / before prod | Static `/health` is liveness, not dependency readiness | `src/legacy_routes/core_public.py:1491` | Routing to app with broken DB/schema | Keep liveness; bounded separate readiness without sensitive details | M / low–medium | Healthy/degraded DB/schema cases; time bound; no private details in response | CONFIG_GAP |
@@ -74,16 +74,19 @@ boundaries, preserves reads/claimed finalization and passes254tests0skips,
 including13real-PG lifecycle cases. Approval-target binding remains separate.
 See FRESH_REVIEW_20260918.md for the historical pre-fix snapshot.
 
-`SEC-APPROVAL-06` (P1, REPRODUCED) — fresh real approval is not bound to the
+`SEC-APPROVAL-06` (P1, FIX_PROVEN locally) — fresh real approval was not bound to the
 recipient/media. RealPG with fake transport records changed Telegram channel
 both before claim and between claim and actual adapter payload. Separate
 media-hash/asset-ID and legacy/malformed cases reach adapter. RED7fail/1positive
 pass20.22s; stdouttruncated, source and visible failure limits retained.
 Root cause: text/business/platform-only fingerprint with late-bound provider
-configuration. Scoped fix under development: nonsecret approved descriptor,
-queue/claim validation and exact frozen adapter payload. Acceptance requires
-zero redirected effects, unchanged positive receipts, all-provider identity
-matrix and retained uncertain-send/CAS safeguards. No live provider action.
+configuration. Reviewed13c1f36a stores nonsecret approved descriptor, validates
+queue/claim and uses the frozen target/account/media in adapters. Main capture
+252pass/9viewer skips60.62s; separateviewer9pass/0skip2.43s. Independent final
+review confirms zero redirected effects, unchanged positive receipts, five-
+provider identity matrix and retained uncertain-send/CAS safeguards. Prior
+failed integration/collection captures retained. No live provider action or
+whole-source aggregate; external storage/URL byte immutability not established.
 
 18September closure/update: actual local guarded restore and full schema/data/ACL/sequence comparison independently pass (`raw/restore-helper-full-schema-20260918.json`); environment recovered with explicit no-reset authorization, fresh PG16/storage checks,264resumed integration tests and current browser-enabled image smoke. This does not certify old damaged volumes or production backups. Compiled runner fixture genuinely passes10previews/5runs and browser3/3. Current frontend checkpoint is6c588 with72 mocked browser scenarios,0 lint errors/1 existing warning; current real-browser117 scenario completion is pending. Clean full backend aggregate6c96192c records4538passed/7explicit live-provider skips/5warnings. Actual query-plan proof remains pending; no performance conclusion is implied.
 

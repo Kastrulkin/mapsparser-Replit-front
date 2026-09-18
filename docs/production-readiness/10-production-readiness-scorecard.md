@@ -20,7 +20,7 @@ and unresolved P1 items remain controlling.
 | Category | Score / 5 | Evidence | Why it is not higher |
 | --- | ---: | --- | --- |
 | Architecture | 3 | [01-system-map.md](01-system-map.md) documents boundaries, execution and approval paths; reviewed isolated compiled profile exists. | Large work areas and startup/migration ownership remain; final whole-diff review is open. |
-| Security | 2 | Local authorization, SSRF, session, webhook and publication-lifecycle work has focused evidence; see [03-security-threat-model.md](03-security-threat-model.md). | Historical credential revocation is unknown; final scans, rollout and actual provider-recipient/media approval binding remain open. |
+| Security | 2 | Local authorization, SSRF, session, webhook, publication binding13c and one real hostile-row24e proof; see [03-security-threat-model.md](03-security-threat-model.md). | Historical credential revocation is unknown; final scans, rollout, broader tool coverage and immutable external media bytes remain open. |
 | Data integrity | 2 | Full synthetic restore covers288tables/schema/grants/sequences/data; SEND-AMB lifecycle/receipt and current120browser checks pass. | Broader mutation/approval-target coverage and production-backup recovery remain incomplete. |
 | Reliability | 2 | Isolated PG16 storage/restart/restore and reviewed duplicate-send/reconciliation checks passed; social-role254/0suite retains13critical realPG lifecycle cases. | Final same-revision full aggregate, immutable image and production recovery proof remain open. |
 | Performance | 2 | Image size fell22.2%;50-sample distributions/44prepared reads/tinySQL plans captured. GET now9reads0DDL versus9reads3DDL. | Frontend and sustained HTTP/server/queue capacity remain open; tiny plans are not capacity, comparable medians nearly unchanged and p99 exploratory. |
@@ -38,7 +38,8 @@ The arithmetic mean is intentionally omitted. A moderate local score cannot
 offset a P1 release gate: historical credential revocation, production restore
 proof, supply-chain closure, SEND-AMB browser/release verification, final scans,
 server-capacity evidence and demo rehearsal remain open. Fresh whole-diff
-review at2f224f05 failed; social-role and approval-binding work plus final
-re-review are required. Tiny query plans alone do not close performance.
+review at2f224f05 failed; later social-role/approval-binding packages pass scoped
+review but require final combined verification and whole-diff re-review.
+Tiny query plans alone do not close performance.
 See [09-residual-risks.md](09-residual-risks.md) and
 [PROGRESS.md](PROGRESS.md) for the authoritative working state.
