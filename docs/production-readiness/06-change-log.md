@@ -1,5 +1,18 @@
 # Production-readiness change log
 
+## FIN-UPLOAD-01 — bounded finance file admission
+
+Reviewed015b4ebc adds a10MiB in-process stream/parser limit and dedicated413
+responses in finance preview/import-file. Existing other error and apply
+contracts are unchanged. Deterministic bounded-read sentinel fails before
+the fix; no huge fixture or production outage was created. Exact64-byte
+acceptance/65-byte CSV+XLSX rejection tests use a reduced test constant and
+verify zero parser/normalizer/DB effects on rejection. Root authoritative
+31tests pass1.48s/2.156451s. Worker dotenv flag mistake and root missing-DBURL
+30/1 failure remain explicit; final root run disables dotenv and uses a
+nonconnecting sink DBURL. This closes byte admission only: multipart spooling,
+proxy limits, row counts, decompressed XLSX and CPU budgets are separate.
+
 ## AC6 proof — retrieved finance data cannot supply execution authority
 
 Test-only24e0d4cd exercises real Runner→ActionOrchestrator→policy/handler and

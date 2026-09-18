@@ -194,6 +194,12 @@
         "raw/agent-finance-untrusted-rows-root.json",
         "raw/secret-delta-f0cc-to-24e.json",
         "raw/docker-build-2e121912-disk-abort.json",
+        "015b4ebc finance upload byte admission",
+        "raw/finance-upload-admission-worker-red.json",
+        "raw/finance-upload-admission-root.json",
+        "raw/finance-upload-admission-root-retry.json",
+        "raw/post-cleanup-disk-during-backend.json",
+        "raw/full-backend-3dca5fda.json (FAIL:10failed4645passed7skipped)",
         "raw/trivy-vulnerability-db.json"
       ],
       "gaps": [

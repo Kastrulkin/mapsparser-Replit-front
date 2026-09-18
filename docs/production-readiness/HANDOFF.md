@@ -1,6 +1,70 @@
 # Readiness handoff
 
-## Current continuation — 18 September 12:13 UTC
+## Current continuation — 18 September 12:47 UTC
+
+Full exact3d backend FAILED:10failed4645passed7live-provider skips6warnings,
+502.58s pytest/515.906761s capture,exit1,no timeout/truncation. Raw
+full-backend-3dca5fda.json retained; migration succeeded. Fresh failed-run DB
+readiness_full_test_3dca5fda_c57379241521/OID3204881/readiness_test_owner remains
+intentionally preserved, not reused for retry. Independent diagnosis:8Compose
+plugin-discovery failures and2Python browser-cache lookup failures under clean
+HOME, all before product assertions. No proven product regression. Prepared
+v3 retry SHA9e02baec39efd88c8fe05aad9c353b7880b91143ef9d73487d08f866e56af0d9
+has independent static PASS: exact Compose plugin also installed in isolated
+HOME/.docker, preflight matches tests' stripped child env, explicit browser cache.
+Runtime UNKNOWN; run only after frontend finishes, with fresh archive/DB/raw.
+Pinned3d archive remains runtime source despite docs-only HEAD advancement.
+Frontend aggregate RUNNING since12:50UTC in readiness-frontend-3dca5fda; own
+frontend-only3d archive, mocked APIs only, no staging or production,1200s/1.5GiB
+group watchdog. Raw frontend-aggregate-3dca5fda.json pending; serialize heavy jobs.
+
+## Historical continuation — 18 September 12:35 UTC
+
+HEAD3dca5fdab9cfd5617ed3bbbc8dee099feeb1fcbc; code/test packages committed,
+root evidence docs still dirty; unrelated maps file preserved. Strict viewer
+DSN guard9pure tests pass0.33s/0.732428s, independently reviewed.
+Full backend currently RUNNING in tmux readiness-backend-3dca5fda via
+/private/tmp/localos-readiness-docker-resume.NsmVen/capture-full-backend-3dca5fda.sh.
+Do not rerun startup. Raw destination full-backend-3dca5fda.json appears on
+completion; inspect child exit, timeout, truncation and final summary, not the
+capture wrapper exit alone. Source is the clean exact3d archive under
+/private/tmp/localos-readiness-final-backend-launcher-v2/3dca5fdab9cfd5617ed3bbbc8dee099feeb1fcbc/source.
+Reviewed launcher SHA8e138cf8d982b517a782f36c03a6a768cfed8149399c4a7f3931eec40d021982.
+Fresh DB readiness_full_test_3dca5fda_<nonce12>; OID/owner are recorded in final
+summary, preserved if tests fail/cancel; success requires identity match then
+DROP+absence confirmation. Previous reviewed base is never used by this run.
+All tests point to the fresh DSN; oldb43 only provides pypdf6.16.1 overlay.
+No new image or production certification; heavy frontend/browser/scanner waits.
+
+## Historical continuation — 18 September 12:31 UTC
+
+HEAD015b4ebc: reviewed finance10MiB application read/parser limit and dedicated
+413 in preview/import-file. Authoritative root31pass1.48s/2.156451s capture
+raw/finance-upload-admission-root-retry.json; worker green is historical because
+its custom dotenv-disable flag was ineffective. Root first30/1 had no DBURL;
+fixed root test wrapper uses disabled dotenv plus nonconnecting127.0.0.1:1 sink URL.
+No production/provider/DB effects. Broader multipart/archive limits unproven.
+
+Exact12 aborted2e cache records removed by independently reviewed task script;
+raw/aborted-build-2e-exact-cache-cleanup-retry.json exit0/12.286372s, preserves
+all10images/16containers/18volumes/nonselectedcache. First attempt exit1 before
+mutation due unsupported boolean filters; exact-ID fallback retains fresh
+reclaimable/nonshared/identity gates. Immediate host delta -172032bytes;
+later raw/post-cleanup-disk-during-backend.json at12:42UTC records3000356KiB
+(~2.86GiB) during backend execution, not immediate prune bytes. Do not claim
+an attributable reclaimed-byte count or
+retry4GiB-start Docker build. Snapshot files retained under2e tasktemp.
+
+Prepared /private/tmp/localos-readiness-final-backend-launcher-v2.py now uses
+fresh readiness_full_test_<sha8>_<nonce12>, strict OID/owner provenance, clean
+archive migration and guarded all-DSN execution. Uses oldb43 only for verified
+pypdf6.16.1 overlay, not image certification. Reviewer rechecks before GO.
+Two uncommitted guard-only test files permit only old exact DB or strict fresh
+name, not arbitrary suffix;9pure tests pass, independent review pending.
+Root must commit them, freeze exact SHA, then launch one full aggregate in tmux.
+Unrelated maps document remains untouched. Overall FAIL; no push/deploy.
+
+## Historical continuation — 18 September 12:13 UTC
 
 Exact2e build aborted safely at12:08:47UTC: exit75/264.590877s,
 free1420404KiB<1.5GiB during Playwright download. Source capture

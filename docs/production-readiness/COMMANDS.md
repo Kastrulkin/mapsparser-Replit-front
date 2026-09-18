@@ -1,5 +1,52 @@
 # Verified commands and evidence
 
+## Frozen backend result — 18 September 12:47 UTC
+
+`full-backend-3dca5fda.json`:10failed4645passed7live-provider skips6warnings,
+502.58s pytest/515.906761s capture,exit1,no timeout/truncation. Migration exit0;
+final stage=tests,valid=false,database_policy=preserved_on_failed_or_cancelled_test.
+Fresh DB readiness_full_test_3dca5fda_c57379241521/OID3204881/ownerreadiness_test_owner
+is intentionally retained. Independent diagnosis:8Compose CLI discovery and
+2Python browser-cache lookup failures under clean HOME, before product assertions.
+Retry needs exact child-environment preflight; no aggregate PASS claim.
+
+Frontend RUNNING12:50UTC: `/private/tmp/localos-readiness-docker-resume.NsmVen/capture-frontend-3dca5fda.sh`
+in tmux readiness-frontend-3dca5fda. Outer capture1350s; root process-group wrapper
+1200s/1.5GiB runtime disk guard; reviewed launcher6d94679e... with pinned config
+02d165a5... creates separate frontend-only3d archive. Existing dependencies,
+explicit Chromium1234 cache, lint/fullTS/units/72mocked/bothbuilds, no real API.
+Destination `frontend-aggregate-3dca5fda.json` remains pending until child result.
+
+## Frozen full-backend run — 18 September 12:35 UTC
+
+`strict-fresh-native-viewer-guard.json`:9pure tests pass0.33s/capture0.732428s,
+no DB, exact env/sink URL. Reviewed guard-only commit3dca5fda accepts old exact
+DB or only the strict fresh8hex_12hex name, not arbitrary readiness suffixes.
+Full backend started from clean3dca5fdab9cfd5617ed3bbbc8dee099feeb1fcbc archive
+using reviewed temporary launcher8e138cf8... and new owned native DB. Result
+pending: `full-backend-3dca5fda.json`. Do not count this as a pass before its
+child exit0/no timeout/no truncation/stagecomplete/validtrue and confirmed
+exact fresh-DB cleanup. Source/environment/commands are captured there.
+
+## Latest scoped checks — 18 September 12:31 UTC
+
+- `finance-upload-admission-worker-red.json`: sentinel shows unbounded read,
+ 1fail0.28s/capture0.672627s. Worker31green is not the final sanitized-env proof.
+- `finance-upload-admission-root.json`:30pass/1fixtureconfiguration failure,
+ 1.25s/capture1.838182s; correctly disabled dotenv left route-registration DBURL
+ unset. `finance-upload-admission-root-retry.json`: explicit nonconnecting
+ loopback:1 sink DBURL, pinned no-egress guard, disabled dotenv;31pass1.48s,
+ exit0/2.156451s/untruncated. Commit015b4ebc independently reviewed.
+- `aborted-build-2e-exact-cache-cleanup.json`: exit1/4.274283s before mutation,
+ installed Buildx boolean filters returned no selected records.
+ `aborted-build-2e-exact-cache-cleanup-retry.json`: exact anchored-ID fallback
+ with unchanged per-record gates, exit0/12.286372s;12records removed, all other
+ cache IDs and10images/16containers/18volumes/states preserved. Immediate host
+ free delta -172032bytes; `post-cleanup-disk-during-backend.json` captured later
+ at12:42UTC records3000356KiB (~2.86GiB) during backend, not immediate cleanup
+ bytes. Cache is rebuildable;
+ no image/volume/data deletion. [Docker selector documentation](https://docs.docker.com/reference/cli/docker/buildx/prune/).
+
 ## Latest Docker build — 18 September 12:13 UTC
 
 Exact2e121912 credential-free archive started successfully; build stopped

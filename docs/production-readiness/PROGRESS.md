@@ -1,5 +1,48 @@
 # Production-readiness progress
 
+12:47 UTC: full backend3dca5fda completed FAIL:10failed,4645passed,7live-provider
+skips,6warnings,502.58s pytest/515.906761s capture,exit1/no timeout/untruncated.
+Migration succeeded; failed-run DB readiness_full_test_3dca5fda_c57379241521
+(OID3204881,ownerreadiness_test_owner) preserved by policy. Independent diagnosis:
+8Compose tests cannot discover CLI plugin under clean HOME;2Python browser
+tests cannot find their Chromium1208 cache, before UI assertions. These are
+launcher-environment failures, not confirmed product defects. No sum-of-scoped-tests
+replacement for aggregate PASS. Heavy backend window is now free.
+
+12:50 UTC: exact3d frontend aggregate started in readiness-frontend-3dca5fda.
+Reviewed launcher6d94679e... pins config02d165a5..., creates a separate clean
+frontend-only git archive, uses existing locked dependencies/Chromium1234,
+and selects only72mocked scenarios (no staging API). Root owned process-group
+wrapper bounds1200s with1.5GiB runtime disk guard; output pending in
+raw/frontend-aggregate-3dca5fda.json. No aggregate success claim yet.
+
+12:35 UTC: reviewed guard-only package committed3dca5fda,9pure tests pass
+0.33s/0.732428s. Clean full backend archive of that exact revision is now
+running in tmux readiness-backend-3dca5fda on a new uniquely named native DB.
+Launcher SHA8e138cf8... independently approved:2GiB pre/post-archive guard,
+1.5GiB runtime watchdog, explicit local images/DSNs/no dotenv/no providers,
+failure preserves the exact fresh DB; normal success verifies identity before
+dropping only that DB. Oldb43 supplies pypdf6.16.1 only; no new image claim.
+Result pending in raw/full-backend-3dca5fda.json. Other heavy work waits.
+
+12:31 UTC: FIN-UPLOAD-01 scoped hardening committed015b4ebc. Finance upload
+reads at most10MiB+1 and rejects before parsing; direct parser also checks
+bytes. Both routes return413 for only the dedicated limit exception. Exact
+root environment passes31tests1.48s/2.156451s, independently reviewed. First
+worker green used an ineffective dotenv flag; root's first exact-env run30/1
+exposed missing test DATABASE_URL, then explicit loopback:1 sink configuration
+passes. All captures retained. No multipart/proxy/XLSX-expansion safety claim.
+
+Exact12aborted-build cache entries removed after independent safety review;
+10images/16containers/18volumes and all nonselected cache IDs unchanged.
+Cleanup exit0/12.286372s. Initial host-free delta was -172032bytes (reclaim not
+yet visible); durable raw/post-cleanup-disk-during-backend.json reports
+3000356KiB (~2.86GiB) at12:42UTC during backend execution. This later observation
+is not an immediate cleanup-byte measurement or an attributable2GB gain.
+First unsupported-filter attempt failed before mutation and is retained.
+No Docker rebuild retry below4GiB. New clean backend aggregate launcher uses
+a fresh owned native DB, not the previous migrated base; final review pending.
+
 12:13 UTC correction: exact2e build started but stopped at its disk guard,
 exit75/264.590877s, no timeout/truncation. Chromium download left1420404KiB
 local free space below1.5GiB. No image/smoke/inventory success; no user
