@@ -1,6 +1,14 @@
 # UX and browser verification — working evidence
 
-Latest local checkpoint: frontend8ebec5ca on isolated4a8backend, **114/114real-API browser tests pass215.263s** after clean build27.414s. All3viewports now pass the Agents contrast check. Causal target was EmployeeWorkspaceSection title `Готовность процесса`; the earlier workflow-graph opacity change was adjacent and the first rebuilt5c1 rerun remained111/3. Both red captures retained. New publication-reconciliation work postdates this browser checkpoint and needs separate full verification.
+Latest local check18September10:39UTC: reviewed20431224 frontend over isolated
+f0cc backend completes **120passed**,227.301s,exit0/no timeout. It includes
+real stored publication receipt, duplicate-confirmation protection, bounded
+Month/List layout and Escape-to-invoker focus across desktop/laptop/mobile.
+The preceding layout-only117passed/3failed run248.788s remains preserved:
+its three new failures led to the scoped focus fix and three unit regressions.
+This separately synced frontend is not final immutable-image evidence.
+
+Earlier checkpoint: frontend8ebec5ca on isolated4a8backend, **114/114real-API browser tests pass215.263s** after clean build27.414s. All3viewports passed the Agents contrast check. Causal target was EmployeeWorkspaceSection title `Готовность процесса`; the earlier workflow-graph opacity change was adjacent and the first rebuilt5c1 rerun remained111/3. Both red captures retained.
 
 Scope: existing LocalOS task flows, not a redesign. Latest checkpoint18September2026: clean4a8e33b8 Docker app, PostgreSQL16 and real compiled runner, synthetic data only. No production session or customer data used. Final aggregate and remaining original acceptance criteria are not complete.
 
@@ -21,7 +29,27 @@ Owners/managers need to move from a concrete opportunity to a reviewed action an
 | Complete five journey projections | Real API/domain records plus explicit completion fixtures | Pass for workflow projection. Map-worker/automation completion is injected by synthetic fixtures, not proof of actual parser/worker/provider execution |
 | Approved compiled table → actual report/CSV |10real previews/5executions precede browser; approved version, real report/CSV, keyboard collapse/viewport bounds | **Three pass**, one perviewport. No row fabricated or assertion skipped; model generation/provider writes not exercised |
 | External script unavailable/no analytics consent | Closed external browser proxy, explicit script interception | Pass; no live external integration validation |
-| Uncertain social publication → receipt reconciliation | 19 UI tests, scoped lint/full TypeScript, independent review; d3ca8b1e | Unit-level pass, includes pending double-click and stale callback controls; real-browser/API integration is still pending |
+| Uncertain social publication → receipt reconciliation | 19 UI tests and actual API/DB receipt/double-confirmation controls | All3viewports now pass after mobile layout correction; no real provider send. Final image/release remains separate |
+| Month calendar → publication sheet → close → List | Normal pointer, clientWidth overflow bounds, Escape and focus restoration | All3viewports pass after reviewed20431224; part of120/120full run |
+
+## UX-CALENDAR-03 and A11Y-CONTENT-04
+
+The owner needs to inspect a publication, reconcile an already completed send,
+then continue from the same card without another send or keyboard-navigation
+reset. A393px mobile device acquired a762px layout because the calendar grid
+child kept its intrinsic minimum width; nonwrapping navigation kept437px even
+in List. Visual-viewport offsets made an ordinary sheet click hit the date
+label although the elements did not physically overlap. Measured regression
+fails with369px root overflow. Two existing utility classes constrain the grid
+child and wrap navigation; no information is hidden or interaction forced.
+
+After that correction, the new browser check reaches receipt details on all
+viewports, but Escape leaves focus inactive. The controlled Sheet has no
+SheetTrigger, so restoration must explicitly remember the actual activated
+calendar/List/nearest button. The scoped correction focuses only a connected,
+enabled saved node and clears it; URL/programmatic opens retain default
+behavior. Browser assertions are unchanged, now pass across all3viewports,
+and retain the original failure capture.
 
 Viewports: desktop1440×1000, laptop1024×768, mobile393×852. Suite uses Russian locale, one browser worker, synthetic users and disabled provider/dispatch credentials. The browser proxy blocks non-loopback connections. Native runs use a Python egress guard; the later Docker application/PG/runner use internal networks. Native fixture subprocess preserves its guard and removes libpq overrides.
 

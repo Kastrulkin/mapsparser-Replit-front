@@ -5,7 +5,7 @@
     {
       "id": "AC1",
       "text": "AC1 inventory, baseline and all audit areas",
-      "status": "UNKNOWN",
+      "status": "FAIL",
       "proof": [
         "docs/production-readiness/01-system-map.md",
         "docs/production-readiness/02-audit-backlog.md",
@@ -43,16 +43,24 @@
         "raw/send-amb-01-native-pg-red.json",
         "d3ca8b1e",
         "raw/social-publish-root-green.json",
-        "raw/send-amb-independent-pane-20260918.json"
+        "raw/send-amb-independent-pane-20260918.json",
+        "125900b2 service/content stored-role mutation gates",
+        "raw/services-content-viewer-rbac-final.json",
+        "2d875357 schema-free canonical business read access",
+        "raw/business-data-preauth-causal-red3.json",
+        "raw/business-data-preauth-green.json",
+        "813609cc social publication stored write-role boundary",
+        "raw/social-posts-viewer-rbac-red2-20260918.json",
+        "raw/social-posts-viewer-rbac-expanded-green-20260918.json"
       ],
       "gaps": [
-        "Reviewed local auth/webhook/scope/navigation/data/contact-GET SSRF, finance/blueprint/Operator-chat viewer and social duplicate-send fixes are committed. Social package237backend tests passes, explicit receipt reconciliation; no exactly-once provider delivery or recipient/media fingerprint binding claim. Historical revocation, generic mutation role/object, new browser integration and operational gaps remain. No audit deployment."
+        "Reviewed local auth/webhook/scope/data/SSRF and finance/blueprint/Operator/services/content stored-role fixes are committed. Durable social intent/reconciliation fixes the reproduced duplicate-send defect, not provider recipient/media approval binding or exactly-once delivery. Historical revocation, wider platform role/tool matrices and operational gates remain. No audit deployment."
       ]
     },
     {
       "id": "AC3",
       "text": "Frontend checks and real user flows",
-      "status": "UNKNOWN",
+      "status": "FAIL",
       "proof": [
         "raw/baseline-frontend-install.json",
         "raw/baseline-frontend-lint.json",
@@ -74,10 +82,22 @@
         "raw/browser-contrast-5c1af983-full.json",
         "raw/frontend-employee-8ebec5ca-build.json",
         "raw/browser-employee-8ebec5ca-full.json",
-        "raw/social-publication-ui-final.json"
+        "raw/social-publication-ui-final.json",
+        "raw/frontend-aggregate-6c96192c.json",
+        "raw/docker-build-f0cc182a-retry.json",
+        "raw/browser-real-f0cc182a.json",
+        "raw/browser-real-2f224f05.json",
+        "raw/browser-real-2f224f05-retry.json",
+        "raw/mobile-content-layout-red.json",
+        "raw/mobile-content-layout-browser.json",
+        "20431224 mobile layout and invoker focus restoration",
+        "raw/content-focus-build.json",
+        "raw/content-focus-sync.json",
+        "raw/content-focus-targeted.json",
+        "raw/content-focus-browser.json"
       ],
       "gaps": [
-        "Checkpoint8ebec5ca clean frontend build27.414s, served on isolated4a8 backend: full114/114real-API browser tests pass215.263s, including3viewports and actual compiled reports. Prior5c1 contrast fix targeted adjacent graph; red111/3capture retained. Later d3ca8b1e reconciliation UI passes19tests/lint/fullTS and independent review, but new browser integration and final same-revision frontend aggregate remain required."
+        "Full6c frontend:588unit/126files,72mockbrowser, fullTS and lint0errors/1warning pass495.068s. Reviewed20431224 layout+focus fix passes fullTS/lint/22targetedunits/bothbuilds84.350s,6/6focused realbrowser25.178s and full120/120realbrowser227.301s. Earlier116/117 and layout-only117/120 failures retained. Servedfrontend artifact is separately synced overf0cc backend, no immutable-image or final whole-source aggregate claim. Broader adverse-state/performance coverage remains."
       ]
     },
     {
@@ -105,10 +125,16 @@
         "raw/native-full-backend-5e1ebe79.json",
         "raw/native-full-migration-5e1ebe79.json",
         "raw/pg16-resumed-skipped-groups.json",
-        "raw/creator-promotion-native-integration.json"
+        "raw/creator-promotion-native-integration.json",
+        "raw/full-backend-d3ca8b1e.json",
+        "raw/social-extraction-root.json",
+        "raw/full-backend-6c96192c.json",
+        "raw/services-content-viewer-rbac-final.json",
+        "raw/business-data-preauth-green.json",
+        "raw/social-posts-viewer-rbac-expanded-green-20260918.json"
       ],
       "gaps": [
-        "Clean5e1ebe79 full nativePG15 aggregate4319passed117skipped5warnings296.79s, exit0. Docker/Compose skip-file groups later passed264tests177.72s on PG16; separately gated creator-promotion passed1test0.34s on fresh migrated nativePG15. Original117skip categories:104Docker+5Compose+1creator now exercised,7liveprovider intentionally excluded. Final same-revision aggregate still required."
+        "Clean6c full backend4538pass/7live-provider skips/5warnings395.49s with nativePG15 and DockerPG16 groups. Later125900b2 role package27focusedpass;2d875357 GET15realPGpass;813609cc social roles254pass0skips42.39s including13critical realPG lifecycle/concurrent/manual cases, independently reviewed. Final same-source aggregate after remaining approval/readiness work and wider role/tool matrices remain."
       ]
     },
     {
@@ -132,32 +158,38 @@
         "raw/docker-4a8e33b8-smoke.json",
         "raw/compiled-4a8e33b8-start.json",
         "raw/compiled-4a8e33b8-proof.json",
-        "raw/restore-helper-full-schema-20260918.json"
+        "raw/restore-helper-full-schema-20260918.json",
+        "raw/docker-build-f0cc182a.json",
+        "raw/docker-build-f0cc182a-retry.json",
+        "raw/docker-smoke-f0cc182a.json",
+        "raw/compiled-update-f0cc182a.json"
       ],
       "gaps": [
-        "Clean4a8e33b8 ARM64 browser-enabled image builds61.615s, real offline/read-only/nonroot Chromium smoke3.682s passes. Actual app-integrated compiled10previews/5runs/replays pass. Actual committed helper full synthetic schema/data/grants/sequences restored and independently verified; not production backup proof. AMD64 and final release/supply-chain checks remain incomplete."
+        "Cleanf0cc ARM64 Node22 bothfrontend image build55.386s; initial PATH/helper failure retained. Exactimage b43efb29cbd176d75c97cfa769adbebe7e7e20a1d467cd1c0a561538305cc93d,1070645450bytes; nonroot/read-only/offlineChromium153,pypdf6.16.1,pipcheck smoke3.721s passes. Onlyownedstagingapp recreated preservingPG/Redis/runner/ingress. Full synthetic restore and earlier10preview/5compiledrun pass; currentbrowser, AMD64 and release/supply-chain remain."
       ]
     },
     {
       "id": "AC6",
       "text": "Security and supply-chain evidence",
-      "status": "UNKNOWN",
+      "status": "FAIL",
       "proof": [
         "raw/baseline-secrets-history.json",
         "raw/baseline-secrets-source.json",
         "raw/baseline-frontend-audit.json",
         "SECURITY.md",
         "docs/production-readiness/03-security-threat-model.md",
-        "raw/audit-commit-secret-scan-through-0fdd.json"
+        "raw/audit-commit-secret-scan-through-0fdd.json",
+        "raw/image-dependencies-f0cc182a.json",
+        "raw/trivy-vulnerability-db.json"
       ],
       "gaps": [
-        "94 baseline current scan candidates triaged as noncredentials; historic service-role/Wordstat exposure confirmed, revocation unknown.26audit commits through0fdd scanned:3generic-key candidates are inspected ordinary report prose, not credentials. Image scan failed on Docker layer EOF. Final worktree/images/logs/resolved Python and adversarial AI/tool evidence remain pending; threat-model document explicitly marks untested boundaries."
+        "Finalf0cc tracked-source98vs94baseline candidates:4delta prose false positives; post-remediation28commit delta1prose false positive. Historical privileged exposure/revocation unknown. Exactimmutableb43 image reports104Python distributions with private pinned inventory; advisory audit still pending. PyMuPDF AGPL/commercial metadata needs ownerlicense confirmation, not a violation claim. TrivyDB safely refused insufficientstartingheadroom before download. Finalimage/log/OS/native/npm/license scans pending. AI/tool realPG versus doubles evidence remains scoped."
       ]
     },
     {
       "id": "AC7",
       "text": "Five-flow before/after performance",
-      "status": "UNKNOWN",
+      "status": "FAIL",
       "proof": [
         "docs/production-readiness/PROGRESS.md baseline command durations",
         "raw/journey-benchmark-one-sample-final-guarded.json",
@@ -166,16 +198,26 @@
         "raw/journey-measure-serial-8ebec5ca.json",
         "raw/journey-measure-serial-8ebec5ca-command.json",
         "raw/journey-measure-cleanup-check-20260918.json",
-        "docs/production-readiness/04-performance-report.md"
+        "docs/production-readiness/04-performance-report.md",
+        "raw/prepared-load-e3f42dbf-command.json",
+        "raw/load-parent-import-red.json",
+        "raw/load-parent-import-green.json",
+        "raw/prepared-load-94de718c.json",
+        "raw/prepared-load-four-94de718c.json",
+        "raw/prepared-load-four-94de718c-command.json",
+        "raw/query-proof-f0cc182a.json",
+        "raw/query-proof-f0cc182a-command.json",
+        "raw/query-proof-20431224.json",
+        "raw/query-proof-20431224-command.json"
       ],
       "gaps": [
-        "Reviewed driver619760b4/fa4e15b8 passes32tests. Independently reconciled cold-process 50-sample comparison: baseline700/750 requests (all50 business-data HTTP500), current750/750; each150/150 invariants. Errors retained, aggregate valid=false. Report04 records descriptive request quantiles and request-work totals; no general speedup. Prepared-target bounded load, query plans and resource/queue evidence remain pending."
+        "Independently reconciled cold-process50-sample comparison retains baseline700/750 requests versus current750/750; each150/150invariants, no general speedup. Prepared94de718c profile4users/2concurrent/5repetitions passes44/44semantic requests with child CPU/max-RSS and descriptive quantiles.8-user same-IP profile truthfully fails after5login successes/3HTTP429; limiter unchanged. Actual20431224 SQL proof passes7.933s: auth4reads/business9reads0DDL versus prior9reads3DDL; three tiny-fixture representative plans and exactownedDBcleanup confirmed. Frontend and sustained HTTP/server/queue capacity remain pending; bounded Flask test-client dispatch is not production capacity proof."
       ]
     },
     {
       "id": "AC8",
       "text": "Operational readiness, runbook and CI",
-      "status": "UNKNOWN",
+      "status": "FAIL",
       "proof": [
         "faefef25",
         "docs/production-readiness/DECISIONS.md",
@@ -189,7 +231,7 @@
     {
       "id": "AC9",
       "text": "Rehearsed safe partner demo",
-      "status": "UNKNOWN",
+      "status": "FAIL",
       "proof": [
         "/tmp/localos-readiness-staging-smoke.log historical synthetic seed and five-flow API smoke",
         "docs/production-readiness/08-partner-demo.md"
@@ -222,12 +264,14 @@
     {
       "id": "AC11",
       "text": "Final independent whole-diff review and aggregate verification",
-      "status": "UNKNOWN",
+      "status": "FAIL",
       "proof": [
-        "docs/production-readiness/06-change-log.md scoped reviews"
+        "docs/production-readiness/06-change-log.md scoped reviews",
+        "docs/production-readiness/FRESH_REVIEW_20260918.md",
+        "verdict.json"
       ],
       "gaps": [
-        "Final whole-diff review and aggregate rerun not performed. verdict.json UNKNOWN is intentional; raw scaffold placeholders are not evidence."
+        "A genuine fresh-session whole-diff review of30262a5b..2f224f05 completed with FAIL acrossAC1–AC11. It found a source-level social-post viewer-write candidate and confirmed known GET DDL, approval-target/media and mobile-browser gaps. Final corrected-revision aggregate and re-review remain. Raw scaffold placeholders are not evidence."
       ]
     }
   ],

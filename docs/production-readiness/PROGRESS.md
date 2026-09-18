@@ -1,5 +1,101 @@
 # Production-readiness progress
 
+10:58 UTC: social write-role package independently approved and committed
+813609cc,254tests/0skips. Post-GET SQL proof204passes7.933s:9read/0DDL versus
+9read/3DDL before; no speed claim. Approval-target causal RED7fail/1positive
+pass20.22s confirms actual redirected fake transport before/after claim;
+reviewed frozen-descriptor implementation now starting. `/ready` design remains
+separate/source-only. Trivy DB preflight safely refused3.82GiB<4GiB before
+download; scanner incomplete. Local data/images/volumes unchanged.
+
+10:45 UTC: reviewed frontend commit20431224 passes full120/120real-API browser
+scenarios227.301s, including mobile containment/focus/receipt reconciliation.
+Separate served-dist identity is pinned; unchangedf0cc backend means final
+immutable-image proof remains. Social write-role focused58pass; expanded
+matrix233pass/21legacy fake-authorizer failures is being repaired narrowly,
+with13real-PG lifecycle cases executed. Worker owns serialized native window.
+Next: final role matrix/review/commit, actual post-GET SQL counts, then approval-
+binding causal RED with real adapter/fake transport. Overall readiness FAIL;
+no production changes. Historical entries below retain their original status.
+
+10:30UTC: GET fix committed2d875357 after15real-PGgreen/review. Mobilewidth
+correction makesalloriginal117pass; expanded120failed3NEWfocusrestorechecks.
+Rootfocusfix passes22units/fullTS/lint/bothbuilds84.350s andactual6/6browser
+25.178s across3viewports. Full120rerunpending. Onlyownedappdistupdated,
+backendstillf0cc; exactservedartifacthash/backup inHANDOFF, noDBrestart.
+Socialviewer causalRED2valid (prepare200vs403;6controls pass), explicitwrite
+boundarychanges awaitingnativegreen/review. Workerownsnativewindow now.
+GenuinefreshreviewFAIL persisted against2f; laterfixesdonotrewritesnapshot.
+
+10:11 UTC delta: 2f224f05 real-browser retry finished **116/117**, exit1,
+239.036026s. Desktop/laptop reconciliation is green; mobile sheet shortcut
+normal click remains blocked. Trace shows horizontal layout overflow (393px
+device, 762px Month / 437px List layout); causal CSS investigation ongoing.
+GET data tests have authorization-only RED, but SQL recorder needed correction
+at the actual compatibility wrapper; empty capture is not no-DDL proof.
+Fresh-session verifier is now running and reports a source-level social-post
+viewer-write candidate. Native-PG window belongs to compiled worker; no heavy
+browser/build/scanner concurrency. Overall FAIL, local-only work continues.
+
+09:57UTC delta: f0cc117browser=114pass/3newreconciliationfail259.528s.
+Reviewed2f224f05 test-onlycorrection uses visibleList+normalclick and requires
+absentqueuecontrol perholdcontract; mobilecalendarcandidate remains.
+First2f rerun pretestlowdiskabort; retryrunning. Safeexactcachecleanup freed
+3.842GB preserving10images/16containers/18volumes+states, host1.8→5.4GiB.
+Actualqueryproof PASS10.309s,4authreads/business9reads+3DDL, representativeplans
+andownedDBcleanupverified. PreauthDDL/owner-onlyguard targeted bynewrealPG
+tests, notyet run; no routefixorconfirmedunauthorizedeffect claim.
+
+09:35 UTC delta: cleanf0cc Node22 Docker build PASS55.386s, imageb43efb29
+size1070645450, bothfrontends built. Original PATH/helper failure retained.
+Actual nonroot/read-only/no-network Chromium/pypdf/pipcheck smoke PASS3.721s.
+Frontend6c aggregate completed:588unit/72mockbrowser, fullTS, lint0errors/
+1existingwarning. Roles125900b2 reviewed27pass and queryf0cc12unitpass committed.
+Ownedcompiledapp-onlyupdate PASS4.533s, HTTP200/health green, other4service
+IDs/starttimes unchanged.117realAPIbrowser running since09:34:57UTC;
+actualqueryproof and finalaggregate pending.8exactoldNode20cache entries freed
+312.8MB; no image/container/volume deletion. Currentdocs reconciliation and
+same-agent review continue; fresh-session review unavailable at agent limit.
+Historical entries below retain their statuses at the stated time.
+
+09:10 UTC delta: exact11oldNode20frontend build-cache records reclaimed1.168GB
+without touching images/containers/volumes. Prepared dashboardreadload parent
+import flaw reproduced and fixed94de718c;45combinedtests reviewed. Actual
+8user same-IP profile retains5login200+3HTTP429 from unchanged limiter; no
+performance pass. Samecode4users/2concurrent/5repetitions passes44/44semantic
+requests,9.249s captured, child CPU/maxRSS/quantiles independently checked.
+This is in-process local request dispatch, not production capacity. Full
+frontend aggregate is running serially with1worker; latest backend6c4538pass
+remains authoritative. Further service/content stored-viewer mutations are
+now causally reproduced;27focusednative tests pass after scoped patch, pending
+independentreview/commit. Queryproof source still underreview, no DB run.
+
+08:51 UTC delta: clean6c96192c full backend PASS **4538passed/7skipped/
+5warnings,395.49s**,403.727s captured; all7skips are explicitly disabled live
+provider tests. Raw `full-backend-6c96192c.json` has exit0/no timeout or truncation.
+This includes nativePG15 groups, DockerPG16 groups, both isolated Vite browser
+regressions and synthetic creator integration; no sum of separate suites.
+Later local commitsba891be4 (Node22builder) ande3f42dbf (prepared dashboard
+read-load harness) are independently source-reviewed, focused tests pass,
+but image build/load runtime are pending. Two further stored-viewer mutation
+candidates in services/content are being causally reproduced in owned native
+schemas; not yet findings. No production change or real provider traffic.
+
+08:44 UTC delta: failed clean d3 aggregate retained:3failed/3722passed/
+809skipped/1error,298.19s. Two module size limits were exceeded; empty guard
+entry incorrectly searched CWD; archive omitted frontend dependencies and
+native test-DSN keys. Reviewed01446148 exact-function extraction lowers both
+legacy limits, and853bdc5d fixes empty paths with regression. Root combined
+272tests pass38.43s (`social-extraction-root.json`). New guarded fixture and
+browser reconciliation spec committed6c96192c after independent review;
+9fixture tests/TS/lint and canonical discovery117cases pass, browser runtime
+still pending. Full clean6c96192c archive now running in named tmux with all
+test DSNs and same-lockfile frontend dependencies. No overlapping heavy job.
+Read-load revision remains blocked by independent source review (failure exit/
+evidence and exact semantic checks need correction), so no load has executed.
+Node22 Docker builder alignment under review; no build/pull yet. No production
+mutation, user-volume reset or external send.
+
 08:30 UTC delta: SEND-AMB committed locally as `d3ca8b1e`, independently
 approved. Root237backend tests pass35.65s; UI19tests + lint/full TS pass52.179s.
 Original root3fake-cursor failures retained and fixed only in the exact fixture.
@@ -64,7 +160,7 @@ Historical Docker/EXT4 I/O errors interrupted the previous image build/scan/back
 
 The whole original objective is preserved in `.agent/tasks/production-readiness-20260917/spec.md`, AC1–AC11. Local fixes, isolated synthetic tests and local commits are authorized; no new production mutation, push, merge, deployment or external sends are included. Prior runtime maintenance is a separately completed operation, not this audit's release.
 
-Branch `codex/production-readiness-20260917`; baseline `30262a5bf7b468e0a6f5a0e3d8262dbef119e075`, initially clean. Latest code checkpoint `b9a146aa`; see fresh git log for later documentation checkpoints. No intentional mutation of unrelated Docker services/volumes.
+Branch `codex/production-readiness-20260917`; baseline `30262a5bf7b468e0a6f5a0e3d8262dbef119e075`, initially clean. Current committed checkpoint `6c96192c`; see latest HANDOFF/git log for pending packages. No intentional mutation of unrelated Docker services/volumes.
 
 ## Phase checklist
 
@@ -76,9 +172,9 @@ Branch `codex/production-readiness-20260917`; baseline `30262a5bf7b468e0a6f5a0e3
 - [x] Twenty-two small local commits througha842d648, independently reviewed; no deployment.
 - [x] Patched frontend aggregate: 570 unit tests, 72 mocked browser scenarios, lint and app+Node TypeScript pass.
 - [x] Original registration/navigation and mobile geometry failures now pass in real-API33-test rerun across desktop/laptop/mobile.
-- [ ] Complete remaining compiled runner fixture + all final real-API browser checks.
+- [x] Actual compiled runner fixture +114real-API browser checks at8ebfrontend/4a8backend. New6c reconciliation browser case and final same-revision aggregate remain pending.
 - [x] Guarded migration rollback aggregate: 23 real PostgreSQL tests pass; distribution fix committed.
-- [x] Consistent-snapshot backup restored into a new isolated database; 288 tables match in data, columns and constraints. Not a full schema/production restore proof.
+- [x] Consistent-snapshot backup restored into a new isolated database; initial288table data/column/constraint comparison superseded by full synthetic schema/data/ACL/sequence verification. Not a production-backup restore proof.
 - [x] Hardened local-only restore helper and compiled fixture guards: independently reviewed; root20purefake tests passed.
 - [x] NativePG15 fallback enabled skipped Operator families:704pass4fixture failures →713pass after canonical network schema; final clean b9a security/native selection826pass.
 - [x] Contact GET DNS pinning and finance viewer/transaction-target boundaries independently reviewed and locally committed; three UI route-switch hypotheses falsified by keyed page lifecycle.

@@ -1,5 +1,157 @@
 # Verified commands and evidence
 
+## Current local checks — 18 September 10:58 UTC
+
+- `social-posts-viewer-rbac-expanded-green-20260918.json`:254passed0skipped,
+  42.39s pytest/42.756374s capture,exit0/no timeout/untruncated. NativeDSNs
+  both pin reviewed fulltestDB; guard-first env-i; nine selected suites include
+  all13uncertain/concurrent/manual real-PG cases. Independently reviewed813609cc.
+- `query-proof-20431224.sh`:clean204archive,exactguard/data_directory,newUUIDDB;
+  validtrue,exit0/7.933036s. Auth4reads/business9reads0DDL, three tinyplans.
+  Cleanuptrue and separatecatalog0; raw stale route_note explicitly corrected
+  only for future captures, not retroactively rewritten.
+- `social-approval-binding-causal-red.json`:real approval/claim/resolver/adapter/
+  finalizer, fakeTelegram transport;7failed/1positive control passed20.22s,
+  exit1/20.689397s,no timeout,stdouttruncated. Changed recipients reached
+  transport, including postclaim interleaving. Source/visiblefailure limits
+  are recorded; no product fix or real send in this capture.
+- `trivy-vulnerability-db.json`:preflightexit1/0.354383s before download:
+  free3.82GiB below4GiB guard. No scanner was spawned, no clean scan claimed.
+- `query-note-tests.json`:12pure tests pass0.10s/0.584456s capture,exit0;
+  only harness docstring/static route_note changed, not counting/SQL behavior.
+
+## Current local checks — 18 September 10:45 UTC
+
+- `build-content-focus.sh`: clean2d875357 archive plus three SHA-pinned files
+  now committed20431224; fullTS,focusedlint,22units,bothbuilds pass84.349914s.
+- `sync-mobile-layout.cjs --focus`: exact localapp/socket/image and previous
+  indexSHA preflight; backup previousdist, replace only staticfrontend, compare
+  servedindex and preserve all five container IDs/starttimes. Exit0/1.185817s.
+  IndexSHA3141022cc76c0882855a4b88886e5a72a34583bfe231bd71e305b5fdbb252061;
+  prior artifact `/private/tmp/localos-readiness-content-focus.S3o4Mi/previous-dist`.
+- `content-focus-targeted.json`: six realAPI browser cases across3viewports,
+  exit0/25.178298s. Full `content-focus-browser.json`:120passed,exit0/no timeout/
+  untruncated,227.301080s. Node22,oneworker,closedexternalproxy,exact archive
+  `/private/tmp/localos-readiness-content-focus.S3o4Mi/frontend`, existing
+  synthetic fixture/compiled blueprint. Independent scoped review PASS.
+- Earlier `mobile-content-layout-browser.json` finished117pass/3newfocusfail,
+  exit1/248.788269s. This failed capture remains preserved, not renamed green.
+
+## Current local checks — 18 September10:19UTC
+
+- `business-data-preauth-causal-red3.json`: guarded native PostgreSQL,
+ 7failed/8passed22.08s (22.707s capture); actual registered-handler SQL is
+ recorded, including forbidden DDL before403. Earlier collection/fixture and
+ empty-spy captures remain invalid for DDL proof. After reviewed2d875357,
+ `business-data-preauth-green.json`:15passed22.26s, exit0/no timeout.
+- `inspect-mobile-content.cjs`: read-only DOM geometry and ordinary click on
+ localstaging. `mobile-content-geometry.json` exit0 is diagnostic completion,
+ NOT behavioral pass: normalClickFAIL and393→762/437px layout expansion.
+ Separate CSS-only hypothesis restores393px and normalClickPASS4.005s.
+- Canonical new mobile regression against oldimage: `mobile-content-layout-red.json`
+ exit1/13.578s, actual369px overflow. `build-mobile-layout.sh` builds clean
+2d875357 archive plus two exacthash-checked frontend files; focusedlint,
+fullTS,19ContentPageunit tests and both builds pass81.932s. No dotenv files.
+- `sync-mobile-layout.cjs`: exactlocal Docker socket/appID/image, olddist
+backup, indexSHA comparison and unchanged fivecontainer IDs/starttimes.
+Exit0/2.235s; servedindexSHA
+`be591d38c15db6c75d2e8a61703c3ec88b92c31d2d230c5ebe7d18b8cd387e07`.
+Onlylocalfrontendstatic files changed; backend remainsf0cc. Olddist in
+`/private/tmp/localos-readiness-mobile-layout.wffmE5/previous-dist`.
+- Full120browser run uses this isolatedfrontend archive, samebackend/DB,
+oneworker/closedexternalproxy and fixedcompiledblueprint; raw
+`mobile-content-layout-browser.json` pending at this timestamp.
+
+## Current local checks — 18September09:57UTC
+
+- browser-f0cc182a.sh:117realAPI exit1/259.528434s,114pass/3fail. Causes/traces
+  inHANDOFF;2f fixes onlytestcontract. browser-2f224f05.sh pretestabort1.368715s
+  hasemptylogs; archive/link exist, lockfilematches, laterdiskbelow2GiB.
+  browser-2f224f05-retry.sh recordsstages/specSHA/disk andrunsfocusedESLint+
+  117realcasesagainstunchangedf0cc runtime; retrypending.
+- query-proof-f0cc182a.sh:cleanarchive/env-i/exactguard+PGdatadir, ownedUUID
+  migrate/seed→routecounts+3representativeplans→cleanup. Raw
+  query-proof-f0cc182a{,-command}.json validtrue/exit0/10.308584s,
+  childcompleted/DBremoved. Auth4reads, business12=9reads+3DDL; nocapacityclaim.
+- clear-completed-audit-cache.js:32explicitimmutable/private/reclaimableIDs
+  validated;22pruned3.842GB/exit0/9.813535s. Raw
+  completed-audit-cache-cleanup-retry.json preserves10images/16containers/
+  18volumes andcontainerstatus/starttimes. Initial4.262s abortbeforeprune
+  matchedstaletmux/zshlaunchertext; correctedactualexecutableguard.
+  No processkills/image/volume/userdata removal. Hostfree1.8→5.4GiB.
+
+## Current local checks — 18September09:35UTC
+
+- `build-f0cc182a.sh` first failed6.111s because sanitizedPATH lacked Docker
+  credential helper; immutable archive retained. `build-f0cc182a-retry.sh`
+  reuses that exactsource with fullDockerbinPATH, same4GiB/1.5GiB guards.
+  `docker-build-f0cc182a-retry.json`:exit0/55.385755s, bothfrontend builds,
+  Node22 engine warning absent; imageb43efb29/1070645450bytes.
+- `smoke-f0cc182a.sh`:actual exactimage, nonroot/networknone/read-only,
+  bundledChromium153.0.8010.12/pypdf6.16.1/pipcheck/app+public artifacts PASS,
+  exit0/3.721313s. Pip disables unwritable cache; not a dependency failure.
+- `clear-node20-ancestor-cache.js`:8exactreclaimable/nonshared/immutableIDs,
+  descriptions and17September21:06creation validated;312.8MBreclaimed2.409s.
+  No images/containers/volumes removed; buildcache is rebuildable.
+- Current ownedapp-only update: `update-compiled-f0cc.js`; fixedlocal socket,
+  project/oldimage/network/appenv/head preflight, exactnewimage and untouched
+  PG/Redis/runner/ingress IDs/starttimes assertions. Completed
+  `compiled-update-f0cc182a.json`:exit0/4.533123s; subsequent HTTP200/health green.
+  No production operation.117realAPIbrowser started09:34:57UTC, still pending.
+
+## Current local checks — 18September09:10UTC
+
+- `clear-node20-audit-cache.js` validates exact local socket and11anchored
+  cacheIDs/private/reclaimable/types/descriptions immediately before pruning
+  onlythoseIDs. Independent safety review PASS; raw
+  `node20-audit-cache-cleanup.json` exit0/4.509s/Dockerreclaim1.168GB. No volumes,
+  containers or images removed. Initial hostfree3.3GiB→eventually4.3GiB.
+- `prepared-load-e3f42dbf.sh` cleanarchive first fails safely before timing,
+  ModuleNotFoundError/cleanuptrue. Root regression captures
+  `load-parent-import-{red,green}.json`:1causalred→45combinedgreen after94de718c.
+- `prepared-load-94de718c.sh`: cleanarchive under tasktemp, exactguardSHA+
+  datadircheck, env-i,8users/5cycles/childtimeout60s;10.172s/exit1 from
+  same-IP5/minloginlimit (5HTTP200/3HTTP429), not a productfailure.
+- `prepared-load-four-94de718c.sh`: identicalguard/source,4users/2concurrent/
+  5cycles,9.249s captured/exit0;44/44semantic requests, createdDBremoved.
+  Exactraw results and limitations in report04; no providers or production.
+- `frontend-aggregate-6c96192c.sh` runs in namedtmux
+  `readiness-frontend-aggregate`, archivefrontendunder853parentdirectory,
+  unchanged tracked6c source plus temporary boundedPlaywrightconfig. Node22,
+  same-lockfiledeps, lint/typecheck/fullunit maxWorkers1 and mockedroot-level
+  browser specs workers1 with closedexternalproxy. Capture now complete:
+  exit0/495.06755s,588unit/126files,72mockbrowser,TS PASS,lint0errors/1warning.
+
+08:51UTC result: `full-backend-6c96192c.json` now records exit0/no timeout,
+**4538passed/7skipped/5warnings in395.49s**,403.727s captured. The7skips are
+six explicitly gated ChatGPT live-HTTP cases and one live Yandex connection;
+all native/Docker synthetic groups ran. Warnings are upstream SWIG deprecations.
+The one-shot script/archive/database below remain retained and must not be
+created again. Later builder/read-load commits require their own runtime proof.
+
+## Latest rerun — 18 September08:44UTC
+
+- `social-extraction-tests.sh`: exact guard SHA/native data-directory check,
+  six social suites plus size ratchet/benchmark/measure suites. Authoritative
+  `social-extraction-root.json`:272passed38.43s, exit0,41.023s captured.
+- `full-backend-d3ca8b1e.json` is a completed **failed** aggregate:
+  3failed/3722passed/809skipped/1error,298.19s tests/306.617s captured.
+  Root setup omitted frontend dependencies and four native test DSN keys;
+  actual size-ratchet/empty-path regressions fixed in01446148/853bdc5d.
+- Historical launch: named tmux `readiness-full-backend-reviewed` ran one-shot
+  `/private/tmp/localos-readiness-docker-resume.NsmVen/full-backend-reviewed.sh 6c96192c`.
+  Sanitized env-i, Node22, explicit local Docker socket; clean tracked archive
+  under `/private/tmp/localos-readiness-final-853bdc5d.MjouFu/source`, same-lockfile
+  node_modules link and verified pypdf6.16.1 private overlay. Fresh native DB
+  `readiness_full_test_reviewed_20260918`; DATABASE_URL plus
+  LOCALOS_READINESS_JOURNEY_DATABASE_URL, OPERATOR_VOICE_TEST_DSN,
+  LOCALOS_TEST_DATABASE_URL, LOCALOS_RBAC_TEST_DATABASE_URL and
+  WHATSAPP_ADMISSION_TEST_DSN all target that exact owned DB. Guard SHA and
+  data_directory verified before create; archive-only sitecustomize link keeps
+  guard in subprocesses which replace PYTHONPATH. No providers/dispatch enabled.
+  Completed result `raw/full-backend-6c96192c.json`:4538pass/7skip/5warnings,
+  exit0/403.726503s captured. This is the same checkpoint described above.
+
 ## Latest committed publication package and measurements — 18 September
 
 - `d3ca8b1e` is the independently reviewed local SEND-AMB package, not a
@@ -18,7 +170,7 @@
   for50baseline business HTTP500; current750/750requests+150/150invariants.
   Independently recomputed tables in report04; p99 exploratory/cold process.
   Post-run catalog check in `journey-measure-cleanup-check-20260918.json`.
-- `full-backend-d3ca8b1e.sh` currently runs in named tmux
+- Historical launch: `full-backend-d3ca8b1e.sh` ran in named tmux
   `readiness-full-backend-d3ca8b1e`: clean tracked-source archive in
   `/private/tmp/localos-readiness-final-d3ca8b1e.Liqulf/source`, no .env, fresh
   `readiness_full_test_d3ca8b1e` on owned native35418; guard symlink added only
@@ -26,8 +178,8 @@
   Pure-Python pypdf6.16.1 copied from the verified local4a8 image into a private
   dependency overlay, shared venv unchanged. Docker socket is explicit, PG16
   testcontainers enabled, exact synthetic creator integration flag enabled,
-  real providers/dispatch disabled. Output `full-backend-d3ca8b1e.json` must
-  be checked for actual result. This one-shot create/archive script is not
+  real providers/dispatch disabled. Output `full-backend-d3ca8b1e.json` records
+  the failed result described above. This one-shot create/archive script is not
   replayable against retained directories/databases.
 
 ## Current image and compiled execution — 18 September07:15UTC

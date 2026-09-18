@@ -27,6 +27,16 @@ Source changes and causal concurrency tests passed independent review and the
 237-test root aggregate in d3ca8b1e. This is not exactly-once delivery or a
 production rollout; new browser integration and final whole-revision gates remain.
 
+## D-019 — Engine alignment and disk headroom are verification prerequisites
+
+18 September: align Docker frontend builder with existing Node22 CI and locked
+jest-dom7 contract; no broad dependency upgrade. Keep failed sanitized-PATH
+build capture separate from product failures. Remove only exact validated
+reclaimable/nonshared old audit build-cache IDs, not images/containers/volumes.
+Build requires over4GiB free and cancels its own process at1.5GiB. Cache is
+rebuildable, not database maintenance. Passing aggregates retain original
+revisions instead of silently proving later changes.
+
 ## D-018 — Preserve failed baseline samples and separate transport claims
 
 18 September: the 50-sample baseline business-data HTTP500 remains an error,

@@ -13,13 +13,13 @@ Relevant actors include an anonymous API caller, a valid user attempting a forei
 | Boundary | Required invariant | Current evidence and limitation |
 | --- | --- | --- |
 | Browser/bot identity → API session | Missing, expired or inactive identities cannot reach effects; demo sessions remain scope-restricted | SEC-AUTH-01 local denial tests and patch. Complete route/session-kind coverage is not established. |
-| Authenticated API → tenant object | Requested IDs, stored object tenant and action permissions agree | Shared `core/auth_helpers.py` checks business/network membership; membership alone does not establish write permission. SEC-RBAC-01 finance write/transaction-target patch is reviewed and locally committed; generic Operator/agent writes and the complete object-derived tenant matrix remain open. |
-| Provider callback → processing | Verify source before effects; repeated delivery cannot repeat unsafe actions | SEC-WH-01/02 local signature/secret fixes; Telegram admission handling SEC-WH-03. WhatsApp event IDs are not yet durable admission keys; replay remains open. Provider rebind is a rollout prerequisite. |
+| Authenticated API → tenant object | Requested IDs, stored object tenant and action permissions agree | Shared `core/auth_helpers.py` checks membership, not automatically writes. Finance/stored-transaction, blueprint, Operator chat and now services/content125900b2 patches are reviewed and locally committed with stored-role negative tests (latest27focusedpass). Complete platform mutation/object-derived tenant matrix remains open. |
+| Provider callback → processing | Verify source before effects; repeated delivery cannot repeat unsafe actions | SEC-WH-01/02 local signature/secret fixes; Telegram admission handling SEC-WH-03. SEC-WH-05 now uses existing durable WhatsApp admission keys and exposes uncertain outcomes without blind replay. Crash/uncertainty still requires reconciliation; not exactly-once delivery. Provider rebind is a rollout prerequisite. |
 | Public website → outbound connection | Every connection uses a validated globally routable destination, including redirects | SEC-SSRF-01 pins contact-page GETs to validated numeric IPs, preserving TLS hostname checks. 76 no-network tests and independent review pass. Unrelated outbound clients are not covered. |
 | Untrusted input/retrieval/model output → tool executor | Model text cannot grant tenant identity, approve actions, select unrestricted tools or bypass billing | Product/architecture contract requires external policy, approval and audit. The complete adversarial prompt/output/tool matrix has not yet been executed; do not infer protection from prompt wording alone. |
-| Approval/job → local commit/provider effect | Durable identity and replay state prevent duplicate local effects; uncertain provider effects require reconciliation | Same-draft service apply row lock and finance savepoint fixes have real PostgreSQL evidence. Remote publish/send uncertainty is still a candidate needing a deterministic accept-then-fail reproduction. No exactly-once claim. |
+| Approval/job → local commit/provider effect | Durable identity and replay state prevent duplicate local effects; uncertain provider effects require reconciliation | Same-draft service apply row lock and finance savepoint fixes have real PostgreSQL evidence. SEND-AMB was causally reproduced with provider-accepted/local-commit-failed behavior and fixed locally with durable intent, advisory exclusion, state CAS and explicit receipt reconciliation (d3ca8b1e;237social backend tests, later full6c96192c aggregate passes). Provider recipient/media fingerprint binding and actual new reconciliation browser proof remain open. No exactly-once claim. |
 | Source/config → image → live service | Tested artifact identity, secrets exclusion, minimal privileges and rollback remain true at runtime | Current build-context exclusion and public-artifact fixes are tested. Production code bind mounts, floating dependencies/base tags, final image scanning and canonical hardened rollout remain gaps. |
-| Backup archive → restored database | Explicit trusted archive and isolated target; verify recovery before claiming it | Restore-helper guards are reviewed. Separate local rehearsal compared 288 tables' data/columns/constraints. Full schema/grants and production recovery have not been proven. |
+| Backup archive → restored database | Explicit trusted archive and isolated target; verify recovery before claiming it | Reviewed helper ran against a fresh synthetic PG16 target; independent comparison covers288tables/all data,844indexes,19triggers,3views,160functions,2sequences and owners/grants/defaultACL. This closes local full-schema proof, not production-backup recovery. |
 
 ## Representative abuse and failure cases
 
@@ -33,10 +33,47 @@ Relevant actors include an anonymous API caller, a valid user attempting a forei
 
 ## Secret and dependency findings
 
-Offline historical scanning confirmed former privileged credential material; revocation is unknown. Values are intentionally absent from tracked reports. The tracked baseline scan's candidates were triaged without a confirmed current credential, but that does not establish absence from later files, image layers, resolved dependencies or logs. Those scans remain incomplete. No key was tested against a provider, rotated, or removed from history by this audit.
+Offline historical scanning confirmed former privileged credential material; revocation is unknown. Values are intentionally absent from tracked reports. Current f0cc tracked-source scan has98candidates versus94baseline: all4new candidates are inspected report prose, not credentials. Post-remediation28commit history delta has1prose false positive. This does not establish absence from image layers, resolved dependencies or logs; those final scans remain incomplete. No key was tested against a provider, rotated, or removed from history by this audit.
+
+## Exact-image Python inventory — 18 September
+
+Read-only, network-disabled, nonroot container from immutable f0cc/b43 image
+reports104installed Python distributions; this replaces neither the older
+121-package host scan nor an OS/image scan. Raw inventory-command evidence:
+`image-dependencies-f0cc182a.json`,exit0/2.924219s; one-shot probe removed,
+no user volumes mounted. Private exact pins SHA256:
+`05c83919609c13ad2c27bdc5a87df56a4f43929d7dc82f7a03182e02c22519ab`.
+Package metadata has43License-Expression entries. Metadata is an inventory,
+not a legal compatibility verdict or proof of notices/distribution compliance.
+
+PyMuPDF1.28.2 metadata declares AGPL/commercial dual licensing; the actual PDF
+attachment path imports it in `src/services/operator_attachments.py:124`.
+This agrees with the publisher's [license documentation](https://pymupdf.readthedocs.io/en/latest/about.html#license-and-copyright).
+The owner's commercial-license status is unknown and has been requested;
+no purchase, removal, violation claim or unilateral license choice is made.
+Psycopg2-binary2.9.13 identifies LGPL with exceptions; assess its actual terms,
+not a blanket GPL label ([Psycopg license](https://www.psycopg.org/docs/license.html)).
+Other bundled OS/npm/native components and final image/license/secret scanning
+remain open. Trivy DB acquisition safely stopped before spawn at3.82GiB free
+against4GiB start guard; this is a storage prerequisite failure, not a clean scan.
+
+## Existing AI/tool evidence and exact limits
+
+| Test boundary | Existing evidence | What it does not prove |
+| --- | --- | --- |
+| Provider admission | `test_agent_sheet_provider_queue_pg.py` uses actual disposablePG and proves revoked/expired approvals, missing/mutated snapshots, preview/no-effect and changed payload cannot claim a send | Every capability/provider and arbitrary prompt-to-tool sequence |
+| Uncertain provider outcome | `test_agent_sheet_provider_recovery_pg.py` uses realPG with a fake adapter for timeout and provider-success/local-commit-failure | Live external delivery or permission enforcement at the provider |
+| Tenant and approval policy | `test_agent_blueprint_async_contracts.py`, `test_agent_api_security.py`, `test_agent_blueprint_compiler.py`, `test_agent_blueprint_reviews_outreach.py` cover requested-business distrust, cross-business IDs, scopes, protected actions and approval stops using pure policy/cursor/runner doubles | RealDB tenant execution for every tool, filesystem/network/secret exfiltration resistance |
+| Run fences and snapshots | `test_agent_run_fences_pg.py`, `test_compiled_run_replay_api_pg.py`, `test_compiled_snapshot_lock_pg.py` use realPG for stale finishers, terminal replay and purge/admission locking; runner seams are substituted where needed | All runner attack payloads, transport modes or end-to-end model behavior |
+| Container contract | Deployment-contract tests inspect mocked Docker metadata; separate isolated runner and app-integrated10preview/5run evidence uses actual Docker | A complete adversarial sandbox matrix; mocked inspect results are not runtime enforcement |
+
+The complete attacker-prompt/model-output→tool matrix, arbitrary filesystem/
+network/secret exfiltration attempts, every provider's cancelled/stale approval,
+and actual unauthorized external-adapter writes remain untested. Policy prose
+and these scoped tests cannot be reported as full AI-security certification.
 
 ## Test boundaries and residual acceptance
 
-All security reproductions use synthetic users/tenants and mocked providers; native PostgreSQL tests use a fresh loopback-only cluster and explicit disposable targets. The native version is 15.15, not production's 16. Docker/EXT4 errors invalidated later local image/full-suite results; those failures are retained, not reported as green.
+All security reproductions use synthetic users/tenants and mocked providers; native PostgreSQL tests use a fresh loopback-only cluster and explicit disposable targets. Native PostgreSQL is15.15; separate Docker integration uses16.10. Historical Docker/EXT4 failures are retained, not reported as green. After approved no-reset startup, a fresh PG16 write/restart/restore/amcheck probe passed. Full clean6c96192c backend passed4538tests with only7explicit live-provider skips; later source packages require their own focused and final aggregate checks.
 
-Before security sign-off, finish the endpoint role/object matrix, WhatsApp replay and uncertain-send tests, AI adversarial/tool boundaries, upload/archive limits, current-source/image/log/dependency scans and independent whole-diff review. Confirm historical credential revocation through the owner/provider process. Severity and safe testing follow [SECURITY.md](../../SECURITY.md); exact finding acceptance tests remain in the backlog rather than being weakened to match available evidence.
+Before security sign-off, finish the remaining endpoint role/object matrix, reconciliation browser/approval-target boundaries, AI adversarial/tool boundaries, upload/archive limits, current-source/image/log/dependency scans and independent whole-diff review. Confirm historical credential revocation through the owner/provider process. Severity and safe testing follow [SECURITY.md](../../SECURITY.md); exact finding acceptance tests remain in the backlog rather than being weakened to match available evidence.

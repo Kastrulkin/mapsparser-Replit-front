@@ -1,5 +1,304 @@
 # Readiness handoff
 
+## Current continuation — 18 September 10:58 UTC
+
+HEAD `813609cc` commits exactly five social modules + legacy service unit fixture
+and new real-PG viewer matrix. Independent scoped review PASS254/0skips42.39s;
+13uncertain/concurrent/manual real-PG cases executed. Read/rehearsal remains
+available to viewers; write denials precede effects/advisory lock. Finalizer
+and already claimed provider path preserve durable attempt/CAS behavior.
+
+Root SQL proof20431224 finished7.933036s: auth4reads/business9reads0DDL, versus
+priorbusiness9reads3DDL. OwnedUUIDDBremoved, independentcatalog0. Three tiny
+plans are not speed/capacity evidence. Raw route_note still contains stale
+legacy prose; root corrected future harness wording;12pureunit tests pass0.10s.
+
+Approval binding causal RED:7fail/1unchanged positive pass20.22s,
+`social-approval-binding-causal-red.json`,stdouttruncated (limitation retained).
+Realapproval→changedchat and postclaim→changedchat both reach fake transport;
+legacy/malformed/media-hash/asset-ID cases reach adapter. No real send.
+Root/reviewer approve minimal frozen-descriptor design; compiled worker owns
+new binding helper, necessary social adapter/lifecycle/approval integration
+and focused tests. No migration/newendpoint/frontend changes. Product work
+starting; native window free but coordinate before any heavy run.
+
+Journey worker designs separate bounded SELECT-only `/ready`, preserving
+`/health`/migrator behavior and Compose defaults. Reviewer design gate applies;
+no source edit yet. Root Trivy DB download aborted safely before spawning:
+host3.82GiB below4GiB start guard, no DB/image scan. Native cluster174MB,
+WAL48MB; uservolumes/images untouched. Prepared watchdog script is
+`trivy-checkpoint.cjs`; do not claim scan success or lower safety cutoff.
+
+Full browser120/120 at204frontend/f0ccbackend remains scopedPASS227.301s,
+not final combined-image evidence. FreshFAILsnapshot unchanged. Rootdocs
+checkpoint pending; unrelated maps analysis preserved. No push/deploy/production.
+
+## Historical continuation — 18 September 10:45 UTC
+
+HEAD `20431224`: mobile layout/focus package independently reviewed and committed.
+Full real-API browser suite now **120/120**, exit0/no timeout/untruncated,
+227.301080s in `raw/content-focus-browser.json`; includes all three viewport
+receipt, double-confirmation, ordinary pointer and Escape/focus checks.
+Build/TS/lint/22 units and focused6browser proof remain captured separately.
+Only owned staging frontend was synced; f0cc/b43 backend unchanged. Served
+indexSHA3141022cc76c0882855a4b88886e5a72a34583bfe231bd71e305b5fdbb252061.
+This is not final immutable-image or whole-source aggregate evidence.
+
+Journey worker has exclusive native-PG window for social-write-role regression
+plus critical lifecycle/service/uncertainty/concurrency matrix. First expanded
+run233pass/21legacy fake-authorizer failures38.49s;13realPG lifecycle cases
+executed. Worker may correct only narrow existing fixtures and rerun; reviewer
+must sign off before root commits five social modules/new viewer test/fixtures.
+58focused tests had already passed. No production or provider traffic.
+
+Then root runs prepared `query-proof-20431224.sh` (new archive/ownedUUIDDB,
+exact guard/datadir; no overlapping heavy job) to measure schema-free GET.
+Approval-binding worker owns only new regression harness. Source review found
+snapshot-shape checks masked actual causal send behavior; worker is separating
+behavioral RED from desired metadata shape and asset identity/hash cases.
+No native grant or product implementation yet. Grant after role commit/query.
+
+Fresh FAIL snapshot at2f remains authoritative for original reviewed revision;
+later fixes require final fresh review. Final image/scans/operational and
+capacity/demo gates remain. Root docs/evidence dirty; preserve unrelated maps
+analysis file. All work local-only; host headroom~5GiB, heavy jobs serialized.
+
+## Historical continuation — 18 September10:30UTC
+
+HEAD2d875357 commits independently reviewed schema-free business GET + new
+real-PG regression. RED3 records actualDDL before403; GREEN15/15 in22.26s.
+First three captures have collection/fixture/spying limitations; preserved.
+
+Root owns uncommitted frontend3-file layout/focus package. Causal geometry:
+393px client→762Month/437List layout, date-label hit atwrongvisualoffset.
+CSS2class correction madealloriginal117pass; expanded120first run failed
+3NEWfocusrestore assertions, exit1/248.788s. Rootaddedactualinvokerref only
+calendar/list/nearest and connected+enabled restorationonSheetclose, preserving
+defaultdeeplink behavior;3newunit tests. Clean2d875+exact3filepatch archive
+`/private/tmp/localos-readiness-content-focus.S3o4Mi`, fullTS/lint/22units/
+bothbuilds PASS84.349914s. Sourcehashes checked inbuild-content-focus.sh.
+Localownedappdist-onlysync PASS1.185817s, priorartifact backedup, all5container
+IDs/starttimes unchanged. CurrentservedindexSHA
+3141022cc76c0882855a4b88886e5a72a34583bfe231bd71e305b5fdbb252061.
+Backend remainsimagef0cc/b43; imageidentityalone is NOT servedfrontendidentity.
+Focusedrealbrowser6/6 PASS25.178298s all3viewports: Month/Texts/receipt/Escape/
+focus/Listbounds and actualAPIreceipt/doubleclick/mutationDBinvariants.
+Full120rerun remainsnext aftersocialnativewindow, notyetcomplete.
+
+**Serializednativewindow now belongsjourney_benchmark_harness** forsocialrole
+green/adjacenttests afterreviewerstaticPASS. NEWtests/test_social_posts_viewer_readiness.py
+clones privateUUIDschemas frommigratednativeDBreadiness_full_test_reviewed_20260918,
+notEMPTYreadiness_operator_test; wrapperpinsdatadir/guard/env-i. FirstREDfixture
+errors retained; RED2valid2viewerfail/6controls pass2.41s, prepare200vs403.
+Workerowns explicitwritehelpers/socialentrygates in5socialmodules, reviewer
+checksreadhelpers/finalizerpreserved. No productcommit orgreenclaimyet.
+
+FreshreviewFAIL snapshot30262a5b..2f224f05 nowpersistedverdict.json and
+FRESH_REVIEW_20260918.md, transcribedwithattribution(readonlyreviewercannotwrite).
+It predatesGETfix; AC1–11 remainFAIL. Knownapprovalrecipient/media gap remains:
+read-only design suggests metadataapprovalsnapshot, but mustalsofreezeactual
+adapterpayload/recipient toavoidcomparison→latebindingrace; implementationnotstarted.
+Rootdocs/evidence aredirtyandneedcheckpointcommit; preserveunrelatedmapdoc.
+No push/deploy/production/providerchanges. Hostfree~5GiB, heavyjobsserial.
+
+## Current continuation — 18 September 10:11 UTC
+
+HEAD remains 2f224f05. Full real-browser retry completed: **116 passed / 1 failed**,
+exit 1, no timeout, 239.036026s (`browser-real-2f224f05-retry.json`). Desktop and
+laptop now prove receipt reconciliation, double-click protection and stored DB
+result. Mobile opens List and the publication sheet, but normal click on
+“Тексты для каналов · 1” is intercepted by the date label. Offline trace shows
+layout viewport expansion from 393px to 762px in Month, then 437px in List;
+root is investigating intrinsic-width overflow, not forcing the click.
+
+Compiled worker currently owns the serialized native-PG test window. GET data
+test captures so far include collection/fixture errors and authorization-only
+RED (direct/network/viewer 403 instead of 200). The original SQL recorder was
+attached to the wrong compatibility-wrapper seam; its empty result is NOT
+no-DDL evidence. Corrected recorder requires nonempty statements and is being
+rerun before any route fix. All failed captures remain preserved.
+
+A genuinely fresh, read-only verifier now runs as `whole_diff_fresh_review`
+(fork_turns=none); prior thread-limit issue is resolved. It found a further
+source-level candidate: social-post mutations use read-role access. Runtime
+reproduction and bounded correction remain pending; no provider calls allowed.
+Overall readiness is still FAIL. No push, production deployment or production
+data/schema changes are authorized in this audit phase.
+
+## Current continuation — 18 September 09:57 UTC
+
+HEAD2f224f05. Currentf0cc realbrowser:114passed/3failed, exit1/259.528434s.
+Desktop/laptop expected disabled queuebutton incorrectly; hold omits it.
+Mobile monthcard click intercepted; usability remains candidate. Reviewed2f
+changes ONLYtest to visibleList→normalclick and queuecount0, retaining
+approval/doubleclick/mutationcount/DBreceipt checks; removes2EOFblanklines.
+Productruntime remainsf0cc. First2f pretestabort1.369s retained: archive/link/
+lockfile established, diskbelow2GiB. Retry emitsstage labels/sourceSHA/disk.
+**Heavyjob readiness-browser-2f224f05-retry started09:55UTC**, rawpending.
+Archive /private/tmp/localos-readiness-browser-reviewed.EOAvTX exact2f;
+externalconfig playwright-2f224f05.config.ts, outputbrowser-results-2f224f05.
+
+Exactcachecleanup reviewedPASS:32immutable/private/reclaimableIDs validated,
+22pruned3.842GB/9.814s, all10images/16containers/18volumes+states preserved.
+Host1.8→5.4GiB. Mutablefrontend cache excluded. Prior4.262s abortmatchedstale
+tmux/zsh launcher strings anddidnotprune; correctedactualexecutableguard.
+Captures completed-audit-cache-cleanup{,-retry}.json retained.
+
+Actualqueryproof PASS10.308584s, cleanf0cc archive
+/private/tmp/localos-readiness-query-f0cc182a.zKi5r7; auth4reads,
+business12=9reads+3compatDDL,3tinyrepresentativeplans. OwnedUUIDDBremoved,
+independentcatalog0rows. Report04 scopes this, noindex/capacityclaim.
+
+NewP1candidate: businessdataGET compatibilityDDL beforebusinessauthorization,
+owner-onlyreadguard. Compiledworker ownsNEWtests/test_legacy_business_data_preauth_pg.py
+andlateronlyget_business_data in src/legacy_routes/public_requests.py.
+No routemutationorDBredyet. Reviewerrequestedallowed+deniednoDDL assertions.
+Grantserializednativewindow AFTERbrowser. CanonicalAlembicruntime required;
+no migration/productionchange. Rootdocs/evidencependingcommit; preserveunrelated
+mapdoc. Finalbackend/image/scans/capacity/demo/freshAC11review remain.
+
+## Current continuation — 18 September 09:35 UTC
+
+HEADf0cc182a. Clean archive `/private/tmp/localos-readiness-image-reviewed.G4Por7`
+is the source for current image. Docker build retry PASS55.385755s (original
+6.111s failure was missing credential helper PATH, retained separately).
+Image `sha256:b43efb29cbd176d75c97cfa769adbebe7e7e20a1d467cd1c0a561538305cc93d`,
+1070645450bytes, localos user, Node22 bothfrontend builds, npm audit0.
+Offline/read-only/nonroot Chromium/pipcheck/pypdf6.16.1 smoke PASS3.721313s.
+Raw `docker-build-f0cc182a{,-retry}.json`, `docker-smoke-f0cc182a.json`.
+Exact8additional oldNode20ancestor cacheIDs reclaimed312.8MB; no images,
+containers or volumes removed. Hostfreeabout4GiB; heavy jobs serialized.
+
+Frontend aggregate6c now complete PASS495.06755s: lint0errors/1existingwarning,
+full TypeScript,588unit/126files and72mockbrowser. It does not replace pending
+117realAPIbrowser. Roles125900b2 and queryproof f0cc independently reviewed/
+committed; roles27focusedpass, query12unitpass but actualqueryrun pending.
+Full6cbackend4538/7 remains previous checkpoint; final currentaggregate needed.
+
+Root is recreating ONLY app in existing local compiled project, using old
+4a8compose archive plus final image override; identical app environment/DBhead
+and unchangedPG/Redis/runner/ingress IDs/starttimes are enforced. Script
+`update-compiled-f0cc.js`; capture `compiled-update-f0cc182a.json` PASS4.533s,
+currentapp445e053b60ac2fcd386fdfd086096c3772ae36e3e6a4ec62816bfbd49c0ea0d2.
+No new migrations in4a8..f0cc; no DBrestart/reseed. Never replay startupscript.
+HTTP200/health verified. **Heavyjob `readiness-browser-f0cc` running since
+09:34:57UTC**, cleanf0cc frontend117cases/1worker/closedexternalproxy/existing
+compiledproofblueprint; capture `browser-real-f0cc182a.json` pending.
+Next preparedqueryscript `query-proof-f0cc182a.sh` NOT EXECUTED yet; newarchive
+and UUIDDB/guard required, no concurrentheavyjob. Hostfreeabout3GiB duringbrowser.
+
+Same-agent whole-diff review ongoing, no new consequential code defect so far;
+fresh-agent creation blocked by threadlimit, therefore NOT AC11 freshsession.
+Root fixes stale reports and2EOFblanklines; workers own only01/02doc updates.
+All00–10workingreports exist; overallFAIL/verdictUNKNOWN remain. Preserve
+unrelated `docs/VR_ENGELSA_MAPS_ANALYSIS_20260918.md`. No push/deploy/providers.
+
+Older continuation blocks below are chronological history, not current state.
+
+## Current continuation — 18 September 09:10 UTC
+
+HEAD94de718c. Heavy job **`readiness-frontend-aggregate`** is running from the
+clean6c96192c archive frontend under `/private/tmp/localos-readiness-final-853bdc5d.MjouFu/source/frontend`.
+Same-lockfile dependency link, Node22, lint/typecheck/fullunit with maxWorkers1,
+then root-level mocked browser specs with1worker/closed external proxy and
+reuseExistingServer=false. Added temporary config `playwright.readiness-final.config.ts`
+does not modify tracked frontend source. Capture `raw/frontend-aggregate-6c96192c.json`
+pending; timeout600s. Do not start build/load/scanner/query run concurrently.
+
+Exact11validated oldNode20frontend cache records removed safely; capture
+`node20-audit-cache-cleanup.json` exit0/4.509s, Dockerreclaim1.168GB, hostfree
+eventually4.3GiB (now3.9GiB after test/archive activity). No images, containers,
+volumes or business data removed. Cached packages are rebuildable. Prepared
+build-e3f42dbf.sh independently safety-reviewed after explicit local socket/
+binary guards; never executed, and its pinnedref must be updated deliberately
+for the next accepted release rather than mislabeling an e3 build as current.
+
+Prepared load actuale3 first failed ModuleNotFoundError before timing; created
+DB removed. Fresh-process red/45combinedgreen proves parent import correction
+94de718c (reviewed). Clean94de 8targetrun correctly invalid:5login200+3HTTP429
+from unchanged5/min same-IP limiter; dependent unauthorizedreads retained.
+Samecode4targets/2concurrent/5readcycles then passes44/44semantic requests,
+9.249s captured, exact child CPU/maxRSS and p50/p95/p99 independently reviewed.
+Raw `prepared-load-{e3f42dbf,94de718c,four-94de718c}{,-command}.json`; thefirst
+twoarefailed—notcapacity successes. All ownedloadDBs removed by harness.
+Report04 updated; queryplans/sustainedHTTPcapacity remain open.
+
+Journey worker owns pending services/content stored-viewer role package plus
+new realPG fixture and narrow existing employee fixture seam. Actual viewer
+200+mutation red from clean e3 retained; latest focused27pass3.35s, independent
+review pending. Legacyviewer-created update/delete/enrich and problematic
+generation paths included; existing reads/NULL-business behavior preserved
+as explicit review criteria. No source commit yet. Compiled worker owns new
+queryproof script/tests; reviewer required truthful structured cleanup failure
+evidence and actual watchdog/lifecycle regression. No queryproof DB execution
+or commit until explicit final PASS. Reviewer remains available.
+
+Root has uncommitted evidence/report updates only; unrelated map-analysis doc
+must never be staged. Full6cbackend4538pass is complete, not to be repeated
+until remaining product patches freeze. Next: review/commit roles/query,
+finishfrontendaggregate, currentDockerbuild/smoke→117realbrowser scenarios,
+queryproof, finalscans/demo/whole-diffreview. Audit remains local/incomplete.
+
+## Current continuation — 18 September 08:51 UTC
+
+Full clean6c96192c aggregate is now PASS: **4538passed/7live-provider skips/
+5upstreamSWIG warnings,395.49s**,403.727s captured, exit0/no timeout.
+Authoritative `raw/full-backend-6c96192c.json` is complete/untruncated.
+Prior3fail/1error capture remains intact. Do not repeat the completed checkpoint.
+
+Later independently reviewed commits:ba891be4 aligns Docker Node22builder with
+the locked jest-dom>=22 and allCI workflows (3contract tests);e3f42dbf adds
+prepared authenticated dashboard read-load (11independent tests). Actual load
+and Node22 image build have not run. Prepared build script `build-e3f42dbf.sh`
+uses fresh `/private/tmp/localos-readiness-image-e3f42dbf.aD1Yfd`, requires4GiB
+free and aborts at1.5GiB. Hostfree3.3GiB; exact11oldNode20frontend cache prune
+script `clear-node20-audit-cache.js` is under safety review, not yet executed.
+It must never delete images, containers or volumes. Runtime remains4a8 backend
+with8ebfrontend; new117case browser suite remains unexecuted.
+
+**Serialized DB window belongs to journey worker now** for red/green proof
+of two newly identified pure-DB stored-viewer mutation candidates (services
+and content item). Only new UUID schemas in readiness_operator_test, no public
+data writes/providers; candidate status until actual red. Root waits before
+load/build. Compiled worker prepares query-count/EXPLAIN harness source only;
+no DB window. Reviewer checks source packages. Unrelated map-analysis doc stays.
+
+## Current continuation — 18 September 08:44 UTC
+
+Latest committed checkpoint `6c96192c`. Independently reviewed extraction
+`01446148` moves unchanged social media/provider transport and publication
+lifecycle functions into two feature modules; AST and facade checks pass,
+legacy size limits lowered to1895/1977. Benchmark guard empty-path fix
+`853bdc5d` prevents accidental CWD provenance. Root capture
+`raw/social-extraction-root.json`:272passed38.43s, exit0/41.023s captured.
+`6c96192c` adds guarded synthetic reconciliation fixtures and a real-browser
+spec, now discovered by canonical staging config for all3viewports (117total).
+Independent source review PASS;9fixture units, TS/ESLint/discovery pass.
+Actual reconciliation browser runtime has not run yet.
+
+Prior clean d3 full run completed **3failed/3722passed/809skipped/1error**,
+298.19s pytest/306.617s captured, exit1; preserved raw
+`full-backend-d3ca8b1e.json`. Causes: two social module-size ratchets, empty
+guard path behavior, and missing frontend dependencies in the archive.
+Many skips also reflected omitted native test-DSN environment keys. The
+product fixes above do not make that unsuccessful aggregate green.
+
+**Current heavy job:** tmux `readiness-full-backend-reviewed`, started08:43:35UTC,
+one-shot `full-backend-reviewed.sh 6c96192c` under the retained taskdir. Fresh
+archive `/private/tmp/localos-readiness-final-853bdc5d.MjouFu/source` contains
+6c96192c despite the parent directory's historical name. New isolated DB
+`readiness_full_test_reviewed_20260918` on owned native35418; all six test-DSN
+keys explicit, same-lockfile node_modules symlink, pinned privatepypdf6.16.1,
+guard symlink, Docker PG16 testcontainers, synthetic creator flag, env-i and
+provider dispatch disabled. Capture `raw/full-backend-6c96192c.json` is pending.
+Do not replay creation or run builds/load/scans/browser concurrently.
+
+Prepared read-load agent rewrote only its new script/tests; reviewer is now
+checking the revision after earlier FAIL12blockers. No actual load authorized
+until independent source PASS. Journey worker starts narrow Node20→22 builder
+contract alignment; no build/pull or dependency changes. Root owns docs and
+runtime work. Preserve unrelated untracked map-analysis document.
+
 ## Current continuation — 18 September 08:30 UTC
 
 Committed `d3ca8b1e`: complete reviewed SEND-AMB backend/provider/UI package.

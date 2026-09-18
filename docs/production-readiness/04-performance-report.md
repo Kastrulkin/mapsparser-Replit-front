@@ -1,7 +1,7 @@
 # Performance — working measurements, not a capacity claim
 
-Updated 18 September 2026, 08:15 UTC. Cold-request distributions are measured;
-prepared-target load and query-plan acceptance remain open.
+Updated 18 September 2026. Cold-request distributions, one bounded prepared
+dashboard profile and tiny-fixture SQL plans are measured; capacity remains open.
 Build/test wall times are engineering feedback measurements, not user latency.
 All measurements are local/synthetic; none describe production capacity.
 
@@ -90,7 +90,7 @@ Raw `journey-measure-serial-8ebec5ca.json` and its command capture record
 543.315 seconds wall time, 5 excluded warmups and 50 measured samples per
 revision. Baseline is `30262a5bf7b468e0a6f5a0e3d8262dbef119e075`, current is
 `8ebec5ca822db1171e05a690377255b3c2205655`. This does not include the later
-uncommitted publication-reconciliation package. Native PostgreSQL 15.15 runs
+committed publication-reconciliation package. Native PostgreSQL 15.15 runs
 in the owned cluster on literal loopback port 35418; no production data or
 provider traffic is involved.
 
@@ -151,9 +151,99 @@ resource pressure, cold processes and stubbed external services, p99 is
 exploratory and neither a production SLO nor proof of a causal regression.
 No cache/index/refactor optimization is justified by these results alone.
 
+## Prepared dashboard profile and admission boundary
+
+Reviewed read-load harness e3f42dbf initially failed before timing because its
+parent seed import depended on pytest's source path. Raw
+`prepared-load-e3f42dbf{,-command}.json` records ModuleNotFoundError/exit1 and
+successful cleanup. A fresh-process regression reproduced the exact import
+failure;94de718c fixes canonical source resolution (45combined harness tests,
+independent review). Failed evidence was not overwritten.
+
+Clean94de718c with8prepared users and two concurrent clients per wave sent
+8logins from the same test-client IP:5returned200,3returned429, matching the
+unchanged login limiter5/minute. Their dependent reads were unauthorized, so
+the run correctly reports valid=false/exit1. This is an admission-boundary
+observation, not a product failure or a passing load result. Raw
+`prepared-load-94de718c{,-command}.json` retains all88request attempts.
+
+The same committed harness was then run with4prepared users, two concurrent
+clients per wave and5read repetitions per user, without disabling the limiter.
+Setup/migration/seeding precede timing. All44semantic checks pass:4real logins,
+20current-user reads and20business-data reads; each response matches its own
+tenant/service identity. Captured wall time9.249s includes setup/cleanup and
+must not be used as a throughput denominator. Both actual measurement DBs were
+removed; raw `prepared-load-four-94de718c{,-command}.json` records exact names.
+An independent reviewer recomputed counts and quantiles.
+
+| Prepared request | Successes | p50 / p95 / p99, ms |
+| --- | ---: | ---: |
+| Login |4/4|74.609 /77.663 /77.734|
+| Current user |20/20|38.187 /110.875 /113.004|
+| Business data |20/20|39.562 /43.186 /44.100|
+
+Measured child CPU deltas are0.145952user+0.038735system seconds. Its maximum
+RSS high-water rises164,593,664→166,084,608bytes (1,490,944bytes); this is not a
+heap measurement, memory-growth rate or steady-state allocation claim.
+
+Scope is in-process Flask test-client request dispatch on nativePG15, not HTTP
+server throughput, sustained load, worker-queue capacity or provider execution.
+All quantiles, especially p99 at n4/n20, are descriptive/exploratory. The legacy
+business-data GET also performs compatibility DDL internally, so this is
+dashboard-read traffic, not a database read-only workload. No general speedup
+or production capacity acceptance follows from this one profile.
+
+## Actual query counts and representative plans
+
+Clean f0cc182a harness ran on18September against one newly created UUID-owned
+nativePG15 database after canonical migrations and a tiny synthetic seed.
+`query-proof-f0cc182a{,-command}.json`:exit0/10.308584s, validtrue, childcompleted,
+no invalid reasons, exactownedDBremoved (independent catalog check confirms).
+Guard origin/SHA, exactPGdata_directory and env-i were checked before execution.
+No production data or providers. Capture duration includes setup/cleanup,
+not request latency or query throughput.
+
+| Actual API route | Instrumented statements | Read | DDL/write |
+| --- | ---: | ---: | ---: |
+| `/api/auth/me` |4|4|0|
+| `/api/business/<id>/data` |12|9|3|
+
+Instrumentation counts `DatabaseManager.DBCursorWrapper.execute`, not every
+possible PostgreSQL driver call. The3compatibility statements are legacy
+CREATE TABLE IF NOT EXISTS forFinancialTransactions/BusinessProfiles and
+ALTER UserServices ADD COLUMN business_id. On the migrated fixture theALTER
+fails and is swallowed; its followingNULL-business backfill is not reached.
+Alembic owns these objects in20250207_002/20250207_009, with finance evolution
+20260224_003. Runtime fallback definitions differ from canonical migrations.
+Removing them needs supported-upgrade/legacy regression coverage, not an
+index/cache guess. Statement count alone does not prove a latency bottleneck.
+
+Three bounded parameterized EXPLAIN ANALYZE BUFFERS plans were captured:
+representative business-access join0.562ms execution, active services0.023ms,
+cards0.018ms. The first omits dynamic moderation/parser filters; it is not the
+exact full route query. Fixture has onebusiness/oneservice/zerocards.
+Services/cards use existingbusiness_id indexes; access includes a smalltable
+sequential scan plus membership/network indexes. These single tinyfixture
+samples are query-shape evidence, not index need, production timing or capacity.
+
+## Schema-free GET follow-up — 20431224
+
+The same isolated harness after reviewed GET correction2d875357 passes in
+7.933036s (`query-proof-20431224{,-command}.json`), validtrue/no invalid reasons.
+`/api/auth/me` still executes4read statements. Business data now executes
+**9read statements and0DDL/write**, versus9reads+3DDL in the priorf0cc run.
+This demonstrates removal of request-time schema maintenance, not a measured
+end-user latency improvement. The new representative plans execute in
+0.551/0.032/0.018ms on the same tiny fixture shape; these single samples do not
+justify index changes or capacity claims. Exact ownedUUIDdatabase was removed;
+root's separate catalog check returned0. Source archive retained at
+`/private/tmp/localos-readiness-query-20431224.wJNhxf`. The raw harness's static
+route_note still describes legacy DDL, which is stale prose, not measured
+behavior; the counted statements above are authoritative. The note is corrected
+for subsequent runs without rewriting this captured artifact.
+
 ## Still required
 
-Prepared-target bounded request load, representative query counts/EXPLAIN
-plans, and CPU/memory/queue
-observations. Do not add speculative indexes, caches or structural rewrites
-before those measurements identify a reachable bottleneck.
+Sustained/server/queue capacity and frontend performance observations. Do not
+add speculative indexes, caches or structural rewrites before measurements
+identify a reachable bottleneck.

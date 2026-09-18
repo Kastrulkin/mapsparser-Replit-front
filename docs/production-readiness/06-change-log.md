@@ -1,5 +1,130 @@
 # Production-readiness change log
 
+## SEC-RBAC-05 — social publication writes require a stored write role
+
+Commit `813609cc` adds a canonical write-role boundary for preparing, approving,
+editing, queuing, publishing and reconciling social posts, attribution/metrics,
+scoped dispatch and future-plan recommendations. Read/list/rehearsal access is
+unchanged. Manual reconciliation rejects a viewer before its advisory lock.
+Only admission is newly write-gated; already claimed provider/finalizer paths
+retain durable attempt/CAS handling so later revocation does not lose receipts.
+
+Real PostgreSQL RED2 showed direct/network viewers could prepare posts (200,
+not403), while six allowed/read controls passed. The full negative matrix now
+checks unchanged post/plan/item/count snapshots and zero downstream calls.
+Owner/member/manager/network-owner/superadmin controls remain allowed.
+Independent review PASS: **254passed,0skipped,42.39s** (42.756s capture),
+including13real-PG uncertain/concurrent/manual lifecycle cases and size limits.
+`social-posts-viewer-rbac-expanded-green-20260918.json` is authoritative.
+The earlier233pass/21legacy-fake failures remain; only pre-authorized unit
+doubles were adapted, with explicit dispatch-before-preflight assertions.
+No production/provider action; approval recipient/media binding stays separate.
+
+## OPS-GET-DDL-01 — schema-free, membership-aware business reads
+
+Commit `2d875357` removes request-time CREATE/ALTER/global backfill/commit
+from GET business data. Canonical Alembic owns that schema. Existing404 stays;
+canonical read access permits active direct/network members and viewers,
+without granting write access. Causal RED3 captures actual DDL attempts even
+for denied403 requests and rejects three legitimate readers. Earlier import,
+fixture and empty-recorder failures are retained and not causal DDL proof.
+Independent review PASS; new+adjacent real-PG tests **15passed22.26s** under
+the pinned native guard (`business-data-preauth-green.json`). Local only;
+current staging backend still runs f0cc until the next frozen image.
+
+## UX-CALENDAR-03 / A11Y-CONTENT-04 — bounded layout and focus return
+
+Actual mobile geometry has393px client width but762px Month layout /437px
+List layout; visual-viewport offsets misdirect the normal sheet click to the
+date label. CSS-only hypothesis restores393px and normal click passes.
+Canonical regression fails before correction with369px horizontal overflow.
+The two-class fix adds wrap/max-width to section navigation and min-width0
+to the calendar grid child. Independent source review passes. Isolated build
+passes lint/fullTS/19ContentPage tests and bothbuilds81.932s. Only frontend
+dist copied to ownedlocal app, olddist retained; all5containerIDs/starttimes
+unchanged, noDB/restart. Expanded120run passes original117 but exposes
+3newfocus-return failures (248.788s). This was not a fully green aggregate.
+
+Reviewedcommit20431224 additionally remembers the actual calendar/List/nearest
+button and restores it on Sheetclose only while connected and enabled, then
+clears it. Deep-link opens retain default behavior. Three focused unit cases
+added; clean snapshot passes fullTS/lint/22units/bothbuilds84.350s. Fresh
+served-artifact6/6browser proof25.178s covers all3viewports, unchanged normal
+pointer/focus assertions and actual receipt/double-confirmation/DB outcomes.
+Full120rerun also passes: exit0/no timeout/untruncated,227.301080s captured,
+`content-focus-browser.json`. Independent reviewer confirms all three
+viewports, unchanged receipt/DB assertions and no prior scenario regression.
+This is not a final immutable image or deployment.
+
+## Current image/runtime checkpoint — f0cc182a
+
+Clean tracked archive built bothfrontends with Node22 and browser-enabled
+backend in55.385755seconds. Exact ARM64 image
+`sha256:b43efb29cbd176d75c97cfa769adbebe7e7e20a1d467cd1c0a561538305cc93d`,
+1070645450bytes. Real offline/read-only smoke passes3.721313s:UID10001,
+Chromium153.0.8010.12, pypdf6.16.1, pipcheck, bothentrypoints present.
+Initial6.111s build failed because sanitizedPATH omittedDockercredentialhelper;
+raw failure retained, not a product defect. FourBuildKit secret warnings name
+booleanfeature flags only; independently inspected, not secret material.
+Onlyownedcompiledstagingapp recreated4.533s, other4services IDs/starttimes
+preserved. No new migration in4a8..f0cc, no database restart/reseed. Current
+117realbrowser retry completed116/117; mobile issue/follow-up above. Exact
+captures inCOMMANDS.md. The app now has the separately recorded local frontend
+artifact, so image identity alone no longer identifies served frontend bytes.
+
+## SEC-RBAC-04 — services and content respect stored read-only roles
+
+Commit125900b2 follows real nativePG red cases: direct/network viewers returned
+200 from service add/compression draft and content item editing. Earlier three
+setup failures and the incomplete JSON fixture red remain explicitly separate
+from causal proof. Clean e3archive with corrected fixture reproduces service
+denials missing, while allowed controls work. Authoritative captures are
+`services-content-viewer-rbac-service-red-e3f42dbf.json` and content red4.
+
+Existing canonical write-role verifier now guards service add/compression
+mutations, problematic enrichment/regeneration, and enrich/update/delete of
+stored services, including services historically created by a current viewer.
+Stored business role is checked before provider work or SQL effects; legacy
+NULL-business own-user/superadmin behavior is retained. Content item update
+uses its stored plan business for the same write guard; read/list/audit and
+content-plan reads retain the existing read-access helper.
+
+Independent review PASS;27native/adjacent tests pass3.35s in
+`services-content-viewer-rbac-final.json`. Tests inspect service/request/source
+active snapshots, content text, provider seam calls and regeneration-job count;
+direct/network viewers and revoked/foreign actors cannot write, owner/member
+controls remain. Existing employee fixture now models the distinct write seam
+without weakening assertions; independent7fake checks pass0.33s. This is not
+platform-wide RBAC closure or deployment; final whole-source suite is pending.
+
+## DEP-ENGINE-01 — align the frontend image builder contract
+
+Commitba891be4 changes Node20-slim toNode22-slim only; all three CI workflows
+already useNode22, and locked jest-dom7 requires>=22. Three contract tests and
+independent review pass. No dependency/lockfile changes. Actual cleanf0cc
+Node22 image/bothfrontend build and nonroot/offline smoke now pass; exact
+identity/durations are in this document's current image checkpoint.
+
+## TEST-PERF-02 — guarded prepared dashboard profile
+
+Commite3f42dbf adds bounded pairwise Flask-dispatch measurement with strict
+database/guard identity, child watchdog, exact response/coverage checks and
+owned cleanup. Real first run caught a parent seed import omitted from clean
+processes;94de718c fixes it with fresh-process red/45combinedgreen. The8-user
+profile retains expected5/min login admission failures; unchanged4-user profile
+passes44/44semantic requests with independently recomputed resource/latency
+values. Details and limitations in report04; no HTTP capacity/speed claim.
+
+## Social module size ratchet and browser fixture follow-through
+
+01446148 mechanically extracts unchanged media transport and publication
+lifecycle functions; independent AST/facade checks and272combined tests pass,
+ratchets decrease to1895/1977 rather than allowing growth.853bdc5d prevents
+empty PYTHONPATH entries from falsely identifying a CWD guard.6c96192c adds
+strictly guarded social reconciliation fixtures and canonical discovery of
+117staged browser cases. The clean6c backend aggregate passes4538tests with
+only7intentional live-provider skips; new staged browser runtime is pending.
+
 ## UX-CONTRAST-02 — actual attention heading verified in the browser
 
 Commit8ebec5ca changes only EmployeeWorkspaceSection title opacity60→80 and adds

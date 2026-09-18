@@ -45,7 +45,7 @@ Provider content/model output are data, not authorization. Signing callbacks doe
 | Upload/debug/audio files | Runtime writable storage | Potential private content; separate from read-only source |
 | External execution | OpenClaw/orchestrator and provider clients | Timeouts, retries, uncertainty, consent and provider IDs |
 
-Tracked inventory: 555 files under `src`, 408 under `tests`, 648 under `frontend`, 239 under `scripts`. These are file counts, not test coverage.
+Tracked inventory is intentionally not expressed as brittle file counts here. Use the current committed tree for exact paths; file totals are neither coverage nor a runtime-readiness signal.
 
 ## Five critical journeys selected for measurement
 
@@ -63,4 +63,4 @@ Credentials, session tokens, provider keys, business finances, private knowledge
 
 ## Deployment reality / unresolved gaps
 
-Compose defines app, worker, operator-worker, Telegram, PostgreSQL, Redis and ancillary services. Base Compose bind-mounts host code over image contents, so image identity alone is not a release attestation. The isolated staging override removes code/env mounts and suppresses integrations. Alembic has an advisory lock, but multiple startup actors remain a configuration concern. These are audit findings, not instructions to mutate production now.
+Compose defines app, worker, operator-worker, Telegram, PostgreSQL, Redis and ancillary services. Base Compose bind-mounts host code over image contents, so image identity alone is not a release attestation. The isolated staging override removes code/env mounts and suppresses integrations. Docker recovery was explicitly approved without reset, prune or volume deletion; recovered task-owned storage evidence does not certify prior user volumes. Alembic has an advisory lock, but multiple startup actors remain a configuration concern. These are audit findings, not instructions to mutate production now.

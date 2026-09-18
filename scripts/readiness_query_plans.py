@@ -2,9 +2,9 @@
 """Capture bounded query plans for the synthetic dashboard read journey.
 
 This tool is intentionally limited to one UUID-owned, migrated synthetic DB.
-It is not a production plan, load test, or generic SQL runner. The business
-route currently contains compatibility DDL; query counts therefore distinguish
-executed read statements from DDL instead of calling the GET route read-only.
+It is not a production plan, load test, or generic SQL runner. Query counts
+distinguish executed reads from DDL/writes so comparisons preserve both legacy
+request-time schema maintenance and schema-free read behavior.
 """
 
 from __future__ import annotations
@@ -363,7 +363,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "query_counts": counts,
         "plans": plans,
         "cleanup": cleanup,
-        "route_note": "business data GET includes compatibility DDL/ALTER/UPDATE; counts report it separately",
+        "route_note": "observed counts distinguish reads from DDL/writes; the GET method alone does not establish read-only behavior",
         "representative_plan_note": "access SQL omits dynamic moderation/parser filters; source drift must be reviewed before interpretation",
         "child_termination": termination,
     }

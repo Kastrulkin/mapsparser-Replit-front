@@ -2,15 +2,50 @@
 
 Status: **FAIL / incomplete whole-goal evidence**, updated 2026-09-18 UTC. This is a progress checkpoint, not final independent sign-off.
 
-Latest durable results supersede the historical interruption paragraph below: clean5e1ebe79 full native backend **4319passed117skipped5warnings**,296.79s, exit0 (`raw/native-full-backend-5e1ebe79.json`); real-browser **111passed3failed**,200.079s (`raw/native-pg-real-api-browser-unset.json`). Three compiled-runner failures remain real. User-authorized Docker startup completed without reset, and fresh task-owned PostgreSQL16 storage/checkpoint/restart/dump-restore/pg_amcheck passed35.107s (`raw/docker-resume-storage-probe.json`). Canonical a0253199 build is running serially; no image success claim yet. No production changes. Older temp archives/traces/dumps/reports vanished across host interruption; repository raw captures survived. Current resources/authority are in HANDOFF's newest section, not the obsolete temp paths below.
+Latest10:58UTC evidence supersedes historical checkpoints below: clean6c96192c
+backend **4538passed/7live-provider skips/5warnings**,395.49s, exit0; frontend
+588unit/126files,72mockbrowser,fullTS,lint0errors/1warning PASS495.068s.
+Reviewed125900b2 service/content viewer fix has27focusedpasses; finalaggregate
+after that change remains. Cleanf0cc182a Node22 image builds bothfrontends
+55.386s and passes real nonroot/read-only/offlineChromium+pypdf+pipcheck smoke
+3.721s. First build's missingcredentialhelper failure is retained separately.
+Ownedstagingapp-onlyupdate passed4.533s, other4service IDs/starttimes unchanged.
+Current20431224 frontend passes120/120real-API browser cases227.301s,exit0/no
+timeout, independently reviewed. Prior116/117 failure reproduced369px mobile
+overflow; the two-class correction then exposed3newfocus failures in120cases.
+The reviewed invoker-focus fix passes22units/fullTS/lint/bothbuilds84.350s and
+the unchanged full120suite. Failed captures are retained. Onlyownedlocalapp
+frontend/dist was replaced, olddist preserved; fivecontainer IDs/starttimes
+unchanged. Backend/image remainsf0cc; servedfrontend has separate identity,
+not a final immutable combined-image claim.
+Prepared94de dashboard profile passes44/44requests; failed8target login-limit
+boundary is separate. Actualf0cc queryproof passes10.309s: auth4reads,
+business9reads+3DDL and tiny representative plans; ownedDBremoval verified.
+CausalGET tests then reproduce request-timeDDL for403 and denied valid readers.
+Reviewedcommit2d875357 removes legacyDDL and uses canonical read access;
+15new/adjacentreal-PG checks pass22.26s. Final aggregate remains pending.
+Genuine fresh whole-diff review30262a5b..2f224f05 completedFAILacrossAC1–AC11,
+including social-viewer mutation then causally reproduced on nativePG.
+Reviewed813609cc passes254tests/0skips42.39s; earlier233/21legacy-fixture failures
+are retained. Post-GET SQL proof204passes7.933s with9reads0DDL. Approval-binding
+RED7fail/1positive pass20.22s actually sends to changed fake recipient before/
+after claim; stdouttruncation retained. Frozen-descriptor fix is starting.
+Trivy DB download refused low startingheadroom before spawn; no scan. Final scans,
+demo, approval-binding, wider role/tool coverage and corrected-revision re-review remain.
+No production changes, user-volume reset or real provider send. Current
+resources/authority are in HANDOFF's newest section, not obsolete paths below.
 
-Latest interruption: full3fadbabd rerun3565passed691skipped4failed79errors and next image build/scan failed on local Docker/EXT4/PG I/O. See `docs/production-readiness/LOCAL_DOCKER_INCIDENT_20260917.md`; host2.6GiB after exact duplicate-cache cleanup, shared local Docker recovery permission requested. No heavy job is still running. Later pure harness packets a04686de/a842d648 independently reviewed and combined20passed2.14s, without Docker.
+Historical interruption: full3fadbabd rerun3565passed691skipped4failed79errors
+and image build/scan failed on local Docker/EXT4/PG I/O. Approved no-reset
+restart and fresh PG16 storage/restart/restore/amcheck subsequently passed.
+See `docs/production-readiness/LOCAL_DOCKER_INCIDENT_20260917.md`; historical
+failures were never converted to green or used to certify old user volumes.
 
 ## Source and acceptance
 
-The original complete request and AC1–AC11 remain in spec.md. evidence.json maps all11criteria to captured evidence and explicit gaps. verdict.json remains UNKNOWN because the final whole-diff verifier has not run; per-package independent reviews are recorded in the change log.
+The original complete request and AC1–AC11 remain in spec.md. evidence.json maps all11criteria to captured evidence and explicit gaps. verdict.json records the genuine fresh review's FAIL snapshot at2f224f05; subsequent scoped fixes do not retrospectively change that verdict. Per-package independent reviews are recorded in the change log.
 
-## Verified evidence groups
+## Historical verified evidence groups (exact checkpoints, not current state)
 
 - Latest nativeSQL/security phase: fresh loopback PostgreSQL15.15, exact owned data_directory; journal704pass4fixture failures→713pass, then cleanb9a146aa selected28-file826pass5warnings54.58s. `raw/native-pg-security-final-b9a146aa.json` exit0/no timeout55.518s. Commitsf1287d81/0fdd3dce/b9a146aa independently reviewed. Own cluster stopped afterwards; no shared Docker restart. This does not prove full backend/PG16 parity. Original false RBAC fake-label/ImportError claims were superseded by real stored-membership/HTTP-effect proof.
 
@@ -32,10 +67,20 @@ The original complete request and AC1–AC11 remain in spec.md. evidence.json ma
 
 Exact sanitized command captures include cwd, child exit_code, timed_out, duration_ms and bounded stdout/stderr. The capture wrapper's own successful exit only proves JSON was written. Command recipes and isolated environments are in docs/production-readiness/COMMANDS.md and HANDOFF.md.
 
-Use named tmux and credential-free archives. Docker app18017/PG15417/testcontainers are currently unavailable pending storage recovery; do not replay them blindly. The retained native PostgreSQL cluster can be restarted using the exact owned-path command in HANDOFF. Do not load local .env, hit arbitrary development apps, send providers or mutate production.
+Use named tmux and credential-free archives. Old Docker app18017/PG15417
+resources are not current targets; do not replay historical startup scripts.
+Current owned nativePG15 port35418 and DockerPG16/compiled staging resources
+are in HANDOFF. Do not load local .env, hit arbitrary development apps,
+send providers or mutate production.
 
 ## Unproven requirements
 
-All residual whole-goal gaps are explicit in evidence.json and problems.md: full backend and114realAPI aggregate, actual compiled app fixture/profile, complete tenant/role/security/data concurrency audit, dependency/image/log scans, real guarded-helper execution/full schema comparison, AMD64 image, five-flow latency/load measurements, operational runbook, demo rehearsal, eight remaining reports and final independent whole-diff review.
+Residual whole-goal gaps are mapped in evidence.json/problems.md: final
+same-revision aggregate after remaining role/approval patches, immutable-image
+browser proof, complete role/AI/tool boundaries, dependency/image/log scans,
+AMD64 image, query/server/queue performance, operational closure, demo
+rehearsal and fresh independent whole-diff review. Full synthetic restore,
+compiled runtime, working00–10reports and prior aggregate checkpoints exist;
+they are not substitutes for those remaining gates.
 
 The scaffold raw/build.txt, test-unit.txt, test-integration.txt, lint.txt and screenshot-1.png are placeholders, NOT evidence. Structural proof-loop validation does not mean readiness or passing acceptance.
