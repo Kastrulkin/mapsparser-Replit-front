@@ -73,6 +73,7 @@ services:
         VITE_BLOCK_ACCESS_V2_ENABLED: "true"
         VITE_BROWSER_COOKIE_AUTH_ENABLED: "true"
         VITE_PROMOTION_HUB_ENABLED: "true"
+        VITE_COMPILED_SCRIPT_PREVIEW_ENABLED: "true"
     restart: "no"
     volumes: !override []
     ports: !override
