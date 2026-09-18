@@ -16,8 +16,8 @@ LEGACY_FILE_LIMITS = {
     # these limits instead of allowing further growth.
     "src/api/prospecting/audit_generation.py": 2174,
     "src/api/prospecting/delivery_runtime.py": 2015,
-    "src/services/social_posts/recommendations_handoff.py": 2094,
-    "src/services/social_posts/launch_proof.py": 2012,
+    "src/services/social_posts/recommendations_handoff.py": 1895,
+    "src/services/social_posts/launch_proof.py": 1977,
     "frontend/src/pages/dashboard/agents/employee.tsx": 2233,
     "tests/test_agent_blueprint_layer.py": 11824,
 }

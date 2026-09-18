@@ -124,6 +124,7 @@ from services.social_posts import dispatch_reports as _chunk_dispatch_reports
 from services.social_posts import recommendations_handoff as _chunk_recommendations_handoff
 from services.social_posts import provider_adapters as _chunk_provider_adapters
 from services.social_posts import metrics_policy as _chunk_metrics_policy
+from services.social_posts import media_delivery, publication_lifecycle
 
 _CHUNK_MODULES = (
     _chunk_readiness_foundation,
@@ -133,6 +134,8 @@ _CHUNK_MODULES = (
     _chunk_recommendations_handoff,
     _chunk_provider_adapters,
     _chunk_metrics_policy,
+    media_delivery,
+    publication_lifecycle,
 )
 _IMPLEMENTATIONS = {
     name: value
