@@ -150,3 +150,10 @@ def test_sitecustomize_provenance_hashes_the_active_guard(tmp_path):
 def test_drop_guard_refuses_non_owned_database():
     with pytest.raises(ValueError):
         benchmark.drop_owned_database("postgresql://owner@127.0.0.1:35418/readiness_operator_test", "postgres")
+
+
+def test_owned_database_name_accepts_only_generated_uuid_forms():
+    measure_name = "localos_readiness_measure_0123456789abcdef0123456789abcdef"
+    assert benchmark.owned_database_name(measure_name)
+    assert benchmark.owned_database_name("localos_readiness_measure_test") is False
+    assert benchmark.owned_database_name("readiness_operator_test") is False

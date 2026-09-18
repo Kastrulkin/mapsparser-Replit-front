@@ -21,6 +21,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -39,6 +40,7 @@ from psycopg2.extensions import parse_dsn
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DSN_ENV = "LOCALOS_READINESS_JOURNEY_DATABASE_URL"
 OWNED_DATABASE_PREFIX = "localos_readiness_benchmark_"
+MEASURE_DATABASE_PREFIX = "localos_readiness_measure_"
 
 
 @dataclass
@@ -120,13 +122,25 @@ def migrate(database_url: str) -> None:
         raise RuntimeError(f"migration failed: {detail}")
 
 
-def create_owned_database(base_dsn: str) -> tuple[str, str]:
-    name = OWNED_DATABASE_PREFIX + uuid.uuid4().hex
+def owned_database_name(name: str) -> bool:
+    return bool(
+        re.fullmatch(OWNED_DATABASE_PREFIX + r"[0-9a-f]{32}", name)
+        or re.fullmatch(MEASURE_DATABASE_PREFIX + r"[0-9a-f]{32}", name)
+    )
+
+
+def create_owned_database(base_dsn: str, requested_name: str | None = None) -> tuple[str, str]:
+    name = requested_name or OWNED_DATABASE_PREFIX + uuid.uuid4().hex
+    if not owned_database_name(name):
+        raise ValueError("refusing a database name outside the harness-owned UUID formats")
     admin_dsn = database_url_for(base_dsn, "postgres")
     connection = psycopg2.connect(admin_dsn)
     cursor = connection.cursor()
     try:
         connection.autocommit = True
+        cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (name,))
+        if cursor.fetchone():
+            raise ValueError("refusing to reuse an existing owned database name")
         cursor.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
     finally:
         cursor.close()
@@ -135,7 +149,7 @@ def create_owned_database(base_dsn: str) -> tuple[str, str]:
 
 
 def drop_owned_database(base_dsn: str, name: str) -> None:
-    if not name.startswith(OWNED_DATABASE_PREFIX):
+    if not owned_database_name(name):
         raise ValueError("refusing to drop a database not owned by this harness")
     connection = psycopg2.connect(database_url_for(base_dsn, "postgres"))
     cursor = connection.cursor()
@@ -548,13 +562,14 @@ def main() -> int:
     parser.add_argument("--database-url", default=os.getenv(DEFAULT_DSN_ENV, ""))
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--keep-database", action="store_true")
+    parser.add_argument("--database-name")
     args = parser.parse_args()
     base_dsn = guarded_dsn(args.database_url)
     guard = sitecustomize_provenance(os.environ.get("PYTHONPATH", ""))
     if guard is None:
         raise ValueError("readiness journey benchmark requires a guard-first sitecustomize.py path")
     remove_external_provider_environment()
-    database_name, database_url = create_owned_database(base_dsn)
+    database_name, database_url = create_owned_database(base_dsn, args.database_name)
     samples: list[StepSample] = []
     try:
         migrate(database_url)
