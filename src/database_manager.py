@@ -2055,7 +2055,7 @@ class DatabaseManager:
         columns = [description[0] for description in cursor.description]
         services = []
         for row in cursor.fetchall():
-            service = dict(zip(columns, row))
+            service = dict(row) if hasattr(row, "keys") else dict(zip(columns, row))
             services.append(service)
         
         return services
@@ -2067,16 +2067,17 @@ class DatabaseManager:
         # Создаем таблицу FinancialMetrics если её нет
         # Для Postgres таблица FinancialMetrics создаётся миграциями, здесь только читаем.
         cursor.execute("""
-            SELECT id, amount, description, transaction_type, date, created_at
+            SELECT id, amount, description, transaction_type, transaction_date, created_at
             FROM financialtransactions 
             WHERE business_id = %s 
-            ORDER BY date DESC
+            ORDER BY transaction_date DESC
         """, (business_id,))
         
         columns = [description[0] for description in cursor.description]
         transactions = []
         for row in cursor.fetchall():
-            transaction = dict(zip(columns, row))
+            transaction = dict(row) if hasattr(row, "keys") else dict(zip(columns, row))
+            transaction["date"] = transaction.pop("transaction_date", None)
             transactions.append(transaction)
         
         # Получаем метрики
@@ -2090,7 +2091,7 @@ class DatabaseManager:
         columns = [description[0] for description in cursor.description]
         metrics = []
         for row in cursor.fetchall():
-            metric = dict(zip(columns, row))
+            metric = dict(row) if hasattr(row, "keys") else dict(zip(columns, row))
             metrics.append(metric)
         
         return {
