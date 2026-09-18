@@ -116,7 +116,11 @@ COPY entrypoint.sh /app/entrypoint.sh
 RUN set -eux; \
     chmod +x /app/entrypoint.sh \
     && mkdir -p /app/debug_data /app/uploads /app/operator_audio /home/localos/.cache /ms-playwright \
-    && chown -R localos:localos /app/debug_data /app/uploads /app/operator_audio /home/localos /ms-playwright
+    && chown -R localos:localos /app/debug_data /app/uploads /app/operator_audio /home/localos
+
+# Chromium is installed at build time with world-readable/executable files.
+# Keep those binaries root-owned: runtime uses /tmp and HOME for writable data.
+# Recursively chowning /ms-playwright copies roughly 1 GB into another layer.
 
 # Flask CLI (flask db upgrade) нужен PYTHONPATH с /app для FLASK_APP=src.main:app; приложение — /app/src
 ENV PYTHONPATH=/app:/app/src
