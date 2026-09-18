@@ -8,6 +8,7 @@ import sys
 from typing import Any
 
 from database_manager import DatabaseManager
+from services.social_posts.approval_binding import current_snapshot_matches, snapshot_is_sendable, snapshot_is_well_formed
 
 
 def _publish_attempt_fingerprint(post: dict[str, Any]) -> str:
@@ -48,6 +49,32 @@ def _advisory_lock_granted(row: Any) -> bool:
     return bool(row[0]) if row else False
 
 
+def _invalidate_approval_binding(cursor: Any, post: dict[str, Any], reason: str) -> dict[str, Any]:
+    metadata = _json_dict(post.get("metadata_json"))
+    snapshot = _json_dict(metadata.get("approval_publish_snapshot"))
+    cursor.execute(
+        """
+        UPDATE social_posts
+        SET status='needs_review', approved_at=NULL, approval_id=NULL,
+            metadata_json=(COALESCE(metadata_json, '{}'::jsonb) - 'approval_publish_snapshot' - 'publish_attempt')
+                || jsonb_build_object('approval_binding_invalidated', jsonb_build_object('reason', %s)),
+            last_error=%s, updated_at=NOW()
+        WHERE id=%s AND status IN ('approved','queued','publishing')
+          AND approval_id=%s
+          AND COALESCE(metadata_json -> 'approval_publish_snapshot' ->> 'hash', '')=%s
+        RETURNING *
+        """,
+        (
+            reason,
+            "Цель или медиа публикации изменились. Проверьте и подтвердите отправку заново.",
+            str(post.get("id") or ""),
+            str(post.get("approval_id") or ""),
+            str(snapshot.get("hash") or ""),
+        ),
+    )
+    return _serialize_social_post(cursor, cursor.fetchone())
+
+
 def _claim_social_post_publish(user_id: str, post_id: str) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -63,6 +90,17 @@ def _claim_social_post_publish(user_id: str, post_id: str) -> dict[str, Any]:
             return post
         if current_status not in {"approved", "queued"} or not post.get("approved_at") or not post.get("approval_id"):
             raise PermissionError("Перед внешней публикацией нужно подтверждение человека")
+        metadata = _json_dict(post.get("metadata_json"))
+        snapshot = metadata.get("approval_publish_snapshot")
+        if str(post.get("publish_mode") or "").strip() == "api" and (
+            not snapshot_is_sendable(snapshot, post) or not current_snapshot_matches(cursor, post, snapshot)
+        ):
+            updated = _invalidate_approval_binding(cursor, post, "approval_snapshot_missing_or_drifted")
+            if not updated:
+                db.conn.rollback()
+                return _publish_claim_conflict(cursor, user_id, post_id)
+            db.conn.commit()
+            return updated
         if not _social_post_has_text(post):
             cursor.execute(
                 """
@@ -111,7 +149,6 @@ def _claim_social_post_publish(user_id: str, post_id: str) -> dict[str, Any]:
         validate_content_rules(cursor, post, user_id)
         platform = str(post.get("platform") or "").strip()
         publish_mode = str(post.get("publish_mode") or "").strip()
-        metadata = _json_dict(post.get("metadata_json"))
         if platform in BROWSER_OR_MANUAL_PLATFORMS:
             updated = _create_supervised_publish_task(cursor, post)
             db.conn.commit()
@@ -148,6 +185,8 @@ def _claim_social_post_publish(user_id: str, post_id: str) -> dict[str, Any]:
             "state": "intent_committed",
             "actor_id": str(user_id or "").strip(),
             "approval_id": str(post.get("approval_id") or "").strip(),
+            "approval_snapshot": snapshot,
+            "approval_snapshot_hash": str(snapshot.get("hash") or ""),
             "content_business_fingerprint": _publish_attempt_fingerprint(post),
             "intent_committed_at": datetime.now(timezone.utc).isoformat(),
             "source": "social_post_publish",
@@ -211,9 +250,12 @@ def _finalize_social_post_publish(user_id: str, post_id: str, attempt_id: str, p
             }
         elif outcome in {"rejected", "not_attempted"}:
             next_status = str(publish_result.get("status") or "failed")
-            if next_status not in {"failed", "needs_manual_publish"}:
+            if next_status not in {"failed", "needs_manual_publish", "needs_review"}:
                 next_status = "failed"
             published_at = None
+            if next_status == "needs_review":
+                metadata.pop("approval_publish_snapshot", None)
+                metadata.pop("publish_attempt", None)
         else:
             next_status = "publishing"
             published_at = None
@@ -223,6 +265,8 @@ def _finalize_social_post_publish(user_id: str, post_id: str, attempt_id: str, p
             """
             UPDATE social_posts
             SET status = %s,
+                approved_at = CASE WHEN %s = 'needs_review' THEN NULL ELSE approved_at END,
+                approval_id = CASE WHEN %s = 'needs_review' THEN NULL ELSE approval_id END,
                 published_at = COALESCE(published_at, %s),
                 provider_post_id = COALESCE(NULLIF(%s, ''), provider_post_id),
                 provider_post_url = COALESCE(NULLIF(%s, ''), provider_post_url),
@@ -235,6 +279,8 @@ def _finalize_social_post_publish(user_id: str, post_id: str, attempt_id: str, p
             RETURNING *
             """,
             (
+                next_status,
+                next_status,
                 next_status,
                 published_at,
                 str(publish_result.get("provider_post_id") or "").strip() if outcome == "accepted" else "",
@@ -290,18 +336,22 @@ def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
         current = _load_post_for_user(cursor, user_id, post_id)
         current_metadata = _json_dict(current.get("metadata_json"))
         current_attempt = _json_dict(current_metadata.get("publish_attempt"))
+        approved_snapshot = _json_dict(current_attempt.get("approval_snapshot"))
         if (
             str(current.get("status") or "").strip() != "publishing"
             or str(current_attempt.get("id") or "").strip() != attempt_id
             or str(current_attempt.get("state") or "").strip() != "intent_committed"
             or str(current_attempt.get("approval_id") or "").strip() != str(current.get("approval_id") or "").strip()
             or str(current_attempt.get("content_business_fingerprint") or "") != _publish_attempt_fingerprint(current)
+            or not approved_snapshot
+            or not snapshot_is_well_formed(approved_snapshot, current)
+            or str(current_attempt.get("approval_snapshot_hash") or "") != str(approved_snapshot.get("hash") or "")
         ):
             if str(current.get("status") or "").strip() == "publishing":
                 current["next_action"] = "reconcile_publication"
             return current
         try:
-            publish_result = _publish_api_post(cursor, current)
+            publish_result = _publish_api_post(cursor, current, approved_snapshot)
         except Exception:
             publish_result = {"publish_outcome": "uncertain", "metadata_json": {"provider_status": "publish_exception"}}
         return _finalize_social_post_publish(user_id, post_id, attempt_id, publish_result)

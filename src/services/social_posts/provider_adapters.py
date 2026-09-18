@@ -21,6 +21,12 @@ from core.helpers import get_business_owner_id
 from services.media_file_storage import load_media_file
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
 from services.social_posts.platform_variants import deterministic_platform_variant
+from services.social_posts.approval_binding import (
+    auth_scope_allows,
+    auth_scope_is_explicit,
+    meta_channel_readiness,
+    vk_publish_binding,
+)
 
 
 SOCIAL_POST_PLATFORMS = [
@@ -203,7 +209,7 @@ def _collect_telegram_post_metrics(post: dict[str, Any]) -> dict[str, Any]:
 def _collect_vk_post_metrics(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
     account = _find_active_external_account(cursor, str(post.get("business_id") or ""), ("vk", "vk_group", "vk_business"))
     auth_data = _external_account_auth_data(account)
-    binding = _vk_publish_binding(account, auth_data)
+    binding = vk_publish_binding(account, auth_data)
     if not binding.get("ready"):
         return {"source": "vk_api", "provider": "vk", "status": str(binding.get("status") or "vk_not_ready")}
     token = str(binding.get("token") or "").strip()
@@ -1295,15 +1301,15 @@ def _build_channel_readiness(cursor: Any, business_id: str) -> list[dict[str, An
     telegram_ready = telegram_token_present and telegram_chat_present
     vk_account = _find_active_external_account(cursor, business_id, ("vk", "vk_group", "vk_business"))
     vk_auth = _external_account_auth_data(vk_account)
-    vk_binding = _vk_publish_binding(vk_account, vk_auth)
+    vk_binding = vk_publish_binding(vk_account, vk_auth)
     google_account = _find_active_external_account(cursor, business_id, ("google_business",))
     google_has_location = bool(str(google_account.get("external_id") or "").strip()) if google_account else False
     google_ready = bool(google_account) and google_has_location
     google_status = "ready" if google_ready else ("missing_binding" if google_account else "missing_connection")
     meta_account = _find_active_external_account(cursor, business_id, ("meta", "facebook", "instagram"))
     meta_auth = _external_account_auth_data(meta_account)
-    instagram_readiness = _meta_channel_readiness(meta_account, meta_auth, "instagram")
-    facebook_readiness = _meta_channel_readiness(meta_account, meta_auth, "facebook")
+    instagram_readiness = meta_channel_readiness(meta_account, meta_auth, "instagram")
+    facebook_readiness = meta_channel_readiness(meta_account, meta_auth, "facebook")
     browser_ready = openclaw_browser_available()
     yandex_target = _map_publish_target(cursor, business_id, "yandex_maps")
     two_gis_target = _map_publish_target(cursor, business_id, "two_gis")
@@ -1590,8 +1596,8 @@ def _vk_connection_checks(
     has_account = bool(account)
     has_token = bool(str(binding.get("token") or auth_data.get("access_token") or auth_data.get("token") or "").strip())
     has_owner = bool(str(binding.get("owner_id") or auth_data.get("owner_id") or account.get("external_id") or "").strip())
-    explicit_scope = _auth_scope_is_explicit(auth_data)
-    has_wall_permission = (not explicit_scope and has_token) or _auth_scope_allows(auth_data, {"wall", "wall.post"})
+    explicit_scope = auth_scope_is_explicit(auth_data)
+    has_wall_permission = (not explicit_scope and has_token) or auth_scope_allows(auth_data, {"wall", "wall.post"})
     return [
         _connection_check(
             "vk_account",
@@ -1668,7 +1674,7 @@ def _meta_connection_checks(
     if platform_key == "instagram":
         has_binding = bool(str(auth_data.get("ig_user_id") or auth_data.get("instagram_business_account_id") or "").strip())
         permission_key = "instagram_content_publish"
-    has_permission = (not _auth_scope_is_explicit(auth_data) and has_token) or _auth_scope_allows(auth_data, {permission_key})
+    has_permission = (not auth_scope_is_explicit(auth_data) and has_token) or auth_scope_allows(auth_data, {permission_key})
     adapter_enabled = str(status or "").strip() != "adapter_pending"
     return [
         _connection_check(
@@ -1702,7 +1708,7 @@ def _meta_connection_checks(
             "Permission",
             f"permission {permission_key} доступен" if has_permission else f"нужен permission {permission_key}",
             f"permission {permission_key} available" if has_permission else f"permission {permission_key} required",
-            "ok" if has_permission and _auth_scope_is_explicit(auth_data) else ("deferred" if has_permission else "missing"),
+            "ok" if has_permission and auth_scope_is_explicit(auth_data) else ("deferred" if has_permission else "missing"),
         ),
         _connection_check(
             "meta_native_publish",

@@ -117,7 +117,7 @@ def social_publish_database(monkeypatch):
         monkeypatch.setenv("DATABASE_URL", database_url)
         monkeypatch.setenv("PYTHON_DOTENV_DISABLED", "1")
         monkeypatch.setenv("BROWSER_COOKIE_AUTH_ENABLED", "false")
-        monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "synthetic-test-token")
+        monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:synthetic-test-token")
         yield database_url
     finally:
         admin = psycopg2.connect(database_url_for(base_dsn, "postgres"), connect_timeout=5)
@@ -156,13 +156,19 @@ def seed_approved_post(database_url: str) -> tuple[str, str]:
             (item_id, plan_id, business_id),
         )
         cursor.execute(
-            "INSERT INTO social_posts(id,business_id,content_plan_id,content_plan_item_id,platform,publish_mode,status,approved_at,approval_id,base_text,platform_text,media_json,metadata_json,created_by) VALUES (%s,%s,%s,%s,'telegram','api','approved',NOW(),%s,'Text','Text','[]','{}',%s)",
-            (post_id, business_id, plan_id, item_id, str(uuid.uuid4()), user_id),
+            "INSERT INTO social_posts(id,business_id,content_plan_id,content_plan_item_id,platform,publish_mode,status,base_text,platform_text,media_json,metadata_json,created_by) VALUES (%s,%s,%s,%s,'telegram','api','needs_review','Text','Text','[]','{}',%s)",
+            (post_id, business_id, plan_id, item_id, user_id),
         )
         connection.commit()
     finally:
         cursor.close()
         connection.close()
+    if str(ROOT / "src") not in sys.path:
+        sys.path.insert(0, str(ROOT / "src"))
+    from services import social_post_service
+
+    approved = social_post_service.approve_social_post(user_id, post_id)
+    assert approved["status"] == "approved"
     return user_id, post_id
 
 
@@ -512,8 +518,9 @@ def test_provider_phase_holds_idle_session_lock_and_blocks_manual_reconciliation
     results: list[dict] = []
     errors: list[Exception] = []
 
-    def provider_stub(cursor, _post):
+    def provider_stub(cursor, _post, snapshot):
         assert cursor.connection.get_transaction_status() == TRANSACTION_STATUS_IDLE
+        assert snapshot["approval_id"]
         entered.set()
         if not release.wait(5):
             raise RuntimeError("test provider wait expired")

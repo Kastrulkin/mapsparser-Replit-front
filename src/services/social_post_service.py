@@ -20,6 +20,25 @@ from core.helpers import get_business_owner_id
 from services.media_file_storage import load_media_file
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
 from services.vk_oauth_service import oauth_token_expiry, refresh_vk_oauth_tokens
+from services.social_posts.approval_binding import (
+    auth_scope_allows,
+    auth_scope_is_explicit,
+    current_snapshot_matches,
+    frozen_external_account,
+    meta_channel_readiness,
+    meta_publish_status,
+    queue_snapshot_is_current,
+    snapshot_is_sendable,
+    vk_publish_binding,
+)
+
+# Compatibility exports remain available to existing service consumers while
+# chunk implementations use the canonical approval-binding helper names.
+_auth_scope_allows = auth_scope_allows
+_auth_scope_is_explicit = auth_scope_is_explicit
+_meta_channel_readiness = meta_channel_readiness
+_meta_publish_status = meta_publish_status
+_vk_publish_binding = vk_publish_binding
 
 
 SOCIAL_POST_PLATFORMS = [

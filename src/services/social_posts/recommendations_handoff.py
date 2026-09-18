@@ -20,6 +20,16 @@ from core.telegram_token_store import decode_telegram_bot_token
 from core.helpers import get_business_owner_id
 from services.media_file_storage import load_media_file
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
+from services.social_posts.approval_binding import (
+    approval_binding_drift_result,
+    frozen_external_account,
+    meta_channel_readiness,
+    meta_publish_status,
+    snapshot_is_sendable,
+    snapshot_is_well_formed,
+    vk_publish_binding,
+    vk_uses_community_token,
+)
 
 
 SOCIAL_POST_PLATFORMS = [
@@ -461,7 +471,7 @@ def _provider_json_object(body: str) -> tuple[dict[str, Any], bool]:
 
 
 @_publish_adapter
-def _publish_api_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
+def _publish_api_post(cursor: Any, post: dict[str, Any], approval_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     from services.disk_import_media import selected
     if selected(cursor, post.get("business_id"), post.get("content_plan_item_id")):
         return {
@@ -471,20 +481,24 @@ def _publish_api_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "publish_outcome": "not_attempted",
         }
     platform = str(post.get("platform") or "").strip()
+    if platform not in API_PLATFORMS:
+        return {
+            "status": "needs_manual_publish",
+            "last_error": "Для канала не настроен API-адаптер",
+            "metadata_json": {"provider_status": "unsupported_api_platform"},
+            "publish_outcome": "not_attempted",
+        }
+    if not snapshot_is_well_formed(approval_snapshot, post) or not snapshot_is_sendable(approval_snapshot, post):
+        return approval_binding_drift_result("approval_binding_missing_or_invalid")
     if platform == "telegram":
-        return _publish_telegram_post(cursor, post)
+        return _publish_telegram_post(cursor, post, approval_snapshot)
     if platform == "vk":
-        return _publish_vk_post(cursor, post)
+        return _publish_vk_post(cursor, post, approval_snapshot)
     if platform == "google_business":
-        return _publish_google_business_post(cursor, post)
+        return _publish_google_business_post(cursor, post, approval_snapshot)
     if platform in {"instagram", "facebook"}:
-        return _publish_meta_post(cursor, post)
-    return {
-        "status": "needs_manual_publish",
-        "last_error": "Для канала не настроен API-адаптер",
-        "metadata_json": {"provider_status": "unsupported_api_platform"},
-        "publish_outcome": "not_attempted",
-    }
+        return _publish_meta_post(cursor, post, approval_snapshot)
+    return approval_binding_drift_result("approval_binding_platform_invalid")
 
 def _resolve_telegram_publish_transport(business: dict[str, Any]) -> dict[str, Any]:
     business_token = decode_telegram_bot_token(business.get("telegram_bot_token"))
@@ -514,11 +528,31 @@ def _resolve_telegram_publish_transport(business: dict[str, Any]) -> dict[str, A
     }
 
 @_publish_adapter
-def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
+def _publish_telegram_post(cursor: Any, post: dict[str, Any], approval_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
+    if not snapshot_is_well_formed(approval_snapshot, post) or not snapshot_is_sendable(approval_snapshot, post):
+        return approval_binding_drift_result("telegram_approval_binding_missing_or_invalid")
     business = _load_business_publish_context(cursor, str(post.get("business_id") or ""))
     transport = _resolve_telegram_publish_transport(business)
     bot_token = str(transport.get("bot_token") or "").strip()
-    chat_id = str(business.get("telegram_chat_id") or "").strip()
+    binding = _json_dict((approval_snapshot or {}).get("binding"))
+    recipient = _json_dict(binding.get("recipient"))
+    sender = _json_dict(binding.get("sender"))
+    chat_id = str(recipient.get("chat_id") or "").strip()
+    expected_source = str(sender.get("transport_source") or "").strip()
+    expected_bot_id = str(sender.get("bot_numeric_id") or "").strip()
+    current_bot_id = str(bot_token).partition(":")[0].strip()
+    if (
+        not chat_id
+        or str(transport.get("token_source") or "") != expected_source
+        or not expected_bot_id
+        or current_bot_id != expected_bot_id
+    ):
+        return {
+            "status": "needs_review",
+            "last_error": "Привязка Telegram изменилась после подтверждения.",
+            "metadata_json": {"provider_status": "telegram_approval_binding_drift"},
+            "publish_outcome": "not_attempted",
+        }
     if not bot_token or not chat_id:
         return {
             "status": "needs_manual_publish",
@@ -537,7 +571,11 @@ def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "metadata_json": {"provider_status": "telegram_empty_text"},
             "publish_outcome": "not_attempted",
         }
-    media_assets = _selected_media_assets(cursor, post, limit=10)
+    from services.social_posts.media_delivery import _approved_media_assets
+
+    media_assets = _approved_media_assets(cursor, post, approval_snapshot or {})
+    if media_assets is None:
+        return approval_binding_drift_result("telegram_approval_media_drift")
     if media_assets:
         return _publish_telegram_media_post(
             bot_token=bot_token,
@@ -632,16 +670,17 @@ def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
         }
 
 @_publish_adapter
-def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
-    account = _find_active_external_account(cursor, str(post.get("business_id") or ""), ("vk", "vk_group", "vk_business"))
+def _publish_vk_post(cursor: Any, post: dict[str, Any], approval_snapshot: dict[str, Any]) -> dict[str, Any]:
+    if not snapshot_is_well_formed(approval_snapshot, post) or not snapshot_is_sendable(approval_snapshot, post):
+        return approval_binding_drift_result("vk_approval_binding_missing_or_invalid")
+    account, binding = frozen_external_account(cursor, post, approval_snapshot, "vk")
     if not account:
-        return {
-            "status": "needs_manual_publish",
-            "last_error": "VK аккаунт/группа не подключены или не выданы права wall.post.",
-            "metadata_json": {"provider_status": "vk_connection_missing"},
-            "publish_outcome": "not_attempted",
-        }
+        return approval_binding_drift_result("vk_approval_account_drift")
     auth_data = _external_account_auth_data(account)
+    frozen_owner_id = str(_json_dict(binding.get("recipient")).get("id") or "").strip()
+    original_binding = vk_publish_binding(account, auth_data)
+    if not frozen_owner_id or not original_binding.get("ready") or str(original_binding.get("owner_id") or "").strip() != frozen_owner_id:
+        return approval_binding_drift_result("vk_approval_binding_drift")
     auth_data = _vk_auth_data_with_fresh_token(cursor, account, auth_data)
     if auth_data.get("_oauth_refresh_error"):
         return {
@@ -653,7 +692,7 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             },
             "publish_outcome": "not_attempted",
         }
-    vk_binding = _vk_publish_binding(account, auth_data)
+    vk_binding = vk_publish_binding(account, auth_data)
     if not vk_binding.get("ready"):
         return {
             "status": "needs_manual_publish",
@@ -665,7 +704,7 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "publish_outcome": "not_attempted",
         }
     token = str(vk_binding.get("token") or "").strip()
-    owner_id = str(vk_binding.get("owner_id") or "").strip()
+    owner_id = frozen_owner_id
     text = str(post.get("platform_text") or post.get("base_text") or "").strip()
     if not text:
         return {
@@ -674,9 +713,13 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "metadata_json": {"provider_status": "vk_empty_text"},
             "publish_outcome": "not_attempted",
         }
-    media_assets = _selected_media_assets(cursor, post, limit=10)
+    from services.social_posts.media_delivery import _approved_media_assets
+
+    media_assets = _approved_media_assets(cursor, post, approval_snapshot)
+    if media_assets is None:
+        return approval_binding_drift_result("vk_approval_media_drift")
     attachments: list[str] = []
-    if media_assets and _vk_uses_community_token(auth_data):
+    if media_assets and vk_uses_community_token(auth_data):
         return {
             "status": "needs_manual_publish",
             "last_error": "Для публикации фото в VK откройте контролируемое размещение.",
@@ -795,15 +838,14 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
     }
 
 @_publish_adapter
-def _publish_google_business_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
-    account = _find_active_external_account(cursor, str(post.get("business_id") or ""), ("google_business",))
+def _publish_google_business_post(cursor: Any, post: dict[str, Any], approval_snapshot: dict[str, Any]) -> dict[str, Any]:
+    if not snapshot_is_well_formed(approval_snapshot, post) or not snapshot_is_sendable(approval_snapshot, post):
+        return approval_binding_drift_result("google_business_approval_binding_missing_or_invalid")
+    account, binding = frozen_external_account(cursor, post, approval_snapshot, "google_business")
     if not account:
-        return {
-            "status": "needs_manual_publish",
-            "last_error": "Google Business Profile не подключен или не готов к публикации.",
-            "metadata_json": {"provider_status": "google_business_connection_missing"},
-            "publish_outcome": "not_attempted",
-        }
+        return approval_binding_drift_result("google_business_approval_account_drift")
+    if str(_json_dict(binding.get("recipient")).get("id") or "").strip() != str(account.get("external_id") or "").strip():
+        return approval_binding_drift_result("google_business_approval_binding_drift")
     summary = str(post.get("platform_text") or post.get("base_text") or "").strip()
     if not summary:
         return {
@@ -820,7 +862,12 @@ def _publish_google_business_post(cursor: Any, post: dict[str, Any]) -> dict[str
             "url": "",
         },
     }
-    media_assets = _selected_media_assets(cursor, post, limit=1)
+    from services.social_posts.media_delivery import _approved_media_assets
+
+    media_assets = _approved_media_assets(cursor, post, approval_snapshot)
+    if media_assets is None:
+        return approval_binding_drift_result("google_business_approval_media_drift")
+    media_assets = media_assets[:1]
     media_url = str(media_assets[0].get("public_url") or "").strip() if media_assets else ""
     if media_url.startswith("https://") or media_url.startswith("http://"):
         post_data["media"] = [{"mediaFormat": "PHOTO", "sourceUrl": media_url}]
@@ -942,15 +989,15 @@ def _meta_publish_error_result(platform: str, result: dict[str, Any], account_id
     }
 
 @_publish_adapter
-def _publish_meta_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
+def _publish_meta_post(cursor: Any, post: dict[str, Any], approval_snapshot: dict[str, Any]) -> dict[str, Any]:
     platform = str(post.get("platform") or "").strip()
-    account = _find_active_external_account(
-        cursor,
-        str(post.get("business_id") or ""),
-        ("meta", "facebook", "instagram"),
-    )
+    if not snapshot_is_well_formed(approval_snapshot, post) or not snapshot_is_sendable(approval_snapshot, post):
+        return approval_binding_drift_result("meta_approval_binding_missing_or_invalid")
+    account, binding = frozen_external_account(cursor, post, approval_snapshot, platform)
+    if not account:
+        return approval_binding_drift_result("meta_approval_account_drift")
     auth_data = _external_account_auth_data(account)
-    publish_status = _meta_publish_status(account, auth_data, platform)
+    publish_status = meta_publish_status(account, auth_data, platform)
     if publish_status != "ready":
         return {
             "status": "needs_manual_publish",
@@ -963,7 +1010,12 @@ def _publish_meta_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
         }
     access_token = str(auth_data.get("access_token") or auth_data.get("token") or "").strip()
     text = str(post.get("platform_text") or post.get("base_text") or "").strip()
-    media_assets = _selected_media_assets(cursor, post, limit=1)
+    from services.social_posts.media_delivery import _approved_media_assets
+
+    media_assets = _approved_media_assets(cursor, post, approval_snapshot)
+    if media_assets is None:
+        return approval_binding_drift_result("meta_approval_media_drift")
+    media_assets = media_assets[:1]
     media_url = str(media_assets[0].get("public_url") or "").strip() if media_assets else ""
     account_id = account.get("id") if account else None
 
@@ -977,6 +1029,8 @@ def _publish_meta_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
 
     if platform == "instagram":
         ig_user_id = str(auth_data.get("ig_user_id") or auth_data.get("instagram_business_account_id") or "").strip()
+        if ig_user_id != str(_json_dict(binding.get("recipient")).get("id") or "").strip():
+            return approval_binding_drift_result("instagram_approval_binding_drift")
         if not media_url.startswith(("https://", "http://")):
             return {
                 "status": "needs_review",
@@ -1011,6 +1065,8 @@ def _publish_meta_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
         provider_status = "instagram_published"
     else:
         page_id = str(auth_data.get("page_id") or (account.get("external_id") if account else "") or "").strip()
+        if page_id != str(_json_dict(binding.get("recipient")).get("id") or "").strip():
+            return approval_binding_drift_result("facebook_approval_binding_drift")
         if media_url.startswith(("https://", "http://")):
             published = _meta_graph_post(f"{page_id}/photos", access_token, {"url": media_url, "caption": text})
         else:
@@ -1216,7 +1272,7 @@ def _vk_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, Any]:
             "Доступ VK устарел. Подключите сообщество заново.",
             "VK access expired. Reconnect the community.",
         )
-    binding = _vk_publish_binding(account, auth_data)
+    binding = vk_publish_binding(account, auth_data)
     checks = _vk_connection_checks(account, auth_data, binding)
     if not binding.get("ready"):
         return _api_channel_preflight_result(
@@ -1464,7 +1520,7 @@ def _google_business_api_channel_preflight(cursor: Any, business_id: str) -> dic
 def _meta_api_channel_preflight(cursor: Any, business_id: str, platform: str) -> dict[str, Any]:
     account = _find_active_external_account(cursor, business_id, ("meta", "facebook", "instagram"))
     auth_data = _external_account_auth_data(account)
-    readiness = _meta_channel_readiness(account, auth_data, platform)
+    readiness = meta_channel_readiness(account, auth_data, platform)
     status = str(readiness.get("status") or "missing_connection").strip()
     checks = _meta_connection_checks(account, auth_data, platform, status)
     return _api_channel_preflight_result(
@@ -1781,100 +1837,6 @@ def _vk_auth_data_with_fresh_token(
         failed_auth_data = dict(auth_data)
         failed_auth_data["_oauth_refresh_error"] = str(sys.exc_info()[1] or "refresh_failed")
         return failed_auth_data
-
-def _vk_publish_binding(account: dict[str, Any], auth_data: dict[str, Any]) -> dict[str, Any]:
-    if not account:
-        return {"ready": False, "status": "missing_connection"}
-    token = str(auth_data.get("access_token") or auth_data.get("token") or "").strip()
-    group_id = str(auth_data.get("group_id") or auth_data.get("community_id") or account.get("external_id") or "").strip()
-    owner_id = str(auth_data.get("owner_id") or "").strip()
-    if not owner_id and group_id:
-        clean_group_id = group_id[1:] if group_id.startswith("-") else group_id
-        owner_id = f"-{clean_group_id}"
-    if not token:
-        return {"ready": False, "status": "missing_keys", "owner_id": owner_id}
-    if not owner_id:
-        return {"ready": False, "status": "missing_binding", "token": token}
-    if _auth_scope_is_explicit(auth_data) and not _auth_scope_allows(auth_data, {"wall", "wall.post"}):
-        return {"ready": False, "status": "missing_permissions", "token": token, "owner_id": owner_id}
-    return {
-        "ready": True,
-        "status": "ready",
-        "token": token,
-        "owner_id": owner_id,
-    }
-
-def _vk_uses_community_token(auth_data: dict[str, Any]) -> bool:
-    auth_mode = str(auth_data.get("auth_mode") or "").strip().lower()
-    token_type = str(auth_data.get("token_type") or "").strip().lower()
-    return auth_mode in {"community_token", "group_token"} or token_type in {"community", "group", "group_token"}
-
-def _meta_publish_status(account: dict[str, Any], auth_data: dict[str, Any], platform: str) -> str:
-    if not account:
-        return "missing_connection"
-    if not str(auth_data.get("access_token") or auth_data.get("token") or "").strip():
-        return "missing_keys"
-    has_page_binding = bool(str(auth_data.get("page_id") or account.get("external_id") or "").strip())
-    has_ig_binding = bool(str(auth_data.get("ig_user_id") or auth_data.get("instagram_business_account_id") or "").strip())
-    if platform == "instagram" and not has_ig_binding:
-        return "missing_binding"
-    if platform == "facebook" and not has_page_binding:
-        return "missing_binding"
-    if _auth_scope_is_explicit(auth_data):
-        required = {"pages_manage_posts", "pages_read_engagement"}
-        if platform == "instagram":
-            required = {"instagram_content_publish"}
-        if not _auth_scope_allows(auth_data, required):
-            return "missing_permissions"
-    return "ready"
-
-def _meta_channel_readiness(account: dict[str, Any], auth_data: dict[str, Any], platform: str) -> dict[str, Any]:
-    status = _meta_publish_status(account, auth_data, platform)
-    if status == "ready":
-        return {
-            "ready": True,
-            "status": "ready",
-        }
-    return {
-        "ready": False,
-        "status": status,
-    }
-
-def _auth_scope_is_explicit(auth_data: dict[str, Any]) -> bool:
-    for key in ("scope", "scopes", "permissions", "granted_scopes", "granted_permissions"):
-        if key in auth_data and auth_data.get(key):
-            return True
-    return False
-
-def _auth_scope_allows(auth_data: dict[str, Any], accepted: set[str]) -> bool:
-    tokens = _auth_scope_tokens(auth_data)
-    if not tokens:
-        return False
-    accepted_normalized = {str(item or "").strip().lower() for item in accepted if str(item or "").strip()}
-    return bool(tokens.intersection(accepted_normalized))
-
-def _auth_scope_tokens(auth_data: dict[str, Any]) -> set[str]:
-    tokens: set[str] = set()
-    for key in ("scope", "scopes", "permissions", "granted_scopes", "granted_permissions"):
-        _collect_scope_tokens(auth_data.get(key), tokens)
-    return tokens
-
-def _collect_scope_tokens(value: Any, tokens: set[str]) -> None:
-    if value is None:
-        return
-    if isinstance(value, dict):
-        for nested_value in value.values():
-            _collect_scope_tokens(nested_value, tokens)
-        return
-    if isinstance(value, (list, tuple, set)):
-        for nested_value in value:
-            _collect_scope_tokens(nested_value, tokens)
-        return
-    raw = str(value or "").replace(",", " ").replace(";", " ")
-    for token in raw.split():
-        normalized = token.strip().lower()
-        if normalized:
-            tokens.add(normalized)
 
 def _vk_readiness_error(status: str) -> str:
     normalized = str(status or "").strip()

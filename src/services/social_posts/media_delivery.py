@@ -55,6 +55,8 @@ def _selected_media_assets(cursor: Any, post: dict[str, Any], limit: int = 10) -
         result.append(
             {
                 "id": asset_id,
+                "asset_version": int(value.get("asset_version") or 0),
+                "content_hash": str(value.get("content_hash") or "").strip(),
                 "original_url": original_url,
                 "public_url": public_url,
                 "storage_path": str(value.get("storage_path") or original.get("storage_path") or value.get("storage_key") or "").strip(),
@@ -82,7 +84,7 @@ def _selected_media_assets(cursor: Any, post: dict[str, Any], limit: int = 10) -
     try:
         cursor.execute(
             """
-            SELECT pa.id, pa.original_url, pa.storage_key, pa.versions_json, pa.metadata_json,
+            SELECT pa.id, pa.asset_version, pa.content_hash, pa.original_url, pa.storage_key, pa.versions_json, pa.metadata_json,
                    usage.target_platform, usage.created_at
             FROM photo_asset_usage_events usage
             JOIN photo_assets pa
@@ -102,6 +104,144 @@ def _selected_media_assets(cursor: Any, post: dict[str, Any], limit: int = 10) -
     except Exception:
         return result[:normalized_limit]
     return result[:normalized_limit]
+
+
+def _strict_selected_media_assets(cursor: Any, post: dict[str, Any], limit: int = 10) -> list[dict[str, Any]]:
+    """Resolve publication media only from the authoritative selected-asset rows."""
+    business_id = str(post.get("business_id") or "").strip()
+    post_id = str(post.get("id") or "").strip()
+    item_id = str(post.get("content_plan_item_id") or "").strip()
+    platform = str(post.get("platform") or "").strip()
+    normalized_limit = max(1, min(int(limit or 10), 10))
+    if not business_id or not post_id or not platform or not hasattr(cursor, "execute"):
+        raise ValueError("Выбранное медиа нельзя однозначно подтвердить; выберите файл заново.")
+    inline_media = post.get("media_json")
+    inline_items = inline_media if isinstance(inline_media, list) else [inline_media] if isinstance(inline_media, dict) else []
+    inline_ids = [
+        str(item.get("id") or item.get("asset_id") or item.get("photo_asset_id") or "").strip()
+        for item in inline_items
+        if isinstance(item, dict)
+    ]
+    if inline_items and (not inline_ids or len(inline_ids) != len(inline_items) or len(set(inline_ids)) != len(inline_ids)):
+        raise ValueError("Выбранное медиа не содержит подтверждаемого ID; выберите файл заново.")
+    if len(inline_ids) > normalized_limit:
+        raise ValueError("Для публикации выбрано слишком много медиафайлов; выберите не более 10.")
+    if inline_ids:
+        cursor.execute(
+            """
+            SELECT id, asset_version, content_hash, original_url, storage_key, versions_json, metadata_json
+            FROM photo_assets
+            WHERE business_id=%s AND id = ANY(%s)
+            """,
+            (business_id, inline_ids),
+        )
+        by_id = {str(_row_to_dict(cursor, row).get("id") or ""): _row_to_dict(cursor, row) for row in cursor.fetchall() or []}
+        rows = [by_id[asset_id] for asset_id in inline_ids if asset_id in by_id]
+        if len(rows) != len(inline_ids):
+            raise ValueError("Выбранное медиа больше недоступно; выберите файл заново.")
+    else:
+        cursor.execute(
+        """
+        SELECT pa.id, pa.asset_version, pa.content_hash, pa.original_url,
+               pa.storage_key, pa.versions_json, pa.metadata_json,
+               usage.created_at
+        FROM photo_asset_usage_events usage
+        JOIN photo_assets pa
+          ON pa.id = usage.photo_asset_id
+         AND pa.business_id = usage.business_id
+        WHERE usage.business_id = %s
+          AND usage.usage_type = 'publication'
+          AND usage.target_id = ANY(%s)
+          AND (usage.target_platform IS NULL OR usage.target_platform = '' OR usage.target_platform = %s)
+        ORDER BY usage.created_at ASC, usage.id ASC
+        LIMIT 101
+        """,
+            (business_id, [value for value in (post_id, item_id) if value], platform),
+        )
+        rows = cursor.fetchall() or []
+        if len(rows) > 100:
+            raise ValueError("Выбор медиа неоднозначен; выберите файлы заново.")
+    unique_rows: list[Any] = []
+    seen_asset_ids: set[str] = set()
+    for row in rows:
+        asset_id = str(_row_to_dict(cursor, row).get("id") or "").strip()
+        if asset_id and asset_id not in seen_asset_ids:
+            seen_asset_ids.add(asset_id)
+            unique_rows.append(row)
+    rows = unique_rows
+    if len(rows) > normalized_limit:
+        raise ValueError("Для публикации выбрано слишком много медиафайлов; выберите не более 10.")
+    resolved: list[dict[str, Any]] = []
+    for row in rows:
+        item = _row_to_dict(cursor, row)
+        versions = _json_dict(item.get("versions_json"))
+        original = _json_dict(versions.get("original"))
+        original_url = str(item.get("original_url") or "").strip()
+        public_url = str(item.get("public_url") or original.get("public_url") or original_url).strip()
+        storage_path = str(item.get("storage_key") or original.get("storage_path") or "").strip()
+        content_hash = str(item.get("content_hash") or "").strip()
+        asset_id = str(item.get("id") or "").strip()
+        asset_version = int(item.get("asset_version") or 0)
+        if not asset_id or asset_version < 1 or not content_hash or not (storage_path or public_url):
+            raise ValueError("Выбранное медиа нельзя однозначно подтвердить; выберите файл заново.")
+        resolved.append(
+            {
+                "id": asset_id,
+                "asset_version": asset_version,
+                "content_hash": content_hash,
+                "storage_path": storage_path,
+                "public_url": public_url,
+                "original_url": original_url,
+                "mime_type": str(item.get("mime_type") or original.get("mime_type") or "image/jpeg").strip(),
+            }
+        )
+    return resolved
+
+
+def _approved_media_assets(cursor: Any, post: dict[str, Any], snapshot: dict[str, Any]) -> list[dict[str, Any]] | None:
+    """Load exactly the approved media identities; never follow a newer selection."""
+    approved = snapshot.get("media")
+    if not isinstance(approved, list):
+        return None
+    if not approved:
+        return []
+    business_id = str(post.get("business_id") or "").strip()
+    if not business_id or len(approved) > 10:
+        return None
+    asset_ids = [str(item.get("asset_id") or "").strip() for item in approved if isinstance(item, dict)]
+    if len(asset_ids) != len(approved) or len(set(asset_ids)) != len(asset_ids):
+        return None
+    cursor.execute(
+        """
+        SELECT id, asset_version, content_hash, original_url, storage_key, versions_json
+        FROM photo_assets
+        WHERE business_id=%s AND id = ANY(%s)
+        """,
+        (business_id, asset_ids),
+    )
+    available = {str(_row_to_dict(cursor, row).get("id") or ""): _row_to_dict(cursor, row) for row in cursor.fetchall() or []}
+    resolved: list[dict[str, Any]] = []
+    for approved_item in approved:
+        if not isinstance(approved_item, dict):
+            return None
+        asset_id = str(approved_item.get("asset_id") or "").strip()
+        item = available.get(asset_id)
+        if not item:
+            return None
+        versions = _json_dict(item.get("versions_json"))
+        original = _json_dict(versions.get("original"))
+        current = {
+            "asset_version": int(item.get("asset_version") or 0),
+            "content_hash": str(item.get("content_hash") or "").strip(),
+            "storage_path": str(item.get("storage_key") or original.get("storage_path") or "").strip(),
+            "public_url": str(item.get("public_url") or original.get("public_url") or item.get("original_url") or "").strip(),
+            "mime_type": str(item.get("mime_type") or original.get("mime_type") or "image/jpeg").strip(),
+        }
+        if any(str(current[key]) != str(approved_item.get(key) or "") for key in ("asset_version", "content_hash", "storage_path", "public_url", "mime_type")):
+            return None
+        current["id"] = asset_id
+        resolved.append(current)
+    return resolved
 
 
 def _media_asset_file(asset: dict[str, Any]) -> dict[str, Any]:

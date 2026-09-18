@@ -1,10 +1,12 @@
 import json
 import sys
+import hashlib
 from datetime import date, timedelta
 
 import pytest
 
 import services.social_post_service as social_post_service
+from services.social_posts.approval_binding import SNAPSHOT_SCHEMA, _canonical_hash
 from services.social_post_service import (
     _build_openclaw_supervised_task_payload,
     _build_plan_recommendation,
@@ -90,6 +92,30 @@ def authorize_legacy_fake_social_post_writes(monkeypatch):
         social_post_service,
         "_require_business_write_access",
         lambda cursor, user_id, business_id: None,
+    )
+
+
+def _approved_descriptor(post, binding, media=None):
+    text = str(post.get("platform_text") or post.get("base_text") or "").strip()
+    payload = {
+        "schema": SNAPSHOT_SCHEMA,
+        "approval_id": str(post["approval_id"]),
+        "business_id": str(post["business_id"]),
+        "platform": str(post["platform"]),
+        "publish_mode": str(post.get("publish_mode") or "api"),
+        "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        "binding": binding,
+        "media": list(media or []),
+    }
+    payload["hash"] = _canonical_hash(payload)
+    return payload
+
+
+def _frozen_external_account(monkeypatch, account, binding):
+    monkeypatch.setattr(
+        social_post_service,
+        "frozen_external_account",
+        lambda cursor, post, snapshot, platform: (account, binding),
     )
 
 
@@ -2487,7 +2513,7 @@ def test_telegram_api_channel_preflight_checks_bot_and_chat_without_publish(monk
         "_load_business_publish_context",
         lambda cursor, business_id: {"telegram_bot_token": "encrypted", "telegram_chat_id": "@localos_test"},
     )
-    monkeypatch.setattr(social_post_service, "decode_telegram_bot_token", lambda value: "telegram-token")
+    monkeypatch.setattr(social_post_service, "decode_telegram_bot_token", lambda value: "123:telegram-token")
 
     def fake_urlopen(req, timeout=10):
         requested_urls.append(req.full_url)
@@ -2601,7 +2627,7 @@ def test_telegram_api_channel_preflight_blocks_channel_without_post_permission(m
         "_load_business_publish_context",
         lambda cursor, business_id: {"telegram_bot_token": "encrypted", "telegram_chat_id": "@localos_test"},
     )
-    monkeypatch.setattr(social_post_service, "decode_telegram_bot_token", lambda value: "telegram-token")
+    monkeypatch.setattr(social_post_service, "decode_telegram_bot_token", lambda value: "123:telegram-token")
 
     def fake_urlopen(req, timeout=10):
         if "getChat" in req.full_url and "getChatMember" not in req.full_url:
@@ -3092,6 +3118,7 @@ def test_publish_social_post_moves_empty_copy_back_to_review(monkeypatch):
             "status": "queued",
             "approved_at": "2026-06-19T10:00:00+00:00",
             "approval_id": "approval-empty-copy",
+            "metadata_json": {"approval_publish_snapshot": {"hash": "snapshot-empty"}},
             "platform_text": " ",
             "base_text": "",
         },
@@ -3101,6 +3128,8 @@ def test_publish_social_post_moves_empty_copy_back_to_review(monkeypatch):
         "_publish_api_post",
         lambda cursor, post: (_ for _ in ()).throw(AssertionError("empty post must not call provider")),
     )
+    monkeypatch.setattr(social_post_service, "snapshot_is_sendable", lambda snapshot, post: True)
+    monkeypatch.setattr(social_post_service, "current_snapshot_matches", lambda cursor, post, snapshot: True)
 
     post = publish_social_post("user-1", "post-empty")
 
@@ -3262,6 +3291,8 @@ def test_queue_social_post_api_preflight_fallback_does_not_create_supervised_led
             "publish_mode": "api",
             "status": "approved",
             "approved_at": "2026-06-19T10:00:00+00:00",
+            "approval_id": "approval-api",
+            "metadata_json": {"approval_publish_snapshot": {"hash": "snapshot-api"}},
             "base_text": "Рейс задержался. Riderra согласует ожидание водителя.",
             "platform_text": "Рейс задержался. Riderra согласует ожидание водителя.",
         },
@@ -3280,6 +3311,7 @@ def test_queue_social_post_api_preflight_fallback_does_not_create_supervised_led
         "_record_social_supervised_handoff_ledger",
         lambda cursor, original, updated, automation_task_id: (_ for _ in ()).throw(AssertionError("map ledger only")),
     )
+    monkeypatch.setattr(social_post_service, "queue_snapshot_is_current", lambda cursor, post: True)
 
     post = queue_social_post("user-1", "post-api")
 
@@ -3382,7 +3414,10 @@ def test_publish_facebook_post_uses_feed_and_returns_provider_proof(monkeypatch)
         "_external_account_auth_data",
         lambda account: {"access_token": "token", "scope": "pages_manage_posts"},
     )
-    monkeypatch.setattr(social_post_service, "_selected_media_assets", lambda cursor, post, limit=1: [])
+    account = {"id": "meta-1", "source": "meta", "external_id": "page-1"}
+    binding = {"provider": "facebook", "account": {"id": "meta-1", "source": "meta", "external_id": "page-1"}, "recipient": {"id": "page-1"}}
+    _frozen_external_account(monkeypatch, account, binding)
+    monkeypatch.setattr(social_post_service, "_approved_media_assets", lambda cursor, current, snapshot: [])
 
     def fake_meta_post(path, token, params):
         calls.append((path, token, params))
@@ -3390,10 +3425,8 @@ def test_publish_facebook_post_uses_feed_and_returns_provider_proof(monkeypatch)
 
     monkeypatch.setattr(social_post_service, "_meta_graph_post", fake_meta_post)
 
-    result = social_post_service._publish_meta_post(
-        object(),
-        {"business_id": "biz-1", "platform": "facebook", "platform_text": "Facebook text"},
-    )
+    post = {"business_id": "biz-1", "platform": "facebook", "publish_mode": "api", "approval_id": "approval-facebook", "platform_text": "Facebook text"}
+    result = social_post_service._publish_meta_post(object(), post, _approved_descriptor(post, binding))
 
     assert result["status"] == "published"
     assert result["provider_post_id"] == "page-1_42"
@@ -3417,11 +3450,11 @@ def test_publish_instagram_post_creates_and_publishes_media(monkeypatch):
             "scope": "instagram_content_publish",
         },
     )
-    monkeypatch.setattr(
-        social_post_service,
-        "_selected_media_assets",
-        lambda cursor, post, limit=1: [{"public_url": "https://cdn.example/photo.jpg"}],
-    )
+    media = [{"asset_id": "photo-1", "asset_version": 1, "content_hash": "photo-hash", "storage_path": "", "public_url": "https://cdn.example/photo.jpg", "mime_type": "image/jpeg"}]
+    account = {"id": "meta-1", "source": "meta", "external_id": "page-1"}
+    binding = {"provider": "instagram", "account": {"id": "meta-1", "source": "meta", "external_id": "page-1"}, "recipient": {"id": "ig-1"}}
+    _frozen_external_account(monkeypatch, account, binding)
+    monkeypatch.setattr(social_post_service, "_approved_media_assets", lambda cursor, current, snapshot: media)
 
     def fake_meta_post(path, token, params):
         calls.append((path, token, params))
@@ -3430,10 +3463,8 @@ def test_publish_instagram_post_creates_and_publishes_media(monkeypatch):
 
     monkeypatch.setattr(social_post_service, "_meta_graph_post", fake_meta_post)
 
-    result = social_post_service._publish_meta_post(
-        object(),
-        {"business_id": "biz-1", "platform": "instagram", "platform_text": "Instagram text"},
-    )
+    post = {"business_id": "biz-1", "platform": "instagram", "publish_mode": "api", "approval_id": "approval-instagram", "platform_text": "Instagram text"}
+    result = social_post_service._publish_meta_post(object(), post, _approved_descriptor(post, binding, media))
 
     assert result["status"] == "published"
     assert result["provider_post_id"] == "ig-post-1"
@@ -3706,22 +3737,27 @@ def test_publish_telegram_post_sends_message_and_records_provider_evidence(monke
             "telegram_chat_id": "@localos_channel",
         },
     )
-    monkeypatch.setattr(social_post_service, "decode_telegram_bot_token", lambda value: "telegram-token")
+    monkeypatch.setattr(social_post_service, "decode_telegram_bot_token", lambda value: "123:telegram-token")
     monkeypatch.setattr(
         social_post_service,
         "telegram_urlopen",
         lambda req, timeout=15: (requests.append(req) or FakeTelegramResponse()),
     )
 
-    result = social_post_service._publish_telegram_post(
-        object(),
-        {
-            "id": "post-telegram",
-            "business_id": "biz-1",
-            "platform": "telegram",
-            "platform_text": "Пост для Telegram",
-        },
+    post = {
+        "id": "post-telegram",
+        "business_id": "biz-1",
+        "platform": "telegram",
+        "publish_mode": "api",
+        "approval_id": "approval-telegram",
+        "platform_text": "Пост для Telegram",
+    }
+    snapshot = _approved_descriptor(
+        post,
+        {"provider": "telegram", "recipient": {"chat_id": "@localos_channel"}, "sender": {"transport_source": "business_bot", "bot_numeric_id": "123"}},
     )
+    monkeypatch.setattr(social_post_service, "_approved_media_assets", lambda cursor, current, approved: [])
+    result = social_post_service._publish_telegram_post(object(), post, snapshot)
 
     assert result["status"] == "published"
     assert result["provider_post_id"] == "42"
@@ -3730,7 +3766,7 @@ def test_publish_telegram_post_sends_message_and_records_provider_evidence(monke
     assert result["metadata_json"]["provider_write_performed"] is True
     assert result["metadata_json"]["external_publish_performed"] is True
     assert len(requests) == 1
-    assert requests[0].full_url == "https://api.telegram.org/bottelegram-token/sendMessage"
+    assert requests[0].full_url == "https://api.telegram.org/bot123:telegram-token/sendMessage"
     payload = json.loads(requests[0].data.decode("utf-8"))
     assert payload["chat_id"] == "@localos_channel"
     assert payload["text"] == "Пост для Telegram"
@@ -3747,7 +3783,7 @@ def test_publish_telegram_post_can_use_global_owner_bot_when_chat_target_is_set(
             pass
 
     requests = []
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "global-token")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:global-token")
     monkeypatch.setattr(
         social_post_service,
         "_load_business_publish_context",
@@ -3763,15 +3799,20 @@ def test_publish_telegram_post_can_use_global_owner_bot_when_chat_target_is_set(
         lambda req, timeout=15: (requests.append(req) or FakeTelegramResponse()),
     )
 
-    result = social_post_service._publish_telegram_post(
-        object(),
-        {
-            "id": "post-telegram",
-            "business_id": "biz-1",
-            "platform": "telegram",
-            "platform_text": "Пост через глобальный бот",
-        },
+    post = {
+        "id": "post-telegram",
+        "business_id": "biz-1",
+        "platform": "telegram",
+        "publish_mode": "api",
+        "approval_id": "approval-telegram-global",
+        "platform_text": "Пост через глобальный бот",
+    }
+    snapshot = _approved_descriptor(
+        post,
+        {"provider": "telegram", "recipient": {"chat_id": "@localos_channel"}, "sender": {"transport_source": "global_owner_bot", "bot_numeric_id": "123"}},
     )
+    monkeypatch.setattr(social_post_service, "_approved_media_assets", lambda cursor, current, approved: [])
+    result = social_post_service._publish_telegram_post(object(), post, snapshot)
 
     assert result["status"] == "published"
     assert result["provider_post_id"] == "43"
@@ -3779,7 +3820,7 @@ def test_publish_telegram_post_can_use_global_owner_bot_when_chat_target_is_set(
     assert result["metadata_json"]["telegram_transport"] == "global_owner_bot"
     assert result["metadata_json"]["provider_write_performed"] is True
     assert len(requests) == 1
-    assert requests[0].full_url == "https://api.telegram.org/botglobal-token/sendMessage"
+    assert requests[0].full_url == "https://api.telegram.org/bot123:global-token/sendMessage"
     payload = json.loads(requests[0].data.decode("utf-8"))
     assert payload["chat_id"] == "@localos_channel"
     assert payload["text"] == "Пост через глобальный бот"
@@ -3801,12 +3842,9 @@ def test_publish_telegram_post_sends_selected_photo(monkeypatch):
         "_load_business_publish_context",
         lambda cursor, business_id: {"telegram_bot_token": "encrypted", "telegram_chat_id": "@localos_channel"},
     )
-    monkeypatch.setattr(social_post_service, "decode_telegram_bot_token", lambda value: "telegram-token")
-    monkeypatch.setattr(
-        social_post_service,
-        "_selected_media_assets",
-        lambda cursor, post, limit=10: [{"id": "photo-1", "storage_path": "/tmp/photo.jpg", "mime_type": "image/jpeg"}],
-    )
+    monkeypatch.setattr(social_post_service, "decode_telegram_bot_token", lambda value: "123:telegram-token")
+    media = [{"asset_id": "photo-1", "asset_version": 1, "content_hash": "photo-hash", "storage_path": "/tmp/photo.jpg", "public_url": "", "mime_type": "image/jpeg"}]
+    monkeypatch.setattr(social_post_service, "_approved_media_assets", lambda cursor, current, approved: media)
     monkeypatch.setattr(
         social_post_service,
         "_media_asset_file",
@@ -3818,10 +3856,13 @@ def test_publish_telegram_post_sends_selected_photo(monkeypatch):
         lambda req, timeout=20: (requests.append(req) or FakeTelegramResponse()),
     )
 
-    result = social_post_service._publish_telegram_post(
-        object(),
-        {"id": "post-telegram", "business_id": "biz-1", "platform": "telegram", "platform_text": "Пост с фото"},
+    post = {"id": "post-telegram", "business_id": "biz-1", "platform": "telegram", "publish_mode": "api", "approval_id": "approval-telegram-media", "platform_text": "Пост с фото"}
+    snapshot = _approved_descriptor(
+        post,
+        {"provider": "telegram", "recipient": {"chat_id": "@localos_channel"}, "sender": {"transport_source": "business_bot", "bot_numeric_id": "123"}},
+        media,
     )
+    result = social_post_service._publish_telegram_post(object(), post, snapshot)
 
     assert result["status"] == "published"
     assert result["provider_post_id"] == "44"
@@ -3912,15 +3953,12 @@ def test_publish_vk_post_calls_wall_post_and_records_provider_evidence(monkeypat
         lambda req, timeout=15: (requests.append(req) or FakeVkResponse()),
     )
 
-    result = social_post_service._publish_vk_post(
-        object(),
-        {
-            "id": "post-vk",
-            "business_id": "biz-1",
-            "platform": "vk",
-            "platform_text": "Пост для VK",
-        },
-    )
+    account = {"id": "vk-1", "source": "vk", "external_id": "12345"}
+    binding = {"provider": "vk", "account": {"id": "vk-1", "source": "vk", "external_id": "12345"}, "recipient": {"id": "-12345"}}
+    _frozen_external_account(monkeypatch, account, binding)
+    monkeypatch.setattr(social_post_service, "_approved_media_assets", lambda cursor, current, snapshot: [])
+    post = {"id": "post-vk", "business_id": "biz-1", "platform": "vk", "publish_mode": "api", "approval_id": "approval-vk", "platform_text": "Пост для VK"}
+    result = social_post_service._publish_vk_post(object(), post, _approved_descriptor(post, binding))
 
     assert result["status"] == "published"
     assert result["provider_post_id"] == "678"
@@ -3956,11 +3994,11 @@ def test_publish_vk_post_passes_uploaded_photo_attachments(monkeypatch):
         "_external_account_auth_data",
         lambda account: {"access_token": "vk-token", "owner_id": "-12345", "scope": "wall", "api_version": "5.199"},
     )
-    monkeypatch.setattr(
-        social_post_service,
-        "_selected_media_assets",
-        lambda cursor, post, limit=10: [{"id": "photo-1"}],
-    )
+    media = [{"asset_id": "photo-1", "asset_version": 1, "content_hash": "photo-hash", "storage_path": "/tmp/photo.jpg", "public_url": "", "mime_type": "image/jpeg"}]
+    account = {"id": "vk-1", "source": "vk", "external_id": "12345"}
+    binding = {"provider": "vk", "account": {"id": "vk-1", "source": "vk", "external_id": "12345"}, "recipient": {"id": "-12345"}}
+    _frozen_external_account(monkeypatch, account, binding)
+    monkeypatch.setattr(social_post_service, "_approved_media_assets", lambda cursor, current, snapshot: media)
     monkeypatch.setattr(
         social_post_service,
         "_upload_vk_wall_photos",
@@ -3972,10 +4010,8 @@ def test_publish_vk_post_passes_uploaded_photo_attachments(monkeypatch):
         lambda req, timeout=15: (requests.append(req) or FakeVkResponse()),
     )
 
-    result = social_post_service._publish_vk_post(
-        object(),
-        {"id": "post-vk", "business_id": "biz-1", "platform": "vk", "platform_text": "VK с фото"},
-    )
+    post = {"id": "post-vk", "business_id": "biz-1", "platform": "vk", "publish_mode": "api", "approval_id": "approval-vk-media", "platform_text": "VK с фото"}
+    result = social_post_service._publish_vk_post(object(), post, _approved_descriptor(post, binding, media))
 
     payload = social_post_service.urllib.parse.parse_qs(requests[0].data.decode("utf-8"))
     assert result["status"] == "published"
@@ -4006,11 +4042,11 @@ def test_publish_vk_community_token_with_photo_uses_controlled_manual_handoff(mo
             "api_version": "5.199",
         },
     )
-    monkeypatch.setattr(
-        social_post_service,
-        "_selected_media_assets",
-        lambda cursor, post, limit=10: [{"id": "photo-1"}],
-    )
+    media = [{"asset_id": "photo-1", "asset_version": 1, "content_hash": "photo-hash", "storage_path": "/tmp/photo.jpg", "public_url": "", "mime_type": "image/jpeg"}]
+    account = {"id": "vk-community-1", "source": "vk", "external_id": "12345"}
+    binding = {"provider": "vk", "account": {"id": "vk-community-1", "source": "vk", "external_id": "12345"}, "recipient": {"id": "-12345"}}
+    _frozen_external_account(monkeypatch, account, binding)
+    monkeypatch.setattr(social_post_service, "_approved_media_assets", lambda cursor, current, snapshot: media)
     monkeypatch.setattr(
         social_post_service,
         "_upload_vk_wall_photos",
@@ -4025,15 +4061,8 @@ def test_publish_vk_community_token_with_photo_uses_controlled_manual_handoff(mo
         lambda req, timeout=15: publish_calls.append(req),
     )
 
-    result = social_post_service._publish_vk_post(
-        object(),
-        {
-            "id": "post-vk-community-photo",
-            "business_id": "biz-1",
-            "platform": "vk",
-            "platform_text": "VK с фото",
-        },
-    )
+    post = {"id": "post-vk-community-photo", "business_id": "biz-1", "platform": "vk", "publish_mode": "api", "approval_id": "approval-vk-community", "platform_text": "VK с фото"}
+    result = social_post_service._publish_vk_post(object(), post, _approved_descriptor(post, binding, media))
 
     assert result["status"] == "needs_manual_publish"
     assert result["metadata_json"]["provider_status"] == "vk_community_media_requires_manual"
@@ -4050,11 +4079,11 @@ def test_publish_google_business_attaches_public_photo(monkeypatch):
         "_find_active_external_account",
         lambda cursor, business_id, sources: {"id": "google-1", "external_id": "locations/1"},
     )
-    monkeypatch.setattr(
-        social_post_service,
-        "_selected_media_assets",
-        lambda cursor, post, limit=1: [{"id": "photo-1", "public_url": "https://cdn.example/photo.jpg"}],
-    )
+    media = [{"asset_id": "photo-1", "asset_version": 1, "content_hash": "photo-hash", "storage_path": "", "public_url": "https://cdn.example/photo.jpg", "mime_type": "image/jpeg"}]
+    account = {"id": "google-1", "source": "google_business", "external_id": "locations/1"}
+    binding = {"provider": "google_business", "account": {"id": "google-1", "source": "google_business", "external_id": "locations/1"}, "recipient": {"id": "locations/1"}}
+    _frozen_external_account(monkeypatch, account, binding)
+    monkeypatch.setattr(social_post_service, "_approved_media_assets", lambda cursor, current, snapshot: media)
 
     class FakeGoogleBusinessSyncWorker:
         def _publish_post(self, account, post_data):
@@ -4065,10 +4094,8 @@ def test_publish_google_business_attaches_public_photo(monkeypatch):
     fake_module.GoogleBusinessSyncWorker = FakeGoogleBusinessSyncWorker
     monkeypatch.setitem(sys.modules, "google_business_sync_worker", fake_module)
 
-    result = social_post_service._publish_google_business_post(
-        object(),
-        {"id": "post-google", "business_id": "biz-1", "platform": "google_business", "platform_text": "Google с фото"},
-    )
+    post = {"id": "post-google", "business_id": "biz-1", "platform": "google_business", "publish_mode": "api", "approval_id": "approval-google", "platform_text": "Google с фото"}
+    result = social_post_service._publish_google_business_post(object(), post, _approved_descriptor(post, binding, media))
 
     assert result["status"] == "published"
     assert result["metadata_json"]["media_attached"] is True

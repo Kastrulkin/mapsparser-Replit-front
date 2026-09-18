@@ -22,6 +22,7 @@ from services.openclaw_capability_catalog import get_openclaw_capability_catalog
 from services.content_editorial_quality import review_content_text
 from services.social_posts.platform_variants import platform_variant_base_hash
 from core.ai_learning import record_ai_learning_event
+from services.social_posts.approval_binding import build_approval_snapshot, invalidate_queued_approval, queue_snapshot_is_current, run_post_batch
 
 
 SOCIAL_POST_PLATFORMS = [
@@ -993,15 +994,21 @@ def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             issues = "; ".join(str(value) for value in quality_review.get("quality_issues") or [] if str(value))
             raise ValueError(f"Текст нужно переписать: {issues}")
         metadata = _json_dict(post.get("metadata_json"))
+        metadata.pop("approval_publish_snapshot", None)
+        metadata.pop("publish_attempt", None)
+        metadata.pop("approval_binding_invalidated", None)
         metadata.update(quality_review)
         metadata["variant_status"] = "current"
         now = datetime.now(timezone.utc)
+        approval_id = _new_id()
+        if str(post.get("publish_mode") or "").strip() == "api":
+            metadata["approval_publish_snapshot"] = build_approval_snapshot(cursor, post, approval_id)
         cursor.execute(
             """
             UPDATE social_posts
             SET status = 'approved',
-                approved_at = COALESCE(approved_at, %s),
-                approval_id = COALESCE(NULLIF(approval_id, ''), %s),
+                approved_at = %s,
+                approval_id = %s,
                 metadata_json = %s,
                 last_error = NULL,
                 updated_at = NOW()
@@ -1009,7 +1016,7 @@ def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
               AND status = %s
             RETURNING *
             """,
-            (now, _new_id(), _json_dumps(metadata), post_id, status),
+            (now, approval_id, _json_dumps(metadata), post_id, status),
         )
         updated = _serialize_social_post(cursor, cursor.fetchone())
         if not updated:
@@ -1042,20 +1049,9 @@ def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
     finally:
         db.close()
 
+
 def approve_social_posts(user_id: str, post_ids: list[str]) -> dict[str, Any]:
-    posts: list[dict[str, Any]] = []
-    failed: list[dict[str, str]] = []
-    for post_id in _normalize_ids(post_ids):
-        try:
-            posts.append(approve_social_post(user_id, post_id))
-        except Exception:
-            failed.append({"id": post_id, "error": str(sys.exc_info()[1])})
-    return {
-        "posts": posts,
-        "failed": failed,
-        "summary": _summary_for_posts(posts),
-        "queue_groups": build_social_queue_groups(posts),
-    }
+    return run_post_batch(post_ids, lambda post_id: approve_social_post(user_id, post_id), _normalize_ids, _summary_for_posts, build_social_queue_groups, lambda: str(sys.exc_info()[1]))
 
 def update_social_post_text(
     user_id: str,
@@ -1136,6 +1132,12 @@ def queue_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             raise ValueError("Публикация уже опубликована")
         if status not in {"approved", "queued"} or not post.get("approved_at"):
             raise PermissionError("Перед постановкой в расписание нужно подтверждение человека")
+        if str(post.get("publish_mode") or "").strip() == "api" and not queue_snapshot_is_current(cursor, post):
+            updated = _serialize_social_post(cursor, invalidate_queued_approval(cursor, post))
+            if updated:
+                db.conn.commit()
+                return updated
+            raise RuntimeError("Состояние публикации изменилось; обновите карточку перед постановкой в очередь")
         quality_review = review_content_text(
             str(post.get("platform_text") or post.get("base_text") or ""),
             source_text=str(post.get("base_text") or ""),
@@ -1153,7 +1155,9 @@ def queue_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             updated = _create_supervised_publish_task(cursor, post)
             db.conn.commit()
             return updated
-        queue_block = _queue_preflight_block(cursor, post)
+        snapshot_binding = _json_dict(metadata.get("approval_publish_snapshot")).get("binding")
+        connection_unbound = isinstance(snapshot_binding, dict) and snapshot_binding.get("state") == "connection_unbound"
+        queue_block = {} if connection_unbound else _queue_preflight_block(cursor, post)
         if queue_block:
             metadata = _json_dict(post.get("metadata_json"))
             metadata.update(_json_dict(queue_block.get("metadata_json")))
@@ -1204,19 +1208,7 @@ def queue_social_post(user_id: str, post_id: str) -> dict[str, Any]:
         db.close()
 
 def queue_social_posts(user_id: str, post_ids: list[str]) -> dict[str, Any]:
-    posts: list[dict[str, Any]] = []
-    failed: list[dict[str, str]] = []
-    for post_id in _normalize_ids(post_ids):
-        try:
-            posts.append(queue_social_post(user_id, post_id))
-        except Exception:
-            failed.append({"id": post_id, "error": str(sys.exc_info()[1])})
-    return {
-        "posts": posts,
-        "failed": failed,
-        "summary": _summary_for_posts(posts),
-        "queue_groups": build_social_queue_groups(posts),
-    }
+    return run_post_batch(post_ids, lambda post_id: queue_social_post(user_id, post_id), _normalize_ids, _summary_for_posts, build_social_queue_groups, lambda: str(sys.exc_info()[1]))
 
 def create_supervised_publish_task(user_id: str, post_id: str, approved: bool = False) -> dict[str, Any]:
     if not approved:
@@ -1369,19 +1361,7 @@ def _record_knowledge_publish_event(cursor: Any, post: dict[str, Any], user_id: 
 
 
 def publish_social_posts(user_id: str, post_ids: list[str]) -> dict[str, Any]:
-    posts: list[dict[str, Any]] = []
-    failed: list[dict[str, str]] = []
-    for post_id in _normalize_ids(post_ids):
-        try:
-            posts.append(publish_social_post(user_id, post_id))
-        except Exception:
-            failed.append({"id": post_id, "error": str(sys.exc_info()[1])})
-    return {
-        "posts": posts,
-        "failed": failed,
-        "summary": _summary_for_posts(posts),
-        "queue_groups": build_social_queue_groups(posts),
-    }
+    return run_post_batch(post_ids, lambda post_id: publish_social_post(user_id, post_id), _normalize_ids, _summary_for_posts, build_social_queue_groups, lambda: str(sys.exc_info()[1]))
 
 def rehearse_social_post_publish(user_id: str, post_id: str) -> dict[str, Any]:
     db = DatabaseManager()
