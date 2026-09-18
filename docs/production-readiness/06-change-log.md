@@ -1,5 +1,42 @@
 # Production-readiness change log
 
+## OPS-CALLBACK-01 — interrupted callback claims become actionable
+
+A process interruption after durable `pending → sending` left the notification
+outside both dispatch and replay forever. Real-PG RED reproduces that exact
+state (1 failed / 1 passed), not an inferred production incident.
+
+Dispatch now quarantines tenant-scoped claims at least one hour old into the
+existing DLQ with `callback_delivery_uncertain_after_interrupted_claim`.
+It neither sends them again nor fabricates attempts. Cached batch rows are
+rechecked before HTTP; finalization requires the exact current lock identity,
+and status plus attempt insert commit together. Additive metrics and the worker
+scan retain visibility after the original creation-time window has expired.
+Normal retry, signatures, event/dedupe IDs and authorized replay are preserved.
+
+Independent static/evidence review accepts bounded local FIX_PROVEN: 19 tests
+pass in1.82s, including10 real-PG interruption, batch-bound, tenant, replay,
+late-result and old-row alert cases. Root postcheck found0 residual schemas.
+Separate adjacent verification passes73tests23.75s:60 capability API,3 schema,
+10 native recovery; preceding RuffF821 passes. Native nonce schemas/roles are
+absent. One historical exited Testcontainers resource predates the run and was
+preserved, not incorrectly attributed to it.
+
+Independent call-chain review then found the deployment smoke automatically
+replayed all DLQ/retry after an alert. Causal fake-command RED2fail/1pass
+demonstrates that path. Its implicit replay/dispatch loop is removed; manual
+reconciliation and strict exit2 remain. Normal capability/outbox sub-smokes
+still create actions/dispatch eligible ordinary callbacks and are explicitly
+disclosed, not mocked away in a claimed read-only guarantee.
+
+OPS-SNAPSHOT-02: the helper's Python heredoc consumed stdin, discarding piped
+outbox JSON. Additional RED1fail/5pass reproduces JSONDecodeError; passing source
+through `python3 -c` restores the exact before/after incident snapshot calls.
+Final combined25tests pass11.41s/capture12.293402s, with Python compilation,
+RuffF821 and bash syntax passing. The73and25sets overlap; do not sum them.
+No new migration, external notification, production action or full aggregate/
+image claim. The fixed sorted100-tenant alert limit remains a fairness follow-up.
+
 ## TEST-E2E-04 — observe console errors at the configured staging origin
 
 Both owner reviews/finance specs now pass Playwright's baseURL to a shared
@@ -12,9 +49,11 @@ outside this assertion. Invalid base configuration fails before listeners.
 The actual extracted old collector fails8of15 pure event regressions. The
 fixed collector passes21/21; scoped strict TypeScript and zero-warning lint
 pass, independent reviewPASS. Command captures are documented in COMMANDS.
-No app code, dependency, build or database changes; no browser was launched.
+No app code or dependency changes. After space recovery, the direct supervised
+browser follow-up at archived641 passes6/6 in22.0s, capture48.938396s; its fresh
+synthetic DB and recorded processes were independently confirmed absent.
 Earlier117real-API results are not retroactively promoted to clean-console
-proof. A browser rerun remains required after local disk headroom recovers.
+proof; this covers only the two selected flows across three viewports.
 
 ## DEP-LOCK-01 — pin the already-observed Docker base indexes
 

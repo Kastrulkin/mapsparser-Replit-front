@@ -1,26 +1,43 @@
 # Residual risks — working register
 
-Updated18September2026. These are remaining risks or verification gaps, not
+Updated19September2026. These are remaining risks or verification gaps, not
 newly demonstrated exploits. Fixed local findings and their evidence remain in
 [02-audit-backlog.md](02-audit-backlog.md) and [06-change-log.md](06-change-log.md).
 The audit branch has not been deployed; local proof is not production proof.
 
-Latest additions are locally reviewed272794a4 (104stored-role/subscription
+Latest runtime source is4f333aa7, the independently reviewed callback package.
+Its final25focused tests and separate73API/schema/native tests pass; the sets
+overlap. They do not re-certify the full backend,117browser cases or image.
+Earlier additions are locally reviewed272794a4 (104stored-role/subscription
 checks),3ac13d87 (11fake-command CI contracts), and a00ac558 (13actual Compose
 render/startup contracts). These respectively strengthen mutation admission,
 isolated CI definition and opt-in migration/image ownership. Full272backend
 passes4728/7intentional provider skips/6warnings656.63s with independentAC4PASS;
-current-source native browser passes117/117 and bounded HTTP240/240 plus frontend
+that source's native browser passes117/117 and bounded HTTP240/240 plus frontend
 60/60 observations have independent scoped PASS. Final image and hosted CI
 execution are not proven. Do not treat these packages as a closed release gate.
 
-TEST-E2E-04 now removes a two-journey console-filter blind spot with21pure
-regressions, scoped strictTS/lint and independent review. Its browser rerun is
-still blocked by local Mac headroom (~0.94GiB); previous117results retain their
-original limitation. No production, image or readiness score is promoted.
+TEST-E2E-04 removes a two-journey console-filter blind spot with21pure
+regressions, scoped strictTS/lint and independent review. Local space is now
+about5.5GiB after approved cleanup and bounded verification; the first native6 retry failed in its
+process controller before tests. A minimal process-only reproduction confirms
+the nested topology limitation. The reviewed sole-owner retry now passes6/6
+in22.0s, capture48.938396s, with independent DB/process cleanup verification.
+Historical117results retain their original limitation. Docker peak-plus-reserve remains
+unmet. No production, image or readiness score is promoted.
+
+New scoped evidence: partial managed-browser demo verifies synthetic finance
+preview/apply/duplicate history but not the intended partnership reason or a
+paced complete rehearsal. OPS-CALLBACK-01 has causal real-PG RED and reviewed
+local finalGREEN25/25, including10 native recovery/race/tenant cases and6shell
+cases for no implicit recovery plus incident snapshots. Its remaining
+release/image proof is separate; no production callback is claimed recovered.
+UX-LOCALE-05 remains a confirmed, unfixed display defect. See backlog02.
 
 | Risk / evidence | Priority and impact | Likelihood / temporary protection | Required next step |
 | --- | --- | --- | --- |
+| Callback alert scan fairness beyond100 tenants |P2 investigation; later tenants might not receive alerts|Existing sorted LIMIT100 can repeatedly select old uncertainty tenants; not reproduced as a live incident. Per-tenant metrics remain available|Bounded synthetic101-tenant test and a reviewed fair scan if reproduced; no notification/provider calls |
+| Deployment smoke still has ordinary mutating phases |P2 operational scope; calling it is not a read-only diagnostic|Implicit alert-triggered replay removed and tested; nested capability/outbox smoke still creates actions/dispatches normal pending/retry|Use specific read-only metrics for diagnosis; require separate authority for full smoke, manual replay and deployment |
 | Historical privileged credential exposure; offline scan confirmed old provider keys, revocation unconfirmed |P1 before production; former credentials might still authorize access|Current validity unknown. Do not use/test/publish old values; owner confirmation requested|Authorized owner/provider revocation evidence and separately approved history policy; no unilateral rotation/rewrite|
 | Reviewed auth/webhook/role/SSRF patches remain local |P1 release gate; intended protections are not certified live|Deployment deliberately not authorized by this audit; retain explicit boundary|Approve an exact release, provider webhook rebind/configuration where required, then verify live flow; no broad dirty-tree sync|
 | App version constraints and base pins lack final image proof; apt/artifact hashes and bot/target-runtime closure remain |P1 before production; supply-chain/build drift or untriaged advisories|Exactb43 audit104packages/0skips finds only pip24.0;26.2pin and app101constraints plus3tools. Node/Python base indexes now pinned with ARM64/AMD64 metadata and14static contracts|Build/version/re-audit and OS/native/image/log scan; index availability is not an AMD64 build. PyMuPDF license basis awaits owner confirmation, not a violation claim|

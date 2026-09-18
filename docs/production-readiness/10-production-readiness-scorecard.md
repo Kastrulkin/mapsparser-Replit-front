@@ -1,20 +1,25 @@
 # Production-readiness scorecard — working, not final
 
-Updated 18 September 2026. Scores describe evidence at the stated checkpoint,
+Updated 19 September 2026. Scores describe evidence at the stated checkpoint,
 not an average that can waive a release gate. The original Definition of Done
 and unresolved P1 items remain controlling.
 
-Latest local272794a4 adds104review/mobile-role/subscription tests with scoped
+Latest source4f333aa7 closes bounded callback recovery/smoke defects with
+independent review,25final focused tests and73overlapping API/schema/native
+checks. This does not extend the earlier full aggregate or image proof to the
+new source. No score is raised and overall readiness remains unproven.
+
+Earlier local272794a4 adds104review/mobile-role/subscription tests with scoped
 independentPASS;3ac13d87 adds an isolated real-API CI definition (11contract
 tests), and a00ac558 adds opt-in release configuration (13render/startup
 contracts). The full272aggregate now passes4728/7intentional provider skips/
 6warnings656.63s, independently accepted for AC4. Fresh whole-diff review has
 no additional reproduced P0/P1 in its bounded coverage; overall verdict FAIL.
-Current native browser passes117/117; hosted CI and current runtime image remain
+That native browser checkpoint passes117/117; hosted CI and current runtime image remain
 pending. A bounded240-read HTTP profile and60frontend timing samples have scoped
 independent PASS. No score is raised solely by these bounded additions.
 Frontend tree remains identical to tested3dca5fda. Independent criterion review
-accepts AC3/AC4/AC10; overall release remains FAIL. AC10 is documentation
+accepted AC3/AC4/AC10 at that checkpoint; overall release remains FAIL. AC10 is documentation
 completeness/current truthfulness, not a higher maturity score or release gate waiver.
 
 ## Rubric
@@ -34,16 +39,16 @@ completeness/current truthfulness, not a higher maturity score or release gate w
 | --- | ---: | --- | --- |
 | Architecture | 3 | [01-system-map.md](01-system-map.md) documents boundaries, execution and approval paths; reviewed isolated compiled profile and fresh272whole-diff review exist. | Large work areas and release startup/migration ownership verification remain. |
 | Security | 2 | Local authorization, SSRF, session, webhook, publication binding13c and one real hostile-row24e proof; see [03-security-threat-model.md](03-security-threat-model.md). | Historical credential revocation is unknown; final scans, rollout, broader tool coverage and immutable external media bytes remain open. |
-| Data integrity | 2 | Full synthetic restore covers288tables/schema/grants/sequences/data; SEND-AMB lifecycle/receipt and current117native browser checks pass; historical120includes compiled runtime. | Broader mutation/approval-target coverage and production-backup recovery remain incomplete. |
-| Reliability | 2 | Isolated PG16 storage/restart/restore and reviewed duplicate-send/reconciliation checks passed; current272full backend passes4728. | Current immutable image and release recovery proof remain open. |
+| Data integrity | 2 | Full synthetic restore covers288tables/schema/grants/sequences/data; SEND-AMB lifecycle/receipt and earlier117native browser checks pass; historical120includes compiled runtime. | Broader mutation/approval-target coverage and production-backup recovery remain incomplete. |
+| Reliability | 2 | Isolated PG16 storage/restart/restore and reviewed duplicate-send/reconciliation checks passed;272full backend passes4728;4f333aa7 adds reviewed callback quarantine/explicit recovery proof. | Current immutable image, new full aggregate and release recovery proof remain open. |
 | Performance | 2 | Image size fell22.2%; five-flow distributions,240current HTTP reads/64.28s and60frontend observations are captured. GET now9reads0DDL versus9reads3DDL. | Realistic server/queue capacity remains open; tiny fixtures are not capacity, comparable medians nearly unchanged and browser p99 exploratory. |
-| Frontend quality | 3 | Current272backend + unchanged built frontend passes117/117real-API desktop/laptop/mobile scenarios; historical120includes compiled runtime. Six new screenshots and60loads show no pageerror/overflow. | Not final immutable image. Broader adverse-state/accessibility coverage remains. TEST-E2E-04 removes the fixed-port filter in21pure tests; browser rerun pending, historical console limitation retained. |
+| Frontend quality | 3 | Checkpoint272backend + unchanged built frontend passes117/117real-API desktop/laptop/mobile scenarios; historical120includes compiled runtime. Six new screenshots and60loads show no pageerror/overflow. TEST-E2E-04 has21pure tests plus6/6 actual owner reviews/finance scenarios at archived641. | Not final immutable image or117-case collector rerun; historical console limitation retained. Broader adverse-state/accessibility coverage remains. |
 | UX | 3 | Owner-oriented workflow review and contrast correction are recorded in [05-ux-review.md](05-ux-review.md). | Partner rehearsal and several adverse UI states are still open. |
-| Testing | 3 | Clean272794a4 full backend:4,728passed/7live-provider skips, including native/Docker PostgreSQL; frontend591units/72mockbrowser/TS/lint/build stages plus separate exact-source artifact proof;117current native real-API cases pass. | Original frontend capture remains exit1 for a helper postcondition; combined current image/compiled runtime and broader mutation-role coverage remain. Live-provider calls deliberately unexercised. |
+| Testing | 3 | Clean272794a4 full backend:4,728passed/7live-provider skips, including native/Docker PostgreSQL; frontend591units/72mockbrowser/TS/lint/build stages plus separate exact-source artifact proof;117native real-API cases at that checkpoint. Current4f333aa7 has25focused and73overlapping adjacent passes. | New full aggregate, combined current image/compiled runtime and broader mutation-role coverage remain. Original frontend capture retains its helper-postcondition exit1. Live-provider calls deliberately unexercised. |
 | Observability | 2 | Raw captures, scoped runbooks and evidence handoff exist. | No completed production log/image scan, operational dashboard closure or repeated incident rehearsal. |
 | Deployment | 1 | Local image/browser and isolated Compose evidence exist. | No audit deployment, production migration, production backup rehearsal or release verification was authorized. |
 | Documentation | 3 | System map, threat model, risk register, runbook, demo and evidence records are present. | This scorecard and reports are working drafts; final DoD reconciliation and demo rehearsal remain. |
-| Demo readiness | 1 | A synthetic, approval-aware script exists in [08-partner-demo.md](08-partner-demo.md). | It has not been rehearsed; provider and customer data are deliberately out of scope. |
+| Demo readiness | 1 | Script08 now has a partial managed-browser pass including actual finance preview/apply/duplicate history. | Intended partnership reason is absent from retained fixture; copy debt and a paced full rehearsal remain. Provider and customer data are deliberately out of scope. |
 
 ## Interpretation
 

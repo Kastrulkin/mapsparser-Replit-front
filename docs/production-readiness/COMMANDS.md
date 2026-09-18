@@ -1,5 +1,97 @@
 # Verified commands and evidence
 
+## Callback final package — committed4f333aa7, 19 September
+
+Offline Gitleaks delta `5b9b9247..4f333aa7` also completed in named tmux:
+`/bin/sh /private/tmp/localos-readiness-secret-delta-5b9-to-4f333aa7-20260919.sh`.
+Actual raw/secret-delta-5b9-to-4f333aa7-20260919.json:exit0/2151.259ms,
+2commits/62274bytes/0findings, no timeout/truncation, full redaction and inline
+allow suppression disabled. Private JSON report is `[]`. This closes only
+that committed-source delta, not historical revocation or image/log scanning.
+
+Completed tmux `readiness-callback-adjacent-20260919`:
+`/bin/sh /private/tmp/localos-readiness-callback-adjacent-capture-20260919.sh`.
+It pins reviewed launcherdef442432…, archives641 plus four exact WIP files,
+preserves guard loading even when migrations reset PYTHONPATH, and uses cached
+local pgvector/Ryuk images without a build. Exact literal native DB preflight
+and source hashes are in `raw/callback-adjacent-20260919.json`.
+Actual73passed23.75s/capture28171.585ms, exit0/no timeout/truncation/stderr;
+60 capability API +3schema +10native cases. No-cache RuffF821 precedes pytest.
+Independent postcheck finds no callback/schema-test nonce schemas or temporary
+roles. One exited historical Testcontainers resource predates the run; preserved.
+
+Shell RED captures (all commands use fake executables, no network):
+
+- `raw/callback-smoke-recovery-red-20260919.json`:2failed/1passed6.99s,
+  capture7361.078ms, exact unexpected management replay. Original fixed scratch
+  path is remapped only inside the temporary test copy, not a shared /tmp file.
+- Initial fix `raw/callback-smoke-recovery-green-20260919.json`:5passed8.32s,
+  capture8716.023ms. Later review narrows wording/test names to recovery-only.
+- `raw/callback-snapshot-red-20260919.json`:1failed/5passed9.67s,
+  capture10124.981ms; exactJSONDecodeError from heredoc consuming JSON stdin.
+
+Final tmux `readiness-callback-final-20260919`:
+`/bin/sh /private/tmp/localos-readiness-callback-final-capture-20260919.sh`.
+Guarded literal DB/OID/owner/data-directory check, six source hashes, compile,
+RuffF821 and bash-n precede the four selected pytest modules. Actual
+`raw/callback-final-20260919.json`:25passed11.41s/capture12293.402ms,
+exit0/no timeout/truncation/empty stderr; independent final reviewPASS.
+Root final native postcheck0callback schemas/0schema-test schemas/0test roles.
+The25and73sets overlap; this is not98unique cases or current whole-project proof.
+All outputs are completed evidence; never replay these one-shot output paths.
+
+## Callback interrupted-claim RED and managed browser — 19 September
+
+Completed tmuxreadiness-callback-red-20260919:
+`/bin/sh /private/tmp/localos-readiness-callback-red-capture-20260919.sh`.
+Env-i/guarded ARM64 Python preflight verifies the literal localDSN, native
+data_directory, DBname/OID1935406/owner and canonical reference tables, then:
+
+```sh
+venv/bin/python -m pytest -q tests/test_action_orchestrator_callback_recovery_pg.py
+```
+
+Actual raw/callback-recovery-red-20260919.json:exit1,1103.264ms,no timeout or
+truncation;1failed1passed0.48s. Failure is exact stale-sending non-recovery,
+not setup. Normal503→retry→sent passes. Root read-only catalogpostcheck0schemas.
+Do not reuse the RED output path for GREEN or claim pending code is fixed.
+
+Completed GREEN: tmux `readiness-callback-green-20260919` ran
+`/bin/sh /private/tmp/localos-readiness-callback-green-capture-20260919.sh`.
+Same literal DB identity preflight and pinned guard; `os.execv` hands the
+single process to pytest with no nested timeout child. Actual command:
+
+```sh
+venv/bin/python -m pytest -q -p no:cacheprovider tests/test_action_orchestrator_callback_recovery_pg.py tests/test_action_orchestrator_callback_ssrf.py tests/test_outbound_network.py
+```
+
+`raw/callback-recovery-green-20260919.json`:19passed1.82s, capture2479.817ms,
+exit0/no timeout/truncation/empty stderr. Ten native cases plus nine adjacent
+SSRF/redirect/transport tests. Source hashes captured and independently matched;
+root read-only catalogpostcheck0 callback_recovery schemas. Bounded local
+FIX_PROVEN, not whole release or deployed behavior. Do not replay output paths.
+
+Managed-browser actions, fixture/source limitations and finance two-batch
+result are in raw/managed-browser-demo-20260919.md. They are direct UI
+observations, not fabricated command JSON or the automated collector run.
+
+Minimal process proof raw/supervisor-v8-nested-reparent-repro2.json:
+exit0/175.259ms/no timeout/truncation; pinned middle exits after spawning an
+unobserved same-group child; nextrefresh reproduces the error. Owned child
+identity-checked cleanup succeeded. Original failed first fixture stays retained.
+
+Completed native6 launch used a separate one-shot direct supervisor:
+`/bin/sh /private/tmp/localos-readiness-native-six-direct-v8-launch-20260919.sh`,
+tmuxreadiness-native-six-direct-20260919. WrapperSHA6d5cf8bd… independently
+reviewed. Actual raw/native-six-direct-v8-641ec5e3.json:validtrue/exit0,
+48938.396ms capture,6passed22.0s (two owner review/finance flows × three
+viewports). Fresh synthetic DB dropped; independent DB and six-PGID absence
+checks PASS. Initial readiness curl refusal and optional popular-queries
+warning remain, not blanket empty-stderr evidence. Keep raw private: fixture
+JSON contains synthetic credential/token fields missed by its redaction flag.
+Never replay completed or failed native6 captures. This archives641 and does
+not include subsequent callback WIP or constitute a117-case/image run.
+
 ## Native six-case attempt — FAILED before tests, 19 September
 
 Named tmux `readiness-native-six-20260919` completed the one-shot

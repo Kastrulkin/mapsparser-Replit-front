@@ -16,9 +16,9 @@ local checks; project owner for credential/license/production authority.
 | 1.2 Backend/API | SEC-AUTH/WH/RBAC/SSRF findings, causal tests and current4728 backend aggregate | Partial: broader object-derived tenant/session-kind and unrelated outbound-client coverage is not certified by the scoped fixes. |
 | 1.3 Database | DATA-SVC/FIN concurrent reproductions/fixes; DB-MIG-02 guards; actual synthetic288-table restore; report04 query plans | Partial: tiny fixtures do not establish representative large-data N+1/index/locking behavior. Production data inspection/recovery is separately authorized work. |
 | 1.4 Security including AI | Threat model03; signed webhook/replay/role/SSRF fixes; actual runner hostile-finance-row proof; secret/dependency scans | Partial: historical revocation and current image/log/OS/native/license triage remain open; no complete adversarial tool/sandbox matrix claimed. |
-| 1.5 Frontend/UX | Scope/registration/mobile/contrast/focus fixes;117 current native real-API cases,591unit/72mocked browser checks; report05 | Partial: three compiled scenarios are historical; TEST-E2E-04 fixes the console filter in21pure tests but its browser rerun is pending; wider slow/large-data/same-business adverse states need explicit results. UX-SVC/CONTENT/OP route-switch hypotheses have explicit NO_BUG_PROVEN results below. |
-| 1.6 Performance | Five-flow50-sample before/after data; prepared44read profile;240current HTTP reads/resources;60frontend observations;six screenshots;tinySQL plans; report04 | Partial: original auth baseline fails50/50, so successful baseline quantiles are unavailable; a separate working pre-optimization reference is being assessed. Representative queue/server capacity is a residual, not a new bounded-local acceptance requirement. |
-| 1.7 Reliability/operations | Duplicate-send uncertainty protections; readiness24tests; restore and migration evidence; runbook07 | Partial: current-image readiness, release/rollback and broader operational rehearsal remain unverified. |
+| 1.5 Frontend/UX | Scope/registration/mobile/contrast/focus fixes;117 current native real-API cases,591unit/72mocked browser checks; report05 | Partial: three compiled scenarios are historical; TEST-E2E-04 now passes21pure and6actual browser cases at archived641, not a117-case rerun. Wider slow/large-data/same-business adverse states and UX-LOCALE-05 remain. UX-SVC/CONTENT/OP route-switch hypotheses have explicit NO_BUG_PROVEN results below. |
+| 1.6 Performance | Five-flow50-sample before/after data;240current HTTP reads/resources;60frontend observations;six screenshots;tinySQL plans; report04 | Partial: successful separate2d→272 comparison now has750requests/150invariants per reference and independent quantile review; tails are mixed, no general speedup. Original302auth baseline remains50failures. Representative queue/server capacity is a residual, not a new bounded-local acceptance requirement. |
+| 1.7 Reliability/operations | Duplicate-send uncertainty protections; readiness24tests; restore and migration evidence; runbook07; callback RED and reviewed19-test GREEN | Partial: OPS-CALLBACK-01 has bounded local FIX_PROVEN. Current-image readiness, release/rollback and broader rehearsal remain unverified. |
 | 1.8 Docker/CI | Historical ARM64 image/nonroot/offline browser checks; public asset fix;13release-config and11CI contract tests | Partial: current clean image blocked by local disk headroom; hosted real-API workflow has not run; immutable release startup/rollback/data transfer unverified. AMD64 remains platform-specific risk. |
 | 1.9 Tests/code quality | Real compiler negative controls, causal red/green fixtures;4728full backend;591frontend units;117realAPI; F821/lint/TS/build and fresh272review; TEST-E2E-04 collector red/green21 and source review of guarded native fixtures | Partial: collector browser rerun and final cross-artifact reconciliation still open; this does not claim an exhaustive flaky-test/mocking/test-pyramid audit. |
 | 1.10 Dependencies | Audited installed Python map, pypdf mitigation, constraints101packages and3pins, Node22 alignment | Partial: refreshed built-image dependency/OS/npm/license triage and owner PyMuPDF license basis remain pending. |
@@ -28,7 +28,10 @@ local checks; project owner for credential/license/production authority.
 
 | ID | Priority / timing | Area / problem | Evidence | Impact / root cause | Proposed fix | Effort / fix risk | Acceptance test | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| TEST-E2E-04 | P2 / before demo | Owner reviews/finance E2E silently ignores first-party console errors at non18000 staging ports | Actual extracted collector RED8fail/7pass, raw/staging-runtime-errors-red.json; configurable baseURL in playwright.journey-staging.config.ts | False-green runtime assertion could hide demo defects; literal-origin prefix disagrees with configured/dynamic target. High confidence/likelihood for these runs, medium impact, two-spec scope | Shared test-only collector uses configured URL origin; preserve pageerror and unknown-source errors | S / low test-only blast radius | Dynamic/IPv6/relative/blob/default-port events recorded; known foreign origins/non-errors excluded; real Page type-compatible; later browser rerun | FIX_PROVEN at collector unit scope:21pass, strictTS/lint, independentPASS. No app defect claimed; browser rerun pending and historical results unchanged |
+| OPS-CALLBACK-01 | P1 / before prod | Interrupted durable sending claims are permanently stranded; deployment-smoke also automatically replays all DLQ on alerts | Native causal RED1fail/1pass; shell RED2fail/1pass; core+worker source and deploy→smoke→replay chain | Missing abandoned-claim lifecycle; uncertainty may be silently lost or blindly retried. Medium likelihood, high impact/confidence, callback/ops scope | Bounded uncertainty DLQ, exact lock fencing, old-row alerts; remove automatic smoke replay in favor of explicit reconciliation | M / medium timing/concurrency/operations risk | Interruption/race/tenant/ledger controls, real API adjacency, no-network shell regression showing zero implicit replay | Local FIX_PROVEN: final25pass11.41s plus separate73API/schema/native pass23.75s, Ruff/syntax PASS; current image/full aggregate remains open |
+| OPS-SNAPSHOT-02 | P2 / before prod | Recovery helper discards piped outbox JSON and cannot choose incident snapshots | Actual no-network shell RED1fail/5pass with JSONDecodeError | Heredoc consumes Python stdin instead of curl JSON; operator loses context for reconciliation. High confidence/likelihood, medium impact, one helper | Pass Python source via -c, keep stdin for JSON | S / low | Nonempty synthetic outbox yields exact before/after snapshot calls without JSONDecodeError; empty and no-replay controls retained | FIX_PROVEN in final25-test package; no live incident/provider request |
+| UX-LOCALE-05 | P3 / before demo | Review draft uses mixed-language Quick Generator/raw draft | Actual UI and ReviewReplyAssistant lines473/726 | Owner sees technical state; hardcoded strings bypass existing translation keys. High frequency/confidence, low risk | Existing localized generate/proposal labels, no API enum changes | S / low one-component scope | Locale draft regression plus actual browser assertion | CONFIRMED, not fixed |
+| TEST-E2E-04 | P2 / before demo | Owner reviews/finance E2E silently ignores first-party console errors at non18000 staging ports | Actual extracted collector RED8fail/7pass, raw/staging-runtime-errors-red.json; configurable baseURL in playwright.journey-staging.config.ts | False-green runtime assertion could hide demo defects; literal-origin prefix disagrees with configured/dynamic target. High confidence/likelihood for these runs, medium impact, two-spec scope | Shared test-only collector uses configured URL origin; preserve pageerror and unknown-source errors | S / low test-only blast radius | Dynamic/IPv6/relative/blob/default-port events recorded; known foreign origins/non-errors excluded; real Page type-compatible; later browser rerun | FIX_PROVEN:21pure tests, strictTS/lint,6/6 actual archived641 browser cases, independentPASS. No app defect or117-case/global-console claim; historical results unchanged |
 | SEC-RBAC-06 | P1 / before prod | Direct/network viewers can mutate review drafts and confirm stored mobile actions | Direct RED10fail/27pass104.57s; corrected mobile-confirm RED4fail/6pass32.02s, both untruncated native-PG captures | Read-role helper on five direct routes and no stored-target write check at common confirm. Actual edits/manual marks and finance deletion; counted review generation including mixed targets. No external publication | Canonical direct write gates and required common target-authorizer before any executor; preserve read preview and completed idempotent replay | M / medium role-compatibility risk across 19 mutation executors; likelihood medium, impact high, confidence high | Both viewer types/revoked/foreign denied before effects; mixed target batch all-or-none admission; owners/members and completed replay preserved; adjacent suites pass | FIX_PROVEN locally272794a4: combined104GREEN156.03s/capture160.365553s exit0/untruncated; independent finalPASS, fixtureDBcatalog empty. Current image/browser/aggregate remain separate |
 | SUB-MOBILE-01 | P2 / before prod | Actual review_replies.generate action bypasses inactive-subscription capability admission | `raw/operator-mobile-review-capability-red.json`: 2fail/2pass15.12s, capture19.186198s untruncated; stored subscriptions and registered routes | Mapping uses legacy reviews. prefix only. Inactive preview creates action; active preview then inactive confirm calls counted generator and completes. No actual model charge claimed | Add review_replies. to maps.reviews mapping, retain legacy alias; re-use existing preview/confirm admission | S / low-medium; likelihood medium, impact medium, one action family, confidence high | Inactive preview/confirm402 with zero effects; active controls remain200; existing subscription tests pass | FIX_PROVEN locally272794a4: original4native cases and17subscription checks pass within combined104GREEN; independent finalPASS |
 | FIN-UPLOAD-01 | P2 / before prod | Finance file helper reads all bytes before parsing without an application bound | `finance_api._finance_import_payload_from_request`; deterministic bounded-read RED; root31checks green | Avoidable in-process allocation/parser admission risk; not a reproduced production DoS and nginx may apply1MiB | Adopt adjacent10MiB application limit, bounded MAX+1 read, direct parser guard, dedicated413 | S / low-medium compatibility; requests above10MiB now rejected explicitly | Exact-limit accepted; oversizedCSV/XLSX rejected before parser; both routes413/zero DB effects | FIX_PROVEN scoped015b4ebc, independent review/root31pass1.48s. Multipart/row/expansion/time limits not covered |
@@ -64,6 +67,62 @@ local checks; project owner for credential/license/production authority.
 | TEST-FIXTURE-02 | P2 / before prod | Journal fixture lacks network membership fallback schema | Native PG15 fixed archive:704pass4fail; revoked access raises UndefinedTable | Negative authorization tests never reach intended branch | Apply canonical network migrations, preserve denial assertions, add five role/status/tenant cases | S / low, test-only | Existing4failure cases and new network matrix pass | FIX_PROVEN f1287d81, independent review; targeted79pass; same22-file archive plus fixture patch713pass52.89s. Not latest full backend or PG16 proof |
 
 ## Additional reproduced findings and environment gaps
+
+`OPS-CALLBACK-01` (P1 before production, bounded local FIX_PROVEN)
+— `src/core/action_orchestrator.py:293–315` commits callbacks as `sending`
+before HTTP; subsequent claims accept only pending/retry, explicit replay only
+dlq/retry. Metrics and `src/worker.py` incident scans omit stale sending.
+Root cause: no abandoned-claim lifecycle, potentially leaving a notification
+permanently unprocessed after a process/DB interruption. Likelihood medium,
+impact high for action-status reconciliation, blast radius callback delivery,
+source confidence high; no production loss demonstrated. Proposed bounded fix:
+surface stale claims and quarantine ambiguous delivery for explicit existing
+tenant-authorized reconciliation, with no blind automatic resend. Effort M,
+fix risk medium (active-claim timing/concurrency). Acceptance: deterministic
+real-PG interruption, fresh/foreign claims retained, stale claim actionable,
+stable event/dedupe identity and real503→retry→sent/ledger control. Important:
+the receiver specification explicitly requires idempotent dedupe/ack, so normal
+timeout retry is an existing at-least-once callback contract, not independently
+proved repeat business effects or grounds for redesigning normal retries.
+Actual `raw/callback-recovery-red-20260919.json`:1failed/1passed0.48s, exact
+missing recovery. Current `raw/callback-recovery-green-20260919.json`:19passed
+1.82s, including10native interruption/batch/claim-identity/replay/metrics/worker
+cases; independent source/hash/evidence review PASS. Root catalogcheck0 residual
+schemas. Separate73-test API/schema/native package passes23.75s with RuffF821;
+final25-test core/transport/shell package passes11.41s, capture12.293402s.
+All captures exit0 without timeout/truncation. Current image/release proof
+remains separate. Implementation changes no schema/status
+contract and preserves the original503 retry control.
+
+Further independent call-chain review found `deploy_openclaw_phase2.sh` invokes
+`openclaw_ops_smoke_recover.sh`, whose alert branch replays all DLQ/retry and
+dispatches. Therefore the core proof does not yet justify a system-wide
+no-automatic-uncertainty-replay claim by itself. The implicit recovery path
+is now removed; explicit tenant-authorized replay remains. Causal shell RED
+and final GREEN cover all three alert classes, strict/non-strict behavior,
+and preservation of normal capability/outbox sub-smokes.
+A preflight metrics check alone would still race with concurrent quarantine.
+The worker itself does not replay DLQ; cleanup SQL only removes old sent rows.
+Normal sub-smokes still create actions and dispatch ordinary pending/retry
+callbacks: this package does not make a deployment smoke read-only.
+
+Observability follow-up (P2 investigation, not a reproduced runtime incident):
+worker tenant scans retain the existing sorted LIMIT100. Old uncertainty rows
+could pin the first100 tenants and starve later alert notifications. Verify
+fairness with a bounded synthetic101-tenant case before selecting a change;
+do not conceal this remaining limit behind the new old-row visibility proof.
+
+`UX-LOCALE-05` (P3 before partner demo, confirmed/unfixed) — managed browser
+and current `frontend/src/components/ReviewReplyAssistant.tsx:473,726` show
+`Quick Generator` and Russian text plus raw `draft`; existing staging test
+expects that raw label and the Greek fixture misses this branch. User impact:
+mixed language/technical state instead of a clear draft label. Probability and
+confidence high, technical risk low, effort S, fix blast radius one component.
+Use existing localized generate/proposal labels without changing backend enums
+or manual-publication behavior; acceptance is an unanswered-draft locale
+regression plus updated real-browser assertion. Further observed Content and
+Finance copy/date/preview-field debt is recorded in the manual raw note, not
+claimed fixed or automatically assigned a behavior severity.
 
 `DEP-PIP-02` (P2, before production; FIX_UNVERIFIED for image) — exact b43
 inventory104packages/0skips returns12records/6unique pip24.0 advisories.

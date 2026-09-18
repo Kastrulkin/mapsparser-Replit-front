@@ -1,5 +1,81 @@
 # Readiness handoff
 
+## Latest continuation — 19 September, managed UI and callback GREEN
+
+Source HEAD4f333aa7 (parent641ec5e32c9c7ca2b809611ccfae15551459c54f);
+branchcodex/production-readiness-20260917, original baseline30262a5.
+Root manually
+exercised synthetic38019 UI, then closed the created tab. Raw manual record:
+managed-browser-demo-20260919.md. Finance uses exact demo CSV; two new completed
+batches0/2/0, oldtwo visible entries retained. Demo incomplete: selected North
+must be explicit, retained partnership card lacks intended overlap reason;
+observed localization debt is UX-LOCALE-05. File-picker delay1262.7265s is tool
+delay, not a paced demo or app performance result. No current-image claim.
+
+OPS-CALLBACK-01 is now causally REPRODUCED: raw/callback-recovery-red-20260919.json
+exit1/1103.264ms,1failed1passed0.48s. Owned nativeDB
+readiness_full_test_reviewed_20260918/OID1935406/ownerreadiness_test_owner,
+data_directory/private/tmp/localos-readiness-resume-pg.anwDNv/data; exactguard
+534a36b9... validated. UUID schemas cleaned (rootcatalogcount0). Source package
+is committed4f333aa7: core action orchestrator, narrow worker alert predicates,
+native regression, adjacent fake fixture, smoke helper/test and two ops docs.
+Root owns the subsequent audit evidence docs; user voice/map edits are excluded.
+Now `raw/callback-recovery-green-20260919.json` is complete:19passed1.82s,
+capture2.479817s, exit0/no timeout/truncation/empty stderr. Ten native cases,
+source hashes match; independent scoped FIX_PROVEN and root catalogcheck0
+residual schemas. Broader raw/callback-adjacent-20260919.json now passes73tests
+23.75s/capture28.171585s, exact four pins/RuffPASS; independent native nonce
+schema/role absence. A historical exited Testcontainers container predates this
+run; no broad cleanup or all-history resource assertion.
+Deployment-smoke implicit replay was then causally reproduced (2fail1pass)
+and removed. Snapshot stdin RED1fail5pass was fixed by python3-c. Final capture
+raw/callback-final-20260919.json:25passed11.41s/capture12.293402s/exit0, no
+timeout/truncation/stderr; syntax/compile/RuffPASS and independent final review.
+Root final postcheck0callback/schema-test schemas and0test roles. All these
+tmux runs are terminal; no callback test remains live or requires polling.
+Strict offline delta5b9..4f333aa7 passed2commits/0findings in2.151259s;
+raw/secret-delta-5b9-to-4f333aa7-20260919.json. This excludes subsequent audit
+documentation commit and does not settle historical revocation/image/log gates.
+Normal callback retry is the existing receiver dedupe/ack contract, not a
+separately proven duplicate-action defect.
+
+Completed, not live: tmuxreadiness-native-six-direct-20260919,
+retained dead panePID23034/status0. One-shot launcher
+/private/tmp/localos-readiness-native-six-direct-v8-launch-20260919.sh
+pins directwrapper6d5cf8bd6085d93b103920a769ecafbe61b78cdfbf52c81aa958641d52c1994c.
+Actual raw/native-six-direct-v8-641ec5e3.json:6passed22.0s, capture48.938396s,
+exit0/validtrue/no timeout/truncation. It archives committed641, not newer
+callback WIP. FreshDBlocalos_staging_641ec5e3_76325403bea2test/OID6773900 was
+dropped after normal success; independently confirmed absent, as were all six
+recorded PGIDs. Do not replay this completed evidence. It used v8 as sole owner
+of a direct long-lived launcher. Raw stdout includes synthetic fixture tokens
+despite redaction flag; keep private and do not claim complete redaction.
+Old bare-PGID/path/missing-helper/constructor-fallback draft issues were fixed
+before execution. Scope still excludes arbitrary unobserved detached groups.
+
+Minimal process-only raw/supervisor-v8-nested-reparent-repro2.json proves known
+middle-spawns-child-then-exits topology rejects unknown same-group member;
+old failed native6 is NOT a product bug. Do not replay old one-shot captures.
+Next: verify existing LIMIT100 callback tenant-alert fairness with a bounded
+101-tenant synthetic/no-notification case; then the locale/demo gaps and fresh
+combined aggregate/image gates. Exact safe source-inspection continuation:
+`git show --stat 4f333aa7` and
+`sed -n '3390,3465p' src/worker.py`. Do not blindly rerun completed one-shot
+captures; any new full backend launch must also provide the strict callback
+native DSN/guard environment or those10cases will skip.
+Read-only next-test design: stable101 synthetic tenants, max100, two due scans,
+record metric calls and stub notifications. Require <=100calls each and all101
+seen in the union. Check disabled flag/interval gate/DB error separately. A
+bounded in-memory round-robin cursor is a candidate fix only after RED; it
+would reset on worker restart and does not establish durable fairness. No
+fairness test or implementation has run yet.
+Completed final launcher: /bin/sh /private/tmp/localos-readiness-callback-final-capture-20260919.sh.
+Current source now differs from272; historical full suite is not current proof.
+Preserve unrelated docs/releases/VOICE_WORK_REVIEW_20260914_PILOT.md and
+docs/VR_ENGELSA_MAPS_ANALYSIS_20260918.md. Audit docs are the only other dirty
+files at this checkpoint. Docker build held by measured peak headroom
+(lastfree5,792,048KiB); no production/push/deploy or additional cleanup.
+
 ## Current continuation — 19 September Moscow, after cleanup
 
 Goal resumed. Previous turn classified PROGRESS: exact authorized cleanup

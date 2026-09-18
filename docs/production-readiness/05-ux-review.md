@@ -1,9 +1,34 @@
 # UX and browser verification — working evidence
 
+19September managed-browser check: explicit business selection, loaded maps,
+review/manual-publication boundary, content sheet and finance preview/apply/
+duplicate retry were actually exercised on retained synthetic38019 staging.
+Finance added two completed import-history batches, each0imported/2duplicates/
+0errors; both earlier batches remained visible. No provider writes or reset.
+Partnership opened but its current fixture did not expose the intended overlap
+reason, so demo08 remains incomplete. Raw `managed-browser-demo-20260919.md`
+distinguishes UI observations from DB-ID proof and tool delays from demo time.
+Current-source localization debt is confirmed in ReviewReplyAssistant:
+`Quick Generator` and raw `draft`; no language/API patch has been applied yet.
+Bounded managed-console reads returned no warning/error entries; they are
+separate from the automated collector evidence and current image proof.
+
+TEST-E2E-04 browser follow-up is now complete: archived `641ec5e3` passed the
+two owner reviews/finance scenarios on desktop, laptop and mobile, **6/6 in
+22.0s** (48.938396s capture, exit0, valid=true, no timeout/truncation).
+`raw/native-six-direct-v8-641ec5e3.json` records the dynamic API/frontend origins
+51026/51027. Independent reconciliation confirmed the fresh synthetic DB was
+dropped and all six recorded process groups were absent. The run predates the
+callback source patch; it is not a 117-case rerun or current-image proof.
+Initial readiness connection refusal and the optional popular-queries warning
+remain in the evidence. Raw stdout contains synthetic fixture login/token
+fields despite its redaction flag; retain privately, do not share unredacted.
+
 18September16:54UTC: TEST-E2E-04 replaces the two owner-journey collectors'
 fixed18000 filter with the configured origin. Causal unit RED8fail/7pass,
-GREEN21pass, strictTS/lint and independent review pass. No browser rerun yet;
-the historical117-case checkpoint below retains its console-coverage limit.
+GREEN21pass, strictTS/lint and independent review pass. At that checkpoint no
+browser rerun had occurred; the six-case follow-up above now covers the selected
+flows. The historical117-case checkpoint retains its console-coverage limit.
 Warnings, known third-party console errors and request/HTTP failures without
 a console/page error are outside this collector's contract.
 

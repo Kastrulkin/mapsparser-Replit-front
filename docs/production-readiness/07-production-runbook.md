@@ -46,6 +46,39 @@ approved release containing this endpoint, add `curl --fail --max-time 15
 http://localhost:8000/ready` to dependency checks; do not assume the older
 production snapshot already has it. This is not a provider or full-schema check.
 
+## Interrupted callback delivery — local correction, not yet deployed
+
+The audited source quarantines `sending` claims whose lock is at least one
+hour old into the existing `dlq`, with
+`callback_delivery_uncertain_after_interrupted_claim`. This age is a conservative
+abandonment heuristic, not evidence that the receiver did nothing. The worker
+does not automatically replay such rows. Metrics expose `stuck_sending` and
+`uncertain_delivery` beyond the recent-created window, with corresponding
+alerts. Missing lock timestamps are not recovered by this bounded rule.
+
+For an authorized incident, inspect the tenant's callback outbox and attempt
+ledger, then reconcile the receiver's receipt using the unchanged event/dedupe
+identity. Do not re-execute the original business action to repair a callback.
+If the outcome is still unknown, retain quarantine and escalate. Explicit
+replay is a separate approved operation through the existing owner/superadmin
+or authorized M2M endpoint; it resets attempts but preserves event/dedupe IDs.
+Its `limit` selects the oldest tenant DLQ rows, not one requested event ID, so
+review the complete affected batch. Do not invoke broad replay as diagnosis.
+
+The local `openclaw_ops_smoke_recover.sh` correction removes its implicit
+alert-triggered replay/dispatch loop. Remaining alerts preserve strict exit2;
+manual reconciliation is now reported. This does **not** make the entire
+deployment/smoke chain read-only: its capability and outbox sub-smokes still
+create test actions and dispatch ordinary pending/retry notifications. Running
+that chain against production still requires explicit authorization.
+
+Rollback of this source-only change needs no schema downgrade: preserve DLQ
+and attempt records. Returning to older source would remove recovery/visibility
+and would re-enable the old unsafe smoke behavior; it is not data recovery.
+Local tests use mocked transport and synthetic PostgreSQL only. Receiver
+dedupe/ack behavior must be verified separately before an approved release;
+see [receiver contract](../OPENCLAW_PHASE2_RECEIVER_SPEC.md).
+
 ## Partial deployment
 
 Prefer the smallest affected update. Frontend-only changes are built locally

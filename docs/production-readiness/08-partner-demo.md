@@ -1,7 +1,14 @@
 # Synthetic partner demo: 10–15 minutes
 
-Status: **to be rehearsed by the release owner**. This is a safe walkthrough,
-not evidence that a production provider or customer workflow has run.
+Status: **partially exercised in the managed browser; not yet demo-ready**.
+On 19 September Moscow, login/maps/review/content and real synthetic finance
+preview → apply → duplicate retry were exercised. Both finance attempts skipped
+two existing duplicates and retained both earlier history entries. The retained
+partnership fixture instead showed `[E2E] Partnership Journey` without the
+expected audience-overlap reason. Reconcile that fixture without resetting
+existing data before the complete presenter rehearsal. A file-picker tool delay
+also prevents treating the elapsed session as a paced10–15minute demo.
+Evidence: task raw `managed-browser-demo-20260919.md`; no provider/customer run.
 
 18 September observed preparation issue: a view-only rehearsal probe stopped
 after154.774seconds at Content; it is not a completed10–15minute rehearsal.
@@ -41,7 +48,8 @@ that a draft was delivered.
 ## Six-step route
 
 1. **Business and map context — 2 min.** Sign in as the synthetic owner,
-   confirm `[E2E] Салон Север` is selected, then show the seeded Yandex map link
+   explicitly select `[E2E] Салон Север` (fresh login was observed selecting
+   `[E2E] Салон Центр`), then show the seeded Yandex map link
    and business context. Do not promise a visible opportunity, task, queue item
    or next action from the basic seed: those require an additional journey
    claim/preparation that this walkthrough does not perform. The basic seed does not prove a
@@ -54,7 +62,8 @@ that a draft was delivered.
    boundary. Do not click a provider publication control.
 
 3. **Content — 2 min.** Open the seeded planned content item. Expected: its
-   theme, scheduled date and `planned` status. Its `draft_text` is intentionally
+   theme and date; the observed UI labels its backend `planned` state
+   `Черновик`, not a confirmed scheduled publication. Its `draft_text` is intentionally
    empty, so do not present an editable content draft, saved news item or a
    posted Telegram/VK message.
 

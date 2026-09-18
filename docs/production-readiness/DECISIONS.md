@@ -1,5 +1,40 @@
 # Readiness decisions
 
+## D-031 — Recovery smoke must not authorize callback replay
+
+Independent call-chain review found the deployment smoke automatically replays
+all DLQ/retry on any alert. That would also replay the new uncertainty marker.
+Checking metrics immediately before replay cannot close the concurrent-row
+race. Remove implicit replay from smoke and report the manual reconciliation
+requirement; keep the existing explicitly invoked, tenant-authorized replay
+operation. This changes no callback schema or HTTP contract and does not treat
+a deployment request as approval to resend ambiguous notifications. Existing
+normal retry remains the documented receiver-idempotency contract. Verify the
+real shell control flow with fake commands, never a live deployment/send.
+
+## D-030 — Follow causal failure evidence, preserve callback delivery contract
+
+The v8 process-only reproducer confirms a nested orchestration limitation,
+not an application bug. Remove redundant orchestration; keep one reviewed
+lifecycle owner, fail closed on unknown identities and preserve old evidence.
+Do not weaken checks or certify arbitrary detached process trees from a small
+proof. Prepared wrappers are not executions; generated helpers/paths/pins must
+be tested, not merely compiled.
+
+Managed-browser finance actually exercised preview/apply/duplicate history.
+Its missing partnership fixture expectation and mixed-language copy stay open;
+a long file-picker delay is not a10–15minute presenter rehearsal. Preserve
+existing synthetic records instead of reseeding merely to make screenshots pass.
+
+Callback interrupted-claim RED proves permanent `sending` non-recovery. Keep
+the receiver's explicit dedupe/idempotent-ack at-least-once delivery contract;
+do not misclassify ordinary timeout retry as proven repeated business effects.
+The scoped fix uses existing DLQ/manual reconciliation for stale ambiguous
+claims and preserves fresh/foreign claims, normal503retry and stable event IDs.
+Late-worker finalization must not overwrite a quarantined or newer claim.
+One-hour abandonment is a conservative heuristic, not proof of non-delivery;
+no automatic replay, new schema or unilateral provider action is authorized.
+
 ## D-029 — Resume native proof without treating recovered space as unlimited
 
 Safe approved cleanup recovered enough space for guarded native measurements.

@@ -1,5 +1,56 @@
 # Production-readiness progress
 
+## Current work — 19 September, callback GREEN and completed native six
+
+Source package committed locally as4f333aa7 on branchcodex/production-readiness-20260917;
+prior HEAD641ec5e3. The preceding
+installer-confirmation turn was NO_PROGRESS toward the broad audit. This turn
+executes the actual callback GREEN, not another status-only continuation.
+Source callback recovery is locally verified; uncommitted
+voice-review/map-analysis work remains untouched.
+
+- [x] Process-only nested reparenting reproduces the v8 controller error in
+  175.259ms, exit0: raw/supervisor-v8-nested-reparent-repro2.json. Identity-checked
+  cleanup has no leftovers. This does not show a LocalOS product failure.
+- [x] Actual managed-browser login/business selection/maps/review/content and
+  synthetic finance preview→apply→duplicate retry; both new batches skip2dupes,
+  prior2history entries retained. No provider writes. Manual raw note and08
+  document the missing intended partnership reason and copy defects; full paced
+  demo remains open, not silently passed after changing expectations.
+- [x] OPS-CALLBACK-01 causal real-PG RED:1failed/1passed0.48s, capture1.103264s,
+  no timeout/truncation. Interrupted stale claim stays `sending`; normal503retry
+  control passes. Root verifies0remaining callback_recovery schemas.
+- [x] Callback local GREEN:19passed1.82s, capture2.479817s/exit0/no timeout or
+  truncation. Includes10 native PG cases for stale/fresh/foreign claims,
+  explicit replay, real503 retry, batch limit, late/new claim identity and
+  old-row metrics/worker alerts. Independent review FIX_PROVEN in this scope;
+  root catalogcheck0 residual schemas. Raw hashes match current source/tests.
+- [x] TEST-E2E-04 direct six-case retry completed at archived641ec5e3:
+  6passed22.0s, capture48.938396s/validtrue/exit0. Independent DB/process cleanup
+  verification PASS. The callback WIP is NOT in this archived browser run.
+- [x] Adjacent checks:73passed23.75s/capture28.171585s, no-cache RuffF821 PASS;
+  60API +3schema +10native cases, independent hash/schema/role reconciliation.
+- [x] Review caught deployment-smoke automatic replay; fake-command RED2fail/
+  1pass, loop removed. Snapshot stdin defect separately RED1fail/5pass, fixed
+  with Python -c. Final25tests11.41s/capture12.293402s plus compile/Ruff/bash
+  syntax pass; independent final PASS. Normal sub-smoke effects disclosed.
+  All captured runs are terminal. Source/runbooks committed4f333aa7; no push.
+- [x] Strict offline secret delta5b9..4f333aa7:2commits/0findings,
+  capture2.151259s. Historical credential revocation remains unconfirmed.
+- [ ] Full current-source aggregate/image remains separate; do not extend
+  historical4728 evidence to new runtime source. Confirm sorted100-tenant
+  callback alert fairness with a bounded synthetic case before changing it.
+- [ ] Reconcile demo partnership fixture without resetting existing data;
+  address UX-LOCALE-05 with scoped tests; complete final image/release gates.
+
+Mac last measured5,792,048KiB (~5.52GiB); native checks remain guarded, Docker
+peak-plus-reserve remains unavailable. No push/deploy/production schema or data
+change. Final root check:0callback schemas/0schema-test schemas/0temporary roles.
+P1 external/release gates remain: historical credential revocation, final
+image/supply-chain/license proof, approved rollout/production restore scope.
+Other Stage1 gaps remain in02; P2 alert fairness/demo/aggregate, P3 locale debt
+are not silently closed. Goal remains active and overall readiness unproven.
+
 ## Resumed after Mac cleanup — 19 September Moscow
 
 The preceding cleanup turn made progress: approved installer removal and exact

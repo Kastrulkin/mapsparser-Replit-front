@@ -1,6 +1,6 @@
 # LocalOS readiness executive summary — working, not final
 
-Updated 18 September 2026. This is a decision aid for an owner or potential
+Updated 19 September 2026. This is a decision aid for an owner or potential
 partner. It is not a production-readiness certificate, release approval, or a
 claim that external providers have been exercised.
 
@@ -14,6 +14,11 @@ writes require the documented human approval or manual boundary.
 
 ## What is materially stronger after this work
 
+- Interrupted callback delivery now has a locally verified quarantine and
+  explicit reconciliation path, with no alert-triggered automatic replay in
+  the deployment smoke. The final focused set passes25tests; separate API/schema
+  validation passes73tests (overlapping coverage, not98unique tests). This newer
+  source is not covered by the historical full-suite/image checkpoint below.
 - Local regression tests now cover blocked-account sessions, authenticated
   provider callbacks, several stored-role and business-boundary checks, safer
   outbound lookup, and transaction/replay protection for internal changes.
@@ -26,16 +31,17 @@ writes require the documented human approval or manual boundary.
   real-API CI job are implemented and contract-tested. They have not been
   deployed or run as a hosted workflow; configuration checks are not runtime
   release evidence.
-- The current-backend browser checkpoint passed **117 of 117** scenarios with
+- The earlier backend browser checkpoint passed **117 of 117** scenarios with
   backend `272794a4` and byte-verified unchanged frontend artifacts, in a
   261.028-second command capture. Three compiled-runner cases remain covered
   only by the earlier **120 of 120** checkpoint (227.301 seconds, `20431224`
   frontend over `f0cc` backend). Neither is a final current immutable image,
   customer or production run. A fixed-port console filter limited that run's
   console-error coverage. It is now fixed in21focused unit tests with scoped
-  type/lint checks and independent review, but no browser rerun yet; the old
-  result is not retroactively promoted. Page-error checks remain active.
-- A clean backend aggregate at current `272794a4` recorded **4,728 passed,
+  type/lint checks and independent review. The selected review/finance follow-up
+  now passes6/6 on three viewports at archived641; it is not a117-case rerun.
+  The old result is not retroactively promoted. Page-error checks remain active.
+- A clean backend aggregate at earlier `272794a4` recorded **4,728 passed,
   7 skipped** tests in656.63seconds, including native and Docker PostgreSQL integration.
   Only live-provider checks were intentionally skipped. Earlier environment
   failures were reproduced and corrected without product changes. Independent
