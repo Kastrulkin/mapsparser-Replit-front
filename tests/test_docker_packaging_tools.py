@@ -9,7 +9,7 @@ def test_app_pins_pip_before_resolving_application_dependencies() -> None:
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
 
-    base_image = "FROM python:3.11-bookworm"
+    base_image = "FROM python:3.11-bookworm@sha256:35d3a4a3d5e42e02ab916d44513a050689f12c0533d45598d229672503fe77ca"
     assert base_image in dockerfile
     pin = '"pip==26.2"'
     pin_index = dockerfile.index(pin)

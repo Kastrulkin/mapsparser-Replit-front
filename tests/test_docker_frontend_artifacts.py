@@ -18,7 +18,7 @@ def test_frontend_builder_satisfies_the_locked_node_compatibility_floor():
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     package_lock = json.loads((ROOT / "frontend" / "package-lock.json").read_text(encoding="utf-8"))
     jest_dom = package_lock["packages"]["node_modules/@testing-library/jest-dom"]
-    assert dockerfile.splitlines()[1] == "FROM node:22-slim AS frontend-builder"
+    assert "FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS frontend-builder" in dockerfile
     assert jest_dom["engines"]["node"] == ">=22"
 
 

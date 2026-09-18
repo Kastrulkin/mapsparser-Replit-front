@@ -1,5 +1,22 @@
 # Verified commands and evidence
 
+## Docker base-pin source checks — 18 September 16:22 UTC
+
+Root executed the existing bug-reproducer capture helper with an empty
+environment, ARM64 venv Python, PYTHON_DOTENV_DISABLED=1 and the pinned
+native-loopback guard first on PYTHONPATH. Child command:
+
+```sh
+venv/bin/python -m pytest -q tests/test_docker_base_pins.py tests/test_docker_packaging_tools.py tests/test_docker_frontend_artifacts.py tests/test_docker_browser_permissions.py tests/test_docker_build_context_contract.py tests/test_release_constraints.py tests/test_staging_compiled_build_contract.py::test_canonical_image_accepts_opt_in_without_enabling_it_by_default
+```
+
+Actual capture `raw/docker-base-pins-root-20260918.json`:14passed0.19s,
+exit0/557.788ms, no timeout/truncation, empty stderr. No DB, Docker daemon or
+network used. Agent raw `docker-base-pins-static-20260918-captured.json` is a
+separate actual8-test capture; its earlier handwritten `...static-20260918.json`
+is only a note, not authoritative timing evidence. Public manifest proof is
+`raw/docker-base-manifest-platforms-20260918.json`; metadata only, no layer pull.
+
 ## Later failed probes — 18 September 16:08 UTC
 
 Demo one-shot outer `/private/tmp/localos-readiness-demo-272-root-capture.py

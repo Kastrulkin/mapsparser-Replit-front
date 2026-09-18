@@ -1,5 +1,21 @@
 # Readiness decisions
 
+## D-025 — Preserve failed probes and pin observed Docker bases
+
+An interrupted comparison is not a partial performance PASS. Preserve the first
+demo and benchmark captures, unknown failure cause and residual synthetic DB;
+fix only the test controller/selection before any separate retry. Review of the
+prepared process controller rejected stale identity overwrites, unreaped leaders
+and unverified process-group ownership before it was executed.
+
+The two application Docker base images can be pinned to the exact public OCI
+indexes already resolved by the historical f0cc build. Registry metadata on
+18 September verifies response SHA256, registry digest header and linux/amd64
+plus linux/arm64 descriptors; no image layers were downloaded. This avoids
+tag drift without a speculative base-version upgrade. It does not freeze apt,
+prove dependency artifact hashes, pin Telegram's application parent or establish
+a new successful build. Those gates remain separate.
+
 ## D-024 — Separate measured local behavior from release and capacity claims
 
 Keep the exact272native117 browser suite,240-read paced HTTP profile and

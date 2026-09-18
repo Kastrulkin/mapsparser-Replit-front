@@ -1,5 +1,7 @@
+# Exact public OCI indexes resolved in historical f0cc182a BuildKit resolution;
+# Registry v2 metadata verification confirmed linux/amd64 and linux/arm64 descriptors.
 # Этап 1: сборка фронтенда (Vite/React)
-FROM node:22-slim AS frontend-builder
+FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS frontend-builder
 ARG VITE_PROMOTION_HUB_ENABLED=false
 ARG VITE_CONTENT_JOURNEY_ENABLED=false
 ARG VITE_JOURNEY_ADMIN_BUILDER_ENABLED=false
@@ -25,7 +27,7 @@ RUN npm run build:all
 
 # Этап 2: backend + worker
 # Базовый образ Python 3.11 на Debian bookworm (стабильный apt-канал).
-FROM python:3.11-bookworm
+FROM python:3.11-bookworm@sha256:35d3a4a3d5e42e02ab916d44513a050689f12c0533d45598d229672503fe77ca
 
 ARG INSTALL_PLAYWRIGHT_BROWSER=true
 

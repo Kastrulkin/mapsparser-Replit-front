@@ -1,5 +1,15 @@
 # Production-readiness progress
 
+16:24 UTC: failed-probe documentation committed locally f372cb84 after
+independent review. Node/Python Docker bases now pin verified historical OCI
+indexes; root14static tests pass0.19s/capture557.788ms, independent scoped
+reviewPASS. No application/frontend/migration change, no build/pull/deploy.
+DEP-LOCK-01 and image acceptance remainPARTIAL. Prepared process controllers
+v5/v6 were rejected before execution (ownership/lifecycle issues, then macOS
+ps lacks sid and the detached-child proof omitted capture); v7 correction is
+being prepared. No heavy job running; Mac headroom~2GiB still inadequate for
+Docker and too marginal for another long native benchmark.
+
 16:08 UTC: supplemental benchmark is no longer running. Its outer capture
 failed with PermissionError/errno1 at16:05:23 before final inner output, so
 there is NO accepted50-sample result. Exact matching process/session checks

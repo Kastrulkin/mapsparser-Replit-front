@@ -2,6 +2,17 @@
 
 ## Current continuation — 18 September after 15:30 UTC
 
+LATEST16:24UTC: f372cb84 commits reviewed failed-probe docs. Docker base-pin
+package is independently source/static approved, root14passed0.19s with real
+capture557.788ms; no app/frontend/migration change from272. DEP-LOCK-01 remains
+PARTIAL pending current image/apt/artifact/bot/target-runtime verification.
+Prepared-only supervisorv5 andv6 are rejected; v6 relies on unsupported macOS
+ps sid and missed detached-child capture in its natural-exit proof. Neither
+was executed. v7 is being prepared; do not launch old wrappers. No heavy job.
+Raw base evidence:docker-base-manifest-platforms-20260918.json and
+docker-base-pins-root-20260918.json; earlier manually assembled note is not a
+command capture. Preserve unrelated map-analysis file. No push/deploy.
+
 LATEST16:08UTC: no heavy job running. Benchmark outer
 `journey-measure-postfix-272794a4-command.json` is invalid/PermissionError
 errno1 at16:05:23, no final inner result. Escalated targeted ps and tmux checks

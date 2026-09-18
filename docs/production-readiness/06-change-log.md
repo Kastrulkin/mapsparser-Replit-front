@@ -1,5 +1,18 @@
 # Production-readiness change log
 
+## DEP-LOCK-01 — pin the already-observed Docker base indexes
+
+Two FROM references now use the exact Node22/Python3.11 OCI indexes resolved
+by historical f0cc BuildKit. Public Registry-v2 metadata verifies response hash,
+digest header and ARM64/AMD64 descriptors. No layer download or version upgrade.
+The new pin contract fails against floating refs; directly affected packaging
+and frontend assertions now include digest syntax. Independent review passes.
+Root guarded aggregate: **14passed0.19s**, capture557.788ms,exit0,no timeout or
+truncation (`raw/docker-base-pins-root-20260918.json`). Application/frontend/
+migrations are unchanged. This is static pinning proof, not a current image,
+AMD64 execution, apt/hash lock or closed DEP-LOCK-01 finding. Build remains
+blocked by local Mac disk headroom; no production deployment.
+
 ## SEC-RBAC-06 / SUB-MOBILE-01 — stored role and subscription admission
 
 Reviewed `272794a4` uses canonical write access on five review mutation routes

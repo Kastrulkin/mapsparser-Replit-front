@@ -223,7 +223,9 @@
         "raw/finance-upload-admission-root-retry.json",
         "raw/post-cleanup-disk-during-backend.json",
         "raw/secret-delta-24e-to-34618037.json",
-        "raw/trivy-vulnerability-db.json"
+        "raw/trivy-vulnerability-db.json",
+        "raw/docker-base-manifest-platforms-20260918.json",
+        "raw/docker-base-pins-root-20260918.json"
       ],
       "gaps": [
         "Finalf0cc tracked-source98vs94baseline candidates:4delta prose false positives; post-remediation28commit delta1prose false positive. Historical privileged exposure/revocation unknown. Exactimmutableb43 strict PyPI audit checked104Python distributions/0skips,12records/6unique advisories only in pip24.0. Reviewed65ca8836 pins26.2;2e121912 app101constraints plus3Docker pins pass11static checks, image/version/re-audit pending. PyMuPDF license confirmation and finalimage/log/OS/native/npm/license scans pending. Real runner/policy/finance hostile-row test24e0d4cd independently passes1/0.79s with exact root capture2.743835s, no row-supplied approval/tenant/capability, foreign403/no effects and owner target-only writes, no providers/SQL errors. Broader AI/tool matrix remains; fixture omissions were not product bugs."
