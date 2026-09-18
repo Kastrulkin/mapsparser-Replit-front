@@ -37,6 +37,19 @@ TABLES = (
 )
 
 
+def is_owned_readiness_database(parsed):
+    legacy = parsed.path == "/readiness_full_test_reviewed_20260918"
+    fresh = re.fullmatch(r"/readiness_full_test_[0-9a-f]{8}_[0-9a-f]{12}", parsed.path)
+    return (
+        parsed.scheme in {"postgresql", "postgres"}
+        and parsed.hostname in {"127.0.0.1", "::1"}
+        and parsed.port == 35418
+        and (legacy or fresh)
+        and not parsed.query
+        and not parsed.fragment
+    )
+
+
 def isolated_test_dsn() -> str:
     database_url = os.getenv(TEST_DSN_ENV, "")
     if not database_url:
@@ -44,14 +57,7 @@ def isolated_test_dsn() -> str:
     if any(os.getenv(key) for key in ("PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE", "PGOPTIONS")):
         raise RuntimeError("native viewer mutation proof refuses inherited libpq overrides")
     parsed = urlsplit(database_url)
-    if (
-        parsed.scheme not in {"postgresql", "postgres"}
-        or parsed.hostname not in {"127.0.0.1", "::1"}
-        or parsed.port != 35418
-        or parsed.path != "/readiness_full_test_reviewed_20260918"
-        or parsed.query
-        or parsed.fragment
-    ):
+    if not is_owned_readiness_database(parsed):
         raise RuntimeError("native viewer mutation proof requires the owned loopback readiness database")
     pythonpath = os.getenv("PYTHONPATH", "")
     guard_directory = pythonpath.split(os.pathsep)[0] if pythonpath else ""
