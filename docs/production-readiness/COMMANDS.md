@@ -1,5 +1,34 @@
 # Verified commands and evidence
 
+## Preview lifecycle and v2 walkthrough — 19 September
+
+Completed one-shot captures in the existing task raw directory; do not replay
+their fixed result paths. Node22 `/usr/local/opt/node@22/bin/node` and the
+bug-reproducer capture_command.py were used; all long operations ran in tmux.
+
+- `node /private/tmp/localos-readiness-preview-lifecycle-20260919.cjs legacy`
+  -> preview-signal-red:1fail2pass/exit1/4572.479ms.
+- Same script with `owned` -> preview-signal-green:3pass/exit0/3971.846ms.
+  Test SHA2569f6a2db7ce373abba06d8767bbf85b75fd94388ec85e26af1b93b30d22e4e9fc.
+- `node --test /private/tmp/localos-readiness-demo-preview-v2-test-20260919.cjs`
+  -> demo-v2-policy:5pass/exit0/1262.987ms.
+- `node /private/tmp/localos-readiness-demo-v2-signal-smoke-20260919.cjs`
+  -> demo-v2-signal:exit0/2347.837ms; actual helper lifecycle/223file identity/
+  ports pass; exact login rejected403 and zero forwarded mutations.
+- `node /private/tmp/localos-readiness-demo-preview-v2-20260919.cjs --execute`
+  -> demo-v2-rehearsal:exit1/320867.914ms, lifecycleValidtrue but financefalse.
+  SIGTERM cleanly finalizes; login1,preview0,import0,48reads. No complete demo.
+
+All five captures above have no timeout/truncation/stderr. Helper SHA256
+757da7d48d7922245a1f9fb7f6df1e6bf16f3b0f3b47a93242dc1c5e35608335;
+policy test SHAd3e6b85043bb7f9d581de4f930b5c28816751dbe592e3ce7526ebca85ed7b9fa.
+Rehearsal result `/private/tmp/localos-readiness-demo-preview-v2-rehearsal-20260919-result.json`
+SHAa46ea68d95991d70190544d086fce356c0a78f1229c191fbb8b426d65ea5cf74.
+Fixture pre/post read-only captures398.875/351.961ms pass; root SQL preserves
+finance2/batches4/artifact1 and all prior digests. Native picker fallback is
+tool-denied; no bypass/finance action. Detailed UI/denial distinctions and exact
+next read routes: raw/demo-v2-rehearsal-20260919.md.
+
 ## Retained demo artifact and current UI — 19 September
 
 Completed exact helper commands, NOT full seed replay:

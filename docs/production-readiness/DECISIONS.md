@@ -1,5 +1,25 @@
 # Readiness decisions
 
+## D-036 — Own preview finalization; preserve tool and feature boundaries
+
+The installed Vite's combined default signal/HTTP-close pattern causally
+reproduces SIGTERM143 before final evidence. The tested fix owns shutdown,
+removes only newly registered Vite SIGTERM/stdin-end listeners and uses its
+public close method. Both changes form one tested fix. Do not patch the
+dependency or suppress pre-existing signal handlers. Clear close timeout timers.
+Actual v2 smoke and subsequent UI stop now preserve their final reports.
+
+Sequence admission must happen synchronously after multipart validation;
+failed reads must not release an in-flight mutation. This is bounded harness
+hardening, not an application concurrency finding or broad security certificate.
+
+Browser/native permission denial is a boundary, not a reason to switch to
+undocumented control. Ask for an allowed browser/manual picker; do not count
+unperformed finance operations as a complete demo. Distinguish proxy403 from
+upstream403: disabled disk import is a retained-stage feature boundary, not
+permission to enable providers. Keep exact IDs/queries and deny write counterparts.
+No full-demo/readiness score promotion from the successful lifecycle regression.
+
 ## D-035 — Separate fixture proof, UI observation and harness lifecycle
 
 The retained fixture correction may insert only the missing exact synthetic

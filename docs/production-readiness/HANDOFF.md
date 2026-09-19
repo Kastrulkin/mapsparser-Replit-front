@@ -1,6 +1,46 @@
 # Readiness handoff
 
-## Current checkpoint — 19 September, demo artifact applied and drawer observed
+## Current checkpoint — 19 September, actual preview lifecycle passes
+
+Branch `codex/production-readiness-20260917`, starting HEAD60e45463. Current
+package is private test-harness fixes and audit docs, no application source.
+Preserve/exclude the same seven foreign dirty files listed below.
+
+TEST-DEMO-02 now scoped FIX_PROVEN. Isolated actual-Vite RED1fail2pass4572.479ms
+(SIGTERM143/missingreport) -> GREEN3pass3971.846ms. New private v2 helper
+SHA757da7d4…/testsSHAd3e6b850… has5policy/multipart passes1262.987ms and reviewed
+actual `--signal-smoke` exit0/2347.837ms, clean result/ports/223file manifest.
+Combined fix removes only Vite-added signal/stdin listeners and calls Vite.close;
+do not attribute success to either change individually. Read-error isolation and
+post-parse atomic admission were reviewed, not race-integration-tested.
+
+Full v2 attempt is TERMINAL and INCOMPLETE: raw demo-v2-rehearsal exit1,
+320867.914ms, lifecycleValidtrue/demoFinanceValidatedfalse; login1,48reads,
+preview0/import0. Created tab4 closed, browser hidden again; Node86206 and named
+tmux readiness-demo-v2-rehearsal-20260919 absent,18017/18018free. Signal-smoke
+session is also terminal. Do not restart/reuse completed output paths.
+
+Native fallback hit explicit Codex-app control denial. No bypass/repeated
+managed chooser. User asked asynchronously whether next run may use Chrome
+or manual CSV selection; no answer at documentation checkpoint. Review/Maps,
+explicit content item/photo guidance, finance summary/history and partnership
+drawer/campaign block observed; no saved campaign or finance mutation.
+
+Next: inspect `raw/demo-v2-rehearsal-20260919.md` and exact v2 result. Add only
+two source-verified reads to a NEW helper: North partnership/results with
+scope_type=business/scope_id, and exact lead/contact-intelligence with North and
+workstream34c9aefa…; their POSTs remain forbidden. Start Content directly with
+seed plan_id, not generic navigation to newer unrelated fixture. Disk-video403
+comes from retained feature-disabled config (root live source/config confirmed),
+not a proxy miss; do not enable it. Use an authorized supported picker route.
+
+Latest postfixture351.961ms passes. Finance2/batches4/artifact1 and all recorded
+digests unchanged; no protected outreach artifacts. Current frontend39aeeff9
+against historicalf0cc backend remains the scope, not a current image. No
+production/push/deploy, no completed10–15minute rehearsal, no score promotion.
+Exact helper/test hashes/captures and raw evidence are recorded in COMMANDS.
+
+## Earlier checkpoint — 19 September, demo artifact applied and drawer observed
 
 Branch `codex/production-readiness-20260917`; source/doc starting HEADed9785b3.
 No new application code in this continuation; only scoped synthetic fixture

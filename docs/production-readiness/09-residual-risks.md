@@ -10,10 +10,12 @@ no timeout/truncation; owned resources checked after completion. Later seed-only
 commit1e955718 has separate2focused/44overlapping adjacent passes and independent
 review. The exact missing retained synthetic artifact is now applied and its
 current-frontend drawer text observed; full presenter rehearsal remains open.
-The current-UI finance attempt never reached preview/apply due a managed-picker
-stall and deadline; source-verified read-allowlist gaps remain. Separate drawer
-helper ended143 with empty result, not lifecycle PASS. Root verified artifact,
-stage and process invariants independently. Concurrent source/test edits appeared
+The earlier managed-picker stall/deadline and drawer exit143 remain historical
+failures. TEST-DEMO-02 now fixes the preview lifecycle with causal/actual-helper
+proof, and v2 current-UI stop finalizes cleanly. Finance still never reaches
+preview/apply: native fallback is tool-denied. Two exact read gaps remain;
+disk-video upstream403 is feature-disabled, not a proxy miss. Root verifies
+unchanged finance/artifact digests and closed resources. Concurrent source/test edits appeared
 during the stall and are not certified by the frozen aggregate; see HANDOFF.
 Frontend39aeeff9 now has616/128files unitPASS309.65s, checked types/lint/build,
 and local reset-token-log regression/asset proof. The locale browser checkpoint

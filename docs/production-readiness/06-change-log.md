@@ -1,5 +1,24 @@
 # Production-readiness change log
 
+## TEST-DEMO-02 — preview signal finalization and bounded read compatibility
+
+Private test instrumentation only; no application/dependency source changed.
+Installed-Vite legacy reproduction fails only SIGTERM (exit143, missing report),
+while SIGINT/deadline pass. New owned listener/close pattern passes3/3; actual
+guarded helper smoke independently passes, preserves final JSON and223artifact
+files, rejects login in smoke mode and closes both ports. Source review also
+hardens async multipart admission and prevents read errors unlocking writes;
+five policy/multipart tests pass, without a racing-request integration claim.
+
+V2 current UI observes map/review/content/photo guidance, financial summary and
+old history, partnership hypothesis and unsaved campaign panel. The native
+picker is tool-denied, so no financial preview/import happens. Clean SIGTERM
+produces lifecycleValidtrue but overallfalse/exit1 after320867.914ms. All finance
+and partnership baseline digests stay unchanged. Two exact read additions and
+an allowed picker route remain; disk-video upstream403 is feature-disabled on
+the retained stage. No full demo, deployment or readiness score change.
+Raw detail: demo-v2-rehearsal-20260919.md; COMMANDS records hashes and captures.
+
 ## TEST-DEMO-01 — persist an explicitly unconfirmed partnership demo hypothesis
 
 Commit `1e955718` changes only `scripts/seed_journey_staging.py` and its new

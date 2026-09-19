@@ -1,6 +1,35 @@
 # Production-readiness progress
 
-## Current checkpoint — 19 September, scoped demo fixture verified
+## Current checkpoint — 19 September, preview lifecycle fixed; file input blocked
+
+- [x] Previous turn PROGRESS: reviewed evidence committed in60e45463; cache
+  inventory reconfirmed insufficient build headroom. No completed suite rerun.
+- [x] TEST-DEMO-02: isolated actual-Vite causal RED1fail/2pass4572.479ms
+  reproduces SIGTERM143/missing report. Owned lifecycle GREEN3pass3971.846ms.
+  Reviewed v2 helper5policy tests1262.987ms; actual signal smoke exit0/2347.837ms,
+  final report preserved, both ports closed,223artifact files unchanged.
+- [x] Current UI maps/review/seeded content/finance summary/partnership drawer
+  observed. Photo and campaign panels no longer hit the old proxy gaps.
+  v2 rehearsal ended cleanly: lifecycleValidtrue, exit1/320867.914ms because
+  finance was not exercised; login1/48reads/preview0/import0. No full-demo PASS.
+- [ ] Native CSV picker fallback is unavailable: tool explicitly denies Codex
+  app control. Did not bypass it or repeat the stalled managed chooser. Asked
+  whether next run may use Chrome or user-selected CSV; answer pending.
+- [ ] Two exact partnership GETs still need positive allowlisting; noncanonical
+  content-plan denial is avoided by starting at the explicit seeded plan URL.
+  Disk-video upstream403 is feature-disabled on this retained stage, not a
+  proxy denial or demonstrated product defect. No settings changed.
+- [x] Postfixture inspect351.961ms and root SQL retain finance2/batches4/artifact1
+  with all baseline row digests unchanged; protected outreach counts0. Tab4
+  closed, visibility restored, Node86206/ports/tmux terminal. Independent
+  lifecycle/policy/raw review PASS for these bounded claims.
+
+Starting HEAD60e45463; no application source changed. Seven foreign dirty files
+remain excluded. Details: raw/demo-v2-rehearsal-20260919.md. Next: two reviewed
+read additions in a new private helper and an allowed file-picker route; never
+replay completed v2 output paths. Full image/owner decisions and broad DoD remain.
+
+## Earlier checkpoint — 19 September, scoped demo fixture verified
 
 - [x] Previous installer-confirmation turn only reconfirmed completed cleanup
   (NO_PROGRESS toward the audit). This continuation adds actual retained-stage

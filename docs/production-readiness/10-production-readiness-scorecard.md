@@ -11,9 +11,10 @@ testcontainer cleanup. Later seed/test1e955718 has separate2focused/44overlappin
 adjacent passes; it is not in that archive. No score is promoted: current image,
 complete demo rehearsal and other original release gates remain open.
 The exact retained synthetic artifact update and current-frontend drawer text
-are now verified, without score promotion. Full walkthrough hit a managed-picker
-stall/read-proxy gaps before finance; drawer helper exited143 without final
-result. Manual root postchecks are recorded separately, not a lifecycle PASS.
+are now verified, without score promotion. The earlier drawer helper exit143
+is now causally fixed: owned lifecycle3pass and actual signal smoke pass;
+v2 UI stop has lifecycleValidtrue. Complete walkthrough remains open because
+native file selection is tool-denied and two read gaps remain; v2 finance0/0.
 Concurrent dirty source/test changes are excluded from frozen-suite claims.
 
 Latest committed backend7bb9f996 adds bounded callback alert rotation with
@@ -73,7 +74,7 @@ completeness/current truthfulness, not a higher maturity score or release gate w
 | Observability | 2 | Raw captures, scoped runbooks and evidence handoff exist. | No completed production log/image scan, operational dashboard closure or repeated incident rehearsal. |
 | Deployment | 1 | Local image/browser and isolated Compose evidence exist. | No audit deployment, production migration, production backup rehearsal or release verification was authorized. |
 | Documentation | 3 | System map, threat model, risk register, runbook, demo and evidence records are present. | This scorecard and reports are working drafts; final DoD reconciliation and demo rehearsal remain. |
-| Demo readiness | 1 | Earlier managed-browser pass includes actual finance preview/apply/duplicate history. Review-copy debt has scoped3-view browser proof. Retained partnership artifact and its current-frontend drawer text are now verified. | The latest full attempt did not run finance; a paced complete rehearsal, proxy compatibility and clean helper lifecycle remain open. Provider and customer data are deliberately out of scope. |
+| Demo readiness | 1 | Earlier managed-browser pass includes actual finance preview/apply/duplicate history. Review-copy debt has scoped3-view browser proof. Partnership artifact/drawer and now actual helper lifecycle are verified. | Latest v2 did not run finance: native picker is tool-denied; two read gaps and a paced complete rehearsal remain. Provider and customer data are deliberately out of scope. |
 
 ## Interpretation
 

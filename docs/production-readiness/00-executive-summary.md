@@ -25,8 +25,10 @@ writes require the documented human approval or manual boundary.
   tests and44overlapping adjacent tests pass. The exact retained demo record
   was added without resetting other data, preserved on repeat, and verified in
   the current frontend drawer. Complete presentation rehearsal is still open:
-  browser file-picker delays and test-proxy compatibility/finalization issues
-  interrupted it. No finance data changed in the newest attempt.
+  browser file selection and remaining test-proxy compatibility gaps interrupt
+  it. Preview finalization is now causally fixed and verified in a real helper
+  smoke plus the latest partial walkthrough. No finance data changed; this is
+  not a completed end-to-end presentation.
 - Password reset pages no longer print raw reset credentials into the browser
   console. A synthetic regression preserves the reset request and success while
   confirming no credential output;28focused/adjacent checks, the rebuilt asset

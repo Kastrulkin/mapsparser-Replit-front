@@ -1,13 +1,23 @@
 # Synthetic partner demo: 10–15 minutes
 
 Status: **partially exercised; complete presenter rehearsal still open**.
+Latest v2 attempt fixes preview lifecycle (real signal smoke passes) and shows
+maps/review/content/photo guidance, finance summary/history and partnership
+hypothesis/unsaved campaign panel. It ends cleanly after320867.914ms, with
+login1/48reads but no finance preview/import. Native picker fallback is denied
+by the tool's Codex-app safety boundary; an allowed browser/manual selection is
+needed. Two scoped partnership reads remain proxy-denied. Disk-video upstream403
+is the explicitly disabled retained-stage feature, not a proxy defect. No data
+reset or feature enablement. See raw/demo-v2-rehearsal-20260919.md.
+
+Earlier fixture and walkthrough evidence:
 Fixture correction `1e955718` now has SQL-contract, scoped real-stage update,
 repeat-preservation and actual current-frontend drawer evidence. The drawer
 shows the explicitly synthetic local-audience hypothesis, unconfirmed score
 and manual fact-check step. No contacts, drafts, approvals or sends were added.
 Do not replay the whole seed against retained staging or overwrite the artifact.
 
-The newest complete-route attempt did NOT reach finance preview/apply: the
+The earlier complete-route attempt did NOT reach finance preview/apply: the
 managed chooser stalled24190.3679s and the proxy safely stopped on its deadline.
 Two entries/four older batches remained unchanged under the recorded
 row-serialization digests. Seven proxy-denied reads caused visible test-environment errors; these
