@@ -18,11 +18,28 @@ independent source/schema/drawer reviewPASS. Source SHA-256
 `70b99674d87f99de0964798a51f808840711fddf1ac07a40b61fe992e07e7ff0`;
 test SHA-256 `737dcc21f4b1132e0962c6ed0aaa42bcee171faa9eebbf02f1505615f524b6ae`.
 The tests record SQL, not a real PostgreSQL preservation or browser result.
-No retained stage was changed. Full-seed replay is unsafe for that purpose:
+At that source-fix checkpoint no retained stage was changed. Full-seed replay is unsafe for that purpose:
 pre-existing seed statements update other fixture fields. Next runtime work
 must be an exact scoped synthetic artifact update, followed by the actual drawer
 and complete presenter rehearsal. The separate fullbackend6eec run excludes
 this later seed/test commit and is not proof for this delta.
+
+19 September runtime follow-up: an independently reviewed identity-checked
+helper inserted only the missing synthetic artifact (663.349ms/exit0); repeat
+preserved it (359.476ms/exit0), with unchanged whole-row digest and zero protected
+outreach counts. Current frontend39aeeff9 over historicalf0cc stage visibly
+renders the intended synthetic overlap, unconfirmed score and manual next
+action in the actual drawer. Final read-only inspect610.647ms passes.
+This closes the scoped fixture/render defect, not the complete presenter demo.
+
+The full walkthrough stopped before finance preview/import: managed chooser
+stalled24190.3679s and the preview reached its1800s deadline. Two entries and
+four prior batches stayed unchanged. Seven GET403s came from an incomplete
+positive proxy allowlist, not application defects. A separate drawer-only
+run rendered the fix but ended143/107152.023ms with empty helper result; root
+independently checked resource cleanup,223artifact files and stage flags.
+No helper lifecycle PASS, full demo, production, new image or wider dirty-tree
+coverage is inferred. See task raw/demo-rehearsal-current-ui-20260919.md.
 
 ## UX-LOCALE-05 — localized manual review-draft copy
 

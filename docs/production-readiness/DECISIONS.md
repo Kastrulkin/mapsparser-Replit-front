@@ -1,5 +1,33 @@
 # Readiness decisions
 
+## D-035 — Separate fixture proof, UI observation and harness lifecycle
+
+The retained fixture correction may insert only the missing exact synthetic
+artifact after container/DB/owner/status checks, never replay the full seed.
+SQL/native and actual drawer evidence now prove that bounded correction.
+They do not close the complete presenter rehearsal.
+
+A managed file chooser stalled for24190.3679s; a short observation timeout is
+not an application failure or permission to restart a possibly live job.
+Check the exact handles/captures first. Here the first preview actually reached
+its deadline; no finance mutation occurred. Preserve that failed result.
+Use a supported native picker for a later run instead of repeating the same
+stalled managed operation. Proxy-denied read paths are harness defects until
+the original application is tested without that interference. Expand only
+source-verified exact synthetic reads, not a broad GET pass-through: some other
+GET endpoints can call providers or change state. SELECT followed by commit
+alone is not evidence of a write.
+
+The separate drawer check rendered the expected text, but its SIGTERM exit143
+left an empty reserved result. Do not call that a clean helper lifecycle.
+Manual root postchecks can prove their own artifact/identity/process invariants,
+not fabricate the missing self-report. Preserve concurrent worktree changes
+that appeared during the long tool stall; the frozen suite is not their proof.
+Installed Vite source independently registers a SIGTERM callback that closes
+its server and calls process.exit, a plausible preemption of the helper's
+async finalization. Trace evidence is absent; test a minimal sole-owner signal
+fix before the next browser run rather than extending another supervisor.
+
 ## D-034 — Preserve retained fixtures and distinguish a hypothesis from a result
 
 The missing partnership overlap is a seed/UI storage-contract mismatch, not a

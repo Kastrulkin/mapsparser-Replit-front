@@ -1,22 +1,33 @@
 # Synthetic partner demo: 10–15 minutes
 
-Status: **partially exercised in the managed browser; not yet demo-ready**.
-Local fixture correction `1e955718` now seeds the actual drawer's `match_json`
-with a clearly synthetic, unconfirmed local-audience hypothesis (`needs_evidence`).
-Two SQL-contract tests and44overlapping adjacent tests pass with independent
-review. It has NOT been applied to the retained stage or browser-rehearsed.
-Apply only the exact missing synthetic artifact after checking its identity;
-do not replay the whole seed, which updates unrelated retained fixture fields.
+Status: **partially exercised; complete presenter rehearsal still open**.
+Fixture correction `1e955718` now has SQL-contract, scoped real-stage update,
+repeat-preservation and actual current-frontend drawer evidence. The drawer
+shows the explicitly synthetic local-audience hypothesis, unconfirmed score
+and manual fact-check step. No contacts, drafts, approvals or sends were added.
+Do not replay the whole seed against retained staging or overwrite the artifact.
+
+The newest complete-route attempt did NOT reach finance preview/apply: the
+managed chooser stalled24190.3679s and the proxy safely stopped on its deadline.
+Two entries/four older batches remained unchanged under the recorded
+row-serialization digests. Seven proxy-denied reads caused visible test-environment errors; these
+are not product failures or a clean demo. The later separate partnership check
+showed the fixed text, but a lower campaign panel was also denied. Its helper
+returned143 with an empty final result; root independently verified cleanup,
+artifact and stage invariants. Use a reviewed complete read allowlist and a
+supported native picker before claiming a paced10–15minute rehearsal.
+Evidence: task raw/demo-rehearsal-current-ui-20260919.md. Current UI39aeeff9,
+historicalf0cc backend only, not a current release image.
 Review-copy localization now has3/3actual browser checks across RUdesktop,
 ENlaptop and ELmobile (5.950617s), exact clipboardtext and no observed runtime
 errors. This narrow newfrontend/historicalsyntheticbackend check is not a
 complete presenter rehearsal; see05 for build-configuration failures retained.
-On 19 September Moscow, login/maps/review/content and real synthetic finance
+In the earlier 19 September Moscow run, login/maps/review/content and real synthetic finance
 preview → apply → duplicate retry were exercised. Both finance attempts skipped
 two existing duplicates and retained both earlier history entries. The retained
 partnership fixture instead showed `[E2E] Partnership Journey` without the
-expected audience-overlap reason. Reconcile that fixture without resetting
-existing data before the complete presenter rehearsal. A file-picker tool delay
+expected audience-overlap reason. That specific fixture gap is now fixed by
+the scoped update and drawer check above, without resetting data. A file-picker tool delay
 also prevents treating the elapsed session as a paced10–15minute demo.
 Evidence: task raw `managed-browser-demo-20260919.md`; no provider/customer run.
 
@@ -93,8 +104,8 @@ that a draft was delivered.
    should be skipped; demonstrate that outcome instead of clearing data during
    the demo or promising two newly imported records.
 
-5. **Partnership — 2 min.** Open the seeded nearby-business/workstream card.
-   Expected after the scoped fixture update: an explicitly synthetic hypothesis
+5. **Partnership — 2 min.** Open the exact seeded lead with `focus=match`, then
+   select `Вся информация`. Verified in the scoped current-frontend check: an explicitly synthetic hypothesis
    under `Общие направления`, `Что нужно для проверки совместимости` and
    `Пока не подтверждена`, plus the Candidate/manual-selection state. This is
    not a confirmed partner assessment or a specific backend next-action label.

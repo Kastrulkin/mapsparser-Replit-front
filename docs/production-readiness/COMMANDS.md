@@ -1,5 +1,32 @@
 # Verified commands and evidence
 
+## Retained demo artifact and current UI — 19 September
+
+Completed exact helper commands, NOT full seed replay:
+`python3 /private/tmp/localos-readiness-demo-artifact-20260919.py --expected-database-oid 16384`
+and the same with `--apply`, captured with bug-reproducer's capture_command.
+Final helper SHA2569e7c250bf40ce8def73c49d3ae858875a2b570f4f8b00dfb380c0ee4c1a78fcb.
+Raw demo-artifact-{inspect,apply,repeat,final-inspect}-20260919.json:
+466.474/663.349/359.476/610.647ms, all exit0/untruncated/no timeout/stderr.
+Repeat preserves existing row, not a full seed re-execution. Exact artifact
+whole-row digestdff7ad2af86369ced7dce0b35ff30051 stayed unchanged.
+
+Both one-shot Node22 previews ran in named tmux sessions and are now terminal:
+
+- demo-current-ui-server-20260919.json: exit1/1812384.731ms, deadline;
+  login1,preview0,import0,32allowedreads,7deniedGETs and1deniedproduct-eventsPOST.
+  Helper cleanup/stage/manifest passed, but finance/demo did not run.
+- partnership-ui-server-20260919.json: exit143/107152.023ms, empty private
+  result. Manual CUA drawer text observed; no helper-finalization PASS.
+
+Neither outer capture timed out or truncated output; stderr empty. Private
+helper/result pins, exact stage identity, UI provenance, SQL digests and
+resource postchecks are in raw/demo-rehearsal-current-ui-20260919.md. Do not
+replay those completed paths or treat old tmux handles as live. Root separately
+confirmed no owned processes/listeners and223unchanged frontend files.
+The managed file chooser took24190.3679s despite timeouts; this is not benchmark
+or rehearsal time. Existing2finance entries/4batches were preserved unchanged.
+
 ## Frozen6eec backend aggregate and demo seed — 19 September
 
 One-shot private capture `/private/tmp/localos-readiness-backend-6eec7e5e-capture-20260919.sh`

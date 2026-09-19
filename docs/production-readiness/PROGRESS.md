@@ -1,6 +1,38 @@
 # Production-readiness progress
 
-## Current checkpoint — 19 September, seed1e955718 / frozen backend aggregate
+## Current checkpoint — 19 September, scoped demo fixture verified
+
+- [x] Previous installer-confirmation turn only reconfirmed completed cleanup
+  (NO_PROGRESS toward the audit). This continuation adds actual retained-stage
+  and current-frontend evidence; the completed full suites were not rerun.
+- [x] TEST-DEMO-01: identity-checked missing synthetic artifact inserted;
+  immediate helper repeat preserves the whole row, including updated_at.
+  Captures: inspect466.474ms, apply663.349ms, repeat359.476ms; exit0, no
+  timeout/truncation/stderr. Contacts/drafts/queues/campaigns/rooms remain0.
+- [x] Separate current-frontend drawer observation shows the synthetic audience
+  hypothesis, unconfirmed score and manual fact-check step. No provider action.
+  Final read-only fixture check passes610.647ms;223artifact files, stage identity
+  and flags independently verified unchanged. Scoped fix proven, not full demo.
+- [ ] Full rehearsal remains incomplete. Managed file chooser stalled
+  24190.3679s; the first server stopped on its1800s deadline before any financial
+  preview/import. Two finance entries and four prior batches are unchanged.
+  Seven read-path403s are proxy compatibility gaps, not product findings.
+- [ ] Separate partnership helper shutdown returned143/107152.023ms and left
+  an empty result, so no helper lifecycle PASS. Root separately confirmed its
+  PID, ports and tmux absent; drawer evidence is manual CUA evidence only.
+
+Raw detail: `demo-rehearsal-current-ui-20260919.md`, server captures and artifact
+captures in the existing task raw directory. Both previews are terminal; do not
+replay completed output paths. No push/deploy/production or financial reset.
+
+HEAD remainsed9785b3 before this evidence commit. Concurrent source/test edits
+appeared during the tool stall and remain excluded (see HANDOFF); the frozen
+aggregate does not certify them. Next: fix the source-grounded positive read
+allowlist and preview finalization, then use a supported native file picker
+instead of repeating the stalled managed chooser. Full image, secret/license
+owner decisions, remaining coverage and release gates stay open; scores unchanged.
+
+## Earlier checkpoint — 19 September, seed1e955718 / frozen backend aggregate
 
 - [x] TEST-DEMO-01: actual drawer reads `match_json`, not the journey preview.
   Commit1e955718 inserts an explicitly synthetic unconfirmed hypothesis and

@@ -14,15 +14,19 @@ writes require the documented human approval or manual boundary.
 
 ## What is materially stronger after this work
 
-- The frozen current backend application source passes4,751tests in652.30s,
+- The frozen backend checkpoint passes4,751tests in652.30s,
   with7deliberate live-provider skips and6dependency/configuration warnings.
   The run includes isolated PostgreSQL and browser regressions; owned test
   resources were checked after completion. It is not a current release-image,
-  production, or complete presenter-rehearsal result.
+  production, or complete presenter-rehearsal result. Concurrent source changes
+  that appeared later are not covered by that frozen run.
 - The partnership demo seed now supplies an explicitly unconfirmed synthetic
   audience-overlap explanation using the actual drawer contract. Two regression
-  tests and44overlapping adjacent tests pass. Updating the retained demo record
-  and rehearsing the complete presentation remain outstanding.
+  tests and44overlapping adjacent tests pass. The exact retained demo record
+  was added without resetting other data, preserved on repeat, and verified in
+  the current frontend drawer. Complete presentation rehearsal is still open:
+  browser file-picker delays and test-proxy compatibility/finalization issues
+  interrupted it. No finance data changed in the newest attempt.
 - Password reset pages no longer print raw reset credentials into the browser
   console. A synthetic regression preserves the reset request and success while
   confirming no credential output;28focused/adjacent checks, the rebuilt asset

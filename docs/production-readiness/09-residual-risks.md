@@ -4,11 +4,17 @@ Updated19September2026. These are remaining risks or verification gaps, not
 newly demonstrated exploits. Fixed local findings and their evidence remain in
 [02-audit-backlog.md](02-audit-backlog.md) and [06-change-log.md](06-change-log.md).
 The audit branch has not been deployed; local proof is not production proof.
-Current backend application source has a frozen6eec aggregate PASS:
+Committed backend application source has a frozen6eec aggregate PASS:
 4751passed/7intentional live-provider skips/6warnings652.30s, capture659.230650s,
 no timeout/truncation; owned resources checked after completion. Later seed-only
 commit1e955718 has separate2focused/44overlapping adjacent passes and independent
-review, but has not updated the retained stage or completed a presenter rehearsal.
+review. The exact missing retained synthetic artifact is now applied and its
+current-frontend drawer text observed; full presenter rehearsal remains open.
+The current-UI finance attempt never reached preview/apply due a managed-picker
+stall and deadline; source-verified read-allowlist gaps remain. Separate drawer
+helper ended143 with empty result, not lifecycle PASS. Root verified artifact,
+stage and process invariants independently. Concurrent source/test edits appeared
+during the stall and are not certified by the frozen aggregate; see HANDOFF.
 Frontend39aeeff9 now has616/128files unitPASS309.65s, checked types/lint/build,
 and local reset-token-log regression/asset proof. The locale browser checkpoint
 uses the preceding993artifact and historical synthetic backend; no current
@@ -69,7 +75,7 @@ backend/image and deployment remain separate. See backlog02.
 | Readiness integration pending; migration startup ownership still coupled |P2 operations; unhealthy app may accept traffic or restart implies DDL|Reviewed52292e6e adds bounded read-only `/ready`,24native/route/CLI/schema tests pass; `/health` unchanged, no image/deployment proof yet|Verify endpoint in frozen image, then separately authorized rollout; preserve deliberate migrator/run modes|
 | Final combined image and whole-diff closure incomplete |P2 release gate; selected green evidence may miss integration regression|Frozen6eec full backend4751pass/7live-provider skips; earlier272native117browser pass; frontend591units/72mockbrowser/TS/lint/build stages plus artifact proof pass without relabeling original exit1. Historical120includes compiled runtime. Fresh272whole-diff review found no additional reproduced P0/P1 in bounded coverage; original verdict remains FAIL|Final combined image/compiled-runtime proof, remaining scoped coverage and independent closure; do not sum overlapping suites|
 | Production-capacity evidence incomplete |P2 capacity; bounded synthetic latency is not capacity|50-sample before/after distributions retain baseline errors; current272HTTP240/240 over64.28s includes10resource snapshots. Frontend60/60 observations use historicalf0ccbackend/unchangedfrontend. All have scoped review;8user earlier run retains login429 failures|Realistic server/queue capacity remains; low-load/tiny fixtures and10browser samples per group cannot establish production limits or speedup|
-| Demo and broader error/large-data/slow-network accessibility coverage not rehearsed |P2 demo; presentation may encounter unsupported/incomplete paths|Synthetic10–15min script separates seeded outcomes from real runner; seed1e955718 fixes the local match-artifact contract with2focused/44overlapping passes, but retained fixture update and rehearsal remain; no live provider data|Rehearse and capture expected outcomes/fallbacks; keep confidential and unimplemented areas out of claims|
+| Demo and broader error/large-data/slow-network accessibility coverage not rehearsed |P2 demo; presentation may encounter unsupported/incomplete paths|Seed1e955718 now has scoped stage insert/repeat-preservation and current-frontend drawer proof. Full attempt hit managed-picker stall and proxy read gaps before finance; separate helper finalization failed143. No live provider data|Fix test-proxy compatibility/finalization and use a supported native picker, then complete the10–15min rehearsal; keep scope/confidentiality boundaries|
 | Large workspaces and remaining structural debt |P3 after correctness; maintainability cost|Scoped fixes preserve existing modules; no architectural rewrite without benefit|Use measured churn/runtime evidence to select the next small module extraction, with existing regression coverage|
 
 The controlling release decision is the original task's Definition of Done,

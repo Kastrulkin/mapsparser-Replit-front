@@ -1,6 +1,64 @@
 # Readiness handoff
 
-## Current checkpoint — 19 September, aggregate complete / demo fixture corrected
+## Current checkpoint — 19 September, demo artifact applied and drawer observed
+
+Branch `codex/production-readiness-20260917`; source/doc starting HEADed9785b3.
+No new application code in this continuation; only scoped synthetic fixture
+insert and audit evidence. Preserve/exclude ALL concurrent dirty files:
+`docs/releases/VOICE_WORK_REVIEW_20260914_PILOT.md`,
+`docs/VR_ENGELSA_MAPS_ANALYSIS_20260918.md`,
+`src/api/prospecting/outreach_routes.py`,
+`src/services/agent_sheet_provider_executor.py`,
+`src/api/prospecting/public_offer_reader.py`,
+`tests/test_agent_sheet_provider_query_adapter.py`,
+`tests/test_public_audit_transitional_schema.py`.
+The last five appeared during a long tool stall; do not stage/revert them or
+claim frozen6eec tests certify the current dirty tree.
+
+TEST-DEMO-01 now has real retained-stage + current-frontend scoped proof.
+Reviewed exact helper SHA9e7c250b… inserts only missing match_json in pinned
+PGc8a753b/OID16384/localos_staging; source seed main() was NOT rerun.
+Raw inspect/apply/repeat exit0 at466.474/663.349/359.476ms, untruncated;
+whole-row digestdff7ad2af86369ced7dce0b35ff30051 unchanged on repeat.
+This is helper idempotence, not a second conflict SQL or full-seed replay.
+Actual CUA drawer shows unconfirmed synthetic overlap/manual next step and
+zero letters/approvals/sends. Final fixture inspect610.647ms passes.
+
+Both preview jobs are TERMINAL, not live. First tmux
+`readiness-demo-current-ui-20260919`/Node52589: deadline exit1 after1812384.731ms,
+helper lifecycleValidtrue but demoFinanceValidatedfalse. Managed chooser stalled
+24190.3679s despite specified timeouts; no preview/import occurred. Entries2 and
+batches4 retain their exact baseline digests. Second
+`readiness-partnership-ui-20260919`/Node82849: manual drawer observed; SIGTERM
+capture exit143/107152.023ms, reserved result empty, NO helper-finalization proof.
+Root confirms both PIDs/sessions/ports absent; independently verifies223artifact
+files unchanged and stage identity/flags. Created CUA tabs2/3 closed.
+
+Current UI artifact is password-logging-dist-20260919, index0bae6615…; backend
+is retained historicalf0cc imageb43efb, not current backend/image. Seven read
+denials in first run plus a lower campaign-panel denial in second are test
+proxy gaps, not demonstrated application failures. Do not claim complete
+10–15minute demo, finance success this turn, or no whole-page errors.
+
+Next concrete work: inspect denied read handlers/queries and allow only exact
+synthetic reads, fix/test preview signal finalization, then rehearse with a
+supported native picker (do NOT repeat the managed chooser that stalled twice).
+Read-only first commands:
+`jq '{exit_code,duration_ms,timed_out}' .agent/tasks/production-readiness-20260917/raw/demo-current-ui-server-20260919.json`
+and the analogous `partnership-ui-server-20260919.json`; details and hashes in
+raw/demo-rehearsal-current-ui-20260919.md. Do not restart old jobs or overwrite
+their outputs. Source analysis says missing services/media/finance GETs are
+SELECT-only, including disk-import/videos; a read transaction commit is not a
+data mutation. Installed Vite adds its own SIGTERM callback that closes its
+server then calls process.exit (config.js:2712-2722,35185-35193); it can preempt
+our async finalization. This is a source-supported causal inference, not a
+captured signal trace. Minimal candidate: remove only the listener Vite adds
+around preview(), retain our handler, call Vite's close(), and first prove
+signal/output cleanup with a short isolated regression. No fix has run yet.
+Keep provider/write POSTs denied. No production, push or deploy.
+Original image/release/owner decisions and broad DoD remain open.
+
+## Earlier checkpoint — 19 September, aggregate complete / demo fixture corrected
 
 Branch `codex/production-readiness-20260917`; HEAD `1e955718` adds only the
 synthetic seed artifact and SQL-contract tests. Backend application source
