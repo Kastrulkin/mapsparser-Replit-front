@@ -2183,7 +2183,7 @@ def operator_news_generate():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        has_access, owner_id = verify_business_write_access(cursor, business_id, user_data)
         if not has_access:
             status_code = 403 if owner_id else 404
             message_text = "Нет доступа" if owner_id else "Бизнес не найден"
