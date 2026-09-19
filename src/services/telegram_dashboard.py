@@ -492,7 +492,7 @@ def route_operator_chat_for_telegram(
 ) -> dict[str, Any]:
     from services.operator_chat_service import process_chat
     from services.operator_audio import authorize_actor
-    actor, access = authorize_actor(cursor, user_id, business_id)
+    actor, access = authorize_actor(cursor, user_id, business_id, require_write=True)
     return process_chat(cursor, business_id=business_id, user_id=user_id, channel="telegram",
         message=message, payload={"limit": limit, **(transport_key if isinstance(transport_key, dict) else {})},
         router=route_operator_message, actor_context=actor, subscription_access=access,

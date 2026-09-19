@@ -9,7 +9,7 @@ import uuid
 from pathlib import Path
 from contextvars import ContextVar
 
-from core.auth_helpers import verify_business_access
+from core.auth_helpers import verify_business_access, verify_business_write_access
 from services.operator_conversations import _row, get_or_create_operator_conversation, find_latest_operator_conversation
 from services.operator_async_jobs import create_operator_async_job
 from subscription_manager import build_subscription_capabilities, capability_access_payload
@@ -20,7 +20,7 @@ MAX_BYTES = 10 * 1024 * 1024
 MAX_SECONDS = 120
 
 
-def authorize_actor(cursor, user_id, business_id, check_subscription=True):
+def authorize_actor(cursor, user_id, business_id, check_subscription=True, *, require_write=False):
     cursor.execute('SELECT id, is_active, is_superadmin FROM users WHERE id=%s', (user_id,))
     user = _row(cursor, cursor.fetchone())
     if not user or not user.get('is_active'):
@@ -36,7 +36,8 @@ def authorize_actor(cursor, user_id, business_id, check_subscription=True):
         if current_scope and (current_scope.get('scope_type')!='business' or current_scope.get('scope_id')!=execution['business_id']):
             raise PermissionError('Выбранный бизнес изменился. Команда остановлена.')
     user['user_id'] = user_id
-    allowed, owner = verify_business_access(cursor, business_id, user)
+    access_verifier = verify_business_write_access if require_write else verify_business_access
+    allowed, owner = access_verifier(cursor, business_id, user)
     if not allowed:
         raise PermissionError('Нет доступа к бизнесу')
     cursor.execute('SELECT subscription_tier, subscription_status, subscription_ends_at FROM businesses WHERE id=%s', (business_id,))

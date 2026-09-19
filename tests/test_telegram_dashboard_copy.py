@@ -18,7 +18,7 @@ from telegram_bot import (
 
 @pytest.fixture(autouse=True)
 def isolated_subscription(monkeypatch):
-    monkeypatch.setattr(operator_audio, 'authorize_actor', lambda *args: ({'role': 'business_owner', 'permissions': ['business.access']}, build_subscription_capabilities(tier='concierge', status='active')))
+    monkeypatch.setattr(operator_audio, 'authorize_actor', lambda *args, **kwargs: ({'role': 'business_owner', 'permissions': ['business.access']}, build_subscription_capabilities(tier='concierge', status='active')))
     monkeypatch.setattr(operator_chat_service, 'find_latest_operator_conversation', lambda *args, **kwargs: {})
     monkeypatch.setattr(operator_chat_service, 'get_or_create_operator_conversation', lambda *args, **kwargs: {'id': 'conversation-1', 'pending_context': {}})
     monkeypatch.setattr(operator_chat_service, 'append_operator_message', lambda *args, **kwargs: 'message-1')
