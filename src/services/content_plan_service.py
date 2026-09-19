@@ -1360,6 +1360,102 @@ def _select_context_seo_keywords(
     return _filter_foreign_brand_seo_keywords(_merge_seo_keyword_lists(ranked_keywords, custom_keywords, limit=limit), business_name)
 
 
+def _content_plan_user_data(cursor: Any, user_id: str) -> dict[str, Any]:
+    cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
+    return {
+        "user_id": user_id,
+        "is_superadmin": bool(_row_get(cursor.fetchone(), "coalesce", 0, False)),
+    }
+
+
+def _resolve_content_plan_scope(
+    cursor: Any,
+    business_row: dict[str, Any],
+    scope_type: str,
+    scope_target_id: str | None,
+) -> dict[str, Any]:
+    """Resolve one canonical scope from options belonging to the root business."""
+    root_business_id = str(business_row.get("id") or "").strip()
+    normalized_scope = _normalize_scope_type(scope_type)
+    scope_options = _fetch_network_scope_options(cursor, business_row)
+    requested_target_id = str(scope_target_id or "").strip()
+    if normalized_scope == "single_business":
+        return {
+            "scope_type": "single_business",
+            "scope_target_id": root_business_id,
+            "business_ids": [root_business_id] if root_business_id else [],
+            "scope_options": scope_options,
+        }
+
+    selected_scope_option = next(
+        (
+            item
+            for item in scope_options
+            if str(item.get("scope_type") or "") == normalized_scope
+            and str(item.get("scope_target_id") or "") == requested_target_id
+        ),
+        None,
+    )
+    if not requested_target_id:
+        selected_scope_option = next(
+            (
+                item
+                for item in scope_options
+                if str(item.get("scope_type") or "") == normalized_scope
+                and (normalized_scope != "network_location" or bool(item.get("is_current")))
+            ),
+            None,
+        )
+    if not selected_scope_option:
+        raise PermissionError("Недоступный контекст контент-плана")
+
+    target_id = str(selected_scope_option.get("scope_target_id") or "").strip()
+    if normalized_scope == "network_location":
+        business_ids = [target_id] if target_id else []
+    else:
+        business_ids = [
+            str(item.get("scope_target_id") or "").strip()
+            for item in scope_options
+            if str(item.get("scope_type") or "") in {"network_parent", "network_location"}
+            and str(item.get("scope_target_id") or "").strip()
+        ]
+    return {
+        "scope_type": normalized_scope,
+        "scope_target_id": target_id,
+        "business_ids": list(dict.fromkeys(business_ids)),
+        "scope_options": scope_options,
+    }
+
+
+def _authorize_content_plan_scope(
+    cursor: Any,
+    *,
+    user_data: dict[str, Any],
+    business_ids: list[str],
+    require_write: bool,
+) -> None:
+    verifier = verify_business_write_access if require_write else verify_business_access
+    for target_business_id in business_ids:
+        has_access, _owner_id = verifier(cursor, target_business_id, user_data)
+        if not has_access:
+            raise PermissionError("Нет доступа к бизнесу")
+
+
+def _visible_content_plan_scope_options(
+    cursor: Any,
+    *,
+    user_data: dict[str, Any],
+    scope_options: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    visible_options = []
+    for option in scope_options:
+        target_business_id = str(option.get("scope_target_id") or "").strip()
+        has_access, _owner_id = verify_business_access(cursor, target_business_id, user_data)
+        if has_access:
+            visible_options.append(option)
+    return visible_options
+
+
 def load_plan_context_for_business(user_id: str, business_id: str, scope_type: str, scope_target_id: str | None = None) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -1368,45 +1464,36 @@ def load_plan_context_for_business(user_id: str, business_id: str, scope_type: s
         business_row = _fetch_business_row(cursor, business_id)
         if not business_row:
             raise ValueError("Бизнес не найден")
-        owner_id = get_business_owner_id(cursor, business_id)
-        if str(owner_id or "").strip() != str(user_id or "").strip():
-            cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
-            superadmin_row = cursor.fetchone()
-            has_access, _ = verify_business_access(
-                cursor,
-                business_id,
-                {
-                    "user_id": user_id,
-                    "is_superadmin": bool(_row_get(superadmin_row, "coalesce", 0, False)),
-                },
-            )
-            if not has_access:
-                raise PermissionError("Нет доступа к бизнесу")
-
+        user_data = _content_plan_user_data(cursor, user_id)
+        _authorize_content_plan_scope(
+            cursor,
+            user_data=user_data,
+            business_ids=[str(business_row.get("id") or "").strip()],
+            require_write=False,
+        )
+        scope_resolution = _resolve_content_plan_scope(cursor, business_row, scope_type, scope_target_id)
+        _authorize_content_plan_scope(
+            cursor,
+            user_data=user_data,
+            business_ids=scope_resolution["business_ids"],
+            require_write=False,
+        )
         subscription = get_subscription_access(business_id)
         allowed_horizons = get_allowed_content_plan_horizons(business_id)
-        scope_options = _fetch_network_scope_options(cursor, business_row)
-        normalized_scope = _normalize_scope_type(scope_type)
-        target_id = str(scope_target_id or "").strip()
-        if not target_id:
-            current_scope_option = next((item for item in scope_options if item.get("is_current")), None)
-            if current_scope_option:
-                normalized_scope = str(current_scope_option.get("scope_type") or normalized_scope)
-                target_id = str(current_scope_option.get("scope_target_id") or business_id)
-            else:
-                target_id = business_id
+        normalized_scope = str(scope_resolution["scope_type"])
+        target_id = str(scope_resolution["scope_target_id"])
+        scope_options = _visible_content_plan_scope_options(
+            cursor,
+            user_data=user_data,
+            scope_options=scope_resolution["scope_options"],
+        )
         selected_scope_option = next(
-            (
-                item
-                for item in scope_options
-                if str(item.get("scope_type") or "") == normalized_scope
-                and str(item.get("scope_target_id") or "") == target_id
-            ),
+            (item for item in scope_options if str(item.get("scope_target_id") or "") == target_id),
             None,
         )
         scope_business_row = _build_scope_business_context(cursor, business_row, normalized_scope, target_id)
         scope_business_id = str(scope_business_row.get("id") or business_id)
-        context_business_ids = _scope_context_business_ids(cursor, business_row, normalized_scope, target_id)
+        context_business_ids = list(scope_resolution["business_ids"])
         if not context_business_ids:
             context_business_ids = [scope_business_id]
         map_links_count = _fetch_map_link_count_for_businesses(cursor, context_business_ids)
@@ -1776,6 +1863,23 @@ def create_generated_content_plan(
     cursor = db.conn.cursor()
     try:
         ensure_content_plan_tables(cursor)
+        business_row = _fetch_business_row(cursor, business_id)
+        if not business_row:
+            raise ValueError("Бизнес не найден")
+        user_data = _content_plan_user_data(cursor, user_id)
+        _authorize_content_plan_scope(
+            cursor,
+            user_data=user_data,
+            business_ids=[str(business_row.get("id") or "").strip()],
+            require_write=True,
+        )
+        scope_resolution = _resolve_content_plan_scope(cursor, business_row, scope_type, scope_target_id)
+        _authorize_content_plan_scope(
+            cursor,
+            user_data=user_data,
+            business_ids=scope_resolution["business_ids"],
+            require_write=True,
+        )
         allowed_horizons = get_allowed_content_plan_horizons(business_id)
         from services.operator_plan_schedule import extract
         explicit_schedule = extract(editorial_brief) if editorial_brief else None
@@ -1787,7 +1891,12 @@ def create_generated_content_plan(
             normalized_period = min(permitted)
         if normalized_period not in allowed_horizons:
             raise PermissionError("Горизонт планирования недоступен на текущем тарифе")
-        context = load_plan_context_for_business(user_id, business_id, scope_type, scope_target_id)
+        context = load_plan_context_for_business(
+            user_id,
+            business_id,
+            str(scope_resolution["scope_type"]),
+            str(scope_resolution["scope_target_id"]),
+        )
         if not bool(context.get("subscription", {}).get("maps_content_access")):
             raise PermissionError("Новости для карт входят в тариф «Карты»")
         knowledge_metadata: dict[str, Any] = {}
@@ -1871,8 +1980,8 @@ def create_generated_content_plan(
             skeleton_meta["knowledge_foundation"] = knowledge_metadata
             skeleton["meta"] = skeleton_meta
         plan_id = str(uuid.uuid4())
-        normalized_scope = _normalize_scope_type(scope_type)
-        target_id = str(scope_target_id or "").strip() or str(context.get("scope", {}).get("scope_target_id") or business_id)
+        normalized_scope = str(scope_resolution["scope_type"])
+        target_id = str(scope_resolution["scope_target_id"])
         root_business = context.get("root_business") if isinstance(context.get("root_business"), dict) else {}
         scope_business = context.get("business") if isinstance(context.get("business"), dict) else {}
         network_location_targets = _network_location_targets_from_context(context)

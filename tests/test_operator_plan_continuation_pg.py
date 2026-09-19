@@ -16,6 +16,17 @@ def database(monkeypatch):
     conn=psycopg2.connect(dsn,cursor_factory=RealDictCursor)
     schema='plan_'+uuid.uuid4().hex
     c=conn.cursor();c.execute('CREATE SCHEMA '+schema);c.execute('SET search_path TO '+schema)
+    c.execute('CREATE TABLE users (id text PRIMARY KEY, is_superadmin boolean NOT NULL DEFAULT FALSE)')
+    c.execute('''CREATE TABLE businesses (
+        id text PRIMARY KEY, owner_id text NOT NULL, name text NOT NULL,
+        city text, address text, network_id text, business_type text, categories text,
+        industry text, description text, site text, website text, is_active boolean
+    )''')
+    c.execute('CREATE TABLE business_members (id text PRIMARY KEY, business_id text NOT NULL, user_id text NOT NULL, role text NOT NULL, status text NOT NULL)')
+    c.execute('CREATE TABLE network_members (id text PRIMARY KEY, network_id text NOT NULL, user_id text NOT NULL, role text NOT NULL, status text NOT NULL)')
+    c.execute('CREATE TABLE networks (id text PRIMARY KEY, owner_id text NOT NULL)')
+    c.execute("INSERT INTO users (id, is_superadmin) VALUES ('u', FALSE)")
+    c.execute("INSERT INTO businesses (id, owner_id, name, is_active) VALUES ('b', 'u', 'Riderra', TRUE)")
     c.execute('''CREATE TABLE contentplans (id text PRIMARY KEY,business_id text,network_id text,scope_type text,scope_target_id text,title text,
         period_days int,period_start date,period_end date,plan_status text,generation_mode text,input_snapshot_json jsonb,generated_plan_json jsonb,
         published_plan_json jsonb,created_by text,created_at timestamptz DEFAULT clock_timestamp())''')

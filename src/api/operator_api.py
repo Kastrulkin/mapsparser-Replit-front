@@ -2793,7 +2793,9 @@ def operator_mobile_content_plan_generate():
             content_mix=payload.get("content_mix") if isinstance(payload.get("content_mix"), dict) else {},
         )
         return jsonify({"success": True, "scope": scope, "plan": plan})
-    except (PermissionError, ValueError):
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
 
 
