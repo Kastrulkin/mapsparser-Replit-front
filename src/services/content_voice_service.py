@@ -8,7 +8,7 @@ from typing import Any
 
 from database_manager import DatabaseManager
 from core.auth_context import AuthContext
-from core.auth_helpers import verify_business_access
+from core.auth_helpers import verify_business_access, verify_business_write_access
 
 
 CONTENT_EXAMPLE_LIMIT = 50
@@ -45,11 +45,14 @@ def _auth_context(actor: AuthContext | str) -> AuthContext:
     return actor if isinstance(actor, AuthContext) else AuthContext(user_id=str(actor or ""))
 
 
-def _verify_access(cursor: Any, actor: AuthContext | str, business_id: str) -> AuthContext:
+def _verify_access(
+    cursor: Any, actor: AuthContext | str, business_id: str, *, require_write: bool = False,
+) -> AuthContext:
     auth = _auth_context(actor)
     if not auth.permits_business(business_id):
         raise PermissionError("Нет доступа к стилю публикаций этого бизнеса")
-    has_access, _owner_id = verify_business_access(
+    verifier = verify_business_write_access if require_write else verify_business_access
+    has_access, _owner_id = verifier(
         cursor,
         business_id,
         {
@@ -300,7 +303,7 @@ def update_content_voice(actor: AuthContext | str, business_id: str, payload: di
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        _verify_access(cursor, auth, business_id)
+        _verify_access(cursor, auth, business_id, require_write=True)
         # Rules have their own versioned write boundary. Legacy style edits cannot overwrite them.
         cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))',('editorial-profile:'+business_id,))
         cursor.execute('SELECT preferences_json FROM content_voice_profiles WHERE business_id=%s',(business_id,))
