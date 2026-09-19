@@ -138,9 +138,34 @@ describe('Content page DOM ownership', () => {
       : screen.getByRole('button', { name: /Тестовая тема публикации/ });
     fireEvent.click(trigger);
     await screen.findByRole('dialog');
+    expect(screen.getByRole('button', { name: 'Закрыть' })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it.each([
+    { language: 'ru', preview: 'Предпросмотр', close: 'Закрыть' },
+    { language: 'tr', preview: 'Önizleme', close: 'Kapat' },
+  ])('localizes the $language publication preview and close control without saving', async ({ language, preview, close }) => {
+    window.localStorage.setItem('language', language);
+    vi.mocked(newAuth.makeRequest).mockClear();
+    renderContentPage();
+    const trigger = await screen.findByRole('button', { name: /Тестовая тема публикации/ });
+    fireEvent.click(trigger);
+    await screen.findByRole('dialog');
+
+    expect(screen.getByText(preview, { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText('Preview', { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: close }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
+    const writes = vi.mocked(newAuth.makeRequest).mock.calls.filter(([, options]) => (
+      options?.method && !['GET', 'HEAD'].includes(options.method)
+    ));
+    expect(writes).toEqual([]);
   });
 
   it('shows the credits charged after a batch photo upload', async () => {

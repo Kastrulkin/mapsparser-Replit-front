@@ -2750,6 +2750,7 @@ function ContentWorkspace() {
       <Sheet open={Boolean(item)} onOpenChange={(open) => { if (!open) setSelectedItemId(''); }}>
         <SheetContent
           className="w-full overflow-y-auto sm:max-w-4xl"
+          closeLabel={calendarCopy.close}
           onCloseAutoFocus={(event) => {
             const trigger = publicationTriggerRef.current;
             if (trigger?.isConnected && !trigger.disabled) {
@@ -2881,7 +2882,7 @@ function ContentWorkspace() {
                     </details>
                   ) : null}
                   <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                    <div className="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Preview</div>
+                    <div className="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">{calendarCopy.preview}</div>
                     <div className="rounded-2xl bg-white p-4 text-sm leading-6 text-slate-700 shadow-sm">
                       {draftEdits[item.id] || item.draft_text || 'Здесь появится текст, который увидит клиент.'}
                     </div>
