@@ -163,6 +163,17 @@ def news_generate():
             message = "Нет доступа к этому бизнесу" if owner_id else "Бизнес не найден"
             return jsonify({"error": message}), 403 if owner_id else 404
 
+        from core.db_helpers import assert_schema_columns
+        assert_schema_columns(
+            cur,
+            "usernews",
+            (
+                "id", "user_id", "business_id", "service_id", "source_text",
+                "generated_text", "original_generated_text", "edited_before_approve",
+                "prompt_key", "prompt_version",
+            ),
+        )
+
         business_name = "Бизнес"
         business_categories = ""
         business_type_context = ""
@@ -555,24 +566,6 @@ Write all generated text in {language_name}.
             raw_info,
         )
 
-        # Keep the legacy compatibility DDL after all authorization and source validation.
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS UserNews (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                service_id TEXT,
-                source_text TEXT,
-                generated_text TEXT NOT NULL,
-                approved INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
-                FOREIGN KEY (service_id) REFERENCES UserServices(id) ON DELETE SET NULL
-            )
-            """
-        )
-        _ensure_usernews_learning_columns(cur)
-
         news_id = str(uuid.uuid4())
         prompt_key = "news_social_generation" if content_mode == "social" else "news_generation"
         prompt_version = "v1"
@@ -607,48 +600,26 @@ Write all generated text in {language_name}.
                 result_status="needs_review" if int(news_impact_metrics.get("needs_review") or 0) > 0 else "good",
                 metrics=news_impact_metrics,
             )
-        has_usernews_business_id = _table_has_column(cur, "usernews", "business_id")
-        if has_usernews_business_id:
-            cur.execute(
-                """
-                INSERT INTO usernews (
-                    id, user_id, business_id, service_id, source_text, generated_text, original_generated_text,
-                    edited_before_approve, prompt_key, prompt_version
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, FALSE, %s, %s)
-                """,
-                (
-                    news_id,
-                    user_data['user_id'],
-                    business_id,
-                    selected_service_id,
-                    raw_info,
-                    generated_text,
-                    generated_text,
-                    prompt_key,
-                    prompt_version,
-                )
+        cur.execute(
+            """
+            INSERT INTO usernews (
+                id, user_id, business_id, service_id, source_text, generated_text, original_generated_text,
+                edited_before_approve, prompt_key, prompt_version
             )
-        else:
-            cur.execute(
-                """
-                INSERT INTO usernews (
-                    id, user_id, service_id, source_text, generated_text, original_generated_text,
-                    edited_before_approve, prompt_key, prompt_version
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, FALSE, %s, %s)
-                """,
-                (
-                    news_id,
-                    user_data['user_id'],
-                    selected_service_id,
-                    raw_info,
-                    generated_text,
-                    generated_text,
-                    prompt_key,
-                    prompt_version,
-                )
-            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, FALSE, %s, %s)
+            """,
+            (
+                news_id,
+                user_data['user_id'],
+                business_id,
+                selected_service_id,
+                raw_info,
+                generated_text,
+                generated_text,
+                prompt_key,
+                prompt_version,
+            ),
+        )
         db.conn.commit()
         db.close()
 

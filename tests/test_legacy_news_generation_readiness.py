@@ -110,7 +110,12 @@ class _Cursor:
             self._many = (
                 [("Business A example",), ("Personal global example",)]
             )
+        elif "from information_schema.columns" in normalized:
+            assert params[0] == "usernews"
+            self._one = {"columns": [name for name in params[1] if name != self.state.get("missing_column")]}
         elif normalized.startswith("create table if not exists usernews ("):
+            if self.state.get("dml_only"):
+                raise PermissionError("Runtime connection has no schema-change authority")
             return
         elif normalized.startswith("insert into usernews"):
             self.state["steps"].append("insert")
@@ -503,3 +508,24 @@ def test_news_generation_redacts_provider_exception(news_route: dict[str, Any], 
     assert marker not in response.get_data(as_text=True) + captured.out + captured.err + caplog.text
     database = news_route["databases"][0]
     assert database.close_calls == 1 and database.conn.rollbacks == 1 and database.conn.commits == 0
+
+
+def test_news_generation_uses_migrated_schema_without_request_time_ddl(news_route: dict[str, Any]) -> None:
+    news_route["dml_only"] = True
+    response = _post(news_route)
+
+    assert response.status_code == 200, response.json
+    statements = news_route["databases"][0].conn.cursor_value.executed
+    assert any("information_schema.columns" in statement for statement, _ in statements)
+    assert not any(statement.lstrip().lower().startswith(("create ", "alter ", "drop ")) for statement, _ in statements)
+
+
+def test_news_generation_missing_migration_fails_before_provider(news_route: dict[str, Any]) -> None:
+    news_route["missing_column"] = "business_id"
+    response = _post(news_route)
+
+    assert response.status_code == 500
+    assert news_route["provider_calls"] == news_route["enforce_calls"] == []
+    database = news_route["databases"][0]
+    assert database.close_calls == 1 and database.conn.rollbacks == 1
+    assert not any("insert into usernews" in statement.lower() for statement, _ in database.conn.cursor_value.executed)
