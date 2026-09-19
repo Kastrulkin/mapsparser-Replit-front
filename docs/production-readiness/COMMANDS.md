@@ -1,5 +1,39 @@
 # Verified commands and evidence
 
+## Business voice-profile write admission — 19 September, 432f64a0
+
+Private `capture.sh` / `run-pure.sh` under
+`/private/tmp/localos-content-voice-readiness.tYjGSQ/`; named tmux
+`readiness-content-voice-{red,green,final,adjacent}-20260919`. Python arm64,
+env-i, dotenv/plugin autoload/bytecode/pytest cache disabled. Reuses guardSHA
+`c49c42a8e83a9a216aad150e2f94226b796a7b86fd55a5df93151f652e873ab5`, blocking Python
+sockets and psycopg2 connections. No native database, Docker or providers.
+
+Raw `content-voice-write-<phase>-20260919.json`:
+
+- red:8failed/6passed0.21s, capture1712.237ms, exit1. Three unauthorized200s
+  (direct/network viewer and simulated downgrade), five missing role queries.
+- green:14passed0.18s, capture574.148ms, exit0; same initial cases.
+- green-final:19passed0.22s, capture738.499ms, exit0; five additional hardening
+  cases have no separate baselineRED. OriginalRED is retained unchanged.
+- adjacent:92passed0.91s, capture1306.485ms, exit0. Files: content_voice_write_access,
+  content_voice_api_security, runtime_schema_contracts, content_rules,
+  content_generation_v2, legacy_news_generation_readiness (all `tests/test_*.py`).
+
+All captures have empty stderr and no timeout/truncation. Default Ruff with
+`--no-cache` on the two changed files, separateF821 and `git diff --check` pass.
+Independent source/test/raw reviewPASS. Tests exercise the actual Flask route,
+service and canonical helpers with fake SQL; counters prove explicit call
+boundaries, not PostgreSQL grants, transactions or concurrent revocation.
+SourceSHA256 `c9cff4de814b883501a36e27704f9acd74f69f6556da841088e6dc591a370815`;
+test `8c0991bfbdb1f7067f9e73ee038e7102d9f18288b274d5c6ed636debaa876459`.
+
+Offline redacted Gitleaks8.30.1 delta `0a79bf9c..432f64a0`: one commit,
+14,230 bytes, zero findings; capture1786.474ms, exit0, findings`[]`, no
+timeout/truncation; normal summarystderr. Raw
+`content-voice-write-secret-delta-20260919.json` and `-report.json`. This is not
+foreign-dirty, whole-history, layer/log or credential-revocation proof.
+
 ## Legacy news generation and schema follow-up — 19 September
 
 Source commits `72fd27a9` and `3ee2279a`. Same env-i pure launcher/guard as the

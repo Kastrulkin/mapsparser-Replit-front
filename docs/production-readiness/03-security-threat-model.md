@@ -4,6 +4,16 @@ Status: incomplete security assessment, not a production approval. Baseline `302
 
 ## Assets and adversaries
 
+19 September SEC-RBAC-10 is locally FIX_PROVEN432f64a0: business voice-profile
+PATCH's role-blind mutation gate is reproduced (8failed/6passed) and replaced
+with optional canonical write admission at the existing write connection.
+Permitted initial profile reads, GET and user-owned examples keep read semantics.
+Final19focused/92overlapping adjacent pure checks and independent review pass,
+including nullable-owner managers, mixed roles, demo scope and a simulated
+read-to-write downgrade. Five hardening cases were added after the baselineRED.
+SQL/commit counters do not prove native grants/durability or close-time commits;
+no live role-change race, image or production certification follows.
+
 19 September SEC-RBAC-08: the direct Operator news endpoint's read-only role
 bypass is reproduced with actual canonical helpers and synthetic SQL rows.
 Local e3e8fbff changes its single guard to write admission: 14 route tests and

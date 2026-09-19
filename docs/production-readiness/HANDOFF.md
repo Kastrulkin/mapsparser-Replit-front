@@ -1,6 +1,41 @@
 # Readiness handoff
 
-## Current checkpoint — 19 September, source 3ee2279a
+## Current checkpoint — 19 September, source 432f64a0
+
+Branch `codex/production-readiness-20260917`, startingHEAD0a79bf9c. SEC-RBAC-10
+commits only `src/services/content_voice_service.py` and new
+`tests/test_content_voice_write_access.py`. Canonical write helper is selected
+only at the profile update's existing write connection; GET and user-owned
+example semantics stay read-scoped. Initial profile read is legitimate even
+for viewers; denial must precede advisory lock/UPSERT/explicit write commit,
+not that permitted read. Do not globally replace the shared read boundary.
+
+Raw `content-voice-write-<phase>-20260919.json`: RED8fail/6pass0.21s,
+GREEN14pass0.18s, hardenedGREEN-final19pass0.22s, adjacent92pass0.91s across six
+files. Actual route/service/helpers run with strict fakeSQL, not native roles.
+Five hardening cases were added afterRED. Nullable-owner manager, both mixed-role
+orders, network owner, superadmin/demo controls, missing/inactive target,
+simulated read→downgrade, personal examples and protected rules all pass.
+Default two-file Ruff, diff and independent final reviewPASS. Exact hashes and
+capture durations are in COMMANDS. The fakeclose does not reproduce the real
+manager's implicit commit; no durable rollback/grant/live-race claim follows.
+
+Private launcher `/private/tmp/localos-content-voice-readiness.tYjGSQ/` verifies
+the same no-network/no-psycopg2 guard used in the prior news package; env-i,
+no dotenv/plugins/bytecode/cache. Four named pure-test sessions and the delta scan
+have terminal raw results; final inventory has no `readiness-content-voice-*`
+sessions. Older/unrelated sessions were untouched. Do not replay destinations. No native DB
+was touched. Disk1,819,548KiB (~1.74GiB) remains below existing2GiB floor; full
+aggregate planning ≥5GiB and Docker8–10GiB margins remain unchanged.
+
+Next bounded source lane: find one authenticated business-website URL reader
+outside the already-fixed contact fetcher and trace admission/client/redirect
+behavior before writing any test or labeling a finding. Read-only explorer
+work is in progress; no new SSRF bug is established. Heavy validation still
+requires capacity recovery, not lowered guards. Seven foreign dirty paths from
+the previous checkpoint remain excluded. No push/deploy or production changes.
+
+## Earlier checkpoint — 19 September, source 3ee2279a
 
 Three reviewed local packages after documentation checkpoint `4ba2be56`:
 `78102124` Telegram mixed-capability chat write admission; `72fd27a9` legacy

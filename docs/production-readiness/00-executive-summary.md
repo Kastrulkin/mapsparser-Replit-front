@@ -14,6 +14,10 @@ writes require the documented human approval or manual boundary.
 
 ## What is materially stronger after this work
 
+- The shared business writing-style profile now requires write permission when
+  changed, while permitted viewing and personal examples remain available.
+  Local432f64a0 has a causal regression,19focused/92overlapping adjacent pure
+  passes and independent review. This is not native-database or deployed proof.
 - News generation now has three additional reviewed local protections: Telegram
   command chat requires write access; the legacy generator's crash is fixed
   together with business/source authorization and final-text validation; its

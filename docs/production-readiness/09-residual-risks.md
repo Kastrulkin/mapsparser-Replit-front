@@ -1,6 +1,13 @@
 # Residual risks — working register
 
-Newest source3ee2279a adds three independently reviewed local packages:
+Newest source432f64a0 locally fixes SEC-RBAC-10 with19focused/92overlapping
+adjacent pure passes and independent review. Business-profile PATCH now checks
+write roles at its write connection, preserving permitted initial reads and
+personal examples. These fakes do not establish native persistence/grants or
+live concurrent role-revocation safety. Membership changes after the check or
+before the post-commit response read remain outside this bounded proof.
+
+Prior source3ee2279a adds three independently reviewed local packages:
 Telegram chat write admission78102124 (12focused/101adjacent), legacy generation
 72fd27a9 (21/71) and Alembic-owned news schema3ee2279a (23/73). These overlapping
 pure tests use real handlers/helpers with controlled SQL/provider boundaries.
@@ -9,10 +16,9 @@ actual billing, live Telegram, current image or production. The full mixed
 Telegram chat is now writer-only (D-039), a deliberate compatibility change.
 User-owned NULL-business examples remain personal/global, not reassigned data.
 Other legacy endpoints may still execute DDL; prompt-template debug output is
-not covered by the raw-provider-output privacy fix. The separate content-voice
-profile mutation candidate remains unproven. No platform-wide closure claim.
+not covered by the raw-provider-output privacy fix. No platform-wide closure claim.
 
-Latest local disk observation is 1,842,016 KiB (~1.76 GiB); heavy native/build
+Latest local disk observation is 1,819,548 KiB (~1.74 GiB); heavy native/build
 jobs remain below unchanged resource gates. No cleanup or apps stopped. Prior
 direct Operator gatee3e8fbff retains its14/20pure proof. Current-source aggregate,
 Today build/full units and current image still need separate validation.

@@ -1,6 +1,28 @@
 # Production-readiness progress
 
-## Current checkpoint — 19 September, news boundaries and schema ownership
+## Current checkpoint — 19 September, content-voice write admission 432f64a0
+
+- [x] Previous goal turn: PROGRESS, three news/Telegram source packages and
+  reviewed documentation committed through0a79bf9c. Full objective retained.
+- [x] SEC-RBAC-10 REPRODUCED: actual PATCH/service/canonical-helper pure RED
+  has8failed/6passed; direct/network viewers and simulated downgraded member
+  receive200, and five writer controls omit role queries.
+- [x] Locally FIX_PROVEN432f64a0: keyword-only write mode at the profile update's
+  existing write-connection gate. Default GET, examples and rule/history read
+  admission unchanged. InitialGREEN14; hardenedGREEN19; adjacent92 across six
+  files. Independent source/test/raw review and default two-file Ruff pass.
+- [ ] Native PostgreSQL/grants/durability and live role-change races remain
+  unverified by these fakes. Five hardening cases are GREEN-only. Close-cleanup
+  commits are not counted; the assertion concerns explicit write commits.
+- [ ] Current full aggregate, Today build/full units, current image, complete
+  demo and original release gates remain open. Disk1,819,548KiB (~1.74GiB) is
+  below the unchanged2GiB native/build floor, with larger heavy-job margins.
+
+No push/deploy, production/DB changes, external sends, cleanup or app stops.
+Seven foreign dirty paths remain preserved. Next safe lane: a bounded source
+trace of a non-contact website reader; no additional SSRF finding is presumed.
+
+## Earlier checkpoint — 19 September, news boundaries and schema ownership
 
 - [x] SEC-RBAC-09 locally FIX_PROVEN in `78102124`: mixed-capability Telegram
   Operator chat now requires write access. Causal RED 6 failed / 6 passed;

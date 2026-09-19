@@ -4,6 +4,11 @@ Updated 19 September 2026. Scores describe evidence at the stated checkpoint,
 not an average that can waive a release gate. The original Definition of Done
 and unresolved P1 items remain controlling.
 
+Content-voice profile admission432f64a0 adds causal pure proof,19focused and92
+overlapping adjacent passes plus independent review. Default read/example scope
+is preserved. Native grants/durability/live race, full-current/image and all
+original release gates remain unverified; no score promotion.
+
 New local78102124/72fd27a9/3ee2279a packages have causal and independently reviewed
 pure proof for Telegram write admission, legacy news repair and read-only schema
 admission. Final101Telegram/adjacent and73legacy/adjacent sets overlap. They are

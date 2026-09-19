@@ -1,5 +1,21 @@
 # Production-readiness change log
 
+## SEC-RBAC-10 — business voice-profile write admission, 432f64a0
+
+The shared content-voice helper now accepts keyword-only `require_write=False`.
+Only the existing `update_content_voice` write gate enables it, selecting the
+canonical write verifier before advisory lock/profile merge/UPSERT/explicit
+commit. Authorized initial reads remain allowed; default GET, user-owned
+examples and rules/history read behavior is unchanged. No API/schema/provider
+change. Legitimate nullable-owner managers and mixed direct/network roles pass.
+
+Actual route/service RED8fail/6pass becomes14pass after the minimal fix;
+hardening adds five passing cases for19final; six-file adjacency92passes.
+Protected existing rules survive attempted overwrite, demo boundaries remain,
+and a simulated role downgrade is denied at the write connection. Ruff/diff and
+independent source/test/evidence reviewPASS. No live race, native persistence,
+current-image, production or full-platform authorization certificate is implied.
+
 ## OPS-NEWS-SCHEMA-01 — read-only news schema admission, 3ee2279a
 
 Remove UserNews CREATE/ALTER from `news_generate` and its optional tenantless

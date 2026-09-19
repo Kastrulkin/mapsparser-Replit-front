@@ -1,5 +1,22 @@
 # Readiness decisions
 
+## D-042 — Separate shared voice-profile writes from permitted reads/examples
+
+SEC-RBAC-10 uses canonical write admission only at `update_content_voice`'s
+existing write connection. Keep keyword-only `require_write=False` on the shared
+helper so GET, rule/history reads and user-owned examples retain their current
+read scope. The initial profile read is legitimate for viewers; authorizing it
+does not grant permission to UPSERT the shared business profile later. Recheck
+the effective role at that mutation boundary, before advisory lock and effects.
+Trust the verifier boolean even if owner_id isNULL; any active non-viewer direct
+or network role retains existing write behavior. Preserve demo scope in both
+checks. No role model, transport contract, schema or provider change.
+
+Local432f64a0 is proven by causal pure tests plus92overlapping adjacent checks
+and independent review. Separate connections and later membership changes are
+not transaction-fenced; the simulated downgrade test is not a live concurrency
+proof. Explicit commit spies do not model native durability or close-time commits.
+
 ## D-041 — Alembic owns news schema; generation only verifies it
 
 Canonical migrations `20260420_add_business_card_automation.py` and
