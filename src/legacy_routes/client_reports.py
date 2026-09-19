@@ -5,6 +5,7 @@ globals().update(_shared.runtime_namespace)
 @app.route('/api/news/generate', methods=['POST', 'OPTIONS'])
 @rate_limit_if_available("30 per hour")
 def news_generate():
+    db = None
     try:
         print(f"🔍 Начало обработки запроса /api/news/generate")
         if request.method == 'OPTIONS':
@@ -25,6 +26,8 @@ def news_generate():
         ab_mode = str(data.get('ab_mode') or '').strip().lower()
         selected_service_id = data.get('service_id')
         selected_transaction_id = data.get('transaction_id')
+        if not use_service:
+            selected_service_id = None
         raw_info = (data.get('raw_info') or '').strip()
 
         def _build_news_generation_fallback(
@@ -151,11 +154,14 @@ def news_generate():
         cur = db.conn.cursor()
         business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id') or data.get('business_id'))
         if not business_id:
-            raise ValueError("Выберите бизнес для подготовки новости")
-        from services.content_rules import enforce
-        from services.operator_social_post_generation import _default_social_post_generator
-        generated_text = enforce(cur, business_id, user_data['user_id'], generated_text,
-            _default_social_post_generator, raw_info)
+            db.rollback_and_close()
+            return jsonify({"error": "Выберите бизнес для подготовки новости"}), 400
+        from core.auth_helpers import verify_business_write_access
+        has_write_access, owner_id = verify_business_write_access(cur, business_id, user_data)
+        if not has_write_access:
+            db.rollback_and_close()
+            message = "Нет доступа к этому бизнесу" if owner_id else "Бизнес не найден"
+            return jsonify({"error": message}), 403 if owner_id else 404
 
         business_name = "Бизнес"
         business_categories = ""
@@ -217,42 +223,26 @@ def news_generate():
             "Если в примерах есть другая отрасль, игнорируй такие примеры. "
             "Для АЗС запрещены темы пекарни, булочек, круассанов, тортов, салона красоты, медицинских услуг и любых услуг, которых нет в контексте."
         )
-        # ensure table
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS UserNews (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                service_id TEXT,
-                source_text TEXT,
-                generated_text TEXT NOT NULL,
-                approved INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
-                FOREIGN KEY (service_id) REFERENCES UserServices(id) ON DELETE SET NULL
-            )
-            """
-        )
-        _ensure_usernews_learning_columns(cur)
-
         service_context = ''
         transaction_context = ''
 
         if use_service:
             if selected_service_id:
                 cur.execute(
-                    "SELECT name, description FROM userservices WHERE id = %s AND user_id = %s",
-                    (selected_service_id, user_data['user_id']),
+                    "SELECT name, description FROM userservices WHERE id = %s AND business_id = %s",
+                    (selected_service_id, business_id),
                 )
                 row = cur.fetchone()
-                if row:
-                    name, desc = (row if isinstance(row, tuple) else (row['name'], row['description']))
-                    service_context = f"Услуга: {name}. Описание: {desc or ''}"
+                if not row:
+                    db.rollback_and_close()
+                    return jsonify({"error": "Услуга не найдена в выбранном бизнесе"}), 400
+                name, desc = (row if isinstance(row, tuple) else (row['name'], row['description']))
+                service_context = f"Услуга: {name}. Описание: {desc or ''}"
             else:
-                # выбрать случайную услугу пользователя
+                # Выбрать случайную услугу выбранного бизнеса.
                 cur.execute(
-                    "SELECT name, description FROM userservices WHERE user_id = %s ORDER BY RANDOM() LIMIT 1",
-                    (user_data['user_id'],),
+                    "SELECT name, description FROM userservices WHERE business_id = %s ORDER BY RANDOM() LIMIT 1",
+                    (business_id,),
                 )
                 row = cur.fetchone()
                 if row:
@@ -265,11 +255,22 @@ def news_generate():
                 cur.execute("""
                     SELECT transaction_date, amount, services, notes, client_type
                     FROM FinancialTransactions
-                    WHERE id = %s AND user_id = %s
-                """, (selected_transaction_id, user_data['user_id']))
+                    WHERE id = %s AND business_id = %s
+                """, (selected_transaction_id, business_id))
                 row = cur.fetchone()
-                if row:
+                if not row:
+                    db.rollback_and_close()
+                    return jsonify({"error": "Транзакция не найдена в выбранном бизнесе"}), 400
+                if isinstance(row, tuple):
                     tx_date, amount, services_raw, notes, client_type = row
+                else:
+                    transaction_data = _row_to_dict(cur, row)
+                    tx_date = transaction_data.get('transaction_date')
+                    amount = transaction_data.get('amount')
+                    services_raw = transaction_data.get('services')
+                    notes = transaction_data.get('notes')
+                    client_type = transaction_data.get('client_type')
+                if row:
                     services_list = []
                     if services_raw:
                         try:
@@ -286,13 +287,20 @@ def news_generate():
                 cur.execute("""
                     SELECT transaction_date, amount, services, notes
                     FROM financialtransactions
-                    WHERE user_id = %s
+                    WHERE business_id = %s
                     ORDER BY transaction_date DESC, created_at DESC
                     LIMIT 1
-                """, (user_data['user_id'],))
+                """, (business_id,))
                 row = cur.fetchone()
                 if row:
-                    tx_date, amount, services_raw, notes = row
+                    if isinstance(row, tuple):
+                        tx_date, amount, services_raw, notes = row
+                    else:
+                        transaction_data = _row_to_dict(cur, row)
+                        tx_date = transaction_data.get('transaction_date')
+                        amount = transaction_data.get('amount')
+                        services_raw = transaction_data.get('services')
+                        notes = transaction_data.get('notes')
                     services_list = []
                     if services_raw:
                         try:
@@ -311,8 +319,14 @@ def news_generate():
             from core.db_helpers import ensure_user_examples_table
             ensure_user_examples_table(cur)
             cur.execute(
-                "SELECT example_text FROM userexamples WHERE user_id = %s AND example_type = 'news' ORDER BY created_at DESC LIMIT 5",
-                (user_data['user_id'],),
+                """
+                SELECT example_text FROM userexamples
+                WHERE user_id = %s
+                  AND example_type = 'news'
+                  AND (business_id = %s OR business_id IS NULL)
+                ORDER BY created_at DESC LIMIT 5
+                """,
+                (user_data['user_id'], business_id),
             )
             r = cur.fetchall()
             ex = [row[0] if isinstance(row, tuple) else row['example_text'] for row in r]
@@ -419,16 +433,12 @@ Write all generated text in {language_name}.
             user_id_value=user_data['user_id'],
         )
 
-        # ВАЖНО: analyze_text_with_gigachat всегда возвращает строку, не словарь
-        print(f"🔍 DEBUG news_generate: result type = {type(result)}")
-        print(f"🔍 DEBUG news_generate: result = {result[:200] if isinstance(result, str) else result}")
-
         # Обрабатываем результат - analyze_text_with_gigachat возвращает строку
         if isinstance(result, dict):
             # Если словарь (на всякий случай), проверяем наличие ошибки
             if 'error' in result:
-                db.close()
-                return jsonify({"error": result['error']}), 500
+                db.rollback_and_close()
+                return jsonify({"error": "Ошибка генерации новости"}), 500
             generated_text = result.get('news') or result.get('text') or json.dumps(result, ensure_ascii=False)
         elif not isinstance(result, str):
             # Если не строка и не словарь, конвертируем в строку
@@ -464,8 +474,8 @@ Write all generated text in {language_name}.
             if isinstance(parsed_result, dict):
                 # Проверяем наличие ошибки
                 if 'error' in parsed_result:
-                    db.close()
-                    return jsonify({"error": parsed_result['error']}), 500
+                    db.rollback_and_close()
+                    return jsonify({"error": "Ошибка генерации новости"}), 500
 
                 # Используем явную проверку ключей, чтобы пустая строка не вызывала фолбэк
                 if 'news' in parsed_result:
@@ -480,7 +490,7 @@ Write all generated text in {language_name}.
 
         # Проверяем, что generated_text не пустой
         if not generated_text or not generated_text.strip():
-            db.close()
+            db.rollback_and_close()
             return jsonify({"error": "Пустой результат генерации"}), 500
 
         if service_context and (
@@ -534,10 +544,38 @@ Write all generated text in {language_name}.
                     "Check the listing contacts for the current schedule, details, and booking."
                 )
 
+        from services.content_rules import enforce
+        from services.operator_social_post_generation import _default_social_post_generator
+        generated_text = enforce(
+            cur,
+            business_id,
+            user_data['user_id'],
+            generated_text,
+            _default_social_post_generator,
+            raw_info,
+        )
+
+        # Keep the legacy compatibility DDL after all authorization and source validation.
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS UserNews (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                service_id TEXT,
+                source_text TEXT,
+                generated_text TEXT NOT NULL,
+                approved INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
+                FOREIGN KEY (service_id) REFERENCES UserServices(id) ON DELETE SET NULL
+            )
+            """
+        )
+        _ensure_usernews_learning_columns(cur)
+
         news_id = str(uuid.uuid4())
         prompt_key = "news_social_generation" if content_mode == "social" else "news_generation"
         prompt_version = "v1"
-        business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id') or data.get('business_id'))
         if active_news_patterns:
             record_industry_pattern_impact_event(
                 db.conn,
@@ -632,11 +670,12 @@ Write all generated text in {language_name}.
         )
 
         return jsonify({"success": True, "news_id": news_id, "generated_text": generated_text})
-    except Exception as e:
-        print(f"❌ Ошибка генерации новости: {e}", flush=True)
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        import sys
+        if db is not None:
+            db.rollback_and_close()
+        app.logger.error("News generation failed: %s", type(sys.exception()).__name__)
+        return jsonify({"error": "Ошибка генерации новости"}), 500
 
 @app.route('/api/news/approve', methods=['POST', 'OPTIONS'])
 def news_approve():
