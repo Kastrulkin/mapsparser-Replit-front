@@ -1,6 +1,33 @@
 # Production-readiness progress
 
-## Current checkpoint — 19 September, Operator news admission e3e8fbff
+## Current checkpoint — 19 September, news boundaries and schema ownership
+
+- [x] SEC-RBAC-09 locally FIX_PROVEN in `78102124`: mixed-capability Telegram
+  Operator chat now requires write access. Causal RED 6 failed / 6 passed;
+  GREEN 12 passed; overlapping adjacent set 101 passed. Default read/audio
+  authorization remains unchanged; the entire generic chat is writer-only.
+- [x] BUG-NEWS-01 locally FIX_PROVEN in `72fd27a9`: reproduce the unbound-local
+  crash, authorize one resolved target, scope service/finance/example inputs,
+  enforce rules on the final text, and roll back failures without exposing raw
+  provider output. RED 16 failed; GREEN 21 passed; adjacent 71 passed.
+- [x] OPS-NEWS-SCHEMA-01 locally FIX_PROVEN in `3ee2279a`: remove request-time
+  UserNews DDL and the unscoped insert fallback. Check the Alembic-owned columns
+  before private context/provider work. RED 2 failed / 21 passed; GREEN 23 passed;
+  adjacent 73 passed. No migration or database operation was performed.
+- [x] Independent reviews and scoped Ruff/diff checks pass. All results above
+  are bounded pure tests with network/psycopg2 blocked, not native PostgreSQL,
+  real billing, live Telegram, current-image or production evidence.
+- [ ] Current-source full backend, Today build/full units, Docker image and
+  complete demo remain open. Latest disk check: 1,842,016 KiB (~1.76 GiB), below
+  the unchanged 2 GiB native/build floor; larger aggregate/image margins apply.
+
+Previous goal turn was PROGRESS (direct news admission and its evidence).
+This continuation also made source/test progress. User-enabled production IAB
+Today was read only again: authenticated SuperAdmin, mixed locale still visible;
+no clicks, preference changes, credential extraction or writes. Seven foreign
+dirty paths preserved. No push/deploy, cleanup or full-goal completion.
+
+## Earlier checkpoint — 19 September, Operator news admission e3e8fbff
 
 - [x] Existing authenticated production Today tab read again without navigation,
   preference changes, token extraction or data actions; mixed locale remains live.

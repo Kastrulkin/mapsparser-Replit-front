@@ -4,6 +4,13 @@ Updated 19 September 2026. Scores describe evidence at the stated checkpoint,
 not an average that can waive a release gate. The original Definition of Done
 and unresolved P1 items remain controlling.
 
+New local78102124/72fd27a9/3ee2279a packages have causal and independently reviewed
+pure proof for Telegram write admission, legacy news repair and read-only schema
+admission. Final101Telegram/adjacent and73legacy/adjacent sets overlap. They are
+not native PostgreSQL/catalog/grant, real provider, image, full current aggregate
+or production evidence. The intentional writer-only Telegram chat compatibility
+boundary is explicit. No score or release gate is promoted.
+
 Today7c374f1f adds93focused/adjacent passes, TS/lint and independent review for
 static copy only. New build/full-unit/browser results are absent: the disk
 preflight fails below2GiB. API action-copy localization and original release

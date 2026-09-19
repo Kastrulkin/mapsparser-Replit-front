@@ -1,5 +1,53 @@
 # Production-readiness change log
 
+## OPS-NEWS-SCHEMA-01 — read-only news schema admission, 3ee2279a
+
+Remove UserNews CREATE/ALTER from `news_generate` and its optional tenantless
+INSERT. The existing read-only schema helper checks ten required columns after
+write authorization and before private context/provider work. Canonical Alembic
+migrations own all ten columns; no migration was changed or executed.
+
+Causal RED: DML-only fake returns500 instead of200, and missing business_id
+incorrectly reaches provider/200 (2 failed / 21 passed). GREEN23 and adjacent73
+pass, with independent review and scoped Ruff/diff checks. Native PostgreSQL
+catalog/grants are not tested; other legacy endpoints' DDL is not removed here.
+
+## BUG-NEWS-01 — legacy generation and tenant input repair, 72fd27a9
+
+Reproduce `generated_text` read before assignment (16 failed). Resolve one
+business and require canonical write access before private context/provider
+work. Scope selected/fallback service and finance queries by business; preserve
+valid owner-created records for managers and personal global examples (D-040).
+Enforce content rules after deterministic text fallbacks, before draft/events;
+preserve the same business ID throughout. Roll back provider/rule failures,
+remove raw model-result debug output and redact provider errors/exceptions.
+Prompt-template debug output elsewhere is not covered by this privacy proof.
+
+GREEN21 / adjacent71 pure tests pass; independent review required nullable-owner
+manager compatibility and provider-exception privacy before acceptance. These
+are strict fake-SQL/spy tests of the real decorated handler, not native commit,
+billing or production proof. Downstream authorization risks were latent behind
+the crash; the baseline RED does not demonstrate an independent tenant exploit.
+The subsequent separate schema package removes the preserved compatibility DDL.
+
+## SEC-RBAC-09 — Telegram command write admission, 78102124
+
+`authorize_actor` adds keyword-only `require_write=False`, preserving existing
+read/audio behavior and positional subscription arguments. The generic Telegram
+Operator chat alone passes `True`, using the canonical write verifier after
+loading user/account state and before subscription lookup or `process_chat`.
+This is a writer-only boundary for the whole mixed-capability chat, not just
+news intents; see D-039. No bot sends, provider configuration or schema change.
+
+Twelve new strict fake-SQL regression cases: owner/direct/network/mixed-role/
+network-owner/superadmin positives, viewer and outsider denials, inactive and
+missing accounts, and default read-helper preservation. Existing dashboard
+mock gains keyword compatibility. Causal RED: 6 failures / 6 passes in 0.33s;
+GREEN: 12 passes in 0.34s; seven-file adjacency: 101 passes in 20.33s.
+Captures 1928.147 / 1961.238 / 22220.165ms; no stderr, timeout or truncation.
+Ruff F821, diff checks and independent review PASS. Bounded local FIX_PROVEN,
+not native DB, real credit effects, live Telegram, image or production proof.
+
 ## SEC-RBAC-08 — direct Operator news write admission, e3e8fbff
 
 One production-source line uses the existing write verifier instead of the read

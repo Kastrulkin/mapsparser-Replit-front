@@ -14,6 +14,14 @@ writes require the documented human approval or manual boundary.
 
 ## What is materially stronger after this work
 
+- News generation now has three additional reviewed local protections: Telegram
+  command chat requires write access; the legacy generator's crash is fixed
+  together with business/source authorization and final-text validation; its
+  database schema is verified rather than changed inside a request. Final scoped
+  sets pass101Telegram/adjacent and73legacy/adjacent pure tests (overlapping,
+  not174unique tests). Commits78102124,72fd27a9,3ee2279a are not deployed or part
+  of the older full backend aggregate. Native database, current-image and real
+  provider validation remain separate; generic Telegram chat is now writer-only.
 - Today static decision/preference/empty-work labels now use ten-language copy
   in local7c374f1f: three causal failing tests become93focused/adjacent passes;
   TypeScript/lint and independent review pass. Server-supplied Russian action

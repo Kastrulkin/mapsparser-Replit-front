@@ -9,10 +9,22 @@ bypass is reproduced with actual canonical helpers and synthetic SQL rows.
 Local e3e8fbff changes its single guard to write admission: 14 route tests and
 20 overlapping adjacent pure tests pass, independently reviewed. Database,
 generator and audit boundaries are controlled in this proof; no native billing,
-production or other-channel certification follows. SEC-RBAC-09 remains an
-unreproduced Telegram chat role candidate. Legacy BUG-NEWS-01 is currently
-blocked by an unbound local variable; its latent missing authorization must be
-fixed before making generation reachable. No production exploit was attempted.
+production or other-channel certification follows.
+
+SEC-RBAC-09 is now causally reproduced and locally fixed in78102124: canonical
+write admission before generic Telegram `process_chat`; 12 focused and101
+overlapping adjacent pure passes with independent review. The entire mixed
+chat is writer-only, even potentially read-only intents; other read/audio
+consumers keep their default behavior. Legacy BUG-NEWS-01 is now locally fixed
+in72fd27a9: crash RED16fail, GREEN21/adjacent71. Its tenant/source issues were
+latent behind the crash, not independently exploited baseline paths. One target
+is authorized before private inputs/provider; final rewritten text is enforced
+before effects; failures roll back and raw provider output is redacted.
+Own NULL-business examples retain their canonical personal-global semantics.
+Follow-up3ee2279a removes news request-time DDL and requires the migrated tenant
+column before generation (23focused/73adjacent pure passes, independent PASS).
+No production exploit, native persistence/grant, real provider or image proof
+is claimed for these new packages; other legacy endpoints remain outside scope.
 
 19 September SEC-RBAC-07: native causal tests reproduce read-only content-plan
 generation plus selected-network-target/context admission gaps. The independently

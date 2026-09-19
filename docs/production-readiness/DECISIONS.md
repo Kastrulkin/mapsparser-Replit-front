@@ -1,5 +1,48 @@
 # Readiness decisions
 
+## D-041 — Alembic owns news schema; generation only verifies it
+
+Canonical migrations `20260420_add_business_card_automation.py` and
+`20260906_move_content_learning_runtime_ddl.py` already own UserNews and the
+ten columns used by generation. After write admission, use the existing
+read-only `assert_schema_columns` before private context/provider work. Remove
+request-time CREATE/ALTER and the compatibility INSERT without business_id.
+Do not silently repair production schema or spend provider credits before a
+known schema failure. Local `3ee2279a` has causal pure proof and independent
+review; actual PostgreSQL grants/catalog behavior remains a separate gate.
+
+## D-040 — Fix the news crash together with its latent admission boundaries
+
+The original unbound local prevents the downstream path from running. Its
+16-failure causal RED proves that crash, not successful cross-tenant exploitation.
+Before enabling generation, authorize the single resolved business and bind
+service/finance inputs and draft/event identity to it. Apply deterministic text
+fallbacks before final content rules; failure paths roll back and redact raw
+provider output. Business managers may use owner-created records in their
+authorized business; creator identity alone is not the tenant boundary.
+
+Keep own `userexamples.business_id IS NULL` entries: canonical content-voice
+reads already define them as personal global examples, and legacy creation uses
+that representation. Exclude other businesses and other users. Reassignment or
+provenance migration is not inferred from this repair. Local `72fd27a9` is
+independently proven in pure handler tests, not native persistence or deployment.
+
+## D-039 — Write admission at the mixed-capability Telegram chat boundary
+
+Causal SEC-RBAC-09 tests prove that direct and network viewers reached
+`process_chat`, where commands can reserve credits and mutate business data.
+Require canonical write admission before entering that mixed-capability path,
+consistent with the existing web chat boundary. This denies viewers even when
+their text might eventually classify as a read-only request. Supporting viewer
+chat later requires a separately constrained read-only path, not removing the
+guard or trusting an input label.
+
+Keep `authorize_actor` read behavior as the default for its other audio/read
+consumers; the new option is keyword-only and only Telegram chat opts in.
+Local commit 78102124 has 12 focused and 101 overlapping adjacent pure passes
+and independent review. Native PostgreSQL, live Telegram transport and actual
+provider/billing behavior are not certified by these synthetic admission tests.
+
 ## D-038 — Keep localized static copy separate from API text and resource gates
 
 Today UI/source trace plus three local REDs justify a dictionary-only fix for

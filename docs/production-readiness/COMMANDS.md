@@ -1,5 +1,68 @@
 # Verified commands and evidence
 
+## Legacy news generation and schema follow-up — 19 September
+
+Source commits `72fd27a9` and `3ee2279a`. Same env-i pure launcher/guard as the
+Telegram section below, no native DB, network or external provider. AST-load the
+actual decorated handler with fresh Flask; import the real authorization and
+schema helpers. SQL rows, transaction counters and provider/rule/event calls are
+controlled fakes/spies. No actual PostgreSQL role/grant or persistence claim.
+
+Raw `news-paths-legacy-<phase>-20260919.json`:
+
+- red: 16 failed, 0.51s, capture1023.813ms, exit1. All fail from the original
+  unbound local; later source-scope risks were latent behind that crash.
+- green: 21 passed, 0.46s, capture2015.284ms, exit0.
+- adjacent: 71 passed, 0.90s, capture2533.432ms, exit0.
+- schema-red: 2 failed / 21 passed, 0.66s, capture1110.719ms, exit1. At committed
+  72fd27a9, denied-DDL fake fails and missing-column fake still generates.
+- schema-green: 23 passed, 0.92s, capture1443.465ms, exit0.
+- schema-adjacent: 73 passed, 0.95s, capture2653.832ms, exit0.
+
+Adjacent files: test_legacy_news_generation_readiness, test_content_rules,
+test_operator_news_generation, test_operator_news_write_access and
+test_telegram_operator_write_access (all `.py`). Sets overlap; do not add them
+into a unique count. All captures have empty stderr and no timeout/truncation;
+RED tracebacks are retained in stdout. Ruff E9,F63,F7 on both files, F821 on
+the new test and diff check pass. Full F821 on the dynamic legacy module was
+not asserted. Independent source/evidence reviews PASS for both packages.
+
+At 72fd27a9 source SHA256 `a99249b5cdaf77f223078d8e19b2513b4ad7b29936abe1e0b6b4372ac2658182`;
+test `50db3be12e4f6ab76ded5851e06deddfd9587ee8a1466dfb938acf8273fe886e`.
+At 3ee2279a source `7258313c53b83adf1d1428b13585acfa259e852d63b55565e4ed5ab26b777bd9`;
+test `447c40999fc3fb0fa6e3d6295a5eb782e8bce1cb65d9a277ed9eacc15205a987`.
+
+Offline redacted Gitleaks8.30.1 scans only `4ba2be56..3ee2279a`: three commits,
+38,298 bytes, zero findings; capture1065.739ms, exit0, report `[]`, no timeout
+or truncation. Raw `news-paths-secret-delta-20260919.json` and its `-report.json`;
+normal scan summary is in stderr. This does not scan foreign dirty files,
+whole history, images or logs, or establish historical credential revocation.
+
+## Telegram command write admission — 19 September, 78102124
+
+Private launcher `/private/tmp/localos-news-paths.5715VM/` verifies and reuses
+guard SHA `c49c42a8e83a9a216aad150e2f94226b796a7b86fd55a5df93151f652e873ab5`.
+Env-i, no dotenv/plugins/bytecode/cache; Python network and psycopg2.connect
+disabled. This is pure testing, not a relaxed native/build resource gate.
+Named `readiness-news-paths-telegram-{red,green,adjacent}-20260919` jobs completed.
+
+Raw `news-paths-telegram-<phase>-20260919.json`:
+
+- red: exit 1, 6 failed / 6 passed, 0.33s, capture 1928.147ms. Two viewers
+  reach process_chat; four allowed non-owner writers skip canonical role queries.
+- green: exit 0, 12 passed, 0.34s, capture 1961.238ms.
+- adjacent: exit 0, 101 passed, 20.33s, capture 22220.165ms. Exact files:
+  test_telegram_operator_write_access, test_telegram_dashboard_copy,
+  test_operator_voice, test_operator_voice_queue, test_content_rules,
+  test_operator_news_write_access, test_operator_news_generation (all `.py`).
+
+All captures: empty stderr, no timeout/truncation. Four-file Ruff F821 and diff
+check pass. Independent source/focused/adjacent evidence review PASS. Source
+SHA256: operator_audio `3f993077726d9b95d716e79b7059effbd6d1075987a8d6866999ab8611d046e8`;
+telegram_dashboard `56f1541216f0287ceb66f61e314c0fd5037c7c2c8d816719f32aa2619be3baca`;
+new test `a871bf1130c4a810b355578d608252eadb766586172fe048070d922d2c0d0c8a`;
+dashboard test `85d08d35e00359016e7273345139e5e39fb7a22d277f2e84f38e8b0fafc0d743`.
+
 ## Direct Operator news write admission — 19 September, e3e8fbff
 
 Private `run-pure.sh` and `capture.sh` in

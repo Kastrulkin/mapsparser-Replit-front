@@ -1,13 +1,21 @@
 # Residual risks — working register
 
-Newest backend e3e8fbff closes only direct Operator news admission, supported by
-14 route / 20 overlapping adjacent pure tests and independent review. Native
-stored-role persistence, current image and production remain unverified. The
-source-traced Telegram viewer admission candidate (SEC-RBAC-09) and legacy
-news crash/latent business-write authorization (BUG-NEWS-01) are still open;
-neither was probed in production. The legacy crash must not be fixed alone.
-Latest local disk observation is 1,871,180 KiB (~1.78 GiB); heavy native/build
-jobs remain below their unchanged resource gates. No cleanup or apps stopped.
+Newest source3ee2279a adds three independently reviewed local packages:
+Telegram chat write admission78102124 (12focused/101adjacent), legacy generation
+72fd27a9 (21/71) and Alembic-owned news schema3ee2279a (23/73). These overlapping
+pure tests use real handlers/helpers with controlled SQL/provider boundaries.
+They do not prove native PostgreSQL grants/catalog, durable rollback/commit,
+actual billing, live Telegram, current image or production. The full mixed
+Telegram chat is now writer-only (D-039), a deliberate compatibility change.
+User-owned NULL-business examples remain personal/global, not reassigned data.
+Other legacy endpoints may still execute DDL; prompt-template debug output is
+not covered by the raw-provider-output privacy fix. The separate content-voice
+profile mutation candidate remains unproven. No platform-wide closure claim.
+
+Latest local disk observation is 1,842,016 KiB (~1.76 GiB); heavy native/build
+jobs remain below unchanged resource gates. No cleanup or apps stopped. Prior
+direct Operator gatee3e8fbff retains its14/20pure proof. Current-source aggregate,
+Today build/full units and current image still need separate validation.
 
 Newest7c374f1f locally fixes only the static UX-LOCALE-07 subset, with93focused
 tests/TS/lint/independent review. API-origin Russian operational text remains.

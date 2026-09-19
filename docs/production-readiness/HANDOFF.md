@@ -1,6 +1,56 @@
 # Readiness handoff
 
-## Current checkpoint — 19 September, direct news gate e3e8fbff
+## Current checkpoint — 19 September, source 3ee2279a
+
+Three reviewed local packages after documentation checkpoint `4ba2be56`:
+`78102124` Telegram mixed-capability chat write admission; `72fd27a9` legacy
+news crash, tenant inputs, final-text enforcement and error privacy;
+`3ee2279a` Alembic schema guard instead of request-time UserNews DDL. Source/test
+hashes and exact RED/GREEN/adjacent results are in COMMANDS. No push/deploy.
+
+Private pure runner: `/private/tmp/localos-news-paths.5715VM/`; guard reused
+from `/private/tmp/localos-news-readiness.jXg1zx/sitecustomize.py`, SHA256
+`c49c42a8e83a9a216aad150e2f94226b796a7b86fd55a5df93151f652e873ab5`.
+Env-i, no dotenv, plugins, bytecode or pytest cache; Python sockets and psycopg2
+connections disabled. The fixture loads the actual decorated legacy handler
+without importing the application and uses strict fake SQL plus provider spies.
+This is not a PostgreSQL grant, real transaction, migration or billing test.
+Do not replay existing capture destinations.
+
+All new `readiness-news-paths-*` test/scan sessions are terminal: raw captures
+are complete and the final tmux inventory contains none of those names. Other
+older/unrelated sessions in that inventory were not stopped or certified.
+Offline redacted three-commit secret delta is clean (38,298 bytes, zero findings),
+not a history/image/log or foreign-dirty scan.
+
+Key compatibility decisions: generic Telegram command chat is writer-only,
+even for text that might later classify as read (D-039). Personal user-owned
+NULL-business examples remain valid per the canonical content-voice contract;
+foreign business examples are excluded (D-040). Schema mismatch fails before
+generation; migrations stay separately owned by Alembic (D-041). Other legacy
+endpoints' runtime DDL and prompt-template debug logging remain outside this fix.
+
+Next safe local work: SEC-RBAC-10 content-voice business-profile PATCH, independently
+traced but not runtime-reproduced. `content_voice_api.py:31` dispatches PATCH to
+`content_voice_service.update_content_voice:290`; common `_verify_access:48`
+uses the read helper, followed by business-keyed profile UPSERT/commit. Existing
+runtime-schema tests pin common read semantics; error-redaction tests omit PATCH.
+Use actual route/service and canonical helpers with strict fake direct/network
+roles to require403/zero UPSERT/commit, preserving owner/manager and GET controls.
+Do not conflate this with private user-owned examples or change the common GET
+helper globally. No current native/full-suite/image run is
+authorized by passing the pure tests. Latest disk 1,842,016 KiB (~1.76 GiB): keep
+the 2 GiB floor, estimated ≥5 GiB aggregate start margin and historical Docker
+6.8 GiB peak plus reserve (8–10 GiB planning target). No deletion of DB/proofs,
+swap cleanup or unrelated app stops. Future aggregate must freeze the then-current
+committed source; old6eec 4751-pass proof excludes these packages.
+
+Existing production Today tab is authenticated; it was read without clicks or
+mutations. Its mixed-language labels remain live. This does not waive the local
+demo file-picker restriction. Preserve the seven foreign dirty paths enumerated
+in the earlier handoff. Whole objective and release gates remain open.
+
+## Earlier checkpoint — 19 September, direct news gate e3e8fbff
 
 Two-file source commit: `src/api/operator_api.py` changes only the direct news
 route from read admission to write admission; new
