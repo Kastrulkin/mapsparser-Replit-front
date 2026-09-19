@@ -1,5 +1,48 @@
 # UX and browser verification — working evidence
 
+## Read-only production Today observation — 19 September
+
+After the user reported login, root selected the existing IAB tab on
+`https://localos.pro/dashboard/today` and read its accessibility tree, without
+navigation clicks, refresh or mutations. The authenticated Today screen and
+SuperAdmin badge were present. No session/cookie/token was extracted.
+
+UX-LOCALE-07: Spanish `Hoy`/`Actualizar` appear beside static English
+`Needs your decision`, its instruction, and `What to show first on Today`.
+Independent bounded source trace identifies RU-vs-English literals at
+TodayPage.tsx:294/366 bypassing existing todayPageCopy. This is not fixed by the
+review/publication packages. Next local regression should render Spanish Today
+with decision/preference fixtures and require Spanish static labels; no live
+preference changes are needed. Russian operational title/button text comes from
+the API and remains unchanged by localizedGrowthText for Spanish; its semantic
+translation contract is separate, not assumed to be user-authored content.
+The observation proves this display defect, not production API health or current
+deployment identity. No automatic regression or fix for Today is claimed yet.
+
+## Publication sheet labels — 19 September, 67169692
+
+UX-LOCALE-06 is locally FIX_PROVEN. The owner's task is to review a publication
+and close it without saving or sending. The real non-demo ContentPage sheet
+hardcoded `Preview`; its shared SheetContent supplied an English accessible
+`Close`. Five focused RED failures reproduce both missing localized labels.
+The fix adds preview/close copy for all ten languages and an optional scoped
+SheetContent label, preserving the existing default for other callers. It does
+not change the generic Dialog, API requests, publication actions or focus logic.
+
+Exact final focused capture `content-sheet-locale-green-typed-20260919.json`
+passes51tests in8.83s (capture11.069804s). RU/TR component cases verify labels,
+button close and no writes; calendar/list/nearest Escape cases retain invoker
+focus, and primitive tests cover default/custom labels and no DOM prop leak.
+The full frontend passes620tests/129files354.85s (capture356.870512s). Typecheck,
+lint(0errors/1existing warning), build and199-JS-asset integrity pass. Two
+independent scoped reviews pass. Earlier mock-history and unsupported test-query
+option failures are retained, not hidden. See COMMANDS for exact captures.
+
+No current browser, full-sheet all-language, production or release-image claim:
+other real-sheet strings still contain hardcoded Russian. The new standard-config
+cookie build is separate from the older envDir:false demo artifact. Backend
+content scope authorization is a distinct locally proven packagebe1b1a95.
+
 UX-LOCALE-05 is locally fixed at focused component scope. The initial locale
 RED recorded3failed/1passed in7.35s (capture10.116326s, exit1/no timeout or
 truncation): RU/EN/EL lacked the expected user-facing manual-draft heading.

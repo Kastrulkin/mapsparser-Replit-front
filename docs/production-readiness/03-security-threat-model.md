@@ -4,6 +4,17 @@ Status: incomplete security assessment, not a production approval. Baseline `302
 
 ## Assets and adversaries
 
+19 September SEC-RBAC-07: native causal tests reproduce read-only content-plan
+generation plus selected-network-target/context admission gaps. The independently
+reviewed localbe1b1a95 patch passes164focused/adjacent tests7.91s, capture9.122281s,
+including stored superadmin, viewer read access, reverse root/target roles,
+foreign scopes, persisted item/audit tenant identity and continuation. Root
+permission is checked before scope resolution; selected targets before private
+content inputs, generation and writes. Structural labels are read internally
+while resolving scope and filtered before response. This does not fence
+concurrent membership/topology changes during generation, cover every content
+mutation, or prove production/image behavior. No schema changes or provider calls.
+
 Assets are business/network membership, sessions, provider credentials, private customer communications, finance records, uploaded documents/audio, private knowledge, drafts, approvals, billing limits and the integrity of execution history. Availability of the app, database and workers is also an asset. PostgreSQL is the durable business source of truth; browser state, Redis and provider acknowledgements are not substitutes for committed business history.
 
 Relevant actors include an anonymous API caller, a valid user attempting a foreign-tenant or higher-role action, a former/revoked member, an attacker controlling a retrieved website or uploaded document, a compromised provider credential, and a mistaken operator targeting the wrong deployment or database. No historical exploitation is asserted by this model.
@@ -63,6 +74,11 @@ capture5.387119s,exit0/no timeout/truncation. Root confirmed zero remaining
 7. A backup/configuration is accidentally included in an image or a restore command targets live data. Exclude sensitive build paths and require explicit validated restore targets. A readable dump is not a successful restore rehearsal.
 
 ## Secret and dependency findings
+
+Latest redacted committed-source deltas:105954d6..67169692 (frontend,1commit)
+and67169692..be1b1a95 (backend,1commit/30339bytes) report zero findings,
+capture2878.404ms and1826.499ms respectively, exit0/no timeout/truncation.
+This is not whole-history, foreign-dirty, image-layer, log or revocation closure.
 
 19 September Moscow continuation: strict redacted Gitleaks8.30.1 history delta
 `272794a4..5b9b9247` scanned7commits/149,093bytes and reported zero findings.

@@ -1,6 +1,60 @@
 # Readiness handoff
 
-## Current checkpoint — 19 September, actual preview lifecycle passes
+## Current checkpoint — 19 September, frontend67169692 / backendbe1b1a95 proven locally
+
+Branchcodex/production-readiness-20260917; startingHEAD105954d6. Five-file frontend
+package committed67169692, no push/deploy. Current accepted focused raw is
+content-sheet-locale-green-typed (51pass8.83s/capture11069.804ms), not pre-type
+green-final. Full units terminal620pass129files354.85s/capture356870.512ms;
+TS46.851108s/lint17.999153s/build20.550229s/199assetintegrity287.737ms pass.
+Preserved earlier RED/fixture/type failures and expected stderr; see COMMANDS.
+Standardconfig+cookieflag artifact index9c98c81d… is not the old demo artifact.
+Offline Gitleaks105954d6..67169692:1commit/0findings/2878.404ms, raw preserved.
+Backend delta67169692..be1b1a95:1commit/30339bytes/0findings/1826.499ms, report[].
+
+Four-file security package now committedbe1b1a95: src/services/content_plan_service.py,
+src/api/operator_api.py (one mobile error mapping), tests/test_services_content_viewer_readiness.py
+and tests/test_operator_plan_continuation_pg.py; no foreign files included.
+Native root RED2fail4pass, initialgreen10pass; mobileRED2fail8pass400vs403;
+scopeRED5fail6pass proves four unauthorized network generations and a context
+read. Root review also caught the intermediate resolver omitting root admission;
+worker fixed root admission before scope resolution and added reverse-role checks.
+FinalGREEN164pass7.91s/capture9122.281ms/no skips/stderr/timeout/truncation; independent
+reviewPASS. Exact source hashes are in root review output; raw final-green retained.
+The intermediate full run162pass2failed had incorrect error/positive-target test
+expectations, corrected without weakening denial/snapshot checks. Old adjacent
+exit4/missing filename is not an application failure. Internal structural-label
+lookup is permitted; transaction-fenced concurrent revocation is not proven.
+Next backend gate: current committed-source aggregate, not replay of old6eec proof.
+Read-only launcher assessment holds the full aggregate at current~2.8GiB free:
+its2GiB abort floor leaves insufficient margin for a~111MiB source archive plus
+Testcontainers writable layers. A planning estimate is at least5GiB start space,
+not measured peak certification; Docker build needs its separate historical
+6.8GiB+reserve. Do not lower existing guards or delete retained evidence/volumes.
+Next archive must use exactbe1b1a95 committed source and fresh launcher/root/raw
+paths, with revalidated dependency/guard/nativeDB/image identity; old6eec outputs
+must not be overwritten. Today local test-first preparation is an independent lane.
+
+Native launcher `/private/tmp/localos-readiness-content-generation-native-20260919.sh`
+guards OID1935406/ownerreadiness_test_owner/exact datadir, env-i/guard-first,
+no inherited credentials, only cloned task schemas; database retained. Prior
+captures all confirm0customschemas/0othersessions afterward. No native test is
+live at this checkpoint. Do not replay existing fixed output paths; use a new
+capture only for new work; final `adjacent` is complete and not to be replayed.
+Its corrected list includes generation, employee access, continuationPG and
+network visibility; OPERATOR_VOICE_TEST_DSN points to the same owned nativeDB.
+
+v3 private helper SHA f904859b9f1f5bd089f2279468c56aec1bb3f3acdca7b11663e4fd8133153e84
+and test SHA4bdc70cae9e1731929b0afbb9ebbdabf0e3d6707e253c863f9f7c0384b82e6a1
+pass5pure tests/capture2149.063ms plus independent review. ONLY two exact GETs
+and v3 result paths change; no server run, old39frontend pin intentionally kept.
+Original file-picker restriction remains. Production IAB login reported by user
+was observed read-only on Today (no clicks); not write authorization or local demo.
+UX-LOCALE-07 records observed Spanish/English static mixing plus separate Russian
+server action labels, independently traced. No Today fix started. Seven foreign files below stay
+excluded. No Docker build/deploy/production or full-goal completion claim.
+
+## Earlier checkpoint — 19 September, actual preview lifecycle passes
 
 Branch `codex/production-readiness-20260917`, starting HEAD60e45463. Current
 package is private test-harness fixes and audit docs, no application source.

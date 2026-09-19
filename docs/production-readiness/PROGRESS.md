@@ -1,6 +1,39 @@
 # Production-readiness progress
 
-## Current checkpoint — 19 September, preview lifecycle fixed; file input blocked
+## Current checkpoint — 19 September, frontend67169692 and content securitybe1b1a95
+
+- [x] Prior installer-confirmation turn was NO_PROGRESS for readiness. Exact
+ installer remains absent; app remains installed. No further cleanup/deletes.
+- [x] UX-LOCALE-06 committed locally67169692:51final focused tests, full620tests/
+ 129files354.85s, TS/lint/build/199asset integrity and independent review pass.
+ Earlier fixture and TS failures are preserved. No browser/deployment claim.
+- [x] New private v3 demo helper adds only the two reviewed exact partnership
+ GETs. Root policy5pass739.323ms/capture2149.063ms and independent review pass;
+ lifecycle/artifact/finance/POST bounds are unchanged. No v3 server run.
+- [x] Native stored-role RED reproduces content generation by viewer/network
+ viewer:2fail4pass1.69s. Initial root-only fix gives10green, but independent
+ review correctly refuses closure: mobile permission errors map400, and network
+ target/read-context authorization is incomplete. Mobile RED2fail8pass2.08s;
+ scope RED5fail6pass2.03s. These are real synthetic-role tests, not production.
+- [x] SEC-RBAC-07 independently FIX_PROVEN locallybe1b1a95: canonical root+target
+ read/write guards, viewer reads, mixed/reverse/foreign/default scope and persisted
+ item/audit identity. Final164native/adjacent pass7.91s/capture9122.281ms, cleanDB
+ pre/post. Initial adjacent wrong filename exit4 and later162pass2incorrect test
+ expectations are retained; no product failures hidden. No role-change-race proof.
+- [ ] Full presenter demo still needs a permitted file picker and current artifact.
+ User reported production IAB login; root read the existing Today UI only, no
+ clicks/mutations. It does not remove the local file-picker tool boundary.
+- [ ] UX-LOCALE-07: Today Spanish static labels mix with RU/English fallbacks.
+ Actual UI plus independent source trace; no local automated red/fix yet.
+
+Starting HEAD105954d6; current backendbe1b1a95/frontend67169692. Seven foreign
+dirty files remain preserved/excluded. Full frontend job is terminal, not to be
+rerun. Owned nativeDB OID1935406/datadir checks and0schemas/0sessions pass after
+each native capture. Latest disk check2999336KiB free; no Docker build headroom.
+The frozen6eec full backend aggregate predates this package; do not relabel it.
+Overall goal remains active; no release/score promotion.
+
+## Earlier checkpoint — 19 September, preview lifecycle fixed; file input blocked
 
 - [x] Previous turn PROGRESS: reviewed evidence committed in60e45463; cache
   inventory reconfirmed insufficient build headroom. No completed suite rerun.

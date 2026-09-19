@@ -4,6 +4,14 @@ Updated 19 September 2026. Scores describe evidence at the stated checkpoint,
 not an average that can waive a release gate. The original Definition of Done
 and unresolved P1 items remain controlling.
 
+Newest scoped evidence: frontend67169692 passes620units/129files354.85s,
+51focused checks, TS/lint/build/integrity. Content root/target authorizationbe1b1a95
+passes164native/adjacent checks7.91s and independent review after three causal RED
+sets and corrected test-only expectations. Neither addition is in the frozen6eec
+backend aggregate or the historical image/browser matrix. V3 demo policy tests
+are preparation, not a server run. Read-only production Today observation confirms
+remaining mixed-locale copy, not full runtime health. No score/release promotion.
+
 Current frozen6eec full backend aggregate now passes4751tests/7intentional
 live-provider skips/6warnings652.30s, capture659.230650s/exit0/no timeout/truncation.
 Root postchecks confirm owned nativeDB identity, schema/session/process and

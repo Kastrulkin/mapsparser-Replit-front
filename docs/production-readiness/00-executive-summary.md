@@ -14,6 +14,17 @@ writes require the documented human approval or manual boundary.
 
 ## What is materially stronger after this work
 
+- New content-plan checks reproduce and fix read-only generation and selected
+  network-target authorization gaps. Localbe1b1a95 passes independent review and
+  164isolated PostgreSQL/adjacent tests7.91s; permitted viewers can still read their
+  own context and legitimate writers can generate. Concurrent role changes during
+  generation, the complete permission matrix and production rollout remain separate.
+- Publication preview and accessible Close labels now follow the selected locale
+  in local67169692. Final focused51tests and full620frontend tests/129files354.85s,
+  TypeScript, lint, build and asset integrity pass. This is not a new browser or
+  current-image result. User-enabled production IAB login was observed read-only;
+  Today still mixes Spanish static copy with English fallbacks and Russian
+  server-supplied action labels. That separate locale debt is not hidden by this fix.
 - The frozen backend checkpoint passes4,751tests in652.30s,
   with7deliberate live-provider skips and6dependency/configuration warnings.
   The run includes isolated PostgreSQL and browser regressions; owned test

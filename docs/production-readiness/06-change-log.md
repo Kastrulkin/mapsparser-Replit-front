@@ -1,5 +1,49 @@
 # Production-readiness change log
 
+## SEC-RBAC-07 — content root/target admission, be1b1a95
+
+Four files only: content_plan_service resolves canonical scope from the root's
+stored network, checks root admission first and every effective target with the
+existing read/write verifier, filters returned scope options, and persists the
+same scope identity. Single-business cannot persist a supplied foreign target;
+blank network-location cannot select an arbitrary sibling. Mobile generation
+maps PermissionError to403 and retains ValueError400. No new roles/schema/API enum.
+
+Causal native REDs: viewer/network-viewer2fail4pass; mobile400vs4032fail8pass;
+network generation/context5fail6pass. The initial root-only10green was rejected
+by independent review; root+target and reverse-role cases were added. An adjacent
+command selected a nonexistent file (exit4/no tests); the next full run had
+162pass2test-expectation failures, preserved unchanged. Final164pass7.91s,
+capture9122.281ms, no skips/stderr/timeout/truncation; exact nativeDB identity and
+zero schemas/sessions before/after. Tests check whole-row no-effect snapshots,
+stored superadmin, allowed viewer reads, filtered options, two network-item target
+IDs, root audit identity, and actual continuation callers. Ruff F821/diff check
+pass; independent final review verified source/test hashes and raw proof: PASS.
+
+Limit: synthetic native roles and actual service/route-function calls, not full
+HTTP middleware/current image/production. Deterministic context/LLM inputs are
+mocked. Structural labels are read internally before target admission but never
+returned unauthorized. Concurrent membership/topology revocation during generation
+is not transaction-fenced. No provider calls, production writes, push or deploy.
+
+## UX-LOCALE-06 — scoped publication-sheet labels, 67169692
+
+Five frontend files only: SheetContent accepts optional `closeLabel`, consumed
+before DOM props and defaulting to its prior English text; ContentPage passes
+current calendar locale and replaces the hardcoded preview caption. Ten complete
+copy records and regression tests preserve default/custom accessible controls,
+Escape/button closing, invoker focus and no current-scenario API writes.
+
+Causal RED5fail5.42s; first GREEN49pass2fail is mock-history contamination, not
+an application write. Clearing prior mock calls retains the no-write assertion.
+First TypeScript run then rejects unsupported `exact` role-query options;
+removing those options preserves exact string-name matching. Final focused51pass
+8.83s, TS46.851108s, lint17.999153s(0errors/1knownwarning), build20.550229s and
+199asset-integrity287.737ms pass. Full frontend620/129files354.85s,
+capture356.870512s/exit0/no timeout or truncation; expected negative-fixture and
+jsdom stderr is preserved. Two independent scoped reviews pass. No browser,
+production, current backend/image or full-sheet localization certification.
+
 ## TEST-DEMO-02 — preview signal finalization and bounded read compatibility
 
 Private test instrumentation only; no application/dependency source changed.

@@ -1,5 +1,29 @@
 # Readiness decisions
 
+## D-037 — Authorize effective content targets, not only the root selector
+
+Native stored-role tests reproduce viewer generation, mobile denial status400,
+and cross-location generation/read-context access even after a root-only write
+guard. Do not close SEC-RBAC-07 from the initial10green cases. Resolve effective
+scope against stored network structure, require existing read rights for context
+and write rights for root plus every generation target before private content
+inputs/provider/effects, and
+retain legitimate viewer reads and network writer/owner/admin behavior. No new
+roles, partial silent target filtering for writes, schema changes or provider calls.
+The targeted fix is independently reviewed and committed locallybe1b1a95:
+164native/adjacent tests pass. Structural sibling ID/name/city/address lookup
+occurs internally after root admission, before target checks; only read-authorized
+options reach the response. This is accepted structural lookup, not proof that
+all DB reads follow target admission. Concurrent membership/topology changes
+after checks remain unfenced; no race-safety claim.
+
+Separately, keep localized sheet labels caller-scoped: optional primitive input
+preserves other screens' defaults. The frontend package67169692 has component,
+full-unit, type/lint/build proof, not a new browser or deployment proof. User
+reported logging into production in IAB; root verified the current Today screen
+without clicks. That authorizes no test writes there and does not resolve the
+isolated demo's file-picker restriction. Mixed-locale Today copy is separate debt.
+
 ## D-036 — Own preview finalization; preserve tool and feature boundaries
 
 The installed Vite's combined default signal/HTTP-close pattern causally

@@ -1,6 +1,14 @@
 # Synthetic partner demo: 10–15 minutes
 
 Status: **partially exercised; complete presenter rehearsal still open**.
+Latest preparation: private v3 helper permits the two exact previously denied
+partnership GETs, with5pure policy tests and independent review. It has not run
+the server/browser and deliberately retains the older39frontend artifact pin.
+The new publication-label build671 is separately tested, not silently substituted.
+User reported production IAB login; root observed the Today screen without clicks
+or data actions. This is not synthetic demo completion and does not authorize
+production writes or bypass the denied native file-picker fallback.
+
 Latest v2 attempt fixes preview lifecycle (real signal smoke passes) and shows
 maps/review/content/photo guidance, finance summary/history and partnership
 hypothesis/unsaved campaign panel. It ends cleanly after320867.914ms, with

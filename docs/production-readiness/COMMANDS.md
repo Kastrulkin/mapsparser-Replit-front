@@ -1,5 +1,74 @@
 # Verified commands and evidence
 
+## Content generation role/scope package — 19 September, be1b1a95
+
+Actual native launch was the private `localos-readiness-content-generation-native-20260919.sh`
+in named tmux sessions, through capture_command.py with180s timeout. The launcher
+uses env-i, disabled dotenv/providers, pinned no-egress guard and the exact owned
+native PostgreSQL database OID1935406. Both pre/post checks require its expected
+owner/datadir and zero custom schemas/other sessions. No production DB was used.
+Captures `raw/content-generation-role-<phase>-20260919.json` are immutable:
+
+| Phase | Result | Captured ms | Interpretation |
+| --- | --- | ---: | --- |
+| red | 2fail4pass/1.69s | 5765.495 | Actual viewer/network-viewer generation accepted before fix |
+| green | 10pass/2.12s | 3653.068 | Initial root-only fix; not scope closure |
+| adjacent | exit4/no tests | 936.772 | Incorrect nonexistent test filename, corrected later |
+| mobile-red | 2fail8pass/2.08s | 6564.104 | Permission denial incorrectly maps400 instead of403 |
+| scope-red | 5fail6pass/2.03s | 3201.280 | Four unauthorized network writes and one context read accepted |
+| final | 2fail162pass/8.71s | 12746.148 | Wrong test message and permitted-target expectations; not product regressions |
+| final-green | 164pass/7.91s | 9122.281 | Corrected assertions, root+all-target guards and persisted item/audit checks |
+
+All captures are terminal, not timed out/truncated; stderr is empty. Final phase
+`adjacent` runs eight files: services_content_viewer_readiness, its guard,
+content_plan_generation, employee_content_plan_access, operator_plan_continuation_pg,
+content_plan_network_visibility, content_plan_direction, operator_plan_continuation.
+The continuation DSN explicitly points to the same owned database; no skips.
+Ruff F821 on all four changed files and git diff --check pass. Route functions
+use Flask test_request_context with real stored roles/service/SQL, not complete
+HTTP middleware or browser proof; context/model inputs are deterministic mocks.
+Structural network labels are looked up internally before target admission;
+unauthorized options never leave the filtered response. Mid-generation concurrent
+membership/topology changes are not fenced or proven by these checks.
+
+Additional terminal captures: `demo-v3-policy-20260919.json` has5pure helper tests,
+739.323ms/capture2149.063ms/exit0; no v3 server/browser. Redacted Gitleaks delta
+`105954d6..67169692` has1commit/0findings/2878.404ms/exit0, report[]; not whole-history,
+image/log/foreign-dirty coverage. No secrets were tested, revoked or rotated.
+The subsequent committed backend delta `67169692..be1b1a95` also passes:
+raw/secret-delta-content-security-20260919.json,1commit/30339bytes,0findings,
+1826.499ms/exit0/no timeout/truncation; findings[]. Same limits apply.
+
+## Content sheet locale package — 19 September, 67169692
+
+Named tmux sessions `readiness-content-sheet-{red,quality,quality-final,
+quality-typed,units}-20260919` ran the private correspondingly named launchers.
+All are terminal. Captures use bug-reproducer/capture_command.py and Node22;
+raw files are `content-sheet-locale-<phase>-20260919.json`:
+
+- red: Vitest ContentPage.dom-mutation filtered to invoker focus/localized sheet,
+ 5fail/16deselected,5.42s/capture7605.205ms/exit1.
+- green: full ContentPage.dom-mutation + DemoLanguageCoverage + sheet.test,
+ 49pass2fail/9.03s/capture11944.798ms; mock history included prior generate action.
+- green-final: same51pass8.63s/capture11366.675ms, before role-query type correction.
+- types: `npm run typecheck`, exit2/42053.586ms; three unsupported `exact` options.
+- green-typed: exact final same51pass8.83s/capture11069.804ms; default exact string
+ role-name matching retained. `types-final`: exit0/46851.108ms.
+- lint: `npm run lint`, exit0/17999.153ms,0errors/1existing auth_new.ts warning.
+- build: `node node_modules/vite/bin/vite.js build --outDir
+ /private/tmp/localos-readiness-content-sheet-dist-20260919` with cookie flagtrue,
+ standard config; exit0/20550.229ms, third-party PURE/outDir warnings retained.
+- integrity: `bash ../scripts/verify_frontend_dist_integrity.sh` with that outDir,
+ 199reachable JS pass/287.737ms; local confstr temp-directory warning retained.
+- units: `node node_modules/vitest/vitest.mjs run --config
+ /private/tmp/localos-readiness-locale-vitest-20260919.mjs --reporter=dot`,
+ env-i/envDirfalse/maxWorkers1;620pass/129files354.85s/capture356870.512ms/exit0.
+
+All captures have no timeout/truncation; full units retain expected negative
+fixture/jsdom stderr. The new build is NOT the older envDir:false demo artifact.
+Index SHA2569c98c81d3e34a03fd8b99db9db3dba04afde42e2619f3cff16448cb5de0533aa.
+No native browser, Docker build or production operation was run for this package.
+
 ## Preview lifecycle and v2 walkthrough — 19 September
 
 Completed one-shot captures in the existing task raw directory; do not replay
