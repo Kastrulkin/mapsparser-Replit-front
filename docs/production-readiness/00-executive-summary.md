@@ -14,6 +14,15 @@ writes require the documented human approval or manual boundary.
 
 ## What is materially stronger after this work
 
+- The frozen current backend application source passes4,751tests in652.30s,
+  with7deliberate live-provider skips and6dependency/configuration warnings.
+  The run includes isolated PostgreSQL and browser regressions; owned test
+  resources were checked after completion. It is not a current release-image,
+  production, or complete presenter-rehearsal result.
+- The partnership demo seed now supplies an explicitly unconfirmed synthetic
+  audience-overlap explanation using the actual drawer contract. Two regression
+  tests and44overlapping adjacent tests pass. Updating the retained demo record
+  and rehearsing the complete presentation remain outstanding.
 - Password reset pages no longer print raw reset credentials into the browser
   console. A synthetic regression preserves the reset request and success while
   confirming no credential output;28focused/adjacent checks, the rebuilt asset
@@ -36,7 +45,7 @@ writes require the documented human approval or manual boundary.
   explicit reconciliation path, with no alert-triggered automatic replay in
   the deployment smoke. The final focused set passes25tests; separate API/schema
   validation passes73tests (overlapping coverage, not98unique tests). This newer
-  source is not covered by the historical full-suite/image checkpoint below.
+  source is covered by the new6eec full backend aggregate, but not a current image.
 - Local regression tests now cover blocked-account sessions, authenticated
   provider callbacks, several stored-role and business-boundary checks, safer
   outbound lookup, and transaction/replay protection for internal changes.

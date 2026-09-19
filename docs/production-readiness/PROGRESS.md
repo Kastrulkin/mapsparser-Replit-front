@@ -1,6 +1,35 @@
 # Production-readiness progress
 
-## Current checkpoint — 19 September, reset-token logs fixed locally
+## Current checkpoint — 19 September, seed1e955718 / frozen backend aggregate
+
+- [x] TEST-DEMO-01: actual drawer reads `match_json`, not the journey preview.
+  Commit1e955718 inserts an explicitly synthetic unconfirmed hypothesis and
+  preserves existing artifacts with conflict-do-nothing. No production behavior
+  or provider action changed. Source/schema/drawer reviewPASS.
+- [x] Root causal RED2fail0.20s on archived6eec seed; GREEN2pass0.05s and
+  44overlapping adjacent tests0.70s, RuffF821/diffPASS. All captures untruncated,
+  no timeout/stderr; independent evidence/docsPASS. RealDB idempotence, retained
+  stage update and actual presenter rehearsal remain separate.
+- [x] Strict offline scan6eec..1e955718:1commit/0findings,3.252838s/exit0.
+  Retained git `confstr`/stderr warning; not a warning-free or historical-key scan.
+- [x] Current backend runner/source/dependency/DB isolation independently checked.
+  First launch failed before tests on a65-character hash validator; original
+  wrapper preserved and exact64/nonhex boundaries tested after correction.
+- [x] Full6eec backend aggregate:4751passed/7intentional live-provider skips/
+  6warnings652.30s; capture659.230650s/exit0/no timeout/truncation, validtrue.
+  Five SWIG and one Alembic deprecation warnings retained, plus shutdown stderr.
+  Owned nativeDB identity unchanged,0custom schemas/other sessions, no remaining
+  testcontainers or known PIDs/process group; retrytmux is terminal. Independent
+  raw/result reviewPASS; all7skips are intentionally external-provider-only.
+  Later seed/test1e955718 is excluded from this immutable archive and has its
+  own focused/adjacent proof above. Remaining release/image/demo gates are open.
+
+No reset/deploy/push, no user-file cleanup or production mutation. Latest
+observed disk5,490,896KiB remains above the2GiB run floor but below measured
+Docker-build peak plus reserve. Next: the exact synthetic demo artifact update
+and complete browser rehearsal; current-image/release gates remain open.
+
+## Earlier checkpoint — 19 September, reset-token logs fixed locally
 
 HEAD39aeeff9; locale commit993349b5, backendfairness7bb9f996, evidence docsa891a9d6.
 No runtime files remain uncommitted. Unrelated user voice/map docs are preserved.

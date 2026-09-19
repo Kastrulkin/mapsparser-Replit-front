@@ -1,5 +1,42 @@
 # Verified commands and evidence
 
+## Frozen6eec backend aggregate and demo seed — 19 September
+
+One-shot private capture `/private/tmp/localos-readiness-backend-6eec7e5e-capture-20260919.sh`
+uses the approved PDF tree pin
+`a2baea11803095e5488c98533a8001edbe2c5e167c4367644e5ebe16ca7fc67e`.
+Do not replay it: retrytmuxreadiness-backend-6eec-retry-20260919 is completed.
+It runs `pytest -q -rs --durations=25` in the immutable6eec archive with the
+owned native DSN, callback aliases/guard and cached testcontainer images.
+NativeDB is retained without launcher migration/reset; suite-owned ephemeral
+PostgreSQL instances still run their ordinary migrations. Pinned launcher
+SHA59378af8501f0911c967044dfc3dc5d7d8ff9f3e0b62f490724091b702430c27,
+capturec3b7cc6aab8dfe27cb8ac49195d058bef11239b53cf422279a326f89f13467bb,
+Docker-to-real-Compose shim43128cef1eedae674c8ed24158f3e0d3657447c3b04332c7c31ff01a2f248ba8.
+The first launch's65-character hash-pattern failure happened before capture;
+its wrapper is preserved. Corrected validator accepts64 and rejects63/65/nonhex.
+Raw/full-backend-6eec7e5e-20260919.json:4751passed/7live-provider skips/6warnings
+652.30s, capture659.230650s/exit0/no timeout/truncation, controllervalidtrue.
+Warnings:5PyMuPDF/SWIG plus1Alembic path_separator; shutdown SWIG stderr retained.
+Root postcheck confirms unchanged nativeDB1935406/owner/datadir,0custom schemas
+and other sessions, no testcontainers/known PID group leftovers; no DB drop.
+Independent raw/result scope reviewPASS; root owns DB/Docker postcheck evidence.
+See raw/backend-6eec7e5e-preflight-20260919.md for failed-launch/provenance detail.
+
+Completed demo proof uses env-i/guard-first/no dotenv, no actual DB connection:
+private `localos-readiness-demo-seed-proof-20260919.sh` archives only the old
+seed and copies the same new tests for causalRED, then tests current source.
+Raw demo-seed-red:2failed0.20s/capture0.546771s; green:2passed0.05s/0.239399s.
+`localos-readiness-demo-seed-adjacent-20260919.sh` runs new seed contract plus
+lead_journey service/API/content+automation migration contracts:44passed0.70s/
+1.094591s; overlapping counts, empty stderr/no truncation/timeout. RuffF821 and
+`git diff --check` pass. These are SQL-recording contracts, not real DB or UI.
+Committed1e955718 after independent review; excluded from the6eec aggregate.
+
+Strict offline Gitleaks delta6eec..1e955718 passes1commit/0findings in3.252838s,
+raw/secret-delta-6eec-to-1e955718-20260919.json and private report[] retained.
+Git `confstr`/stderr warning retained; no historic-key revocation claim.
+
 ## Password-reset console disclosure — 19 September, source39aeeff9
 
 Private `localos-readiness-password-logging-capture-20260919.sh` records source

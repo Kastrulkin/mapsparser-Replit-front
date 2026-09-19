@@ -4,6 +4,11 @@ Updated19September2026. These are remaining risks or verification gaps, not
 newly demonstrated exploits. Fixed local findings and their evidence remain in
 [02-audit-backlog.md](02-audit-backlog.md) and [06-change-log.md](06-change-log.md).
 The audit branch has not been deployed; local proof is not production proof.
+Current backend application source has a frozen6eec aggregate PASS:
+4751passed/7intentional live-provider skips/6warnings652.30s, capture659.230650s,
+no timeout/truncation; owned resources checked after completion. Later seed-only
+commit1e955718 has separate2focused/44overlapping adjacent passes and independent
+review, but has not updated the retained stage or completed a presenter rehearsal.
 Frontend39aeeff9 now has616/128files unitPASS309.65s, checked types/lint/build,
 and local reset-token-log regression/asset proof. The locale browser checkpoint
 uses the preceding993artifact and historical synthetic backend; no current
@@ -11,7 +16,8 @@ wholeimage or all-page browser claim follows from the newer unit result.
 
 Latest backend source is7bb9f996: independently reviewed callback alert rotation
 passes29focused tests in12.04s, with no residual native test schemas. This does
-not recertify the full backend/image. Review-locale frontend work is locally
+not itself recertify the full backend/image; the separate6eec full backend run
+above now covers this source, while image proof remains open. Review-locale frontend work is locally
 focused FIX_PROVEN and has a narrow three-viewport RU/EN/EL browser result against
 historical synthetic staging, but does not establish all-locale or whole-workflow
 runtime coverage. Previous runtime source is4f333aa7, the callback package.
@@ -61,9 +67,9 @@ backend/image and deployment remain separate. See backlog02.
 | Local Docker had filesystem I/O incident; old volumes not certified |P2 audit infrastructure; old verification invalid or local state damaged|Approved no-reset restart and fresh PG16 storage/restart/restore/checks pass; old volumes not reused|Do not erase/repair user volumes. Maintain headroom, preserve dumps and stop heavy work on I/O errors|
 | Node engine mismatch is fixed locally; broader supply-chain gap remains |FormerP2 reproducibility finding|ba891be4 and cleanf0cc Node22 bothfrontend image builds pass55.386s; actual nonroot/offline smoke passes3.721s|Final image/dependency scan is separate; no broad upgrade or production claim|
 | Readiness integration pending; migration startup ownership still coupled |P2 operations; unhealthy app may accept traffic or restart implies DDL|Reviewed52292e6e adds bounded read-only `/ready`,24native/route/CLI/schema tests pass; `/health` unchanged, no image/deployment proof yet|Verify endpoint in frozen image, then separately authorized rollout; preserve deliberate migrator/run modes|
-| Final combined image and whole-diff closure incomplete |P2 release gate; selected green evidence may miss integration regression|Current272full backend4728pass/7live-provider skips and native117browser pass; frontend591units/72mockbrowser/TS/lint/build stages plus artifact proof pass without relabeling original exit1. Historical120includes compiled runtime. Fresh272whole-diff review found no additional reproduced P0/P1 in bounded coverage; original verdict remains FAIL|Final combined image/compiled-runtime proof, remaining scoped coverage and independent closure; do not sum overlapping suites|
+| Final combined image and whole-diff closure incomplete |P2 release gate; selected green evidence may miss integration regression|Frozen6eec full backend4751pass/7live-provider skips; earlier272native117browser pass; frontend591units/72mockbrowser/TS/lint/build stages plus artifact proof pass without relabeling original exit1. Historical120includes compiled runtime. Fresh272whole-diff review found no additional reproduced P0/P1 in bounded coverage; original verdict remains FAIL|Final combined image/compiled-runtime proof, remaining scoped coverage and independent closure; do not sum overlapping suites|
 | Production-capacity evidence incomplete |P2 capacity; bounded synthetic latency is not capacity|50-sample before/after distributions retain baseline errors; current272HTTP240/240 over64.28s includes10resource snapshots. Frontend60/60 observations use historicalf0ccbackend/unchangedfrontend. All have scoped review;8user earlier run retains login429 failures|Realistic server/queue capacity remains; low-load/tiny fixtures and10browser samples per group cannot establish production limits or speedup|
-| Demo and broader error/large-data/slow-network accessibility coverage not rehearsed |P2 demo; presentation may encounter unsupported/incomplete paths|Synthetic10–15min script clearly separates seeded outcomes from real runner; no live provider data|Rehearse and capture expected outcomes/fallbacks; keep confidential and unimplemented areas out of claims|
+| Demo and broader error/large-data/slow-network accessibility coverage not rehearsed |P2 demo; presentation may encounter unsupported/incomplete paths|Synthetic10–15min script separates seeded outcomes from real runner; seed1e955718 fixes the local match-artifact contract with2focused/44overlapping passes, but retained fixture update and rehearsal remain; no live provider data|Rehearse and capture expected outcomes/fallbacks; keep confidential and unimplemented areas out of claims|
 | Large workspaces and remaining structural debt |P3 after correctness; maintainability cost|Scoped fixes preserve existing modules; no architectural rewrite without benefit|Use measured churn/runtime evidence to select the next small module extraction, with existing regression coverage|
 
 The controlling release decision is the original task's Definition of Done,

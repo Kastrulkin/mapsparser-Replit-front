@@ -1,5 +1,23 @@
 # Readiness decisions
 
+## D-034 — Preserve retained fixtures and distinguish a hypothesis from a result
+
+The missing partnership overlap is a seed/UI storage-contract mismatch, not a
+failure of matching logic. Store only an explicitly synthetic, unconfirmed
+`needs_evidence` artifact using the current drawer fields. `ON CONFLICT DO
+NOTHING` must preserve an existing artifact instead of replacing audit/offer
+evidence. SQL-recording tests establish the emitted contract, not actual DB
+idempotence or a completed browser demo. Do not replay the full seed against
+retained staging: its older statements update other fixture fields. A later
+runtime correction must target only the identity-verified missing artifact.
+
+The current backend aggregate uses an immutable6eec archive and reuses the
+owned native test DB without launcher reset/migration. Normal suite-owned
+temporary PostgreSQL migrations are distinct. Resolve Compose through a
+task-local shim that executes the actual installed plugin; do not repurpose
+HOME or change the user's Docker profile. Keep all source/evidence boundaries,
+2GiB floor and failed-launch evidence explicit.
+
 ## D-033 — Pin actual synthetic cohort; never reconfigure it for a UI proof
 
 The review browser preflight expected all compiled flagsfalse but retained

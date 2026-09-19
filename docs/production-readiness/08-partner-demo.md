@@ -1,6 +1,12 @@
 # Synthetic partner demo: 10–15 minutes
 
 Status: **partially exercised in the managed browser; not yet demo-ready**.
+Local fixture correction `1e955718` now seeds the actual drawer's `match_json`
+with a clearly synthetic, unconfirmed local-audience hypothesis (`needs_evidence`).
+Two SQL-contract tests and44overlapping adjacent tests pass with independent
+review. It has NOT been applied to the retained stage or browser-rehearsed.
+Apply only the exact missing synthetic artifact after checking its identity;
+do not replay the whole seed, which updates unrelated retained fixture fields.
 Review-copy localization now has3/3actual browser checks across RUdesktop,
 ENlaptop and ELmobile (5.950617s), exact clipboardtext and no observed runtime
 errors. This narrow newfrontend/historicalsyntheticbackend check is not a
@@ -88,8 +94,11 @@ that a draft was delivered.
    the demo or promising two newly imported records.
 
 5. **Partnership — 2 min.** Open the seeded nearby-business/workstream card.
-   Expected: a local-audience overlap reason and an unprocessed/manual
-   next-action state. The basic seed creates neither a message draft nor an
+   Expected after the scoped fixture update: an explicitly synthetic hypothesis
+   under `Общие направления`, `Что нужно для проверки совместимости` and
+   `Пока не подтверждена`, plus the Candidate/manual-selection state. This is
+   not a confirmed partner assessment or a specific backend next-action label.
+   The basic seed creates neither a message draft nor an
    approval; do not present either, or a reply/external send, as simulated.
 
 6. **Agents / compiled table — 3 min, optional.** Use only the separately

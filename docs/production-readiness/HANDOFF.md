@@ -1,6 +1,54 @@
 # Readiness handoff
 
-## Current checkpoint — 19 September, source39aeeff9
+## Current checkpoint — 19 September, aggregate complete / demo fixture corrected
+
+Branch `codex/production-readiness-20260917`; HEAD `1e955718` adds only the
+synthetic seed artifact and SQL-contract tests. Backend application source
+remains7bb9f996; frontend source39aeeff9. Prior evidence docs were committed
+6eec7e5e (the earlier checkpoint's dirty-doc wording is historical).
+Audit documentation is reconciled separately from source commit1e955718.
+The two unrelated user voice/map documents remain excluded; do not stage or
+revert them. No push/deploy/production.
+
+TEST-DEMO-01 is locally SQL-contract FIX_PROVEN, not stage/browser-complete.
+Root raw demo-seed-red2failed0.20s/capture0.546771s, green2passed0.05s/
+0.239399s and overlapping adjacent44passed0.70s/1.094591s. RuffF821/diffPASS;
+source/schema/drawer and evidence/docs independentPASS. Source/test SHA70b99674…
+and737dcc21… are fully recorded in06. No retained synthetic data was modified;
+never replay the whole seed there. Exact missing-artifact update plus actual
+drawer and complete10–15min rehearsal remain.
+
+COMPLETED, not live: tmux
+`readiness-backend-6eec-retry-20260919`, former capturePID41174, launcher41188,
+pytest41224 are absent. The immutable archive is
+`/private/tmp/localos-readiness-backend-6eec7e5e-20260919/source`, frozen at
+6eec7e5e and excluding later seed1e955718. Raw destination is
+`.agent/tasks/production-readiness-20260917/raw/full-backend-6eec7e5e-20260919.json`;
+the result is4751passed/7intentional live-provider skips/6warnings652.30s,
+capture659.230650s/exit0/no timeout or truncation. Controllervalidtrue.
+Warnings are five PyMuPDF/SWIG and one Alembic path_separator deprecation;
+stderr retains an additional SWIG interpreter-shutdown warning. Root postcheck
+confirms exact nativeDB identity unchanged,0custom schemas/other sessions,
+only the expected readiness_test_owner role, no testcontainers or known process
+group leftovers. Independent raw/result scope reviewPASS. Do not rerun the
+completed job. The old first session is terminal:
+an erroneous65-character shell hash check rejected input before capture/archive.
+Preserved bad wrapper and corrected64-character validator are in the preflight
+raw note. Final launcher59378af8…, capturec3b7cc6a…, shim43128cef… are pinned.
+No HOME overrides; actual Compose plugin forwarding, guard-first Python,
+owned retainedDB1935406,1800s inner/2400s capture and2GiB floor remain.
+
+Next: prepare an identity-checked missing partnership artifact update
+and real drawer/full demo rehearsal; no replay of seed main(). The first exact
+read-only step is to inspect the current retained fixture and the artifact
+contract in `scripts/seed_journey_staging.py` against the verified synthetic
+stage identity recorded in the preceding browser proof. Do not infer approval
+to mutate another business, container or production from this local fixture fix.
+Do not extend reused-nativeDB proof to fresh migrations or a current image.
+Current immutable image, full demo, historical credential/license owner decisions
+and other original release gates remain open; broad goal is not complete.
+
+## Earlier checkpoint — 19 September, source39aeeff9
 
 Branchcodex/production-readiness-20260917; HEAD39aeeff95e49991f7b13d0b8b661c92b02677766.
 Locale993349b5/backend7bb9f996/evidencea891a9d6 remain separate local commits.

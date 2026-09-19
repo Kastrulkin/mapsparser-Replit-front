@@ -1,5 +1,29 @@
 # Production-readiness change log
 
+## TEST-DEMO-01 — persist an explicitly unconfirmed partnership demo hypothesis
+
+Commit `1e955718` changes only `scripts/seed_journey_staging.py` and its new
+SQL-contract tests. The journey preview contained the local-audience narrative,
+but the actual Partnerships drawer reads a separate `match_json` artifact,
+which the seed never inserted. The new insert uses the deterministic fixture
+lead and `ON CONFLICT (lead_id) DO NOTHING`, with `needs_evidence`, overlap,
+an explicitly synthetic explanation and a manual fact-check next action.
+It adds no confirmed score, contact, offer, approval or send.
+
+Root-captured RED against archived6eec seed:2failed0.20s (capture0.546771s).
+Same test against the fix:2passed0.05s (capture0.239399s). Five-file adjacent
+suite:44passed0.70s (capture1.094591s); counts overlap. All captures are
+untruncated, not timed out, with empty stderr. RuffF821 and diff checks pass;
+independent source/schema/drawer reviewPASS. Source SHA-256
+`70b99674d87f99de0964798a51f808840711fddf1ac07a40b61fe992e07e7ff0`;
+test SHA-256 `737dcc21f4b1132e0962c6ed0aaa42bcee171faa9eebbf02f1505615f524b6ae`.
+The tests record SQL, not a real PostgreSQL preservation or browser result.
+No retained stage was changed. Full-seed replay is unsafe for that purpose:
+pre-existing seed statements update other fixture fields. Next runtime work
+must be an exact scoped synthetic artifact update, followed by the actual drawer
+and complete presenter rehearsal. The separate fullbackend6eec run excludes
+this later seed/test commit and is not proof for this delta.
+
 ## UX-LOCALE-05 — localized manual review-draft copy
 
 The review draft card had a hardcoded English `Quick Generator`, raw `draft`,
