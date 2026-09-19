@@ -4,6 +4,10 @@ Updated19September2026. These are remaining risks or verification gaps, not
 newly demonstrated exploits. Fixed local findings and their evidence remain in
 [02-audit-backlog.md](02-audit-backlog.md) and [06-change-log.md](06-change-log.md).
 The audit branch has not been deployed; local proof is not production proof.
+Frontend39aeeff9 now has616/128files unitPASS309.65s, checked types/lint/build,
+and local reset-token-log regression/asset proof. The locale browser checkpoint
+uses the preceding993artifact and historical synthetic backend; no current
+wholeimage or all-page browser claim follows from the newer unit result.
 
 Latest backend source is7bb9f996: independently reviewed callback alert rotation
 passes29focused tests in12.04s, with no residual native test schemas. This does
@@ -24,7 +28,7 @@ execution are not proven. Do not treat these packages as a closed release gate.
 
 TEST-E2E-04 removes a two-journey console-filter blind spot with21pure
 regressions, scoped strictTS/lint and independent review. Local space is now
-about5.5GiB after approved cleanup and bounded verification; the first native6 retry failed in its
+about4.52GiB at the latest check after approved cleanup and bounded verification; the first native6 retry failed in its
 process controller before tests. A minimal process-only reproduction confirms
 the nested topology limitation. The reviewed sole-owner retry now passes6/6
 in22.0s, capture48.938396s, with independent DB/process cleanup verification.
@@ -47,7 +51,7 @@ backend/image and deployment remain separate. See backlog02.
 | Alert scan rotation is process-local |P2 operational limit under frequent restarts; progress is not durable/shared|Lexical-prefix starvation is causally fixed in7bb9f996 and verified by101-tenant test; every worker restart resets its own cursor|Current-image verification, then assess durable/shared scheduling only if restart/topology evidence warrants it; no live incident or global-fairness claim |
 | Deployment smoke still has ordinary mutating phases |P2 operational scope; calling it is not a read-only diagnostic|Implicit alert-triggered replay removed and tested; nested capability/outbox smoke still creates actions/dispatches normal pending/retry|Use specific read-only metrics for diagnosis; require separate authority for full smoke, manual replay and deployment |
 | Historical privileged credential exposure; offline scan confirmed old provider keys, revocation unconfirmed |P1 before production; former credentials might still authorize access|Current validity unknown. Do not use/test/publish old values; owner confirmation requested|Authorized owner/provider revocation evidence and separately approved history policy; no unilateral rotation/rewrite|
-| Reset URL credential is logged by the SetPassword browser component |P2 before production; source/build artifact can disclose a real reset token to local console collection or screen capture|Confirmed source and current cookie-build artifact path only; synthetic unit token is not evidence of a real-secret event or bearer-token exposure|Add no-raw-console regression, remove/redact logging, rebuild and inspect the intended release artifact; do not probe real tokens|
+| Intended release artifact still needs the reset-log fix verified |P2 before production; older cookie-build asset contains raw reset email/token log literals|Local source regression and rebuilt local artifact are fixed; synthetic tests do not demonstrate a real-secret event or bearer-token exposure|Verify the exact release image/artifact has neither raw log literal; do not probe real tokens|
 | Reviewed auth/webhook/role/SSRF patches remain local |P1 release gate; intended protections are not certified live|Deployment deliberately not authorized by this audit; retain explicit boundary|Approve an exact release, provider webhook rebind/configuration where required, then verify live flow; no broad dirty-tree sync|
 | App version constraints and base pins lack final image proof; apt/artifact hashes and bot/target-runtime closure remain |P1 before production; supply-chain/build drift or untriaged advisories|Exactb43 audit104packages/0skips finds only pip24.0;26.2pin and app101constraints plus3tools. Node/Python base indexes now pinned with ARM64/AMD64 metadata and14static contracts|Build/version/re-audit and OS/native/image/log scan; index availability is not an AMD64 build. PyMuPDF license basis awaits owner confirmation, not a violation claim|
 | Production backup recoverability not rehearsed |P1 before production changes; possible recovery failure|Independent local synthetic full-schema/data restore passes; production datasets/backup transport/permissions differ|Under separate authority, verify an actual backup in an isolated restore target before schema change; never overwrite live DB|

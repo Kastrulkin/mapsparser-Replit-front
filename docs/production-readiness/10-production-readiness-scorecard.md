@@ -10,6 +10,12 @@ recovery/smoke defects with25focused and73overlapping API/schema/native checks.
 These do not extend the earlier full aggregate or image proof to the new source.
 No score is raised and overall readiness remains unproven.
 
+New frontend39aeeff9 removes two raw reset-credential console logs with a causal
+synthetic regression,28focused/adjacent passes, typecheck/lint/build/integrity
+and before/after built-asset proof. Independent scoped reviewPASS. Full new
+frontend units pass616/128files309.65s at the same source; do not extend the earlier browserartifact
+identity or claim deployment/currentimage proof. Scores remain unchanged.
+
 Earlier local272794a4 adds104review/mobile-role/subscription tests with scoped
 independentPASS;3ac13d87 adds an isolated real-API CI definition (11contract
 tests), and a00ac558 adds opt-in release configuration (13render/startup

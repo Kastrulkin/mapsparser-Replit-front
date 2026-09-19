@@ -1,5 +1,31 @@
 # Verified commands and evidence
 
+## Password-reset console disclosure — 19 September, source39aeeff9
+
+Private `localos-readiness-password-logging-capture-20260919.sh` records source
+hashes and enforces2GiBfree before each command; env-i/Node22/envDirfalse.
+RED: newSetPassword.logging.test +AuthRecovery.brand-buttons,1fail2pass4.71s,
+capture7.595154s. Product fix removes only2logs. FirstGREEN includes4adjacent
+files:27pass1newtest timeout from fake timers/userEvent, capture17.769319s.
+Preserve both failures. FireEvent/act with fake-clock cleanup keeps identical
+resetPOST/success/no-console-credentials assertions; final28pass11.15s,
+capture12.628319s. Expected authnegative-fixture stderr is retained.
+
+Namedtmuxreadiness-password-logging-quality-retry-20260919 subsequently passes
+typecheck39.757401s, lint15.610447s(0errors1existingany), cookiebuild15.46s/
+capture17.366236s,199reachableJS integrity0.346085s. The full unit run is now
+terminal616passed/128files309.65s, capture310.950615s/exit0. All captures are untruncated
+and not timed out. Source39aeeff9 committed after independent scopedPASS.
+Separate asset-proof0.501916s compares old993cookie SetPassword chunk with
+new39chunk: both log literals disappear; resetendpoint remains. This uses local
+synthetic/build evidence, not a production token/request/log test.
+
+Strict offline scan: one-shotlocalos-readiness-secret-delta-72-to-39aeeff9-
+20260919.sh uses exact72f588081d93774dad455627adf818d6e25970fe..39aeeff95e49991f7b13d0b8b661c92b02677766,
+`--ignore-gitleaks-allow --redact=100`, report[]. Rawcapture2.249284s/exit0,
+4commits/0findings/no timeout/truncation. Later docs and historical credentials
+remain outside that delta; no rotation or provider validity probe occurred.
+
 ## Review-copy frontend checks — 19 September
 
 Completed one-shot tmux launchers are in/private/tmp; do not replay them over

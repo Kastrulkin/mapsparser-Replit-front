@@ -24,18 +24,28 @@ cleans up browser/Vite resources. Three synthetic-login POSTs are explicitly
 in scope, so it is not a no-database-write claim. This is not all-locale,
 whole-workflow, current-backend/image or deployment evidence.
 
-## SEC-LOG-01 — raw password-reset token browser logging candidate
+## SEC-LOG-01 — remove password-reset URL credential logging
 
-Bounded source and built-artifact inspection found `SetPassword` reading
-`email` and `token` from URL parameters and logging both raw values on mount.
-`/reset-password` reaches that component and forwards the token to the reset
-confirmation endpoint; the backend checks it against the expiring reset-token
-column. The current cookie-build SetPassword asset retains the log literals.
-The unit output used only the synthetic `valid-token`; no real credential was
-inspected or exposed by this audit. Status is a confirmed source/build-artifact
-candidate, not a production-runtime claim. Next step: regression proving no raw
-URL credential reaches console, then remove/redact the logs and inspect the
-rebuilt target artifact.
+`SetPassword` read URL `email` and `token` values on mount and logged both raw
+values. The `/reset-password` route forwards that token to the reset-confirmation
+endpoint, where it is checked as an expiring reset token. Causal synthetic RED
+`password-logging-red-20260919.json` fails1/3 in4.71s (capture7.595154s): after
+the exact mocked reset POST and success state, the console capture contains both
+synthetic email and token. No real credential was read or used.
+
+The two raw `console.log` calls were removed without changing the reset request
+or success behavior. The first post-fix suite is retained as a fixture failure:
+27passed but the fake-timer plus `userEvent` test timed out at5s
+(capture17.769319s). The corrected `fireEvent`/`act` test keeps the exact payload
+and success assertions, captures log/warn/error, and passes28/28 in11.15s
+(capture12.628319s). Typecheck passes39.757401s; lint passes with0errors and one
+existing warning in15.610447s; app build passes15.46s (capture17.366236s), and
+199-asset integrity passes0.346085s. Local artifact proof finds both credential
+log literals before and neither after while retaining the reset endpoint
+(0.501916s). Committed39aeeff9 after independent scoped review. Full frontend
+units subsequently pass616/128files309.65s (capture310.950615s) on identical
+source. This is local FIX_PROVEN only: no real reset, production runtime or
+target-image claim.
 
 ## OPS-CALLBACK-02 — rotate alert coverage beyond the first100 tenants
 

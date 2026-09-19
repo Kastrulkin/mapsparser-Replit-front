@@ -1,6 +1,47 @@
 # Readiness handoff
 
-## Current checkpoint — 19 September, locale browser proof complete
+## Current checkpoint — 19 September, source39aeeff9
+
+Branchcodex/production-readiness-20260917; HEAD39aeeff95e49991f7b13d0b8b661c92b02677766.
+Locale993349b5/backend7bb9f996/evidencea891a9d6 remain separate local commits.
+No push/deploy/production/real reset or provider calls. User voice-review/map
+documents remain excluded. Runtime source clean; new audit evidence docs dirty.
+
+SEC-LOG-01 is independently scoped FIX_PROVEN: only2consolelogs removed plus
+new synthetic regression. Raw password-logging-red1fail2pass4.71s/capture
+7.595154s; firstgreen27pass1fixturetimeout17.769319s; correctedgreen-final
+28pass11.15s/capture12.628319s. Same exact payload/success/no credentialsconsole
+assertions; fake clock cleanup and fireEvent/act fix the test-only deadlock.
+Typecheck39.757401s, lint15.610447s(0err1knownwarning), cookiebuild17.366236s,
+199integrity0.346085s and artifactdiff0.501916s allPASS/no timeout/truncation.
+AppSHA90a9ac3c207022bf9489b7d56284397c7452ecb2062dfb284bf7d2e77e388fd5;
+testSHAaa792e199d75e191ad3e9b4dd55d3546727095e02bc0fe5bd325b588f9102a79.
+Newartifact/private/tmp/localos-readiness-password-logging-dist-20260919;
+SetPassword assetSHA022e42ef1e25f12396a0ac73d0d5c4acec8088f967e0c2b8f50f92f59bc1e0da.
+Old browserlocaleproof is at993builtartifact, not this newer wholeartifact.
+
+COMPLETED, not live: tmuxreadiness-password-logging-quality-retry-20260919,
+former capturePID37868/node37869. Rawpassword-logging-units-20260919.json:
+616passed/128files309.65s, capture310.950615s/exit0/no timeout/truncation;
+same frozen source hashes. Expected negative-fixture stderr retained.
+Do not duplicate this completed run or reinterpret the old rawfiles as live.
+The earlier quality tmux/PID37425 is finishedFAILEDfixture, not current.
+
+Offline strict delta72f58808..39aeeff9 passed4commits/0findings in2.249284s;
+rawsecret-delta-72-to-39aeeff9-20260919.json/report[] preserved. Does not scan
+later docs, certify historical revocation, runtime logs or release image.
+
+Next: reconcile docs/commit evidence. Then inspect a minimal
+current-backend aggregate runner, not auto-replay old wrappers. Agent's read-only
+candidate is old backend272capture/v4 with retainednativeDB; proposal has NOT
+been independently reviewed or implemented. Preserve exactDBOID1935406/owner
+readiness_test_owner/datadir/private/tmp/localos-readiness-resume-pg.anwDNv/data,
+guardSHA534a36b9... and2GiBfloor. Remove obsolete HOME overrides and do not add
+migrations/createdb/dropdb/Dockerbuild. ReusedDB is not fresh-migrationproof.
+Full image, demo partnershipfixture/rehearsal, historicalsecret/license/owner
+and release gates remain; do not mark broad goal complete.
+
+## Earlier checkpoint — 19 September, locale browser proof complete
 
 HEAD993349b56144ea00978175854d98be6cb00662cd; frontend13-file locale package
 is committed after independentPASS. Exact-current focused4/4 is the

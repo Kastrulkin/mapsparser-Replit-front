@@ -1,6 +1,34 @@
 # Production-readiness progress
 
-## Current checkpoint — 19 September, locale browser proof complete
+## Current checkpoint — 19 September, reset-token logs fixed locally
+
+HEAD39aeeff9; locale commit993349b5, backendfairness7bb9f996, evidence docsa891a9d6.
+No runtime files remain uncommitted. Unrelated user voice/map docs are preserved.
+
+- [x] SEC-LOG-01 causalRED1fail2pass4.71s/capture7.595154s. Exactly two raw
+  email/reset-token console logs removed; reset payload and success unchanged.
+- [x] First post-fix test hit fake-timer/userEvent timeout (27adjacentpass),
+  retained17.769319s capture. Fixture changed to fireEvent/act with clockcleanup;
+  assertions unchanged. Final28pass11.15s/capture12.628319s, independentPASS.
+- [x] Typecheck39.757401s; lint15.610447s/0errors1existingwarning; cookiebuild
+  15.46s/capture17.366236s;199assetintegrity0.346085s. Exact-current hashes match.
+  Builtasset proof0.501916s confirms old log literals present/new absent and
+  reset endpoint retained. Local FIX_PROVEN; production not inspected or changed.
+- [x] Strict offline secret delta72f58808..39aeeff9:4commits/0findings,
+  capture2.249284s. Later evidence docs and historical revocation are not covered.
+- [x] Full frontend run completed at exact39aeeff9 source:616passed/128files
+  in309.65s, capture310.950615s/exit0/no timeout/truncation. Negative-fixture
+  stderr retained. Former retry tmux/PID37868 is terminal, not live.
+- [ ] Current fullbackend/image and complete demo remain. Read-only planning
+  identified an old backend launcher as a candidate, not a reviewed runnable
+  successor. Before execution, inspect/remove obsolete HOME assumptions and
+  retain2GiB guards/exact owned DB identity; no image/migration/recovery claims
+  from reused-database tests. No new backend runner has been created or run.
+
+LatestMac free4,736,712KiB (~4.52GiB); no extra cleanup/reset. Next required
+release steps remain current backend aggregate, final image and complete demo.
+
+## Earlier checkpoint — 19 September, locale browser proof complete
 
 Current HEAD993349b5 commits the reviewed13-file frontend locale package;
 latest backend change7bb9f996. Existing

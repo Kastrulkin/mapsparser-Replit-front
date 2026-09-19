@@ -14,6 +14,11 @@ writes require the documented human approval or manual boundary.
 
 ## What is materially stronger after this work
 
+- Password reset pages no longer print raw reset credentials into the browser
+  console. A synthetic regression preserves the reset request and success while
+  confirming no credential output;28focused/adjacent checks, the rebuilt asset
+  and full616frontend tests pass. This reviewed local change does not certify
+  the deployed version.
 - Callback alert selection now rotates through eligible businesses rather than
   repeatedly selecting the same first100. A101-business reproduction fails
   before the change and the29-test bounded set passes afterwards; independent
