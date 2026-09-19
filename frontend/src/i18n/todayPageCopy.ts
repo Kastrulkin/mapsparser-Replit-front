@@ -27,7 +27,76 @@ const copy: Record<Language, TodayPageCopy> = {
   tr: { title: 'Bugün', description: 'Yeni gelişmeler, LocalOS görevleri ve şu anda en önemli işlem.', loading: 'Yeni gelişmeler ve mevcut görevler yükleniyor.', loadError: 'Gelişmeler ve görevler yüklenemedi.', unavailable: 'Bu sayfa geçici olarak kullanılamıyor', retryHint: 'Tekrar deneyin. İşletme verileriniz değişmedi.', retry: 'Tekrar dene', selectBusiness: 'Bir işletme seçin', selectBusinessHint: 'Seçimden sonra yeni gelişmeler, LocalOS görevleri ve karar bekleyen işler burada görünür.', refresh: 'Yenile', networkEyebrow: 'LocalOS · ağ', locationName: 'Ağ konumu', now: 'Şimdi ne yapmalısınız?', openTasks: 'Görev listesini aç', noUrgent: 'Şu anda acil bir iş yok. Tamamlanan ve bekleyen görevler için İlerleme’yi açın.', after: 'Bundan sonra:', openProgress: 'İlerlemeyi aç', locationsTitle: 'Konumların durumu', locationsHint: 'Hangi konumların iyi durumda olduğunu ve nerede kararınız gerektiğini görün.', locations: 'ağdaki konum', healthy: 'iyi durumda', attention: 'ilgilenmeniz gerekiyor', locationAttention: 'Bu konumla ilgilenmeniz gerekiyor.', allHealthy: 'Tüm aktif konumlar iyi durumda.', dataTitle: 'Son 8 haftanın verileri', dataHint: 'Gelir, ortalama sepet, ek satış ve kapasiteyi görmek için düzenli olarak mali özet yükleyin. CRM bağlantısı isteğe bağlıdır.', coverage: '8 haftalık veri kapsamı', summaries: '{count}/8 hafta için özet yüklendi', nextSummary: 'sonraki özeti {date} tarihinde ekleyin', analytics: 'Analiz', trend: 'Haftalık karşılaştırma', ready: 'görüntülenebilir', updateSummary: 'özeti güncelleyin', uploadSummary: 'özet yükleyin', changesTitle: 'Neler değişti?', changesHint: 'Son 24 saatteki yorumlar, satışlar ve diğer işletme gelişmeleri.', noChanges: 'Son 24 saatte yeni yorum, satış veya doğrulanmış başka bir gelişme bulunamadı.', workTitle: 'LocalOS şu anda ne yapıyor?', workHint: 'Mevcut LocalOS görevleri. Ağ modunda ilgili konum gösterilir.', noWork: 'LocalOS’un şu anda aktif görevi yok.', readyTitle: 'LocalOS’ta hazır', readyHint: 'İncelemeniz için hazır taslaklar, planlar ve raporlar. Hiçbiri otomatik olarak yayınlanmadı veya gönderilmedi.', source: 'Kaynak:', resultHistory: 'tamamlanan görev geçmişi', pulseTitle: 'Kaynaklarınızda neler konuşuluyor?', pulseHint: 'Bağlı Telegram kanallarından ve diğer kaynaklardan mesajlar. LocalOS bunları yalnızca burada gösterir.', financeSource: 'Mali veri kaynağı:', unknownSource: 'belirtilmedi', updated: '{date} tarihinde güncellendi', add: 'ekleyin: {items}', allTasksTitle: 'Tüm görevler ve sonuçlar', allTasksHint: 'Tamamlanan işleri, bulunan sorunları ve kalan işlemleri içeren tam listeyi açın.', financeTitle: 'Mali verilerinizi güncelleyin', financeReason: 'Henüz mali özet yüklenmedi.', financeOutcome: 'Yüklemeden sonra seçilen dönem için gelir, gider, ortalama sepet ve kapasiteyi göreceksiniz.', uploadData: 'Veri yükle' },
 };
 
+type TodayPreferenceCopy = {
+  configure: string; undo: string; disableSuggestions: string; enableSuggestions: string;
+  proposalTitle: string; proposalDescription: string; accept: string; decline: string; snooze: string;
+};
+
+type TodayEmptyMissionCopy = { title: string; reason: string; cta: string };
+
+export type TodayOperationalCopy = {
+  preference: TodayPreferenceCopy;
+  emptyMissions: Record<'content' | 'influencers' | 'automation', TodayEmptyMissionCopy>;
+  decisionTitle: string;
+  decisionDescription: string;
+};
+
+const operationalCopy: Record<Language, TodayOperationalCopy> = {
+  ru: {
+    preference: { configure: 'Что показывать первым на «Сегодня»', undo: 'Отменить последнее изменение', disableSuggestions: 'Не предлагать смену раздела', enableSuggestions: 'Снова включить предложения', proposalTitle: 'Вы стали чаще работать с', proposalDescription: 'Поставить этот раздел первым среди обычных задач? Срочные решения останутся выше.', accept: 'Поставить первым', decline: 'Не сейчас', snooze: 'Напомнить позже' },
+    emptyMissions: { content: { title: 'Подготовьте следующий материал', reason: 'Откройте контент-план, создайте черновик или продолжите уже начатый материал.', cta: 'Открыть контент' }, influencers: { title: 'Продолжите работу с инфлюенсерами', reason: 'Откройте сотрудничества и выберите следующего автора или ответ.', cta: 'Открыть инфлюенсеров' }, automation: { title: 'Проверьте автоматизацию', reason: 'Откройте автоматизацию, чтобы посмотреть результат, ошибку или следующий запрос решения.', cta: 'Открыть автоматизацию' } },
+    decisionTitle: 'Требует решения', decisionDescription: 'Проверьте подготовленный результат и выберите следующий шаг.',
+  },
+  en: {
+    preference: { configure: 'What to show first on Today', undo: 'Undo last change', disableSuggestions: 'Stop suggesting a section change', enableSuggestions: 'Enable suggestions again', proposalTitle: 'You have been working more often with', proposalDescription: 'Put this section first among regular work? Urgent decisions will stay above it.', accept: 'Put first', decline: 'Not now', snooze: 'Remind me later' },
+    emptyMissions: { content: { title: 'Prepare the next post', reason: 'Open your content plan, create a draft, or continue an existing post.', cta: 'Open content' }, influencers: { title: 'Continue creator work', reason: 'Open collaborations and choose the next creator or reply.', cta: 'Open creators' }, automation: { title: 'Review automation', reason: 'Open automation to review a result, error, or a decision request.', cta: 'Open automation' } },
+    decisionTitle: 'Needs your decision', decisionDescription: 'Review the prepared result and choose the next step.',
+  },
+  fr: {
+    preference: { configure: 'À afficher en premier aujourd’hui', undo: 'Annuler la dernière modification', disableSuggestions: 'Ne plus proposer de changer de section', enableSuggestions: 'Réactiver les suggestions', proposalTitle: 'Vous travaillez plus souvent avec', proposalDescription: 'Mettre cette section en premier parmi les tâches courantes ? Les décisions urgentes resteront au-dessus.', accept: 'Mettre en premier', decline: 'Pas maintenant', snooze: 'Me le rappeler plus tard' },
+    emptyMissions: { content: { title: 'Préparez le prochain contenu', reason: 'Ouvrez votre plan de contenu, créez un brouillon ou continuez un contenu déjà commencé.', cta: 'Ouvrir le contenu' }, influencers: { title: 'Continuez le travail avec les créateurs', reason: 'Ouvrez les collaborations et choisissez le prochain créateur ou la prochaine réponse.', cta: 'Ouvrir les créateurs' }, automation: { title: 'Vérifiez l’automatisation', reason: 'Ouvrez l’automatisation pour vérifier un résultat, une erreur ou une demande de décision.', cta: 'Ouvrir l’automatisation' } },
+    decisionTitle: 'Votre décision est requise', decisionDescription: 'Vérifiez le résultat préparé et choisissez la prochaine étape.',
+  },
+  es: {
+    preference: { configure: 'Qué mostrar primero en Hoy', undo: 'Deshacer el último cambio', disableSuggestions: 'Dejar de sugerir un cambio de sección', enableSuggestions: 'Volver a activar las sugerencias', proposalTitle: 'Has trabajado más a menudo con', proposalDescription: '¿Poner esta sección primero entre el trabajo habitual? Las decisiones urgentes seguirán arriba.', accept: 'Poner primero', decline: 'Ahora no', snooze: 'Recordármelo más tarde' },
+    emptyMissions: { content: { title: 'Prepara el siguiente contenido', reason: 'Abre tu plan de contenido, crea un borrador o continúa con un contenido ya iniciado.', cta: 'Abrir contenido' }, influencers: { title: 'Continúa el trabajo con creadores', reason: 'Abre las colaboraciones y elige el siguiente creador o respuesta.', cta: 'Abrir creadores' }, automation: { title: 'Revisa la automatización', reason: 'Abre la automatización para revisar un resultado, error o solicitud de decisión.', cta: 'Abrir automatización' } },
+    decisionTitle: 'Requiere tu decisión', decisionDescription: 'Revisa el resultado preparado y elige el siguiente paso.',
+  },
+  el: {
+    preference: { configure: 'Τι να εμφανίζεται πρώτο σήμερα', undo: 'Αναίρεση τελευταίας αλλαγής', disableSuggestions: 'Να μη προτείνονται αλλαγές ενότητας', enableSuggestions: 'Ενεργοποίηση ξανά προτάσεων', proposalTitle: 'Εργάζεστε συχνότερα με', proposalDescription: 'Να μπει αυτή η ενότητα πρώτη στις συνήθεις εργασίες; Οι επείγουσες αποφάσεις θα μείνουν πιο πάνω.', accept: 'Ορισμός ως πρώτη', decline: 'Όχι τώρα', snooze: 'Υπενθύμιση αργότερα' },
+    emptyMissions: { content: { title: 'Ετοιμάστε το επόμενο περιεχόμενο', reason: 'Ανοίξτε το πλάνο περιεχομένου, δημιουργήστε προσχέδιο ή συνεχίστε υπάρχον περιεχόμενο.', cta: 'Άνοιγμα περιεχομένου' }, influencers: { title: 'Συνεχίστε τη συνεργασία με δημιουργούς', reason: 'Ανοίξτε συνεργασίες και επιλέξτε τον επόμενο δημιουργό ή απάντηση.', cta: 'Άνοιγμα δημιουργών' }, automation: { title: 'Ελέγξτε τον αυτοματισμό', reason: 'Ανοίξτε τον αυτοματισμό για να δείτε αποτέλεσμα, σφάλμα ή αίτημα απόφασης.', cta: 'Άνοιγμα αυτοματισμού' } },
+    decisionTitle: 'Απαιτείται η απόφασή σας', decisionDescription: 'Ελέγξτε το προετοιμασμένο αποτέλεσμα και επιλέξτε το επόμενο βήμα.',
+  },
+  de: {
+    preference: { configure: 'Was heute zuerst angezeigt wird', undo: 'Letzte Änderung rückgängig machen', disableSuggestions: 'Keine Bereichsänderung mehr vorschlagen', enableSuggestions: 'Vorschläge wieder aktivieren', proposalTitle: 'Sie arbeiten häufiger mit', proposalDescription: 'Diesen Bereich bei normalen Aufgaben zuerst anzeigen? Dringende Entscheidungen bleiben darüber.', accept: 'An erste Stelle setzen', decline: 'Jetzt nicht', snooze: 'Später erinnern' },
+    emptyMissions: { content: { title: 'Bereiten Sie den nächsten Inhalt vor', reason: 'Öffnen Sie Ihren Inhaltsplan, erstellen Sie einen Entwurf oder setzen Sie einen begonnenen Inhalt fort.', cta: 'Inhalte öffnen' }, influencers: { title: 'Arbeit mit Creators fortsetzen', reason: 'Öffnen Sie Kooperationen und wählen Sie den nächsten Creator oder die nächste Antwort.', cta: 'Creators öffnen' }, automation: { title: 'Automatisierung prüfen', reason: 'Öffnen Sie die Automatisierung, um ein Ergebnis, einen Fehler oder eine Entscheidungsanfrage zu prüfen.', cta: 'Automatisierung öffnen' } },
+    decisionTitle: 'Ihre Entscheidung ist erforderlich', decisionDescription: 'Prüfen Sie das vorbereitete Ergebnis und wählen Sie den nächsten Schritt.',
+  },
+  th: {
+    preference: { configure: 'สิ่งที่จะแสดงก่อนในวันนี้', undo: 'เลิกทำการเปลี่ยนแปลงล่าสุด', disableSuggestions: 'ไม่ต้องแนะนำการเปลี่ยนส่วนงาน', enableSuggestions: 'เปิดคำแนะนำอีกครั้ง', proposalTitle: 'คุณทำงานกับสิ่งนี้บ่อยขึ้น', proposalDescription: 'ให้ส่วนนี้อยู่ก่อนงานทั่วไปหรือไม่ งานที่ต้องตัดสินใจเร่งด่วนจะยังอยู่ด้านบน', accept: 'ตั้งเป็นอันดับแรก', decline: 'ไม่ใช่ตอนนี้', snooze: 'เตือนฉันภายหลัง' },
+    emptyMissions: { content: { title: 'เตรียมเนื้อหาชิ้นถัดไป', reason: 'เปิดแผนเนื้อหา สร้างร่าง หรือทำเนื้อหาที่เริ่มไว้ต่อ', cta: 'เปิดเนื้อหา' }, influencers: { title: 'ทำงานกับครีเอเตอร์ต่อ', reason: 'เปิดความร่วมมือแล้วเลือกครีเอเตอร์หรือคำตอบถัดไป', cta: 'เปิดครีเอเตอร์' }, automation: { title: 'ตรวจสอบระบบอัตโนมัติ', reason: 'เปิดระบบอัตโนมัติเพื่อตรวจผลลัพธ์ ข้อผิดพลาด หรือคำขอการตัดสินใจ', cta: 'เปิดระบบอัตโนมัติ' } },
+    decisionTitle: 'ต้องการการตัดสินใจจากคุณ', decisionDescription: 'ตรวจสอบผลลัพธ์ที่เตรียมไว้แล้วเลือกขั้นตอนถัดไป',
+  },
+  ar: {
+    preference: { configure: 'ما الذي يظهر أولاً اليوم', undo: 'التراجع عن آخر تغيير', disableSuggestions: 'إيقاف اقتراح تغيير القسم', enableSuggestions: 'إعادة تفعيل الاقتراحات', proposalTitle: 'تعمل أكثر مع', proposalDescription: 'هل نضع هذا القسم أولاً بين الأعمال العادية؟ ستبقى القرارات العاجلة في الأعلى.', accept: 'وضعه أولاً', decline: 'ليس الآن', snooze: 'ذكّرني لاحقًا' },
+    emptyMissions: { content: { title: 'حضّر المحتوى التالي', reason: 'افتح خطة المحتوى، وأنشئ مسودة أو تابع محتوى بدأت به.', cta: 'فتح المحتوى' }, influencers: { title: 'تابع العمل مع صناع المحتوى', reason: 'افتح التعاونات واختر صانع المحتوى أو الرد التالي.', cta: 'فتح صناع المحتوى' }, automation: { title: 'راجع الأتمتة', reason: 'افتح الأتمتة لمراجعة نتيجة أو خطأ أو طلب قرار.', cta: 'فتح الأتمتة' } },
+    decisionTitle: 'قرارك مطلوب', decisionDescription: 'راجع النتيجة المُعدة واختر الخطوة التالية.',
+  },
+  ha: {
+    preference: { configure: 'Abin da za a fara nuna yau', undo: 'Soke canjin ƙarshe', disableSuggestions: 'A daina ba da shawarar canjin sashe', enableSuggestions: 'A sake kunna shawarwari', proposalTitle: 'Kana yawan aiki da', proposalDescription: 'A sa wannan sashe farko cikin ayyuka na yau da kullum? Shawarar gaggawa za ta ci gaba da kasancewa a sama.', accept: 'Saka farko', decline: 'Ba yanzu ba', snooze: 'Tunatar da ni daga baya' },
+    emptyMissions: { content: { title: 'Shirya abu na gaba', reason: 'Buɗe tsarin abun ciki, ƙirƙiri daftari, ko ci gaba da abin da ka fara.', cta: 'Buɗe abun ciki' }, influencers: { title: 'Ci gaba da aiki da masu ƙirƙira', reason: 'Buɗe haɗin gwiwa kuma zaɓi mai ƙirƙira ko amsa ta gaba.', cta: 'Buɗe masu ƙirƙira' }, automation: { title: 'Duba aikin atomatik', reason: 'Buɗe aikin atomatik don duba sakamako, kuskure, ko buƙatar yanke shawara.', cta: 'Buɗe aikin atomatik' } },
+    decisionTitle: 'Ana buƙatar shawararka', decisionDescription: 'Duba sakamakon da aka shirya kuma zaɓi mataki na gaba.',
+  },
+  tr: {
+    preference: { configure: 'Bugün önce ne gösterilsin', undo: 'Son değişikliği geri al', disableSuggestions: 'Bölüm değişikliği önermeyi durdur', enableSuggestions: 'Önerileri yeniden etkinleştir', proposalTitle: 'Daha sık çalıştığınız alan', proposalDescription: 'Bu bölüm normal işlerde ilk sıraya alınsın mı? Acil kararlar üstte kalır.', accept: 'İlk sıraya al', decline: 'Şimdi değil', snooze: 'Daha sonra hatırlat' },
+    emptyMissions: { content: { title: 'Sonraki içeriği hazırlayın', reason: 'İçerik planınızı açın, taslak oluşturun veya başladığınız içeriğe devam edin.', cta: 'İçeriği aç' }, influencers: { title: 'İçerik üreticileriyle çalışmaya devam edin', reason: 'İş birliklerini açın ve sonraki içerik üreticisini veya yanıtı seçin.', cta: 'İçerik üreticilerini aç' }, automation: { title: 'Otomasyonu inceleyin', reason: 'Sonuç, hata veya karar isteğini incelemek için otomasyonu açın.', cta: 'Otomasyonu aç' } },
+    decisionTitle: 'Kararınız gerekli', decisionDescription: 'Hazırlanan sonucu inceleyin ve sonraki adımı seçin.',
+  },
+};
+
 export const getTodayPageCopy = (language: Language) => copy[language];
+
+export const getTodayOperationalCopy = (language: Language) => operationalCopy[language];
 
 export const fillTodayTemplate = (template: string, values: Record<string, string | number>) => (
   Object.entries(values).reduce((result, [key, value]) => result.replace(`{${key}}`, String(value)), template)

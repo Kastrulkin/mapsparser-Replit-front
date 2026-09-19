@@ -9,7 +9,7 @@ import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
 import { Button } from '@/components/ui/button';
 import { featureFlags } from '@/config/featureFlags';
 import { useLanguage, type Language } from '@/i18n/LanguageContext.logic';
-import { fillTodayTemplate, getTodayPageCopy, type TodayPageCopy } from '@/i18n/todayPageCopy';
+import { fillTodayTemplate, getTodayOperationalCopy, getTodayPageCopy, type TodayPageCopy } from '@/i18n/todayPageCopy';
 import { newAuth } from '@/lib/auth_new';
 import type { JourneyAction } from '@/lib/leadJourney';
 import { clearLeadJourneyIntent, getLeadJourneyDirection, readLeadJourneyIntent, readLeadJourneyToken, resolveStoredLeadJourney } from '@/lib/leadJourney';
@@ -157,6 +157,7 @@ export const TodayPage = () => {
   const navigate = useNavigate();
   const { language } = useLanguage();
   const copy = getTodayPageCopy(language);
+  const operationalCopy = getTodayOperationalCopy(language);
   const { currentBusinessId, controlScope, onControlScopeChange, onBusinessChange } = useOutletContext<DashboardContext>();
   const [cachedOverview, setOverview] = useState<TodayOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -257,9 +258,9 @@ export const TodayPage = () => {
 
   const mission = missionCopy(language, overview?.focus_action, copy);
   const emptyPrimaryMissions: Partial<Record<TodayPreference['primary_flow'], Mission>> = {
-    content: { title: language === 'ru' ? 'Подготовьте следующий материал' : 'Prepare the next post', reason: language === 'ru' ? 'Откройте контент-план, создайте черновик или продолжите уже начатый материал.' : 'Open your content plan, create a draft, or continue an existing post.', expected_outcome: '', cta_label: language === 'ru' ? 'Открыть контент' : 'Open content', screen: 'content' },
-    influencers: { title: language === 'ru' ? 'Продолжите работу с инфлюенсерами' : 'Continue creator work', reason: language === 'ru' ? 'Откройте сотрудничества и выберите следующего автора или ответ.' : 'Open collaborations and choose the next creator or reply.', expected_outcome: '', cta_label: language === 'ru' ? 'Открыть инфлюенсеров' : 'Open creators', screen: 'influencers' },
-    automation: { title: language === 'ru' ? 'Проверьте автоматизацию' : 'Review automation', reason: language === 'ru' ? 'Откройте автоматизацию, чтобы посмотреть результат, ошибку или следующий запрос решения.' : 'Open automation to review a result, error, or a decision request.', expected_outcome: '', cta_label: language === 'ru' ? 'Открыть автоматизацию' : 'Open automation', screen: 'agents' },
+    content: { ...operationalCopy.emptyMissions.content, expected_outcome: '', cta_label: operationalCopy.emptyMissions.content.cta, screen: 'content' },
+    influencers: { ...operationalCopy.emptyMissions.influencers, expected_outcome: '', cta_label: operationalCopy.emptyMissions.influencers.cta, screen: 'influencers' },
+    automation: { ...operationalCopy.emptyMissions.automation, expected_outcome: '', cta_label: operationalCopy.emptyMissions.automation.cta, screen: 'agents' },
   };
   const preferredFlow = overview?.preference?.primary_flow;
   const hasPreferredWork = [...(overview?.work_sections?.needs_decision || []), ...(overview?.work_sections?.continue_work || overview?.active_work || [])]
@@ -289,9 +290,7 @@ export const TodayPage = () => {
   const dataHealth = overview?.data_health;
   const hasDataOverview = Boolean(dataRhythm || analyticsModules.length);
   const dataNeedsAttention = Boolean(['missing', 'stale', 'due'].includes(dataHealth?.status || '') || dataHealth?.stale || dataHealth?.is_stale || dataHealth?.missing?.length);
-  const preferenceCopy = language === 'ru'
-    ? { configure: 'Что показывать первым на «Сегодня»', undo: 'Отменить последнее изменение', disableSuggestions: 'Не предлагать смену раздела', enableSuggestions: 'Снова включить предложения', proposalTitle: 'Вы стали чаще работать с', proposalDescription: 'Поставить этот раздел первым среди обычных задач? Срочные решения останутся выше.', accept: 'Поставить первым', decline: 'Не сейчас', snooze: 'Напомнить позже' }
-    : { configure: 'What to show first on Today', undo: 'Undo last change', disableSuggestions: 'Stop suggesting a section change', enableSuggestions: 'Enable suggestions again', proposalTitle: 'You have been working more often with', proposalDescription: 'Put this section first among regular work? Urgent decisions will stay above it.', accept: 'Put first', decline: 'Not now', snooze: 'Remind me later' };
+  const preferenceCopy = operationalCopy.preference;
 
   const updatePreference = async (action: 'set' | 'accept' | 'decline' | 'snooze' | 'opt_out' | 'enable' | 'undo', options: { primary_flow?: TodayPreference['primary_flow']; proposal_id?: string } = {}) => {
     const preference = overview?.preference;
@@ -363,7 +362,7 @@ export const TodayPage = () => {
 
       {overview?.priority_proposal && overview.preference?.suggestions_enabled ? <section className="rounded-2xl bg-slate-50 p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"><p className="text-sm font-semibold text-slate-950">{preferenceCopy.proposalTitle} «{flowLabels[language][overview.priority_proposal.flow]}»</p><p className="mt-1 text-sm text-slate-600">{preferenceCopy.proposalDescription}</p><div className="mt-3 flex flex-wrap gap-2"><Button type="button" size="sm" disabled={preferenceSaving} onClick={() => updatePreference('accept', { proposal_id: overview.priority_proposal?.id })}>{preferenceCopy.accept}</Button><Button type="button" size="sm" variant="outline" disabled={preferenceSaving} onClick={() => updatePreference('decline', { proposal_id: overview.priority_proposal?.id })}>{preferenceCopy.decline}</Button><Button type="button" size="sm" variant="ghost" disabled={preferenceSaving} onClick={() => updatePreference('snooze', { proposal_id: overview.priority_proposal?.id })}>{preferenceCopy.snooze}</Button></div></section> : null}
 
-      {remainingNeedsDecision.length ? <DashboardSection title={language === 'ru' ? 'Требует решения' : 'Needs your decision'} description={language === 'ru' ? 'Проверьте подготовленный результат и выберите следующий шаг.' : 'Review the prepared result and choose the next step.'}><div className="space-y-3">{remainingNeedsDecision.map((item) => <button key={item.id} type="button" onClick={() => openItem({ title: item.title, reason: '', expected_outcome: '', cta_label: '', screen: item.screen }, item.business_id, item.business_name, item.action?.url)} className="w-full rounded-2xl bg-amber-50 px-4 py-3 text-left transition-transform active:scale-[0.96]"><strong className="block text-sm text-slate-950">{localizedGrowthText(language, item.title)}</strong>{item.description ? <span className="mt-1 block text-sm text-slate-600">{localizedGrowthText(language, item.description)}</span> : null}</button>)}</div></DashboardSection> : null}
+      {remainingNeedsDecision.length ? <DashboardSection title={operationalCopy.decisionTitle} description={operationalCopy.decisionDescription}><div className="space-y-3">{remainingNeedsDecision.map((item) => <button key={item.id} type="button" onClick={() => openItem({ title: item.title, reason: '', expected_outcome: '', cta_label: '', screen: item.screen }, item.business_id, item.business_name, item.action?.url)} className="w-full rounded-2xl bg-amber-50 px-4 py-3 text-left transition-transform active:scale-[0.96]"><strong className="block text-sm text-slate-950">{localizedGrowthText(language, item.title)}</strong>{item.description ? <span className="mt-1 block text-sm text-slate-600">{localizedGrowthText(language, item.description)}</span> : null}</button>)}</div></DashboardSection> : null}
 
       {controlScope?.kind === 'network' && networkSummary ? (
         <DashboardSection title={copy.locationsTitle} description={copy.locationsHint}>

@@ -6,8 +6,10 @@ import { newAuth } from '@/lib/auth_new';
 import { LEAD_JOURNEY_STORAGE_KEY } from '@/lib/leadJourney';
 import { TodayPage } from './TodayPage';
 
+const languageMock = vi.hoisted(() => ({ current: 'ru' }));
+
 vi.mock('@/lib/auth_new', () => ({ newAuth: { makeRequest: vi.fn() } }));
-vi.mock('@/i18n/LanguageContext.logic', () => ({ useLanguage: () => ({ language: 'ru' }) }));
+vi.mock('@/i18n/LanguageContext.logic', () => ({ useLanguage: () => ({ language: languageMock.current }) }));
 
 const ContextRoute = () => <Outlet context={{ currentBusinessId: 'business-1' }} />;
 const NetworkContextRoute = () => <Outlet context={{ currentBusinessId: 'business-1', controlScope: { kind: 'network', id: 'network-1', name: 'Сеть' } }} />;
@@ -20,6 +22,7 @@ const LocationProbe = () => {
 describe('TodayPage', () => {
   beforeEach(() => {
     vi.mocked(newAuth.makeRequest).mockReset();
+    languageMock.current = 'ru';
     window.localStorage.clear();
   });
 
@@ -116,6 +119,73 @@ describe('TodayPage', () => {
     renderPage();
     expect(await screen.findByRole('heading', { name: 'Подтвердите черновик' })).toBeInTheDocument();
     expect(screen.queryByText('Сейчас у LocalOS нет активных задач.')).not.toBeInTheDocument();
+  });
+
+  it('shows the static decision heading and instruction in Spanish without rewriting API decision text', async () => {
+    languageMock.current = 'es';
+    vi.mocked(newAuth.makeRequest).mockResolvedValue({
+      preference: { scope_type: 'business', scope_id: 'business-1', primary_flow: 'content', suggestions_enabled: true, revision: 1 },
+      work_sections: {
+        needs_decision: [
+          { id: 'decision-primary', title: 'Проверьте подготовленный ответ', description: 'Это подпись из API.' },
+          { id: 'decision-follow-up', title: 'Выберите следующий шаг', description: 'Это подпись из API.' },
+        ],
+        continue_work: [],
+        results: [],
+      },
+      active_work: [], changes_24h: [], completed_results: [],
+    });
+
+    renderPage();
+
+    expect(await screen.findByText('Requiere tu decisión')).toBeInTheDocument();
+    expect(screen.getByText('Revisa el resultado preparado y elige el siguiente paso.')).toBeInTheDocument();
+    expect(screen.getByText('Выберите следующий шаг')).toBeInTheDocument();
+    expect(vi.mocked(newAuth.makeRequest)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(newAuth.makeRequest)).toHaveBeenCalledWith('/operator/today?scope_type=business&scope_id=business-1', { method: 'GET' });
+  });
+
+  it('shows the priority preference label in Spanish without posting', async () => {
+    languageMock.current = 'es';
+    vi.mocked(newAuth.makeRequest).mockResolvedValue({
+      preference: { scope_type: 'business', scope_id: 'business-1', primary_flow: 'content', suggestions_enabled: true, revision: 1 },
+      active_work: [], changes_24h: [], completed_results: [],
+    });
+
+    renderPage();
+
+    expect(await screen.findByText('Qué mostrar primero en Hoy: Contenido')).toBeInTheDocument();
+    expect(vi.mocked(newAuth.makeRequest)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(newAuth.makeRequest)).toHaveBeenCalledWith('/operator/today?scope_type=business&scope_id=business-1', { method: 'GET' });
+  });
+
+  it('shows empty preferred content in Spanish and keeps its route navigation free of requests', async () => {
+    languageMock.current = 'es';
+    vi.mocked(newAuth.makeRequest).mockResolvedValue({
+      preference: { scope_type: 'business', scope_id: 'business-1', primary_flow: 'content', suggestions_enabled: true, revision: 1 },
+      active_work: [], changes_24h: [], completed_results: [],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard/today']}>
+        <Routes>
+          <Route element={<ContextRoute />}>
+            <Route path="/dashboard/today" element={<TodayPage />} />
+            <Route path="/dashboard/content" element={<LocationProbe />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Prepara el siguiente contenido' })).toBeInTheDocument();
+    expect(screen.getByText('Abre tu plan de contenido, crea un borrador o continúa con un contenido ya iniciado.')).toBeInTheDocument();
+    expect(vi.mocked(newAuth.makeRequest)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(newAuth.makeRequest)).toHaveBeenCalledWith('/operator/today?scope_type=business&scope_id=business-1', { method: 'GET' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir contenido' }));
+
+    expect(screen.getByText('/dashboard/content')).toBeInTheDocument();
+    expect(vi.mocked(newAuth.makeRequest)).toHaveBeenCalledTimes(1);
   });
 
   it.each([
