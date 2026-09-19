@@ -386,6 +386,25 @@ def seed_journeys(owner_id: str, business_id: str) -> dict[str, str]:
                 """,
                 (fixture_id("workstream:partnership"), lead_id, business_id, owner_id),
             )
+            cursor.execute(
+                """
+                INSERT INTO partnershipleadartifacts (lead_id, match_json, updated_at)
+                VALUES (%s, %s, NOW())
+                ON CONFLICT (lead_id) DO NOTHING
+                """,
+                (
+                    lead_id,
+                    Json({
+                        "overlap": ["Локальная аудитория: жители Санкт-Петербурга, выбирающие услуги рядом."],
+                        "score_explanation": (
+                            "Синтетическая гипотеза для демо: у компаний может пересекаться "
+                            "локальная аудитория; требуется ручная проверка фактов."
+                        ),
+                        "readiness_code": "needs_evidence",
+                        "next_action": "Проверить публичные факты о партнёре вручную перед подготовкой предложения.",
+                    }),
+                ),
+            )
         cursor.execute(
             """
             INSERT INTO lead_journeys (
