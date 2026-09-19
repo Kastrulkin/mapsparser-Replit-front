@@ -14,6 +14,12 @@ writes require the documented human approval or manual boundary.
 
 ## What is materially stronger after this work
 
+- Today static decision/preference/empty-work labels now use ten-language copy
+  in local7c374f1f: three causal failing tests become93focused/adjacent passes;
+  TypeScript/lint and independent review pass. Server-supplied Russian action
+  labels remain unresolved. New build/full units did not run because free Mac
+  space fell below the2GiB safety floor (~1.7GiB, with11GiB swap allocated).
+  No deployed or fully translated Today claim is made.
 - New content-plan checks reproduce and fix read-only generation and selected
   network-target authorization gaps. Localbe1b1a95 passes independent review and
   164isolated PostgreSQL/adjacent tests7.91s; permitted viewers can still read their

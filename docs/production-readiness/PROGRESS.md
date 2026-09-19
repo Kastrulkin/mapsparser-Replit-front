@@ -1,6 +1,23 @@
 # Production-readiness progress
 
-## Current checkpoint — 19 September, frontend67169692 and content securitybe1b1a95
+## Current checkpoint — 19 September, Today static copy7c374f1f; disk guard holds builds
+
+- [x] User's production IAB login confirmed by reading the existing Today tree,
+ without clicks, credentials, account changes or data actions.
+- [x] UX-LOCALE-07 static subset locally proven7c374f1f: causal3fail24pass7.67s;
+ final93focused/adjacent pass8.82s, TS46.430031s, lint15.553081s with0errors/1existing
+ warning, independent reviewPASS. All ten dictionary locales populated; API Russian
+ action labels remain a separate unresolved contract, not automatically translated.
+- [ ] New Today build/integrity/full units NOT RUN: preflight exits1 at1801168KiB
+ free versus2097152KiB floor. macOS swap allocation increased10→11GiB; no files
+ removed or apps stopped. Current image, backend aggregate and full demo stay open.
+
+Latest source7c374f1f; prior backendbe1b1a95 and publication67169692 remain local.
+Their historical164backend/620frontend results retain those exact scopes, not a
+current whole-project aggregate. No test/build process remains running. Source
+changes committed; seven foreign files preserved. Goal ACTIVE, not complete.
+
+## Earlier checkpoint — 19 September, frontend67169692 and content securitybe1b1a95
 
 - [x] Prior installer-confirmation turn was NO_PROGRESS for readiness. Exact
  installer remains absent; app remains installed. No further cleanup/deletes.

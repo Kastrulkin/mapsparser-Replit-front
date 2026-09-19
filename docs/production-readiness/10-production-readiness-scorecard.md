@@ -4,6 +4,11 @@ Updated 19 September 2026. Scores describe evidence at the stated checkpoint,
 not an average that can waive a release gate. The original Definition of Done
 and unresolved P1 items remain controlling.
 
+Today7c374f1f adds93focused/adjacent passes, TS/lint and independent review for
+static copy only. New build/full-unit/browser results are absent: the disk
+preflight fails below2GiB. API action-copy localization and original release
+gates remain open. The prior620full-unit result is not promoted to this revision.
+
 Newest scoped evidence: frontend67169692 passes620units/129files354.85s,
 51focused checks, TS/lint/build/integrity. Content root/target authorizationbe1b1a95
 passes164native/adjacent checks7.91s and independent review after three causal RED

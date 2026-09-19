@@ -5,6 +5,8 @@ Latest preparation: private v3 helper permits the two exact previously denied
 partnership GETs, with5pure policy tests and independent review. It has not run
 the server/browser and deliberately retains the older39frontend artifact pin.
 The new publication-label build671 is separately tested, not silently substituted.
+The newer Today source7c374f1f has scoped test/type/lint proof but NO build yet:
+disk guard prevents it. Neither source silently updates the retained v3 artifact.
 User reported production IAB login; root observed the Today screen without clicks
 or data actions. This is not synthetic demo completion and does not authorize
 production writes or bypass the denied native file-picker fallback.

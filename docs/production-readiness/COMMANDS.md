@@ -1,5 +1,28 @@
 # Verified commands and evidence
 
+## Today static operational copy — 19 September, 7c374f1f
+
+Named tmux `readiness-today-locale-red-20260919` and `...quality...` are terminal.
+Node22, env-i, envDir:false Vitest overlay, one worker; all API data mocked.
+Raw/today-locale-<phase>-20260919.json:
+
+- red: TodayPage.test only,3fail24pass7.67s/capture10621.106ms,exit1.
+- green: TodayPage.test + todayPageCopy.test + DemoLanguageCoverage.test,
+ 93pass8.82s/capture10561.150ms,exit0/empty stderr.
+- types: npm run typecheck,exit0/46430.031ms/empty stderr.
+- lint: npm run lint,exit0/15553.081ms,0errors/1existing auth_new.ts:115warning.
+- build-preflight: explicit read-only guard recheck,exit1/22.091ms;
+ 1801168KiB free versus2097152KiB floor; swap11264MiB allocated/9749.62MiB used.
+ It confirms planned build directory and build/integrity/full-unit raw outputs
+ are absent. No build/full-unit test ran; guard failure is not an application failure.
+
+All captures no timeout/truncation. No browser or deployment proof. The prepared
+Vite overlay disables env files; it has not produced an artifact. The previous
+620-unit/publication-build result is for67169692, not this new Today source.
+Redacted committed-source Gitleaks617a3b90..7c374f1f also passes1commit/20730bytes,
+0findings,2519.886ms,exit0/no timeout/truncation; findings[]. Capture
+secret-delta-today-20260919.json; not history/image/log/foreign-dirty coverage.
+
 ## Content generation role/scope package — 19 September, be1b1a95
 
 Actual native launch was the private `localos-readiness-content-generation-native-20260919.sh`

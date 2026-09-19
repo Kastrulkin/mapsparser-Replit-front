@@ -1,5 +1,11 @@
 # Residual risks — working register
 
+Newest7c374f1f locally fixes only the static UX-LOCALE-07 subset, with93focused
+tests/TS/lint/independent review. API-origin Russian operational text remains.
+Today build/integrity/full units have not run: explicit preflight1801168KiB free
+fails the2097152KiB floor; system swap allocation rose10→11GiB during this turn.
+No automated memory cleanup, app shutdown, production action or delete occurred.
+
 Latest19September checkpoint: SEC-RBAC-07 is locally FIX_PROVEN inbe1b1a95,
 164native/adjacent passes plus independent review. The current-image/production
 boundary is still unverified; concurrent role/topology changes during generation

@@ -1,5 +1,20 @@
 # Production-readiness change log
 
+## UX-LOCALE-07 — static Today copy subset, 7c374f1f
+
+Reproduced three static Spanish failures (decision section, preference settings,
+empty preferred content). Four-file copy-only change moves these existing
+RU/English branches into the same i18n module's typed ten-language operational
+dictionary. Existing RU/EN text, priority ordering, scope, APIs and routes are
+unchanged; dynamic API action text is intentionally not rewritten.
+
+RED3fail24pass7.67s; GREEN93focused/adjacent pass8.82s, full TypeScript and lint
+0errors/1existing warning pass; independent source/evidence reviewPASS. Spanish
+checks preserve exact scoped GET/noPOST, API Russian text and content navigation.
+Build/integrity/full-unit follow-up is not run: explicit disk preflight fails at
+1801168KiB free, with11GiB system swap allocated. No current artifact, complete
+Today translation, production or release-ready claim. Seven foreign files kept.
+
 ## SEC-RBAC-07 — content root/target admission, be1b1a95
 
 Four files only: content_plan_service resolves canonical scope from the root's

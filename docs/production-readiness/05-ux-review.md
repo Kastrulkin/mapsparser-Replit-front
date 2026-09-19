@@ -1,5 +1,17 @@
 # UX and browser verification — working evidence
 
+## Today static copy fix — 19 September, 7c374f1f
+
+The three static surfaces observed/traced below now have causal local proof:
+3failed/24passed before,93focused/adjacent tests after, TypeScript and lint pass,
+independent reviewPASS. Ten declared locales have complete typed operational copy;
+RU/EN behavior and actual API strings are preserved. Spanish tests check the
+decision section, preference summary, empty-content CTA, scoped GET/noPOST and
+navigation. This is the static subset only: Russian server action labels remain
+an unresolved localization contract. No arbitrary business-content translation.
+New build/full-unit/browser verification is pending capacity recovery; the2GiB
+disk guard correctly prevents launch at~1.7GiB free. See COMMANDS for captures.
+
 ## Read-only production Today observation — 19 September
 
 After the user reported login, root selected the existing IAB tab on
@@ -17,7 +29,7 @@ preference changes are needed. Russian operational title/button text comes from
 the API and remains unchanged by localizedGrowthText for Spanish; its semantic
 translation contract is separate, not assumed to be user-authored content.
 The observation proves this display defect, not production API health or current
-deployment identity. No automatic regression or fix for Today is claimed yet.
+deployment identity. Subsequent static-subset proof is recorded above.
 
 ## Publication sheet labels — 19 September, 67169692
 

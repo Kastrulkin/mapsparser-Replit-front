@@ -1,6 +1,40 @@
 # Readiness handoff
 
-## Current checkpoint — 19 September, frontend67169692 / backendbe1b1a95 proven locally
+## Current checkpoint — 19 September, Today7c374f1f / resource hold
+
+Source HEAD7c374f1f adds only four Today copy/test files after docs617a3b90.
+Independent static and evidence reviewPASS for the three static copy surfaces.
+No production mutations or push/deploy. User's existing authenticated IAB Today
+tree was read only; no navigation clicks, session extraction or preference writes.
+
+Root captures today-locale-<phase>-20260919.json: RED3fail24pass7.67s/10621.106ms;
+GREEN93pass8.82s/10561.150ms; TSexit0/46430.031ms; lint0errors1existing warning/
+15553.081ms. No timeout/truncation. Source hashes pinned in reviewer messages:
+TodayPage bb3e562…, componenttest5a065875…, dictionarye66c0c6…, copytest8f068165….
+RU/EN retained, ten typed locales, Spanish1GET/noPOST/APItext/navigation controls.
+Russian server-provided operational labels remain unresolved; do not close the
+entire mixed-language Today/API contract from this static subset.
+Redacted Today commit delta617a3b90..7c374f1f:0findings/2519.886ms; report[].
+
+Quality launcher is terminal. Build, integrity and full-unit outputs/artifact
+are ABSENT, not successes. Fresh explicit preflight capture exits1/22.091ms:
+1801168KiB free <2097152KiB floor, swap11264MiB/used9749.62MiB. Earlier this turn
+swap was10240MiB/used9723.12MiB. This explains a newly allocated1GiB, not the
+entire historic30GiB loss. Raw evidence6.5MiB, old full source archive111MiB,
+publication build13.2MiB do not justify deleting proof/DB data. No cleanup/restart.
+
+After capacity recovery, do not replay quality script (earlier raw phases exist).
+Review a build-only resume using prepared envDir:false Vite config
+`/private/tmp/localos-readiness-today-locale-vite-20260919.mjs` and fresh captures;
+intended dist `/private/tmp/localos-readiness-today-locale-dist-20260919` is absent.
+Full-unit launcher `/private/tmp/localos-readiness-today-locale-units-20260919.sh`
+is prepared but NEVER RUN; revalidate current source/guard/headroom before use.
+Do not lower guards, stop unrelated apps, or delete data/proofs without authority.
+Whole backend current aggregate and Docker image need larger separate margins.
+Production login does not clear synthetic demo file-picker restriction.
+All work jobs terminal; seven foreign dirty files below remain preserved/excluded.
+
+## Earlier checkpoint — 19 September, frontend67169692 / backendbe1b1a95 proven locally
 
 Branchcodex/production-readiness-20260917; startingHEAD105954d6. Five-file frontend
 package committed67169692, no push/deploy. Current accepted focused raw is

@@ -1,5 +1,18 @@
 # Readiness decisions
 
+## D-038 — Keep localized static copy separate from API text and resource gates
+
+Today UI/source trace plus three local REDs justify a dictionary-only fix for
+decision, preference and empty-mission copy. Preserve API-provided titles,
+scope, priority ordering and request/navigation behavior; dynamic operational
+translation needs a separate semantic contract. Local7c374f1f is independently
+accepted for93focused/adjacent tests/TS/lint, not all Today localization.
+
+Free host space fell below the existing2GiB floor while system swap allocation
+grew10→11GiB. Build/full-unit launch remains withheld; no lowering guards, deleting
+swap/proof/DB files, stopping unrelated apps or asserting a successful build.
+Human-controlled capacity recovery is needed before resource-heavy gates.
+
 ## D-037 — Authorize effective content targets, not only the root selector
 
 Native stored-role tests reproduce viewer generation, mobile denial status400,
