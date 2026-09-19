@@ -1,5 +1,38 @@
 # Verified commands and evidence
 
+## Direct Operator news write admission — 19 September, e3e8fbff
+
+Private `run-pure.sh` and `capture.sh` in
+`/private/tmp/localos-news-readiness.jXg1zx/`; named tmux jobs
+`readiness-news-admission-{red,red-verified,green,adjacent}-20260919` are terminal.
+Python arm64, env-i, dotenv/plugin autoload/bytecode/pytest cache disabled.
+Guard blocks Python network operations and psycopg2.connect; no native DB,
+Docker, provider or app server involved. This bounded pure check does not lower
+the native/build disk guards.
+
+Raw `news-write-admission-operator-<phase>-20260919.json`:
+
+- red: exit 1, 7 failed / 7 passed, 0.65s; capture 1546.159ms. Includes one
+  incorrect test expectation (demo mismatch correctly performs zero SQL reads).
+- red-verified: exit 1, 6 failed / 8 passed, 0.55s; capture 970.405ms. Two
+  viewer cases return 200 instead of 403; four legitimate non-owner writer
+  cases expose omitted canonical role queries. Test fixture corrected only.
+- green: exit 0, 14 passed, 0.64s; capture 1039.628ms.
+- adjacent: exit 0, 20 passed, 0.55s; capture 1255.096ms. Runs the new route
+  tests plus existing `test_operator_news_generation.py` (fake DB/provider).
+
+All four captures have empty stderr and no timeout/truncation. Ruff F821 with
+`--no-cache` on the two changed files and `git diff --check` pass. Independent
+review PASS for route admission only, not real billing/persistence or deployment.
+Source SHA256: operator_api `3105b0b30870c3a4f7c2acb49e8650aaab2103aa23ad936652d8c47845171a7f`;
+test `4574ceaf61a64927f7b714c3c96bb623b4d59a5e14955dec57aab4b414891d3f`;
+guard `c49c42a8e83a9a216aad150e2f94226b796a7b86fd55a5df93151f652e873ab5`.
+
+Offline redacted Gitleaks 8.30.1 delta `73a24aae..e3e8fbff`: one commit,
+6948 bytes, zero findings; capture 1177.740ms, exit 0, report `[]`, no
+timeout/truncation. Raw `news-write-admission-secret-delta-20260919.json`
+retains normal stderr scan summaries. This is not a whole-history/image scan.
+
 ## Today static operational copy — 19 September, 7c374f1f
 
 Named tmux `readiness-today-locale-red-20260919` and `...quality...` are terminal.

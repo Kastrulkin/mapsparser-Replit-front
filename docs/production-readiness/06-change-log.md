@@ -1,5 +1,22 @@
 # Production-readiness change log
 
+## SEC-RBAC-08 — direct Operator news write admission, e3e8fbff
+
+One production-source line uses the existing write verifier instead of the read
+verifier before news generation. No role model, schema, provider, service logic
+or external publication behavior changed. New route tests register the real
+Flask blueprint and retain both actual canonical helpers. Strict fake SQL
+checks target/user parameters; downstream generation/audit are counted spies.
+
+Verified RED: 6 failures / 8 passes in 0.55s (two viewer 200s, four omitted role
+queries); GREEN: 14 passes in 0.64s; adjacent: 20 passes in 0.55s. The initial
+7/7 run also contained a demo-query-count fixture error and is preserved.
+Ruff F821/diff checks and independent review PASS. Env-i/private guard blocks
+Python network and PostgreSQL. This is bounded local FIX_PROVEN, not native
+DB/credits, other-channel, current-image, full backend or production proof.
+Telegram admission and the legacy handler's crash/latent authorization remain
+separate open findings. No push/deploy or modification of seven foreign paths.
+
 ## UX-LOCALE-07 — static Today copy subset, 7c374f1f
 
 Reproduced three static Spanish failures (decision section, preference settings,

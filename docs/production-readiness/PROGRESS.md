@@ -1,5 +1,27 @@
 # Production-readiness progress
 
+## Current checkpoint — 19 September, Operator news admission e3e8fbff
+
+- [x] Existing authenticated production Today tab read again without navigation,
+  preference changes, token extraction or data actions; mixed locale remains live.
+- [x] SEC-RBAC-08 locally FIX_PROVEN: direct `/api/operator/news/generate` now
+  uses canonical write admission before generation. Verified RED: 6 failed / 8
+  passed (two viewer HTTP 200 instead of 403; four missing role-query checks).
+  GREEN: 14 passed; adjacent generation tests: 20 passed. Independent review PASS.
+- [ ] SEC-RBAC-09: Telegram chat also has a role-blind admission candidate;
+  source traced, no causal test or fix yet. Existing web chat has a write guard.
+- [ ] BUG-NEWS-01: legacy news reads `generated_text` before assignment. Source
+  confirms the crash; not yet reproduced by a route test. Its missing write guard
+  and second business resolver must be addressed together before enabling the flow.
+
+Only one production-source line and one new test file committed locally. Pure
+tests use fake SQL rows and downstream spies, with Python network/PostgreSQL
+connections disabled; they do not certify native persistence, provider billing,
+Telegram, legacy news, current image or production. Initial RED included one
+incorrect demo-query expectation and is retained separately. Latest free space
+1,871,180 KiB (~1.78 GiB); native/build guards remain unchanged. Seven foreign
+dirty paths preserved. No push/deploy or full-goal completion; goal ACTIVE.
+
 ## Current checkpoint — 19 September, Today static copy7c374f1f; disk guard holds builds
 
 - [x] User's production IAB login confirmed by reading the existing Today tree,

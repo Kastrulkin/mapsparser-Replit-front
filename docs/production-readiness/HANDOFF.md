@@ -1,5 +1,44 @@
 # Readiness handoff
 
+## Current checkpoint — 19 September, direct news gate e3e8fbff
+
+Two-file source commit: `src/api/operator_api.py` changes only the direct news
+route from read admission to write admission; new
+`tests/test_operator_news_write_access.py` adds 14 route cases. Independent
+source/raw review PASS. All other source changes below remain excluded.
+
+Raw `news-write-admission-operator-<phase>-20260919.json`: original red has
+7 failures / 7 passes in 0.65s, including a wrong demo-query-count expectation;
+verified red has 6 failures / 8 passes in 0.55s (capture 970.405ms). It reproduces
+two viewer HTTP 200s and four skipped write-role queries. Green: 14 passes in
+0.64s (1039.628ms); adjacent: 20 passes in 0.55s (1255.096ms). No timeout,
+truncation or stderr. Ruff F821 and diff checks pass. All jobs are terminal.
+Private launcher/guard: `/private/tmp/localos-news-readiness.jXg1zx/`;
+no dotenv, inherited credentials, cache, network, PostgreSQL or providers.
+This is pure route/unit evidence, not a native DB or whole-service certificate.
+Do not replay existing capture destinations.
+
+Next safe local work (no production or expensive native/image run):
+1. SEC-RBAC-09: `telegram_dashboard.route_operator_chat_for_telegram` calls
+   role-blind `operator_audio.authorize_actor`. Reproduce viewer denial before
+   `process_chat`; preserve read/audio consumers if adding optional write mode.
+   Web `/api/operator/chat` already has write admission. Lower paid preflight
+   and reservation only inspect consent/balance/usage, not membership roles.
+2. BUG-NEWS-01: AST-load real decorated `news_generate` following
+   `tests/test_profile_input_settings_pg.py`. Reproduce its unbound local text,
+   add canonical write guard before private context/provider work, resolve the
+   business only once, then enforce content rules after all deterministic text
+   rewrites before effects. Do not fix the crash alone and expose its latent
+   foreign-business path. No legacy patch/test has run yet.
+3. Content-voice profile PATCH read-only admission is a separate unproven
+   candidate; do not conflate business-wide style with user-owned examples.
+
+User production login was reconfirmed by reading the existing Today tree only.
+It does not authorize writes or clear the local demo file-picker restriction.
+Latest disk 1,871,180 KiB (~1.78 GiB), below unchanged 2 GiB native/build floor;
+full aggregates/image need their larger margins. No cleanup, app stop, push,
+deployment or production mutation. Goal remains active, not complete.
+
 ## Current checkpoint — 19 September, Today7c374f1f / resource hold
 
 Source HEAD7c374f1f adds only four Today copy/test files after docs617a3b90.

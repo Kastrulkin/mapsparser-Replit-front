@@ -4,6 +4,16 @@ Status: incomplete security assessment, not a production approval. Baseline `302
 
 ## Assets and adversaries
 
+19 September SEC-RBAC-08: the direct Operator news endpoint's read-only role
+bypass is reproduced with actual canonical helpers and synthetic SQL rows.
+Local e3e8fbff changes its single guard to write admission: 14 route tests and
+20 overlapping adjacent pure tests pass, independently reviewed. Database,
+generator and audit boundaries are controlled in this proof; no native billing,
+production or other-channel certification follows. SEC-RBAC-09 remains an
+unreproduced Telegram chat role candidate. Legacy BUG-NEWS-01 is currently
+blocked by an unbound local variable; its latent missing authorization must be
+fixed before making generation reachable. No production exploit was attempted.
+
 19 September SEC-RBAC-07: native causal tests reproduce read-only content-plan
 generation plus selected-network-target/context admission gaps. The independently
 reviewed localbe1b1a95 patch passes164focused/adjacent tests7.91s, capture9.122281s,
