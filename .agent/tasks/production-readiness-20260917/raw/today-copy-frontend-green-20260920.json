@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "label": "today-copy-frontend-green",
+  "captured_at": "2026-09-20T15:22:21.806796+00:00",
+  "command": [
+    "/usr/local/opt/node@22/bin/node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "src/pages/dashboard/TodayPage.test.tsx",
+    "src/i18n/todayWorkCopy.test.ts",
+    "src/i18n/todayPageCopy.test.ts",
+    "src/pages/dashboard/ProgressPage.i18n.test.tsx",
+    "src/pages/dashboard/ProgressPage.network.test.tsx",
+    "src/pages/dashboard/ProgressPage.dom-mutation.test.tsx",
+    "src/components/telegram/TodayMobileV2.test.tsx",
+    "src/components/journey/JourneyActionCard.test.tsx",
+    "--no-cache",
+    "--maxWorkers=1"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend",
+  "runtime": "Python 3.11.7 on Darwin x86_64",
+  "duration_ms": 26003.966,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "\n\u001b[1m\u001b[30m\u001b[46m RUN \u001b[49m\u001b[39m\u001b[22m \u001b[36mv4.1.11 \u001b[39m\u001b[90m/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend\u001b[39m\n\n \u001b[32m\u2713\u001b[39m src/pages/dashboard/TodayPage.test.tsx \u001b[2m(\u001b[22m\u001b[2m31 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 1176\u001b[2mms\u001b[22m\u001b[39m\n     \u001b[33m\u001b[2m\u2713\u001b[22m\u001b[39m keeps the chosen direction one click away when only other work exists (urgent=false) \u001b[33m 404\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m\u2713\u001b[39m src/pages/dashboard/ProgressPage.network.test.tsx \u001b[2m(\u001b[22m\u001b[2m3 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 576\u001b[2mms\u001b[22m\u001b[39m\n     \u001b[33m\u001b[2m\u2713\u001b[22m\u001b[39m shows the network map and opens a selected location in LocalOS \u001b[33m 524\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m\u2713\u001b[39m src/pages/dashboard/ProgressPage.i18n.test.tsx \u001b[2m(\u001b[22m\u001b[2m4 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 742\u001b[2mms\u001b[22m\u001b[39m\n     \u001b[33m\u001b[2m\u2713\u001b[22m\u001b[39m renders Turkish system and structured growth copy when the API payload contains Russian labels \u001b[33m 489\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m\u2713\u001b[39m src/components/journey/JourneyActionCard.test.tsx \u001b[2m(\u001b[22m\u001b[2m5 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 981\u001b[2mms\u001b[22m\u001b[39m\n     \u001b[33m\u001b[2m\u2713\u001b[22m\u001b[39m sends the same version, surface and selected reply outcome to the controller \u001b[33m 500\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m\u2713\u001b[39m src/components/telegram/TodayMobileV2.test.tsx \u001b[2m(\u001b[22m\u001b[2m6 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 630\u001b[2mms\u001b[22m\u001b[39m\n     \u001b[33m\u001b[2m\u2713\u001b[22m\u001b[39m opens the preferred content plan in its own location \u001b[33m 416\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m\u2713\u001b[39m src/pages/dashboard/ProgressPage.dom-mutation.test.tsx \u001b[2m(\u001b[22m\u001b[2m1 test\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 452\u001b[2mms\u001b[22m\u001b[39m\n     \u001b[33m\u001b[2m\u2713\u001b[22m\u001b[39m does not crash when translated audit text is removed after refresh \u001b[33m 450\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m\u2713\u001b[39m src/i18n/todayWorkCopy.test.ts \u001b[2m(\u001b[22m\u001b[2m21 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[32m 26\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m\u2713\u001b[39m src/i18n/todayPageCopy.test.ts \u001b[2m(\u001b[22m\u001b[2m38 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[32m 22\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m8 passed\u001b[39m\u001b[22m\u001b[90m (8)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m109 passed\u001b[39m\u001b[22m\u001b[90m (109)\u001b[39m\n\u001b[2m   Start at \u001b[22m 18:21:57\n\u001b[2m   Duration \u001b[22m 24.42s\u001b[2m (transform 1.81s, setup 1.69s, import 5.52s, tests 4.61s, environment 6.69s)\u001b[22m\n\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

@@ -1,5 +1,17 @@
 # Production-readiness change log
 
+## UX-LOCALE-07 — additive Today system-display codes, 20 September
+
+Parent625a5d15: one backend adapter emits an Open label code and allowlisted
+sheet-write message codes while retaining Russian legacy text. Today maps those
+codes using typed ten-language copy, without changing user titles, state,
+approvals, requests or deep links. Tests preserve unknown-code fallback and
+queued/unknown-provider semantics. Pure backend42 and frontend adjacent109 pass;
+independent static review PASS. Both builds/integrity and667full frontend units
+pass. A test-only query option type fix afterward passes31TodayPage tests and
+app/node TypeScript/lint; original type failure is retained. No DB/provider/production
+mutation, deployment, new dependency or wider builder refactor.
+
 ## SEC-SSRF-03 / SEC-RBAC-11 — media security, 5cc7c0cd
 
 Only two production files and two tests: replace generic unbounded asset GET

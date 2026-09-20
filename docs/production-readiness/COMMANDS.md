@@ -1,5 +1,50 @@
 # Verified commands and evidence
 
+## Today display-code regression — 20 September, parent 625a5d15
+
+Unique `raw/today-copy-*-20260920.json` captures contain exact commands, cwd,
+duration and output. No existing runner destinations were replayed. Focused
+tests use workspace source, mock data and reused dependencies (not clean install
+or whole-worktree acceptance). The nine foreign paths are outside the patch.
+
+- Backend: private Python3.11.7 arm64 at
+  `/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python`,
+  `env -i`, `PYTHONDONTWRITEBYTECODE=1`, pytest plugin autoload disabled,
+  original `XoKy4o/guard` before `src` in PYTHONPATH. Run via `arch -arm64`
+  inside tmux: its x86_64 default failed psycopg2 guard initialization before
+  the first two test attempts. Guard was retained, not weakened. RED 8fail/4pass
+  in0.06s (396.964ms capture); GREEN 42pass in0.64s (1004.953ms capture):
+  `tests/test_today_work_copy.py tests/test_operator_today_api.py tests/test_operator_mobile_today.py`.
+- Frontend: Node22, `env -i`, existing `GtHPOV/no-egress-compatible.cjs`
+  preload, `vitest run --no-cache --maxWorkers=1`, named tmux jobs.
+  RED1fail/30pass (5216.686ms capture); GREEN109pass/8files in24.42s
+  (26003.966ms capture). No native DB or outbound requests.
+- Initial typecheck exit2 (37607.789ms): unsupported test query `exact`
+  option. Retain this failure; it prevented the chained lint command from running.
+- Both builds PASS (24729.552ms capture), outputs only in new
+  `/private/tmp/localos-today-copy-build-20260920.crNWEm/{app,public}`.
+  Existing vendor PURE-annotation warnings remain. Build output was not deployed.
+
+Final captures:
+
+- `today-copy-frontend-full`:667pass/130files,291.66s; exit0,
+  292952.671ms capture, no timeout/truncation. Negative-path auth/scope/context
+  tests emit expected stderr; no test failure. Application source stayed fixed.
+- After full completion, removed only the unsupported test-query option:
+  `today-copy-final-page`:31pass4.30s,5496.727ms capture.
+- `today-copy-final-types-lint`: app/node TypeScript and full lint exit0,
+  48431.044ms, zero errors/one existing `auth_new.ts` any warning.
+- `today-copy-build-integrity`: exit0,243.398ms,199app+12public reachable JS.
+- `today-copy-source-manifest`: six final code/test SHA256s plus inherited
+  Python/Node guards; exit0,37.385ms.
+- `today-copy-staged-secret-scan`: redacted Gitleaks staged delta only,
+  exit0,1319.864ms,229323bytes, zero findings. This is not a history/image scan.
+
+No final capture has a timeout or output truncation. Final31 and full667 overlap;
+do not add them. Full667 precedes the test-only type correction, not an app edit.
+This workflow is not the rejected general backend aggregate-v2 or restore runner;
+neither denied preparation lane was retried.
+
 ## Current proof-ledger validation
 
 `PYTHON_BIN=/usr/local/bin/python3.11 scripts/proof_loop.sh validate production-readiness-20260917`

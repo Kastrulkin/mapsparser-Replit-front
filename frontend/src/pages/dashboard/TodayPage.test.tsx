@@ -159,6 +159,52 @@ describe('TodayPage', () => {
     expect(vi.mocked(newAuth.makeRequest)).toHaveBeenCalledWith('/operator/today?scope_type=business&scope_id=business-1', { method: 'GET' });
   });
 
+  it('localizes coded system work copy without translating titles or changing the deep link', async () => {
+    languageMock.current = 'es';
+    const target = '/dashboard/agents?blueprint_id=blueprint-1&run_id=run-1&business_id=business-1';
+    vi.mocked(newAuth.makeRequest).mockResolvedValue({
+      work_sections: {
+        needs_decision: [{
+          id: 'agent_run:run-1', title: 'Проверка записей на завтра',
+          description: 'Результат записи неизвестен. Сверьте таблицу перед следующими действиями.',
+          message_code: 'today.automation.provider_reconciliation_required',
+          action: { label: 'Открыть', label_code: 'today.open', url: target },
+        }, {
+          id: 'agent_run:run-2', title: 'Моя вторая задача',
+          description: 'Запись требует внимания. Откройте результат, чтобы проверить причину.',
+          message_code: 'today.automation.provider_failed',
+        }],
+        continue_work: [{ id: 'work-3', title: 'Моя работа', description: 'Выполняется запись в таблицу.', message_code: 'today.automation.provider_executing' }],
+        results: [{ id: 'result-4', title: 'Мой результат', description: 'Пользовательский текст без перевода', message_code: 'future.unknown' }],
+      },
+    });
+    render(<MemoryRouter initialEntries={['/dashboard/today']}><Routes><Route element={<ContextRoute />}>
+      <Route path="/dashboard/today" element={<TodayPage />} />
+      <Route path="/dashboard/agents" element={<LocationProbe />} />
+    </Route></Routes></MemoryRouter>);
+
+    expect(await screen.findByRole('heading', { name: 'Проверка записей на завтра' })).toBeInTheDocument();
+    expect(screen.getByText('Se desconoce el resultado de la escritura. Revisa la hoja antes de continuar.')).toBeInTheDocument();
+    expect(screen.getByText('La escritura requiere atención. Abre el resultado para comprobar la causa.')).toBeInTheDocument();
+    expect(screen.getByText('Se está escribiendo en la hoja.')).toBeInTheDocument();
+    expect(screen.getByText('Пользовательский текст без перевода')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir' }));
+    expect(screen.getByText(target)).toBeInTheDocument();
+    expect(newAuth.makeRequest).toHaveBeenCalledTimes(1);
+    expect(newAuth.makeRequest).toHaveBeenCalledWith('/operator/today?scope_type=business&scope_id=business-1', { method: 'GET' });
+  });
+
+  it.each([undefined, 'future.action', 'toString'])('preserves uncoded or unknown action labels (%s)', async (labelCode) => {
+    languageMock.current = 'es';
+    vi.mocked(newAuth.makeRequest).mockResolvedValue({ work_sections: { needs_decision: [{
+      id: 'legacy', title: 'Моя задача', description: 'Неизвестное описание', message_code: 'toString',
+      action: { label: 'Моя кнопка', label_code: labelCode, url: '/dashboard/content' },
+    }] } });
+    renderPage();
+    expect(await screen.findByRole('button', { name: 'Моя кнопка' })).toBeInTheDocument();
+    expect(screen.getByText('Неизвестное описание')).toBeInTheDocument();
+  });
+
   it('shows empty preferred content in Spanish and keeps its route navigation free of requests', async () => {
     languageMock.current = 'es';
     vi.mocked(newAuth.makeRequest).mockResolvedValue({

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "label": "today-copy-backend-green",
+  "captured_at": "2026-09-20T15:21:55.484492+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-m",
+    "pytest",
+    "tests/test_today_work_copy.py",
+    "tests/test_operator_today_api.py",
+    "tests/test_operator_mobile_today.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 1004.953,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "..........................................                               [100%]\n42 passed in 0.64s\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

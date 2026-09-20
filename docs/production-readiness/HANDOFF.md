@@ -1,6 +1,46 @@
 # Readiness handoff
 
-## Current checkpoint — 20 September, aggregate terminal / corrective slices PASS
+## Current checkpoint — 20 September, local Today display-code patch
+
+Branch remains `codex/production-readiness-20260917`, parent `625a5d15`.
+UX-LOCALE-07 now has a bounded additive API copy contract: known system action
+and sheet-provider messages have explicit codes; user names and Russian legacy
+fields are preserved. Client mapping covers ten locales, unknown codes fall back,
+and no status/approval/URL/scope behavior changes. Six owned code/test files:
+`src/services/today_workspace.py`, `tests/test_today_work_copy.py`,
+`frontend/src/pages/dashboard/TodayPage.tsx`, its test, and
+`frontend/src/i18n/todayWorkCopy.ts` with its test. All nine foreign paths below
+remain excluded.
+
+RED/GREEN captures live under `raw/today-copy-*-20260920.json`: 8 failed/4 passed
+backend and 1 failed/30 passed frontend before; 42 backend and 109 adjacent
+frontend passes after. Static independent review PASS. Full frontend667pass/130files
+in291.66s. Typecheck exposed an unsupported `getByRole` test-only `exact` option;
+removed after the full run, then final31TodayPage tests and app/node TypeScript
+plus lint pass (0errors/1existing warning). App source did not change after the
+full run. App/public builds and199/12JS asset integrity PASS. No live DB/provider
+requests in these mocked tests. IAB observation only confirmed authenticated
+production Today; it did not verify the new local code, extract tokens or change
+settings/data.
+
+The v2 aggregate and restore script permissions remain outstanding: do not
+retry their rejected preparation writes. No push/deploy/production change is
+authorized by this patch. Current locale slice does not close overall readiness
+or the broader UX-LOCALE-07 system-copy/browser gate.
+
+Source and inherited guard SHA256s are captured in
+`raw/today-copy-source-manifest-20260920.json`. Working-tree dependencies were
+reused, not reinstalled. This is not acceptance of the nine foreign changes.
+Independent final source/evidence reconciliation PASS; source hashes match.
+Staged secret scan and structural evidence validation PASS. The latter is not
+a current whole-project verdict. Local commit title:
+`fix(today): localize explicit system work messages without rewriting user content`.
+Latest local free space6,050,976KiB (~5.77GiB); unchanged10GiB Docker gate.
+Next: after outstanding permission decisions, resume the separately guarded
+aggregate/restore lanes; otherwise continue bounded unkeyed Today focus-copy
+inventory. Do not rerun terminal captures or promote current production readiness.
+
+## Previous checkpoint — 20 September, aggregate terminal / corrective slices PASS
 
 Application source is frozen at `5cc7c0cd`; the reviewed aggregate/corrective
 evidence package is committed locally in `e82e0b55` (parent `4000e41e`).

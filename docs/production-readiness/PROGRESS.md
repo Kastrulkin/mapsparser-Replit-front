@@ -1,6 +1,37 @@
 # Production-readiness progress
 
-## Current checkpoint — 20 September, isolated backend aggregate terminal / corrective slices PASS
+## Current checkpoint — 20 September, Today API-owned display copy
+
+- [x] User-reported IAB login reconfirmed read-only on Today: authenticated
+  SuperAdmin screen, mixed locale still visible. No refresh, navigation,
+  settings, token extraction or production mutation. This does not identify
+  the deployed revision or verify the new local patch.
+- [x] UX-LOCALE-07 bounded API slice: additive `action.label_code=today.open`
+  and seven allowlisted sheet-status `message_code` values; original Russian
+  API fields, user titles, state, approvals and deep links remain unchanged.
+  The web client has typed copy for ten declared languages and preserves unknown
+  code fallbacks. No automatic translation service or new dependency.
+- [x] Causal RED: frontend 1 failed / 30 passed; backend 8 failed / 4 passed.
+  GREEN: 109 frontend tests across 8 files and 42 pure backend/route/mobile tests.
+  Independent static review PASS. No native database was used for this slice.
+- [x] Full frontend:667passed/130files,291.66s (292.952671s capture).
+  TypeScript caught an unsupported test-query `exact` option; removing that
+  option after the full run preserved the exact string match. Final TodayPage
+  rerun:31passed; app/node TypeScript and lint PASS (0errors/1existing warning).
+  Application code was unchanged after the full run. App/public builds passed
+  in24.729552s capture; asset integrity passed for199/12reachable JS files.
+- [x] Independent final source/evidence reconciliation PASS; final six-file
+  manifest matches. Staged secret scan has zero findings; structural evidence
+  validation passes. Neither check promotes whole-project readiness.
+- [ ] UX-LOCALE-07 is still PARTIAL: focus-action and other unkeyed system text
+  plus current deployed-browser verification remain outside this slice.
+
+Source parent is `625a5d15`; the older aggregate/source evidence below remains
+scoped to `5cc7c0cd`, not this new patch. Raw namespace `today-copy-*-20260920`.
+Nine foreign worktree paths remain excluded. Restore and aggregate-v2 preparation
+permissions, 10 GiB image capacity and other release gates are unchanged.
+
+## Previous checkpoint — 20 September, isolated backend aggregate terminal / corrective slices PASS
 
 - [x] Formal task `evidence.json` is reconciled with current source `5cc7c0cd`
   and durable captures. AC3/AC4 historical PASS is preserved but no longer

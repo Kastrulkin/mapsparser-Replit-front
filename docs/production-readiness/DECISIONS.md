@@ -1,5 +1,21 @@
 # Readiness decisions
 
+## D-049 — Localize explicit system copy, not arbitrary API text
+
+Today work items carry backwards-compatible `action.label_code=today.open`.
+Only the seven existing automation sheet descriptions receive finite
+`today.automation.<status>` message codes. Keep raw labels/descriptions for
+older web clients and Telegram; no locale query, schema or shared state change.
+The web dictionary is keyed by these explicit codes for ten declared locales.
+Unknown/missing codes retain the existing fallback behavior; never infer a code
+from a business name, draft, campaign title or free-text Russian sentence.
+Pending and uncertain provider effects remain pending and uncertain, never
+localized into completion or a recommendation to retry a write blindly.
+
+This bounded vertical slice establishes the contract without a large builder
+rewrite. Other focus/system copy and deployed-browser proof remain separate.
+Language coverage tests prove dictionary completeness, not native-speaker review.
+
 ## D-048 — Acceptance is revision-scoped; historical verdicts stay immutable
 
 The machine-readable evidence ledger must follow current verified source and

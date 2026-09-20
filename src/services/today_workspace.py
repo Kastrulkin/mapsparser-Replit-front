@@ -45,7 +45,7 @@ def work_item(*, entity_type, entity_id, flow, business_id, title, status, url,
         "entity_id": str(entity_id), "flow": flow, "business_id": business_id,
         "title": title, "description": description, "status": status,
         "urgency": "urgent" if urgent else "normal", "due_at": _iso(due_at),
-        "preview": preview, "action": {"label": "Открыть", "url": url},
+        "preview": preview, "action": {"label": "Открыть", "label_code": "today.open", "url": url},
         "occurred_at": _iso(updated_at),
         "freshness": {"as_of": _iso(now), "status": "live"},
         "reason_code": status, "message_code": message_code,
@@ -117,6 +117,7 @@ def automation_work(cursor, scope, now):
         status = (row.get("provider_state") or row["status"]) if row["status"] == "waiting_provider" else row["status"]
         result.append(work_item(entity_type="agent_run",entity_id=row["id"],flow="automation",business_id=row["business_id"],
             title=row["name"],status=status,description=descriptions.get(status, ""),
+            message_code=f"today.automation.{status}" if status in descriptions else None,
             url="/dashboard/agents?"+urlencode({"blueprint_id":row["blueprint_id"],"run_id":row["id"],"business_id":row["business_id"]}),
             now=now,updated_at=row["updated_at"],urgent=status in attention))
     return result

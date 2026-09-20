@@ -7,7 +7,26 @@
     "application_source_commit": "5cc7c0cddc1df4356f23e1e6c6e0f0b68d849721",
     "frontend_tree": "0af96cd4614e0a1c5b658339b0a73d1a7bec9e46",
     "evidence_package_commit": "e82e0b55b050d8d1a715d6b03a18c52e0239bad2",
-    "assessment_kind": "current_evidence_reconciliation_not_final_verdict",
+    "assessment_kind": "aggregate_evidence_reconciliation_with_subsequent_scoped_patch_not_final_verdict",
+    "subsequent_scoped_patch": {
+      "finding": "UX-LOCALE-07",
+      "parent_commit": "625a5d15",
+      "scope": "Additive Today system display codes; original aggregate remains scoped to application_source_commit above",
+      "source_manifest": "raw/today-copy-source-manifest-20260920.json",
+      "proof": [
+        "raw/today-copy-backend-red-20260920.json",
+        "raw/today-copy-backend-green-20260920.json",
+        "raw/today-copy-frontend-red-20260920.json",
+        "raw/today-copy-frontend-green-20260920.json",
+        "raw/today-copy-frontend-full-20260920.json",
+        "raw/today-copy-final-page-20260920.json",
+        "raw/today-copy-types-lint-20260920.json",
+        "raw/today-copy-final-types-lint-20260920.json",
+        "raw/today-copy-build-20260920.json",
+        "raw/today-copy-build-integrity-20260920.json"
+      ],
+      "limits": "667 frontend units precede a test-only query option type correction; final31 TodayPage pass afterward. No subsequent aggregate, native DB, browser, image or production proof. Overall acceptance unchanged."
+    },
     "foreign_worktree_paths_excluded": 9,
     "historical_verdict_file": "verdict.json",
     "historical_verdict_reviewed_commit": "2f224f051e3b3487a2c0d529d40b547c414ccb52"

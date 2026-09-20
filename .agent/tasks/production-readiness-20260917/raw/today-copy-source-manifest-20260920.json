@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "label": "today-copy-source-manifest",
+  "captured_at": "2026-09-20T15:29:32.265547+00:00",
+  "command": [
+    "/usr/bin/shasum",
+    "-a",
+    "256",
+    "src/services/today_workspace.py",
+    "tests/test_today_work_copy.py",
+    "frontend/src/pages/dashboard/TodayPage.tsx",
+    "frontend/src/pages/dashboard/TodayPage.test.tsx",
+    "frontend/src/i18n/todayWorkCopy.ts",
+    "frontend/src/i18n/todayWorkCopy.test.ts",
+    "/private/tmp/localos-backend-full-20260920.XoKy4o/guard/sitecustomize.py",
+    "/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress.cjs",
+    "/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-local.cjs",
+    "/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-compatible.cjs"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 37.385,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "16e2d314a571167d44a3dc225412061b813d3b49759ebf7226ab706e9ec3c470  src/services/today_workspace.py\nb11c41509d13b48ff9ef26c22a4f0b3a23affe49ddb120110a7d8ad28564da9b  tests/test_today_work_copy.py\n8288e2e5779a45095fc353801614ed23d3177149fae70b13c6f101e216dc1fb8  frontend/src/pages/dashboard/TodayPage.tsx\n9737c865550a3580177831a002935d914ad6e8b7af18d6663e3f8f3a0c87faba  frontend/src/pages/dashboard/TodayPage.test.tsx\nb181528310419ea57cf86ae504f3a97c09e0911a421a6acd8024c3e538898c9c  frontend/src/i18n/todayWorkCopy.ts\n0c8be77617f05b4c680e59918fa361b8c87ff0cf0df830bacc1f1853ad889de6  frontend/src/i18n/todayWorkCopy.test.ts\n93e4d9d7c99e9653a8e95e2735a369c3ab986e02c2afcb6d206aa63d05a9b590  /private/tmp/localos-backend-full-20260920.XoKy4o/guard/sitecustomize.py\nc4396e02c723b18643539bd8db47478d6cdfb350781b6152f7c961e026f9bcd1  /private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress.cjs\n63fb97ba9828874223b0cb514bc8349aa02992abe267422ba12cb95daab30c61  /private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-local.cjs\n2af789a00689ae774f5f42ba5f9774432f6d4308420ff6b351718e3889107500  /private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-compatible.cjs\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

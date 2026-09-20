@@ -1,5 +1,29 @@
 # UX and browser verification — working evidence
 
+## Today API-owned copy slice — 20 September, parent 625a5d15
+
+The owner/manager's task is still to choose the next action on Today. The
+existing primary action, decision/continue/results sections, navigation and
+approval boundaries are unchanged. Seven sheet-write status descriptions and
+the generic Open button now have explicit additive API display codes and a
+ten-locale frontend dictionary. Raw API text remains available to old clients
+and Telegram; user titles, campaigns and drafts never become translation keys.
+Unknown/missing/prototype-like codes preserve the existing fallback path.
+
+Causal RED: 8 backend failures/4 passes and 1 frontend failure/30 passes.
+GREEN: 42 pure backend/API/mobile tests and 109 frontend adjacent tests/8files.
+Independent static review PASS. App/public builds and reachable-asset integrity
+PASS (199/12 JS assets). Full667units/130files PASS. Typecheck caught one
+test-query API mismatch; after the full run only that test option was corrected,
+then31TodayPage tests and app/node TypeScript/lint passed. App code was unchanged.
+Lint retains one existing warning. See COMMANDS for exact captures and limits.
+
+This is PARTIAL UX-LOCALE-07, not complete localization: focus-action and other
+unkeyed API/system copy remain. Ten-language coverage is not a native-speaker
+linguistic review. Production Today was observed read-only after login and still
+shows the previously reported mix; no deployed revision/new-build browser proof
+or live preference/provider mutation follows from that observation.
+
 ## Today static copy fix — 19 September, 7c374f1f
 
 The three static surfaces observed/traced below now have causal local proof:
@@ -9,8 +33,9 @@ RU/EN behavior and actual API strings are preserved. Spanish tests check the
 decision section, preference summary, empty-content CTA, scoped GET/noPOST and
 navigation. This is the static subset only: Russian server action labels remain
 an unresolved localization contract. No arbitrary business-content translation.
-New build/full-unit/browser verification is pending capacity recovery; the2GiB
-disk guard correctly prevents launch at~1.7GiB free. See COMMANDS for captures.
+The historical capacity block was superseded on20September by642frontend units,
+TypeScript/lint and both builds for tree0af96cd4. Current API-copy slice is above;
+deployed-browser verification remains open. See COMMANDS for scoped captures.
 
 ## Read-only production Today observation — 19 September
 
