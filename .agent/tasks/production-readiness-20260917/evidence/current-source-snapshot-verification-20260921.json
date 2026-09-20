@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "current-source-snapshot-verification",
+  "captured_at": "2026-09-20T22:22:58.486284+00:00",
+  "command": [
+    "node",
+    "-e",
+    "\nconst fs = require('fs'), path = require('path'), crypto = require('crypto'), cp = require('child_process');\nconst ref = '334c9d4bf69cc9e96fd13a39d9eba8ff32c9f3d6', snapshot = '/private/tmp/localos-current-source-scan-20260921.8KYNaW/source';\nconst entries = cp.execFileSync('/usr/bin/git', ['ls-tree','-r','-z','--full-tree',ref], {encoding:'utf8', maxBuffer:16000000}).split('\\0').filter(Boolean);\nconst expected = new Set(), failures = []; let bytes = 0, blobs = 0;\nfor (const entry of entries) {\n const tab = entry.indexOf('\\t'), [mode,type,oid] = entry.slice(0,tab).split(' '), name = entry.slice(tab+1);\n if(type !== 'blob' || mode === '120000') { failures.push({name,reason:'unsupported tree entry'}); continue; }\n expected.add(name);\n const full = path.join(snapshot,name);\n if(!fs.existsSync(full) || !fs.lstatSync(full).isFile()) { failures.push({name,reason:'missing/non-file'}); continue; }\n const content = fs.readFileSync(full);\n const actual = crypto.createHash('sha1').update('blob '+content.length+'\\0').update(content).digest('hex');\n if(actual !== oid) failures.push({name,reason:'blob mismatch'});\n blobs++; bytes += content.length;\n}\nconst actualNames = [];\nfunction walk(dir,prefix='') { for(const name of fs.readdirSync(dir)) { const relative=prefix+name, full=path.join(dir,name); if(fs.lstatSync(full).isDirectory()) walk(full,relative+'/'); else actualNames.push(relative); } }\nwalk(snapshot);\nconst extras = actualNames.filter(name=>!expected.has(name));\nconst report = fs.readFileSync('/private/tmp/localos-current-source-scan-20260921.8KYNaW/findings-redacted.json');\nconst findings = JSON.parse(report);\nconst result = {commit:ref,tree_entries:entries.length,verified_blobs:blobs,verified_bytes:bytes,archive_entries:actualNames.length,failures,extras,redacted_report_sha256:crypto.createHash('sha256').update(report).digest('hex'),findings:findings.length,all_secrets_redacted:findings.every(item=>item.Secret === 'REDACTED')};\nconsole.log(JSON.stringify(result,null,2));\nprocess.exitCode = failures.length || extras.length || !result.all_secrets_redacted ? 1 : 0;\n"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 3866.82,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\n  \"commit\": \"334c9d4bf69cc9e96fd13a39d9eba8ff32c9f3d6\",\n  \"tree_entries\": 5417,\n  \"verified_blobs\": 5417,\n  \"verified_bytes\": 86228059,\n  \"archive_entries\": 5417,\n  \"failures\": [],\n  \"extras\": [],\n  \"redacted_report_sha256\": \"77d5bb14a5e0843cc734fff3c5a13ecca47ab4cf5573d64863105c1371cd7125\",\n  \"findings\": 101,\n  \"all_secrets_redacted\": true\n}\n",
+  "stderr": "git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

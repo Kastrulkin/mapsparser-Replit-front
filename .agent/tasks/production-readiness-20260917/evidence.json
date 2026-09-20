@@ -309,6 +309,30 @@
       "result": "Initial3fail/7pass6.26s/capture8465.478ms; expanded8fail/11pass6.53s/capture8757.466ms on unchanged source. Final20Focus cases;104targeted/5files pass16.72s/capture18960.526ms, empty stderr/no timeout/truncation. Quality49518.454ms pass with one existing warning. Build12.72s/capture14375.571ms succeeds with truncated asset-list stdout, complete stderr/result;199JS integrity287.79ms passes. Full frozen791tests/137files pass317.37s/capture319678.171ms, complete/no timeout;14manifest inputs match afterward. Full stderr14259characters byte-equals prior known negative/jsdom diagnostics.",
       "limits": "Mocked router/UI/jsdom only; no real API/browser/provider/backend/DB/deployed proof. Two nonmatching targeted selectors add no coverage; actual104/5 is authoritative.404 means unavailable, not necessarily deleted. Commands already started are not cancelled or rolled back. Native/full-backend/image/demo/original DoD, LanguageProvider remount and generic binding03 gates remain; wholeFAIL, nine foreign paths, aggregate/restore denials and prior unsafe-reset INCONCLUSIVE effects persist. No push/deploy/production/DB/delete/Docker/provider action."
     },
+    "current_source_supplychain_checkpoint": {
+      "observed_date": "2026-09-21",
+      "application_source_commit": "334c9d4bf69cc9e96fd13a39d9eba8ff32c9f3d6",
+      "scope": "Frozen committed-source secret triage, current-branch delta, frontend lock advisories and license declarations; no application or dependency changes",
+      "proof": [
+        "evidence/current-source-secrets-20260921.json",
+        "evidence/current-source-snapshot-verification-20260921.json",
+        "evidence/current-source-finding-predicates-20260921.json",
+        "evidence/current-source-secret-triage-20260921.json",
+        "evidence/current-branch-secret-delta-20260921.json",
+        "evidence/current-branch-secret-delta-verification-20260921.json",
+        "evidence/current-frontend-lock-audit-20260921.json",
+        "evidence/current-frontend-lock-audit-verified-20260921.json",
+        "evidence/current-frontend-lock-metadata-20260921.json",
+        "evidence/current-frontend-license-metadata-verified-20260921.json",
+        "evidence/current-frontend-license-registry-20260921.json",
+        "evidence/current-frontend-license-inventory-20260921.json",
+        "evidence/current-source-supplychain-notes-20260921.md",
+        "evidence/current-source-supplychain-review-20260921.md",
+        "evidence/current-performance-equivalence-20260921.md"
+      ],
+      "result": "5417 Git-matched blobs; strict scan exits1 with101 matches exhaustively classified non-secret. Strict131-commit baseline-to-current delta exits1 with7 synthetic/prose findings; all historical excerpts match classified frozen source. Verified npm audit exits0:528 entries,0 advisories. Complete528-entry license inventory:215 lock,305 matching-installed metadata with hashes,8 exact registry version/integrity matches;0 unresolved declarations. Independent bounded supply-chain review PASS; current performance equivalence review completed without new timing.",
+      "limits": "Initial npm config failure and truncated initial license capture are retained, not authoritative success evidence. Scanner classification is not a universal absence-of-secrets guarantee; delta is not all-ref history or revocation proof. License metadata is not legal compliance or installed/release artifact integrity. Changed content-plan path needs authorized paired current-revision measurements; four other direct fixture paths have source equivalence only. No native DB/Docker/production/provider/cleanup/push/deploy action. Aggregate/restore preparation await separate affirmative replies; original overall and AC statuses, historical verdict and prior unsafe-reset INCONCLUSIVE effects remain unchanged."
+    },
     "foreign_worktree_paths_excluded": 9,
     "historical_verdict_file": "verdict.json",
     "historical_verdict_reviewed_commit": "2f224f051e3b3487a2c0d529d40b547c414ccb52"
@@ -574,7 +598,7 @@
         "raw/backend-full-v1-post-full-native-20260920.json"
       ],
       "gaps": [
-        "Fresh isolated PostgreSQL 16 migration and current native integration evidence exist for source 5cc7c0cd. The canonical current-source image, browser-worker runtime, signal/recovery and current restore rehearsal remain unverified. Historical image/rollback/restore captures remain scoped to their original revisions. Latest inspected free disk is about 5.80 GiB, below the unchanged 10 GiB image floor; synthetic restore preparation also awaits its separate permission. No current image or production-backup proof follows from the native suite."
+        "Fresh isolated PostgreSQL 16 migration and native integration evidence exist for source 5cc7c0cd. The canonical current-source image, browser-worker runtime, signal/recovery and current restore rehearsal remain unverified. Historical image/rollback/restore captures remain scoped to their original revisions. Latest inspected free disk is about 6.52 GiB, below the unchanged 10 GiB image floor; synthetic restore preparation also awaits its separate permission. No current image or production-backup proof follows from the native suite."
       ],
       "historical_checkpoint": {
         "status": "FAIL",
@@ -622,10 +646,21 @@
         "raw/backend-deps-v2-inventory-parity-20260920.json",
         "raw/social-media-secret-delta-20260920.json",
         "raw/backend-full-staged-secret-scan-20260920.json",
-        "raw/backend-full-handoff-secret-scan-20260920.json"
+        "raw/backend-full-handoff-secret-scan-20260920.json",
+        "evidence/current-source-secrets-20260921.json",
+        "evidence/current-source-snapshot-verification-20260921.json",
+        "evidence/current-source-finding-predicates-20260921.json",
+        "evidence/current-source-secret-triage-20260921.json",
+        "evidence/current-branch-secret-delta-20260921.json",
+        "evidence/current-branch-secret-delta-verification-20260921.json",
+        "evidence/current-frontend-lock-audit-verified-20260921.json",
+        "evidence/current-frontend-license-metadata-verified-20260921.json",
+        "evidence/current-frontend-license-registry-20260921.json",
+        "evidence/current-frontend-license-inventory-20260921.json",
+        "evidence/current-source-supplychain-review-20260921.md"
       ],
       "gaps": [
-        "Latest scoped source/documentation secret scans pass. Current private macOS133-distribution strict PyPI scan now returns0advisories/0skips with exact audited/installed parity; license declarations are inventoried, not legal compliance. Current image/layer/log/OS/embedded-native/AMD64/bot scans remain open. Historical privileged credential revocation and PyMuPDF license basis await owner confirmation. No live credential test, key rotation or history rewrite is authorized. The threat-model and targeted AI/role/SSRF controls remain bounded evidence, not universal tool isolation proof."
+        "Strict full committed-source scan at334c9d4b has101 classified non-secret matches; the131-commit branch delta has7 classified synthetic/prose matches. Neither replaces all-ref history, runtime/image/log inspection or historical revocation. Current frontend528-entry lock audit returns0advisories;528 license declarations have explicit provenance. Private macOS133-distribution strict PyPI scan returns0advisories/0skips with exact audited/installed parity. Declaration inventory is not legal compliance or installed/release artifact integrity. Current image/layer/log/OS/embedded-native/AMD64/bot scans remain open. Historical privileged credential revocation and PyMuPDF license basis await owner confirmation. No live credential test, key rotation or history rewrite is authorized. Targeted AI/role/SSRF controls remain bounded evidence, not universal tool isolation proof."
       ],
       "historical_checkpoint": {
         "status": "FAIL",
@@ -673,10 +708,11 @@
         "raw/frontend-perf-272-retry.json",
         "raw/frontend-perf-272-retry-command.json",
         "raw/journey-measure-postfix-272794a4-command.json (FAIL: outer PermissionError; incomplete comparison)",
-        "raw/journey-measure-v8-2d875357-272794a4-command.json"
+        "raw/journey-measure-v8-2d875357-272794a4-command.json",
+        "evidence/current-performance-equivalence-20260921.md"
       ],
       "gaps": [
-        "The previously missing paired working-reference comparison is complete: 2d875357 versus 272794a4, 750 measured requests and 150 invariants per reference, five journey distributions; independently reviewed with no general speedup claim. Earlier interruption and original authentication-baseline failures remain historical. Bounded HTTP and frontend observations also exist. The ledger no longer treats that paired comparison as missing; remaining closure is an independent assessment of coverage/equivalence for later changed paths and material bottlenecks. These small synthetic measurements do not establish production or queue capacity."
+        "The paired2d875357 versus272794a4 comparison remains complete for its revisions:750 measured requests and150 invariants per reference, five independently recomputed journey distributions, no general speedup claim. The independent later-path equivalence assessment is now complete: four non-content direct fixture sequences have source equivalence only, but content-plan scope/write admission changed the timed path. Authorized paired272794a4-to334c9d4b content plan/draft/internal-news measurements remain missing. Website-fetch hardening is outside the old empty-site fixture and must be explicitly excluded or covered with a deterministic no-egress seam. Static review establishes neither a bottleneck nor a latency regression. Earlier interruption, original authentication-baseline failures and bounded HTTP/browser evidence retain their historical scope. Production or queue capacity is not established."
       ],
       "historical_checkpoint": {
         "status": "FAIL",

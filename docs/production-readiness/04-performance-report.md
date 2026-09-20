@@ -1,5 +1,16 @@
 # Performance — working measurements, not a capacity claim
 
+21 September current-revision assessment: the independent source trace from
+`272794a4` to `334c9d4b` is complete. Four non-content direct benchmark sequences
+are source-equivalent for the inspected fixture, not newly measured. The content
+plan now performs additional scope/write-admission checks in the timed path;
+old results cannot establish its current latency. The empty-site fixture also
+excludes later website-fetch hardening. AC7 remains FAIL pending an authorized
+paired content plan/draft/internal-news run, with raw samples and independent
+recomputation; website fetching must stay explicitly excluded or use a
+deterministic no-egress seam. No bottleneck or regression is inferred from
+static code. See [the exact assessment](../../.agent/tasks/production-readiness-20260917/evidence/current-performance-equivalence-20260921.md).
+
 20 September draft-snapshot tests/build timings are correctness-tool durations
 only (COMMANDS.md), not API latency or contention benchmarks. Added approval/
 draft/lead locks have no representative PostgreSQL contention measurement yet.
@@ -25,12 +36,13 @@ Independent review recomputed all15step distributions and all five journey
 distributions from the raw samples. Exact110unique owned database names are
 absent from the verified local cluster; no supervised process remains and the
 new source archive was cleaned. The old interrupted archive remains preserved.
-The scoped comparison passes; overall AC7 still needs its broader reconciliation.
+The scoped comparison passes for those revisions; the later changed-path gap
+is specified in the 21 September assessment above.
 
 The following quantiles are recomputed from each successful run's sum of timed
 request durations for that journey, not sums of per-request percentiles.
 
-| Journey | Working reference p50 / p95 / p99, ms | Current p50 / p95 / p99, ms |
+| Journey | Working reference `2d875357` p50 / p95 / p99, ms | Checkpoint `272794a4` p50 / p95 / p99, ms |
 | --- | ---: | ---: |
 | Authentication and tenant |148.8 /192.1 /245.3|148.1 /193.3 /249.0|
 | Service menu |303.6 /402.1 /467.8|310.2 /374.4 /430.8|

@@ -1,5 +1,15 @@
 # Production-readiness change log
 
+## Current source and dependency evidence — 21 September, checkpoint `334c9d4b`
+
+Evidence/documentation only: strict frozen-source scan, exhaustive sanitized
+triage, current-branch delta, frontend lock advisory audit and per-package
+license declaration provenance. Failed initial npm configuration and truncated
+initial metadata remain preserved; successful captures are separately named.
+Independent performance tracing identifies the changed content-path timing gap.
+No application, dependency, schema, production or deployment change. Original
+acceptance statuses remain unchanged; exact results and limits are in COMMANDS.
+
 ## Detail intent and request ordering — 21 September, parentd72475e3
 
 Only JourneyWorkspaceFocus implementation changes: keyed focus-only state,

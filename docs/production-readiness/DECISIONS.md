@@ -1,5 +1,20 @@
 # Readiness decisions
 
+## D-066 — Separate scanned matches, source proof and release certification
+
+Scan a Git-frozen snapshot, validate every blob against its commit, and retain
+raw scanner exit codes. A redacted Authorization-shaped match is not proof of a
+credential: inspect a value-free exact-source predicate before classification.
+Do not suppress false positives globally or conflate current snapshot/branch
+delta with other refs, runtime logs/images or historical credential revocation.
+
+License declarations may be inventoried from frozen lock, same-version installed
+metadata and exact-version/integrity public registry metadata; preserve each
+source and installed metadata hash. This is not legal compliance or artifact
+provenance. Never install/update solely to populate a metadata report. Historical
+performance samples retain revision scope: source changes to a timed path require
+new authorized paired measurements, not a static claim of unchanged latency.
+
 ## D-065 — Keep detail requests and navigation bound to the current URL intent
 
 Key only the selected-action panel by business/action ID; keep workspace children

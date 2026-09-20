@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "label": "current-frontend-lock-audit",
+  "captured_at": "2026-09-20T22:23:37.323660+00:00",
+  "command": [
+    "npm",
+    "audit",
+    "--package-lock-only",
+    "--ignore-scripts",
+    "--audit-level=low",
+    "--registry=https://registry.npmjs.org",
+    "--cache=/private/tmp/localos-current-source-scan-20260921.8KYNaW/npm-cache",
+    "--fetch-timeout=15000",
+    "--fetch-retries=1",
+    "--json"
+  ],
+  "cwd": "/private/tmp/localos-current-source-scan-20260921.8KYNaW/source/frontend",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 860.359,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "Exit prior to config file resolving\ncause\ndouble-loading config \"/dev/null\" as \"global\", previously loaded as \"user\"\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

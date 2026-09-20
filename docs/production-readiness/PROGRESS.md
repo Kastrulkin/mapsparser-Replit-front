@@ -1,5 +1,26 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, current-source and dependency evidence
+
+- [x] Previous334c9d4b fixes Focus;791frontend checks remain its verified scope.
+- [x] Fresh strict full committed-source scan:5417Git-matched blobs,101matches
+  fully classified non-secret; no suppression. Exact source predicates corrected
+  one unsupported reviewer inference about a documentation bearer placeholder.
+- [x] Strict131commit branch delta:7matches, all3synthetic-output/4prose; no
+  newly confirmed credential. Existing historical revocation remains unknown.
+- [x] Current frontend lock npm audit:528entries,0advisories; no install/update.
+- [x] Complete528license declaration inventory:215lock/305matching-installed/
+  8registry version+integrity. Metadata is not legal or artifact certification.
+- [x] Independent AC7 trace: content-plan path changed since272794a4; old timings
+  cannot certify it. Four unchanged direct sequences have source equivalence only.
+- [ ] Await separate permission replies for denied aggregate and restore prep;
+  current backend full-green, content timing, image, browser/demo/CI and final
+  whole-DoD review remain. Original AC6/AC7/overallFAIL are retained.
+
+No application or dependency changes; no native DB/Docker/production/cleanup/
+push/deploy. Nine foreign paths preserved. Exact captures/limitations in
+evidence/current-source-supplychain-notes-20260921.md and COMMANDS.
+
 ## Latest checkpoint — 21 September, detail URL/request scope
 
 - [x] Parentd72475e3 committed; initialRED3fail/7pass, expandedRED8fail/11pass.

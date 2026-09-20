@@ -4,6 +4,19 @@ Status: incomplete security assessment, not a production approval. Baseline `302
 
 ## Assets and adversaries
 
+21 September supply-chain checkpoint at `334c9d4b`: a strict full committed-source
+scan produced 101 matches, all classified non-secret after source predicates
+and independent review. The 131-commit branch delta has seven synthetic/prose
+matches; it does not re-scan all refs or establish historical revocation. The
+frozen frontend lock audit reports zero advisories across 528 dependency entries.
+All 528 license declarations now have recorded provenance: 215 lock entries,
+305 matching-version installed manifests and eight registry version/integrity
+matches. This is metadata, not legal compliance or release-artifact integrity.
+Initial failed/truncated captures are retained and explicitly excluded from
+success claims. Current image/layer/log/OS/native scans and owner decisions
+remain open; AC6 remains FAIL. See
+[the bounded review](../../.agent/tasks/production-readiness-20260917/evidence/current-source-supplychain-review-20260921.md).
+
 20 September source adjudication afterca0c3d36: supported contact writers never
 change normalized identity under the same UUID, and supported sender writers
 produce boolean capabilities. Both proposed bypasses are NO_BUG_PROVEN, not

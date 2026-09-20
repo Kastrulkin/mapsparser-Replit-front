@@ -1,5 +1,39 @@
 # Verified commands and evidence
 
+## Current-source/dependency evidence — 21 September, application334c9d4b
+
+Exact commands: task evidence/current-*-20260921.json. Private snapshot/cache/
+redacted reports: /private/tmp/localos-current-source-scan-20260921.8KYNaW.
+Named tmux for scans/public-registry queries; env-i, isolated npm configs/cache,
+private arm64 Python capture. No application import, install, native DB or Docker.
+
+| Capture prefix | Actual result | Duration ms |
+| --- | --- | ---: |
+| current-source-secrets |Strict Gitleaks101matches/exit1,67.25MB; all triaged non-secret |17037.047|
+| current-source-snapshot-verification |5417blobs/86228059bytes exact Git parity; report redaction/hash |3866.82|
+| current-source-finding-predicates |83exact64hex values + literal bearer placeholder verified |483.736|
+| current-frontend-lock-audit |Failed config resolution: duplicate user/global/dev/null |860.359|
+| current-frontend-lock-audit-verified |528lock entries/0advisories; no install/fix |1920.909|
+| current-frontend-lock-metadata |Truncated inner stdout; unusable full inventory |834.889|
+| current-frontend-license-metadata-verified |528audit/lock parity;305same-version metadata +8missing optional |759.034|
+| current-frontend-license-registry |8exact versions/integrities matched; declarations only |10703.626|
+| current-frontend-license-inventory |528per-package declarations/provenance;0unresolved |573.153|
+| current-branch-secret-delta |131commits/5.87MB/7matches,exit1; all non-secret |10245.786|
+| current-branch-secret-delta-verification |7historical exact excerpts match frozen triaged source |2673.807|
+| current-source-precommit |26 exact staged paths;11 captures reconciled; original statuses/verdict unchanged;324411-byte staged scan clean |3394.769|
+
+All listed captures are complete and not timed out except explicitly truncated
+initial license stdout. Failed config and truncation are harness/evidence issues,
+not vulnerabilities. npm update notice and Darwin temp fallback warnings retained.
+No scanner exit1 was relabeled0. Full source triage has101rows; branch delta has
+3synthetic OAuth-output and4prose matches. Independent bounded review and AC7
+source-equivalence assessment are in the same evidence directory. No original
+AC/score promoted; current image/log/native/history-revocation/legal gaps remain.
+The precommit capture precedes the final wording clarification: static review
+does not establish a bottleneck or a latency regression. Its assertions retain
+the failed config and truncated metadata as explicit exceptions, not successes.
+The final staged scan also includes the capture and this documentation update.
+
 ## Detail URL/request scope — 21 September, parentd72475e3
 
 Task evidence/journey-detail-* contains exact commands. Named tmux sessions,

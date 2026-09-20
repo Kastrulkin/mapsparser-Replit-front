@@ -1,5 +1,13 @@
 # Production-readiness scorecard — working, not final
 
+21 September evidence-only checkpoint at `334c9d4b`: committed-source and
+current-branch scans are exhaustively classified; frontend lock audit has
+0 advisories across 528 entries, with complete license declaration provenance.
+The exact changed-content performance gap is now independently identified.
+These are bounded evidence improvements, not current-image/runtime, legal,
+historical-revocation or full-aggregate closure. AC6, AC7 and overall status
+remain FAIL; no original acceptance status or numerical score is promoted.
+
 21September detail-focus slice (parentd72475e3): expanded causal8fail/11pass
 becomes104targeted passes, with20new router/card regressions. TypeScript/lint,
 build and199JS integrity pass; source/targeted review PASS. See COMMANDS for

@@ -1,5 +1,37 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, release-gate reconciliation at334c9d4b
+
+This documentation/evidence-only package advances original AC6/AC7, not another
+UI correction. Full committed snapshot is5417blobs/86.23MB, exact Git parity.
+Gitleaks101matches:83digest/3synthetic-output/2idempotency/5prose/7fixtures/
+1placeholder,0confirmed/unknown.131commit delta30262a5b..334:7non-secret matches
+with exact historical/current excerpt parity. No suppression or raw secrets.
+Current npm lock528entries has0advisories; all528license declarations inventoried
+with provenance, not legal compliance. Failed initial npm config and truncated
+license capture remain retained; verified captures are explicitly named.
+
+Independent AC7 assessment proves the content-plan timed path is no longer
+source-equivalent to272794a4; repeat paired current content measurements only in
+an authorized native lane. Old benchmark stays valid for its own revisions, not
+current latency. No bottleneck or speedup inferred from static source.
+
+Next critical step is explicit preparation/test authority: two async questions
+were presented this turn for isolated full backend and synthetic restore. No
+affirmative reply received at this checkpoint. Do not retry denied preparation
+via a different agent, path or shell. Native aggregate remains4886pass9fail1error
+14skip;4903distinct corrected non-provider cases are not a full-green run. Disk
+at turn start6,840,372KiB (~6.52GiB), still below10GiB image floor. No image build.
+Then current immutable image, real-API/compiled browser proof, full paced demo,
+hosted CI and final independent all-DoD review remain. Owner credential-revocation
+and PyMuPDF license confirmations are separate. No new broad audit is needed.
+
+Branchcodex/production-readiness-20260917; applicationHEAD334c9d4b. Only evidence/
+readiness docs in this package, nine foreign paths excluded. Private artifacts:
+/private/tmp/localos-current-source-scan-20260921.8KYNaW. Do not rerun completed
+destinations or delete them. No production/DB/provider/Docker/cleanup/push/deploy.
+Original wholeFAIL and prior unguarded-reset INCONCLUSIVE effects persist.
+
 ## Latest checkpoint — 21 September, detail URL/request scope
 
 Branch codex/production-readiness-20260917, parentd72475e3. Own implementation is

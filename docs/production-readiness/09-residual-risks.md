@@ -1,5 +1,14 @@
 # Residual risks — working register
 
+21 September source/dependency checkpoint at `334c9d4b`: 101 committed-source
+matches and seven branch-delta matches are classified non-secret, not ignored.
+Zero current npm advisories and complete license declarations do not clear
+historical credential revocation, legal entitlement or release-image/OS/native/
+layer/log gates. AC7 now needs a paired measurement of the changed content
+path; old timings remain revision-bound. Aggregate/restore preparation still
+await separate permission replies, disk remains below the 10 GiB image floor,
+and prior unsafe-reset effects remain INCONCLUSIVE. Overall FAIL is unchanged.
+
 21September afterd72475e3: UX-JOURNEY-DETAIL-LOAD-09 is no longer source-only.
 Expanded8causal failures are corrected;104targeted checks, types/lint/build and
 199JS integrity pass. Only current URL intent can update focus; loss of access
