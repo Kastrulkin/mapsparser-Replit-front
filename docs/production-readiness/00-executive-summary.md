@@ -14,12 +14,19 @@ writes require the documented human approval or manual boundary.
 
 ## What is materially stronger after this work
 
+- Frozen current frontend4e33587d now passes all642 unit tests across129 files,
+  TypeScript, lint (one known warning), app/public builds and asset integrity;
+  independent evidence review passes. Existing exact dependencies were reused.
+  This does not certify a clean install, browser/API, new backend changes or
+  production. Fresh review found a media-fetch security path now being repaired;
+  the intentional Telegram webhook transition still needs an approved cutover.
 - Website context used by content plans now rejects private network destinations
   and unsafe redirects while bounding page size and redirect count. Local4e33587d
   has149 passing adjacent checks including25 focused cases and independent review;
-  this is synthetic-network proof, not deployed certification. Local capacity
-  recovered to about16.26GiB; full-current build/image checks can resume after
-  fresh isolated preflight. Prior low-disk failures remain historical evidence.
+  this is synthetic-network proof, not deployed certification. Latest local
+  capacity is about7.08GiB; Docker is running without resets. Current backend
+  dependency/runtime and image checks remain open; image headroom is still below
+  the unchanged10GiB planning margin. Prior low-disk failures remain evidence.
 - The shared business writing-style profile now requires write permission when
   changed, while permitted viewing and personal examples remain available.
   Local432f64a0 has a causal regression,19focused/92overlapping adjacent pure

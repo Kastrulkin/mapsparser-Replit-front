@@ -79,6 +79,38 @@ Local tests use mocked transport and synthetic PostgreSQL only. Receiver
 dedupe/ack behavior must be verified separately before an approved release;
 see [receiver contract](../OPENCLAW_PHASE2_RECEIVER_SPEC.md).
 
+## Telegram ingress release gate — SEC-WH-02
+
+The new branded-business bot ingress is intentionally not backward compatible:
+it requires `business_id` and the derived secret header; the raw-token URL
+returns `410`. Owner-bot polling is a different runtime and does not prove this
+ingress works. Local tests prove fail-closed admission, not provider registration.
+Do not approve a release containing this change without a coordinated cutover
+plan for every active branded bot:
+
+- An explicitly authorized operator inventories affected bindings, without
+  copying bot tokens or callback secrets into logs, commands, or this repository.
+- Approve the exact runtime revision, maintenance window, provider rebind and
+  post-cutover controlled receipt. Rebinding against old code can also interrupt
+  ingress; neither code-first nor provider-first alone is a zero-downtime plan.
+- In that approved window, use the trusted-environment procedure in
+  [AI_AGENT_WEBHOOKS_SETUP.md](../../AI_AGENT_WEBHOOKS_SETUP.md). Do not drop pending
+  updates or restore unauthenticated/token-in-URL admission as a workaround.
+- Check provider URL and a controlled callback accepted by the new runtime.
+  `getWebhookInfo` reports URL, pending-update count and recent error fields,
+  not the configured secret; a
+  matching URL alone is insufficient proof. Provider retries do not guarantee
+  zero lost updates during a broken cutover. See the
+  [Telegram provider contract](https://core.telegram.org/bots/api#setwebhook).
+- Record only business UUID, revision, timestamp and redacted registration/
+  URL-match/receipt outcomes. Keep the gate open for any unverified binding;
+  reconcile pending or uncertain events before any replay. Do not log headers,
+  tokens, message bodies or raw legacy URLs.
+
+No production inventory, token access, provider call, rebind or live receipt
+was performed in this audit. The existing security setup is a procedure,
+not evidence that a real bot has been migrated.
+
 ## Partial deployment
 
 Prefer the smallest affected update. Frontend-only changes are built locally

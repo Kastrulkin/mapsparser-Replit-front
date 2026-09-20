@@ -1,6 +1,35 @@
 # Production-readiness progress
 
-## Current checkpoint — 20 September, website reader 4e33587d
+## Current checkpoint — 20 September, frozen frontend verification completed
+
+- [x] Source `4e33587d`, frontend tree `0af96cd4614e0a1c5b658339b0a73d1a7bec9e46`:
+  full unit suite **642 passed / 129 files**, 311.97s; full app/node TypeScript;
+  lint zero errors / one existing `auth_new.ts` warning; app and public builds.
+- [x] Integrity: 199 app + 12 public reachable JS assets; 257 artifact files;
+  all 528 installed dependency tuples unchanged. Independent terminal review PASS.
+  Existing dependencies were reused; this is not clean-install or browser proof.
+- [x] Three early runner initialization failures and the first full suite's
+  641 pass / 1 synchronous-fetch-guard failure are retained. Only private test
+  harness semantics were corrected; no frontend source/test assertion changed.
+- [x] Own frontend processes have ended; shared caches unchanged. Docker started
+  under the earlier approval despite the UI launch timeout. Existing Riderra and
+  LocalOS containers resumed; none was reset, stopped, migrated or reused here.
+- [ ] Current backend aggregate and image remain open. Latest free space is
+  7,421,004 KiB (~7.08 GiB), not the earlier 16.26 GiB. Keep the 5 GiB aggregate
+  start / 2 GiB live floors and the larger 10 GiB image planning margin.
+- [ ] Fresh whole-diff review found the media-delivery SSRF/unbounded-read and
+  role-blind media mutation path. Causal pure RED is retained; a minimal local
+  source/test package is in progress, not yet independently accepted.
+- [ ] Telegram rebind is an already documented intentional breaking release
+  gate, not a newly discovered source regression. The runbook now requires an
+  approved coordinated cutover; no actual provider rebind or live proof exists.
+
+Nine foreign dirty paths are preserved. The frontend archive excludes them and
+the new backend package. No push/deploy, production/DB changes, provider sends,
+deletion or readiness promotion. Next: finish the media security package and
+review, then freeze that committed revision for isolated backend verification.
+
+## Earlier checkpoint — 20 September, website reader 4e33587d
 
 - [x] SEC-SSRF-02 locally FIX_PROVEN: content-plan website context now uses
   canonical public-IP-pinned GET, validates every redirect, caps five requests

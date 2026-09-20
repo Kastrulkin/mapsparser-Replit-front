@@ -1,6 +1,55 @@
 # Readiness handoff
 
-## Current checkpoint — 20 September, source 4e33587d
+## Current checkpoint — 20 September, frontend terminal PASS
+
+Branch `codex/production-readiness-20260917`, HEAD before this documentation
+package `54bc55e6723500996b7fd7974c257502747a756e`. Tested archive is exactly
+`4e33587d`, frontend tree `0af96cd4614e0a1c5b658339b0a73d1a7bec9e46`, not the
+dirty worktree. All 642 units / 129 files, TypeScript, lint (one warning), both
+builds and artifact integrity pass; independent final evidence review PASS.
+Details and preserved initialization/harness failures are in COMMANDS.
+
+Private frontend root `/private/tmp/localos-frontend-current-20260920.GtHPOV/`
+contains the retained artifact and postcheck. **Do not replay** main or resume
+scripts: all destinations now exist. Compatible resume is terminal; own tmux/
+Vitest/build processes are absent. Foreign Vite PID22862 on4173 and dead
+`localos-audit-*` panes were not stopped or certified. Final shared-cache check
+is equal; no private bundled-config residue. Latest disk7,421,004KiB. No cleanup.
+
+Docker is now running, contrary to the older checkpoint below. The UI launch
+timed out, but CLI proves local desktop-linux Docker29.2.0. Existing containers
+`83c6450f7e10` (Riderra PostgreSQL), `5dd879dc4bb7` (LocalOS Redis), and
+`f288e1a93b75` (LocalOS PostgreSQL) resumed under the earlier startup approval;
+do not reuse, reset, stop or migrate them. Native PostgreSQL15 is also foreign.
+New private backend preparation directory
+`/private/tmp/localos-backend-current-20260920.TpGpRC/` contains only a verified
+private pypdf6.16.1 package copy from a retained stopped historical app container.
+No backend runner/container/database has been launched by this continuation.
+
+Next source package is media SSRF + mutation roles, owned by worker
+`social_media_ssrf_fix`; root owns proof/release docs. Do not commit its files
+until exact RED/GREEN/adjacent results and independent review are complete.
+Fresh delta review keeps Telegram SEC-WH-02 as an intentional, unresolved
+provider-rebind release gate. No real token inventory/provider action authorized.
+
+Backend preflight found nine missing declared packages (redis, stripe,
+dnspython, phonenumbers, telethon, pysocks, python-socks, reportlab, boto3) and
+pypdf6.13.2 instead of6.16.1 in the shared macOS venv. The private overlay matches
+the earlier 58-file package hash; it does not alter that shared venv or establish
+full requirement parity. A clean `pip check` does
+not establish requirement parity. Resolve the isolated dependency plan before
+claiming a current full-runtime result. Cached PG16/Ryuk and historical app
+images exist; they are not current-source image proof. Preserve unchanged disk
+guards; do not overlap heavy jobs or use foreign databases.
+
+Safe first resumption commands: `git status --short`, `git rev-parse HEAD`,
+`df -k /private/tmp`; inspect the terminal raw captures in COMMANDS. Then freeze
+the next reviewed committed source and create/review a new owned backend runner,
+guard and synthetic PG16 target. There is no approved replayable backend launch
+command yet. Nine foreign paths remain excluded; production login does not waive
+the earlier denied local file-picker boundary. No push/deploy or goal completion.
+
+## Earlier checkpoint — 20 September, source 4e33587d
 
 Branch `codex/production-readiness-20260917`; resumed from70c0bf60. Commit4e33587d
 contains only `src/services/content_plan_service.py` and new

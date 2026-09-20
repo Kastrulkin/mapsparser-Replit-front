@@ -1,5 +1,20 @@
 # Residual risks — working register
 
+Latest20September checkpoint supersedes the capacity/frontend holds below:
+frozen4e33587d frontend642/129 units, TypeScript, lint, app/public builds and
+199+12 JS integrity pass with independent review. Reused dependencies are not
+clean-install proof. Fresh disk is~7.08GiB; Docker is running, foreign resumed
+containers untouched. Full backend, current image, browser/demo and original
+release gates remain open. Shared macOS venv is missing nine declared runtime
+packages and has pypdf version drift; `pip check` alone does not prove parity.
+
+Fresh independent whole-diff review remains NOT READY: the media delivery path
+has causal SSRF/size-limit and viewer-mutation failures under pure fixtures; its
+local repair is in progress, not yet accepted. Telegram SEC-WH-02 is an existing
+intentional breaking release gate. The runbook now requires coordinated code/
+provider cutover and controlled receipt, with explicit approval. No real bot
+inventory, token access, rebind or receipt proof has been performed.
+
 20 September update: SEC-SSRF-02 locally fixed4e33587d, independently accepted
 with exact149 adjacent passes including25 focused cases. Website fetches now
 pin public destinations and revalidate redirects; five per-hop timeouts are

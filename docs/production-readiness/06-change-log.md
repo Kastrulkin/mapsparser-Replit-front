@@ -1,5 +1,20 @@
 # Production-readiness change log
 
+## Frozen frontend evidence and Telegram rollout documentation — 20 September
+
+No frontend source change: recreated isolated verification, corrected only
+private runner compatibility, and retained all initial failures. Exact frozen
+4e33587d passes642 units/129 files, TypeScript/lint, app/public builds and
+199+12 reachable-JS integrity. Artifact has257 files; installed528 dependency
+tuples and shared caches remain unchanged. Independent evidence review PASS.
+Not clean-install, browser/API, backend, image or production proof.
+
+Telegram runbook now spells out the already-required coordinated approved
+code/provider cutover, secret-proof limitation and per-bot receipt evidence.
+Setup documentation separates branded webhook ingress from owner-bot polling
+and aligns owner runtime with canonical Compose. No provider or server command
+was executed; the release gate remains open.
+
 ## SEC-SSRF-02 — pinned content-plan website context, 4e33587d
 
 Replace automatic-redirect `requests.get` with the existing canonical public

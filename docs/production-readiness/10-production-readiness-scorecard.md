@@ -4,6 +4,14 @@ Updated 20 September 2026. Scores describe evidence at the stated checkpoint,
 not an average that can waive a release gate. The original Definition of Done
 and unresolved P1 items remain controlling.
 
+Latest20September evidence: frozen4e33587d frontend642 tests/129 files,
+TypeScript, lint (one warning), both builds and199+12 JS integrity PASS;
+independent terminal evidence review PASS. This closes the current frozen
+frontend unit/build hold only. No score promotion: clean install, browser/API,
+current backend/image, full demo and provider rebind remain open. Fresh whole-
+diff review found a media-fetch security path; its repair is in progress.
+Disk~7.08GiB after Docker startup is below the10GiB image planning margin.
+
 SEC-SSRF-02 is locally proven4e33587d by exact149 adjacent passes including25
 focused cases and independent review; DNS/pools are faked, so no real-network,
 native-route, image or production certificate follows. Capacity recovered to

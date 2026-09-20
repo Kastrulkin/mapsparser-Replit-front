@@ -1,5 +1,57 @@
 # Verified commands and evidence
 
+## Frozen frontend terminal verification — 20 September
+
+Source4e33587d/frontend tree0af96cd4614e0a1c5b658339b0a73d1a7bec9e46, no dirty
+overlays. ArchiveSHA256 `a0e57816d776ddaab0a555be1fedfff893620aa7c757e4a0f362491944a127b0`;
+lockSHA256 `a4e1362910fe02f286e950840fd79141fd411533b7743aa79f8c1a450ddece8b`.
+Node22.22.0 and 528 exactly matching installed package tuples; no npm install.
+All raw files below are in `.agent/tasks/production-readiness-20260917/raw/`.
+
+| Raw filename (`frontend-current-…-20260920.json`) | Terminal result | Capture duration |
+| --- | --- | --- |
+| preflight | exit0; archive, helper and package pins valid | 8.023454s |
+| lint | exit0; zero errors, existing `auth_new.ts:115:82` any warning | 16.052490s |
+| typecheck | exit0; app and node configs | 40.082434s |
+| unit | exit1 before tests; Vitest4 does not accept `--minWorkers` | 2.016826s |
+| unit-resume | exit1 before tests; runner loader lacks canonical `__dirname` | 2.013067s |
+| bundle-view | exit0; isolated dependency view prepared | 6.039259s |
+| unit-bundle | exit1 before tests; guard blocked Vite localhost DNS lookup | 2.014569s |
+| unit-local | exit1; 641 pass / 1 fail; synchronous fetch guard, not app regression | 315.253710s |
+| unit-compatible | exit0; **642 pass / 129 files**, Vitest311.97s | 314.940551s |
+| build-compatible | exit0; app + public bundle, known Rollup PURE warnings | 26.099014s |
+| integrity | exit0; 199 app + 12 public JS, 528 tuples, 257 artifact files | 12.068793s |
+
+All captures are complete, without timeout/truncation. Full unit stderr includes
+expected negative-test messages; it is not empty-console/browser proof. Private
+helpers under `/private/tmp/localos-frontend-current-20260920.GtHPOV/` use env-i,
+envDir:false, no provider env, network-denying Node preload, one worker and
+owned-process-group cleanup. Literal loopback DNS is synthesized, not resolved;
+fetch rejects asynchronously like native fetch while sockets remain blocked.
+This is selected-tool supervision, not a hostile-code OS sandbox.
+
+RunnerSHA256 `ef08aae1bfdfa483a53c60b598492a3763f7a8d6c0a1d1cf7a750a39e784a4db`;
+compatible preloadSHA256 `2af789a00689ae774f5f42ba5f9774432f6d4308420ff6b351718e3889107500`.
+The final launch was named tmux `frontend-current-compatible-20260920` invoking
+`/usr/bin/python3 /private/tmp/localos-frontend-current-20260920.GtHPOV/resume-compatible.py`.
+Do not replay it or overwrite captures. Canonical archived integrity script
+verified both entries, including `public-dist/public-audit/index.html`.
+Manifest `output.sha256` has257 lines,42,128bytes, SHA256
+`143fe37cab65be0882b15011bcf7e580ad18d5cbf101efa24ca4884a33677cbc`.
+Independent review recomputed unchanged shared caches and empty private
+`.vite-temp`; `postcheck.json` records7,417,796KiB free. Root process check finds
+own session/processes absent; unrelated Vite4173 is left untouched.
+
+No frontend source/test changes, clean-install, browser/API, backend, current
+image or production claim. Subsequent backend worktree changes are excluded.
+
+Backend dependency preflight is recorded separately in
+`raw/backend-current-dependency-preflight-20260920.md` (manual reconciliation,
+not a test capture). Shared venv requirement gaps remain explicit. Read-only
+copy from a stopped historical app container restored the private pure-Python
+pypdf6.16.1 overlay with its exact prior 58-file hash; no image/app/DB was started
+or changed. This is preparation, not full runtime or requirement-parity proof.
+
 ## Frontend resumption preparation — 20 September, NOT RUN
 
 New helper directory `/private/tmp/localos-frontend-current-20260920.GtHPOV/`

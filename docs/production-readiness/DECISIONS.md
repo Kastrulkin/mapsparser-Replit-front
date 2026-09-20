@@ -1,5 +1,21 @@
 # Readiness decisions
 
+## D-044 — Preserve native async contracts in isolated frontend verification
+
+Network denial must preserve fetch's rejected-Promise behavior; a synchronous
+throw created a false ProgressPage passive-effect failure. Preserve the original
+641/1 raw result, correct only the private shim, and rerun the entire unchanged
+suite (642 pass). Vite's literal localhost lookup receives a synthetic loopback
+answer; this does not allow sockets or external DNS. Use the canonical bundle
+loader in a private dependency view because the canonical config uses __dirname.
+Independently verify shared caches remain unchanged. No test is weakened.
+
+This proves the frozen frontend with reused exact dependencies, not a clean
+install, real API/browser, new backend package or release image. Docker startup
+approval does not authorize mutation of resumed user databases. Telegram rebind
+remains a coordinated, separately authorized release gate; URL inspection alone
+does not establish secret-header configuration or successful callback receipt.
+
 ## D-043 — Reuse pinned public transport for optional website context
 
 Stored business website is untrusted input even when its setter requires owner
