@@ -1,5 +1,34 @@
 # Readiness decisions
 
+## D-059 — Show the exact campaign recipient before consent
+
+The owner reviews each message and destination together. Add server recipient
+projection to saved and preview touches, using the selected contact UUID and
+normalized value; do not infer a different address in the browser. Missing
+legacy contacts remain visible with an explicit warning. Preserve the existing
+screen, approval, dispatch and schema contracts. Plain React text needs no
+new abstraction or HTML rendering. This display fix is separate from a contact
+snapshot migration and from the late-request/workstream race candidate.
+
+## D-058 — Reject unsupported security hypotheses before changing contracts
+
+The same-ID contact-value mutation hypothesis is NO_BUG_PROVEN for supported
+writers: a new normalized address receives a new UUID; conflict updates never
+replace normalized identity. Sender capability truthiness likewise lacks a
+supported non-boolean writer. Retain arbitrary-DB/future-writer hardening only
+as defense-in-depth debt, not a reproduced approval bypass. Exact source traces
+are in evidence/recipient-review-notes.md. No speculative hash/schema/capability
+rewrite follows. Native races and the separate broad binding03 remain open.
+
+## D-057 — Dispatch the hash-covered campaign body, not mutable draft copies
+
+Reconcile the preceding ca0c3d36 package: generic campaign preflight must bind
+queue/draft/touch identity and all body copies to the approved generated text,
+then pass freshly validated provider arguments to dispatch. Keep existing
+template, manual-channel and AI-provenance boundaries. Mismatched legacy rows
+fail closed rather than silently gaining fresh consent. Pure tests do not prove
+native concurrent revocation or actual provider delivery.
+
 ## D-056 — Consent belongs to the reviewed draft snapshot
 
 Use the stored approval payload, not current editable rows or the newest run

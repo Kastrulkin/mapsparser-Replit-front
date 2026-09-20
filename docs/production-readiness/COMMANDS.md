@@ -1,5 +1,49 @@
 # Verified commands and evidence
 
+## Campaign recipient review — 20 September, parentca0c3d36
+
+Captures: existing task evidence/recipient-review-*.json. Long checks use named
+localos-recipient-* tmux sessions. Private arm64 Python3.11.7/env-i/-I/-B and
+support/campaign_recipient_pure_check.py prohibit DB/network/dotenv/subprocess
+effects before imports; no conftest/autoload/cache. Node22 uses the existing
+GtHPOV/no-egress-compatible.cjs chain, envDir:false and frontend child cwd.
+These are process-local guards, not native/OS isolation certification.
+
+| Suffix | Outcome | Duration ms |
+| --- | --- | ---: |
+| backend-red |5fail, includes incorrect creator fixture; nonfinal |1372.424|
+| backend-red-causal |5causal failures/1positive control |1455.811|
+| backend-red-final |6fail/1pass0.89s, also Riderra preview |1362.726|
+| backend-green |288pure passes1.42s, all recorded guard counters0 |1936.259|
+| frontend-red |5fail/1pass, verbose DOM stderr truncated |12177.754|
+| frontend-red-causal |same tests/source, compact DOM;5fail/1pass9.40s |10794.223|
+| frontend-green |6passes4.76s, empty stderr |6216.942|
+| frontend-full |frozen689tests/132files pass295.18s |297624.189|
+| quality |app/node TypeScript and full lint pass,1existing warning |48447.642|
+| ruff |five Python files, F821/F822/F823 no-cache;pass |85.355|
+| build |canonical local app build12.80s;pass |14485.890|
+| integrity |199reachable JS assets;pass |135.526|
+| manifest |12source/test/config/guard SHA-256 records |34.232|
+| precommit |12hashes match; staged diff/Gitleaks pass (~272579bytes) |1479.033|
+
+All final captures exit0 without timeout/truncation. Full frontend stderr
+retains expected negative-test/jsdom diagnostics, not an empty-stderr claim;
+no unhandled-error result is reported. Source remained frozen throughout the
+full run and subsequent quality/build checks. Build warnings concern upstream
+Yandex PURE annotations and the external output path; no existing dist is
+emptied. Artifact: `/private/tmp/localos-recipient-review-build-20260920.ASLLbO/dist`,
+entry index-CTBidUNH.js, CSS index-BM6vOqzw.css. No deployment or current-artifact
+native browser pass. Public-only build was not changed or repeated.
+
+Reconciliation, exact supported-writer NO_BUG_PROVEN traces and bounded review
+PASS are in recipient-review-notes.md and recipient-review-review.md. There is
+no native JOIN/full backend/concurrency/provider proof. Simple resolved
+workstream transition is not late-response safety. Whole acceptance staysFAIL;
+nine foreign paths and previous safety denials/INCONCLUSIVE effects persist.
+Secret scan covers this staged package only, not git history, images, logs or
+credential revocation. The final documentation adds these observed metadata;
+application/test sources remained unchanged afterward.
+
 ## Generic campaign dispatch identity — 20 September, parent7b41e8a9
 
 Captures: existing task evidence/manual-campaign-dispatch-*.json. Named

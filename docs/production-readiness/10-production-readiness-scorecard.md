@@ -1,9 +1,17 @@
 # Production-readiness scorecard — working, not final
 
+20September recipient-review slice (parentca0c3d36):288pure backend,6targeted UI
+and full689frontend/132files pass; independent bounded review PASS. Normal
+same-ID contact mutation and non-boolean capability hypotheses are rejected
+for supported writers, not counted as new security fixes. Type/build evidence
+is reconciled in COMMANDS. No native SQL/new-build browser/full backend/image
+or overall readiness promotion; all original scores/statuses remain unchanged.
+
 Later20September generic campaign dispatch fix (parent7b41e8a9) adds138guarded
 pure passes and scoped Ruff, after causal5fail/1pass. This closes only reproduced
-draft-body/preflight payload drift locally; original contact-value versioning,
-native races and production remain outside proof. All scores/statuses unchanged.
+draft-body/preflight payload drift locally. Contact-value snapshotting is now
+classified as defense-in-depth (D-058); native races and production remain
+outside proof. All scores/statuses unchanged.
 
 20 September draft-approval snapshot package adds scoped313mocked backend and
 16targeted UI passes plus TS/lint/build checks (COMMANDS has final reconciliation).

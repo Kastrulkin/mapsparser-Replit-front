@@ -288,12 +288,14 @@ def _campaign_payload(cursor: Any, campaign_id: str) -> dict[str, Any] | None:
     cursor.execute(
         """
         SELECT touch.*,
+               contact.normalized_value AS recipient,
                sender.status AS sender_status,
                sender.outreach_enabled AS sender_outreach_enabled,
                sender.health_status AS sender_health_status,
                sender.capabilities_json AS sender_capabilities_json,
                permissions.outreach_enabled AS telegram_outreach_enabled
         FROM outreach_campaign_touches touch
+        LEFT JOIN lead_contact_points contact ON contact.id = touch.contact_point_id
         LEFT JOIN outreach_sender_accounts sender ON sender.id = touch.sender_account_id
         LEFT JOIN telegram_account_permissions permissions ON permissions.account_id = sender.external_account_id
         WHERE touch.campaign_id = %s

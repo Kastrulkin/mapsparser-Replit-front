@@ -1,6 +1,26 @@
 # Production-readiness progress
 
-## Current checkpoint — 20 September, generic campaign dispatch binding
+## Current checkpoint — 20 September, campaign recipient visibility
+
+- [x] UX-CAMPAIGN-RECIPIENT-01: causal backend6fail/1pass and UI5fail/1pass.
+  Selected normalized recipient is projected into saved/generic/Riderra touches
+  and shown as plain text beside each message, or an explicit missing warning.
+- [x] Final288guarded backend passes1.42s/1936.259ms, all counters0;6targeted
+  UI passes4.76s/6216.942ms. Full frozen689frontend/132files pass295.18s/
+  297624.189ms, untruncated. Independent bounded source/evidence review PASS.
+  TypeScript/lint, scoped Ruff, app build and199JS integrity all pass; one
+  existing lint warning. Exact captures are reconciled in COMMANDS.
+- [x] Supported same-ID contact mutation and non-boolean capability hypotheses
+  are NO_BUG_PROVEN. Previous contact-snapshot wording is superseded by D-058.
+- [ ] Next source candidate: reversed old/new workstream responses may show the
+  wrong campaign. Only source-traced; recipient tests do not establish race safety.
+
+Parentca0c3d36. No push/deploy, production/DB action, Docker or cleanup. Latest
+disk4,853,324KiB (~4.63GiB) remains below10GiB image floor. Nine foreign paths
+preserved, aggregate-v2/restore denials unchanged, earlier unguarded-reset
+effects INCONCLUSIVE. All original acceptance gates remain, overallFAIL.
+
+## Previous checkpoint — 20 September, generic campaign dispatch binding
 
 - [x] OUTREACH-DISPATCH-IDENTITY-01: actual hash/preflight/bind RED5fail/1pass
   reproduces edited draft bytes passing an unchanged campaign approval.
@@ -11,8 +31,8 @@
   counters0. Scoped Ruff passes79.648ms. No frontend application edits.
 - [x] Signed-in IAB Today/Operator/Agents loaded; bounded error/warn log empty.
   Returned to Today. Mixed locale remains in the deployed version.
-- [ ] Original-approval contact-value versioning and native concurrent revocation
-  remain open. Whole-project readiness is still FAIL, not a release approval.
+- [ ] Native concurrent revocation remains open. Original contact-value concern
+  is later adjudicated in D-058. Whole-project readiness is still FAIL.
 
 Parent7b41e8a9. No push/deploy, database change, external send, Docker build or
 cleanup. Nine foreign paths preserved. Existing aggregate/restore denials and

@@ -912,6 +912,7 @@ def test_native_preview_persist_and_template_approval_hooks_use_same_grant(monke
     preview = campaign_service.build_riderra_template_preview(preview_cursor, member)
     assert preview["touches"][0]["text"] == member["body"]
     assert preview["touches"][0]["sender_account_id"] == riderra.SENDER_ACCOUNT_ID
+    assert preview["touches"][0]["recipient"] == member["recipient"]
 
     monkeypatch.setenv("OUTREACH_ROOM_SYNC_ENABLED", "false")
     persisted_cursor = CampaignCursor()

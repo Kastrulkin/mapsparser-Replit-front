@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "label": "recipient-review-manifest",
+  "captured_at": "2026-09-20T19:43:42.343641+00:00",
+  "command": [
+    "/usr/bin/shasum",
+    "-a",
+    "256",
+    "src/api/outreach_campaign_api.py",
+    "src/services/outreach_campaign_service.py",
+    "frontend/src/components/prospecting/OutreachCampaignBuilder.tsx",
+    "frontend/src/components/prospecting/OutreachCampaignBuilder.test.tsx",
+    "tests/test_campaign_recipient_review.py",
+    "tests/test_riderra_template_authorization.py",
+    ".agent/tasks/production-readiness-20260917/support/campaign_recipient_pure_check.py",
+    ".agent/tasks/production-readiness-20260917/support/managed_growth_build.config.mjs",
+    ".agent/tasks/production-readiness-20260917/support/managed_growth_vitest.config.mjs",
+    "/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-compatible.cjs",
+    "/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-local.cjs",
+    "/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress.cjs"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 34.232,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "12255052729d0b10718a076df293398d961fa20fca229d7d62d702cb4050ddf2  src/api/outreach_campaign_api.py\n45d7b3c92ab9b17d4c5eb0774a8cb3db8f5ccfce26fe13c26065fadd2630db17  src/services/outreach_campaign_service.py\nc59e4fa07805509a8d3ec60d5fa06cb6213ae7107bbf8be5065994b45e490f4d  frontend/src/components/prospecting/OutreachCampaignBuilder.tsx\nf931bdbd4783c936b58d375391e1ff8b15c7111da2c5a6ff72b6313f15dbedc1  frontend/src/components/prospecting/OutreachCampaignBuilder.test.tsx\nc56424bb3833b276d13bd77f22a3c334d5228875a7b5c31bb05fb3dc22634348  tests/test_campaign_recipient_review.py\nc69a465e975147b30078c5efa5e9af715d0d6cfdc0cd1d8f9d5799329412fa26  tests/test_riderra_template_authorization.py\n169ba090d446be70bcf07b97b467fd2cb4052b7291f0e490c1f1a992036975fa  .agent/tasks/production-readiness-20260917/support/campaign_recipient_pure_check.py\nbfd4522902bbd6eb96c959bb23d5f6220b23b5022bee118509c8caa0d86e6892  .agent/tasks/production-readiness-20260917/support/managed_growth_build.config.mjs\n8d3b4c0cdf9780b91b1b6cb30deb897f40b621c50634b846938264b4a3f91148  .agent/tasks/production-readiness-20260917/support/managed_growth_vitest.config.mjs\n2af789a00689ae774f5f42ba5f9774432f6d4308420ff6b351718e3889107500  /private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-compatible.cjs\n63fb97ba9828874223b0cb514bc8349aa02992abe267422ba12cb95daab30c61  /private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-local.cjs\nc4396e02c723b18643539bd8db47478d6cdfb350781b6152f7c961e026f9bcd1  /private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress.cjs\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

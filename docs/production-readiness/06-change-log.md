@@ -1,5 +1,16 @@
 # Production-readiness change log
 
+## Campaign recipient display — 20 September, parentca0c3d36
+
+UX-CAMPAIGN-RECIPIENT-01: exact-contact recipient projection for saved touches,
+normalized recipient in generic/Riderra preview and plain-text recipient or
+missing warning in each builder touch. No hash, approval, provider-send, schema
+or persistence change. Backend causal6fail/1pass becomes288pure passes; UI
+causal5fail/1pass becomes6passes, independently reviewed. Further verification
+is reconciled in COMMANDS. Same-ID normalized-contact mutation and non-boolean
+capability hypotheses are rejected for supported writers (D-058), not presented
+as repaired bugs. Native races/current image/whole readiness remain open.
+
 ## Generic campaign dispatch binding — 20 September, parent7b41e8a9
 
 OUTREACH-DISPATCH-IDENTITY-01: compare queue/draft/touch identity and all approved
@@ -10,7 +21,8 @@ default generic AI checks and manual channel boundaries remain intact.
 
 Causal RED5fail/1pass; final138guarded pure checks pass, zero recorded attempts;
 scoped Ruff passes. No frontend, migration, actual send or production change.
-Contact-row value at original approval and native race fencing remain separate.
+The contact-value concern is subsequently adjudicated in D-058; native race
+fencing remains separate.
 
 ## Exact draft-approval identity — 20 September, parent79d7b227
 

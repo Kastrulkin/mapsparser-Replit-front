@@ -1,10 +1,18 @@
 # LocalOS readiness executive summary — working, not final
 
-Latest20September continuation (parent7b41e8a9) also binds ordinary campaign
+Latest20September continuation (parentca0c3d36) adds the exact recipient beside
+each campaign message before review. Local288pure backend tests,6targeted UI
+tests and full689frontend/132files pass; independent bounded source review PASS.
+Full verification is reconciled in COMMANDS. Supported writers do not mutate
+normalized contact identity under the same UUID; that earlier security
+hypothesis is not reproduced. A separate late-response UI race is a source-only
+candidate. No deployment or readiness promotion; whole acceptance remains FAIL.
+
+Previous20September continuation (parent7b41e8a9) also binds ordinary campaign
 dispatch to the approved message body instead of mutable draft copies.
 Causal5fail/1pass becomes138guarded pure passes; scoped Ruff passes. This is a
-local correction only. Contact-value versioning at original approval and native
-concurrency remain open; no production action or readiness promotion occurred.
+local correction only. Contact-value snapshotting is defense-in-depth, not a
+supported mutation bug; native concurrency remains open. No production action occurred.
 Authenticated IAB screens load, with mixed locale still visible in production.
 
 Previous20September source package (parent79d7b227) corrects approval of changed

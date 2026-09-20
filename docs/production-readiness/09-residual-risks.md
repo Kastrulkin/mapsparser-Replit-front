@@ -1,10 +1,28 @@
 # Residual risks — working register
 
+20 September adjudication afterca0c3d36: the prior paragraph's same-contact-ID
+value-mutation concern is NOT a reproduced supported-flow defect. Normal
+contact writers create a new UUID for a changed normalized address and never
+update that field on conflict. Arbitrary DB/future-writer drift is only
+defense-in-depth debt. Likewise, non-boolean capability bypass has no supported
+writer; no speculative policy/schema hardening was added. Detailed source
+traces: evidence/recipient-review-notes.md. Native race fencing and broad
+AI-APPROVAL-BINDING-03 remain separate open scopes.
+
+UX-CAMPAIGN-RECIPIENT-01 now has local projection/display proof:288pure backend
+and6targeted UI passes, independent bounded review PASS. New-artifact browser,
+native JOIN and late-response UI race are not certified. Late old-workstream
+campaign/preview responses remain a separate source-only candidate; they do not
+automatically issue a send. Current disk4,853,324KiB (~4.63GiB), below10GiB
+image floor. WholeFAIL, nine foreign paths, aggregate/restore denials and prior
+unguarded-reset INCONCLUSIVE effects remain; no push/deploy/cleanup.
+
 20 September generic campaign dispatch checkpoint (parent7b41e8a9):
 OUTREACH-DISPATCH-IDENTITY-01 has causal5fail/1pass and final138pure passes.
 It binds approved body copies and current preflight provider arguments, but
-does not bind a contact row's mutable value to the original human approval.
-That versioning problem, native transaction/race fencing, broad binding03 and
+does not snapshot a contact row's value at original human approval. That
+historical concern is adjudicated above, not a supported mutation bug.
+Native transaction/race fencing, broad binding03 and
 production rollout remain open. No readiness score or whole-goal promotion.
 
 20 September draft-identity correction (parent79d7b227): exact reviewed draft

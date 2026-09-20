@@ -175,7 +175,30 @@
         "evidence/manual-campaign-dispatch-review.md"
       ],
       "result": "Causal5fail/1pass0.15s/capture513.364ms; final138pure passes1.27s/capture1795.702ms, all recorded guard counters0; scoped Ruff79.648ms. IAB authenticated Today/Operator/Agents loaded, bounded console error/warn list empty; no form submissions.",
-      "limits": "Fake SQL/unrelated gates and process-local guards, not native DB/concurrency or external dispatch. Hash still lacks original-approval contact-row value versioning; generic finance/tool binding03 open. No frontend build or full backend rerun; no push/deploy/DB changes/cleanup. Nine foreign paths excluded, overallFAIL and aggregate/restore denials unchanged; prior unguarded-reset effects INCONCLUSIVE."
+      "limits": "Fake SQL/unrelated gates and process-local guards, not native DB/concurrency or external dispatch. Hash lacks a contact-value snapshot, but subsequent D-058 source trace rejects supported same-ID normalized-value mutation: new normalized identity gets new UUID. Generic finance/tool binding03 and native races remain open. No frontend build or full backend rerun in that package; no push/deploy/DB changes/cleanup. Nine foreign paths excluded, overallFAIL and aggregate/restore denials unchanged; prior unguarded-reset effects INCONCLUSIVE."
+    },
+    "subsequent_campaign_recipient_review": {
+      "parent_commit": "ca0c3d36",
+      "finding": "UX-CAMPAIGN-RECIPIENT-01",
+      "scope": "Exact-contact normalized recipient in saved/generic/Riderra touches; escaped per-message UI text or explicit missing warning. Approval/hash/send/schema unchanged.",
+      "source_manifest": "evidence/recipient-review-manifest.json",
+      "independent_review": "Read-only bounded source/evidence PASS, evidence/recipient-review-review.md; not whole-project verdict",
+      "proof": [
+        "evidence/recipient-review-backend-red-final.json",
+        "evidence/recipient-review-backend-green.json",
+        "evidence/recipient-review-frontend-red-causal.json",
+        "evidence/recipient-review-frontend-green.json",
+        "evidence/recipient-review-frontend-full.json",
+        "evidence/recipient-review-quality.json",
+        "evidence/recipient-review-ruff.json",
+        "evidence/recipient-review-build.json",
+        "evidence/recipient-review-integrity.json",
+        "evidence/recipient-review-precommit.json",
+        "evidence/recipient-review-notes.md",
+        "evidence/recipient-review-review.md"
+      ],
+      "result": "Backend causal6fail/1pass then288pure passes1.42s/capture1936.259ms, zero guard counters. UI causal5fail/1pass then6passes4.76s/capture6216.942ms. Full frozen689frontend/132files pass295.18s/capture297624.189ms, no timeout/truncation. App/node TS and full lint pass48447.642ms, one existing warning; scoped Ruff85.355ms. Local app build12.80s/capture14485.890ms and199reachable JS integrity135.526ms pass, untruncated.",
+      "limits": "Projection-aware fake SQL and jsdom only; no native JOIN, new-build browser, delayed-response safety, full backend/image or deployed proof. Initial backend fixture failure and first truncated UI RED retained as intermediate evidence. Two supported-writer security hypotheses (same-ID normalized contact mutation, truthy non-boolean capability) are NO_BUG_PROVEN, not fixed vulnerabilities. UX-CAMPAIGN-SCOPE-02 remains source-only late-response candidate. WholeFAIL, nine foreign paths, denied aggregate/restore lanes, disk floor and prior unguarded-reset INCONCLUSIVE effects remain unchanged. No push/deploy/DB action/Docker/cleanup."
     },
     "foreign_worktree_paths_excluded": 9,
     "historical_verdict_file": "verdict.json",

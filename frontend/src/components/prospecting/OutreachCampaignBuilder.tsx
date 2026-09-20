@@ -107,6 +107,7 @@ type TouchPreview = {
   status?: string;
   generated_text?: string;
   approved_text?: string | null;
+  recipient?: string | null;
   scheduled_at?: string | null;
 };
 
@@ -1026,6 +1027,11 @@ export function OutreachCampaignBuilder({
                     Основа: {touch.template_label || touch.template_selection?.label}
                   </p>
                 ) : null}
+                <p className="mt-2 break-all text-sm leading-6 text-slate-700">
+                  {touch.recipient
+                    ? `Получатель: ${touch.recipient}`
+                    : 'Получатель не указан для этого касания.'}
+                </p>
                 {touch.observation || touch.pain_hypothesis || touch.problem_hypothesis || touch.solution || touch.relevance_bridge ? (
                   <div className="mt-3 space-y-1 border-l-2 border-sky-200 pl-3 text-sm leading-6 text-slate-700">
                     {touch.observation ? <p><span className="font-semibold text-slate-900">{operatorApprovedIdea ? 'Подтверждённая идея:' : 'Факт:'}</span> {touch.observation}</p> : null}

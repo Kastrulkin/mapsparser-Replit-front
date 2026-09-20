@@ -1,6 +1,34 @@
 # Readiness handoff
 
-## Current checkpoint — 20 September, generic campaign dispatch identity
+## Current checkpoint — 20 September, campaign recipient display
+
+Parentca0c3d36. UX-CAMPAIGN-RECIPIENT-01 is an additive API/UI display change:
+saved touches join their exact contact UUID to normalized_value; generic and
+Riderra preview touches carry recipient. Builder shows only that server value
+as escaped text, or warns if absent. Approval/hash/provider/schema unchanged.
+Backend causal6fail/1pass becomes288guarded passes; targeted UI5fail/1pass
+becomes6passes. Full frozen frontend689tests/132files pass295.18s. Bounded
+independent review PASS. COMMANDS has final exact captures and quality checks.
+
+Do not reopen same-ID normalized-contact mutation as a confirmed P1: supported
+upsert writers allocate a new UUID for changed normalized identity. Non-boolean
+sender-capability bypass likewise has no supported writer. These are now
+NO_BUG_PROVEN; arbitrary DB/future writer drift is defense-in-depth only.
+See D-058 and recipient-review-notes.md for source references and rejected
+harness failures, not a schema or approval-contract rewrite.
+
+Next safe local reproduction: UX-CAMPAIGN-SCOPE-02. The drawer reuses Builder
+across workstreams; loadCampaigns and prepare have no stale-response check.
+Use deferred A/B GET and preview/save promises, resolving B then A, and assert
+only current recipient/campaign/action ID remains. No automatic external send
+is implied. Do not claim race FIX_PROVEN from the simple resolved-switch test.
+
+No new-build native browser, native SQL/full backend/current image proof.
+WholeFAIL; nine foreign paths excluded; disk~4.63GiB below10GiB; aggregate/
+restore denials and prior unsafe reset-run INCONCLUSIVE effects persist.
+No push/deploy, production action, cleanup or provider call authorized here.
+
+## Previous checkpoint — 20 September, generic campaign dispatch identity
 
 Parent7b41e8a9; OUTREACH-DISPATCH-IDENTITY-01. A shared admin draft approval
 can edit draft.approved_text without changing the approved campaign touch.
@@ -15,9 +43,9 @@ passes79.648ms. No app frontend changes; no new full aggregate/build claim.
 IAB signed-in Today, Operator and Agents load without captured error/warn logs;
 production locale mix remains. No form/settings/approval/send action occurred.
 
-Next distinct security scope: approved contact-value versioning (the current
-hash includes contact ID, not mutable normalized_value) and native cross-
-transaction revocation races. This fix must not be sold as solving either.
+The proposed contact-value mutation scope is subsequently adjudicated as
+NO_BUG_PROVEN for supported writers (D-058). Native cross-transaction revocation
+races remain open; this fix must not be sold as solving them.
 The direct AgentBlueprint legacy queue is denied by campaign_approval_required,
 so its external dispatch bypass was not reproduced. Keep broad binding03 open.
 OverallFAIL, nine excluded foreign paths, aggregate/restore denials and earlier

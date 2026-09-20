@@ -1,5 +1,24 @@
 # UX and browser verification — working evidence
 
+## Campaign recipient visibility — 20 September, parentca0c3d36
+
+Owner/operator task: check where each campaign message will go before approval.
+The builder previously showed channel and message but omitted destination.
+Saved touches now project the selected contact's normalized address by exact
+UUID; both preview branches include recipient on each touch. The existing UI
+shows it as escaped text beside the message, or warns when it is absent.
+No client guess from other contacts, new control, focus behavior or consent
+change. Long destinations wrap with existing typography/style conventions.
+
+Actual causal UI5fail/1pass becomes6passes; backend6fail/1pass becomes288pure
+passes including adjacent contracts. Independent bounded review PASS. The test
+matrix includes saved, fresh preview, absent address, markup escaping and a
+normally resolved workstream switch. Full frontend/build/quality results are in
+COMMANDS. This is not native SQL, browser/mobile layout, localization or an
+async late-response proof. An old request overwriting a new workstream remains
+a separate source-only candidate; it requires a deferred-response reproduction.
+No production approval, send, preview generation or form submission occurred.
+
 ## Exact outreach review — 20 September, parent79d7b227
 
 Operator task: check every message and its destination before consenting.
