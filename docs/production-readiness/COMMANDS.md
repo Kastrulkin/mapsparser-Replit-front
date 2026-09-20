@@ -1,5 +1,16 @@
 # Verified commands and evidence
 
+## Frontend resumption preparation — 20 September, NOT RUN
+
+New helper directory `/private/tmp/localos-frontend-current-20260920.GtHPOV/`
+targets frozen4e33587d/frontend tree0af96cd4614e0a1c5b658339b0a73d1a7bec9e46.
+V1 failed root/independent static review before any archive, unit or build
+launch; revised helpers require fresh review. No new app-test failure or PASS
+can be inferred. Do not execute unreviewed helpers or overwrite existing raw.
+Separate workspace frontend tmux job is active; backend job has ended but is
+not our certified result. Heavy checks must remain serialized. This preparation
+does not replace the historical test evidence or certify Docker/native DB.
+
 ## Content-plan website SSRF — 20 September commit4e33587d
 
 SourceSHA256 `a46fa9edd35c6d6c73fca879997942fdd378605f2280a436ebaba342ea45e0a7`;

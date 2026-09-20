@@ -23,6 +23,15 @@ plus concurrent `src/main.py` and `tests/test_core_public_spa.py` edits observed
 during review. The source snapshot stays exactly4e33587d, without overlays. No push/deploy,
 production/DB changes, provider sends or full-readiness promotion.
 
+20September follow-up: docs checkpointa23995a2 is committed. Frontend-only
+runner preparation under `/private/tmp/localos-frontend-current-20260920.GtHPOV/`
+has not launched a build/test. V1 is NO-GO in root and independent review;
+replacement is being prepared. Do not execute that path without fresh review.
+Separate `localos-audit-frontend` is currently active in this workspace;
+`localos-audit-backend` is terminal, with its result not inspected or claimed.
+Neither was launched or stopped by this continuation. Serialize our heavy
+checks after external jobs finish; latest space15869804KiB (~15.13GiB).
+
 ## Earlier checkpoint — 19 September, content-voice write admission 432f64a0
 
 - [x] Previous goal turn: PROGRESS, three news/Telegram source packages and

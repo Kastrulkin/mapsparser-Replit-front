@@ -34,6 +34,19 @@ unrelated and must not be reused or stopped. Recreate isolated runtime later;
 frontend checks do not require either service. This is not an app-test failure.
 No push/deploy, production changes, deletion, or full-goal completion.
 
+Latest preparation aftera23995a2: do NOT execute frontend runner
+`/private/tmp/localos-frontend-current-20260920.GtHPOV/run-frontend-current.sh`
+until its revised version passes independent review. V1 was rejected before
+launch (missing Mac command, destructive/overwrite paths and incomplete
+isolation/evidence guards). Worker `content_generation_role` owns only its
+private helpers/new raw destinations; `operator_chat_review` is its reviewer.
+No new frontend capture/build exists from this runner. Foreign tmux
+`localos-audit-frontend` currently runs Node in this workspace; the backend
+session is terminal and not certified. Do not stop, reuse or overlap these
+jobs blindly. Recheck ownership/idle state and disk before our launch. Latest
+space15869804KiB; exact frontend source remains4e33587d, tree
+`0af96cd4614e0a1c5b658339b0a73d1a7bec9e46`, with no worktree overlays.
+
 ## Earlier checkpoint — 19 September, source 432f64a0
 
 Branch `codex/production-readiness-20260917`, startingHEAD0a79bf9c. SEC-RBAC-10
