@@ -1,5 +1,17 @@
 # UX and browser verification — working evidence
 
+## Draft confirmation matches review availability — 21 September
+
+Owner task: review the exact prepared text before approving it, or reject an
+incomplete review and prepare it again. `UX-DRAFT-REVIEW-ADMISSION-01` was
+reproduced in both detail and employee panels: the recovery warning was visible
+but confirmation remained enabled (12 failures, 14 controls passed). One shared
+predicate now drives the existing warning and native disabled-button state.
+Rejection, generic approval, loading and stale/valid/stale prop transitions are
+covered in 26 passing tests. TypeScript/lint/build/199-JS integrity pass; final
+full-suite evidence is in COMMANDS. This is local jsdom proof, not a backend
+bypass, live browser test or deployed behavior. No layout or policy redesign.
+
 ## Selected action follows URL intent — 21 September, parentd72475e3
 
 Owner task: work on the action currently selected in the URL without losing the

@@ -1,5 +1,15 @@
 # Residual risks — working register
 
+21 September, parent `7fd95caa`: the locally reproduced incomplete draft-review
+confirmation mismatch is corrected, with 26 targeted checks and quality/build
+proof. Current prop completeness is not backend identity/freshness or deployed
+proof. Cumulative source review reports retain explicit coverage/limits and a
+withdrawn network-parent false positive; they do not close final all-DoD review.
+Native aggregate/restore preparation permission remains pending after prior
+denials. Current Mac free space 6,654,180 KiB (~6.35 GiB) remains below the 10 GiB
+image floor. Full backend, current image/browser/demo/performance and historical
+unsafe-reset INCONCLUSIVE effects remain unchanged. Whole-project FAIL persists.
+
 21 September source/dependency checkpoint at `334c9d4b`: 101 committed-source
 matches and seven branch-delta matches are classified non-secret, not ignored.
 Zero current npm advisories and complete license declarations do not clear

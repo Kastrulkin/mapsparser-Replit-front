@@ -1,5 +1,17 @@
 # Production-readiness change log
 
+## Draft-review admission and cumulative source review — 21 September
+
+Parent `7fd95caa`: five frontend implementation/test paths change, sharing the
+existing draft completeness predicate and disabling confirmation in two panels.
+No backend/API/schema/dependency changes; rejection stays available. Eighteen
+new regression cases plus eight existing checks: causal 12 failures become 26
+passes. Types/lint/build/integrity pass; full result is recorded in COMMANDS.
+Three cumulative source reports preserve exact coverage of `30262a5b..7fd95caa`
+separately from the subsequent fix. A network-parent inference was withdrawn
+after verifying the supported writer/reader identity convention. No whole-DoD
+PASS, native execution, production, cleanup, push or deployment is implied.
+
 ## Current source and dependency evidence — 21 September, checkpoint `334c9d4b`
 
 Evidence/documentation only: strict frozen-source scan, exhaustive sanitized

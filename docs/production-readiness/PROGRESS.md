@@ -1,5 +1,23 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, cumulative source and draft-review admission
+
+- [x] Independent source reports reconcile all248changed code/test/config paths
+  in30262a5b..7fd95caa;314documentation/evidence paths excluded from this claim.
+- [x] Corrected review omissions; withdrew network-parent false positive using
+  supported writer and reader contracts. No schema/data repair was justified.
+- [x] Draft-review UI contradiction:12causal failures become26targeted passes.
+  Shared warning/control predicate, rejection and generic/loading behavior kept.
+- [x] TypeScript/lint (one old warning), fresh build and199JS integrity pass.
+- [x] First full attempt timed out at300s and is retained. Same frozen suite
+  passes809tests/137files with600s cap; all14input hashes still match. Full stderr
+  has the same known diagnostic lines, with changed ordering. See COMMANDS.
+
+Parent7fd95caa; no backend/API/schema/dependency or production changes. Renewed
+native aggregate/restore preparation permission is pending; Mac~6.35GiB is below
+the10GiB image floor. Nine foreign paths and unsafe-reset INCONCLUSIVE effects
+persist. Original whole-project acceptanceFAIL is not changed by static review.
+
 ## Latest checkpoint — 21 September, current-source and dependency evidence
 
 - [x] Previous334c9d4b fixes Focus;791frontend checks remain its verified scope.

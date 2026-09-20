@@ -24,6 +24,87 @@ const snapshotApproval = () => draftApproval({
 
 const activeRun: AgentRun = { id: 'run-1', status: 'waiting_approval', blueprint_id: 'blueprint-1' };
 
+const incompleteSnapshots: Array<{ name: string; payload: Record<string, unknown> }> = [
+  { name: 'missing version', payload: { items: [{ review_text: 'Legacy text' }] } },
+  { name: 'non-array items', payload: { snapshot_version: 1, items: { review_text: 'Not a list' } } },
+  { name: 'empty items', payload: { snapshot_version: 1, items: [] } },
+  { name: 'blank review text', payload: { snapshot_version: 1, items: [{ review_text: '  \n ' }] } },
+  { name: 'incomplete item after a valid item', payload: { snapshot_version: 1, items: [{ review_text: 'Valid text' }, null] } },
+];
+
+describe.each(['detail', 'employee'])('%s draft approval admission', (surface) => {
+  const panel = (approval: AgentApproval, actionLoading: boolean, onApprove: () => void, onReject: () => void) => (
+    surface === 'detail'
+      ? <AgentApprovalDecisionPanel approval={approval} actionLoading={actionLoading} onApprove={onApprove} onReject={onReject} />
+      : <EmployeeTestResultPanel activeRun={activeRun} pendingApproval={approval} actionLoading={actionLoading} onApprove={onApprove} onReject={onReject} onRunAgain={vi.fn()} />
+  );
+
+  it.each(incompleteSnapshots)('blocks confirmation but preserves rejection for $name', async ({ payload }) => {
+    const onApprove = vi.fn();
+    const onReject = vi.fn();
+    const user = userEvent.setup();
+    render(panel(draftApproval(payload), false, onApprove, onReject));
+
+    expect(screen.getByText('Проверка черновиков устарела или неполна. Пересоздайте проверку перед утверждением.')).toBeVisible();
+    const approve = screen.getByRole('button', { name: 'Подтвердить публикацию' });
+    const reject = screen.getByRole('button', { name: 'Отклонить результат' });
+    expect(approve).toBeDisabled();
+    expect(reject).toBeEnabled();
+    await user.click(approve);
+    expect(onApprove).not.toHaveBeenCalled();
+    await user.click(reject);
+    expect(onReject).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates confirmation admission when the reviewed snapshot changes', async () => {
+    const onApprove = vi.fn();
+    const onReject = vi.fn();
+    const user = userEvent.setup();
+    const { rerender } = render(panel(draftApproval({}), false, onApprove, onReject));
+    expect(screen.getByRole('button', { name: 'Подтвердить публикацию' })).toBeDisabled();
+
+    rerender(panel(snapshotApproval(), false, onApprove, onReject));
+    expect(screen.queryByText(/Проверка черновиков устарела или неполна/)).not.toBeInTheDocument();
+    expect(screen.getByText('Snapshot before approval')).toBeVisible();
+    const approve = screen.getByRole('button', { name: 'Подтвердить публикацию' });
+    expect(approve).toBeEnabled();
+    await user.click(approve);
+    expect(onApprove).toHaveBeenCalledTimes(1);
+
+    rerender(panel(draftApproval({}), false, onApprove, onReject));
+    expect(screen.getByRole('button', { name: 'Подтвердить публикацию' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Отклонить результат' })).toBeEnabled();
+  });
+
+  it.each([false, true])('keeps both decisions disabled while loading (complete snapshot: %s)', async (complete) => {
+    const onApprove = vi.fn();
+    const onReject = vi.fn();
+    const user = userEvent.setup();
+    render(panel(complete ? snapshotApproval() : draftApproval({}), true, onApprove, onReject));
+
+    const approve = screen.getByRole('button', { name: 'Подтвердить публикацию' });
+    const reject = screen.getByRole('button', { name: 'Отклонить результат' });
+    expect(approve).toBeDisabled();
+    expect(reject).toBeDisabled();
+    await user.click(approve);
+    await user.click(reject);
+    expect(onApprove).not.toHaveBeenCalled();
+    expect(onReject).not.toHaveBeenCalled();
+  });
+
+  it('does not require a draft snapshot for other approval types', async () => {
+    const onApprove = vi.fn();
+    const onReject = vi.fn();
+    const user = userEvent.setup();
+    render(panel({ id: 'generic-approval', status: 'pending', approval_type: 'custom', title: 'Manual decision' }, false, onApprove, onReject));
+
+    const approve = screen.getByRole('button', { name: 'Разрешить выполнение' });
+    expect(approve).toBeEnabled();
+    await user.click(approve);
+    expect(onApprove).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('ApprovalPayloadSummary draft snapshots', () => {
   it('turns stale snapshot error variants into the recovery instruction while preserving unrelated errors', () => {
     const staleInstruction = 'Черновики или получатели изменились. Отклоните это решение и запустите подготовку заново, затем проверьте новый текст.';

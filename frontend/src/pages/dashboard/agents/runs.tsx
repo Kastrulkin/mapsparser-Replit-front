@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import type React from 'react';
 import { useState } from 'react';
-import { buildJournalFromSections, buildStepStatusMap, compactValue, findJournalDetailValue, findJournalEntryForGenericStage, formatPayloadItem, formatPayloadValue, getGenericStageDetail, getGenericStageStatus, previewNextStepActionLabel, previewSimulationTone, toRecordOrNull } from './runs.logic';
+import { buildJournalFromSections, buildStepStatusMap, compactValue, findJournalDetailValue, findJournalEntryForGenericStage, formatPayloadItem, formatPayloadValue, getGenericStageDetail, getGenericStageStatus, hasCompleteDraftApprovalSnapshot, previewNextStepActionLabel, previewSimulationTone, toRecordOrNull } from './runs.logic';
 
 import {
 	DashboardEmptyState
@@ -1448,15 +1448,8 @@ export const ApprovalPayloadSummary = ({ approval }: { approval: AgentApproval }
   const payload = approval.payload_json || {};
   const count = typeof payload.count === 'number' ? payload.count : null;
   const artifactType = typeof payload.artifact_type === 'string' ? payload.artifact_type : '';
-  const snapshotVersion = payload.snapshot_version;
   const snapshotItems = Array.isArray(payload.items) ? payload.items : [];
-  const isDraftSnapshot = approval.approval_type === 'drafts' && snapshotVersion === 1;
-  const hasCompleteDraftSnapshot = isDraftSnapshot
-    && snapshotItems.length > 0
-    && snapshotItems.every((item) => {
-      const record = toRecordOrNull(item);
-      return Boolean(record && typeof record.review_text === 'string' && record.review_text.trim().length > 0);
-    });
+  const hasCompleteDraftSnapshot = hasCompleteDraftApprovalSnapshot(approval);
   if (!artifactType && count === null && approval.approval_type !== 'drafts') {
     return null;
   }

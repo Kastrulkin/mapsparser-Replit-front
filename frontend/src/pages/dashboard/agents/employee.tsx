@@ -87,6 +87,7 @@ import {
 	ApprovalPayloadSummary,
 	HumanResultView
 } from './runs';
+import { hasCompleteDraftApprovalSnapshot } from './runs.logic';
 import { TimezoneSelect } from './timezone-select';
 
 const AgentWorkflowGraph = lazy(() => import('./workflow-graph').then((module) => ({ default: module.AgentWorkflowGraph })));
@@ -1106,6 +1107,7 @@ export const EmployeeTestResultPanel = ({
   const isBlocked = result.state === 'blocker';
   const canApprove = Boolean(pendingApproval && !isBlocked);
   const canReject = Boolean(pendingApproval && !isBlocked);
+  const needsDraftReview = pendingApproval?.approval_type === 'drafts' && !hasCompleteDraftApprovalSnapshot(pendingApproval);
   const canRebuildScenario = Boolean(needsScenarioRebuild && onRebuildScenario);
   const canRunAfterGoogleReconnect = Boolean(!canRebuildScenario && googleAccessJustConnected && needsGoogleAccessReconnect);
   const canOpenGoogleAccessReconnect = Boolean(!canRunAfterGoogleReconnect && !canRebuildScenario && needsGoogleAccessReconnect && onOpenGoogleAccessReconnect);
@@ -1176,7 +1178,7 @@ export const EmployeeTestResultPanel = ({
         {pendingApproval?.approval_type === 'drafts' ? <ApprovalPayloadSummary approval={pendingApproval} /> : null}
         <div className="flex min-w-0 flex-wrap gap-2">
           {canApprove ? (
-            <Button type="button" className="min-h-10 whitespace-nowrap active:scale-[0.96] transition-transform" onClick={onApprove} disabled={actionLoading}>
+            <Button type="button" className="min-h-10 whitespace-nowrap active:scale-[0.96] transition-transform" onClick={onApprove} disabled={actionLoading || needsDraftReview}>
               {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
               {labels.approve}
             </Button>

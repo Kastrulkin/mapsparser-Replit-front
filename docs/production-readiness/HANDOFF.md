@@ -1,5 +1,33 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, cumulative review and draft-review UI
+
+Parent7fd95caa. Three independent source-only reports explicitly cover all248
+changed code/test/config paths in30262a5b..7fd95caa, plus one legacy README.
+The314documentation/evidence paths were not all reread; this is not a562file
+whole-DoD verdict. Root inventory reconciliation caught omitted constraints and
+ten misclassified social/WhatsApp modules; reviewers re-read them before closure.
+Network-parent candidate was withdrawn based on supported writer/readers.
+
+Only reproduced candidate in this pass: UX-DRAFT-REVIEW-ADMISSION-01, an enabled
+confirm button despite incomplete-review warning. Four implementation files
+share the existing predicate;18new tests plus8existing cases. RED12fail/14pass
+becomes26passes. TS/lint pass with1existingwarning; fresh build17.59s and199JS
+integrity pass. Independent five-file static review found no regression.
+First full suite timed out at300s (retained, not aPASS). Exact same frozen source
+passes809tests/137files in317.31s with600s cap. All14hashes still match; full stderr
+has the same known diagnostic lines with first four jsdom messages reordered,
+not byte-identical output. See COMMANDS and draft-review-admission notes/captures.
+
+Do not restart completed source reviews or treat login as evidence of deployment.
+Original wholeFAIL persists. The next release gates are authorized native full
+backend/restore/content timing, sufficient image headroom, current immutable
+image/real-API compiled browser proof, paced demo/CI and final all-DoD review.
+Aggregate/restore preparation permission is still pending; do not retry denied
+work through another route. Mac6,654,180KiB(~6.35GiB) is below10GiB image floor.
+Historical unsafe-reset effects remainINCONCLUSIVE; nine foreign paths excluded.
+No production/DB/provider/Docker/cleanup/push/deploy; local source/evidence only.
+
 ## Latest checkpoint — 21 September, release-gate reconciliation at334c9d4b
 
 This documentation/evidence-only package advances original AC6/AC7, not another

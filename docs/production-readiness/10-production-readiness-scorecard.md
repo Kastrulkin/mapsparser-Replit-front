@@ -1,5 +1,13 @@
 # Production-readiness scorecard — working, not final
 
+21 September continuation (parent `7fd95caa`) adds cumulative source reviews and
+causal proof for the incomplete draft-confirmation UI mismatch: 12 failures
+become 26 targeted passes, with types/lint/build/asset integrity. Exact final
+full-suite and coverage reconciliation live in COMMANDS and the task ledger.
+No numerical score or original acceptance gate is promoted. Static review plus
+local frontend proof cannot replace current native aggregate/image/browser/demo
+or final all-DoD verification; whole-project FAIL remains controlling.
+
 21 September evidence-only checkpoint at `334c9d4b`: committed-source and
 current-branch scans are exhaustively classified; frontend lock audit has
 0 advisories across 528 entries, with complete license declaration provenance.

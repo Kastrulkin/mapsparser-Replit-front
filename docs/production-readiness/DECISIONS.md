@@ -1,5 +1,15 @@
 # Readiness decisions
 
+## D-067 — Share the review condition between warning and confirmation
+
+An incomplete draft snapshot must not show a recovery warning while offering an
+enabled confirmation. Reuse the existing frontend condition in the summary and
+both controls; keep rejection available and preserve loading/generic approvals.
+Do not duplicate backend freshness/identity validation or reinterpret a disabled
+UI control as a security boundary. Preserve exact causal RED and later checks.
+Source-only review findings require contract adjudication: the network-parent
+candidate was withdrawn because the supported writer deliberately shares IDs.
+
 ## D-066 — Separate scanned matches, source proof and release certification
 
 Scan a Git-frozen snapshot, validate every blob against its commit, and retain

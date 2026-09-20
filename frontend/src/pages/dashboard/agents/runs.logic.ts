@@ -140,6 +140,18 @@ export const toRecordOrNull = (value: unknown): Record<string, unknown> | null =
   return Object.fromEntries(Object.entries(value));
 };
 
+export const hasCompleteDraftApprovalSnapshot = (approval: AgentApproval) => {
+  const payload = approval.payload_json;
+  return approval.approval_type === 'drafts'
+    && payload?.snapshot_version === 1
+    && Array.isArray(payload.items)
+    && payload.items.length > 0
+    && payload.items.every((item) => {
+      const record = toRecordOrNull(item);
+      return Boolean(record && typeof record.review_text === 'string' && record.review_text.trim().length > 0);
+    });
+};
+
 export const formatPayloadItem = (value: unknown) => {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     const entries = Object.entries(value).filter(([, itemValue]) => itemValue !== '' && itemValue !== null && itemValue !== undefined);

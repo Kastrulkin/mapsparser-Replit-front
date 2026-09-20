@@ -1,5 +1,43 @@
 # Verified commands and evidence
 
+## Cumulative review and draft-review admission — 21 September, parent7fd95caa
+
+Exact commands/captures: task evidence/draft-review-admission-*-20260921.json
+and cumulative-source-coverage-20260921.json. Named local tmux, env-i, Node22,
+private arm64 Python capture, no-egress-compatible chain and envDir:false.
+Source/test/config/lock/guard manifest has14inputs. No backend suite or DB run.
+
+| Suffix | Actual outcome | Duration ms |
+| --- | --- | ---: |
+| red | Causal12fail/14pass;26tests, first failure native disabled assertion |6712.088|
+| green | Same26tests pass; empty stderr |5827.563|
+| quality | App/node TypeScript + lint;1existing auth_new.ts115 warning |49376.496|
+| manifest |14input hashes frozen |391.959|
+| build | Fresh private build17.59s; retained third-party/outDir warnings |18734.316|
+| integrity |199reachable JS files; empty stderr |190.296|
+| copy-guard | Existing first-layer copy guard only |31.706|
+| full-unit |TIMEOUT, null exit;121file-completion lines, no final result |300002.76|
+| full-unit-verified |809passed/137files,317.31s; no timeout/truncation |318877.799|
+| cumulative-source-coverage |248code/test/config paths claimed by3reviews,0missing;314docs/evidence excluded |1674.379|
+| precommit |31exact owned paths,14hashes, original statuses/verdict,9foreign exclusions;311961-byte staged scan clean |3838.84|
+
+All captures above are untruncated. The timed-out full attempt is incomplete,
+not a PASS or a product failure. Matching test processes were absent before
+the same frozen suite was repeated with a600s capture limit and passed. All14
+input hashes still match. Full stderr14259characters has the same line multiset
+as journey-detail-full.json; first four known jsdom messages reordered, not
+byte-identical output. No test assertions, files or per-test timeout were weakened.
+The copy guard reads AgentBlueprintsPage.tsx only, not all extracted UI files.
+
+Three static reports cover the frozen30262a5b..7fd95caa range, distinct from the
+subsequent five-file UI correction. Missing constraints and ten misclassified
+social/WhatsApp paths were explicitly re-reviewed before inventory closure.
+Network-parent candidate was withdrawn against supported writer/readers.
+Source coverage does not prove runtime, native locking, provider effects or
+complete all-DoD acceptance. No original status/score or historical verdict changes.
+Precommit retains nonfatal Darwin temporary-directory fallback warnings. It
+precedes adding its own capture and this documentation result to the final stage.
+
 ## Current-source/dependency evidence — 21 September, application334c9d4b
 
 Exact commands: task evidence/current-*-20260921.json. Private snapshot/cache/

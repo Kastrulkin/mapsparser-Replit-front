@@ -90,6 +90,7 @@ import {
 	OutreachRunProgress,
 	PreviewRunSummaryPanel
 } from './runs';
+import { hasCompleteDraftApprovalSnapshot } from './runs.logic';
 import {
 	AgentAdvancedPanel,
 	AgentVoiceStylePanel,
@@ -834,6 +835,7 @@ export const AgentApprovalDecisionPanel = ({
 }) => {
   const labels = approvalActionLabels(approval);
   const previewItems = getApprovalPreviewItems(approval);
+  const needsDraftReview = approval.approval_type === 'drafts' && !hasCompleteDraftApprovalSnapshot(approval);
   return (
     <div className={cn(
       'rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-amber-950',
@@ -852,7 +854,7 @@ export const AgentApprovalDecisionPanel = ({
         </div>
         {onApprove && onReject ? (
           <div className="flex shrink-0 flex-wrap gap-2">
-            <Button type="button" onClick={onApprove} disabled={actionLoading}>
+            <Button type="button" onClick={onApprove} disabled={actionLoading || needsDraftReview}>
               {labels.approve}
             </Button>
             <Button type="button" variant="outline" onClick={onReject} disabled={actionLoading}>
