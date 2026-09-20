@@ -1,5 +1,23 @@
 # UX and browser verification — working evidence
 
+## Review the version being approved — 20 September, parent191488ba
+
+Owner task: review the saved message and destination that approval or pilot
+launch actually targets. Transient previews and unsaved text/channel/schedule/
+sender edits now block approval, pilot start and resume. Saving/applying a
+recommendation reloads the exact new ID, showing canonical saved text/recipient
+instead of transient POST output. Missing/failed reload remains blocked. A
+secondary discard action and version selector explicitly restore saved review.
+Pause/cancel/reply sync and separate pilot confirmation remain unchanged.
+
+Causal7fail/1pass becomes40focused passes (14new,20scope,6existing), including
+canonical B approval/pilot routing, cancel-confirm, learning/reload errors and
+resume after discard. Independent bounded source/targeted review PASS; final
+broader checks are reconciled in COMMANDS. Native controls/labels and established
+styles are retained; no new keyboard/focus mechanism. Browser/mobile accessibility
+and actual provider delivery are not certified by jsdom. The earlier source-only
+consent note below is superseded by this bounded local correction, not deployment.
+
 ## Campaign context continuity — 20 September, parent03ef38f6
 
 Owner task: review only the currently opened lead, its recipient and campaign.

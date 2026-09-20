@@ -4326,7 +4326,7 @@ def test_preflight_is_only_shown_after_campaign_approval():
 
     assert "/pilot-preflight" not in admin_source
     assert 'id="campaign-status"' in admin_source
-    assert "{selectedCampaign?.status === 'approved' && !pilotAlreadySent && !pilotReplyReceived ? (" in builder_source
+    assert "{selectedCampaign?.status === 'approved' && !hasUnsavedReview && !pilotAlreadySent && !pilotReplyReceived ? (" in builder_source
 
 
 def test_partner_builder_blocks_approval_until_current_quality_checked_draft_is_ready():

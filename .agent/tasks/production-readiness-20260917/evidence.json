@@ -222,6 +222,29 @@
       "result": "Causal4fail/1pass5.01s/capture7340.171ms; frozen26targeted UI/2files pass13.00s/capture14464.038ms. Full frozen709frontend/133files pass330.49s/capture331940.084ms, no timeout/truncation; known jsdom/negative-fixture diagnostics retained. Existing guarded backend contracts288pass1.51s/capture2214.813ms, all counters0. Final TS/lint61243.355ms passes with one existing warning; build14.41s/capture15917.933ms;199JS integrity176.578ms. Nine manifest hashes match afterward.",
       "limits": "RED first approval URL assertion and separate rejection assertion were not reached; it proves old-response/busy contamination, not actual provider consent/send. Expanded deferred tests use synthetic API mocks/jsdom. No server cancellation, same-lifetime ordering, native SQL/full backend/current image/new-build browser or deployed proof. Unsaved-preview/saved-campaign consent remains separate source-only UX-CAMPAIGN-CONSENT-03. Authenticated IAB Today read-only observation shows mixed locale, not a local-fix rollout. WholeFAIL, nine foreign paths, aggregate/restore denials, disk floor and prior unsafe-reset INCONCLUSIVE effects unchanged. No push/deploy/production/data deletion/Docker/provider action."
     },
+    "subsequent_campaign_consent_binding": {
+      "parent_commit": "191488ba",
+      "finding": "UX-CAMPAIGN-CONSENT-03",
+      "scope": "UI-only no-unsaved-review guards for approval/pilot/resume, exact saved-ID reload before canonical review, explicit saved-version selection/discard; no backend/API/schema or consent-policy change.",
+      "source_manifest": "evidence/campaign-consent-manifest.json",
+      "independent_review": "Actual source, targeted and final broader evidence PASS; eleven hashes independently verified after full run. See evidence/campaign-consent-review.md; not a whole-project verdict.",
+      "proof": [
+        "evidence/campaign-consent-red.json",
+        "evidence/campaign-consent-green.json",
+        "evidence/campaign-consent-final.json",
+        "evidence/campaign-consent-backend-contract.json",
+        "evidence/campaign-consent-backend-final.json",
+        "evidence/campaign-consent-full.json",
+        "evidence/campaign-consent-quality.json",
+        "evidence/campaign-consent-build.json",
+        "evidence/campaign-consent-integrity.json",
+        "evidence/campaign-consent-precommit.json",
+        "evidence/campaign-consent-notes.md",
+        "evidence/campaign-consent-review.md"
+      ],
+      "result": "Causal7fail/1pass6.71s/capture9103.429ms; frozen40targeted UI/3files pass15.74s/capture18257.181ms. Backend288pass1.59s/capture2181.95ms, counters0. Full frozen723frontend/134files pass314.24s/capture316492.583ms, untruncated/no timeout. TS/lint54979.441ms pass with one existing warning; build16.28s/capture17880.036ms;199JS integrity plus scoped Ruff351.341ms. Eleven hashes match after full run.",
+      "limits": "Mocked UI/jsdom and synthetic backend only; RED asserts UI mismatch before any wrong actual approve/send. Pilot positive proves routing/manual confirmation, not delivery. Known negative-fixture stderr retained. No same-lifetime global ordering, native DB, current image/full backend/new-build browser or deployed proof. Maton account-drift subcase of broad binding03 is NO_BUG_PROVEN (D-062), not repaired. WholeFAIL, nine foreign paths, aggregate/restore denials, disk floor and prior unsafe-reset INCONCLUSIVE effects persist. No push/deploy/production/DB/delete/Docker/provider action."
+    },
     "foreign_worktree_paths_excluded": 9,
     "historical_verdict_file": "verdict.json",
     "historical_verdict_reviewed_commit": "2f224f051e3b3487a2c0d529d40b547c414ccb52"

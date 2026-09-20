@@ -1,5 +1,47 @@
 # Verified commands and evidence
 
+## Saved campaign consent — 20 September, parent191488ba
+
+Existing task evidence/campaign-consent-* captures contain exact commands and
+logs. Named localos-consent-* tmux, sanitized env-i/Node22, GtHPOV no-egress chain,
+envDir:false config, private arm64 Python. Same guarded288backend selection as
+scope package: no conftest/autoload/cache, DB/network/dotenv/child-process guards.
+These process-local frontend guards do not certify OS-level isolation of children.
+
+| Suffix | Actual outcome | Duration ms |
+| --- | --- | ---: |
+| red | Causal7fail/1pass,6.71s; old controls/stale rendered review |9103.429|
+| green | Intermediate32pass/2assertion-expectation failures,15.68s |17973.136|
+| backend-contract | Intermediate287pass/1old static condition,1.61s; counters0 |2208.642|
+| final | Frozen40pass/3files,15.74s:14consent+20scope+6existing |18257.181|
+| backend-final |288pass,1.59s; all guard counters0 |2181.95|
+| full | Frozen723pass/134files,314.24s |316492.583|
+| quality | App/node TypeScript+lint pass;1existing auth_new.ts115 warning |54979.441|
+| build | Frozen application build16.28s; test-only additions followed |17880.036|
+| integrity |199reachable JS assets and scoped Ruff pass |351.341|
+| manifest |11source/test/config/guard hashes before full run; post-run allOK |42.344|
+| precommit |11hashes, staged diff, Gitleaks (~237053bytes) and unchanged overallFAIL pass |1426.531|
+
+Final captures exit0, no timeout/truncation. Full stderr retains jsdom unsupported
+scroll/navigation and intentional error-boundary/auth/network fixture messages;
+no unhandled-error test result. Initial test corrections remove Badge/option
+selector ambiguity, expect authoritative GET recipient instead of POST preview,
+and strengthen preflight's approved condition with no-unsaved-review. Original
+scope/consent negatives are not weakened. RED UI assertions stop before mismatched
+actual approve/send; pilot positive proves mock B routing/cancel-confirm, not
+provider delivery. Independent source/targeted review PASS; final broader closure
+is recorded in campaign-consent-review.md.
+
+Artifact: /private/tmp/localos-campaign-consent-build-20260920.tYTzun/dist,
+index-KhDntMj7.js and index-BM6vOqzw.css. Existing dist not emptied. Retained
+upstream Yandex PURE annotations/external-outDir warnings. No new-build browser,
+native SQL/current image/full backend or deployed proof. Source stayed frozen;
+only evidence/docs followed full checks. Nine foreign paths, wholeFAIL, denials
+and unsafe-reset INCONCLUSIVE effects persist. No push/deploy/DB/Docker/cleanup.
+Precommit scanning covers this staged package, not history/images/production
+logs or credential revocation. Only observed report metadata followed that scan;
+application/test sources remained frozen. Final bounded evidence review PASS.
+
 ## Campaign editor async scope — 20 September, parent03ef38f6
 
 Captures: existing task evidence/campaign-scope-*.json. Named

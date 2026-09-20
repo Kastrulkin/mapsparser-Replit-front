@@ -1,5 +1,14 @@
 # Residual risks — working register
 
+20September after191488ba: UX-CAMPAIGN-CONSENT-03 now has causal UI proof and a
+local correction, superseding its source-only status below. Forty targeted UI
+and288guarded backend checks pass; canonical saved review is required before
+consent. This does not establish native provider effects, new-build browser/
+mobile accessibility or production rollout. Same-lifetime request ordering and
+edits during pending requests are not globally certified. Original readiness
+gates, aggregate/restore denials and unsafe-reset INCONCLUSIVE effects persist.
+Latest measured disk6,851,904KiB (~6.53GiB) remains below10GiB image floor.
+
 20September after03ef38f6: UX-CAMPAIGN-SCOPE-02 is locally corrected with causal
 old-response/busy evidence and26 focused passes. This supersedes the older
 source-only scope note below, not its historical capture. Requests already

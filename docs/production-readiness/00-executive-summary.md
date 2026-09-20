@@ -1,6 +1,14 @@
 # LocalOS readiness executive summary — working, not final
 
-Latest20September continuation (parent03ef38f6) fixes stale campaign data when
+Latest20September continuation (parent191488ba) prevents approval or pilot start
+while a different unsaved campaign preview is visible. Saving now reloads and
+shows the exact saved version before enabling those actions; failed reloads
+remain blocked and users can explicitly return to a saved version. Local40UI
+and288guarded backend checks, types/lint/build/integrity pass. Independent bounded
+source/targeted review PASS; full check reconciliation is in COMMANDS. No rollout
+or readiness promotion: whole acceptance remains FAIL.
+
+Previous20September continuation (parent03ef38f6) fixes stale campaign data when
 switching lead cards. Twenty-six focused UI checks and288 adjacent mocked
 backend checks pass; types/lint and local build pass. Independent source review
 is scoped to this correction; full check reconciliation is in COMMANDS. The

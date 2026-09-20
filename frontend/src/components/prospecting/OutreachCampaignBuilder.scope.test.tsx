@@ -420,7 +420,8 @@ describe('OutreachCampaignBuilder workstream scope', () => {
     await user.click(screen.getByRole('button', { name: 'Показать всю цепочку' }));
     expect(await screen.findByText('Получатель: preview-a@example.invalid')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Сохранить изменения' }));
-    expect(await screen.findByText('Получатель: saved-a@example.invalid')).toBeVisible();
+    expect(await screen.findByText('Получатель: owner-a@example.invalid')).toBeVisible();
+    expect(screen.queryByText('Получатель: saved-a@example.invalid')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Утвердить цепочку и перейти к отправке' }));
     expect(requests).toContain('/outreach/campaigns/campaign-A/approve');
   });

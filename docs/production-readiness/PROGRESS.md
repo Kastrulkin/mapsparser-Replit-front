@@ -1,6 +1,30 @@
 # Production-readiness progress
 
-## Current checkpoint — 20 September, campaign editor scope
+## Latest checkpoint — campaign preview/consent identity
+
+- [x] UX-CAMPAIGN-CONSENT-03: causal7fail/1pass; exact saved review now required
+  before approval/pilot/resume. Failed reload stays blocked; explicit discard
+  or version selection restores saved review. No API/schema/policy change.
+- [x] Final40targeted UI and288guarded backend tests pass, effect counters0.
+  Full frozen frontend723tests/134files pass314.24s/capture316492.583ms, without
+  timeout/truncation. Eleven source/test/config/guard hashes match afterward.
+- [x] App/node TypeScript, lint (one existing warning), build,199JS integrity
+  and scoped Ruff pass. Independent source/targeted review PASS; broader
+  evidence closure is recorded in campaign-consent-review.md.
+- [x] Maton account-drift hypothesis rejected: handler account takes precedence
+  over mutable route; no supported handler update found (D-062). General
+  AI-APPROVAL-BINDING-03 remains unproven, not a fixed security bug.
+- [ ] Next bounded UX-LOCALE-07 continuation: reproduce JourneyActionCard's
+  Russian system controls/date under ES/EN, preserve API/business content and
+  command payloads; use existing RU/mini-app/idempotency tests as controls.
+
+Branch codex/production-readiness-20260917, parent191488ba. Nine foreign paths
+excluded; local commit only. No production/provider/DB action, Docker or cleanup.
+Latest disk6,851,904KiB (~6.53GiB), below10GiB. Aggregate/restore denials and prior
+unsafe-reset INCONCLUSIVE effects persist. Whole acceptance remains FAIL.
+Initial failed test expectations remain in captures, explained in COMMANDS.
+
+## Previous checkpoint — 20 September, campaign editor scope
 
 - [x] UX-CAMPAIGN-SCOPE-02: reversed campaign/preview/save responses and old busy
   state reproduced (4 failed / 1 passed). Keyed private editor and per-lifetime

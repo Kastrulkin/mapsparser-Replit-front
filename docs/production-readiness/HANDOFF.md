@@ -1,6 +1,37 @@
 # Readiness handoff
 
-## Current checkpoint — 20 September, campaign editor async scope
+## Latest checkpoint — campaign preview/consent identity
+
+Branch codex/production-readiness-20260917, parent/precommit HEAD191488ba.
+UX-CAMPAIGN-CONSENT-03 source/tests frozen: Builder UI-only saved-review binding,
+14newconsent cases, one old scope positive now expecting canonical GET recipient,
+and one stronger static preflight assertion in test_founder_outreach_campaigns.py.
+Failed or missing exact saved-version reload stays blocked; discard/selection
+rebind saved state. No API/schema/backend implementation changes.
+
+Causal7fail/1pass becomes40targeted passes. Guarded backend288pass, counters0.
+Full frozen723frontend/134files pass314.24s/capture316492.583ms, untruncated.
+Eleven manifest hashes still match. TypeScript/lint pass (one existing warning),
+build16.28s,199JS integrity/scoped Ruff pass. Independent source/targeted review
+PASS; final broader closure is in campaign-consent-review.md. Initial failed
+expectations and known negative-fixture/jsdom stderr are preserved, not hidden.
+
+Next useful local work is the remaining UX-LOCALE-07 shared JourneyActionCard
+copy, not another whole audit. Root/source tracer checked Russian system controls
+and ru-RU dates despite ES/EN, reachable via Today fallback and Mini App. Reproduce
+under the existing language provider; retain raw action title/description/draft
+and API command/outcome values. Existing RU/surface/idempotency tests are controls.
+Do not start with a speculative broad approval rewrite: D-062 rejects the Maton
+route-change account hypothesis; generic binding03 still has no causal path.
+
+Resume: `git status --short`, then read the existing JourneyActionCard.tsx/test
+and language context; use COMMANDS' captured env-i/no-egress runner with focused
+selection. Commit hash is `git log -1 --oneline` after this package. No push/deploy,
+DB action/cleanup; nine foreign paths remain excluded. Aggregate/restore denials
+and unsafe-reset INCONCLUSIVE effects persist. Latest disk6,851,904KiB (~6.53GiB)
+is below10GiB. WholeFAIL; native SQL/full backend/image/browser/demo gates remain.
+
+## Previous checkpoint — 20 September, campaign editor async scope
 
 Branch codex/production-readiness-20260917, parent/current precommit03ef38f6.
 Owned source: OutreachCampaignBuilder.tsx and new .scope.test.tsx. UI scope key

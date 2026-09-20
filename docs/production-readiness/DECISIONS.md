@@ -1,5 +1,29 @@
 # Readiness decisions
 
+## D-062 — Maton route change is not proven approval account drift
+
+Reject the proposed AI-APPROVAL-BINDING-03 Maton reproduction: the authorized
+route-selection writer changes route/integration metadata, but runtime resolves
+handler.external_account_id before route.external_account_id. Existing handler A
+therefore wins over a changed route B. The traced handler constructor is used
+when creating a new blueprint; no supported in-place handler writer was found.
+Root checked this precedence and the independent tracer corrected its initial
+claim to NO_BUG_PROVEN. Generic binding03 remains an unproven candidate, not a
+confirmed bypass or closed security finding. Do not fabricate raw DB mutation
+or change approval contracts without a reachable causal case.
+
+## D-061 — Consent requires the displayed saved campaign snapshot
+
+Transient previews and local text/schedule/sender changes are not a review of
+the currently selected saved campaign. Block approval/pilot start/resume while
+they are present. Save/apply-learning POST returns metadata only: reload the
+campaign list and locate that exact returned ID before showing saved content
+and enabling consent. Failed/missing reload remains blocked. Explicit discard
+or version selection may rebind to the saved snapshot. Do not change API,
+backend authorization/preflight, pilot confirmation or safe pause/cancel/reply
+controls. Bounded source and targeted evidence review PASS after191488ba;
+final wider checks are reconciled in COMMANDS, not production proof.
+
 ## D-060 — Campaign UI state belongs to one scope lifetime
 
 Use a keyed private editor for the existing workstream/business/segment inputs,

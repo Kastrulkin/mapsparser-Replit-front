@@ -1,5 +1,12 @@
 # Production-readiness scorecard — working, not final
 
+20September consent correction (parent191488ba) binds review to the canonical
+saved campaign version. Causal7fail/1pass becomes40targeted UI passes;288guarded
+backend contracts pass with zero effect attempts. Types/lint (one old warning),
+build and199JS integrity pass; independent bounded source/targeted review PASS.
+Final broad evidence is in COMMANDS. This supersedes the source-only consent
+candidate below, without promoting any score, acceptance gate or overallFAIL.
+
 20September campaign-scope correction (parent03ef38f6) has causal4fail/1pass,
 final26 targeted UI passes and288 guarded backend contract passes. TypeScript,
 lint (one existing warning), build and199JS integrity pass. Exact final broader

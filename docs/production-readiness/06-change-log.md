@@ -1,5 +1,17 @@
 # Production-readiness change log
 
+## Saved campaign consent binding — 20 September, parent191488ba
+
+UX-CAMPAIGN-CONSENT-03: unify unsaved-review gating for approval/pilot/resume;
+reload the exact saved campaign ID before clearing preview/edits; rehydrate saved
+channels/senders/schedule on explicit discard or selection. Save/review guidance
+explains the next action. Fourteen new regression cases plus20scope/6existing
+pass; adjacent guarded backend288pass. The old scope positive now expects the
+canonical GET recipient, and the static preflight check requires the stronger
+no-unsaved-review guard. No backend implementation, API/schema, dependency or
+consent-policy change. Independent source/targeted review PASS. COMMANDS retains
+initial failures and final broad evidence; no production action.
+
 ## Campaign scope/lifetime fence — 20 September, parent03ef38f6
 
 UX-CAMPAIGN-SCOPE-02: keyed private editor clears prior lead state immediately;
