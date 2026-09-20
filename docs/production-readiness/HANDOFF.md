@@ -1,6 +1,37 @@
 # Readiness handoff
 
-## Current checkpoint — 20 September, campaign recipient display
+## Current checkpoint — 20 September, campaign editor async scope
+
+Branch codex/production-readiness-20260917, parent/current precommit03ef38f6.
+Owned source: OutreachCampaignBuilder.tsx and new .scope.test.tsx. UI scope key
+is workstream/business/segment; unchanged key retains draft. Layout lifetime
+token rejects responses/catches/finalizers after unmount, scope change and the
+first StrictMode setup. All follow-up loaders and onChanged calls are fenced.
+Already-started authorized requests are not cancelled or rolled back.
+
+Causal RED4fail/1pass; final targeted26pass/13.00s, adjacent guarded backend
+288pass/1.51s, effect counters0. Final TypeScript/lint61243.355ms pass with one
+existing warning. Build14.41s and199JS integrity pass. Exact captures and hashes
+are evidence/campaign-scope-*. Full frozen frontend709tests/133files passes
+330.49s/capture331940.084ms, untruncated; bounded evidence review PASS. No new-build browser,
+native SQL/full backend, Docker or deployed-fix proof.
+
+Next bounded local package: UX-CAMPAIGN-CONSENT-03, source-only. Mock a saved
+ready campaign A, produce a different unsaved preview B in the same scope, then
+observe approval URL. Intended review contract is save→review→approve the same
+version, not approval of old A while showing B. Preserve positives and reproduce
+before implementation. Same-lifetime competing reload ordering is not fixed by
+the scope fence and is not yet a separate reproduced defect.
+
+Do not repeat production navigation merely because login is available: Today
+was confirmed read-only again; RU/ES/EN mix remains. Never submit approval/send/
+settings controls without authority. Nine foreign paths remain excluded. Last
+disk4,828,188KiB (~4.60GiB) is below10GiB; aggregate/restore denials persist and
+unguarded reset effects stay INCONCLUSIVE. OverallFAIL, no push/deploy/cleanup.
+Resume with `git status --short` and COMMANDS' final captured commands, not a
+new whole audit or an alternate route around a denied lane.
+
+## Previous checkpoint — 20 September, campaign recipient display
 
 Parentca0c3d36. UX-CAMPAIGN-RECIPIENT-01 is an additive API/UI display change:
 saved touches join their exact contact UUID to normalized_value; generic and

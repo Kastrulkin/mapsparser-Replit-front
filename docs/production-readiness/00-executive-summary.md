@@ -1,5 +1,12 @@
 # LocalOS readiness executive summary — working, not final
 
+Latest20September continuation (parent03ef38f6) fixes stale campaign data when
+switching lead cards. Twenty-six focused UI checks and288 adjacent mocked
+backend checks pass; types/lint and local build pass. Independent source review
+is scoped to this correction; full check reconciliation is in COMMANDS. The
+authenticated browser is available for read-only checks, not evidence that local
+patches are deployed. Whole acceptance remains FAIL and original gates remain.
+
 Latest20September continuation (parentca0c3d36) adds the exact recipient beside
 each campaign message before review. Local288pure backend tests,6targeted UI
 tests and full689frontend/132files pass; independent bounded source review PASS.

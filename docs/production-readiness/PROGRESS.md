@@ -1,6 +1,28 @@
 # Production-readiness progress
 
-## Current checkpoint — 20 September, campaign recipient visibility
+## Current checkpoint — 20 September, campaign editor scope
+
+- [x] UX-CAMPAIGN-SCOPE-02: reversed campaign/preview/save responses and old busy
+  state reproduced (4 failed / 1 passed). Keyed private editor and per-lifetime
+  response fences now prevent obsolete state, reloads and callbacks.
+- [x] Final 26 targeted UI tests pass, including StrictMode, A→B→A, close,
+  same-key draft preservation and old resolve/reject while B remains busy.
+  Existing guarded backend contracts: 288 pass, all effect counters zero.
+- [x] Final TypeScript/lint pass (one existing warning); local build and all
+  199 reachable JS assets pass. Independent bounded source review PASS.
+- [x] Full frozen frontend:709 tests/133files pass330.49s/capture331940.084ms,
+  no timeout/truncation. Bounded evidence review PASS; source hashes match.
+- [ ] Next separate candidate: unsaved preview B can be displayed while the
+  approval control targets saved campaign A. Reproduce before changing consent.
+
+Branch codex/production-readiness-20260917, parent03ef38f6. The IAB login is
+confirmed read-only; mixed-language Today remains on the deployed page. No
+deployment/DB/provider action, Docker or cleanup. Latest disk 4,828,188KiB
+(~4.60GiB) is below10GiB image floor. Nine foreign paths preserved, denied
+aggregate/restore lanes and earlier unsafe-reset INCONCLUSIVE effects unchanged.
+Original full acceptance remains FAIL; local UI proof is not production proof.
+
+## Previous checkpoint — 20 September, campaign recipient visibility
 
 - [x] UX-CAMPAIGN-RECIPIENT-01: causal backend6fail/1pass and UI5fail/1pass.
   Selected normalized recipient is projected into saved/generic/Riderra touches

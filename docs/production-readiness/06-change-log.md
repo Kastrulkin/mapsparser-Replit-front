@@ -1,5 +1,16 @@
 # Production-readiness change log
 
+## Campaign scope/lifetime fence — 20 September, parent03ef38f6
+
+UX-CAMPAIGN-SCOPE-02: keyed private editor clears prior lead state immediately;
+per-layout-lifetime token guards campaign/recommendation loaders, all action
+responses, errors, busy finalizers, chained reloads and parent notifications.
+Same-key drafts persist; StrictMode and A→B→A use distinct lifetimes. No backend,
+schema, payload, approval/send policy or dependency change. Causal4fail/1pass
+becomes26 targeted passes;288 existing guarded backend contracts pass. Full
+quality/build/aggregate results are reconciled in COMMANDS. Independent source
+review PASS. Already-started server operations are not cancelled. No deployment.
+
 ## Campaign recipient display — 20 September, parentca0c3d36
 
 UX-CAMPAIGN-RECIPIENT-01: exact-contact recipient projection for saved touches,

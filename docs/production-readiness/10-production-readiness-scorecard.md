@@ -1,5 +1,12 @@
 # Production-readiness scorecard — working, not final
 
+20September campaign-scope correction (parent03ef38f6) has causal4fail/1pass,
+final26 targeted UI passes and288 guarded backend contract passes. TypeScript,
+lint (one existing warning), build and199JS integrity pass. Exact final broader
+evidence is in COMMANDS. This closes only cross-scope UI response contamination
+locally; same-scope unsaved-preview consent remains a separate candidate.
+No score, original acceptance criterion or whole-project verdict is promoted.
+
 20September recipient-review slice (parentca0c3d36):288pure backend,6targeted UI
 and full689frontend/132files pass; independent bounded review PASS. Normal
 same-ID contact mutation and non-boolean capability hypotheses are rejected

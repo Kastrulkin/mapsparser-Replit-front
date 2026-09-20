@@ -1,5 +1,22 @@
 # UX and browser verification — working evidence
 
+## Campaign context continuity — 20 September, parent03ef38f6
+
+Owner task: review only the currently opened lead, its recipient and campaign.
+Deferred old campaign/preview/save responses replaced the newer card; old busy
+state blocked new controls. Causal4fail/1pass; final26 targeted cases pass after
+keyed state and lifetime fences. Tests cover exact current approval URL,
+immediate old UI removal, A→B→A, close/reload callback, StrictMode, same-key draft
+preservation, business/segment changes and stale resolve/reject during B busy.
+Original controls, styling and endpoint payloads remain unchanged.
+
+Independent bounded source review PASS; quality/build/aggregate reconciliation
+is in COMMANDS. This is jsdom/mocked API evidence, not new-build browser/mobile
+or production proof. User-authenticated IAB Today was observed read-only; it
+still combines Russian, Spanish and English. No production action was submitted.
+Separate source candidate UX-CAMPAIGN-CONSENT-03 needs causal proof: an unsaved
+preview can obscure which saved version the approval button targets.
+
 ## Campaign recipient visibility — 20 September, parentca0c3d36
 
 Owner/operator task: check where each campaign message will go before approval.

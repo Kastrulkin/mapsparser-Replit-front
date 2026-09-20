@@ -1,5 +1,51 @@
 # Verified commands and evidence
 
+## Campaign editor async scope — 20 September, parent03ef38f6
+
+Captures: existing task evidence/campaign-scope-*.json. Named
+localos-campaign-scope-* tmux sessions, sanitized env-i. Private arm64 Python
+capture helper; Node22 with the existing GtHPOV/no-egress-compatible.cjs chain,
+envDir:false and frontend child cwd. Guarded backend uses the unchanged
+support/campaign_recipient_pure_check.py adjacent selection, disabled pytest
+autoload/conftest/cache and pre-import DB/network/dotenv/child-process guards.
+
+| Suffix | Actual outcome | Duration ms |
+| --- | --- | ---: |
+| red | Causal4fail/1pass,5.01s; actual old-response/busy failures |7340.171|
+| green | Intermediate24pass/2files,11.75s |13502.221|
+| final | Frozen26pass/2files,13.00s;20scope+6existing |14464.038|
+| frontend-full |Frozen709pass/133files,330.49s |331940.084|
+| backend-contract |288pass,1.51s; all guard counters0 |2214.813|
+| quality |First TS/lint pass before final test additions,1existing warning |55320.814|
+| quality-final |Frozen app/node TS and lint pass,1existing warning |61243.355|
+| build |Frozen app source, local app build14.41s; pass |15917.933|
+| integrity |199reachable JS assets pass |176.578|
+| manifest |9source/test/config/guard SHA-256 entries |51.24|
+| precommit |9hashes/staged diff/Gitleaks pass (~211139bytes), overallFAIL preserved |1544.671|
+
+Final captures exit0 without timeout/truncation. Full frontend stderr retains
+known jsdom scroll/navigation and negative error-boundary/auth/network fixture
+diagnostics; it is not empty. No unhandled-error result is reported. App/test
+source stayed frozen during the full run, and all nine manifest hashes still
+match afterward. These timings are checks, not a production performance gain.
+No existing dist was emptied. Build artifact:
+`/private/tmp/localos-campaign-scope-build-20260920.9x30pD/dist`, entry
+index-D2EAyMYE.js, CSS index-BM6vOqzw.css. Build retains upstream Yandex PURE
+annotation and external-outDir warnings. No public-only build or new-build
+browser pass. Independent actual source and bounded evidence review PASS;
+all nine manifest hashes match. Exact commands are retained in each capture.
+
+RED's first approval-URL assertion was not reached after the visible B failure;
+the combined busy/error assertion likewise stopped before rejection. Do not
+claim a baseline real approval, provider effect or separate rejection result.
+Expanded positive controls use saved campaigns explicitly. Same-scope request
+ordering and unsaved-preview consent are not fixed by this lifetime fence.
+OverallFAIL, nine foreign paths, disk floor, aggregate/restore denials and prior
+unsafe-reset INCONCLUSIVE effects persist. No push/deploy/DB/provider/cleanup.
+The precommit scan covers this staged package, not history/images/production
+logs or credential revocation. Only observed documentation/report metadata was
+added afterward; application and test source remained frozen.
+
 ## Campaign recipient review — 20 September, parentca0c3d36
 
 Captures: existing task evidence/recipient-review-*.json. Long checks use named

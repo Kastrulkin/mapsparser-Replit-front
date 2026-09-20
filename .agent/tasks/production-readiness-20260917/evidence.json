@@ -200,6 +200,28 @@
       "result": "Backend causal6fail/1pass then288pure passes1.42s/capture1936.259ms, zero guard counters. UI causal5fail/1pass then6passes4.76s/capture6216.942ms. Full frozen689frontend/132files pass295.18s/capture297624.189ms, no timeout/truncation. App/node TS and full lint pass48447.642ms, one existing warning; scoped Ruff85.355ms. Local app build12.80s/capture14485.890ms and199reachable JS integrity135.526ms pass, untruncated.",
       "limits": "Projection-aware fake SQL and jsdom only; no native JOIN, new-build browser, delayed-response safety, full backend/image or deployed proof. Initial backend fixture failure and first truncated UI RED retained as intermediate evidence. Two supported-writer security hypotheses (same-ID normalized contact mutation, truthy non-boolean capability) are NO_BUG_PROVEN, not fixed vulnerabilities. UX-CAMPAIGN-SCOPE-02 remains source-only late-response candidate. WholeFAIL, nine foreign paths, denied aggregate/restore lanes, disk floor and prior unguarded-reset INCONCLUSIVE effects remain unchanged. No push/deploy/DB action/Docker/cleanup."
     },
+    "subsequent_campaign_scope_fence": {
+      "parent_commit": "03ef38f6",
+      "finding": "UX-CAMPAIGN-SCOPE-02",
+      "scope": "Keyed workstream/business/segment editor state and distinct layout-lifetime token; guards after requests, catch/finally and chained reloads/callbacks. No backend/API/consent/provider policy change.",
+      "source_manifest": "evidence/campaign-scope-manifest.json",
+      "independent_review": "Read-only actual source and bounded evidence PASS, evidence/campaign-scope-review.md; no whole-project verdict",
+      "proof": [
+        "evidence/campaign-scope-red.json",
+        "evidence/campaign-scope-green.json",
+        "evidence/campaign-scope-final.json",
+        "evidence/campaign-scope-frontend-full.json",
+        "evidence/campaign-scope-backend-contract.json",
+        "evidence/campaign-scope-quality-final.json",
+        "evidence/campaign-scope-build.json",
+        "evidence/campaign-scope-integrity.json",
+        "evidence/campaign-scope-precommit.json",
+        "evidence/campaign-scope-notes.md",
+        "evidence/campaign-scope-review.md"
+      ],
+      "result": "Causal4fail/1pass5.01s/capture7340.171ms; frozen26targeted UI/2files pass13.00s/capture14464.038ms. Full frozen709frontend/133files pass330.49s/capture331940.084ms, no timeout/truncation; known jsdom/negative-fixture diagnostics retained. Existing guarded backend contracts288pass1.51s/capture2214.813ms, all counters0. Final TS/lint61243.355ms passes with one existing warning; build14.41s/capture15917.933ms;199JS integrity176.578ms. Nine manifest hashes match afterward.",
+      "limits": "RED first approval URL assertion and separate rejection assertion were not reached; it proves old-response/busy contamination, not actual provider consent/send. Expanded deferred tests use synthetic API mocks/jsdom. No server cancellation, same-lifetime ordering, native SQL/full backend/current image/new-build browser or deployed proof. Unsaved-preview/saved-campaign consent remains separate source-only UX-CAMPAIGN-CONSENT-03. Authenticated IAB Today read-only observation shows mixed locale, not a local-fix rollout. WholeFAIL, nine foreign paths, aggregate/restore denials, disk floor and prior unsafe-reset INCONCLUSIVE effects unchanged. No push/deploy/production/data deletion/Docker/provider action."
+    },
     "foreign_worktree_paths_excluded": 9,
     "historical_verdict_file": "verdict.json",
     "historical_verdict_reviewed_commit": "2f224f051e3b3487a2c0d529d40b547c414ccb52"

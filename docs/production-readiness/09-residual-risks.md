@@ -1,5 +1,15 @@
 # Residual risks — working register
 
+20September after03ef38f6: UX-CAMPAIGN-SCOPE-02 is locally corrected with causal
+old-response/busy evidence and26 focused passes. This supersedes the older
+source-only scope note below, not its historical capture. Requests already
+started can still complete on the server; same-lifetime request ordering and
+new-build browser/current image evidence are not covered. Separate candidate
+UX-CAMPAIGN-CONSENT-03: unsaved preview B can be shown while approval targets
+saved A; source-traced, not causally tested or fixed yet. Temporary operator
+practice: save and review the selected saved version before approving. No
+claim of automatic provider send or backend consent bypass from that trace.
+
 20 September adjudication afterca0c3d36: the prior paragraph's same-contact-ID
 value-mutation concern is NOT a reproduced supported-flow defect. Normal
 contact writers create a new UUID for a changed normalized address and never

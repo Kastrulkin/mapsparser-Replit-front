@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "label": "campaign-scope-manifest",
+  "captured_at": "2026-09-20T20:11:25.246491+00:00",
+  "command": [
+    "shasum",
+    "-a",
+    "256",
+    "frontend/src/components/prospecting/OutreachCampaignBuilder.tsx",
+    "frontend/src/components/prospecting/OutreachCampaignBuilder.scope.test.tsx",
+    "frontend/src/components/prospecting/OutreachCampaignBuilder.test.tsx",
+    ".agent/tasks/production-readiness-20260917/support/managed_growth_vitest.config.mjs",
+    ".agent/tasks/production-readiness-20260917/support/managed_growth_build.config.mjs",
+    ".agent/tasks/production-readiness-20260917/support/campaign_recipient_pure_check.py",
+    "/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-compatible.cjs",
+    "/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-local.cjs",
+    "/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress.cjs"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 51.24,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "b376648fd1ec9428998a41a98fde97c29e72e7c8b33d29572ffd494ab9c980de  frontend/src/components/prospecting/OutreachCampaignBuilder.tsx\n300c1e342dfd10b16c73f6a34cd5901ba3c242389c25470326e6a997503542d7  frontend/src/components/prospecting/OutreachCampaignBuilder.scope.test.tsx\nf931bdbd4783c936b58d375391e1ff8b15c7111da2c5a6ff72b6313f15dbedc1  frontend/src/components/prospecting/OutreachCampaignBuilder.test.tsx\n8d3b4c0cdf9780b91b1b6cb30deb897f40b621c50634b846938264b4a3f91148  .agent/tasks/production-readiness-20260917/support/managed_growth_vitest.config.mjs\nbfd4522902bbd6eb96c959bb23d5f6220b23b5022bee118509c8caa0d86e6892  .agent/tasks/production-readiness-20260917/support/managed_growth_build.config.mjs\n169ba090d446be70bcf07b97b467fd2cb4052b7291f0e490c1f1a992036975fa  .agent/tasks/production-readiness-20260917/support/campaign_recipient_pure_check.py\n2af789a00689ae774f5f42ba5f9774432f6d4308420ff6b351718e3889107500  /private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-compatible.cjs\n63fb97ba9828874223b0cb514bc8349aa02992abe267422ba12cb95daab30c61  /private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-local.cjs\nc4396e02c723b18643539bd8db47478d6cdfb350781b6152f7c961e026f9bcd1  /private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress.cjs\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

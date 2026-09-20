@@ -1,5 +1,16 @@
 # Readiness decisions
 
+## D-060 — Campaign UI state belongs to one scope lifetime
+
+Use a keyed private editor for the existing workstream/business/segment inputs,
+plus a distinct token for each layout-effect lifetime. A key clears stale
+controls immediately; a token additionally suppresses obsolete follow-up
+requests and parent callbacks, including StrictMode setup reuse. Check after
+every await and before catch/finally writes. An unchanged key preserves drafts.
+No new dependency, API payload, consent policy or server-side cancellation.
+This fixes cross-scope responses, not ordering of concurrent same-scope requests.
+Keep the unsaved-preview versus saved-campaign consent candidate separate.
+
 ## D-059 — Show the exact campaign recipient before consent
 
 The owner reviews each message and destination together. Add server recipient
