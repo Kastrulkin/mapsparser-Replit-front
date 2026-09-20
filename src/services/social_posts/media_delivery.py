@@ -8,8 +8,16 @@ import urllib.error
 import urllib.request
 import uuid
 from typing import Any
+from urllib.parse import urljoin
 
+from core import outbound_network
+from services.media_file_storage import load_media_file
 from services.social_posts.recommendations_handoff import _publish_adapter
+
+
+_MAX_EXTERNAL_MEDIA_BYTES = 10_000_000
+_MAX_EXTERNAL_MEDIA_REQUESTS = 5
+_EXTERNAL_MEDIA_HEADERS = {"User-Agent": "LocalOSMedia/1.0 (+https://localos.pro)"}
 
 
 def _telegram_publish_error_state(status_code: int = 0, description: str = "") -> tuple[str, str]:
@@ -244,17 +252,41 @@ def _approved_media_assets(cursor: Any, post: dict[str, Any], snapshot: dict[str
     return resolved
 
 
+def _fetch_public_media(public_url: str) -> bytes | None:
+    """Fetch a bounded media file through validated, DNS-pinned public transport."""
+    next_url = str(public_url or "").strip()
+    visited: set[str] = set()
+    for _ in range(_MAX_EXTERNAL_MEDIA_REQUESTS):
+        if not next_url or next_url in visited:
+            return None
+        visited.add(next_url)
+        response = outbound_network.public_pinned_get(
+            next_url,
+            headers=_EXTERNAL_MEDIA_HEADERS,
+            timeout=20,
+            max_bytes=_MAX_EXTERNAL_MEDIA_BYTES + 1,
+        )
+        if response.status_code in {301, 302, 303, 307, 308}:
+            location = str(response.headers.get("location") or "").strip()
+            if not location:
+                return None
+            next_url = urljoin(next_url, location)
+            continue
+        if not 200 <= int(response.status_code or 0) < 300:
+            return None
+        if len(response.body) > _MAX_EXTERNAL_MEDIA_BYTES:
+            return None
+        return response.body
+    return None
+
+
 def _media_asset_file(asset: dict[str, Any]) -> dict[str, Any]:
     storage_path = str(asset.get("storage_path") or "").strip()
     content = load_media_file(storage_path) if storage_path else None
     public_url = str(asset.get("public_url") or "").strip()
     if content is None and (public_url.startswith("https://") or public_url.startswith("http://")):
         try:
-            response = outbound_urlopen(public_url, timeout=20)
-            try:
-                content = response.read()
-            finally:
-                response.close()
+            content = _fetch_public_media(public_url)
         except Exception:
             content = None
     if not content:

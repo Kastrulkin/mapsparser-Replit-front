@@ -5,7 +5,7 @@ import sys
 from flask import Blueprint, Response, jsonify, request
 
 from core.api_errors import internal_error_response
-from core.auth_helpers import require_auth_from_request, verify_business_access
+from core.auth_helpers import require_auth_from_request, verify_business_access, verify_business_write_access
 from database_manager import DatabaseManager
 from services.ai_runtime import (
     VISION_CAPABILITY,
@@ -36,10 +36,11 @@ def _user_id(user_data: dict) -> str:
     return str(user_data.get("user_id") or user_data.get("id") or "").strip()
 
 
-def _require_business(cursor, business_id: str, user_data: dict):
+def _require_business(cursor, business_id: str, user_data: dict, *, require_write: bool = False):
     if not business_id:
         return False, (jsonify({"success": False, "error": "business_id обязателен"}), 400)
-    has_access, _owner_id = verify_business_access(cursor, business_id, user_data)
+    access_check = verify_business_write_access if require_write else verify_business_access
+    has_access, _owner_id = access_check(cursor, business_id, user_data)
     if not has_access:
         return False, (jsonify({"success": False, "error": "Нет доступа к бизнесу"}), 403)
     return True, None
@@ -126,7 +127,7 @@ def media_settings_post():
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        ok, error_response = _require_business(cursor, business_id, user_data)
+        ok, error_response = _require_business(cursor, business_id, user_data, require_write=True)
         if not ok:
             return error_response
         setting = set_capability_enabled(
@@ -182,7 +183,7 @@ def media_photos_create():
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        ok, error_response = _require_business(cursor, business_id, user_data)
+        ok, error_response = _require_business(cursor, business_id, user_data, require_write=True)
         if not ok:
             return error_response
         if not is_capability_enabled(cursor, business_id, VISION_CAPABILITY):
@@ -224,7 +225,7 @@ def media_photo_upload():
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        ok, error_response = _require_business(cursor, business_id, user_data)
+        ok, error_response = _require_business(cursor, business_id, user_data, require_write=True)
         if not ok:
             return error_response
         if not is_capability_enabled(cursor, business_id, VISION_CAPABILITY):
@@ -313,7 +314,7 @@ def media_photo_analyze(asset_id: str):
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        ok, error_response = _require_business(cursor, business_id, user_data)
+        ok, error_response = _require_business(cursor, business_id, user_data, require_write=True)
         if not ok:
             return error_response
         business = load_business(cursor, business_id)
@@ -360,7 +361,7 @@ def media_photo_new_version(asset_id: str):
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        ok, error_response = _require_business(cursor, business_id, user_data)
+        ok, error_response = _require_business(cursor, business_id, user_data, require_write=True)
         if not ok:
             return error_response
         photo = create_photo_asset_version(
@@ -394,7 +395,7 @@ def media_photo_usage(asset_id: str):
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        ok, error_response = _require_business(cursor, business_id, user_data)
+        ok, error_response = _require_business(cursor, business_id, user_data, require_write=True)
         if not ok:
             return error_response
         cursor.execute("SELECT id FROM photo_assets WHERE id=%s AND business_id=%s AND metadata_json->>'disk_import_available' IS DISTINCT FROM 'false'",(asset_id,business_id))
