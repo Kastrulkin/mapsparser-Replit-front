@@ -1,5 +1,24 @@
 # Readiness decisions
 
+## D-046 — Separate clean dependency preparation from application proof
+
+Do not mutate the shared developer venv to satisfy aggregate tests. Freeze
+the committed runtime/test/constraint manifests, create a private native arm64
+Python3.11.7 venv and bootstrap the Dockerfile's pinned packaging tools first.
+Wheel-only resolution exposed sdist-only googlemaps/pyaes. Review exact official
+archives, build only those exceptions without index/dependency/build-isolation
+resolution, and then install the full selected artifact set with SHA256 hashes.
+Satisfy googlemaps legacy setup_requires with constrained requests beforehand.
+Keep the failed initial resolver and failed supervisor probe as harness evidence.
+
+The final 133-package metadata equality plus pip check closes this environment's
+missing-package/version-preparation gap. It does not prove runtime imports,
+native tests, provider behavior, Linux/AMD64 parity or a reproducible image.
+httpx/httpcore used by test PTB and runtime httpx2/httpcore2 are distinct packages;
+do not replace valid constraints merely because their names differ. Keep current
+test-tool versions in the captured lock and verify them in the actual suite.
+No application source or dependency manifest was changed by this preparation.
+
 ## D-045 — Media approval is not network or write-role admission
 
 An approved post may still reference a hostile stored URL. Reuse canonical

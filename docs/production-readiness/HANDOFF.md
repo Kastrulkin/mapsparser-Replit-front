@@ -1,6 +1,46 @@
 # Readiness handoff
 
-## Current checkpoint — 20 September, frontend terminal PASS
+## Current checkpoint — 20 September, clean dependency parity PASS
+
+Branch unchanged, HEAD before this docs-only checkpoint `8c252df4`; latest
+application source remains `5cc7c0cd`. All nine foreign paths listed below are
+preserved. No source change, push/deploy, DB operation or provider call here.
+
+Use the new private environment:
+`/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python` under
+`/usr/bin/arch -arm64`, Python 3.11.7. All 133 distributions pass exact resolved
+inventory, requirement/constraint metadata checks and `pip check`. Per-platform
+lock SHA256 `e0d42ce31cf155d5d65224f199784af8aa859472dade74a49e9b5129903ff90e`;
+durable raw copies and full stage results are described in COMMANDS. Do not
+reuse the older shared-venv pypdf overlay or call metadata parity app proof.
+All dependency stage destinations exist: **do not replay** either launcher.
+The old v1 remains NOT RUN/NO-GO. The original v2 bootstrap launcher pins the
+earlier helper; its terminal evidence is valid, but it is not a resume command.
+
+Frozen source: `/private/tmp/localos-backend-full-20260920.XoKy4o/source/`.
+Archive SHA256 `7c9fdf2d11ff6a4cce3f2045d1a53aa8631b116531697cba3ad6737c06bc3eb1`.
+No overlays of dirty repo files. Worker `content_generation_role` owns only
+the adjacent `guard/` preparation; no aggregate test/DB/container has launched.
+Draft `guard/sitecustomize.py` now exists, SHA256
+`117c1e3a49cf8145eddda23696202410eb2cfc1fd99588c796a718c500b57868`;
+only AST/static checks were performed. Root/runtime/independent review is pending.
+Review it before use; the old pure-media guard forbids DB/subprocess and is not
+suitable. Copy identical reviewed guard bytes into private archive `src/`,
+because testcontainers migration children replace PYTHONPATH with archive paths.
+The proposed guard allows fixture-specific loopback testcontainers and narrow
+voice search_path options; review these against frozen tests before execution.
+
+Next exact read-only checks: `git status --short`, `git rev-parse HEAD`,
+`df -k /private/tmp`; inspect `backend-deps-v2-inventory-parity-20260920.json`.
+Then finish a new reviewed aggregate runner. There is no approved launch command
+yet. Use only a fresh owned PG16 on 127.0.0.1:35418 and synthetic test DB; never
+reuse the three foreign containers/native PG15. All DSN aliases and five guard
+SHA variables must be set; provider live flags/credentials stay absent. Collect
+first, then the full suite; retain intentional provider skips, not Docker-off
+skips. Source-freeze free 6,592,656 KiB exceeds 5 GiB start but not 10 GiB image margin.
+The production browser login still does not waive the denied local file picker.
+
+## Earlier checkpoint — 20 September, frontend terminal PASS
 
 Branch `codex/production-readiness-20260917`, HEAD before this documentation
 package `54bc55e6723500996b7fd7974c257502747a756e`; frontend documentation is now

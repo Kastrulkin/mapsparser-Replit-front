@@ -1,0 +1,35 @@
+{
+  "label": "source-freeze",
+  "captured_at": "2026-09-20T13:20:17.292584+00:00",
+  "command": [
+    "/bin/sh",
+    "-c",
+    "set -eu\ntest ! -e /private/tmp/localos-backend-full-20260920.XoKy4o/source.tar\ntest ! -e /private/tmp/localos-backend-full-20260920.XoKy4o/source\n/usr/bin/git -C \"/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435\" archive --format=tar --output=/private/tmp/localos-backend-full-20260920.XoKy4o/source.tar 5cc7c0cddc1df4356f23e1e6c6e0f0b68d849721\n/bin/mkdir /private/tmp/localos-backend-full-20260920.XoKy4o/source\n/usr/bin/tar -xf /private/tmp/localos-backend-full-20260920.XoKy4o/source.tar -C /private/tmp/localos-backend-full-20260920.XoKy4o/source\n/usr/bin/shasum -a 256 /private/tmp/localos-backend-full-20260920.XoKy4o/source.tar"
+  ],
+  "cwd": "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK",
+  "source_commit": "5cc7c0cddc1df4356f23e1e6c6e0f0b68d849721",
+  "helper_sha256": "a93ca3fbff74eaa6524aa2294ca958116beef3de2b7c32b91ddab050cc2e7607",
+  "exit_code": 0,
+  "duration_ms": 2337.051,
+  "timed_out": false,
+  "abort_reason": "completed",
+  "stdout": "7c9fdf2d11ff6a4cce3f2045d1a53aa8631b116531697cba3ad6737c06bc3eb1  /private/tmp/localos-backend-full-20260920.XoKy4o/source.tar\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "initial_free_bytes": 6937165824,
+  "final_free_bytes": 6750879744,
+  "owned_group_absent": true,
+  "failure": null,
+  "environment_keys": [
+    "NETRC",
+    "NO_COLOR",
+    "PATH",
+    "PIP_CONFIG_FILE",
+    "PYTHONDONTWRITEBYTECODE",
+    "PYTHONNOUSERSITE",
+    "PYTHON_DOTENV_DISABLED",
+    "TMPDIR",
+    "XDG_CACHE_HOME"
+  ]
+}

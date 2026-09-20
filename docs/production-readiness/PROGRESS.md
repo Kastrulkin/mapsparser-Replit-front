@@ -1,6 +1,35 @@
 # Production-readiness progress
 
-## Current checkpoint — 20 September, frozen frontend verification completed
+## Current checkpoint — 20 September, fresh backend dependencies verified
+
+- [x] Fresh private Python 3.11.7 / macOS arm64 environment installed from
+  the three SHA-verified manifests in source `5cc7c0cd`. All **133** resolved
+  distributions match installed metadata; all 101 release constraints are
+  selected and satisfied, direct runtime/test requirements pass, `pip check`
+  exits 0. Shared `venv` was not changed.
+- [x] Independent terminal review PASS: resolver/lock/inventory agree, both
+  reviewed source-to-wheel chains match, final stages have no truncation,
+  timeout or residual process group.
+- [x] Initial all-wheel resolution stopped on sdist-only `googlemaps`; retained
+  as preparation evidence, not an application failure. Exactly pinned official
+  `googlemaps` and `pyaes` source archives were reviewed and built separately.
+  The final complete install used a captured SHA256 lock and wheel-only policy.
+- [x] Supervisor probe exposed transient signal-zero EPERM during cleanup;
+  treating EPERM as group existence fixed the harness. Repeated timeout probe
+  removed the TERM-resistant descendant, with group absence verified. Both
+  results are retained; no application source/test change was needed.
+- [x] Clean source archive `5cc7c0cd` created, excluding all nine foreign paths.
+- [ ] Full-current backend collection/tests, migrations and Docker image remain
+  unrun. A new aggregate network/DB guard is being prepared, not approved for
+  execution. Dependency parity is not runtime, database or container proof.
+
+Source-freeze capture free disk: 6,592,656 KiB (~6.29 GiB), after the 589 MiB private venv and
+source archive. Keep 5 GiB aggregate start / 2 GiB live floors and the 10 GiB
+image planning margin. No cleanup, user DB mutation, provider send, push/deploy
+or readiness promotion. Next: review/probe the aggregate guard, create one
+owned synthetic PG16 target, then collect and run the frozen backend suite.
+
+## Earlier checkpoint — 20 September, frozen frontend verification completed
 
 - [x] Source `4e33587d`, frontend tree `0af96cd4614e0a1c5b658339b0a73d1a7bec9e46`:
   full unit suite **642 passed / 129 files**, 311.97s; full app/node TypeScript;

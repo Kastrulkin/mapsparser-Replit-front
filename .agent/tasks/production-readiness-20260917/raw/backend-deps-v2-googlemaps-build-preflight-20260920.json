@@ -1,0 +1,37 @@
+{
+  "label": "googlemaps-build-preflight",
+  "captured_at": "2026-09-20T13:18:12.293135+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-c",
+    "import importlib.metadata; assert importlib.metadata.version(\"requests\") == \"2.34.2\"; assert importlib.metadata.version(\"setuptools\") == \"84.0.0\"; print(\"Pinned legacy build prerequisites present\")"
+  ],
+  "cwd": "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK",
+  "source_commit": "5cc7c0cddc1df4356f23e1e6c6e0f0b68d849721",
+  "helper_sha256": "a93ca3fbff74eaa6524aa2294ca958116beef3de2b7c32b91ddab050cc2e7607",
+  "exit_code": 0,
+  "duration_ms": 50.027,
+  "timed_out": false,
+  "abort_reason": "completed",
+  "stdout": "Pinned legacy build prerequisites present\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "initial_free_bytes": 7538544640,
+  "final_free_bytes": 7538536448,
+  "owned_group_absent": true,
+  "failure": null,
+  "environment_keys": [
+    "NETRC",
+    "NO_COLOR",
+    "PATH",
+    "PIP_CONFIG_FILE",
+    "PYTHONDONTWRITEBYTECODE",
+    "PYTHONNOUSERSITE",
+    "PYTHON_DOTENV_DISABLED",
+    "TMPDIR",
+    "XDG_CACHE_HOME"
+  ]
+}

@@ -1,5 +1,71 @@
 # Verified commands and evidence
 
+## Fresh backend dependency environment — 20 September, source 5cc7c0cd
+
+Private root `/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/`.
+Named tmux jobs `localos-deps-v2-20260920` and `localos-deps-install-20260920`
+are terminal. All destinations are exclusive; **do not replay** their scripts.
+Commands/clean environment keys/output/duration/status are captured in
+`.agent/tasks/production-readiness-20260917/raw/backend-deps-v2-*-20260920.json`.
+
+Actual outcomes (milliseconds from capture):
+
+| Phase | Exit | Duration | Result |
+| --- | --- | --- | --- |
+| bootstrap | 0 | 3264.764 | pip26.2, setuptools84.0.0, wheel0.48.0 |
+| wheel-resolution | 1 | 4406.968 | googlemaps4.10.0 lacks a wheel; preparation stop |
+| googlemaps-build-dependencies | 0 | 1852.872 | constrained requests2.34.2 satisfies legacy setup_requires |
+| build-pyaes | 0 | 461.328 | reviewed pure wheel |
+| build-googlemaps | 0 | 460.516 | reviewed pure wheel |
+| resolve-reviewed-wheels | 0 | 24570.043 | 133 exact versions including packaging tools |
+| install-locked | 0 | 32667.579 | wheel-only, force-reinstall, SHA256 hashes required |
+| pip-check-final | 0 | 396.050 | no broken requirements |
+| inventory-parity | 0 | 127.945 | 133 equal distributions, direct requirements/all101 constraints pass |
+| source-freeze | 0 | 2337.051 | clean git archive5cc7c0cd, no dirty overlays |
+
+Final phases have no timeout, output truncation or residual owned process group.
+`supervisor-probe` is a retained harness failure (transient EPERM), not a product
+failure. `supervisor-probe2` intentionally times out after an exited leader leaves
+a TERM-resistant descendant; exit0 leader, timeout=true, group absent,3098.475ms.
+It proves cleanup, not a successful application command.
+
+Final supervisor SHA `a93ca3fbff74eaa6524aa2294ca958116beef3de2b7c32b91ddab050cc2e7607`;
+resume SHA `382e65f7039bb50db3721ff186291ba3db4d9a23145942171c17868b695af63d`;
+metadata verifier SHA `e0df68ec9ee10c9965ee4a7eca88b8bb4405fddf708795efe267c2b45fccd80b`.
+Earlier bootstrap captures correctly record pre-probe helper `e293903b…`.
+Explicit arm64 Python3.11.7, env-i children, NETRC/PIP_CONFIG_FILE=/dev/null,
+no user site/dotenv/bytecode, disabled keyring/cache and explicit public PyPI.
+Dependency fetching permits public index HTTPS; it is not the no-egress test guard.
+
+Reviewed official sdist hashes:
+
+- pyaes1.6.1: `02c1b1405c38d3c370b085fb952dd8bea3fadcee6411ad99f312cc129c536d8f`.
+- googlemaps4.10.0: `3055fcbb1aa262a9159b589b5e6af762b10e80634ae11c59495bd44867e47d88`.
+
+Both builds use `--no-index --no-deps --no-build-isolation`; compatible pinned
+requests/setuptools are present before googlemaps setup_requires executes.
+Raw `backend-deps-v2-reviewed-wheels-20260920.json` ties each source hash to its
+built wheel. `backend-deps-v2-artifact-lock-20260920.json` preserves all133 selected
+artifact identities/URLs/hashes and the original full report SHA. Full private
+`resolved.json` SHA is `fbf32a6f02890c3090c00493c4965c539aa4e2f0f6dccad2246c9898df75f0f5`.
+The complete upstream report remains private/untracked: its embedded package
+README examples triggered two staged Gitleaks patterns (API hash/JWT). The
+redacted initial scans are retained; the commit contains only relevant artifact
+metadata, not those third-party README bodies. No scanner allowlist was added.
+Final staged-only Gitleaks: raw `backend-deps-v2-staged-secret-scan-final-20260920.json`,
+exit0,1318.840ms,225504bytes,zero findings. This is not history/image/venv/foreign
+dirty-file coverage; the two earlier redacted scanner failures are retained.
+`backend-deps-v2-resolved-hashes-20260920.txt` SHA is
+`e0d42ce31cf155d5d65224f199784af8aa859472dade74a49e9b5129903ff90e`.
+These capture one macOS arm64 resolution, not a universal repository/image lock
+or independent supply-chain certification. No runtime import/native test implied.
+Fresh test-tool versions include pytest9.1.1, testcontainers4.15.0, docker7.2.0;
+the forthcoming aggregate must establish their compatibility.
+
+Source archive at `/private/tmp/localos-backend-full-20260920.XoKy4o/source.tar`
+SHA `7c9fdf2d11ff6a4cce3f2045d1a53aa8631b116531697cba3ad6737c06bc3eb1`.
+Only guard preparation is underway there; no aggregate collection/test/DB run.
+
 ## Media fetch and write admission — source5cc7c0cd, 20 September
 
 Exact SHA256 pins:

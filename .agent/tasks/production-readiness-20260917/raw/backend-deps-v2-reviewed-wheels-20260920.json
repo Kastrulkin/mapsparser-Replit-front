@@ -1,0 +1,16 @@
+{
+  "pyaes": {
+    "sdist_sha256": "02c1b1405c38d3c370b085fb952dd8bea3fadcee6411ad99f312cc129c536d8f",
+    "wheel": "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/reviewed-wheels/pyaes-1.6.1-py3-none-any.whl",
+    "wheel_sha256": "af05f3086db6680faeea82b853294c0b806877fcf58fa51729902879d862ff31",
+    "requires_dist": []
+  },
+  "googlemaps": {
+    "sdist_sha256": "3055fcbb1aa262a9159b589b5e6af762b10e80634ae11c59495bd44867e47d88",
+    "wheel": "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/reviewed-wheels/googlemaps-4.10.0-py3-none-any.whl",
+    "wheel_sha256": "a0224d17fc95bc41bfc8e85c13a3b49754971608f94a0c4ace867fd43a430a56",
+    "requires_dist": [
+      "requests<3.0,>=2.20.0"
+    ]
+  }
+}

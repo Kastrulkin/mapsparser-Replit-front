@@ -1,0 +1,37 @@
+{
+  "label": "manifest-requirements.test.txt",
+  "captured_at": "2026-09-20T13:09:05.967702+00:00",
+  "command": [
+    "/usr/bin/git",
+    "-C",
+    "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+    "show",
+    "5cc7c0cddc1df4356f23e1e6c6e0f0b68d849721:requirements.test.txt"
+  ],
+  "cwd": "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK",
+  "source_commit": "5cc7c0cddc1df4356f23e1e6c6e0f0b68d849721",
+  "helper_sha256": "e293903bab2d5c883a8ce5726229038b454f5d04f9912c0c2eee307c3f7f3a26",
+  "exit_code": 0,
+  "duration_ms": 15.194,
+  "timed_out": false,
+  "abort_reason": "completed",
+  "stdout": "pytest\nruff==0.15.0\npsycopg2-binary\nsqlalchemy\ntestcontainers\ndocker\nflask\nflask-migrate\nflask-sqlalchemy\npip-audit\npython-telegram-bot[socks]==20.8\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "initial_free_bytes": 7577460736,
+  "final_free_bytes": 7577456640,
+  "owned_group_absent": true,
+  "failure": null,
+  "environment_keys": [
+    "NETRC",
+    "NO_COLOR",
+    "PATH",
+    "PIP_CONFIG_FILE",
+    "PYTHONDONTWRITEBYTECODE",
+    "PYTHONNOUSERSITE",
+    "PYTHON_DOTENV_DISABLED",
+    "TMPDIR",
+    "XDG_CACHE_HOME"
+  ]
+}
