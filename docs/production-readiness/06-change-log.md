@@ -1,5 +1,14 @@
 # Production-readiness change log
 
+## Approved colleague proxy route — 20 September, parent a231abb8
+
+OPS-TELEGRAM-PROXY-01 reuses the canonical Telegram requests proxy helper in
+the post-commit colleague send. Shared alias precedence and existing timeout,
+approval, recipient, schedule, durable attempt and no-blind-retry contracts are
+preserved. Causal4fail/3pass becomes final32pure passes; no live network call or
+native database check occurred. Separately reconciled stale latest-checkpoint
+copy in reports00/08/09/10; older results retain their revision and scope.
+
 ## Execution admission and post-claim role re-admission — 20 September, parent381de671
 
 AI-APPROVAL-LEGACY-02: the runner now applies canonical and resolved-payload

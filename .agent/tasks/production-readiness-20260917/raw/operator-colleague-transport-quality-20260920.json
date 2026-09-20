@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "operator-colleague-transport-quality",
+  "captured_at": "2026-09-20T16:42:35.045771+00:00",
+  "command": [
+    "/bin/bash",
+    "-c",
+    "set -e; /usr/bin/arch -arm64 /private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python -m ruff check --no-cache --select F821,F822,F823 src/services/operator_colleagues.py tests/test_operator_colleague_transport.py; git diff --check"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 174.117,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "All checks passed!\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

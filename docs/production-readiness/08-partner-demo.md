@@ -4,9 +4,12 @@ Status: **partially exercised; complete presenter rehearsal still open**.
 Latest preparation: private v3 helper permits the two exact previously denied
 partnership GETs, with5pure policy tests and independent review. It has not run
 the server/browser and deliberately retains the older39frontend artifact pin.
-The new publication-label build671 is separately tested, not silently substituted.
-The newer Today source7c374f1f has scoped test/type/lint proof but NO build yet:
-disk guard prevents it. Neither source silently updates the retained v3 artifact.
+The publication-label build671 and subsequent Today builds are separately
+tested, not silently substituted. As of `a231abb8`, the Today API-copy package
+has 667 full frontend units, 31 final focused checks after a test-only correction,
+TypeScript/lint, app/public builds and asset-integrity evidence. The earlier
+19 September disk hold on building Today was resolved for that local package.
+None of this updates the retained v3 artifact or completes its browser rehearsal.
 User reported production IAB login; root observed the Today screen without clicks
 or data actions. This is not synthetic demo completion and does not authorize
 production writes or bypass the denied native file-picker fallback.

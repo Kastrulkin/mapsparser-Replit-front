@@ -1,6 +1,25 @@
 # Readiness handoff
 
-## Current checkpoint — 20 September, execution admission and social re-admission
+## Current checkpoint — 20 September, Telegram colleague transport
+
+Parent `a231abb8`. OPS-TELEGRAM-PROXY-01 is a bounded two-line change in
+`src/services/operator_colleagues.py` plus `tests/test_operator_colleague_transport.py`.
+The approved sender omitted the shared proxy helper even though the deployment
+uses Telegram-specific proxy variables and intentionally no global HTTP proxy.
+Causal RED2:4failed/3passed; final2:32passed/0.90s/1406.815ms, untruncated.
+Initial RED had a recreated-fake-state problem; first final had an unsupported
+replay-response expectation. Neither is a separate product defect. Current
+tests preserve commit-before-effect and no blind retry; no native transaction,
+real proxy/provider or new RBAC certification follows. Four summary documents
+also correct stale build/aggregate scope; no readiness-score promotion.
+
+Password reset is the next independent security investigation, owned separately:
+`src/legacy_routes/public_requests.py` and a new focused regression. Keep its
+uncommitted work separate from this transport commit and verify causal results
+before assigning FIX_PROVEN. Existing nine foreign paths stay excluded. No
+aggregate-v2/restore preparation retry, deletion, provider call or deploy.
+
+## Previous checkpoint — 20 September, execution admission and social re-admission
 
 Parent381de671 on the existing audit branch. AI-APPROVAL-LEGACY-02 now uses
 canonical/payload-aware approval admission at the runner boundary; static AST

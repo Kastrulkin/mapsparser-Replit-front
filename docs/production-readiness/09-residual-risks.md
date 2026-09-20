@@ -5,13 +5,26 @@ Python parity covers 133 distributions; `5cc7c0cd` migrated and 4,910 tests
 collected. The initial full aggregate remains not green (4,886 pass / 9 fail /
 1 error / 14 skip); corrective evidence supports 4,903 unique non-provider cases
 across runs, not a single green aggregate. Seven live-provider skips remain
-intentional. Frontend 642/129, TypeScript, lint, builds and integrity remain
-unchanged evidence. Free space is ~5.8 GiB, below the 10 GiB image floor. V2 has
+intentional. Later Today frontend evidence is 667/130, followed by a test-only
+query correction and 31 focused passes, TypeScript/lint, builds and integrity.
+Source `a231abb8` also has separate reviewed 116- and 467-test pure access/admission
+suites; no later full backend aggregate exists. Free space is ~5.7 GiB, below
+the 10 GiB image floor. V2 has
 not executed: its first script write was safety-rejected; root's guard/probe are
 static-PASS only. New asynchronous permission is pending for preparation and an
 isolated full test, not restore/deploy/deletion; restore approval remains separate. See
 [COMMANDS.md](COMMANDS.md) and [HANDOFF.md](HANDOFF.md); older details are
 historical and do not promote readiness.
+
+Current local security fixes do not prove native concurrent revocation,
+provider delivery or full tool/role coverage. Run/type approval matching is not
+immutable target/payload binding; AI-APPROVAL-BINDING-03 remains a static candidate,
+not a reproduced normal-flow bypass. The serial runner stops at each pending
+approval. Keep manual approval and existing provider snapshot gates; further
+binding changes require a supported lifecycle contract and causal proof.
+Standalone lifecycle lint retains 33 existing F821 findings from dynamic helper
+injection (same count before/after); runtime regressions do not eliminate this
+maintainability/static-analysis limitation. No suppression was added.
 
 Fresh independent whole-diff review remains NOT READY overall. Its new media
 findings are now locally FIX_PROVEN5cc7c0cd with279 guarded pure passes and
@@ -35,7 +48,7 @@ first validated public IP is attempted. Setter-to-reader provenance is source
 traced, not an authenticated native-route or real-network proof.
 
 The historical 16.26 GiB capacity observation below is not current. Current
-headroom is about 5.8 GiB, so the 10 GiB image floor remains unmet. No production
+headroom is about 5.7 GiB, so the 10 GiB image floor remains unmet. No production
 changes follow from the user's browser login; authenticated Today still shows
 mixed locale.
 
@@ -59,13 +72,14 @@ not covered by the raw-provider-output privacy fix. No platform-wide closure cla
 
 Historical19September disk observation was1,819,548KiB (~1.74GiB); that hold is
 superseded by the20September update above. No cleanup or apps stopped. Prior
-direct Operator gatee3e8fbff retains its14/20pure proof. Current-source aggregate,
-Today build/full units and current image still need separate validation.
+direct Operator gatee3e8fbff retains its14/20pure proof. Current-source aggregate
+and current image still need validation; the Today build/full-unit hold was
+subsequently resolved as recorded above.
 
 Newest7c374f1f locally fixes only the static UX-LOCALE-07 subset, with93focused
 tests/TS/lint/independent review. API-origin Russian operational text remains.
-Today build/integrity/full units have not run: explicit preflight1801168KiB free
-fails the2097152KiB floor; system swap allocation rose10→11GiB during this turn.
+At that historical checkpoint, Today build/integrity/full units had not run:
+preflight1801168KiB free failed the2097152KiB floor and swap allocation rose10→11GiB.
 No automated memory cleanup, app shutdown, production action or delete occurred.
 
 Latest19September checkpoint: SEC-RBAC-07 is locally FIX_PROVEN inbe1b1a95,

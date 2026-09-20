@@ -8,8 +8,12 @@ Latest checkpoint: private clean Python parity covers 133 distributions;
 `5cc7c0cd` migrated and 4,910 tests collected. The initial full aggregate is
 not green (4,886 pass / 9 fail / 1 error / 14 skip). Corrective captures support
 4,903 unique non-provider cases across runs, not one full green run; seven
-live-provider skips remain intentional. Frozen frontend 642/129, TypeScript,
-lint, builds and integrity remain unchanged evidence. Free space is ~5.8 GiB,
+live-provider skips remain intentional. Later Today evidence adds667/130 frontend
+units and builds/integrity, then31 focused tests and TypeScript/lint after a
+test-only query correction. Source `a231abb8` adds reviewed access/admission
+patches with separate116/467 pure suites, not a full-current backend rerun.
+Standalone lifecycle lint still has33 existing dynamic-binding F821 findings;
+the scoped nine-file pass is not a global backend lint pass. Free space is ~5.7 GiB,
 below the separate 10 GiB image floor. V2 is not executed: its first script write
 was safety-rejected and root's guard/probe are static-PASS preparation only. New
 asynchronous permission is pending for preparation and an isolated full test, not
@@ -36,10 +40,11 @@ not native PostgreSQL/catalog/grant, real provider, image, full current aggregat
 or production evidence. The intentional writer-only Telegram chat compatibility
 boundary is explicit. No score or release gate is promoted.
 
-Today7c374f1f adds93focused/adjacent passes, TS/lint and independent review for
-static copy only. New build/full-unit/browser results are absent: the disk
-preflight fails below2GiB. API action-copy localization and original release
-gates remain open. The prior620full-unit result is not promoted to this revision.
+At the historical Today7c374f1f checkpoint,93focused/adjacent passes, TS/lint and
+independent review covered static copy only; the below2GiB disk hold prevented
+build/full units then. The later API-copy/build/unit result is recorded above.
+Other unkeyed system text, current-artifact browser proof and original release
+gates remain open; earlier620full units are not promoted to later code.
 
 Newest scoped evidence: frontend67169692 passes620units/129files354.85s,
 51focused checks, TS/lint/build/integrity. Content root/target authorizationbe1b1a95

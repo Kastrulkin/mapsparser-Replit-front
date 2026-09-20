@@ -5,6 +5,7 @@ import os
 import uuid
 import requests
 
+from core.telegram_network import build_requests_proxy_kwargs
 from database_manager import DatabaseManager
 from services.operator_conversations import _row
 from services import operator_workday
@@ -86,7 +87,7 @@ def process_job(job):
         if not token:raise ValueError('Telegram-бот не настроен.')
         c.execute("UPDATE journey_action_notification_deliveries SET attempted_at=NOW(),dispatch_state='unknown' WHERE dedupe_key=%s",(payload['dedupe_key'],))
         db.conn.commit()  # Persist the no-blind-retry fence before network I/O.
-        response=requests.post('https://api.telegram.org/bot'+token+'/sendMessage',json={'chat_id':str(selected['telegram_id']),'text':row['message_text']},timeout=(10,30))
+        response=requests.post('https://api.telegram.org/bot'+token+'/sendMessage',json={'chat_id':str(selected['telegram_id']),'text':row['message_text']},timeout=(10,30),**build_requests_proxy_kwargs())
         body=response.json()
         if response.status_code!=200 or not body.get('ok'):
             c.execute("UPDATE journey_action_notification_deliveries SET dispatch_state='failed' WHERE dedupe_key=%s",(payload['dedupe_key'],))

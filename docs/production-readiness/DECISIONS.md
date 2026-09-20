@@ -1,5 +1,15 @@
 # Readiness decisions
 
+## D-052 — Reuse the configured Telegram route without weakening delivery fences
+
+The colleague sender must honor the same application proxy precedence as the
+adjacent voice/bot transports. Add the existing helper at the HTTP boundary;
+do not introduce a new global proxy, retries, destination selection or client.
+The durable attempted state remains committed before the provider call, and
+uncertain outcomes remain non-retryable pending reconciliation. A mocked request
+without explicit proxy kwargs proves preservation of Requests defaults, not
+that an inherited global proxy would be ignored. No live routing claim follows.
+
 ## D-051 — Approval and post-claim authorization are revalidated at the effect boundary
 
 Legacy blueprint metadata cannot weaken the canonical capability or

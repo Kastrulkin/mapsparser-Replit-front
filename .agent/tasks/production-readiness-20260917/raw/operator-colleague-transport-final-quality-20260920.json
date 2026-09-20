@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "operator-colleague-transport-final-quality",
+  "captured_at": "2026-09-20T16:44:39.240291+00:00",
+  "command": [
+    "/bin/bash",
+    "-c",
+    "set -e; /usr/bin/arch -arm64 /private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python -m ruff check --no-cache --select F821,F822,F823 src/services/operator_colleagues.py tests/test_operator_colleague_transport.py; git diff --check; /usr/bin/shasum -a 256 src/services/operator_colleagues.py tests/test_operator_colleague_transport.py src/core/telegram_network.py /private/tmp/localos-backend-full-20260920.XoKy4o/guard/sitecustomize.py; /usr/bin/arch -arm64 /bin/bash scripts/proof_loop.sh validate production-readiness-20260917"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 304.671,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "All checks passed!\n3b81181c9944128f018336b1d8daf7187f8b4e2cf794bac5c9af2425838e5c36  src/services/operator_colleagues.py\nf24e45e1d2a470f1af920557f0b29702afbaf16901bacf0a432abd5cb041c459  tests/test_operator_colleague_transport.py\n43d4b698b99c2a9cc4d2994b9661db116e70a2df2970a8dbba4682e420b49e6f  src/core/telegram_network.py\n93e4d9d7c99e9653a8e95e2735a369c3ab986e02c2afcb6d206aa63d05a9b590  /private/tmp/localos-backend-full-20260920.XoKy4o/guard/sitecustomize.py\n{\n  \"repo_root\": \"/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\\u0412\\u0441\\u044f\\u043a\\u043e\\u0435/SEO \\u0441 \\u0420\\u0435\\u043f\\u043b\\u0438\\u0442 \\u043d\\u0430 \\u041a\\u0443\\u0440\\u0441\\u043e\\u0440\\u0435\",\n  \"task_id\": \"production-readiness-20260917\",\n  \"task_dir\": \"/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\\u0412\\u0441\\u044f\\u043a\\u043e\\u0435/SEO \\u0441 \\u0420\\u0435\\u043f\\u043b\\u0438\\u0442 \\u043d\\u0430 \\u041a\\u0443\\u0440\\u0441\\u043e\\u0440\\u0435/.agent/tasks/production-readiness-20260917\",\n  \"valid\": true,\n  \"missing_files\": [],\n  \"errors\": []\n}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

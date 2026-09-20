@@ -1,6 +1,26 @@
 # Production-readiness progress
 
-## Current checkpoint — 20 September, execution admission and social role re-admission
+## Current checkpoint — 20 September, approved colleague transport
+
+- [x] OPS-TELEGRAM-PROXY-01: the existing approved colleague sender now uses
+  the shared Telegram proxy helper. Causal RED2:4failed/3passed; final scoped
+  suite32passed/0.90s, capture1406.815ms, without timeout/truncation. Tests cover
+  configured alias precedence, unchanged Requests defaults when absent, commit
+  before effect, receipt/unknown replay without a second send and rejection.
+  Authorization denial is mocked here, not a new role-matrix proof.
+- [x] Executive summary, demo, residual-risk and scorecard headers now reconcile
+  the later667 frontend/31final-focused/116auth/467admission evidence. Historical
+  disk/build holds are dated, not presented as current. No scores were raised.
+- [ ] Reset-password review is in progress. Runtime row/date assumptions are a
+  reachable candidate for a valid-request failure; causal proof and any repair
+  must remain a separate security package, not part of this transport result.
+
+Parent `a231abb8`; no native DB, network/provider request, production mutation,
+push or deploy. Source fix is two lines; historical failed fixture/assertion
+captures remain preserved. Whole-goal acceptance stays FAIL; aggregate/restore
+preparation denials and10GiB image floor remain. Latest disk5,995,684KiB (~5.72GiB).
+
+## Previous checkpoint — 20 September, execution admission and social role re-admission
 
 - [x] AI-APPROVAL-LEGACY-02: the legacy runner now resolves canonical and
   payload-dependent approval policy after public input resolution, requires the

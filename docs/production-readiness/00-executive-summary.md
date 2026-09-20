@@ -10,15 +10,23 @@ Private clean Python parity covers 133 distributions; frozen `5cc7c0cd` migrated
 successfully and collected 4,910 tests. The initial full aggregate is retained
 not green: 4,886 passed, 9 failed, 1 error and 14 skipped. Corrective captures
 support 4,903 unique non-provider cases across runs, not one clean aggregate
-green run; seven live-provider skips remain intentional. The unchanged frontend
-checkpoint remains 642 units across 129 files with TypeScript, lint, builds and
-integrity. Free space is about 5.8 GiB, below the separate 10 GiB image floor.
+green run; seven live-provider skips remain intentional. Later Today copy work
+in `8612efac` passed 667 frontend units across 130 files, app/public builds and
+asset integrity. A test-only query-option correction followed the full run;
+31 focused tests, TypeScript and lint then passed (one existing warning).
+Later `381de671` and `a231abb8` have independently reviewed local access and
+execution-admission fixes, with separate 116- and 467-test pure suites. These
+overlapping suites do not replace a current complete backend run. Standalone
+lifecycle lint retains 33 existing dynamic-binding findings; no all-backend-lint
+success is claimed. Free space is about 5.7 GiB, below the 10 GiB image floor.
 V2 preparation has not executed: its first script write was safety-rejected, and
 root's guard/probe files are static-PASS preparation only. A new asynchronous
 permission request is pending for preparation plus an isolated full test; restore,
 deploy and deletion are excluded. Restore approval remains separate. See
 [COMMANDS.md](COMMANDS.md) and [HANDOFF.md](HANDOFF.md); dated detail below is
-historical and does not promote readiness.
+historical and does not promote readiness. Dated observations below retain their
+original revision scope; local evidence does not identify the deployed version
+or silently update the retained demo artifact.
 
 ## What LocalOS is
 
@@ -30,7 +38,7 @@ writes require the documented human approval or manual boundary.
 
 ## What is materially stronger after this work
 
-- Frozen current frontend4e33587d now passes all642 unit tests across129 files,
+- At the earlier frozen frontend4e33587d checkpoint, all642 unit tests across129 files passed,
   TypeScript, lint (one known warning), app/public builds and asset integrity;
   independent evidence review passes. Existing exact dependencies were reused.
   This does not certify a clean install, browser/API, new backend changes or
@@ -41,7 +49,7 @@ writes require the documented human approval or manual boundary.
   and unsafe redirects while bounding page size and redirect count. Local4e33587d
   has149 passing adjacent checks including25 focused cases and independent review;
   this is synthetic-network proof, not deployed certification. Latest local
-  capacity is about7.08GiB; Docker is running without resets. Current backend
+  capacity was about7.08GiB; Docker was running without resets. Current backend
   dependency/runtime and image checks remain open; image headroom is still below
   the unchanged10GiB planning margin. Prior low-disk failures remain evidence.
 - The shared business writing-style profile now requires write permission when
@@ -59,7 +67,8 @@ writes require the documented human approval or manual boundary.
 - Today static decision/preference/empty-work labels now use ten-language copy
   in local7c374f1f: three causal failing tests become93focused/adjacent passes;
   TypeScript/lint and independent review pass. Server-supplied Russian action
-  labels remain unresolved. On19September new build/full units did not run because free Mac
+  labels were unresolved then; the later additive API-copy slice is covered
+  above, with other unkeyed text still open. On19September new build/full units did not run because free Mac
   space fell below the2GiB safety floor (~1.7GiB, with11GiB swap allocated).
   No deployed or fully translated Today claim is made.
 - New content-plan checks reproduce and fix read-only generation and selected

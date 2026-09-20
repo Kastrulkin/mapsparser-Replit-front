@@ -1,5 +1,25 @@
 # Verified commands and evidence
 
+## Colleague Telegram routing — 20 September, parent a231abb8
+
+Named tmux, private arm64 Python3.11.7, `env -i`, unchanged guard before `src`,
+no DSN, bytecode or plugin autoload. Explicit pure files only; native
+`test_operator_workday.py` was deliberately not run. Raw namespace
+`operator-colleague-transport-*-20260920.json`:
+
+- `red`: initial fake delivery state was recreated; retain as harness evidence.
+- `red2`:4failed/3passed,0.18s/477.956ms, causal missing configured proxy kwargs.
+- `green`:9passed,0.19s/500.412ms, focused plus outbound-helper tests.
+- `final`:3failed/29passed; new positive-replay assertion incorrectly expected
+  `delivery_state` instead of the existing receipt-only replay response.
+- `final2`:32passed,0.90s/1406.815ms; includes pure voice queue/autosubmit/followup
+  and userbot proxy adjacency. No timeout/truncation/stderr. A stub verifies
+  committed attempt before effect and no second request for success/unknown.
+
+These are process-local fake DB/HTTP checks, not a real proxy, delivery, SQL,
+concurrency, full backend suite or production result. Real role SQL is not
+exercised by the mocked authorization-denial control.
+
 ## Execution-admission and social re-admission — 20 September, parent381de671
 
 All pure pytest captures use the private arm64 Python3.11.7 environment, `arch -arm64`,
