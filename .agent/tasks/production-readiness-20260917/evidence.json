@@ -27,6 +27,24 @@
       ],
       "limits": "667 frontend units precede a test-only query option type correction; final31 TodayPage pass afterward. No subsequent aggregate, native DB, browser, image or production proof. Overall acceptance unchanged."
     },
+    "subsequent_security_patch": {
+      "parent_commit": "8612efac",
+      "findings": ["GOOGLE-OAUTH-STALE-ACCESS-02", "CRM-VIEWER-WRITE-01"],
+      "scope": "Local current-access and CRM write-admission fixes only; older aggregate and Today proof retain their original revision scope",
+      "independent_review": "PASS for both bounded source/evidence slices; not a whole-goal verdict",
+      "source_manifest": "raw/access-boundaries-source-manifest-20260920.json",
+      "proof": [
+        "raw/google-oauth-current-access-red-20260920.json",
+        "raw/google-oauth-current-access-green-20260920.json",
+        "raw/google-oauth-current-access-expanded-20260920.json",
+        "raw/crm-request-rbac-red-20260920.json",
+        "raw/crm-request-rbac-red2-causal-20260920.json",
+        "raw/crm-request-rbac-green5-20260920.json",
+        "raw/access-boundaries-final-20260920.json",
+        "raw/access-boundaries-quality-20260920.json"
+      ],
+      "limits": "OAuth causal18 failures then36 focused and103 overlapping adjacent passes; CRM corrected causal viewer201 failure with2positive controls then13passes. Final root116pure tests cover both patches using fake DB/provider boundaries. Initial CRM fixture500 is not causal insert proof. No native SQL/row-lock, clean-image, browser, production or full-aggregate proof. AI approval and social post-claim role candidates remain unexecuted. Overall acceptance unchanged."
+    },
     "foreign_worktree_paths_excluded": 9,
     "historical_verdict_file": "verdict.json",
     "historical_verdict_reviewed_commit": "2f224f051e3b3487a2c0d529d40b547c414ccb52"

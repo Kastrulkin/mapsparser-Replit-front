@@ -1,6 +1,34 @@
 # Readiness handoff
 
-## Current checkpoint — 20 September, local Today display-code patch
+## Current checkpoint — 20 September, OAuth/CRM admission
+
+Parent8612efac on the existing audit branch. Owned code/tests only:
+`src/api/google_business_api.py`, `tests/test_google_oauth_current_access.py`,
+`src/api/crm_integration_requests_api.py`, `tests/test_crm_integration_requests_api.py`.
+OAuth rechecks current owner/admin/activity before exchange and locked writes;
+CRM POST uses canonical write access, viewer GET is retained, network role
+comparison is normalized. No migrations, frontend or production changes.
+
+OAuth RED18fail/18pass, original36 GREEN, expanded103pass; CRM causal RED
+viewer201vs403 with two positive controls passing, final13pass. Root final
+combined116pass0.84s/capture1208.816ms and scoped Ruff/diff PASS. Independent
+source/evidence reviews accept both bounded patches. Earlier CRM
+fixture500 and query-assertion failure are preserved separately. Native SQL,
+lock scheduling, live OAuth and full aggregate are not validated by these fakes.
+
+Next safe work is the two source-traced P1 candidates, not more cosmetic copy:
+AI-APPROVAL-LEGACY-02 (legacy capability policy vs unconditional orchestrator
+override) and SOCIAL-ROLE-READMISSION-02 (read-only admission after publish claim).
+Both need causal pure regressions first. For social, do not block reconciliation
+after a provider call; another role check alone is not full concurrency safety.
+
+Unresolved aggregate-v2/restore preparation denials remain in force. No push,
+deploy, real provider operation, production mutation, deletion or key rotation
+is authorized. Nine foreign dirty paths remain excluded. Latest read-only disk
+observation6,031,316KiB (~5.75GiB) keeps the10GiB image floor unmet. Whole-goal
+acceptance remains FAIL, historical verifier verdict unchanged.
+
+## Previous checkpoint — 20 September, local Today display-code patch
 
 Branch remains `codex/production-readiness-20260917`, parent `625a5d15`.
 UX-LOCALE-07 now has a bounded additive API copy contract: known system action

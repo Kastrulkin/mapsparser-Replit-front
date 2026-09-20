@@ -223,6 +223,32 @@ def _verify_auth_and_access(business_id: str) -> tuple[dict, DatabaseManager] | 
     
     return user_data, db
 
+
+def _require_current_google_oauth_access(cursor, user_id: str, business_id: str, *, lock_for_write: bool = False) -> None:
+    """Signed state identifies the actor, but does not preserve revoked access."""
+    query = """
+        SELECT business.owner_id, actor.is_active, actor.is_superadmin
+        FROM businesses business
+        JOIN users actor ON actor.id = %s
+        WHERE business.id = %s
+    """
+    if lock_for_write:
+        # Fence owner/actor changes until credential persistence commits. The
+        # earlier provider exchange runs without holding these row locks.
+        query += " FOR SHARE OF business, actor"
+    cursor.execute(query, (user_id, business_id))
+    row = cursor.fetchone()
+    if (
+        not row
+        or _row_value(row, "is_active", 1) in (False, 0, "0")
+        or (
+            _row_value(row, "owner_id", 0) != user_id
+            and not _row_value(row, "is_superadmin", 2)
+        )
+    ):
+        raise PermissionError("Google OAuth access is no longer available")
+
+
 def _get_google_account(cursor, business_id: str, account_id: str = None) -> dict | None:
     """Получить Google аккаунт для бизнеса"""
     if account_id:
@@ -444,7 +470,12 @@ def google_oauth_callback():
     if not user_id or not business_id:
         return redirect(f"{frontend_url}{_append_google_auth_status(return_to, 'error')}")
     
+    db = None
     try:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        _require_current_google_oauth_access(cursor, user_id, business_id)
+        db.conn.rollback()
         auth = GoogleBusinessAuth()
         credentials = auth.get_credentials_from_code(code)
         
@@ -466,8 +497,7 @@ def google_oauth_callback():
             print(f"⚠️ Не удалось определить связанные Google Business аккаунты: {discovery_error}")
         
         # Сохраняем или обновляем аккаунт в ExternalBusinessAccounts
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
+        _require_current_google_oauth_access(cursor, user_id, business_id, lock_for_write=True)
         
         # Проверяем, есть ли уже аккаунт для этого бизнеса
         cursor.execute("""
@@ -501,16 +531,20 @@ def google_oauth_callback():
             user_id,
         )
         db.conn.commit()
-        db.close()
         
         # Редиректим в исходный пользовательский сценарий с успешным статусом
         return redirect(f"{frontend_url}{_append_google_auth_status(return_to, 'success')}")
         
     except Exception as e:
+        if db:
+            db.conn.rollback()
         print(f"❌ Ошибка обработки OAuth callback: {e}")
         import traceback
         traceback.print_exc()
         return redirect(f"{frontend_url}{_append_google_auth_status(return_to, 'error')}")
+    finally:
+        if db:
+            db.close()
 
 
 @google_business_bp.route('/api/google/sheets/oauth/authorize', methods=['GET', 'OPTIONS'])
@@ -554,6 +588,10 @@ def google_sheets_oauth_callback():
         return redirect(f"{frontend_url}{_append_google_auth_status(return_to, 'error', 'google_sheets')}")
     db = None
     try:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        _require_current_google_oauth_access(cursor, user_id, business_id)
+        db.conn.rollback()
         auth = GoogleSheetsAuth()
         credentials = auth.get_credentials_from_code(code)
         account_identity = auth.get_account_identity(credentials)
@@ -561,8 +599,7 @@ def google_sheets_oauth_callback():
         account_name = str(account_identity.get("name") or "").strip()
         account_display_name = account_email or account_name or "Google Таблицы"
         encrypted_creds = encrypt_auth_data(json.dumps(auth.credentials_to_dict(credentials)))
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
+        _require_current_google_oauth_access(cursor, user_id, business_id, lock_for_write=True)
         cursor.execute(
             "SELECT id FROM externalbusinessaccounts WHERE business_id = %s AND source = 'google_sheets'",
             (business_id,),

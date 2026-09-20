@@ -1,5 +1,26 @@
 # Production-readiness change log
 
+## Google callback and CRM write admission — 20 September, parent8612efac
+
+GOOGLE-OAUTH-STALE-ACCESS-02: signed-state identity now receives current
+owner/admin and account-activity checks before provider exchange and credential
+persistence. The write phase locks actor/business rows, not the provider phase;
+error paths roll back before close. See D-050. No OAuth format/scope/schema change.
+Original36 red/green and expanded103 pure tests pass; independent static review
+PASS. These are fake provider/DB results, not native row-lock or live OAuth proof.
+
+CRM-VIEWER-WRITE-01: POST uses canonical write access, GET keeps read access,
+and network-wide requests exclude normalized viewer roles while preserving
+existing writer roles. Corrected causal RED shows viewer201instead of403, with
+member201andviewerGET200 controls passing; final worker13pass. The initial
+incomplete-fixture failure is retained, not called causal proof. Final root
+combined116pure tests and scoped Ruff/diff checks PASS; independent source/evidence
+review accepts both patches. No frontend change,
+native DB/provider, deployment or whole-goal readiness claim.
+
+Two newly traced candidates remain unexecuted: legacy AI approval override and
+social post-claim role re-admission. They are in backlog, not silently marked fixed.
+
 ## UX-LOCALE-07 — additive Today system-display codes, 20 September
 
 Parent625a5d15: one backend adapter emits an Open label code and allowlisted

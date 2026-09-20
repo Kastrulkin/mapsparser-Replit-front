@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "label": "access-boundaries-source-manifest",
+  "captured_at": "2026-09-20T15:56:04.194319+00:00",
+  "command": [
+    "/usr/bin/shasum",
+    "-a",
+    "256",
+    "src/api/google_business_api.py",
+    "tests/test_google_oauth_current_access.py",
+    "src/api/crm_integration_requests_api.py",
+    "tests/test_crm_integration_requests_api.py",
+    "src/core/auth_helpers.py",
+    "/private/tmp/localos-backend-full-20260920.XoKy4o/guard/sitecustomize.py"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 32.842,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "c69d1e816a2a2be9614b01361f984f9f13ee134935046074fae29e151955ec0f  src/api/google_business_api.py\ne45054acce00e37b160393064fc0a8a0185368902013681fd8354a6ba0fef346  tests/test_google_oauth_current_access.py\n9d3179dce4aa572abbb3fcb78d941c09988526cf1b8811afc92f081af3d9e3b6  src/api/crm_integration_requests_api.py\n7f70a71ea264de5e522d303e58cc35f1a5310727c6f132a8d5e014b68158a290  tests/test_crm_integration_requests_api.py\nad486fb0c2d59fd80f9d2b084cbd5321b60c92c0f54a62aa6470dc050a0dde7d  src/core/auth_helpers.py\n93e4d9d7c99e9653a8e95e2735a369c3ab986e02c2afcb6d206aa63d05a9b590  /private/tmp/localos-backend-full-20260920.XoKy4o/guard/sitecustomize.py\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "label": "crm-request-rbac-red2",
+  "captured_at": "2026-09-20T15:49:02.240355+00:00",
+  "command": [
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_crm_integration_requests_api.py",
+    "-k",
+    "business_viewer_cannot_submit_a_crm_integration_request or business_member_can_submit_a_crm_integration_request or business_viewer_can_list_crm_integration_requests"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 518.087,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "FF.                                                                      [100%]\n=================================== FAILURES ===================================\n_________ test_business_viewer_cannot_submit_a_crm_integration_request _________\n\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x105858690>\n\n    def test_business_viewer_cannot_submit_a_crm_integration_request(monkeypatch):\n        \"\"\"A viewer may read the tenant, but must not create an internal request.\"\"\"\n        cursor = _Cursor()\n        cursor.fetchone_results = [{\n            \"owner_id\": \"owner-1\",\n            \"has_business_membership\": True,\n            \"has_network_membership\": False,\n            \"owns_network\": False,\n        }, None, {\n            \"id\": \"request-1\",\n            \"business_id\": \"business-1\",\n            \"requested_by\": \"viewer-1\",\n            \"crm_name\": \"MoySklad\",\n            \"note\": \"\",\n            \"status\": \"open\",\n            \"created_at\": None,\n            \"updated_at\": None,\n        }]\n        cursor.fetchall = lambda: [{\"role\": \"viewer\"}]\n        _Database.cursor = cursor\n        _Database.connection = _Connection(cursor)\n        monkeypatch.setattr(crm_integration_requests_api, \"require_auth_from_request\", lambda: {\"user_id\": \"viewer-1\"})\n        monkeypatch.setattr(crm_integration_requests_api, \"DatabaseManager\", _Database)\n    \n        response = _app().test_client().post(\n            \"/api/business/business-1/crm-integration-requests\",\n            json={\"crm_name\": \"MoySklad\"},\n        )\n    \n>       assert response.status_code == 403\nE       assert 201 == 403\nE        +  where 201 = <WrapperTestResponse streamed [201 CREATED]>.status_code\n\ntests/test_crm_integration_requests_api.py:134: AssertionError\n__________ test_business_member_can_submit_a_crm_integration_request ___________\n\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x105bce010>\n\n    def test_business_member_can_submit_a_crm_integration_request(monkeypatch):\n        cursor = _Cursor()\n        cursor.fetchone_results = [{\n            \"owner_id\": \"owner-1\",\n            \"has_business_membership\": True,\n            \"has_network_membership\": False,\n            \"owns_network\": False,\n        }, None, {\n            \"id\": \"request-1\",\n            \"business_id\": \"business-1\",\n            \"requested_by\": \"member-1\",\n            \"crm_name\": \"MoySklad\",\n            \"note\": \"\",\n            \"status\": \"open\",\n            \"created_at\": None,\n            \"updated_at\": None,\n        }]\n        cursor.fetchall = lambda: [{\"role\": \"member\"}]\n        _Database.cursor = cursor\n        _Database.connection = _Connection(cursor)\n        monkeypatch.setattr(crm_integration_requests_api, \"require_auth_from_request\", lambda: {\"user_id\": \"member-1\"})\n        monkeypatch.setattr(crm_integration_requests_api, \"DatabaseManager\", _Database)\n    \n        response = _app().test_client().post(\n            \"/api/business/business-1/crm-integration-requests\",\n            json={\"crm_name\": \"MoySklad\"},\n        )\n    \n        assert response.status_code == 201\n        assert _Database.connection.committed is True\n>       assert any(\"SELECT bm.role\" in query for query, _ in cursor.queries)\nE       assert False\nE        +  where False = any(<generator object test_business_member_can_submit_a_crm_integration_request.<locals>.<genexpr> at 0x105b16500>)\n\ntests/test_crm_integration_requests_api.py:170: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_crm_integration_requests_api.py::test_business_viewer_cannot_submit_a_crm_integration_request\nFAILED tests/test_crm_integration_requests_api.py::test_business_member_can_submit_a_crm_integration_request\n2 failed, 1 passed, 7 deselected in 0.19s\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

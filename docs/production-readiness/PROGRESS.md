@@ -1,6 +1,29 @@
 # Production-readiness progress
 
-## Current checkpoint — 20 September, Today API-owned display copy
+## Current checkpoint — 20 September, remaining callback/CRM write admission
+
+- [x] GOOGLE-OAUTH-STALE-ACCESS-02: two signed-state callbacks now recheck
+  current owner/admin and user activity before exchange and before persistence.
+  Short shared DB row locks occur only after provider I/O; failures roll back
+  before close. Causal RED18failed/18passed, same36 GREEN, expanded103passed.
+  Independent static review PASS. Provider, state and row data are synthetic;
+  native SQL/concurrent lock behavior and live OAuth are not proven.
+- [x] CRM-VIEWER-WRITE-01: canonical POST write gate and normalized network
+  viewer exclusion; viewer GET preserved. Initial fixture-failed RED retained;
+  corrected causal RED shows201forviewer against403expected, with two positive
+  controls passing. Final worker13pass and root combined116pass across seven
+  pure test files; scoped Ruff F821/F822/F823 and diff checks pass. Final
+  independent source/evidence review PASS; no native SQL/persistence proof.
+- [ ] Read-only trace found two additional candidates: legacy runner's
+  unconditional approval override and social provider-phase read re-admission
+  after a write claim. Both are recorded as CANDIDATE, not executed exploits or
+  completed fixes. These take precedence over further cosmetic locale work.
+
+Parent8612efac; no frontend change, live provider/DB access, push or deployment.
+Nine foreign paths remain excluded. The two denied aggregate/restore preparation
+lanes were not retried. Whole-goal acceptance remains FAIL/incomplete.
+
+## Previous checkpoint — 20 September, Today API-owned display copy
 
 - [x] User-reported IAB login reconfirmed read-only on Today: authenticated
   SuperAdmin screen, mixed locale still visible. No refresh, navigation,

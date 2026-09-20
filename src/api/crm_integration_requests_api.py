@@ -5,7 +5,7 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
-from core.auth_helpers import require_auth_from_request, verify_business_access
+from core.auth_helpers import require_auth_from_request, verify_business_access, verify_business_write_access
 from database_manager import DatabaseManager
 
 
@@ -16,13 +16,14 @@ def _normalize_crm_name(value: object) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip()).casefold()
 
 
-def _authorized(business_id: str):
+def _authorized(business_id: str, *, require_write: bool = False):
     user_data = require_auth_from_request()
     if not user_data:
         return None, (jsonify({"success": False, "error": "Требуется авторизация"}), 401)
     db = DatabaseManager()
     cursor = db.conn.cursor()
-    has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+    access_verifier = verify_business_write_access if require_write else verify_business_access
+    has_access, owner_id = access_verifier(cursor, business_id, user_data)
     if not has_access:
         db.close()
         return None, (jsonify({"success": False, "error": "Нет доступа к бизнесу" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404)
@@ -57,6 +58,7 @@ def _can_manage_network(cursor, network_id: str, user_data: dict) -> bool:
               ON nm.network_id = n.id
              AND nm.user_id = %s
              AND nm.status = 'active'
+             AND LOWER(BTRIM(nm.role)) <> 'viewer'
             WHERE n.id = %s
               AND (n.owner_id = %s OR nm.user_id IS NOT NULL)
         ) AS allowed
@@ -96,7 +98,7 @@ def list_crm_integration_requests(business_id: str):
 
 @crm_integration_requests_bp.route("/api/business/<business_id>/crm-integration-requests", methods=["POST"])
 def create_crm_integration_request(business_id: str):
-    auth, error = _authorized(business_id)
+    auth, error = _authorized(business_id, require_write=True)
     if error:
         return error
     user_data, db, cursor = auth

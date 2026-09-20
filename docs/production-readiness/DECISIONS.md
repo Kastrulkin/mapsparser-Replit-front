@@ -1,5 +1,20 @@
 # Readiness decisions
 
+## D-050 — OAuth state is identity, not a frozen authorization grant
+
+Keep the existing Google owner-or-superadmin contract; signed, purpose-bound
+600-second state does not preserve a revoked role or a blocked account. Check
+current DB identity before exchanging the code, end that read transaction, then
+check again under shared actor/business row locks before persisting credentials
+or rebinding Sheets integrations. Do not hold row locks during provider I/O.
+The inactive flag follows `verify_session`, including its legacy NULL handling.
+Failure rolls back before `DatabaseManager.close`, which otherwise commits.
+
+This does not change callback URLs, OAuth scopes, state format, schema, member
+rights or provider publication approval. Pure callback tests prove ordered
+admission and synthetic effects; native PostgreSQL lock scheduling, live OAuth,
+related-account concurrency and deployed behavior remain separate evidence.
+
 ## D-049 — Localize explicit system copy, not arbitrary API text
 
 Today work items carry backwards-compatible `action.label_code=today.open`.

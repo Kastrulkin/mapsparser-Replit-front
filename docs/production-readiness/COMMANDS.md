@@ -1,5 +1,55 @@
 # Verified commands and evidence
 
+## Callback current-access checks — 20 September, parent 8612efac
+
+`raw/google-oauth-current-access-{red,green,expanded}-20260920.json`
+record exact commands and output. Named tmux sessions use private Python3.11.7
+arm64, `arch -arm64`, `env -i`, `PYTHONDONTWRITEBYTECODE=1`, disabled pytest
+plugin autoload and the unchanged `XoKy4o/guard` before `src` in PYTHONPATH.
+No DSN, real provider, Docker, production or denied aggregate/restore runner.
+
+- RED: 18 failed / 18 passed, 0.50s pytest / 779.106ms capture. Actual signed-state
+  callbacks exchange the fake code or persist fake credentials after revocation.
+- Same original36 GREEN: 36 passed, 0.43s / 774.431ms capture.
+- Expanded: 103 passed, 0.77s / 1177.268ms, covering42 callback cases plus Google
+  auth recovery, performance details, Sheets auth/preconditions and blueprint
+  runtime connections. This includes fake rollback/close and query-lock ordering.
+- All three exit as expected without timeout/truncation; no stderr. Independent
+  static review PASS. Native SQL/lock contention and live OAuth are not exercised.
+
+The focused36 and expanded103 overlap; do not add them. Workspace source and
+existing dependencies are reused, not a clean archive or a whole-project verdict.
+
+CRM raw captures use `crm-request-rbac-*-20260920.json`. The first RED is an
+incomplete-fixture500, not proof of an unauthorized insert. Corrected `red2`
+has a genuine viewer201 failure plus a test-only required-query assertion;
+`red2-causal` retains the actual201-vs403 failure with writer201/viewerGET200
+positive controls passing: 1failed/2passed, 498.621ms. The query assertion was
+added back for the patched source. Network viewer/member/manager controls and
+normalized network SQL predicate are included in final `green5`:13pass0.18s,
+496.265ms. All intermediate failures/greens remain exact, not relabelled.
+
+Final root `access-boundaries-final-20260920.json` combines the six Google files
+above with `tests/test_crm_integration_requests_api.py`:116passed0.84s,
+1208.816ms, exit0, no timeout/truncation/stderr. This is a scoped pure suite,
+not the rejected full aggregate. `access-boundaries-quality-20260920.json`
+checks four changed source/test files with Ruff F821/F822/F823: exit0,
+1251.303ms. Unchanged frontend was not rerun for this backend-only patch.
+
+`access-boundaries-source-manifest` records the four source/test SHA256s,
+canonical role helper and unchanged original guard, exit0/32.842ms. Structural
+proof-ledger validation passes97.168ms; this is not acceptance sufficiency.
+The initial staged secret scan exits1 with three generic-key candidates. Fully
+redacted detailed findings locate all three in OAuth RED's synthetic SQL failure
+display: pytest truncates a column list into the suffix of a randomly generated
+test UUID. Provider/DB are fake and the encrypted value is the explicit
+`synthetic-encrypted` literal. These are not real credentials. Preserve the
+original exit1 and redacted findings; do not weaken the scanner or rewrite RED.
+Independent read-only triage confirms all three as false positives.
+Separate `access-boundaries-code-secret-scan` covers all four changed code/test
+files: exit0/201.127ms, 24,782bytes, zero findings. This is not a full history,
+image or production-secret assessment.
+
 ## Today display-code regression — 20 September, parent 625a5d15
 
 Unique `raw/today-copy-*-20260920.json` captures contain exact commands, cwd,
