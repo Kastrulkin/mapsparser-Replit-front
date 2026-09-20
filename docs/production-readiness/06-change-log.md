@@ -1,5 +1,14 @@
 # Production-readiness change log
 
+## Current private-environment advisory evidence — 20 September, parentaf351060
+
+No application/dependency edit. Revalidated133 installed versions, completed a
+strict current PyPI audit with no skips or returned advisories, collected license
+declarations, and independently checked exact audited/installed map equality.
+This replaces the missing current macOS Python advisory result only; existing
+image/native/library/license/credential and whole-goal gates remain. The static
+profile helper investigation was rejected as a reachable product finding.
+
 ## Password reset runtime/transaction contract — 20 September, parentcf36cbb0
 
 SEC-AUTH-RESET-02 fixes a valid native TIMESTAMP reset returning500 because the

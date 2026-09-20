@@ -1,5 +1,20 @@
 # Readiness decisions
 
+## D-054 — Scan the exact installed set without conflating it with the release image
+
+Revalidate the installed133-package map before a strict advisory query, then
+compare the audited normalized name/version map to the same inventory. Do not
+silently skip unknown packages, install new versions, treat zero findings as
+absence of all vulnerabilities, or transfer macOS results to Linux/AMD64 images.
+License declarations are an inventory, not legal compliance or evidence of a
+commercial license. Preserve PyMuPDF and historical credential owner decisions.
+
+The unused auth_system.update_user defect is dormant debt, not a demonstrated
+profile outage: the live route uses different correct SQL. Prioritize the
+reachable untranslated Progress branch over rewriting that unused helper.
+Codex Security has no callable tool in the current tool inventory; its optional
+scan/deep-scan branch was not run or represented by pip-audit.
+
 ## D-053 — Reset is one recovery transaction; unsafe evidence cannot be laundered
 
 Use the actual main DB wrapper and SELECT projection before judging row types.

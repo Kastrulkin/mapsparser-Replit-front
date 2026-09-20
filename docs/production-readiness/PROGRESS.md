@@ -1,6 +1,30 @@
 # Production-readiness progress
 
-## Current checkpoint — 20 September, guarded password reset and authenticated UI
+## Current checkpoint — 20 September, current native dependency evidence
+
+- [x] Revalidated the current private arm64 environment:133 distributions exactly
+  match the locked artifact inventory and current three requirements manifests;
+  capture206.481ms. No dependency was installed, upgraded or removed.
+- [x] Strict current PyPI advisory scan:133checked,0skips,0known advisories,
+  0fixes;15948.290ms,exit0,untruncated. Independent scoped review PASS.
+- [x] Current license metadata inventory:133packages,56License-Expression
+  fields; every package has at least one declaration field. This is metadata,
+  not a legal/compliance verdict. PyMuPDF owner/license decision remains open.
+- [x] Profile helper investigation rejected as a reachable product finding:
+  auth_system.update_user has dormant parameter-order debt, but the actual
+  profile PUT uses a different, correctly ordered path. No application edit.
+- [ ] Next source package: reproduce and fix untranslated system labels in the
+  Progress managed-growth branch with card_state coverage, preserving user/API
+  business text. Full aggregate/restore preparation denials remain in force.
+
+Parentaf351060. AC6 closes only the current macOS Python advisory-inventory gap;
+Docker/Linux/OS/native libraries, bot/AMD64, image/layer/log scans, historical
+credential revocation and license decisions remain open. No scores or whole-goal
+status promoted. Current read-only disk5,822,536KiB (~5.55GiB) remains below10GiB.
+Prior unguarded reset-run effects remain INCONCLUSIVE; this audit does not alter
+that conclusion. Nine foreign dirty paths preserved; no production action.
+
+## Previous checkpoint — 20 September, guarded password reset and authenticated UI
 
 - [x] SEC-AUTH-RESET-02: corrected PostgreSQL TIMESTAMP handling in confirm-reset;
   atomic password/token/session update, scoped session revocation, rollback and

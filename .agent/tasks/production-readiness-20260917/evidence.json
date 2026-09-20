@@ -103,6 +103,18 @@
       "scope": "User-owned IAB Today/Progress/Content/Agents read-only render and bounded captured console check",
       "limits": "No deployed revision attestation or verification of unshipped local patches. Mixed locale remains; current Progress managed-growth branch has untranslated system copy. No submitted data controls or complete scenario audit."
     },
+    "current_native_dependency_audit": {
+      "parent_commit": "af351060",
+      "scope": "Current private macOS arm64 Python distributions only; no application/dependency change",
+      "proof": [
+        "raw/current-native-dependency-parity-20260920.json",
+        "raw/current-native-python-advisories-20260920.json",
+        "raw/current-native-license-metadata-20260920.json",
+        "raw/current-native-advisory-evidence-validation-20260920.json"
+      ],
+      "result": "133 exact installed/audited/artifact versions; strict PyPI audit0skips/0returned advisories/0fixes,15948.290ms,exit0;133license metadata entries,56License-Expression fields. Independent scoped PASS.",
+      "limits": "Not Docker/Linux/OS/embedded native libraries/AMD64/bot, whole-history/image/log secret scanning, legal compliance, PyMuPDF entitlement or historical credential revocation. No readiness score promotion."
+    },
     "foreign_worktree_paths_excluded": 9,
     "historical_verdict_file": "verdict.json",
     "historical_verdict_reviewed_commit": "2f224f051e3b3487a2c0d529d40b547c414ccb52"
@@ -419,7 +431,7 @@
         "raw/backend-full-handoff-secret-scan-20260920.json"
       ],
       "gaps": [
-        "Latest scoped source/documentation secret scans pass; dependency parity covers 133 private macOS distributions. Neither substitutes for current resolved vulnerability/license triage or current image/layer/log/OS/native/bot scans. Historical privileged credential revocation and PyMuPDF license basis await owner confirmation. No live credential test, key rotation or history rewrite is authorized. The threat-model and targeted AI/role/SSRF controls remain bounded evidence, not universal tool isolation proof."
+        "Latest scoped source/documentation secret scans pass. Current private macOS133-distribution strict PyPI scan now returns0advisories/0skips with exact audited/installed parity; license declarations are inventoried, not legal compliance. Current image/layer/log/OS/embedded-native/AMD64/bot scans remain open. Historical privileged credential revocation and PyMuPDF license basis await owner confirmation. No live credential test, key rotation or history rewrite is authorized. The threat-model and targeted AI/role/SSRF controls remain bounded evidence, not universal tool isolation proof."
       ],
       "historical_checkpoint": {
         "status": "FAIL",

@@ -1,5 +1,11 @@
 # Evidence Bundle: production-readiness-20260917
 
+20 September current macOS dependency checkpoint:133/133 installed/artifact
+parity, strict PyPI advisory scan133checked/0skips/0findings/0fixes15.948290s,
+133license metadata entries, exact audited-map verification and independent
+scoped PASS. No app or dependency change. This closes only the current private
+Python advisory-evidence gap; overallFAIL, image/native and owner gates remain.
+
 20 September scoped checkpoint: SEC-AUTH-RESET-02 has guarded causal
 RED6fail/1pass, focused7pass and adjacent16pass0.53s/2586.098ms; recorded guard
 counters zero, independent source/evidence PASS. Native datetime TypeError is

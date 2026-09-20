@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "label": "current-native-advisory-evidence-validation",
+  "captured_at": "2026-09-20T17:20:18.872020+00:00",
+  "command": [
+    "/usr/bin/jq",
+    "-e",
+    "-s",
+    "def canonical: ascii_downcase | gsub(\"[-_.]+\";\"-\"); (.[0].stdout|fromjson|.installed) as $installed | (.[1].stdout|fromjson) as $audit | ($audit.dependencies|map({key:(.name|canonical),value:.version})|from_entries) as $audited | (.[2].stdout|fromjson) as $licenses | {captures_complete:(all(.[]; .exit_code==0 and .timed_out==false and .stdout_truncated==false and .stderr_truncated==false)), exact_inventory_match:($installed==$audited), installed_count:($installed|length),audited_count:($audit.dependencies|length), skipped_count:([$audit.dependencies[]|select(has(\"skip_reason\"))]|length),vulnerability_count:([$audit.dependencies[].vulns[]]|length),fix_count:($audit.fixes|length),license_inventory_matches_artifact:$licenses.inventory_equal_to_artifact_manifest,license_count:$licenses.distribution_count} | if (.captures_complete and .exact_inventory_match and .installed_count==133 and .audited_count==133 and .skipped_count==0 and .vulnerability_count==0 and .fix_count==0 and .license_inventory_matches_artifact and .license_count==133) then . else error(\"dependency evidence mismatch\") end",
+    ".agent/tasks/production-readiness-20260917/raw/current-native-dependency-parity-20260920.json",
+    ".agent/tasks/production-readiness-20260917/raw/current-native-python-advisories-20260920.json",
+    ".agent/tasks/production-readiness-20260917/raw/current-native-license-metadata-20260920.json"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 10.696,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\n  \"captures_complete\": true,\n  \"exact_inventory_match\": true,\n  \"installed_count\": 133,\n  \"audited_count\": 133,\n  \"skipped_count\": 0,\n  \"vulnerability_count\": 0,\n  \"fix_count\": 0,\n  \"license_inventory_matches_artifact\": true,\n  \"license_count\": 133\n}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

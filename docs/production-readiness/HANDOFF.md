@@ -1,6 +1,36 @@
 # Readiness handoff
 
-## Current checkpoint — 20 September, guarded reset package
+## Current checkpoint — 20 September, native advisory closure
+
+Parentaf351060. No application source/dependency changes. Current private
+macOS arm64 venv remains133/133 equal to its artifact map and the unchanged
+requirements.txt, requirements.test.txt and requirements.release.constraints.txt.
+Strict pip-audit2.10.1/PyPI scan returns133checked/0skips/0advisories/0fixes,
+15948.290ms, exit0, untruncated. Independent scoped review PASS.
+The metadata-only support/dependency_metadata_check.py inventories133 licenses,
+56License-Expression fields. At least one declaration per distribution is not
+proof of compatibility, notices or commercial entitlement; PyMuPDF remains
+owner-pending. Cache is isolated at /private/tmp/localos-native-advisory-20260920.LYhCkc
+(1396KiB at observation), not a new global environment or server. Do not rerun
+the finished tmux audit merely because its session has terminated.
+
+Raw current-native-{dependency-parity,python-advisories,license-metadata,
+advisory-evidence-validation}-20260920.json retain exact commands/results.
+The final jq check proves matching name/version maps and complete captures.
+An initial verifier wrapper used nonexistent /usr/local/bin/jq and ran no check;
+the actual captured verifier uses /usr/bin/jq. Not a product or scanner failure.
+
+Next safe source work is the observed Progress managed-growth locale branch:
+map route/widget/API boundaries, add a failing Spanish card_state scenario,
+then translate only system copy using existing conventions and review/build.
+The dormant auth_system.update_user parameter-order suspicion is not reachable
+from current in-repo callers; public PUT/users/profile follows the correct
+auth_user_api path. Do not spend this lane on an unmeasured dead-code rewrite.
+Retain production restrictions, denied aggregate/restore lanes, the10GiB image
+floor (~5.55GiB observed), nine foreign dirty paths and unresolved prior unsafe-
+reset-run effects. Overall acceptance remains FAIL, not release approval.
+
+## Previous checkpoint — 20 September, guarded reset package
 
 Parentcf36cbb0. Owned source is only confirm_reset in
 src/legacy_routes/public_requests.py; tests/test_password_reset_sessions.py uses

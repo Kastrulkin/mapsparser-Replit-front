@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "current-native-audit-quality",
+  "captured_at": "2026-09-20T17:23:20.452753+00:00",
+  "command": [
+    "/bin/bash",
+    "-c",
+    "set -e; /private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/ruff check --no-cache --select F821,F822,F823 .agent/tasks/production-readiness-20260917/support/dependency_metadata_check.py; git diff --check; /usr/bin/shasum -a 256 .agent/tasks/production-readiness-20260917/support/dependency_metadata_check.py requirements.txt requirements.test.txt requirements.release.constraints.txt .agent/tasks/production-readiness-20260917/raw/current-native-python-advisories-20260920.json .agent/tasks/production-readiness-20260917/raw/current-native-license-metadata-20260920.json; /bin/bash scripts/proof_loop.sh validate production-readiness-20260917"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 240.798,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "All checks passed!\n5b6f9b059be73798efd9bae06d7f2329451567abfc314bed0b3113cb3d5a8bf5  .agent/tasks/production-readiness-20260917/support/dependency_metadata_check.py\ncbc339f2b4d782ff9cfe043dd02f0adb4a07531c5a16ebdcfbb4f150020eda73  requirements.txt\nf4217b1ea4c2504a3ec9632d1b58b255cf94592f47420a6f1fff97261c364d84  requirements.test.txt\n1f9835cdc2cf40c714601275409d7f16ecd6c0ca6cedd963f3edebaa0176097c  requirements.release.constraints.txt\n14e6c5adb85da4b4cff20aeb22fe5c5e67995f06d2ef891b8d5ea80a3431d028  .agent/tasks/production-readiness-20260917/raw/current-native-python-advisories-20260920.json\n23e94042f219deb54f3e7c45c7ca1c9b9bdda45c76ed8f7cb32eba45b08f8edd  .agent/tasks/production-readiness-20260917/raw/current-native-license-metadata-20260920.json\n{\n  \"repo_root\": \"/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\\u0412\\u0441\\u044f\\u043a\\u043e\\u0435/SEO \\u0441 \\u0420\\u0435\\u043f\\u043b\\u0438\\u0442 \\u043d\\u0430 \\u041a\\u0443\\u0440\\u0441\\u043e\\u0440\\u0435\",\n  \"task_id\": \"production-readiness-20260917\",\n  \"task_dir\": \"/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\\u0412\\u0441\\u044f\\u043a\\u043e\\u0435/SEO \\u0441 \\u0420\\u0435\\u043f\\u043b\\u0438\\u0442 \\u043d\\u0430 \\u041a\\u0443\\u0440\\u0441\\u043e\\u0440\\u0435/.agent/tasks/production-readiness-20260917\",\n  \"valid\": true,\n  \"missing_files\": [],\n  \"errors\": []\n}\n",
+  "stderr": "git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

@@ -1,5 +1,14 @@
 # Residual risks — working register
 
+20 September later dependency checkpoint: the current private macOS133-package
+set has now passed a strict PyPI advisory scan with0skips/0returned advisories,
+not parity alone. Exact installed/audited maps match. License declarations are
+inventoried, but owner entitlement/compatibility remains unverified. This closes
+that local advisory-evidence gap only. Current Linux image/OS/native/AMD64/bot,
+layer/log scans and historical credential revocation remain open. No readiness
+score changes. The preceding reset packageaf351060 has16guarded pure passes;
+its earlier unguarded worker runs still have INCONCLUSIVE possible effects.
+
 Latest checkpoint supersedes stale capacity/dependency holds below. Private clean
 Python parity covers 133 distributions; `5cc7c0cd` migrated and 4,910 tests
 collected. The initial full aggregate remains not green (4,886 pass / 9 fail /

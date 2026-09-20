@@ -4,6 +4,12 @@ Updated 20 September 2026. Scores describe evidence at the stated checkpoint,
 not an average that can waive a release gate. The original Definition of Done
 and unresolved P1 items remain controlling.
 
+Later20September addition: strict current macOS Python scan covers all133
+installed versions with0skips and0returned PyPI advisories, independently
+reconciled to the artifact inventory. License metadata is not compliance proof.
+This is a bounded AC6 evidence improvement, not image/OS/native, entitlement or
+historical-key closure; scores below remain unchanged.
+
 Latest checkpoint: private clean Python parity covers 133 distributions;
 `5cc7c0cd` migrated and 4,910 tests collected. The initial full aggregate is
 not green (4,886 pass / 9 fail / 1 error / 14 skip). Corrective captures support

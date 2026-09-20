@@ -117,6 +117,24 @@ capture5.387119s,exit0/no timeout/truncation. Root confirmed zero remaining
 
 ## Secret and dependency findings
 
+20 September current private macOS arm64 environment:133 installed distributions
+still equal the hash-locked artifact map and current requirement manifests.
+Strict pip-audit2.10.1 against PyPI checked all133 with0skips,0returned advisories
+and0fixes in15.948290s; exact audited/installed name-version equality and complete
+captures were separately verified. Independent scoped review PASS. The scanner
+did not install/upgrade packages or import LocalOS. This is a dated Python
+advisory result, not a claim that there are no unknown vulnerabilities, nor an
+OS/native-library/image/AMD64/bot scan. Raw current-native-python-advisories and
+advisory-evidence-validation captures retain the actual result.
+
+Current metadata inventory contains133 declarations,56License-Expression fields.
+PyMuPDF1.28.2 still declares AGPL/commercial dual licensing; entitlement remains
+owner-pending. psycopg2-binary2.9.13 declares LGPL with exceptions and
+python-telegram-bot20.8 LGPLv3. socksio1.0.0 has License=UNKNOWN but a MIT
+classifier: this is inconsistent metadata, not a finding of unlicensed code.
+At least one metadata declaration per package does not establish compatibility,
+distribution notices, bundled-library terms or legal compliance.
+
 Latest redacted committed-source deltas:105954d6..67169692 (frontend,1commit)
 and67169692..be1b1a95 (backend,1commit/30339bytes) report zero findings,
 capture2878.404ms and1826.499ms respectively, exit0/no timeout/truncation.

@@ -1,5 +1,31 @@
 # Verified commands and evidence
 
+## Current native Python advisory scan — 20 September, parentaf351060
+
+Private interpreter /private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python,
+arm64 Python3.11.7, pip-audit2.10.1. The advisory command ran once in named tmux
+readiness-native-audit-20260920 with env -i, NETRC/PIP_CONFIG_FILE=/dev/null,
+no bytecode/user site, safe import path, and isolated cache. Exact child:
+`python -I -B -m pip_audit --local --strict --vulnerability-service pypi --format json --desc off --aliases on --progress-spinner off --timeout 15 --cache-dir /private/tmp/localos-native-advisory-20260920.LYhCkc/cache`.
+Only public package names/versions were queried; no --fix, app import, DB,
+Docker, installation, dependency update, production or provider operation.
+
+| Raw current-native capture | Result | Duration ms |
+| --- | --- | ---: |
+| dependency-parity |133/133 exact installed/artifact map;3current manifests unchanged;exit0|206.481|
+| python-advisories |133checked,0skips,0advisories,0fixes;exit0|15948.290|
+| license-metadata |133entries,56License-Expression fields;artifact parity true;exit0|172.238|
+| advisory-evidence-validation |complete captures and exact audited/installed maps;exit0|10.696|
+
+All four outputs are complete and not timed out. Scanner stderr is only
+`No known vulnerabilities found`; other stderr is empty. An initial verifier
+attempt named nonexistent /usr/local/bin/jq and failed before execution/capture;
+the corrected verifier uses the observed /usr/bin/jq. Its durable result, not
+the failed wrapper, proves map/count equality. Independent scoped review PASS.
+Metadata parsing imports no application or installed package modules; it uses
+the known process-local guard and exact private prefix. No legal compliance,
+Docker/Linux, native embedded library, bot/AMD64 or whole-goal claim follows.
+
 ## Guarded reset regression — 20 September, parentcf36cbb0
 
 Root-owned named tmux runs used env -i, private arm64 Python3.11.7, disabled
