@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "label": "social-role-readmission-red-20260920",
+  "captured_at": "2026-09-20T16:07:23.476812+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-m",
+    "pytest",
+    "tests/test_social_publish_role_readmission.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 543.122,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "FF                                                                       [100%]\n=================================== FAILURES ===================================\n_ test_viewer_demotion_after_claim_never_reaches_provider_and_keeps_reconciliation_state _\n\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1053be790>\n\n    def test_viewer_demotion_after_claim_never_reaches_provider_and_keeps_reconciliation_state(monkeypatch):\n>       current, adapter_calls, finalizer_calls = _configure_provider_phase(monkeypatch, \"viewer\")\n                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\ntests/test_social_publish_role_readmission.py:139: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1053be790>\nrole = 'viewer'\n\n    def _configure_provider_phase(monkeypatch, role: str):\n        _RoleDatabaseManager.instances = []\n        _RoleDatabaseManager.role = role\n        current = _claimed_post(\"post-1\")\n        adapter_calls: list[dict] = []\n        finalizer_calls: list[tuple] = []\n        monkeypatch.setattr(social_post_service, \"DatabaseManager\", _RoleDatabaseManager)\n        monkeypatch.setattr(\n            social_post_service,\n            \"_claim_social_post_publish\",\n            lambda _user_id, _post_id: _claimed_post(\"post-1\"),\n        )\n        monkeypatch.setattr(\n            social_post_service,\n            \"_load_post_for_user\",\n            lambda _cursor, _user_id, _post_id: current,\n        )\n>       monkeypatch.setattr(social_post_service, \"snapshot_is_well_formed\", lambda _snapshot, _post: True)\nE       AttributeError: <module 'services.social_post_service' from '/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/src/services/social_post_service.py'> has no attribute 'snapshot_is_well_formed'\n\ntests/test_social_publish_role_readmission.py:121: AttributeError\n_ test_editor_access_is_readmitted_and_keeps_existing_provider_finalization_path _\n\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1047e6390>\n\n    def test_editor_access_is_readmitted_and_keeps_existing_provider_finalization_path(monkeypatch):\n>       _current, adapter_calls, finalizer_calls = _configure_provider_phase(monkeypatch, \"editor\")\n                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\ntests/test_social_publish_role_readmission.py:153: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1047e6390>\nrole = 'editor'\n\n    def _configure_provider_phase(monkeypatch, role: str):\n        _RoleDatabaseManager.instances = []\n        _RoleDatabaseManager.role = role\n        current = _claimed_post(\"post-1\")\n        adapter_calls: list[dict] = []\n        finalizer_calls: list[tuple] = []\n        monkeypatch.setattr(social_post_service, \"DatabaseManager\", _RoleDatabaseManager)\n        monkeypatch.setattr(\n            social_post_service,\n            \"_claim_social_post_publish\",\n            lambda _user_id, _post_id: _claimed_post(\"post-1\"),\n        )\n        monkeypatch.setattr(\n            social_post_service,\n            \"_load_post_for_user\",\n            lambda _cursor, _user_id, _post_id: current,\n        )\n>       monkeypatch.setattr(social_post_service, \"snapshot_is_well_formed\", lambda _snapshot, _post: True)\nE       AttributeError: <module 'services.social_post_service' from '/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/src/services/social_post_service.py'> has no attribute 'snapshot_is_well_formed'\n\ntests/test_social_publish_role_readmission.py:121: AttributeError\n=========================== short test summary info ============================\nFAILED tests/test_social_publish_role_readmission.py::test_viewer_demotion_after_claim_never_reaches_provider_and_keeps_reconciliation_state\nFAILED tests/test_social_publish_role_readmission.py::test_editor_access_is_readmitted_and_keeps_existing_provider_finalization_path\n2 failed in 0.24s\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

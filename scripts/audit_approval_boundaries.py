@@ -93,14 +93,22 @@ def audit_blueprint_boundaries(findings):
     for path_text in BLUEPRINT_FILES:
         reject_calls(path_text, BLUEPRINT_DISALLOWED_CALLS, findings)
 
+    runner_path = "src/services/agent_blueprint_runner.py"
+    for node in ast.walk(ast.parse(read_text(runner_path), filename=runner_path)):
+        if not isinstance(node, ast.Call) or call_name(node) != "self.orchestrator.execute":
+            continue
+        for keyword in node.keywords:
+            if keyword.arg == "allow_execute_when_approved" and isinstance(keyword.value, ast.Constant) and keyword.value.value is True:
+                findings.append(f"{runner_path}:{node.lineno}: unconditional approval override")
+
     require_markers(
         "src/services/agent_blueprint_runner.py",
         [
             "self.orchestrator.execute(",
-            "allow_execute_when_approved=True",
+            "allow_execute_when_approved=approval_verified",
             "_capability_requires_approval",
             "_has_required_approval",
-            "DANGEROUS_CAPABILITY_WORDS",
+            "evaluate_risk_policy",
             "required_approval_type",
             '"billing": {"source": "agent_blueprint"}',
             '"approval": {"source": "agent_blueprint"',

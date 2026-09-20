@@ -1,5 +1,44 @@
 # Verified commands and evidence
 
+## Execution-admission and social re-admission — 20 September, parent381de671
+
+All pure pytest captures use the private arm64 Python3.11.7 environment, `arch -arm64`,
+`env -i`, no bytecode, disabled pytest plugin autoload and the unchanged
+`XoKy4o/guard` before `src`; no DSN, Docker, provider or production endpoint.
+
+- `legacy-approval-policy-red`:29failed/1passed,0.37s pytest,700.311ms capture;
+  legacy `requires_approval=false` reached the trusted orchestrator. Hardened
+  `red2`:40failed/22passed,0.41s/791.144ms. Focused GREEN:62passed,0.32s/
+  652.091ms. These causal runs are untruncated and retain their exact failures.
+- `social-role-readmission-red2`:1failed/1passed,0.24s/559.229ms; a viewer
+  after durable claim did not raise and could reach the adapter. Focused green
+  with `test_social_post_service.py`:164passed,0.75s/1086.359ms.
+- Final `execution-admission-final`:467passed in3.45s,4083.48ms capture,
+  exit0 with no timeout/truncation/stderr. It is a pure, overlapping scoped
+  suite, not a backend aggregate, native DB or provider proof.
+- Preserve intermediate failures: first adjacent3failed/292passed exposed two
+  preview regressions and the old static-audit contract; `adjacent2` is
+  4failed/299passed and stdout-truncated, with three preview fixture failures
+  and the remaining Maton literal override. The preview fixture SQL-spacing fix
+  and verified boolean propagation are covered by the final suite; neither artifact
+  is silently promoted to green.
+
+Static quality is intentionally split. Initial `execution-admission-quality`
+is exit1/33F821/148.839ms with truncated stdout. Baseline and current isolated
+`publication_lifecycle.py` checks both report the same33F821 dynamic-namespace
+names (baseline142.165ms; current64.532ms), exit1 and untruncated. The sole
+source replacement only changes read→write at that runtime-injected boundary.
+`social_post_service.py:164–185` supplies names using
+`_bind_runtime_namespace`; this is a tracked static-analysis limitation, not a
+new product regression. `execution-admission-quality-scoped` checks the other
+nine files plus `git diff --check`: exit0/102.632ms, untruncated. Do not state a
+global Ruff PASS.
+
+`execution-admission-secrets-20260920.json` scans the scoped staged source/raw
+delta: exit0, zero findings,272,974bytes,1708.863ms capture. Proof-ledger
+validation also passes; neither result is an image/history/production scan or
+whole-goal acceptance.
+
 ## Callback current-access checks — 20 September, parent 8612efac
 
 `raw/google-oauth-current-access-{red,green,expanded}-20260920.json`

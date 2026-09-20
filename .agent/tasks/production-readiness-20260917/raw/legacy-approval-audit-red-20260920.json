@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "label": "legacy-approval-audit-red",
+  "captured_at": "2026-09-20T16:15:51.996276+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-m",
+    "pytest",
+    "tests/test_approval_boundaries_audit.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 568.325,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "FF                                                                       [100%]\n=================================== FAILURES ===================================\n________________ test_approval_boundaries_audit_has_no_findings ________________\n\n    def test_approval_boundaries_audit_has_no_findings() -> None:\n        findings = []\n    \n        audit_approval_boundaries.audit_blueprint_boundaries(findings)\n        audit_approval_boundaries.audit_operator_boundaries(findings)\n        audit_approval_boundaries.audit_dispatcher_opt_in(findings)\n    \n>       assert findings == []\nE       AssertionError: assert ['src/service...BILITY_WORDS'] == []\nE         \nE         Left contains one more item: 'src/services/agent_blueprint_runner.py: missing marker DANGEROUS_CAPABILITY_WORDS'\nE         Use -v to get more diff\n\ntests/test_approval_boundaries_audit.py:11: AssertionError\n_______ test_audit_rejects_unconditional_orchestrator_approval_override ________\n\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10538f310>\n\n    def test_audit_rejects_unconditional_orchestrator_approval_override(monkeypatch):\n        original_read = audit_approval_boundaries.read_text\n    \n        def unsafe_runner(path):\n            source = original_read(path)\n            if path == \"src/services/agent_blueprint_runner.py\":\n                return source.replace(\"allow_execute_when_approved=approval_verified\", \"allow_execute_when_approved=True\")\n            return source\n    \n        monkeypatch.setattr(audit_approval_boundaries, \"read_text\", unsafe_runner)\n        findings = []\n    \n        audit_approval_boundaries.audit_blueprint_boundaries(findings)\n    \n>       assert any(\"unconditional approval override\" in finding for finding in findings)\nE       assert False\nE        +  where False = any(<generator object test_audit_rejects_unconditional_orchestrator_approval_override.<locals>.<genexpr> at 0x102c8f6b0>)\n\ntests/test_approval_boundaries_audit.py:28: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_approval_boundaries_audit.py::test_approval_boundaries_audit_has_no_findings\nFAILED tests/test_approval_boundaries_audit.py::test_audit_rejects_unconditional_orchestrator_approval_override\n2 failed in 0.28s\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

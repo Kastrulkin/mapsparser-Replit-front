@@ -1,6 +1,43 @@
 # Production-readiness progress
 
-## Current checkpoint — 20 September, remaining callback/CRM write admission
+## Current checkpoint — 20 September, execution admission and social role re-admission
+
+- [x] AI-APPROVAL-LEGACY-02: the legacy runner now resolves canonical and
+  payload-dependent approval policy after public input resolution, requires the
+  matching run approval before the trusted orchestrator boundary, and no longer
+  passes a literal `True` approval override. Causal RED retains29failed/1passed;
+  hardened RED2 retains40failed/22passed; focused GREEN62passed. Adjacent runs
+  exposed repaired preview regressions, an old static-audit contract, then a
+  preview SQL fixture gap and remaining Maton literal override. The latest
+  intermediate run remains4failed/299passed with stdout truncation. The final combined
+  pure suite is467passed in3.45s (4083.48ms capture), untruncated. Independent
+  final review PASS. This is not native persistence, billing, provider or
+  production proof.
+- [x] SOCIAL-ROLE-READMISSION-02: provider dispatch now repeats canonical write
+  admission after the durable publish claim. Causal RED is1failed/1passed:
+  a demoted viewer reached the adapter; the new pure regression denies before
+  the adapter, retains the `publishing` reconciliation state, and keeps the
+  existing post-send finalizer unchanged. Its focused GREEN is164passed; it is
+  also included in the final467-pass suite. Re-admission narrows, but does not
+  prove elimination of, concurrent role-revocation races.
+- [ ] AI-APPROVAL-BINDING-03 is a new static candidate: approval lookup binds
+  run/type but not a canonical target/payload identity. No tamper regression,
+  fix, provider or financial effect has been executed; it remains CANDIDATE.
+- [ ] Static-analysis debt remains: `publication_lifecycle.py` intentionally
+  receives shared names through `social_post_service._bind_runtime_namespace`.
+  Baseline and current focused Ruff checks both find the same33F821 names;
+  current check exits1 in64.532ms, untruncated. The separate nine-file scoped
+  quality check plus `git diff --check` exits0 in102.632ms; do not call this a
+  global Ruff PASS.
+
+Parent381de671; no migrations, frontend change, native DB/provider access, push
+or deployment. The dirty worktree is preserved. The 10GiB image gate remains
+unmet at6,016,008KiB (~5.74GiB). The two denied aggregate/restore preparation
+lanes were not retried. Read-only IAB still shows mixed Spanish/English/Russian
+Today copy; this is existing UX-LOCALE-07, not a deployed verification or new
+local patch. Whole-goal acceptance remains FAIL/incomplete.
+
+## Previous checkpoint — 20 September, remaining callback/CRM write admission
 
 - [x] GOOGLE-OAUTH-STALE-ACCESS-02: two signed-state callbacks now recheck
   current owner/admin and user activity before exchange and before persistence.

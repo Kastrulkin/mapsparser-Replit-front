@@ -45,6 +45,31 @@
       ],
       "limits": "OAuth causal18 failures then36 focused and103 overlapping adjacent passes; CRM corrected causal viewer201 failure with2positive controls then13passes. Final root116pure tests cover both patches using fake DB/provider boundaries. Initial CRM fixture500 is not causal insert proof. No native SQL/row-lock, clean-image, browser, production or full-aggregate proof. AI approval and social post-claim role candidates remain unexecuted. Overall acceptance unchanged."
     },
+    "subsequent_execution_admission_patch": {
+      "parent_commit": "381de671",
+      "findings": ["AI-APPROVAL-LEGACY-02", "SOCIAL-ROLE-READMISSION-02"],
+      "scope": "Canonical and resolved-payload risk policy, verified run/type approval propagation including Maton, no unapproved domain apply, and current social write-role re-admission before provider phase",
+      "independent_review": "Scoped PASS after correcting Maton literal override; no whole-goal verdict",
+      "source_manifest": "raw/execution-admission-source-manifest-20260920.json",
+      "proof": [
+        "raw/legacy-approval-policy-red-20260920.json",
+        "raw/legacy-approval-policy-red2-20260920.json",
+        "raw/legacy-approval-policy-green-20260920.json",
+        "raw/legacy-approval-policy-adjacent-20260920.json",
+        "raw/legacy-approval-audit-red-20260920.json",
+        "raw/legacy-approval-policy-adjacent2-20260920.json",
+        "raw/social-role-readmission-red-20260920.json",
+        "raw/social-role-readmission-red2-20260920.json",
+        "raw/social-role-readmission-green-20260920.json",
+        "raw/execution-admission-final-20260920.json",
+        "raw/execution-admission-quality-20260920.json",
+        "raw/execution-admission-lifecycle-baseline-20260920.json",
+        "raw/execution-admission-lifecycle-current-20260920.json",
+        "raw/execution-admission-quality-scoped-20260920.json"
+      ],
+      "result": "Final twelve-file pure suite: 467 passed in 3.45s, capture4083.48ms, exit0, no timeout/truncation. Nine-file Ruff F821/F822/F823 and diff checks pass. Lifecycle has33 dynamic-injection F821 findings both at HEAD and current; no global Ruff PASS. Initial verbose quality capture is truncated; both concise baseline/current captures are complete.",
+      "limits": "Fake DB/provider boundaries only. Initial social fixture failure is not causal proof; AI adjacent2 stdout is truncated and retained as failed intermediate evidence. Run/type matching is not immutable target/payload/capability binding (AI-APPROVAL-BINDING-03). Social recheck does not fence concurrent revocation; finalizer remains read-admitted to reconcile issued effects. No native SQL/concurrency, actual provider, clean-image or full current aggregate proof. Read-only authenticated IAB Today observation does not identify deployed revision or verify local fixes. Overall acceptance unchanged."
+    },
     "foreign_worktree_paths_excluded": 9,
     "historical_verdict_file": "verdict.json",
     "historical_verdict_reviewed_commit": "2f224f051e3b3487a2c0d529d40b547c414ccb52"

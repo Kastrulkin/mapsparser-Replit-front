@@ -333,7 +333,10 @@ def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             if str(current.get("status") or "").strip() == "publishing":
                 current["next_action"] = "reconcile_publication"
             return current
-        current = _load_post_for_user(cursor, user_id, post_id)
+        # The durable claim was created on a previous connection.  Re-admit
+        # write access immediately before an external provider effect so a
+        # member demoted to viewer in the interval cannot publish.
+        current = _load_post_for_write(cursor, user_id, post_id)
         current_metadata = _json_dict(current.get("metadata_json"))
         current_attempt = _json_dict(current_metadata.get("publish_attempt"))
         approved_snapshot = _json_dict(current_attempt.get("approval_snapshot"))

@@ -1,6 +1,49 @@
 # Readiness handoff
 
-## Current checkpoint — 20 September, OAuth/CRM admission
+## Current checkpoint — 20 September, execution admission and social re-admission
+
+Parent381de671 on the existing audit branch. AI-APPROVAL-LEGACY-02 now uses
+canonical/payload-aware approval admission at the runner boundary; static AST
+coverage rejects a literal `allow_execute_when_approved=True`. SOCIAL-ROLE-
+READMISSION-02 repeats write admission immediately before the provider adapter.
+The post-send finalizer deliberately remains unchanged: a completed or uncertain
+external effect must still reconcile rather than being blocked by a later write
+gate. No schema, frontend, provider, production or deployment action occurred.
+
+Authoritative final pure capture `raw/execution-admission-final-20260920.json`:
+467passed in3.45s,4083.48ms capture, exit0, no timeout/truncation/stderr. It
+includes the AI runtime/approval, Sheets, social role and social-service files.
+Independent compiled-staging-packaging final review PASS. Keep causal RED and
+fixture artifacts: legacy RED29failed/1passed, hardened RED2 40failed/22passed,
+and social RED1failed/1passed; adjacent2 is4failed/299passed with truncated
+stdout and is not a green claim.
+
+Quality limitation is explicit. `publication_lifecycle.py` receives helpers at
+runtime through `social_post_service._bind_runtime_namespace`; focused Ruff has
+the same33F821 names at parent and current (baseline142.165ms, current64.532ms,
+both untruncated/exit1). Initial combined quality output is truncated. The
+other-nine-file scoped check plus diff check is green in102.632ms; this is not
+a global lint pass. Do not silence or alias the dynamic namespace debt in this
+release lane.
+
+New AI-APPROVAL-BINDING-03 is static only: approval records currently identify
+run/type without a canonical target/payload identity. Next safe work is a
+causal synthetic tamper test and bounded contract decision, not a claimed
+provider/finance exploit. Continue to preserve the 10GiB image gate (latest
+6,016,008KiB free), denied aggregate-v2/restore preparation restrictions, and
+existing mixed-locale IAB observation. Whole-goal acceptance remains FAIL.
+
+Read-only follow-up narrows the binding candidate: duplicate approval types are
+schema-valid, but the serial runner stops at every pending gate, so two same-type
+steps alone do not reproduce a normal-flow bypass. Nearest preceding step-key
+binding would be defense-in-depth, not a demonstrated fix. A finance action
+declaring `shortlist` can test a semantic mismatch with the compiled finance
+template; that template's approval type is not yet a universal legacy contract.
+Do not manufacture a product RED by corrupting run state or assuming a global
+capability-to-approval-type map. Immutable target/payload binding needs its own
+explicit lifecycle contract.
+
+## Previous checkpoint — 20 September, OAuth/CRM admission
 
 Parent8612efac on the existing audit branch. Owned code/tests only:
 `src/api/google_business_api.py`, `tests/test_google_oauth_current_access.py`,

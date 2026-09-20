@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "label": "execution-admission-source-manifest",
+  "captured_at": "2026-09-20T16:25:47.289436+00:00",
+  "command": [
+    "/usr/bin/shasum",
+    "-a",
+    "256",
+    "src/core/capability_names.py",
+    "src/core/action_policy.py",
+    "src/services/agent_capability_handlers.py",
+    "src/services/agent_blueprint_runner.py",
+    "src/services/social_posts/publication_lifecycle.py",
+    "scripts/audit_approval_boundaries.py",
+    "tests/agent_blueprint_fakes.py",
+    "tests/test_approval_boundaries_audit.py",
+    "tests/test_legacy_agent_approval_policy.py",
+    "tests/test_social_publish_role_readmission.py",
+    "/private/tmp/localos-backend-full-20260920.XoKy4o/guard/sitecustomize.py"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 39.238,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "2b54588d4e70fb118ce128c42432131fa0c296363814980b841c076f660b60b3  src/core/capability_names.py\na78c7092f073ae052b16f832a71ca5d7a753a941c18fc843006338de4109a050  src/core/action_policy.py\nd9a448be3009d9bb601a7128f07bc010b696f539cf02d330a9a59d76bc060f81  src/services/agent_capability_handlers.py\ncc14e130cd8b1c06d5442838c07d4d208662826f568d7a75962c3fe27930a6b8  src/services/agent_blueprint_runner.py\nb093123e333b97246ceda209d597d6d16b5214e4eee5db00ef13e821033f02ed  src/services/social_posts/publication_lifecycle.py\n15e1ac76c8d9ed2b8f3faed399c5e4b996f7d7db5c9e25f0b33e41b0cfa10a13  scripts/audit_approval_boundaries.py\n9b799513d7b3033abdf354768813ca64cb39e091e3afd7290578aa975a0e74df  tests/agent_blueprint_fakes.py\n3493ceac8d4fbab89083f961a005c39da6d9e9724e1ccd9e9e24edc3a1a0179b  tests/test_approval_boundaries_audit.py\n1ad46ac53551dfa4751423e6c6e65102924db0923aa829ea8ff9751ad5666c6f  tests/test_legacy_agent_approval_policy.py\nbd674e79387b75877cd388a86b1ea1e90a3ce75c06235057d32530ec23733fdd  tests/test_social_publish_role_readmission.py\n93e4d9d7c99e9653a8e95e2735a369c3ab986e02c2afcb6d206aa63d05a9b590  /private/tmp/localos-backend-full-20260920.XoKy4o/guard/sitecustomize.py\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

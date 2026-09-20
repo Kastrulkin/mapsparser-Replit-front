@@ -1,5 +1,30 @@
 # Production-readiness change log
 
+## Execution admission and post-claim role re-admission — 20 September, parent381de671
+
+AI-APPROVAL-LEGACY-02: the runner now applies canonical and resolved-payload
+approval policy before its trusted orchestrator call, requires matching run/type
+approval, and passes the verified result instead of a literal approval override.
+The static AST auditor now detects a literal `True`; fixture support accepts the
+existing preview-completion SQL spacing. Causal RED29failed/1passed and hardened
+RED2 40failed/22passed are retained; focused GREEN62passed. Final combined pure
+suite is467passed/3.45s (4083.48ms capture), independent final review PASS.
+No native database, billing, provider or production behavior is claimed.
+
+SOCIAL-ROLE-READMISSION-02: after a durable `publishing` claim, the provider
+phase now reloads through canonical write admission. Causal RED1failed/1passed
+showed a demoted viewer could reach the adapter. The regression ensures denial
+before adapter/finalizer while retaining the existing `publishing` reconciliation
+state; editor control retains the old finalizer path. Focused164passed and final
+combined467passed. This is a narrow re-admission boundary, not transaction-level
+revocation fencing; post-send finalization was intentionally not write-gated.
+
+The source uses `social_post_service` runtime namespace injection, so standalone
+Ruff reports the same33F821 names before and after this patch. That pre-existing
+static debt is recorded rather than suppressed; only the other nine changed
+files plus diff check are quality-green. New AI-APPROVAL-BINDING-03 is static
+only: run/type approval has no canonical target/payload identity binding.
+
 ## Google callback and CRM write admission — 20 September, parent8612efac
 
 GOOGLE-OAUTH-STALE-ACCESS-02: signed-state identity now receives current

@@ -6,7 +6,9 @@ from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from core.action_orchestrator import ActionOrchestrator
-from services.agent_capability_handlers import build_capability_handlers
+from core.action_policy import evaluate_risk_policy
+from core.capability_names import normalize_capability_name
+from services.agent_capability_handlers import CANONICAL_CAPABILITIES, build_capability_handlers
 from services.agent_run_billing import finalize_agent_run_credits
 from services.agent_domain_request_executors import execute_approved_domain_requests
 from services.agent_blueprint_workspace import (
@@ -24,7 +26,6 @@ from services.compiled_script_runtime import CompiledRuntimeUnavailable, execute
 
 
 RUNNING_STATUSES = {"running", "waiting_approval"}
-DANGEROUS_CAPABILITY_WORDS = ("send", "publish", "payment", "delete", "destructive", "mass")
 SHORTLIST_APPROVED = "shortlist_approved"
 SELECTED_FOR_OUTREACH = "selected_for_outreach"
 CHANNEL_SELECTED = "channel_selected"
@@ -1054,8 +1055,24 @@ class AgentBlueprintRunner:
             step_id = self._insert_step(run, step, step_index, "failed", {}, {"error": "capability_not_allowlisted"})
             self._fail_run(str(run.get("id")), f"capability not allowlisted: {capability}", step_id)
             return False
-        if self._capability_requires_approval(capability, step) and not self._has_required_approval(str(run.get("id")), step):
-            required_type = str(step.get("required_approval_type") or "").strip()
+        payload = self._build_capability_payload(run, step)
+        canonical_capability = normalize_capability_name(capability)
+        run_input = self._run_input(run)
+        if canonical_capability in {"sheets.append_row_request", "google_sheets.update_cells"} and (
+            run_input.get("preview_mode") is True or run_input.get("external_side_effects_allowed") is False
+        ):
+            step_id = self._insert_step(run, step, step_index, "running", {}, {})
+            self.cursor.execute(
+                "UPDATE agent_run_steps SET status='completed', completed_at=NOW(), output_json=%s::jsonb WHERE id=%s",
+                (json.dumps({"capability": capability, "status": "preview_only", "provider_write_performed": False,
+                             "summary": "Проверка завершена. Запись в таблицу не выполнялась."}, ensure_ascii=False), step_id),
+            )
+            return True
+        required_type = str(step.get("required_approval_type") or "").strip()
+        # A previous unrelated decision is not approval for this step. Legacy
+        # writers must explicitly declare the decision type they depend on.
+        approval_verified = bool(required_type) and self._has_required_approval(str(run.get("id")), step)
+        if self._capability_requires_approval(capability, step, payload) and not approval_verified:
             error_text = f"approval required before capability: {capability}"
             if required_type:
                 error_text = f"approval required before capability: {capability} ({required_type})"
@@ -1064,21 +1081,10 @@ class AgentBlueprintRunner:
             return False
 
         step_id = self._insert_step(run, step, step_index, "running", {}, {})
-        payload = self._build_capability_payload(run, step)
-        run_input = self._run_input(run)
-        if capability in {"sheets.append_row_request", "google_sheets.append_row", "google_sheets.update_cells"} and (
-            run_input.get("preview_mode") is True or run_input.get("external_side_effects_allowed") is False
-        ):
-            self.cursor.execute(
-                "UPDATE agent_run_steps SET status='completed', completed_at=NOW(), output_json=%s::jsonb WHERE id=%s",
-                (json.dumps({"capability": capability, "status": "preview_only", "provider_write_performed": False,
-                             "summary": "Проверка завершена. Запись в таблицу не выполнялась."}, ensure_ascii=False), step_id),
-            )
-            return True
         if capability == "outreach.send_batch" and not payload.get("draft_ids"):
             payload["draft_ids"] = self._latest_artifact_item_ids(str(run.get("id") or ""), "message_drafts", "id")
         if self._is_maton_delivery_step(run, capability):
-            return self._execute_maton_delivery_step(run, step, step_id, capability, payload)
+            return self._execute_maton_delivery_step(run, step, step_id, capability, payload, approval_verified=approval_verified)
         envelope = {
             "tenant_id": str(run.get("business_id") or ""),
             "actor": {
@@ -1093,7 +1099,7 @@ class AgentBlueprintRunner:
             "approval": {"source": "agent_blueprint", "run_id": run.get("id")},
             "billing": {"source": "agent_blueprint"},
         }
-        orchestrator_result = self.orchestrator.execute(envelope, user_data, allow_execute_when_approved=True)
+        orchestrator_result = self.orchestrator.execute(envelope, user_data, allow_execute_when_approved=approval_verified)
         if not orchestrator_result.get("success"):
             validation_error = str(orchestrator_result.get("error") or "orchestrator rejected capability")
             runtime_contract = self._production_action_runtime_contract(
@@ -1103,6 +1109,7 @@ class AgentBlueprintRunner:
                 orchestrator_result,
                 preflight_status="failed",
                 recovery_state="error",
+                payload=payload,
             )
             self.cursor.execute(
                 """
@@ -1155,6 +1162,7 @@ class AgentBlueprintRunner:
                 orchestrator_result,
                 preflight_status="passed",
                 recovery_state="blocked",
+                payload=payload,
             )
             self.cursor.execute(
                 """
@@ -1180,16 +1188,22 @@ class AgentBlueprintRunner:
             )
             self._fail_run(str(run.get("id")), reason_code, step_id)
             return False
-        approved_executor = execute_approved_domain_requests(
-            self.cursor,
-            run=run,
-            step=step,
-            step_id=step_id,
-            orchestrator_result=orchestrator_result,
-            user_data=user_data,
-            apply_finance=capability != "finance.transaction.create",
-        )
-        if capability in {"sheets.append_row_request", "google_sheets.append_row", "google_sheets.update_cells"}:
+        approved_executor = {
+            "executor": "agent_domain_request_executor_v1", "executed": 0, "items": [],
+            "external_dispatch_performed": False, "localos_writes_performed": False,
+            "provider_writes_performed": False, "reason_code": "NO_VERIFIED_STEP_APPROVAL",
+        }
+        if approval_verified:
+            approved_executor = execute_approved_domain_requests(
+                self.cursor,
+                run=run,
+                step=step,
+                step_id=step_id,
+                orchestrator_result=orchestrator_result,
+                user_data=user_data,
+                apply_finance=canonical_capability != "finance.transaction.create",
+            )
+        if canonical_capability in {"sheets.append_row_request", "google_sheets.update_cells"}:
             queued_items = [item for item in approved_executor.get("items", []) if isinstance(item, dict) and item.get("apply_state") == "provider_request_queued"]
             if not queued_items:
                 error_text = "approved Google Sheets request was not durably bound to this run"
@@ -1227,6 +1241,7 @@ class AgentBlueprintRunner:
             approved_executor=approved_executor,
             preflight_status="passed",
             recovery_state="ready",
+            payload=payload,
         )
         self.cursor.execute(
             """
@@ -1261,9 +1276,10 @@ class AgentBlueprintRunner:
         approved_executor: Dict[str, Any] | None = None,
         preflight_status: str = "passed",
         recovery_state: str = "ready",
+        payload: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         result = orchestrator_result.get("result") if isinstance(orchestrator_result.get("result"), dict) else {}
-        approval_required = self._capability_requires_approval(capability, step)
+        approval_required = self._capability_requires_approval(capability, step, payload)
         required_approval_type = str(step.get("required_approval_type") or step.get("approval_type") or "").strip()
         action_id = str(orchestrator_result.get("action_id") or result.get("action_id") or "").strip()
         request_id = str(result.get("request_id") or result.get("draft_id") or result.get("review_id") or "").strip()
@@ -1397,6 +1413,8 @@ class AgentBlueprintRunner:
         step_id: str,
         capability: str,
         payload: Dict[str, Any],
+        *,
+        approval_verified: bool,
     ) -> bool:
         contract = self._maton_delivery_contract(run)
         message = self._maton_delivery_message(payload)
@@ -1447,11 +1465,11 @@ class AgentBlueprintRunner:
                         "bound_external_account_id": str(contract.get("external_account_id") or ""),
                         "agent_run_id": str(run.get("id") or ""),
                     },
-                    "approval": {"source": "agent_blueprint", "run_id": run.get("id"), "approved": True},
+                    "approval": {"source": "agent_blueprint", "run_id": run.get("id"), "approved": approval_verified},
                     "billing": {"source": "agent_blueprint"},
                 },
                 {"user_id": str(run.get("created_by_user_id") or "")},
-                allow_execute_when_approved=True,
+                allow_execute_when_approved=approval_verified,
             )
             request_created = bool(router_result.get("success"))
             delivery_state = "request_queued" if request_created else "request_blocked"
@@ -3340,13 +3358,14 @@ class AgentBlueprintRunner:
         )
         return bool(self.cursor.fetchone())
 
-    def _capability_requires_approval(self, capability: str, step: Dict[str, Any]) -> bool:
+    def _capability_requires_approval(self, capability: str, step: Dict[str, Any], payload: Dict[str, Any] | None = None) -> bool:
         if bool(step.get("requires_approval")):
             return True
-        if capability in {"sheets.append_row_request", "google_sheets.append_row", "google_sheets.update_cells"}:
-            return True
-        lowered = capability.lower()
-        return any(word in lowered for word in DANGEROUS_CAPABILITY_WORDS)
+        canonical = normalize_capability_name(capability)
+        metadata = CANONICAL_CAPABILITIES.get(canonical, {})
+        effective_payload = payload if isinstance(payload, dict) else step.get("payload")
+        risk = evaluate_risk_policy(canonical, effective_payload if isinstance(effective_payload, dict) else {}, {})
+        return bool(metadata.get("approval_required") or risk.get("requires_human"))
 
     def _build_approval_payload(self, run: Dict[str, Any], step: Dict[str, Any]) -> Dict[str, Any]:
         payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}

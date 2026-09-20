@@ -540,7 +540,7 @@ class FakeCursor:
                 approval["decided_by_user_id"] = params[0]
                 approval["decision_reason"] = params[1]
             return None
-        if normalized_query.startswith("update agent_run_steps set status = 'completed'"):
+        if normalized_query.startswith(("update agent_run_steps set status = 'completed'", "update agent_run_steps set status='completed'")):
             step = self.tables["agent_run_steps"].get(params[1])
             if step:
                 step["status"] = "completed"

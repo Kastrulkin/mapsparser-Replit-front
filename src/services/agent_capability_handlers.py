@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict
 from zoneinfo import ZoneInfo
 
 from database_manager import DatabaseManager
+from core.capability_names import LEGACY_CAPABILITY_ALIASES, normalize_capability_name
 from core.db_helpers import assert_schema_columns
 from core.finance_imports import normalize_finance_import_rows
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
@@ -177,27 +178,6 @@ CAPABILITY_RUNTIME_STATUS = {
 }
 
 
-LEGACY_CAPABILITY_ALIASES = {
-    "reviews.reply": "reviews.reply.draft",
-    "appointments.create": "appointments.create_request",
-    "appointments.update": "appointments.create_request",
-    "appointments.cancel": "appointments.create_request",
-    "reminders.send": "communications.send_reminder",
-    "communications.send": "communications.send_reminder",
-    "google_sheets.append_row": "sheets.append_row_request",
-    "sheets.append_row": "sheets.append_row_request",
-    "google_sheets.read": "google_sheets.read_rows",
-    "finance.create_transaction": "finance.transaction.create",
-    "finance.manual_entry": "finance.transaction.create",
-    "finance.transaction.create_request": "finance.transaction.create",
-    "partners.audit_card": "partnership.audit_card",
-    "partners.match_services": "partnership.match_services",
-    "partners.draft_first_offer": "partnership.draft_offer",
-    "partners.draft_commercial_offer": "partnership.draft_offer",
-    "billing.reserve/settle": "billing.reserve",
-}
-
-
 def build_capability_catalog() -> Dict[str, Any]:
     capabilities = {}
     for name, meta in CANONICAL_CAPABILITIES.items():
@@ -224,7 +204,7 @@ def build_capability_catalog() -> Dict[str, Any]:
 
 
 def capability_runtime_contract(name: str) -> Dict[str, Any]:
-    canonical = LEGACY_CAPABILITY_ALIASES.get(str(name or "").strip(), str(name or "").strip())
+    canonical = normalize_capability_name(name)
     runtime_status, beta_enabled = CAPABILITY_RUNTIME_STATUS.get(canonical, ("planned_gap", False))
     return {
         "capability": canonical,
@@ -267,11 +247,6 @@ def build_capability_handlers() -> Dict[str, CapabilityHandler]:
         if target in handlers:
             handlers[alias] = handlers[target]
     return handlers
-
-
-def normalize_capability_name(value: Any) -> str:
-    name = str(value or "").strip()
-    return LEGACY_CAPABILITY_ALIASES.get(name, name)
 
 
 def _catalog_item(name: str, meta: Dict[str, Any]) -> Dict[str, Any]:

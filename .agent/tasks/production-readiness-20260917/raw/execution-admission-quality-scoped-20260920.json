@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "execution-admission-quality-scoped",
+  "captured_at": "2026-09-20T16:26:29.133192+00:00",
+  "command": [
+    "/bin/bash",
+    "-c",
+    "set -e; /usr/bin/arch -arm64 /private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python -m ruff check --no-cache --select F821,F822,F823 src/core/capability_names.py src/core/action_policy.py src/services/agent_capability_handlers.py src/services/agent_blueprint_runner.py scripts/audit_approval_boundaries.py tests/agent_blueprint_fakes.py tests/test_approval_boundaries_audit.py tests/test_legacy_agent_approval_policy.py tests/test_social_publish_role_readmission.py; git diff --check"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 102.632,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "All checks passed!\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

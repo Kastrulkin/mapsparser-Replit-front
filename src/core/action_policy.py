@@ -1,6 +1,7 @@
 import os
 from datetime import datetime, timezone
 from typing import Any, Dict
+from core.capability_names import normalize_capability_name
 
 
 DEFAULT_MONTHLY_TOKEN_LIMIT = int(os.getenv("ORCHESTRATOR_MONTHLY_TOKEN_LIMIT", "500000"))
@@ -66,6 +67,7 @@ def check_tenant_access(cursor, tenant_id: str, actor_user_id: str, is_superadmi
 
 
 def evaluate_risk_policy(capability: str, payload: Dict[str, Any], approval: Dict[str, Any]) -> Dict[str, Any]:
+    capability = normalize_capability_name(capability)
     mode = str((approval or {}).get("mode") or "auto").strip().lower()
     if mode == "required":
         return {"ok": True, "requires_human": True, "reason": "approval.mode=required"}
@@ -92,7 +94,7 @@ def evaluate_risk_policy(capability: str, payload: Dict[str, Any], approval: Dic
     if capability in {"appointments.create_request", "communications.send_reminder", "communications.send_offer"}:
         return {"ok": True, "requires_human": True, "reason": "dangerous capability requires review"}
 
-    if capability == "sheets.append_row_request":
+    if capability in {"sheets.append_row_request", "google_sheets.update_cells"}:
         return {"ok": True, "requires_human": True, "reason": "external spreadsheet write request requires review"}
 
     if capability in {

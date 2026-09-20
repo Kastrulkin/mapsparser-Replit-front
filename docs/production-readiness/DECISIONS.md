@@ -1,5 +1,29 @@
 # Readiness decisions
 
+## D-051 — Approval and post-claim authorization are revalidated at the effect boundary
+
+Legacy blueprint metadata cannot weaken the canonical capability or
+payload-dependent approval policy. Resolve the public input first, evaluate the
+canonical policy, require the matching run approval, and pass only that verified
+result into the trusted orchestrator boundary. A literal approval override is
+forbidden and guarded statically. This does not create a claim that a run/type
+approval cryptographically binds a particular target or payload: that separate
+AI-APPROVAL-BINDING-03 question remains a candidate until a scoped contract and
+tamper regression exist.
+
+A durable social publish claim does not grant permanent write authority. Repeat
+canonical write admission immediately before the provider adapter. Do not add
+the new write gate to the post-send finalizer: once an external effect may have
+been issued, the existing receipt/uncertainty reconciliation contract takes
+precedence over a later role check. This narrows the demotion interval without
+claiming transaction-level fencing against concurrent revocation.
+
+Pure fakes prove these local ordering and no-adapter boundaries only. They do
+not prove native PostgreSQL concurrency, provider delivery, billing, production
+authorization, or deployment. The standalone lifecycle chunk's dynamic helper
+injection retains a pre-existing F821 static-analysis limitation; do not hide it
+with aliases or waive it as a global lint pass.
+
 ## D-050 — OAuth state is identity, not a frozen authorization grant
 
 Keep the existing Google owner-or-superadmin contract; signed, purpose-bound
