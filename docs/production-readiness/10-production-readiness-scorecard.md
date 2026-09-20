@@ -1,5 +1,12 @@
 # Production-readiness scorecard — working, not final
 
+21September action-scope slice (parent544fbe96): causal4fail/6pass becomes105
+targeted/adjacent passes, including14form/async regressions. TypeScript/lint,
+build/199JS integrity and independent bounded review pass.12inputs frozen;
+full frontend reconciliation is in COMMANDS. No numerical score or original
+acceptance gate is promoted: parent detail-loading, native/browser/provider,
+image/full backend/demo and other whole-project gates remain. WholeFAIL.
+
 20–21September shared task-card locale slice (parent7c080d11) adds causal4fail/
 6pass →91focused/adjacent passes, typed ten-language system copy, unchanged raw
 data/wire contracts, TS/lint/build/199JS integrity and bounded independent PASS.

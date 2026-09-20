@@ -1,5 +1,35 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, action form/request scope
+
+Branch codex/production-readiness-20260917, parent544fbe96. Own application change
+is only JourneyActionCard.tsx: keyed inner form [businessId, action.id], distinct
+layout-effect lifetime for command result/error/finally and clipboard dispatch.
+No version/language/surface reset; no cancellation/rollback of started commands.
+New scope test file has14cases; root corrected pre-execution Radix polyfills and
+Location spy facade without weakening assertions. Source review PASS.
+
+Root RED4fail/6pass8.40s/capture10687.735ms. Build13.83s/capture15210.221ms and
+199JS integrity242.268ms pass.12inputs frozen in journey-scope-manifest.json.
+Targeted105mocked checks pass38.12s/capture40349.497ms;12hashes still match.
+Quality passes48761.169ms with one existing lint warning. Full frozen frontend
+771tests/136files passes313.22s/capture314627.727ms, no timeout/truncation.
+All12hashes match after full; stderr equals prior negative/jsdom diagnostics.
+Source/targeted review PASS; final broader closure in journey-scope-review.md.
+No audit test/build job remains live. Resume next lane after local commit via
+git status/log and COMMANDS' guarded env-i/no-egress runner; no whole re-audit.
+Read journey-scope-notes/review for exact scope.
+
+Next bounded candidate UX-JOURNEY-DETAIL-LOAD-09: deferred A/B detail GETs on
+the same mounted route, same business, changed journey_action query. Older A
+must not replace B or expose a mismatched clickable card during loading. Trace
+and proposed positive retry in journey-detail-load-candidate.md. No causal test
+yet. Dashboard business changes remount Outlet; cross-tenant claim unproven.
+
+Nine foreign paths preserved/excluded. No production/DB/send/push/deploy/cleanup/
+Docker; disk6,893,116KiB (~6.57GiB), below10GiB. Aggregate/restore denials and
+unguarded-reset INCONCLUSIVE effects unchanged. Original whole acceptanceFAIL.
+
 ## Latest checkpoint — 21 September, shared action-card locale
 
 Branch codex/production-readiness-20260917, parent/precommit HEAD7c080d11.

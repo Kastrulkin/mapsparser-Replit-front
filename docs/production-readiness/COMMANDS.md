@@ -1,5 +1,31 @@
 # Verified commands and evidence
 
+## Journey action form/request scope — 21 September, parent544fbe96
+
+Exact commands/logs: task evidence/journey-scope-*. Named localos-journey-scope-*
+tmux; env-i Node22, GtHPOV no-egress-compatible chain, envDir:false configs and
+private arm64 Python capture. Mocked frontend API only, no backend suite or DB.
+
+| Suffix | Actual outcome | Duration ms |
+| --- | --- | ---: |
+| red | Causal4fail/6pass,10tests,8.40s; no timeout/truncation |10687.735|
+| build | App build13.83s; existing PURE/external-outDir warnings |15210.221|
+| integrity |199reachable JS files pass; nonfatal Darwin temp-dir fallback warning |242.268|
+| manifest |12source/test/config/guard inputs; all match after targeted |39.202|
+| targeted |105passes/6files,38.12s; known2jsdom scrollTo lines only |40349.497|
+| quality |App/node TypeScript+full lint pass;1existing auth_new.ts115 warning |48761.169|
+| full |Frozen771passes/136files,313.22s; no timeout/truncation |314627.727|
+| precommit |12hashes, staged diff-check, staged Gitleaks188912bytes/no findings, originalFAIL/onlyAC10PASS retained |1257.505|
+
+Build artifact /private/tmp/localos-journey-scope-build-20260921.Dg5qTe/dist,
+index-C7EcEDZk.js/CSS index-BM6vOqzw.css. Existing dist unchanged. Manifest freezes
+12inputs before105passing targeted checks; quality and frozen771full pass.
+All12hashes match afterward. Full stderr byte-equals prior journey-locale full:
+known jsdom and intentional negative auth/network/error-boundary diagnostics.
+Source/targeted review PASS; final bounded closure in journey-scope-review.md,
+not a full-goal readiness or production proof. Pre-run fixture
+corrections are recorded separately from causal failures in journey-scope-notes.
+
 ## Shared JourneyActionCard locale — 20–21 September, parent7c080d11
 
 Existing task evidence/journey-locale-* holds exact commands and logs. Named

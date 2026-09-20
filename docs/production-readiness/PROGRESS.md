@@ -1,5 +1,27 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, action form/request scope
+
+- [x] Previous package committed544fbe96; no own residue before this slice.
+- [x] UX-JOURNEY-ACTION-SCOPE-08 causal RED4fail/6pass8.40s: obsolete form,
+  callback and error survive new-action selection. Defensive business-ID test
+  is mocked UI evidence, not a demonstrated cross-tenant backend mutation.
+- [x] Keyed business/action form and layout lifetime fence implemented; same-id
+  payload/version/surface/locale refresh preserves edits. Source review PASS.
+- [x] Build13.83s and199JS integrity pass;12source/test/config/guard hashes frozen.
+- [x] Expanded105targeted checks pass38.12s;12hashes still match.
+- [x] App/node TypeScript+lint pass48761.169ms, one existing warning.
+- [x] Full frozen771frontend/136files passes313.22s/capture314627.727ms.
+  All12hashes match; stderr equals previous retained negative/jsdom diagnostics.
+  Source/targeted review PASS; final bounded closure in journey-scope-review.md.
+- [ ] Next source-only candidate: UX-JOURNEY-DETAIL-LOAD-09 detail GET ordering,
+  not repaired by a keyed child; causal reproduction required.
+
+Branch codex/production-readiness-20260917, parent544fbe96. Nine foreign paths
+excluded; no push/deploy, production/DB/provider action, Docker or cleanup.
+Disk6,893,116KiB (~6.57GiB), below10GiB. Aggregate/restore denials and unsafe-reset
+INCONCLUSIVE effects persist. Whole-project DoD and acceptance remain FAIL.
+
 ## Latest checkpoint — 21 September, shared action-card locale
 
 - [x] UX-LOCALE-07 shared JourneyActionCard slice: causal4fail/6pass; component

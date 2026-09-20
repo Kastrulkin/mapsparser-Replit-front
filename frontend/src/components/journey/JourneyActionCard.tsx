@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, Clipboard, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,13 @@ import { journeyActionCopy } from '@/i18n/journeyActionCopy';
 
 const primaryCommand = (action: JourneyAction) => action.allowed_commands.find((item) => item !== 'copy') || action.allowed_commands[0] || '';
 
-export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = false, onUpdated }: { action: JourneyAction; businessId: string; surface?: 'web' | 'telegram_mini_app'; dark?: boolean; onUpdated: (nextAction?: JourneyAction) => void }) => {
+type JourneyActionCardProps = { action: JourneyAction; businessId: string; surface?: 'web' | 'telegram_mini_app'; dark?: boolean; onUpdated: (nextAction?: JourneyAction) => void };
+
+export const JourneyActionCard = (props: JourneyActionCardProps) => (
+  <JourneyActionForm key={JSON.stringify([props.businessId, props.action.id])} {...props} />
+);
+
+const JourneyActionForm = ({ action, businessId, surface = 'web', dark = false, onUpdated }: JourneyActionCardProps) => {
   const { language } = useLanguage();
   const copy = journeyActionCopy(language);
   const [busy, setBusy] = useState('');
@@ -30,8 +36,17 @@ export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = 
   const expectedResult = expectedResultOverride ?? copy.defaultExpectedResult;
   const command = primaryCommand(action);
 
+  const requestScope = useRef({ active: false });
+  useLayoutEffect(() => {
+    // A new action owns fresh fields; StrictMode also gets a distinct lifetime.
+    const scope = { active: true };
+    requestScope.current = scope;
+    return () => { scope.active = false; };
+  }, []);
+
   const execute = async (nextCommand: string) => {
-    if (!nextCommand || busy) return;
+    const scope = requestScope.current;
+    if (!scope.active || !nextCommand || busy) return;
     setBusy(nextCommand);
     setError('');
     const retryKey = `${action.id}:${action.version}:${nextCommand}`;
@@ -64,6 +79,7 @@ export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = 
     }
     try {
       const result = await runJourneyCommand({ action, businessId, command: nextCommand, payload, surface, idempotencyKey });
+      if (!scope.active) return;
       retryKeys.current.delete(retryKey);
       if (nextCommand === 'open_upgrade') {
         const returnTo = `${window.location.pathname}${window.location.search}`;
@@ -74,15 +90,19 @@ export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = 
       }
       onUpdated(result.next_action || undefined);
     } catch (caught) {
+      if (!scope.active) return;
       setError(caught instanceof Error ? caught.message : copy.saveError);
     } finally {
-      setBusy('');
+      if (scope.active) setBusy('');
     }
   };
 
   const copyMessage = async () => {
+    const scope = requestScope.current;
+    if (!scope.active) return;
     const message = typeof action.payload?.message === 'string' ? action.payload.message : typeof action.payload?.message_excerpt === 'string' ? action.payload.message_excerpt : action.description;
     try { await navigator.clipboard.writeText(message); } catch { /* Manual selection remains available in the detail workspace. */ }
+    if (!scope.active) return;
     await execute('copy');
   };
 

@@ -1,5 +1,21 @@
 # Production-readiness change log
 
+## Action form/request lifetime — 21 September, parent544fbe96
+
+UX-JOURNEY-ACTION-SCOPE-08: only JourneyActionCard implementation changes. Keyed
+inner form uses JSON tuple business/action ID; version/payload/surface/locale
+are not reset keys. Each layout setup owns an active lifetime, invalidated on
+cleanup, checked before dispatch and all asynchronous continuations. Clipboard
+completion cannot start an old copy command; upgrade navigation/callback/error/
+finally cannot affect a later form. Already-started commands are not cancelled.
+
+New14scope regression cases plus existing card/locale and adjacent pages105pass;
+causal RED4fail/6pass retained. Pre-run Promise/clipboard/navigation/Radix fixture
+corrections are not product failures. TypeScript/lint (one existing warning),
+build and199JS integrity pass;12input hashes retained. Source/targeted independent
+review PASS, final full evidence in COMMANDS. No API/schema/backend/dependency,
+provider, deployment or product flow redesign. Parent GET race remains separate.
+
 ## Shared task-card chrome — 20–21 September, parent7c080d11
 
 UX-LOCALE-07 continuation: move owned labels into journeyActionCopy for all ten

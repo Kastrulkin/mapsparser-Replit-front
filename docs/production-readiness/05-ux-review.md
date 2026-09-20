@@ -1,5 +1,29 @@
 # UX and browser verification — working evidence
 
+## Action form and late response isolation — 21 September, parent544fbe96
+
+Owner task: edit the currently selected next action and retain only that action's
+form values. Unkeyed Focus/Mini handoffs reused mount-local fields across new
+content cycles despite backend clearing the previous draft. Old command results
+could call the obsolete callback or show errors in the newly selected card.
+The inner form is now keyed by business/action ID; distinct layout lifetimes
+fence command result/error/finally, upgrade navigation and post-clipboard dispatch.
+Same-ID payload/version/surface/locale refresh does not discard local edits.
+
+Root causal4fail/6pass becomes105targeted/adjacent passes, including14newscope
+cases: supported same-entity handoff, defensive business reuse, retained edit,
+A/B busy isolation, unmount/StrictMode, clipboard and upgrade negative/positive
+controls, and details/date/reply/configuration/metrics reset. Initial RED field
+checks fail before submitting B; mocked tests do not prove a backend/cross-tenant
+write. Exact raw data, wire/API/approval and layout/primitives remain unchanged.
+Types/lint/build/199JS integrity pass; independent bounded review PASS. Full
+frontend reconciliation follows in COMMANDS. No native/browser/provider proof.
+
+New source-only UX-JOURNEY-DETAIL-LOAD-09 concerns the parent's GET ordering and
+withholding old clickable A while query B loads; a child key cannot fix it.
+Dashboard business changes remount the Outlet, so cross-tenant leakage is not
+inferred. Actual LanguageProvider loading/remount remains separately unverified.
+
 ## Shared task-card language — 20–21 September, parent7c080d11
 
 Owner task: understand and record the next action in the selected interface

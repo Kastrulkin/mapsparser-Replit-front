@@ -267,6 +267,27 @@
       "result": "Causal4fail/6pass7.17s/capture9592.439ms; final91focused/adjacent passes38.89s/capture41146.947ms. Full frozen757frontend/135files pass309.20s/capture310547.28ms, untruncated/no timeout,11hashes match afterward. Quality53358.768ms passes with one existing warning; build12.98s/capture15205.897ms;199JS integrity181.551ms. Known full stderr equals previous retained negative/jsdom diagnostics.",
       "limits": "UI mocks/jsdom, no new backend run/native DB/provider/deployed/browser/mobile/RTL proof. Direct Context.Provider switch does not prove actual LanguageProvider async loading/remount persistence. Other product locale gaps remain. Intermediate clipboard fixture failure retained, not a product defect. Next-action state retention is source-only candidate, not repaired/cross-tenant write proof. WholeFAIL, nine foreign paths, aggregate/restore denials, disk floor and prior unsafe-reset INCONCLUSIVE effects persist. No push/deploy/production/DB/delete/Docker/provider action."
     },
+    "subsequent_journey_action_scope": {
+      "parent_commit": "544fbe96",
+      "finding": "UX-JOURNEY-ACTION-SCOPE-08",
+      "scope": "Keyed business/action-ID inner form and layout-lifetime command/clipboard fence. Same-ID version/payload/surface/locale refresh retains edits; wire/API/approval/layout unchanged. Started requests not aborted or rolled back.",
+      "source_manifest": "evidence/journey-scope-manifest.json",
+      "independent_review": "Actual source, targeted105 and full771 bounded evidence PASS; all12current hashes independently verified. See evidence/journey-scope-review.md. Not whole-project readiness.",
+      "proof": [
+        "evidence/journey-scope-red.json",
+        "evidence/journey-scope-targeted.json",
+        "evidence/journey-scope-full.json",
+        "evidence/journey-scope-quality.json",
+        "evidence/journey-scope-build.json",
+        "evidence/journey-scope-integrity.json",
+        "evidence/journey-scope-notes.md",
+        "evidence/journey-scope-review.md",
+        "evidence/journey-scope-precommit.json",
+        "evidence/journey-detail-load-candidate.md"
+      ],
+      "result": "Causal4fail/6pass8.40s/capture10687.735ms; frozen105focused/adjacent passes38.12s/capture40349.497ms,14newscope cases. Full frozen771frontend/136files passes313.22s/capture314627.727ms, no timeout/truncation. Quality48761.169ms passes with one existing warning; build13.83s/capture15210.221ms;199JS integrity242.268ms.12hashes match afterward; full stderr equals prior retained negative/jsdom diagnostics.",
+      "limits": "Mocked UI/jsdom only; RED field checks fail before B submission, not cross-tenant/backend write evidence. Parent detail GET ordering remains source-only UX-JOURNEY-DETAIL-LOAD-09, not fixed. LanguageProvider async loading/remount, native browser/provider, current image/full backend/demo and original DoD gates remain. WholeFAIL, nine foreign paths, aggregate/restore denials and prior unsafe-reset INCONCLUSIVE effects persist. No push/deploy/production/DB/delete/Docker/provider action."
+    },
     "foreign_worktree_paths_excluded": 9,
     "historical_verdict_file": "verdict.json",
     "historical_verdict_reviewed_commit": "2f224f051e3b3487a2c0d529d40b547c414ccb52"

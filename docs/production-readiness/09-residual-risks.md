@@ -1,5 +1,20 @@
 # Residual risks — working register
 
+21September after544fbe96: UX-JOURNEY-ACTION-SCOPE-08 has causal local proof and
+a bounded correction, superseding the source-only status below.105focused/
+adjacent checks pass; new-action form and late command/clipboard continuations
+are isolated. Same-id refresh preserves edits. This neither cancels a started
+backend action nor establishes native browser/provider/production behavior.
+
+UX-JOURNEY-DETAIL-LOAD-09 remains a source-only P2: the Focus parent can accept
+an obsolete same-business action GET after the query selects another action,
+or keep the old card clickable while the next one loads. Its request-generation
+and retry tests are the next step, not part of the card fix. Dashboard business
+switches remount Outlet; no cross-tenant write/leak established. The separate
+real LanguageProvider loading/remount gap also persists. Full771frontend tests pass;
+original wholeFAIL, aggregate/restore denials and unsafe-reset INCONCLUSIVE effects
+unchanged. Last disk6,893,116KiB (~6.57GiB) is below10GiB image-build floor.
+
 21September after7c080d11: shared JourneyActionCard Russian chrome is locally
 corrected for ten languages;91focused/adjacent tests pass. UX-LOCALE-07 remains
 partial across the product: raw API/business copy is deliberately not translated,

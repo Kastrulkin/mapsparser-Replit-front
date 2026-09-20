@@ -1,5 +1,14 @@
 # LocalOS readiness executive summary — working, not final
 
+Latest21September continuation (parent544fbe96) separates the current action's
+form and asynchronous results from previously selected actions. Old drafts and
+late errors/callbacks no longer contaminate a new card; refreshing the same
+action retains edits. Causal4fail/6pass becomes105targeted/adjacent passes;
+types/lint (one existing warning), build and199JS integrity pass. Independent
+bounded review PASS; full frozen frontend771tests/136files passes. No rollout or production
+data change. Parent detail-load ordering remains a separate source candidate;
+original whole-project acceptance remains FAIL.
+
 Latest20–21September continuation (parent7c080d11) localizes shared task-card
 controls, instructions and dates for the ten existing languages. Raw business
 text and action contracts remain unchanged. Causal4fail/6pass becomes91focused/

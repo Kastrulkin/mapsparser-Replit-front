@@ -1,5 +1,18 @@
 # Readiness decisions
 
+## D-064 — Bind action form and asynchronous continuation to business/action ID
+
+Use a keyed inner form for `[businessId, action.id]`, not version, payload,
+surface or locale. Supported server paths can merge payload on the same ID
+without incrementing version; version is optimistic concurrency, not draft
+identity. Same-action refresh keeps in-progress edits and retry identity.
+New-action handoff initializes fresh fields, even for the same content entity.
+Each layout-effect setup has a distinct lifetime, invalidated on cleanup;
+command success/error/finally, upgrade navigation and clipboard continuation
+must not affect a later form after unmount. Do not cancel or claim rollback of
+an already-started command. Parent detail-load ordering is a separate boundary
+and is not repaired by this card change. No transport/API/approval redesign.
+
 ## D-063 — Localize action chrome, not business content or command values
 
 The shared JourneyActionCard must read the existing language context for system
