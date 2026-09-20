@@ -7,11 +7,12 @@ import uuid
 import unicodedata
 from datetime import date, datetime, timedelta
 from typing import Any
+from urllib.parse import urljoin
 
-import requests
 from bs4 import BeautifulSoup
 
 from database_manager import DatabaseManager
+from core import outbound_network
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
 from core.auth_helpers import verify_business_access, verify_business_write_access
 from core.card_audit import build_card_audit_snapshot
@@ -2790,7 +2791,10 @@ def _normalize_website_url(value: Any) -> str:
     text = str(value or "").strip()
     if not text:
         return ""
-    if text.startswith(("http://", "https://")):
+    if re.match(r"^[^/?#:@]+\.[^/?#:@]+:\d+(?:[/?#]|$)", text):
+        return f"https://{text}"
+    if re.match(r"^[a-z][a-z0-9+.-]*:", text, re.I):
+        # Preserve explicit schemes for the outbound validator to accept or reject.
         return text
     return f"https://{text}"
 
@@ -2804,7 +2808,7 @@ def _clean_site_description_text(value: Any) -> str:
     return text[:500]
 
 
-def _extract_site_description_from_html(html: str) -> str:
+def _extract_site_description_from_html(html: str | bytes) -> str:
     if not html:
         return ""
     try:
@@ -2832,14 +2836,38 @@ def _fetch_site_description(site_url: Any) -> str:
     if not url:
         return ""
     try:
-        response = requests.get(
-            url,
-            headers={"User-Agent": "LocalOSBot/1.0 (+https://localos.pro)"},
-            timeout=5,
-        )
-        if response.status_code >= 400:
-            return ""
-        return _extract_site_description_from_html(response.text or "")
+        visited: set[str] = set()
+        for _ in range(5):
+            if url in visited:
+                return ""
+            visited.add(url)
+            response = outbound_network.public_pinned_get(
+                url,
+                headers={"User-Agent": "LocalOSBot/1.0 (+https://localos.pro)"},
+                timeout=5,
+                max_bytes=1_000_001,
+            )
+            if response.status_code in {301, 302, 303, 307, 308}:
+                location = str(response.headers.get("location") or "").strip()
+                if not location:
+                    return ""
+                url = urljoin(url, location)
+                continue
+            if not 200 <= response.status_code < 300 or len(response.body) > 1_000_000:
+                return ""
+            charset = re.search(
+                r"charset\s*=\s*[\"']?([A-Za-z0-9._-]+)",
+                str(response.headers.get("content-type") or ""),
+                re.I,
+            )
+            html: str | bytes = response.body
+            if charset:
+                try:
+                    html = response.body.decode(charset.group(1), errors="replace")
+                except LookupError:
+                    html = response.body.decode("utf-8", errors="replace")
+            return _extract_site_description_from_html(html)
+        return ""
     except Exception:
         return ""
 
