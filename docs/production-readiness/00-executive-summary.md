@@ -1,6 +1,6 @@
 # LocalOS readiness executive summary — working, not final
 
-Updated 19 September 2026. This is a decision aid for an owner or potential
+Updated 20 September 2026. This is a decision aid for an owner or potential
 partner. It is not a production-readiness certificate, release approval, or a
 claim that external providers have been exercised.
 
@@ -14,6 +14,12 @@ writes require the documented human approval or manual boundary.
 
 ## What is materially stronger after this work
 
+- Website context used by content plans now rejects private network destinations
+  and unsafe redirects while bounding page size and redirect count. Local4e33587d
+  has149 passing adjacent checks including25 focused cases and independent review;
+  this is synthetic-network proof, not deployed certification. Local capacity
+  recovered to about16.26GiB; full-current build/image checks can resume after
+  fresh isolated preflight. Prior low-disk failures remain historical evidence.
 - The shared business writing-style profile now requires write permission when
   changed, while permitted viewing and personal examples remain available.
   Local432f64a0 has a causal regression,19focused/92overlapping adjacent pure
@@ -29,7 +35,7 @@ writes require the documented human approval or manual boundary.
 - Today static decision/preference/empty-work labels now use ten-language copy
   in local7c374f1f: three causal failing tests become93focused/adjacent passes;
   TypeScript/lint and independent review pass. Server-supplied Russian action
-  labels remain unresolved. New build/full units did not run because free Mac
+  labels remain unresolved. On19September new build/full units did not run because free Mac
   space fell below the2GiB safety floor (~1.7GiB, with11GiB swap allocated).
   No deployed or fully translated Today claim is made.
 - New content-plan checks reproduce and fix read-only generation and selected

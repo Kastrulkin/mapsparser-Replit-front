@@ -1,5 +1,37 @@
 # Verified commands and evidence
 
+## Content-plan website SSRF — 20 September commit4e33587d
+
+SourceSHA256 `a46fa9edd35c6d6c73fca879997942fdd378605f2280a436ebaba342ea45e0a7`;
+testSHA256 `b9e8d1c958fde09b953211d6d61ca94d573c48f8d02fb9088db41f03c66ea6f1`.
+Raw under `.agent/tasks/production-readiness-20260917/raw/`:
+
+- `content-site-ssrf-red-20260919.json`:16failed0.32s,capture1895.583ms,exit1.
+  Old direct-client and compatibility/pinning contracts fail; not16bugs or a
+  real private-network exploit.
+- `content-site-ssrf-green-20260919.json`:16passed0.53s,3271.917ms,exit0.
+- `content-site-ssrf-green-final-20260919.json`:25passed0.47s,2605.469ms,exit0.
+  Predates the final lint-driven request-count assertion; not exact final testSHA.
+- `content-site-ssrf-adjacent-final-20260919.json`:149passed0.50s,954.791ms,exit0,
+  at the exact hashes above. Includes all25 current focused cases plus contact
+  SSRF, content-plan generation, generation-v2 and content-rules tests.
+
+All captures have empty stderr, no timeout/truncation. Scoped source/test
+Ruff E9,F63,F7,F821, default new-test Ruff and diff checkPASS; independent final
+reviewPASS20September. These pure tests call real validation/pinning and facts
+helpers with DNS/urllib3 pools faked; setter/caller provenance is source-traced.
+No live HTTP, native DB, current-image or deployed proof. Overlapping test sets
+must not be added into unique totals. Historical private runner and guard paths
+are now absent; raw evidence remains, so do not rerun just to replace history.
+
+Fresh named tmux `readiness-content-site-scan-20260920` is terminal. Helper
+`/private/tmp/localos-readiness-resume-20260920.PTMOqH/scan.sh` uses env-i,
+Gitleaks8.30.1 offline/redacted git delta70c0bf60..4e33587d. Raw
+`content-site-secret-delta-20260920.json`:exit0,970.979ms,no timeout/truncation;
+one commit12,960bytes, zero findings; `content-site-secret-delta-report-20260920.json`
+is[]. This is not a whole-history, dirty-tree, image or log scan. Existing outputs
+are guarded against overwrite. Capacity check `df -k /`:17044920KiB free; no cleanup.
+
 ## Business voice-profile write admission — 19 September, 432f64a0
 
 Private `capture.sh` / `run-pure.sh` under

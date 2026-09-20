@@ -1,6 +1,40 @@
 # Readiness handoff
 
-## Current checkpoint — 19 September, source 432f64a0
+## Current checkpoint — 20 September, source 4e33587d
+
+Branch `codex/production-readiness-20260917`; resumed from70c0bf60. Commit4e33587d
+contains only `src/services/content_plan_service.py` and new
+`tests/test_content_plan_site_ssrf.py`. SEC-SSRF-02 source/test/raw reviewPASS;
+exact149-test adjacent-final proof and hashes are recorded in COMMANDS.
+No live exploit, real DNS/socket, native database or production proof is implied.
+
+Capacity hold is superseded:17044920KiB (~16.26GiB) free on20September. The
+existing2GiB abort floor and larger start margins are unchanged. Old private
+content-site/content-voice/Today runners are ENOENT; retained repository raw
+evidence is intact. Recreate safe runners rather than claiming old resources
+survive. Fresh tmux inventory contained only `localos-ready-test`; ownership and
+runtime purpose of that session have not been certified or altered.
+
+Next: serialize fresh current-source frontend verification, then frozen committed
+backend and image validation with isolated runtime identity guards. No heavy run
+is claimed here. Root's fresh offline secret-scan helper is
+`/private/tmp/localos-readiness-resume-20260920.PTMOqH/scan.sh`; its destination
+already exists and must not be replayed. A new continuation must first run
+`git status --short`, `git rev-parse HEAD`, and `df -k /`, then inspect the
+latest COMMANDS checkpoint for terminal/running captures before starting work.
+
+Production IAB sign-in confirmed again without navigation, preference changes,
+credential extraction or writes. It does not waive the separate denied local
+demo file-picker boundary. Nine foreign paths remain untouched: the earlier seven
+listed below plus concurrent `src/main.py` and `tests/test_core_public_spa.py`
+changes observed during review. Freeze4e33587d excludes all worktree changes.
+Fresh Docker preflight: context `desktop-linux`, daemon socket absent. The old
+owned native PostgreSQL directory is also absent; the running PostgreSQL15 is
+unrelated and must not be reused or stopped. Recreate isolated runtime later;
+frontend checks do not require either service. This is not an app-test failure.
+No push/deploy, production changes, deletion, or full-goal completion.
+
+## Earlier checkpoint — 19 September, source 432f64a0
 
 Branch `codex/production-readiness-20260917`, startingHEAD0a79bf9c. SEC-RBAC-10
 commits only `src/services/content_voice_service.py` and new

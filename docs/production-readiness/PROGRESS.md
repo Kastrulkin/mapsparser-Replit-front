@@ -1,6 +1,29 @@
 # Production-readiness progress
 
-## Current checkpoint — 19 September, content-voice write admission 432f64a0
+## Current checkpoint — 20 September, website reader 4e33587d
+
+- [x] SEC-SSRF-02 locally FIX_PROVEN: content-plan website context now uses
+  canonical public-IP-pinned GET, validates every redirect, caps five requests
+  and one-million-byte HTML, and preserves HTTP/meta charset handling.
+  Causal RED16 failures; final overlapping adjacent set149passes0.50s includes
+  all25 hardened focused cases at the exact committed hashes. Independent PASS.
+- [x] Offline secret delta70c0bf60..4e33587d: one commit,12,960bytes, zero findings.
+- [x] User-enabled production IAB login observed read-only: authenticated
+  SuperAdmin Today page; mixed locale remains visible. No clicks or writes.
+- [x] Capacity recovered: fresh17044920KiB (~16.26GiB) free, above existing
+  planning margins. This agent did not delete files or stop applications.
+- [ ] Full-current backend/frontend/image validation remains open. Older private
+  runners/configs are now absent; recreate isolated guards and revalidate runtime
+  identity before launching serialized jobs. Do not replay or overwrite raw proof.
+
+Previous meaningful turn: PROGRESS. Final SSRF review was interrupted by an
+agent-service failure, not a test failure; resumed review accepts unchanged
+source/test hashes. Nine foreign dirty paths remain excluded: the earlier seven
+plus concurrent `src/main.py` and `tests/test_core_public_spa.py` edits observed
+during review. The source snapshot stays exactly4e33587d, without overlays. No push/deploy,
+production/DB changes, provider sends or full-readiness promotion.
+
+## Earlier checkpoint — 19 September, content-voice write admission 432f64a0
 
 - [x] Previous goal turn: PROGRESS, three news/Telegram source packages and
   reviewed documentation committed through0a79bf9c. Full objective retained.

@@ -4,6 +4,16 @@ Status: incomplete security assessment, not a production approval. Baseline `302
 
 ## Assets and adversaries
 
+20 September SEC-SSRF-02 is locally FIX_PROVEN4e33587d. Owner-set business
+website reaches content-plan generation; owner authorization is not network
+destination authorization. The reader now reuses canonical public-IP-pinned
+transport at every redirect, with response/redirect limits and safe empty
+optional-context fallback. Causal16 contract failures and exact149 adjacent
+passes (including25 focused cases) plus independent review support this bounded
+claim. DNS and connection pools are faked; setter/caller provenance is traced
+in source, not a live HTTP/route integration exploit. Other outbound readers
+and production remain outside this proof.
+
 19 September SEC-RBAC-10 is locally FIX_PROVEN432f64a0: business voice-profile
 PATCH's role-blind mutation gate is reproduced (8failed/6passed) and replaced
 with optional canonical write admission at the existing write connection.

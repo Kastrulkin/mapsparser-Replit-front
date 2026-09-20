@@ -1,8 +1,15 @@
 # Production-readiness scorecard — working, not final
 
-Updated 19 September 2026. Scores describe evidence at the stated checkpoint,
+Updated 20 September 2026. Scores describe evidence at the stated checkpoint,
 not an average that can waive a release gate. The original Definition of Done
 and unresolved P1 items remain controlling.
+
+SEC-SSRF-02 is locally proven4e33587d by exact149 adjacent passes including25
+focused cases and independent review; DNS/pools are faked, so no real-network,
+native-route, image or production certificate follows. Capacity recovered to
+~16.26GiB; old resource holds below are historical. Fresh aggregate/build/image
+checks remain pending while vanished temporary guards are recreated. No score
+promotion follows from capacity recovery or authenticated production IAB access.
 
 Content-voice profile admission432f64a0 adds causal pure proof,19focused and92
 overlapping adjacent passes plus independent review. Default read/example scope

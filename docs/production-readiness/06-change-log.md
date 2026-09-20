@@ -1,5 +1,18 @@
 # Production-readiness change log
 
+## SEC-SSRF-02 — pinned content-plan website context, 4e33587d
+
+Replace automatic-redirect `requests.get` with the existing canonical public
+pinned transport. Check each redirect, cap five requests/one-million-byte HTML,
+preserve bare host/port and HTTP-over-meta charset behavior, and retain the
+existing empty-context fallback on failure. No setter, schema or provider change.
+
+RED16 fails on the original direct-client/contract gaps, not16independent
+vulnerabilities. Hardened25 focused cases are included in exact149 adjacent
+passes0.50s. Independent final reviewPASS; source/test scoped Ruff and diffPASS.
+Offline one-commit redacted secret scan finds zero leaks. DNS/pools are faked;
+no real-network, native DB, image or production validation is implied.
+
 ## SEC-RBAC-10 — business voice-profile write admission, 432f64a0
 
 The shared content-voice helper now accepts keyword-only `require_write=False`.

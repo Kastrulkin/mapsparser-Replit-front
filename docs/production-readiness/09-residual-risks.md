@@ -1,5 +1,18 @@
 # Residual risks — working register
 
+20 September update: SEC-SSRF-02 locally fixed4e33587d, independently accepted
+with exact149 adjacent passes including25 focused cases. Website fetches now
+pin public destinations and revalidate redirects; five per-hop timeouts are
+not a strict wall-clock deadline, DNS latency is not certified, and only the
+first validated public IP is attempted. Setter-to-reader provenance is source
+traced, not an authenticated native-route or real-network proof.
+
+Capacity has recovered to17044920KiB (~16.26GiB); earlier low-disk observations
+below are historical, not the current blocker. Old temporary runners/guards
+are absent. Fresh isolated runtime and same-revision aggregate/image checks
+must be rebuilt, with unchanged safety floors. No production changes follow
+from the user's browser login; authenticated Today still shows mixed locale.
+
 Newest source432f64a0 locally fixes SEC-RBAC-10 with19focused/92overlapping
 adjacent pure passes and independent review. Business-profile PATCH now checks
 write roles at its write connection, preserving permitted initial reads and
@@ -18,8 +31,8 @@ User-owned NULL-business examples remain personal/global, not reassigned data.
 Other legacy endpoints may still execute DDL; prompt-template debug output is
 not covered by the raw-provider-output privacy fix. No platform-wide closure claim.
 
-Latest local disk observation is 1,819,548 KiB (~1.74 GiB); heavy native/build
-jobs remain below unchanged resource gates. No cleanup or apps stopped. Prior
+Historical19September disk observation was1,819,548KiB (~1.74GiB); that hold is
+superseded by the20September update above. No cleanup or apps stopped. Prior
 direct Operator gatee3e8fbff retains its14/20pure proof. Current-source aggregate,
 Today build/full units and current image still need separate validation.
 

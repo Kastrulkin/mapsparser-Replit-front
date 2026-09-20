@@ -1,5 +1,20 @@
 # Readiness decisions
 
+## D-043 — Reuse pinned public transport for optional website context
+
+Stored business website is untrusted input even when its setter requires owner
+access. Content generation must not connect to private addresses or follow a
+redirect without fresh admission. Reuse `core.outbound_network.public_pinned_get`
+instead of another URL validator/client. Preserve bare-host compatibility,
+HTTP charset precedence and HTML meta/BOM decoding; unsupported/private/failed,
+oversized or over-budget pages yield the existing empty optional context.
+
+Five requests and five-second per-hop timeout are not a strict total deadline;
+OS DNS latency and first-public-IP availability remain residuals. Current proof
+uses real policy/pinning code with fake DNS/pools, not real network transport.
+Capacity recovery20September permits renewed preflight, not lowered guards or
+automatic production actions. Recreate vanished temporary runners safely.
+
 ## D-042 — Separate shared voice-profile writes from permitted reads/examples
 
 SEC-RBAC-10 uses canonical write admission only at `update_content_voice`'s
