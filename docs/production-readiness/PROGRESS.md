@@ -17,17 +17,23 @@
 - [ ] Current backend aggregate and image remain open. Latest free space is
   7,421,004 KiB (~7.08 GiB), not the earlier 16.26 GiB. Keep the 5 GiB aggregate
   start / 2 GiB live floors and the larger 10 GiB image planning margin.
-- [ ] Fresh whole-diff review found the media-delivery SSRF/unbounded-read and
-  role-blind media mutation path. Causal pure RED is retained; a minimal local
-  source/test package is in progress, not yet independently accepted.
+- [x] SEC-SSRF-03 / SEC-RBAC-11 fixed locally in `5cc7c0cd`: public-IP-pinned,
+  bounded media downloads and write admission for all six media mutations.
+  Causal mocked RED 3 fail / 2 pass is retained. Exact final guarded set:
+  279 passed, zero skips, 0.89s; independent source/evidence review PASS.
+  Prior worker captures did not have the root no-egress/dotenv guard; do not
+  claim equivalent isolation for those earlier runs. No native DB/provider proof.
+- [x] Two-commit offline secret delta through `5cc7c0cd`: zero findings.
 - [ ] Telegram rebind is an already documented intentional breaking release
   gate, not a newly discovered source regression. The runbook now requires an
   approved coordinated cutover; no actual provider rebind or live proof exists.
 
 Nine foreign dirty paths are preserved. The frontend archive excludes them and
 the new backend package. No push/deploy, production/DB changes, provider sends,
-deletion or readiness promotion. Next: finish the media security package and
-review, then freeze that committed revision for isolated backend verification.
+deletion or readiness promotion. Next: prepare a safe clean dependency environment,
+then use frozen `5cc7c0cd` for isolated backend verification. Private dependency
+installer v1 failed static safety review and has NOT RUN; see HANDOFF. This is
+harness work remaining, not an application test failure or external blocker.
 
 ## Earlier checkpoint — 20 September, website reader 4e33587d
 

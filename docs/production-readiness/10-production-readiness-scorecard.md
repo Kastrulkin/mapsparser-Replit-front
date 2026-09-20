@@ -9,7 +9,8 @@ TypeScript, lint (one warning), both builds and199+12 JS integrity PASS;
 independent terminal evidence review PASS. This closes the current frozen
 frontend unit/build hold only. No score promotion: clean install, browser/API,
 current backend/image, full demo and provider rebind remain open. Fresh whole-
-diff review found a media-fetch security path; its repair is in progress.
+diff review's media-fetch and write-role findings are locally fixed5cc7c0cd
+with279 guarded pure passes and independent review; no native/provider proof.
 Disk~7.08GiB after Docker startup is below the10GiB image planning margin.
 
 SEC-SSRF-02 is locally proven4e33587d by exact149 adjacent passes including25

@@ -3,7 +3,9 @@
 ## Current checkpoint — 20 September, frontend terminal PASS
 
 Branch `codex/production-readiness-20260917`, HEAD before this documentation
-package `54bc55e6723500996b7fd7974c257502747a756e`. Tested archive is exactly
+package `54bc55e6723500996b7fd7974c257502747a756e`; frontend documentation is now
+committed in `7901b8bd`, and latest source is `5cc7c0cddc1df4356f23e1e6c6e0f0b68d849721`.
+Tested frontend archive is exactly
 `4e33587d`, frontend tree `0af96cd4614e0a1c5b658339b0a73d1a7bec9e46`, not the
 dirty worktree. All 642 units / 129 files, TypeScript, lint (one warning), both
 builds and artifact integrity pass; independent final evidence review PASS.
@@ -24,11 +26,13 @@ do not reuse, reset, stop or migrate them. Native PostgreSQL15 is also foreign.
 New private backend preparation directory
 `/private/tmp/localos-backend-current-20260920.TpGpRC/` contains only a verified
 private pypdf6.16.1 package copy from a retained stopped historical app container.
-No backend runner/container/database has been launched by this continuation.
+No full backend aggregate runner, container or database has been launched by
+this continuation; the selected pure media tests described below did run.
 
-Next source package is media SSRF + mutation roles, owned by worker
-`social_media_ssrf_fix`; root owns proof/release docs. Do not commit its files
-until exact RED/GREEN/adjacent results and independent review are complete.
+Media SSRF + mutation roles is now reviewed/committed in `5cc7c0cd`: only two
+production files and two test files. Root guarded final proof has279 passes,
+zero skips,0.89s; independent source/guard/raw review PASS. Exact hashes and all
+earlier capture limitations are in COMMANDS. Frontend tree is unchanged from4e.
 Fresh delta review keeps Telegram SEC-WH-02 as an intentional, unresolved
 provider-rebind release gate. No real token inventory/provider action authorized.
 
@@ -44,10 +48,20 @@ guards; do not overlap heavy jobs or use foreign databases.
 
 Safe first resumption commands: `git status --short`, `git rev-parse HEAD`,
 `df -k /private/tmp`; inspect the terminal raw captures in COMMANDS. Then freeze
-the next reviewed committed source and create/review a new owned backend runner,
+reviewed source5cc7c0cd and create/review a new owned backend runner,
 guard and synthetic PG16 target. There is no approved replayable backend launch
 command yet. Nine foreign paths remain excluded; production login does not waive
 the earlier denied local file-picker boundary. No push/deploy or goal completion.
+
+Dependency-only preparation helper `/private/tmp/localos-backend-deps-20260920.sytPnl/`
+is **NO-GO / NOT RUN**. Do not execute its `run-deps.sh` or `install-deps.py`.
+Root took ownership after rejecting v1: silent output truncation, missing signal/
+exception cleanup, leader-only descendant cleanup, no explicit arm64 selection,
+no helper hash enforcement, no separate pip bootstrap or parity postcheck.
+Fix those harness defects before any install. A fresh private dependency install
+from the frozen manifests is within the existing local-development authority;
+missing packages are not a reason to ask for production/DB access. Shared venv,
+copied overlay, foreign Docker containers and all existing proof remain untouched.
 
 ## Earlier checkpoint — 20 September, source 4e33587d
 

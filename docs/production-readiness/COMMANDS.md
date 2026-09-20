@@ -1,5 +1,51 @@
 # Verified commands and evidence
 
+## Media fetch and write admission — source5cc7c0cd, 20 September
+
+Exact SHA256 pins:
+
+- `src/services/social_posts/media_delivery.py`: `a1c452d32802254522d7a8dcc74c2d2b23b3acd86245b59c10608241b3eeb264`.
+- `src/api/media_intelligence_api.py`: `36f2b34bffb910c971ac77f1344ae9d88b8e5b0687ba6823472ebd8c29d60afd`.
+- `tests/test_social_media_delivery_ssrf.py`: `6b433eca7abbad585ef1d3a2c57aaa810efef351fa81da2f20b4504ce0798f49`.
+- `tests/test_media_intelligence_api.py`: `420e01a8163e6d89080a7a11a3e11c0b05c0bdc8de9dbfd856d5df6c8e1bbf32`.
+
+Retain all raw files; do not relabel worker isolation:
+
+- `social-media-ssrf-red-20260920.json` is an initial fixture/setup failure,
+  not the causal verdict. Corrected `social-media-ssrf-red2-20260920.json`
+  is3failed/2passed,0.35s,capture874.646ms: generic private URL body accepted,
+  missing pinned redirect/size contract, and viewer photo-create200. These use
+  mocks/env-i but had no custom no-egress hook or dotenv-disable flag.
+- Hardened worker `social-media-ssrf-final2-20260920.json`:35passed/4deselected,
+  0.48s,capture843.915ms. Broader worker set242passed0.79s. These earlier runs
+  do not establish the stronger root environment boundary; new hardening cases
+  are GREEN-only, not additional pre-fix reproductions.
+- Root `social-media-root-guard-probe-20260920.json`:exit0,282.700ms. Verified
+  exact source/test hashes, env flags and actual DNS/TCP/psycopg2/subprocess
+  denials before the selected pure test run.
+- Root `social-media-root-guarded-20260920.json`:**279passed**, zero skips,
+  0.89s,capture1172.216ms,exit0,empty stderr,no timeout/truncation. Exact command
+  contains11 test files, no `-k`, and `-p no:cacheprovider`. Do not sum overlapping
+  worker and root sets. Independent final source/guard/raw review PASS.
+
+Private root `/private/tmp/localos-media-root-20260920.EKReQ6/`; named tmux
+`readiness-media-root-20260920` is terminal. `run.sh` uses env-i with guard-first
+PYTHONPATH, dotenv/plugin autoload/bytecode disabled. GuardSHA256
+`aed4499900a678ff6429cbd6f9f451b7374cff569ec4ee0de7c0390850e2bc12` blocks selected
+Python network/child effects and psycopg2.connect; this is not a host firewall.
+Root posthashes match; own process/session absent. Test-file Ruff, API scoped
+E9/F63/F7/F821, media AST syntax and diff check PASS. Media runtime fragment is
+already excluded by the canonical standalone F821 gate; no whole-file lint claim.
+This selected pure set ran from the worktree with four explicit file pins, not
+a clean full-backend archive. It does not certify the other dirty files or a
+whole-revision aggregate; the next backend run must freeze committed5cc7c0cd.
+
+Offline Gitleaks delta54bc55e6..5cc7c0cd, named tmux
+`readiness-media-scan-20260920`:raw `social-media-secret-delta-20260920.json`,
+exit0,1852.025ms,no timeout/truncation;2commits/36,291bytes/zero findings;
+`social-media-secret-delta-report-20260920.json` is[]. Not whole-history/image/
+log/foreign-dirty proof. No DB/provider/image/deploy claim follows from this package.
+
 ## Frozen frontend terminal verification — 20 September
 
 Source4e33587d/frontend tree0af96cd4614e0a1c5b658339b0a73d1a7bec9e46, no dirty

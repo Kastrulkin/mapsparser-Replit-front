@@ -18,7 +18,8 @@ writes require the documented human approval or manual boundary.
   TypeScript, lint (one known warning), app/public builds and asset integrity;
   independent evidence review passes. Existing exact dependencies were reused.
   This does not certify a clean install, browser/API, new backend changes or
-  production. Fresh review found a media-fetch security path now being repaired;
+  production. Fresh review found a media-fetch security path, now locally fixed
+  in5cc7c0cd with279 guarded regression/adjacent passes and independent review;
   the intentional Telegram webhook transition still needs an approved cutover.
 - Website context used by content plans now rejects private network destinations
   and unsafe redirects while bounding page size and redirect count. Local4e33587d

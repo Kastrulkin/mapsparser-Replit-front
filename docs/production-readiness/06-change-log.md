@@ -1,5 +1,19 @@
 # Production-readiness change log
 
+## SEC-SSRF-03 / SEC-RBAC-11 — media security, 5cc7c0cd
+
+Only two production files and two tests: replace generic unbounded asset GET
+with canonical per-hop public pinning, cap five requests/10,000,000 accepted
+bytes per remote asset, and require canonical write access for all six media mutations. Existing
+reads, legitimate writers, local-storage priority and publication approvals stay.
+
+Causal mocked RED3fail/2pass; hardened worker35pass and adjacent242pass are
+overlapping and did not carry the root no-egress/dotenv guard. Exact root final
+guarded set279pass0.89s, zero skips, with actual guard probes and independent
+source/evidence review PASS. Two-commit secret delta finds zero leaks. No real
+network, native DB, current image or production proof; proxy-only source
+compatibility, decimal cap and non-global timeout limits are explicit in D-045.
+
 ## Frozen frontend evidence and Telegram rollout documentation — 20 September
 
 No frontend source change: recreated isolated verification, corrected only

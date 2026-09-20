@@ -1,5 +1,25 @@
 # Readiness decisions
 
+## D-045 — Media approval is not network or write-role admission
+
+An approved post may still reference a hostile stored URL. Reuse canonical
+public-IP-pinned GET for each of at most five requests per remote asset; read
+at most10,000,001 bytes per response and reject an asset above the decimal
+10,000,000-byte accepted cap. A publication can contain up to10 assets under
+the existing limit; this adds no separate publication-wide budget or deadline. Keep
+existing local-storage priority and fail-closed empty-media behavior. This
+external-download cap is intentionally distinct from the existing10MiB upload
+cap. The canonical direct transport does not use the ambient generic proxy;
+proxy-only sources may fail closed. Twenty-second per-hop timeouts and DNS
+checks do not prove a strict whole-download deadline or real provider transport.
+
+Select the existing write-role helper for six POST mutations only. Default
+GET/HEAD read scope stays unchanged; no new role model, schema, automatic
+approval or publication behavior. Real canonical helpers run with synthetic
+role rows/DNS/pools. A causal mocked RED remains useful but is not a no-egress
+certificate: root repeats final279 tests with verified environment and guard.
+Keep native database/grants/concurrent role changes and deployed proof separate.
+
 ## D-044 — Preserve native async contracts in isolated frontend verification
 
 Network denial must preserve fetch's rejected-Promise behavior; a synchronous

@@ -8,9 +8,16 @@ containers untouched. Full backend, current image, browser/demo and original
 release gates remain open. Shared macOS venv is missing nine declared runtime
 packages and has pypdf version drift; `pip check` alone does not prove parity.
 
-Fresh independent whole-diff review remains NOT READY: the media delivery path
-has causal SSRF/size-limit and viewer-mutation failures under pure fixtures; its
-local repair is in progress, not yet accepted. Telegram SEC-WH-02 is an existing
+Fresh independent whole-diff review remains NOT READY overall. Its new media
+findings are now locally FIX_PROVEN5cc7c0cd with279 guarded pure passes and
+independent review, not native DB/provider/deployment proof. Canonical direct
+transport bypasses the ambient proxy; proxy-only assets can fail closed. The
+decimal10,000,000-byte remote cap differs from10MiB uploads; five20s per-hop
+timeouts and the byte/request caps apply per remote asset, with up to10 assets
+under the existing publication limit. There is no separate publication-wide
+budget or strict global deadline. Image format
+validation and native role-change races are outside this bounded package.
+Telegram SEC-WH-02 is an existing
 intentional breaking release gate. The runbook now requires coordinated code/
 provider cutover and controlled receipt, with explicit approval. No real bot
 inventory, token access, rebind or receipt proof has been performed.
