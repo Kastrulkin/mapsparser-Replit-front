@@ -260,3 +260,17 @@ Initial native attempt36pass78fail153.249s is retained in `raw/native-pg-real-ap
 UX-SVC-01, UX-CONTENT-01 and UX-OP-01 cross-business state-overwrite hypotheses were **NO_BUG_PROVEN**: actual DashboardLayout's keyed Outlet unmounts the old business page. A test reusing a page under new props would bypass the real route contract. This does not prove same-business races or uncertain external-send retries safe.
 
 Still required for broader release closure: exact current immutable-image/compiled-runtime proof, large-data and controlled slow-network measurements beyond the tested states, broader same-business concurrency/provider uncertainty, and rehearsed partner demo. Current272native117 and historical120 already include social-publication receipt/reconciliation; that integration is not pending. Required critical-flow keyboard/focus/error/empty/slow contracts have scoped AC3PASS; this is not all-pages accessibility or production-ready sign-off.
+
+## Authenticated IAB follow-up — 20 September
+
+User-confirmed login enabled read-only navigation across Today, Progress,
+Content and Agents; all rendered, and bounded captured error/warn logs were
+empty. No settings, approvals, generation or external actions were submitted.
+This is not a complete scenario or current-build certification.
+
+Existing UX-LOCALE-07 remains visible on Today despite locally translated static
+keys. The deployed revision/cache/runtime-language cause is not established.
+Progress additionally exposes hardcoded Russian system copy in
+ManagedCardGrowthPanel and its managed-growth page branch; current i18n tests
+omit card_state, so that branch remains uncovered. User-authored titles and
+business content are excluded. See raw/iab-authenticated-navigation-20260920.md.

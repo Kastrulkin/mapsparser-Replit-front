@@ -1,5 +1,22 @@
 # Readiness decisions
 
+## D-053 — Reset is one recovery transaction; unsafe evidence cannot be laundered
+
+Use the actual main DB wrapper and SELECT projection before judging row types.
+Native TIMESTAMP handling is the reproduced defect; a plain-dict KeyError from
+an inaccurate fake is not. Consume the reset token, update the hash and revoke
+that user's existing sessions together; normal password helpers stay unchanged.
+The explicit account-recovery hardening follows OWASP Forgot Password guidance
+to invalidate sessions, without claiming a successful native-baseline exploit.
+
+Discard preliminary unguarded runs as acceptance evidence and keep possible
+effects INCONCLUSIVE. A sanitized env alone is insufficient when main loads
+dotenv. Root-owned final pure checks disable dotenv and real DB/network, pin
+handler/import provenance and retain all harness failures. Prevent urllib3's
+irrelevant IPv6 import probe in the fixture instead of allowing socket access.
+Fakes do not establish native lock/concurrent-login safety, full application
+health or production readiness. Do not retry denied aggregate/restore work.
+
 ## D-052 — Reuse the configured Telegram route without weakening delivery fences
 
 The colleague sender must honor the same application proxy precedence as the

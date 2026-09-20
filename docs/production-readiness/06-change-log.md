@@ -1,5 +1,19 @@
 # Production-readiness change log
 
+## Password reset runtime/transaction contract — 20 September, parentcf36cbb0
+
+SEC-AUTH-RESET-02 fixes a valid native TIMESTAMP reset returning500 because the
+handler expected an ISO string. Actual HybridRow compatibility is preserved.
+The route validates JSON, accepts native/ISO expiry, consumes the token and
+updates password/revokes same-user existing sessions in one transaction, closes
+on every path and rolls back on failure. Session revocation is deliberate
+recovery hardening, not a reproduced successful-baseline session exploit.
+
+Guarded historical-handler6fail/1pass becomes7pass; adjacent16pass0.53s. The
+earlier unguarded worker runs are invalid/inconclusive, not silently replaced
+by green evidence. Native lock/concurrency/production proof remains absent.
+Read-only IAB navigation and residual locale observations are recorded separately.
+
 ## Approved colleague proxy route — 20 September, parent a231abb8
 
 OPS-TELEGRAM-PROXY-01 reuses the canonical Telegram requests proxy helper in

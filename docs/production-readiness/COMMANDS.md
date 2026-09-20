@@ -1,5 +1,30 @@
 # Verified commands and evidence
 
+## Guarded reset regression — 20 September, parentcf36cbb0
+
+Root-owned named tmux runs used env -i, private arm64 Python3.11.7, disabled
+bytecode/plugin-autoload/dotenv, unchanged XoKy4o guard plus the stricter scoped
+support/password_reset_pure_check.py. Modes baseline/current/adjacent accept
+only the seven reset cases or those plus three auth-security/six cookie cases.
+The synthetic URI satisfies engine initialization only; all psycopg2 connects,
+socket operations, dotenv reads and unexpected children remain denied.
+
+Raw password-reset-guarded-red:6fail/1pass0.44s,2765.219ms,exit1. Same current
+green:7pass0.43s,2386.050ms,exit0. Adjacent:16pass0.53s,2586.098ms,exit0.
+All three final captures are untruncated/no timeout/empty stderr and every
+recorded denied-operation counter is zero. A separate quality capture exits0
+in536.396ms: source AST syntax, test/support Ruff F821/F822/F823, diff check,
+nine file hashes and structural proof-bundle validation. Git emits a benign
+confstr temp-directory warning; this is not an all-repository lint assertion.
+
+Do not count preliminary unguarded worker runs, config-error baseline, or
+exit79 bootstrap-bind diagnostic as acceptance. Their correction and limits
+are recorded in raw/password-reset-evidence-notes-20260920.md. The final
+fixture prevents urllib3's unrelated IPv6 bind probe without allowing any
+network access. Baseline replaces only the byte-pinned historical handler,
+not the whole application or rate-limiter wrapper. Final independent PASS is
+scoped to source/fake regression evidence, not native SQL or full-goal readiness.
+
 ## Colleague Telegram routing — 20 September, parent a231abb8
 
 Named tmux, private arm64 Python3.11.7, `env -i`, unchanged guard before `src`,

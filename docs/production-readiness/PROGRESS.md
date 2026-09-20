@@ -1,6 +1,27 @@
 # Production-readiness progress
 
-## Current checkpoint — 20 September, approved colleague transport
+## Current checkpoint — 20 September, guarded password reset and authenticated UI
+
+- [x] SEC-AUTH-RESET-02: corrected PostgreSQL TIMESTAMP handling in confirm-reset;
+  atomic password/token/session update, scoped session revocation, rollback and
+  close. Final guarded historical-handler RED6failed/1passed; current7passed;
+  adjacent16passed/0.53s, capture2586.098ms. Recorded guard counters are all zero.
+  The real compatibility row wrapper is used; no native DB/concurrency claim.
+- [x] User-authenticated read-only IAB: Today, Progress, Content and Agents render;
+  bounded captured error/warn logs empty. Returned to Today. Mixed locale remains;
+  Progress managed-growth system copy is still hardcoded in current local source.
+  No submitted settings, generation, approval, send, publish or credential action.
+- [ ] Preliminary worker reset tests ran outside the required guard and lack
+  durable captures. They are invalid evidence and their side effects remain
+  INCONCLUSIVE. Worker stopped; root reruns are separately captured and guarded.
+
+Parentcf36cbb0. Source/test/support hashes and evidence corrections are retained
+in raw/password-reset-evidence-notes-20260920.md and password-reset-quality capture.
+Final independent source/evidence review PASS. Nine foreign dirty paths are preserved.
+No push/deploy, aggregate-v2/restore retry or readiness-score promotion.
+Whole-goal acceptance remains FAIL; existing permission and image-disk gates remain.
+
+## Previous checkpoint — 20 September, approved colleague transport
 
 - [x] OPS-TELEGRAM-PROXY-01: the existing approved colleague sender now uses
   the shared Telegram proxy helper. Causal RED2:4failed/3passed; final scoped

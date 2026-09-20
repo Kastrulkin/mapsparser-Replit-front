@@ -1,5 +1,15 @@
 # Evidence Bundle: production-readiness-20260917
 
+20 September scoped checkpoint: SEC-AUTH-RESET-02 has guarded causal
+RED6fail/1pass, focused7pass and adjacent16pass0.53s/2586.098ms; recorded guard
+counters zero, independent source/evidence PASS. Native datetime TypeError is
+fixed with atomic same-user reset/session handling. Earlier unguarded worker
+attempts remain invalid/inconclusive; see raw/password-reset-evidence-notes.
+Authenticated IAB four-route read-only rendering succeeds, bounded captured
+error/warn logs empty, locale debt remains. No native lock/full aggregate,
+production mutation or deployment proof follows. Overall verdict remains FAIL.
+Historical checkpoints below retain their original dates and scope.
+
 Status: **FAIL / incomplete whole-goal evidence**, updated 2026-09-18 UTC. This is a progress checkpoint, not final independent sign-off.
 
 16:29UTC: Docker base pins committed ae80292d, independent static review and

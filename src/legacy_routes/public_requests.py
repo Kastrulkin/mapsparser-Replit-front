@@ -1377,13 +1377,20 @@ def auth_set_password():
 @rate_limit_if_available("5 per hour")
 def confirm_reset():
     """Подтверждение сброса пароля с новым паролем"""
+    conn = None
     try:
-        data = request.get_json()
-        email = normalize_email(data.get('email'))
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"error": "Все поля обязательны"}), 400
+
+        raw_email = data.get('email')
         token = data.get('token')
         new_password = data.get('password')
+        if not all(isinstance(value, str) and value for value in (raw_email, token, new_password)):
+            return jsonify({"error": "Все поля обязательны"}), 400
+        email = normalize_email(raw_email)
 
-        if not all([email, token, new_password]):
+        if not email:
             return jsonify({"error": "Все поля обязательны"}), 400
 
         # Проверяем токен
@@ -1393,6 +1400,7 @@ def confirm_reset():
             SELECT id, reset_token, reset_token_expires
             FROM Users
             WHERE LOWER(email) = %s AND reset_token = %s
+            FOR UPDATE
         """, (email, token))
         user = cursor.fetchone()
 
@@ -1400,30 +1408,53 @@ def confirm_reset():
             return jsonify({"error": "Неверный токен"}), 400
 
         # Проверяем срок действия токена
-        from datetime import datetime
-        if datetime.now() > datetime.fromisoformat(user[2]):
+        from datetime import datetime, timezone
+        if isinstance(user, dict) or hasattr(user, "keys"):
+            user_id = user["id"]
+            reset_token_expires = user["reset_token_expires"]
+        else:
+            user_id = user[0]
+            reset_token_expires = user[2]
+        if isinstance(reset_token_expires, str):
+            reset_token_expires = datetime.fromisoformat(reset_token_expires)
+        if not isinstance(reset_token_expires, datetime):
+            return jsonify({"error": "Неверный токен"}), 400
+        now = (
+            datetime.now(timezone.utc)
+            if reset_token_expires.tzinfo is not None
+            else datetime.now()
+        )
+        if now > reset_token_expires:
             return jsonify({"error": "Токен истек"}), 400
 
-        # Устанавливаем новый пароль
-        from auth_system import set_password
-        result = set_password(user[0], new_password)
-
-        if 'error' in result:
-            return jsonify(result), 400
-
-        # Очищаем токен
+        # Хеширование, consume reset token и отзыв всех сессий должны быть одной транзакцией.
+        from auth_system import hash_password
         cursor.execute("""
             UPDATE Users
-            SET reset_token = NULL, reset_token_expires = NULL
+            SET password_hash = %s,
+                updated_at = %s,
+                reset_token = NULL,
+                reset_token_expires = NULL
             WHERE id = %s
-        """, (user[0],))
+        """, (hash_password(new_password), datetime.now().isoformat(), user_id))
+        cursor.execute("DELETE FROM UserSessions WHERE user_id = %s", (user_id,))
         conn.commit()
-        conn.close()
 
         return jsonify({"success": True, "message": "Пароль успешно изменен"})
 
     except Exception:
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
         return internal_error_response("Не удалось подтвердить сброс пароля")
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 @app.route('/api/public/request-report', methods=['POST', 'OPTIONS'])
 @rate_limit_if_available("10 per hour")

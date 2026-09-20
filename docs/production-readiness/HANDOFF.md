@@ -1,6 +1,33 @@
 # Readiness handoff
 
-## Current checkpoint — 20 September, Telegram colleague transport
+## Current checkpoint — 20 September, guarded reset package
+
+Parentcf36cbb0. Owned source is only confirm_reset in
+src/legacy_routes/public_requests.py; tests/test_password_reset_sessions.py uses
+the actual DBConnectionWrapper/HybridRow and real hashing/session verification.
+Native datetime previously caused fromisoformat TypeError/HTTP500. Current
+transaction updates password, consumes token and deletes only that user's
+existing sessions, with rollback/finally-close. Shared password helpers unchanged.
+
+Final guarded RED6fail/1pass0.44s; GREEN7pass0.43s; adjacent16pass0.53s
+(2586.098ms capture), no denied-operation counters, timeout or truncation.
+Earlier shared-venv unguarded worker tests are excluded and possible effects
+remain INCONCLUSIVE; do not turn the final safe rerun into retrospective proof
+about them. Initial incorrect plain-dict fixture, import config failure and denied
+urllib3 IPv6 bind probe are explicitly reconciled in raw evidence notes.
+Guard is process-local trusted bootstrap, not OS sandbox; native concurrency,
+live reset, rate-limiter baseline parity and full backend aggregate are unverified.
+Final independent source/evidence review PASS; preserve the nine foreign dirty paths.
+
+User-reported login was confirmed through read-only IAB navigation of four
+authenticated pages. No captured error/warn logs; no data-control submissions.
+Today static locale fix already exists locally, but the live mixed text remains.
+Progress managed-growth branch still has untranslated Russian system copy and
+missing i18n branch coverage; logged only, not patched in this security package.
+Keep existing denied aggregate/restore lanes, production restrictions and10GiB
+image gate. Whole-goal acceptance is still FAIL, not a release approval.
+
+## Previous checkpoint — 20 September, Telegram colleague transport
 
 Parent `a231abb8`. OPS-TELEGRAM-PROXY-01 is a bounded two-line change in
 `src/services/operator_colleagues.py` plus `tests/test_operator_colleague_transport.py`.
