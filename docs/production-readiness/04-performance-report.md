@@ -1,5 +1,10 @@
 # Performance — working measurements, not a capacity claim
 
+20 September draft-snapshot tests/build timings are correctness-tool durations
+only (COMMANDS.md), not API latency or contention benchmarks. Added approval/
+draft/lead locks have no representative PostgreSQL contention measurement yet.
+No performance score or capacity claim changes with this package.
+
 Updated 18 September 2026. Cold-request distributions, one bounded prepared
 dashboard profile and tiny-fixture SQL plans are measured; capacity remains open.
 Build/test wall times are engineering feedback measurements, not user latency.

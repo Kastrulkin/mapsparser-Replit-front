@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "label": "draft-approval-red",
+  "captured_at": "2026-09-20T18:38:44.105226+00:00",
+  "command": [
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-B",
+    ".agent/tasks/production-readiness-20260917/support/draft_approval_pure_check.py"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin x86_64",
+  "duration_ms": 443.404,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "Traceback (most recent call last):\n  File \"/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/.agent/tasks/production-readiness-20260917/support/draft_approval_pure_check.py\", line 33, in <module>\n    import psycopg2\n  File \"/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/lib/python3.11/site-packages/psycopg2/__init__.py\", line 51, in <module>\n    from psycopg2._psycopg import (                     # noqa\nImportError: dlopen(/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/lib/python3.11/site-packages/psycopg2/_psycopg.cpython-311-darwin.so, 0x0002): tried: '/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/lib/python3.11/site-packages/psycopg2/_psycopg.cpython-311-darwin.so' (mach-o file, but is an incompatible architecture (have 'arm64', need 'x86_64')), '/System/Volumes/Preboot/Cryptexes/OS/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/lib/python3.11/site-packages/psycopg2/_psycopg.cpython-311-darwin.so' (no such file), '/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/lib/python3.11/site-packages/psycopg2/_psycopg.cpython-311-darwin.so' (mach-o file, but is an incompatible architecture (have 'arm64', need 'x86_64'))\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

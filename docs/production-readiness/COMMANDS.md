@@ -1,5 +1,48 @@
 # Verified commands and evidence
 
+## Exact draft approval snapshot — 20 September, parent79d7b227
+
+Captures for this package are in the existing task's `evidence/` directory
+(not its older `raw/` directory), with prefix `draft-approval-`. All launches
+use named `localos-draft-approval-*` tmux sessions. Private arm64 Python3.11.7,
+env-i, -I -B, plugin autoload disabled and explicit support/draft_approval_pure_check.py
+selection prohibit DB/network/dotenv/child processes before app imports. Only
+fake cursor/effect boundaries run; final recorded forbidden-attempt counters0.
+Node22 frontend checks use the existing GtHPOV/no-egress-compatible.cjs chain,
+envDir:false and frontend child cwd. This is not an OS/native isolation proof.
+
+| Capture suffix | Result | Duration ms |
+| --- | --- | ---: |
+| red | x86_64/arm64 psycopg2 import mismatch before tests; NOT causal |443.404|
+| red2 | actual arm64 runner4fail/1pass, zero guard attempts |1093.250|
+| green | intermediate307pass |2169.596|
+| green2 | intermediate311pass |2185.514|
+| backend-final | final313pass/1.66s; all guard counters0 |2149.401|
+| ui | earlier11pass before actual main-panel integrations |8236.820|
+| ui-final | final16pass/3files/14.49s, both controls with spy callbacks |16316.089|
+| quality | earlier TS/lint pass before final UI integration |59272.045|
+| quality-final | app/node TS and full lint pass;0errors/1existing warning |68514.283|
+| ruff | four Python files, F821/F822/F823, no cache;pass |87.732|
+| build | local canonical-config app build;pass |28499.077|
+| integrity |199reachable JS assets;pass |289.258|
+| full-ui |684pass/132files, but source changed during run; nonfinal |335145.413|
+| full-final | frozen684pass/132files/308.62s;exit0/untruncated |309982.748|
+| source-manifest |15 SHA-256 records: sources/tests/guards/index |38.494|
+| precommit |15hashes match; staged diff/FAIL ledger/Gitleaks pass |1417.411|
+
+Frozen full-final is one complete current frontend run, not a union. It retains
+expected negative-test/jsdom diagnostics in stderr, not an empty-stderr claim.
+No failed suites or unhandled-error result was reported. Complete command,
+stdout/stderr, timeouts and truncation flags are retained in every JSON capture.
+Build artifact: `/private/tmp/localos-draft-approval-build-20260920.nGsezM/dist`,
+entry `index-CGcZxJQ5.js`, CSS `index-BM6vOqzw.css`. No dist or production sync.
+Expected upstream Yandex PURE comments and external-outDir warning are retained.
+New build has no native-browser proof. Independent bounded review PASS is in
+evidence/draft-approval-review.md; whole-project acceptance remains FAIL.
+Precommit secret check covered the staged package (~253229bytes), not history,
+images, logs or revocation of historical credentials. The final documentation
+adds these observed results; no application/test source changed afterward.
+
 ## Managed Progress display contract — 20 September, parent2fac7241
 
 All operations use named readiness-card-copy/readiness-managed tmux sessions.

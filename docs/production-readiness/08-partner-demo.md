@@ -1,5 +1,11 @@
 # Synthetic partner demo: 10–15 minutes
 
+20 September local review update: the outreach demonstration should show the
+stored exact text/contact snapshot before confirmation. Use a newly prepared
+synthetic run; old versionless pending approvals are deliberately rejected.
+Tests for the two actual UI controls are mocked, not a completed live demo or
+permission to confirm a production batch. Existing rehearsal gaps remain.
+
 Status: **partially exercised; complete presenter rehearsal still open**.
 Latest preparation: private v3 helper permits the two exact previously denied
 partnership GETs, with5pure policy tests and independent review. It has not run

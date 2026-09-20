@@ -138,6 +138,28 @@
       "independent_review": "Bounded backend and frontend source/evidence PASS after legacy measurement normalization and explicit disclaimer/rating corrections; full2 aggregate review recorded in evidence notes",
       "limits": "Mocks/process-local guards, not native DB, real API, browser layout/scroll, linguistic certification, Docker/current image or production proof. Shared JourneyActionCard still displays raw Russian action/command copy; replacing it with direct navigation would alter execution semantics. Intermediate fixture/type/build-cwd failures are reconciled separately. Nine foreign paths preserved; overallFAIL and denied aggregate/restore lanes unchanged."
     },
+    "subsequent_draft_approval_identity": {
+      "parent_commit": "79d7b227",
+      "finding": "AI-APPROVAL-DRAFT-IDENTITY-04",
+      "scope": "Versioned business/ID/lead/channel/effective-text/contact review snapshot, pre-write comparison and locks, fixed approved IDs at outreach runner admission, complete snapshot in both actual UI decision surfaces",
+      "source_manifest": "evidence/draft-approval-source-manifest.json",
+      "proof": [
+        "evidence/draft-approval-red.json",
+        "evidence/draft-approval-red2.json",
+        "evidence/draft-approval-backend-final.json",
+        "evidence/draft-approval-ui-final.json",
+        "evidence/draft-approval-quality-final.json",
+        "evidence/draft-approval-ruff.json",
+        "evidence/draft-approval-build.json",
+        "evidence/draft-approval-integrity.json",
+        "evidence/draft-approval-full-final.json",
+        "evidence/draft-approval-notes.md",
+        "evidence/draft-approval-review.md"
+      ],
+      "result": "Actual arm64 RED4fail/1pass; final313pure backend passes1.66s/2149.401ms, zero guard attempts. Final16UI/3files passes14.49s/16316.089ms; app/node TypeScript plus full lint68514.283ms, one existing warning; scoped Ruff87.732ms; build28499.077ms;199JS integrity289.258ms. Frozen full frontend684tests/132files pass308.62s/309982.748ms,exit0/untruncated; expected negative-test/jsdom diagnostics retained.",
+      "independent_review": "Bounded source/evidence PASS; initial reviewer proposal to forbid explicit fresh re-review of approved drafts was withdrawn after compatibility trace and positive regression",
+      "limits": "Initial red.json is architecture failure before collection, not causal evidence. First full UI684pass overlapped edits and is not frozen-source proof. Pure fake DB/effect and process-local guards do not prove native PG contention/rollback, separate queue/later dispatch races, generic binding03, full current backend, current image or production. Legacy pending draft snapshots intentionally need reject/reprepare. Nine foreign paths remain excluded; overallFAIL, disk floor and denied aggregate/restore lanes unchanged; earlier unguarded reset-run effects remain INCONCLUSIVE."
+    },
     "foreign_worktree_paths_excluded": 9,
     "historical_verdict_file": "verdict.json",
     "historical_verdict_reviewed_commit": "2f224f051e3b3487a2c0d529d40b547c414ccb52"

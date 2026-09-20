@@ -330,6 +330,11 @@ class FakeCursor:
             approval = self.tables["agent_approvals"].get(approval_id)
             self.last_result = approval if approval and approval["run_id"] == run_id else None
             return None
+        if normalized_query.startswith("select * from agent_approvals") and "approval_type = 'drafts'" in normalized_query:
+            matches = [item for item in self.tables["agent_approvals"].values()
+                       if item["run_id"] == params[0] and item.get("approval_type") == "drafts" and item.get("status") == "approved"]
+            self.last_result = matches[-1] if matches else None
+            return None
         if normalized_query.startswith("select * from agent_approvals"):
             run_id = params[0]
             self.last_results = [item for item in self.tables["agent_approvals"].values() if item["run_id"] == run_id]
@@ -465,6 +470,9 @@ class FakeCursor:
                     {
                         **draft,
                         "lead_name": lead.get("name"),
+                        "email": lead.get("email"),
+                        "telegram_url": lead.get("telegram_url"),
+                        "whatsapp_url": lead.get("whatsapp_url"),
                     }
                 )
             self.last_results = rows

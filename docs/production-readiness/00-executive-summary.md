@@ -1,5 +1,14 @@
 # LocalOS readiness executive summary — working, not final
 
+Latest20September source package (parent79d7b227) corrects approval of changed
+outreach drafts and newer artifact IDs. Stored exact snapshots are validated
+before decision, rechecked at runner admission, and shown before both UI
+confirmation controls. Local313mocked backend/16targeted UI, types/lint/build
+pass; full frozen evidence is reconciled in COMMANDS. No production update,
+native concurrency/downstream-dispatch or whole-project readiness claim.
+Overall acceptance remains FAIL; latest Mac free space~4.66GiB is below the
+10GiB image floor. Existing foreign changes and safety denials are preserved.
+
 Updated 20 September 2026. This is a decision aid for an owner or potential
 partner. It is not a production-readiness certificate, release approval, or a
 claim that external providers have been exercised.

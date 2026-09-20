@@ -272,6 +272,13 @@ class AgentBlueprintRunner:
             return {"success": False, "error": "approval_not_found"}
         if approval.get("status") != "pending":
             return {"success": False, "error": "approval_already_decided"}
+        approval_type = str(approval.get("approval_type") or "").strip()
+        reviewed_drafts = None
+        if approval_type == "drafts":
+            run = self._load_run_header(run_id)
+            reviewed_drafts = self._validated_draft_snapshot(run or {}, approval, for_update=True)
+            if not reviewed_drafts:
+                return {"success": False, "error": "approval_payload_stale"}
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         self.cursor.execute(
             """
@@ -297,11 +304,10 @@ class AgentBlueprintRunner:
                 approval.get("step_id"),
             ),
         )
-        approval_type = str(approval.get("approval_type") or "").strip()
         if approval_type == "shortlist":
             self._apply_shortlist_approval(run_id, user_id)
         if approval_type == "drafts":
-            self._apply_drafts_approval(run_id, user_id)
+            self._apply_drafts_approval(run_id, user_id, reviewed_drafts)
         self.cursor.execute(
             "UPDATE agent_runs SET status = 'running', updated_at = NOW() WHERE id = %s",
             (run_id,),
@@ -756,9 +762,10 @@ class AgentBlueprintRunner:
             "items": rows,
         }
 
-    def _load_message_draft_rows(self, run: Dict[str, Any], draft_ids: List[str], limit: int) -> List[Dict[str, Any]]:
+    def _load_message_draft_rows(self, run: Dict[str, Any], draft_ids: List[str], limit: int, *, for_update: bool = False) -> List[Dict[str, Any]]:
         query = """
-            SELECT d.id, d.lead_id, d.channel, d.status, d.generated_text, d.approved_text, l.name AS lead_name
+            SELECT d.id, d.lead_id, d.channel, d.status, d.generated_text, d.edited_text,
+                   d.approved_text, l.name AS lead_name, l.email, l.telegram_url, l.whatsapp_url
             FROM outreachmessagedrafts d
             JOIN prospectingleads l ON l.id = d.lead_id
             WHERE l.business_id = %s
@@ -769,12 +776,21 @@ class AgentBlueprintRunner:
             params.append(draft_ids)
         else:
             query += " AND d.status IN ('generated', 'edited', 'approved')"
-        query += " ORDER BY d.updated_at DESC, d.created_at DESC LIMIT %s"
+        query += " ORDER BY d.id LIMIT %s" if for_update else " ORDER BY d.updated_at DESC, d.created_at DESC LIMIT %s"
         params.append(limit)
+        if for_update:
+            query += " FOR UPDATE OF d, l"
         try:
             self.cursor.execute(query, tuple(params))
-            return [dict(row) for row in (self.cursor.fetchall() or [])]
+            rows = [dict(row) for row in (self.cursor.fetchall() or [])]
+            for row in rows:
+                row["review_text"] = row.get("edited_text") or row.get("generated_text") or ""
+                contact_key = {"email": "email", "telegram": "telegram_url", "whatsapp": "whatsapp_url"}.get(row.get("channel"))
+                row["review_recipient"] = str(row.get(contact_key) or "") if contact_key else ""
+            return rows
         except Exception:
+            if for_update:
+                raise
             return []
 
     def _create_message_drafts_for_approved_shortlist(self, run: Dict[str, Any], limit: int) -> None:
@@ -1080,9 +1096,16 @@ class AgentBlueprintRunner:
             self._fail_run(str(run.get("id")), error_text, step_id)
             return False
 
+        if canonical_capability == "outreach.send_batch":
+            reviewed_drafts = self._approved_draft_snapshot(run)
+            if not reviewed_drafts:
+                step_id = self._insert_step(run, step, step_index, "blocked", {}, {"error": "approval_payload_stale"})
+                self._fail_run(str(run.get("id")), "draft approval snapshot is missing or stale", step_id)
+                return False
+            # Neither mutable public input nor a newer artifact may widen the
+            # reviewed batch. Provider dispatch remains outside this runner.
+            payload["draft_ids"] = [item["id"] for item in reviewed_drafts]
         step_id = self._insert_step(run, step, step_index, "running", {}, {})
-        if capability == "outreach.send_batch" and not payload.get("draft_ids"):
-            payload["draft_ids"] = self._latest_artifact_item_ids(str(run.get("id") or ""), "message_drafts", "id")
         if self._is_maton_delivery_step(run, capability):
             return self._execute_maton_delivery_step(run, step, step_id, capability, payload, approval_verified=approval_verified)
         envelope = {
@@ -3319,7 +3342,7 @@ class AgentBlueprintRunner:
         return dict(row) if row else None
 
     def _load_approval(self, run_id: str, approval_id: str) -> Optional[Dict[str, Any]]:
-        self.cursor.execute("SELECT * FROM agent_approvals WHERE id = %s AND run_id = %s", (approval_id, run_id))
+        self.cursor.execute("SELECT * FROM agent_approvals WHERE id = %s AND run_id = %s FOR UPDATE", (approval_id, run_id))
         row = self.cursor.fetchone()
         return dict(row) if row else None
 
@@ -3389,6 +3412,8 @@ class AgentBlueprintRunner:
         artifact_payload = self._latest_artifact_payload(str(run.get("id") or ""), artifact_type)
         if not artifact_payload:
             return dict(payload)
+        if approval_type == "drafts":
+            payload = {**payload, "snapshot_version": 1, "business_id": str(run.get("business_id") or "")}
         return {
             **payload,
             "artifact_type": artifact_type,
@@ -3490,11 +3515,48 @@ class AgentBlueprintRunner:
             (SELECTED_FOR_OUTREACH, PIPELINE_IN_PROGRESS, user_id or None, str(run.get("business_id") or ""), lead_ids),
         )
 
-    def _apply_drafts_approval(self, run_id: str, user_id: str) -> None:
+    def _validated_draft_snapshot(self, run: Dict[str, Any], approval: Dict[str, Any], *, for_update: bool = False) -> Optional[List[Dict[str, Any]]]:
+        payload = parse_json_field(approval.get("payload_json"), {})
+        business_id = str(run.get("business_id") or "")
+        if not isinstance(payload, dict) or payload.get("snapshot_version") != 1 or not business_id or payload.get("business_id") != business_id:
+            return None
+        items = payload.get("items")
+        if not isinstance(items, list) or not items or len(items) > 100 or payload.get("count") != len(items):
+            return None
+        ids = []
+        for item in items:
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"] or item["id"] in ids:
+                return None
+            if not isinstance(item.get("review_text"), str) or not item["review_text"].strip() or not isinstance(item.get("review_recipient"), str):
+                return None
+            ids.append(item["id"])
+        current = self._load_message_draft_rows(run, ids, len(ids), for_update=for_update)
+        by_id = {str(row.get("id") or ""): row for row in current}
+        if len(by_id) != len(items):
+            return None
+        for item in items:
+            row = by_id.get(item["id"])
+            if not row or row.get("status") not in {"generated", "edited", "approved"}:
+                return None
+            if any(item.get(key) != row.get(key) for key in ("lead_id", "channel", "review_text", "review_recipient")):
+                return None
+            if approval.get("status") == "approved" and (row.get("status") != "approved" or row.get("approved_text") != item["review_text"]):
+                return None
+        return items
+
+    def _approved_draft_snapshot(self, run: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
+        self.cursor.execute(
+            "SELECT * FROM agent_approvals WHERE run_id = %s AND approval_type = 'drafts' AND status = 'approved' ORDER BY decided_at DESC, id DESC LIMIT 1",
+            (run.get("id"),),
+        )
+        approval = self.cursor.fetchone()
+        return self._validated_draft_snapshot(run, dict(approval)) if approval else None
+
+    def _apply_drafts_approval(self, run_id: str, user_id: str, reviewed_drafts: List[Dict[str, Any]]) -> None:
         run = self._load_run_header(run_id)
         if not run:
             return
-        draft_ids = self._latest_artifact_item_ids(run_id, "message_drafts", "id")
+        draft_ids = [item["id"] for item in reviewed_drafts]
         if not draft_ids:
             return
         self.cursor.execute(

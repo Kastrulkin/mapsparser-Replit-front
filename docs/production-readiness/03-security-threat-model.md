@@ -4,6 +4,14 @@ Status: incomplete security assessment, not a production approval. Baseline `302
 
 ## Assets and adversaries
 
+20 September AI-APPROVAL-DRAFT-IDENTITY-04 is locally reproduced and corrected:
+an editable draft or newer artifact could replace what a pending decision
+represented. The stored versioned snapshot now binds tenant, IDs, lead/channel,
+effective text and contact; pre-write locked comparison and capability recheck
+use only those IDs. Final313mocked tests and16targeted UI checks pass. This is
+pre-decision/capability-admission proof, not native concurrency or the separate
+later queue/provider transaction; broad generic binding03 remains a candidate.
+
 20 September SEC-SSRF-02 is locally FIX_PROVEN4e33587d. Owner-set business
 website reaches content-plan generation; owner authorization is not network
 destination authorization. The reader now reuses canonical public-IP-pinned

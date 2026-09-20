@@ -1,5 +1,21 @@
 # Readiness decisions
 
+## D-056 — Consent belongs to the reviewed draft snapshot
+
+Use the stored approval payload, not current editable rows or the newest run
+artifact, to identify the reviewed batch. Validate exact business, IDs, lead,
+channel, effective text and recipient before any decision write; lock the
+approval/draft/lead rows through application. Preserve a new explicit consent
+to an already-approved draft, but do not let the older grant bypass a new
+snapshot check. Recheck snapshot/IDs at runner capability admission.
+
+Versionless pending approvals fail closed rather than being silently upgraded.
+The UI displays every reviewed message before the real controls and gives a
+reject/reprepare recovery instruction. No schema or production data rewrite.
+SQL locks are source-reviewed, not native concurrency proof; the separate queue
+transaction and later provider dispatch remain a distinct unclosed boundary.
+This scoped fix does not promote generic AI-APPROVAL-BINDING-03 or whole DoD.
+
 ## D-055 — Translate managed-card system messages by semantic codes
 
 20 September, parent2fac7241. The owner's Progress task is to understand the

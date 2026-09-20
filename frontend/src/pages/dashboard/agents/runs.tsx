@@ -1448,13 +1448,48 @@ export const ApprovalPayloadSummary = ({ approval }: { approval: AgentApproval }
   const payload = approval.payload_json || {};
   const count = typeof payload.count === 'number' ? payload.count : null;
   const artifactType = typeof payload.artifact_type === 'string' ? payload.artifact_type : '';
-  if (!artifactType && count === null) {
+  const snapshotVersion = payload.snapshot_version;
+  const snapshotItems = Array.isArray(payload.items) ? payload.items : [];
+  const isDraftSnapshot = approval.approval_type === 'drafts' && snapshotVersion === 1;
+  const hasCompleteDraftSnapshot = isDraftSnapshot
+    && snapshotItems.length > 0
+    && snapshotItems.every((item) => {
+      const record = toRecordOrNull(item);
+      return Boolean(record && typeof record.review_text === 'string' && record.review_text.trim().length > 0);
+    });
+  if (!artifactType && count === null && approval.approval_type !== 'drafts') {
     return null;
   }
   return (
     <div className="mt-3 rounded-lg bg-white/80 px-3 py-2 text-xs leading-5 text-slate-600 ring-1 ring-amber-100">
       {artifactType ? <div>Результат: {artifactType}</div> : null}
       {count !== null ? <div>Ожидают решения: {count}</div> : null}
+      {approval.approval_type === 'drafts' ? (
+        hasCompleteDraftSnapshot ? (
+          <div className="mt-3">
+            <div className="font-medium text-slate-900">Текст, который будет утверждён</div>
+            <div className="mt-2 max-h-96 space-y-2 overflow-y-auto pr-1">
+              {snapshotItems.map((item, index) => {
+                const draft = toRecordOrNull(item) || {};
+                const recipient = typeof draft.lead_name === 'string' && draft.lead_name ? draft.lead_name : 'Получатель не указан';
+                const channel = typeof draft.channel === 'string' && draft.channel ? draft.channel : 'канал не указан';
+                const reviewRecipient = typeof draft.review_recipient === 'string' && draft.review_recipient ? draft.review_recipient : 'адрес не указан';
+                const reviewText = String(draft.review_text);
+                return (
+                  <div key={`${typeof draft.id === 'string' ? draft.id : 'draft'}-${index}`} className="rounded-md border border-amber-100 bg-amber-50/50 px-2 py-2">
+                    <div className="font-medium text-slate-800">{recipient} · {channel} · {reviewRecipient}</div>
+                    <div className="mt-1 whitespace-pre-wrap text-slate-700">{reviewText}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-2 rounded-md bg-amber-50 px-2 py-2 text-amber-950">
+            Проверка черновиков устарела или неполна. Пересоздайте проверку перед утверждением.
+          </div>
+        )
+      ) : null}
     </div>
   );
 };

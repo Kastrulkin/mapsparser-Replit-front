@@ -84,6 +84,7 @@ import {
 import { ProviderActionPill } from './connections';
 import { connectionActionTone, providerRouteLabel } from './connections.logic';
 import {
+	ApprovalPayloadSummary,
 	HumanResultView
 } from './runs';
 import { TimezoneSelect } from './timezone-select';
@@ -1172,6 +1173,7 @@ export const EmployeeTestResultPanel = ({
             Это только бизнес-результат. Технические подробности находятся в расширенных настройках.
           </p>
         </div>
+        {pendingApproval?.approval_type === 'drafts' ? <ApprovalPayloadSummary approval={pendingApproval} /> : null}
         <div className="flex min-w-0 flex-wrap gap-2">
           {canApprove ? (
             <Button type="button" className="min-h-10 whitespace-nowrap active:scale-[0.96] transition-transform" onClick={onApprove} disabled={actionLoading}>

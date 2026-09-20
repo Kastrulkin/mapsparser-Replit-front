@@ -1,5 +1,11 @@
 # Production-readiness scorecard — working, not final
 
+20 September draft-approval snapshot package adds scoped313mocked backend and
+16targeted UI passes plus TS/lint/build checks (COMMANDS has final reconciliation).
+It closes the reproduced pre-decision draft mismatch locally, not general
+approval identity, native concurrency, current-image or production gates.
+No numerical score or original acceptance status is promoted; overallFAIL.
+
 Updated 20 September 2026. Scores describe evidence at the stated checkpoint,
 not an average that can waive a release gate. The original Definition of Done
 and unresolved P1 items remain controlling.

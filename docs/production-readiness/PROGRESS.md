@@ -1,6 +1,31 @@
 # Production-readiness progress
 
-## Current checkpoint — 20 September, managed Progress display contract
+## Current checkpoint — 20 September, exact draft approval snapshot
+
+- [x] AI-APPROVAL-DRAFT-IDENTITY-04: actual runner RED4fail/1pass reproduces
+  stale text and newer-artifact substitution. Final313 guarded mocked backend
+  tests pass1.66s/2149.401ms, with zero recorded forbidden operations.
+- [x] Versioned business/text/contact/lead/channel/ID snapshot is checked before
+  decision writes; locks cover approval and selected draft/lead rows. Capability
+  admission rechecks the approved snapshot and uses only its IDs.
+- [x] All snapshot messages are visible before both real approval controls;
+  legacy snapshots warn and stale errors explain recovery. Final16 targeted UI
+  tests pass14.49s/16316.089ms; TS/lint68514.283ms pass, one existing warning;
+  scoped Ruff passes. Local build passes28499.077ms.
+- [x] Frozen final frontend aggregate:684tests/132files pass308.62s/309982.748ms;
+  all199reachable JS assets pass integrity. Scoped independent review PASS.
+  Earlier684pass run overlapped edits and is not final-source certification.
+- [ ] Native PostgreSQL concurrency, later queue/dispatch mutation fences and
+  broad generic approval identity remain unproved. Overall acceptance FAIL.
+
+Parent79d7b227. Read-only IAB confirms the user-authenticated Today page, not
+the local new build. No push/deploy, DB/schema/data change, Docker or cleanup.
+Latest disk4,881,460KiB (~4.66GiB), below10GiB image floor. Nine foreign dirty
+paths preserved; aggregate-v2/restore denials and prior unsafe reset-run
+INCONCLUSIVE effects remain unchanged. See evidence/draft-approval-notes.md in
+the existing task bundle. Next locale slice is still deferred JourneyActionCard.
+
+## Previous checkpoint — 20 September, managed Progress display contract
 
 - [x] UX-LOCALE-07 managed panel, direct-focus and provider-audit slice now uses
   additive semantic display codes and ten typed locale dictionaries. Business

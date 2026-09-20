@@ -85,6 +85,7 @@ import {
 } from './connections';
 import {
 	AgentRunReviewPanel,
+	ApprovalPayloadSummary,
 	GenericRunProgress,
 	OutreachRunProgress,
 	PreviewRunSummaryPanel
@@ -838,6 +839,7 @@ export const AgentApprovalDecisionPanel = ({
       'rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-amber-950',
       compact ? 'text-sm' : '',
     )}>
+      {approval.approval_type === 'drafts' ? <ApprovalPayloadSummary approval={approval} /> : null}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="text-sm font-semibold uppercase tracking-wide text-amber-700">Нужно решение человека</div>

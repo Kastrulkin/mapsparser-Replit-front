@@ -1,5 +1,23 @@
 # UX and browser verification — working evidence
 
+## Exact outreach review — 20 September, parent79d7b227
+
+Operator task: check every message and its destination before consenting.
+Previously the advanced summary showed only count/type, while the main panels
+offered confirmation without this exact draft snapshot. ApprovalPayloadSummary
+now shows every stored review_text and recipient/channel; EmployeeTestResultPanel
+and AgentApprovalDecisionPanel place it before their actual controls. React
+escapes content; text/newlines are preserved. Legacy/incomplete review warns;
+the stale response explains reject/reprepare instead of silently accepting edits.
+Final16tests/3files include both controls with spy callbacks, six-item visibility,
+text priority, markup escaping, missing snapshot, unchanged generic summary and
+error recovery. No real approval/send is performed by these tests.
+
+Read-only authenticated IAB Today was confirmed again after the user logged in;
+Spanish/English/Russian labels remain visible on that deployed artifact. No
+production form/action was submitted. That observation is not a new-build
+browser test, linguistic/mobile/accessibility audit or proof of the local fix.
+
 ## Managed Progress slice — 20 September, parent2fac7241
 
 The owner/manager needs to understand the listing state, choose a goal, act on

@@ -1,5 +1,19 @@
 # Production-readiness change log
 
+## Exact draft-approval identity — 20 September, parent79d7b227
+
+AI-APPROVAL-DRAFT-IDENTITY-04: additive snapshot_version/business/review_text/
+review_recipient metadata, missing edited-text projection repaired, locked
+pre-write snapshot comparison, validated IDs for application and capability
+admission. Fresh explicit re-review remains compatible; legacy pending approvals
+need renewed preparation. Shared plain-text review appears before both real UI
+controls and in the advanced queue; exact stale errors explain recovery.
+
+Actual RED4fail/1pass; final313guarded mocked backend and16targeted UI pass,
+TS/lint/scoped Ruff/build pass. Final full/integrity/review evidence is in
+COMMANDS. No migration, production mutation, push or deploy. Native concurrency,
+downstream queue/dispatch and generic finance/tool binding are not certified.
+
 ## Managed Progress system copy — 20 September, parent2fac7241
 
 UX-LOCALE-07 gains optional action/evidence/decision/disclaimer codes while

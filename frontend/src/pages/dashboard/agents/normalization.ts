@@ -106,9 +106,13 @@ const normalizeWorkspaceMode = (value: string): AgentWorkspaceMode | undefined =
 
 export const getRequestErrorMessage = (requestError: unknown, fallback: string) => {
   if (requestError instanceof Error && requestError.message.trim()) {
-    return requestError.message
+    const message = requestError.message
       .replace(/^Ошибка соединения с сервером:\s*/i, '')
       .replace(/^Ошибка запроса:\s*/i, '');
+    if (message === 'approval_payload_stale') {
+      return 'Черновики или получатели изменились. Отклоните это решение и запустите подготовку заново, затем проверьте новый текст.';
+    }
+    return message;
   }
   return fallback;
 };

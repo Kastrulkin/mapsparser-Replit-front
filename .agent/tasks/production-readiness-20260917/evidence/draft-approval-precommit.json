@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "draft-approval-precommit",
+  "captured_at": "2026-09-20T18:59:06.366175+00:00",
+  "command": [
+    "/bin/bash",
+    "-c",
+    "set -euo pipefail; git diff --cached --check; /usr/bin/jq -e '.overall_status == \"FAIL\" and .checkpoint.foreign_worktree_paths_excluded == 9' .agent/tasks/production-readiness-20260917/evidence.json; /usr/bin/jq -jr '.stdout' .agent/tasks/production-readiness-20260917/evidence/draft-approval-source-manifest.json | /usr/bin/shasum -a 256 -c -; git diff --cached --no-ext-diff | /usr/local/bin/gitleaks stdin --redact=100 --no-banner"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 1417.411,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "true\nsrc/services/agent_blueprint_runner.py: OK\ntests/agent_blueprint_fakes.py: OK\ntests/test_agent_draft_approval_identity.py: OK\nfrontend/src/pages/dashboard/agents/runs.tsx: OK\nfrontend/src/pages/dashboard/agents/employee.tsx: OK\nfrontend/src/pages/dashboard/agents/detail.tsx: OK\nfrontend/src/pages/dashboard/agents/normalization.ts: OK\nfrontend/src/pages/dashboard/agents/draftApprovalSnapshot.test.tsx: OK\n.agent/tasks/production-readiness-20260917/support/draft_approval_pure_check.py: OK\n.agent/tasks/production-readiness-20260917/support/managed_growth_vitest.config.mjs: OK\n.agent/tasks/production-readiness-20260917/support/managed_growth_build.config.mjs: OK\n/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-compatible.cjs: OK\n/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-local.cjs: OK\n/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress.cjs: OK\n/private/tmp/localos-draft-approval-build-20260920.nGsezM/dist/index.html: OK\n",
+  "stderr": "\u001b[90m9:59PM\u001b[0m \u001b[32mINF\u001b[0m \u001b[1mscanned ~253229 bytes (253.23 KB) in 559ms\u001b[0m\n\u001b[90m9:59PM\u001b[0m \u001b[32mINF\u001b[0m \u001b[1mno leaks found\u001b[0m\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

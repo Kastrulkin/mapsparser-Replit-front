@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "label": "draft-approval-backend-final",
+  "captured_at": "2026-09-20T18:49:04.196317+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-B",
+    ".agent/tasks/production-readiness-20260917/support/draft_approval_pure_check.py",
+    "adjacent"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 2149.401,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "........................................................................ [ 23%]\n........................................................................ [ 46%]\n........................................................................ [ 69%]\n........................................................................ [ 92%]\n.........................                                                [100%]\n313 passed in 1.66s\n{\"blocked_attempts\": {\"network\": 0, \"database\": 0, \"dotenv\": 0, \"child_process\": 0}}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

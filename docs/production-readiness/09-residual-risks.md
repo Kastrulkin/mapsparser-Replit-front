@@ -1,5 +1,13 @@
 # Residual risks — working register
 
+20 September draft-identity correction (parent79d7b227): exact reviewed draft
+content/contact/IDs now have bounded313mocked backend and16targeted UI proof.
+Native locking/concurrency, the later separate queue/dispatch mutation window
+and broader finance/tool approval identity remain open. Versionless pending
+draft approvals intentionally require rejection/repreparation; do not migrate
+or auto-approve them. No production rollout occurred. Latest local disk is
+4,881,460KiB (~4.66GiB), below10GiB image floor. OverallFAIL remains unchanged.
+
 20 September later dependency checkpoint: the current private macOS133-package
 set has now passed a strict PyPI advisory scan with0skips/0returned advisories,
 not parity alone. Exact installed/audited maps match. License declarations are

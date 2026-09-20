@@ -17,6 +17,12 @@ are in `08-partner-demo.md`; its rehearsal is still incomplete.
 
 ## Components, flow and trust boundaries
 
+20 September local draft approval boundary (parent79d7b227): message artifact
+→ versioned approval snapshot → pre-write locked comparison → exact draft IDs
+→ runner capability revalidation. The separate queue handler/provider dispatcher
+still forms a later transaction/effect boundary; this package does not certify
+that race window. UI uses stored snapshot text, not a fresh current-draft fetch.
+
 ```mermaid
 flowchart TD
     U[Owner / manager / network member] -->|HTTPS session / tenant selection| UI[React SPA / Telegram Mini App]

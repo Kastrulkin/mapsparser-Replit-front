@@ -7,6 +7,13 @@ must be observed afresh; the 17 September maintenance record is historical.
 
 ## Before any server action
 
+Local-only pending change AI-APPROVAL-DRAFT-IDENTITY-04 (20 September): after an
+authorized future rollout, versionless/stale draft approvals intentionally fail
+closed. Do not backfill consent or bulk-approve old decisions. The user should
+reject the stale decision, prepare again and inspect every new text/destination.
+This needs no schema migration. Local313mocked/16UI passes do not certify native
+locking or the later external-dispatch boundary; no rollout is authorized here.
+
 Obtain explicit authority for the proposed production action. Publication,
 external send, payment, destructive/bulk change, credential rotation and
 database data/schema changes each require their own approval. Use a named tmux

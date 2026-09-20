@@ -1,6 +1,33 @@
 # Readiness handoff
 
-## Current checkpoint — 20 September, managed Progress copy
+## Current checkpoint — 20 September, draft approval identity
+
+Parent79d7b227. Local source now binds supervised outreach approval to the
+versioned stored business/ID/lead/channel/effective-text/contact snapshot.
+Stale/legacy/malformed snapshots are denied before decision/domain writes;
+draft/lead and approval rows lock for decision. Approved-snapshot recheck and
+fixed IDs precede the request-only orchestrator boundary. Fresh explicit
+re-review of an already-approved draft is intentionally supported.
+
+Both real UI approval surfaces and the advanced queue use the same complete
+plain-text snapshot. Legacy approval must be rejected and a new preparation
+reviewed; no auto-upgrade grants consent to unseen text. Exact stale-code error
+gets a recovery instruction; unrelated errors keep their previous behavior.
+
+Final313pure backend/16targeted UI, scoped Ruff, TS/lint and local build pass.
+Full frozen684tests/132files pass308.62s/309982.748ms;199JS integrity and scoped
+independent review PASS. Reconciliation is in COMMANDS. Earlier
+RED architecture error is retained as harness-only; actual arm64RED is4fail/
+1pass, zero guard attempts. Evidence is under the existing task's evidence/
+draft-approval-* files. No native PG/concurrency, downstream dispatcher fence,
+full backend/image or production fix claim; generic binding03 remains candidate.
+
+User login enables read-only IAB; Today confirmed, no production submission.
+Keep nine foreign paths excluded. Disk4,881,460KiB (~4.66GiB) below10GiB; denied
+aggregate/restore preparation stays denied. Prior unguarded-reset effects remain
+INCONCLUSIVE. No push/deploy, cleanup, schema/data modification. OverallFAIL.
+
+## Previous checkpoint — 20 September, managed Progress copy
 
 Parent2fac7241. Scoped source ownership: card_growth_service additive codes,
 ManagedCardGrowthPanel, direct managed-focus and provider audit in ProgressPage,
