@@ -2,7 +2,8 @@
 
 ## Current checkpoint — 20 September, isolated backend aggregate terminal / corrective slices PASS
 
-- [x] Current documentation HEAD is `4000e41e`; frozen application source stays
+- [x] Aggregate/corrective evidence is committed locally in `e82e0b55`;
+  frozen application source stays
   `5cc7c0cd` with no overlay of the nine foreign paths. The final private runner
   is `dc5e3d1`, guard `93e4…9b590`, and probe `30208…bd678`.
 - [x] The fifth native-preflight attempt passed. Fresh dependency parity passed 147
@@ -59,6 +60,14 @@ compiled-staging-packaging reconciliation supports 4,903 unique non-provider
 tests across captures, not one aggregate green run; seven live-provider skips
 remain. Next gates are one clean aggregate rerun, 10 GiB image capacity, separate
 restore approval, real-API browser/demo and original release gates.
+
+- [x] New private v2 guard/probe received independent static review; the guard
+  changes only denial wording. Neither probe nor aggregate has run.
+- [ ] The safety reviewer rejected the first v2 preparation-script write under
+  an earlier read-only restriction. Await the separate user permission request;
+  do not retry via another agent or write mechanism. Next permitted step is
+  preparation/review, not an existing runnable command. Latest free disk is
+  6,078,312 KiB (~5.80 GiB); unchanged 5/2 GiB test floors and 10 GiB image floor.
 
 ## Earlier checkpoint — 20 September, fresh backend dependencies verified
 

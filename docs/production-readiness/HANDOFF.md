@@ -2,7 +2,8 @@
 
 ## Current checkpoint — 20 September, aggregate terminal / corrective slices PASS
 
-Application source is frozen at `5cc7c0cd`; current docs HEAD is `4000e41e`.
+Application source is frozen at `5cc7c0cd`; the reviewed aggregate/corrective
+evidence package is committed locally in `e82e0b55` (parent `4000e41e`).
 Keep all nine foreign paths excluded. The reviewed private runner is `dc5e3d1`;
 guard `93e4…9b590` and probe `30208…bd678`. The runner's full phase is terminal
 exit 1 in tmux `localos-backend-full-a2f974eb33e8`; do not replay it. Corrective
@@ -61,6 +62,29 @@ compiled-staging-packaging reconciliation supports 4,903 unique non-provider
 tests across captures, not a single-run green; seven live-provider skips remain.
 Restore preparation was safely denied before file creation and awaits
 separate asynchronous user approval; this does not block the overall goal.
+
+### Next aggregate: preparation-only checkpoint, awaiting permission
+
+Reserved private root `/private/tmp/localos-backend-full-v2-20260920.Ik5q93`.
+Only root-owned `guard/sitecustomize.py` and `guard-probe.py` exist. Guard SHA
+`120cc1f68fc1b9809b1c2bbd37b791951a6df0c46a74990a20ca517dc432983d` differs
+from the original by the denial-message line only. Probe SHA
+`e5cd8a7dccf1108d7099fc02e0a42341fc0a11072f3b60db6d6bf2a27b6a20ab` adds
+an exact imported-guard hash and port-8000 denial check. Independent static
+review PASS; 24 planned check groups have **not run**.
+
+The first worker write of a new preparation script was rejected by the safety
+reviewer as conflicting with an earlier read-only constraint. No preparation
+script, source extraction, wrapper, runner, test or database operation followed.
+Do not work around this denial. A separate asynchronous question asks permission
+to prepare and run the isolated aggregate; it explicitly excludes restore,
+production, push/deploy and deletion. Restore approval remains a different gate.
+There is no runnable v2 launch command yet. After permission, implement/review the
+new exclusive runner, private dependency view and identity-checked Vite cleanup,
+then probe, migrate the owned synthetic DB, collect exactly 4,910 and run once.
+Require 4,903 passes / seven explicit live-provider skips, followed by postchecks.
+Latest read-only inspection: owned PG healthy on 35418, three foreign containers
+unchanged; free 6,078,312 KiB (~5.80 GiB), below the 10 GiB image floor.
 
 ## Earlier checkpoint — 20 September, clean dependency parity PASS
 

@@ -4,6 +4,22 @@ Updated 20 September 2026. This is a decision aid for an owner or potential
 partner. It is not a production-readiness certificate, release approval, or a
 claim that external providers have been exercised.
 
+## Latest checkpoint
+
+Private clean Python parity covers 133 distributions; frozen `5cc7c0cd` migrated
+successfully and collected 4,910 tests. The initial full aggregate is retained
+not green: 4,886 passed, 9 failed, 1 error and 14 skipped. Corrective captures
+support 4,903 unique non-provider cases across runs, not one clean aggregate
+green run; seven live-provider skips remain intentional. The unchanged frontend
+checkpoint remains 642 units across 129 files with TypeScript, lint, builds and
+integrity. Free space is about 5.8 GiB, below the separate 10 GiB image floor.
+V2 preparation has not executed: its first script write was safety-rejected, and
+root's guard/probe files are static-PASS preparation only. A new asynchronous
+permission request is pending for preparation plus an isolated full test; restore,
+deploy and deletion are excluded. Restore approval remains separate. See
+[COMMANDS.md](COMMANDS.md) and [HANDOFF.md](HANDOFF.md); dated detail below is
+historical and does not promote readiness.
+
 ## What LocalOS is
 
 LocalOS is an operating layer for local businesses. It helps an owner or team
@@ -57,7 +73,7 @@ writes require the documented human approval or manual boundary.
   current-image result. User-enabled production IAB login was observed read-only;
   Today still mixes Spanish static copy with English fallbacks and Russian
   server-supplied action labels. That separate locale debt is not hidden by this fix.
-- The frozen backend checkpoint passes4,751tests in652.30s,
+- The earlier frozen backend checkpoint passed4,751tests in652.30s,
   with7deliberate live-provider skips and6dependency/configuration warnings.
   The run includes isolated PostgreSQL and browser regressions; owned test
   resources were checked after completion. It is not a current release-image,

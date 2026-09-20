@@ -28,6 +28,12 @@ gates remain distinct from these corrections. Process postcheck after normal
 completion does not prove forced-crash cleanup. Post-native catalog observations
 made without `--fresh` must not be represented as new freshness assertions.
 
+After the v2 preparation-script write was policy-denied under a prior read-only
+constraint, stop that lane and request explicit preparation/test permission.
+Do not recreate the rejected script through root, another worker or a shell.
+The two already-created, statically reviewed guard/probe files remain evidence
+of preparation only, not executable-run or permission proof.
+
 ## D-046 — Separate clean dependency preparation from application proof
 
 Do not mutate the shared developer venv to satisfy aggregate tests. Freeze

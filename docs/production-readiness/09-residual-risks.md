@@ -1,12 +1,17 @@
 # Residual risks — working register
 
-Latest20September checkpoint supersedes the capacity/frontend holds below:
-frozen4e33587d frontend642/129 units, TypeScript, lint, app/public builds and
-199+12 JS integrity pass with independent review. Reused dependencies are not
-clean-install proof. Fresh disk is~7.08GiB; Docker is running, foreign resumed
-containers untouched. Full backend, current image, browser/demo and original
-release gates remain open. Shared macOS venv is missing nine declared runtime
-packages and has pypdf version drift; `pip check` alone does not prove parity.
+Latest checkpoint supersedes stale capacity/dependency holds below. Private clean
+Python parity covers 133 distributions; `5cc7c0cd` migrated and 4,910 tests
+collected. The initial full aggregate remains not green (4,886 pass / 9 fail /
+1 error / 14 skip); corrective evidence supports 4,903 unique non-provider cases
+across runs, not a single green aggregate. Seven live-provider skips remain
+intentional. Frontend 642/129, TypeScript, lint, builds and integrity remain
+unchanged evidence. Free space is ~5.8 GiB, below the 10 GiB image floor. V2 has
+not executed: its first script write was safety-rejected; root's guard/probe are
+static-PASS only. New asynchronous permission is pending for preparation and an
+isolated full test, not restore/deploy/deletion; restore approval remains separate. See
+[COMMANDS.md](COMMANDS.md) and [HANDOFF.md](HANDOFF.md); older details are
+historical and do not promote readiness.
 
 Fresh independent whole-diff review remains NOT READY overall. Its new media
 findings are now locally FIX_PROVEN5cc7c0cd with279 guarded pure passes and
@@ -29,11 +34,10 @@ not a strict wall-clock deadline, DNS latency is not certified, and only the
 first validated public IP is attempted. Setter-to-reader provenance is source
 traced, not an authenticated native-route or real-network proof.
 
-Capacity has recovered to17044920KiB (~16.26GiB); earlier low-disk observations
-below are historical, not the current blocker. Old temporary runners/guards
-are absent. Fresh isolated runtime and same-revision aggregate/image checks
-must be rebuilt, with unchanged safety floors. No production changes follow
-from the user's browser login; authenticated Today still shows mixed locale.
+The historical 16.26 GiB capacity observation below is not current. Current
+headroom is about 5.8 GiB, so the 10 GiB image floor remains unmet. No production
+changes follow from the user's browser login; authenticated Today still shows
+mixed locale.
 
 Newest source432f64a0 locally fixes SEC-RBAC-10 with19focused/92overlapping
 adjacent pure passes and independent review. Business-profile PATCH now checks

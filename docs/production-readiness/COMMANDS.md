@@ -2,7 +2,7 @@
 
 ## Isolated backend aggregate — 20 September, full RED / corrective slices PASS
 
-Frozen application source is `5cc7c0cd`; docs HEAD is `4000e41e`. Private final
+Frozen application source is `5cc7c0cd`; evidence commit is `e82e0b55`. Private final
 runner SHA256 `dc5e3d12989263eda16d48ac5d722401d116ade33bd64666ef7cd0fd883c46b3`,
 guard SHA256 `93e4d9d7c99e9653a8e95e2735a369c3ab986e02c2afcb6d206aa63d05a9b590`
 and probe SHA256 `30208c1400cc807d5198183d60223a444aa6989615ef13f825b83d61716bd678`
@@ -66,6 +66,13 @@ Staged documentation + 27 raw captures passed redacted Gitleaks: exit 0,
 4727.728ms, 855,780 bytes scanned, no findings, timeout or truncation;
 `backend-full-staged-secret-scan-20260920.json`. This is staged-delta coverage,
 not a scan of Git history, Docker layers, private dependencies or foreign edits.
+
+V2 is **not runnable**. Only a new guard/probe was statically reviewed in
+`/private/tmp/localos-backend-full-v2-20260920.Ik5q93`; no probe/test executed.
+Creation of the remaining scripts was policy-denied under the earlier read-only
+constraint. Await the new explicit preparation/test permission before writing
+or executing them; there is no approved resume command to copy. Existing v1
+destinations remain terminal and must not be replayed. See HANDOFF for pins.
 
 ## Fresh backend dependency environment — 20 September, source 5cc7c0cd
 

@@ -4,21 +4,25 @@ Updated 20 September 2026. Scores describe evidence at the stated checkpoint,
 not an average that can waive a release gate. The original Definition of Done
 and unresolved P1 items remain controlling.
 
-Latest20September evidence: frozen4e33587d frontend642 tests/129 files,
-TypeScript, lint (one warning), both builds and199+12 JS integrity PASS;
-independent terminal evidence review PASS. This closes the current frozen
-frontend unit/build hold only. No score promotion: clean install, browser/API,
-current backend/image, full demo and provider rebind remain open. Fresh whole-
-diff review's media-fetch and write-role findings are locally fixed5cc7c0cd
-with279 guarded pure passes and independent review; no native/provider proof.
-Disk~7.08GiB after Docker startup is below the10GiB image planning margin.
+Latest checkpoint: private clean Python parity covers 133 distributions;
+`5cc7c0cd` migrated and 4,910 tests collected. The initial full aggregate is
+not green (4,886 pass / 9 fail / 1 error / 14 skip). Corrective captures support
+4,903 unique non-provider cases across runs, not one full green run; seven
+live-provider skips remain intentional. Frozen frontend 642/129, TypeScript,
+lint, builds and integrity remain unchanged evidence. Free space is ~5.8 GiB,
+below the separate 10 GiB image floor. V2 is not executed: its first script write
+was safety-rejected and root's guard/probe are static-PASS preparation only. New
+asynchronous permission is pending for preparation and an isolated full test, not
+restore, deploy or deletion; restore approval remains separate. Scores and original gates
+do not change. See [COMMANDS.md](COMMANDS.md) and [HANDOFF.md](HANDOFF.md);
+dated evidence below is historical.
 
 SEC-SSRF-02 is locally proven4e33587d by exact149 adjacent passes including25
 focused cases and independent review; DNS/pools are faked, so no real-network,
-native-route, image or production certificate follows. Capacity recovered to
-~16.26GiB; old resource holds below are historical. Fresh aggregate/build/image
-checks remain pending while vanished temporary guards are recreated. No score
-promotion follows from capacity recovery or authenticated production IAB access.
+native-route, image or production certificate follows. The historical 16.26 GiB
+capacity observation below is not current; ~5.8 GiB is free and the 10 GiB image
+floor remains unmet. No score promotion follows from capacity or authenticated
+production IAB access.
 
 Content-voice profile admission432f64a0 adds causal pure proof,19focused and92
 overlapping adjacent passes plus independent review. Default read/example scope
