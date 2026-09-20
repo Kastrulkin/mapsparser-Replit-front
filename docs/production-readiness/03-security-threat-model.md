@@ -4,6 +4,15 @@ Status: incomplete security assessment, not a production approval. Baseline `302
 
 ## Assets and adversaries
 
+20 September OUTREACH-DISPATCH-IDENTITY-01 closes a bounded generic campaign
+body-binding gap locally: draft.approved_text could change while the approved
+touch hash stayed unchanged, and the dispatcher used that mutable copy. Real
+hash/preflight/bind causal5fail/1pass and final138pure passes support linked
+queue/draft/touch validation and fresh provider inputs. No actual endpoint edit,
+DB/provider send or production exploit was executed. The original approval hash
+still binds contact ID, not its mutable value; post-preflight native races and
+generic non-outreach approval identity remain open.
+
 20 September AI-APPROVAL-DRAFT-IDENTITY-04 is locally reproduced and corrected:
 an editable draft or newer artifact could replace what a pending decision
 represented. The stored versioned snapshot now binds tenant, IDs, lead/channel,

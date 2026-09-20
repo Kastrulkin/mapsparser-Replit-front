@@ -19,15 +19,21 @@ from services.outreach_safety_service import (
 
 
 def bind_preflight_dispatch_item(item: dict[str, Any], preflight: dict[str, Any]) -> dict[str, Any]:
-    """Use only freshly validated bytes/recipient for template-authorized sends."""
+    """Use freshly validated campaign bytes/recipient, never the claim snapshot."""
     checked = preflight.get("item") or {}
     approval_mode = (checked.get("policy_json") or {}).get("approval_mode")
-    if approval_mode not in {"author_template", "riderra_template"}:
-        return item
     payload = preflight.get("validated_dispatch_payload")
+    template_mode = approval_mode in {"author_template", "riderra_template"}
+    error_prefix = approval_mode if template_mode else "campaign"
     if (not isinstance(payload, dict) or payload.get("id") != str(item.get("id") or "")
-            or not payload.get("approved_text") or not payload.get("email")):
-        raise ValueError(f"{approval_mode}_dispatch_payload_missing")
+            or not payload.get("approved_text")):
+        raise ValueError(f"{error_prefix}_dispatch_payload_missing")
+    if template_mode:
+        if not payload.get("email"):
+            raise ValueError(f"{error_prefix}_dispatch_payload_missing")
+    elif (payload.get("channel") not in {"email", "telegram", "vk"}
+            or not payload.get("contact_value")):
+        raise ValueError("campaign_dispatch_payload_missing")
     return {**item, **payload}
 
 

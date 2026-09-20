@@ -1,6 +1,29 @@
 # Readiness handoff
 
-## Current checkpoint — 20 September, draft approval identity
+## Current checkpoint — 20 September, generic campaign dispatch identity
+
+Parent7b41e8a9; OUTREACH-DISPATCH-IDENTITY-01. A shared admin draft approval
+can edit draft.approved_text without changing the approved campaign touch.
+The actual generic preflight/binder RED5fail/1pass demonstrates this gap with
+synthetic rows and the real hash. Generic dispatch now validates linked draft,
+queue and approved touch copies, then uses fresh preflight payload fields.
+Unchanged campaigns pass; changed bodies and binding mismatches fail closed.
+No manual-channel auto-send or AI-provenance bypass was introduced.
+
+Final138 pure checks pass1.27s/1795.702ms; zero guard counters; scoped Ruff
+passes79.648ms. No app frontend changes; no new full aggregate/build claim.
+IAB signed-in Today, Operator and Agents load without captured error/warn logs;
+production locale mix remains. No form/settings/approval/send action occurred.
+
+Next distinct security scope: approved contact-value versioning (the current
+hash includes contact ID, not mutable normalized_value) and native cross-
+transaction revocation races. This fix must not be sold as solving either.
+The direct AgentBlueprint legacy queue is denied by campaign_approval_required,
+so its external dispatch bypass was not reproduced. Keep broad binding03 open.
+OverallFAIL, nine excluded foreign paths, aggregate/restore denials and earlier
+unguarded-reset INCONCLUSIVE effects remain. No push/deploy/DB write/cleanup.
+
+## Previous checkpoint — 20 September, draft approval identity
 
 Parent79d7b227. Local source now binds supervised outreach approval to the
 versioned stored business/ID/lead/channel/effective-text/contact snapshot.

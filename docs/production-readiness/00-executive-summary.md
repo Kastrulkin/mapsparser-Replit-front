@@ -1,6 +1,13 @@
 # LocalOS readiness executive summary — working, not final
 
-Latest20September source package (parent79d7b227) corrects approval of changed
+Latest20September continuation (parent7b41e8a9) also binds ordinary campaign
+dispatch to the approved message body instead of mutable draft copies.
+Causal5fail/1pass becomes138guarded pure passes; scoped Ruff passes. This is a
+local correction only. Contact-value versioning at original approval and native
+concurrency remain open; no production action or readiness promotion occurred.
+Authenticated IAB screens load, with mixed locale still visible in production.
+
+Previous20September source package (parent79d7b227) corrects approval of changed
 outreach drafts and newer artifact IDs. Stored exact snapshots are validated
 before decision, rechecked at runner admission, and shown before both UI
 confirmation controls. Local313mocked backend/16targeted UI, types/lint/build

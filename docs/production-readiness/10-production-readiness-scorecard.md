@@ -1,5 +1,10 @@
 # Production-readiness scorecard — working, not final
 
+Later20September generic campaign dispatch fix (parent7b41e8a9) adds138guarded
+pure passes and scoped Ruff, after causal5fail/1pass. This closes only reproduced
+draft-body/preflight payload drift locally; original contact-value versioning,
+native races and production remain outside proof. All scores/statuses unchanged.
+
 20 September draft-approval snapshot package adds scoped313mocked backend and
 16targeted UI passes plus TS/lint/build checks (COMMANDS has final reconciliation).
 It closes the reproduced pre-decision draft mismatch locally, not general

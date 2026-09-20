@@ -1,5 +1,12 @@
 # Residual risks — working register
 
+20 September generic campaign dispatch checkpoint (parent7b41e8a9):
+OUTREACH-DISPATCH-IDENTITY-01 has causal5fail/1pass and final138pure passes.
+It binds approved body copies and current preflight provider arguments, but
+does not bind a contact row's mutable value to the original human approval.
+That versioning problem, native transaction/race fencing, broad binding03 and
+production rollout remain open. No readiness score or whole-goal promotion.
+
 20 September draft-identity correction (parent79d7b227): exact reviewed draft
 content/contact/IDs now have bounded313mocked backend and16targeted UI proof.
 Native locking/concurrency, the later separate queue/dispatch mutation window

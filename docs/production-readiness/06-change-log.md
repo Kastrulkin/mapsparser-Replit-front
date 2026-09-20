@@ -1,5 +1,17 @@
 # Production-readiness change log
 
+## Generic campaign dispatch binding — 20 September, parent7b41e8a9
+
+OUTREACH-DISPATCH-IDENTITY-01: compare queue/draft/touch identity and all approved
+body copies to hash-covered generated text, then bind fresh provider arguments.
+Generic sends no longer pass through earlier mutable claim data. Sender,
+channel, lead, contact and workstream mismatches are denied. Template lanes,
+default generic AI checks and manual channel boundaries remain intact.
+
+Causal RED5fail/1pass; final138guarded pure checks pass, zero recorded attempts;
+scoped Ruff passes. No frontend, migration, actual send or production change.
+Contact-row value at original approval and native race fencing remain separate.
+
 ## Exact draft-approval identity — 20 September, parent79d7b227
 
 AI-APPROVAL-DRAFT-IDENTITY-04: additive snapshot_version/business/review_text/

@@ -160,6 +160,23 @@
       "independent_review": "Bounded source/evidence PASS; initial reviewer proposal to forbid explicit fresh re-review of approved drafts was withdrawn after compatibility trace and positive regression",
       "limits": "Initial red.json is architecture failure before collection, not causal evidence. First full UI684pass overlapped edits and is not frozen-source proof. Pure fake DB/effect and process-local guards do not prove native PG contention/rollback, separate queue/later dispatch races, generic binding03, full current backend, current image or production. Legacy pending draft snapshots intentionally need reject/reprepare. Nine foreign paths remain excluded; overallFAIL, disk floor and denied aggregate/restore lanes unchanged; earlier unguarded reset-run effects remain INCONCLUSIVE."
     },
+    "subsequent_generic_campaign_dispatch_identity": {
+      "parent_commit": "7b41e8a9",
+      "finding": "OUTREACH-DISPATCH-IDENTITY-01",
+      "scope": "Generic campaign queued draft/touch/body binding and fresh preflight provider fields; manual channels and default AI gate retained",
+      "source_manifest": "evidence/manual-campaign-dispatch-manifest.json",
+      "independent_review": "Read-only bounded source/evidence PASS, recorded in evidence/manual-campaign-dispatch-review.md; not whole-project DoD",
+      "proof": [
+        "evidence/manual-campaign-dispatch-red.json",
+        "evidence/manual-campaign-dispatch-green.json",
+        "evidence/manual-campaign-dispatch-final.json",
+        "evidence/manual-campaign-dispatch-quality.json",
+        "evidence/manual-campaign-dispatch-notes.md",
+        "evidence/manual-campaign-dispatch-review.md"
+      ],
+      "result": "Causal5fail/1pass0.15s/capture513.364ms; final138pure passes1.27s/capture1795.702ms, all recorded guard counters0; scoped Ruff79.648ms. IAB authenticated Today/Operator/Agents loaded, bounded console error/warn list empty; no form submissions.",
+      "limits": "Fake SQL/unrelated gates and process-local guards, not native DB/concurrency or external dispatch. Hash still lacks original-approval contact-row value versioning; generic finance/tool binding03 open. No frontend build or full backend rerun; no push/deploy/DB changes/cleanup. Nine foreign paths excluded, overallFAIL and aggregate/restore denials unchanged; prior unguarded-reset effects INCONCLUSIVE."
+    },
     "foreign_worktree_paths_excluded": 9,
     "historical_verdict_file": "verdict.json",
     "historical_verdict_reviewed_commit": "2f224f051e3b3487a2c0d529d40b547c414ccb52"

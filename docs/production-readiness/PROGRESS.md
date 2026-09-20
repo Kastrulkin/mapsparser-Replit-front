@@ -1,6 +1,26 @@
 # Production-readiness progress
 
-## Current checkpoint — 20 September, exact draft approval snapshot
+## Current checkpoint — 20 September, generic campaign dispatch binding
+
+- [x] OUTREACH-DISPATCH-IDENTITY-01: actual hash/preflight/bind RED5fail/1pass
+  reproduces edited draft bytes passing an unchanged campaign approval.
+- [x] Linked queue/draft/touch/body/channel/contact/sender checks and a fresh
+  provider payload now cover generic campaigns, not only template lanes.
+  AI provenance and manual-channel boundaries remain unchanged.
+- [x] Final138 guarded pure tests pass1.27s/1795.702ms; all forbidden-attempt
+  counters0. Scoped Ruff passes79.648ms. No frontend application edits.
+- [x] Signed-in IAB Today/Operator/Agents loaded; bounded error/warn log empty.
+  Returned to Today. Mixed locale remains in the deployed version.
+- [ ] Original-approval contact-value versioning and native concurrent revocation
+  remain open. Whole-project readiness is still FAIL, not a release approval.
+
+Parent7b41e8a9. No push/deploy, database change, external send, Docker build or
+cleanup. Nine foreign paths preserved. Existing aggregate/restore denials and
+unguarded-reset INCONCLUSIVE effects remain. Last observed disk~4.66GiB is
+below10GiB image floor; it was not remeasured by this package. See existing
+task evidence/manual-campaign-dispatch-* and COMMANDS.
+
+## Previous checkpoint — 20 September, exact draft approval snapshot
 
 - [x] AI-APPROVAL-DRAFT-IDENTITY-04: actual runner RED4fail/1pass reproduces
   stale text and newer-artifact substitution. Final313 guarded mocked backend

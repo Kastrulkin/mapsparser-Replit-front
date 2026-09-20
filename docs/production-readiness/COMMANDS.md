@@ -1,5 +1,32 @@
 # Verified commands and evidence
 
+## Generic campaign dispatch identity — 20 September, parent7b41e8a9
+
+Captures: existing task evidence/manual-campaign-dispatch-*.json. Named
+localos-campaign-identity-* tmux launches; private arm64 Python3.11.7/env-i/-I/-B,
+explicit support/manual_campaign_dispatch_pure_check.py, no conftest/plugin
+autoload/cache, pre-import DB/socket/dotenv/child-process guards. Both actual
+snapshot hashing and preflight/binder run; SQL and unrelated gates are fake.
+
+| Suffix | Outcome | Duration ms |
+| --- | --- | ---: |
+| red | causal5fail/1pass,0.15s; zero recorded forbidden attempts |513.364|
+| green | initial109pass,1.26s; zero recorded forbidden attempts |1787.738|
+| final | expanded138pass,1.27s; zero recorded forbidden attempts |1795.702|
+| quality | five files, Ruff F821/F822/F823 no-cache; pass |79.648|
+| manifest | five tested source/test/bootstrap SHA-256 records |39.974|
+| precommit | five hashes match; staged diff and Gitleaks pass |1393.913|
+
+All listed captures exit as expected, without truncation/timeouts; test stderr
+is empty. Native PG, provider dispatch, OS isolation and full backend aggregate
+are not claimed. The author/Riderra adjacent selection excludes native tests and
+the subprocess runner-help case. No frontend code changed or build/deploy ran.
+Browser observations and residual original-contact-value/concurrency limits are
+recorded in manual-campaign-dispatch-notes.md. Overall acceptance stays FAIL.
+Independent bounded source/evidence review PASS is in manual-campaign-dispatch-
+review.md. Gitleaks scanned the staged package (~62493bytes), not history,
+images or logs; final documentation only adds these observed metadata results.
+
 ## Exact draft approval snapshot — 20 September, parent79d7b227
 
 Captures for this package are in the existing task's `evidence/` directory

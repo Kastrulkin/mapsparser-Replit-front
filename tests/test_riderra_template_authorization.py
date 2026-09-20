@@ -316,8 +316,8 @@ def test_dispatch_binds_only_freshly_validated_riderra_payload():
     proof = {"item": {"policy_json": {"approval_mode": "riderra_template"}},
              "validated_dispatch_payload": validated}
     assert bind_preflight_dispatch_item(original, proof)["approved_text"] == "exact"
-    unchanged = bind_preflight_dispatch_item(original, {"item": {"policy_json": {"approval_mode": "manual"}}})
-    assert unchanged is original
+    with pytest.raises(ValueError, match="campaign_dispatch_payload_missing"):
+        bind_preflight_dispatch_item(original, {"item": {"policy_json": {"approval_mode": "manual"}}})
 
 
 def test_dispatch_sql_keeps_noncreator_riderra_after_legacy_cap_and_is_fair(monkeypatch):

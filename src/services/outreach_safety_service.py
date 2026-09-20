@@ -822,7 +822,7 @@ def run_dispatch_preflight(
     cursor.execute(
         """
         SELECT q.id, q.lead_id, q.workstream_id, q.campaign_touch_id,
-               q.draft_id AS queue_draft_id, q.idempotency_key,
+               q.draft_id AS queue_draft_id, q.idempotency_key, q.channel AS queue_channel,
                draft.id AS queued_draft_id, draft.status AS queued_draft_status,
                draft.approved_text AS queued_draft_body,
                draft.channel AS queued_draft_channel,
@@ -1058,6 +1058,57 @@ def run_dispatch_preflight(
     )
     if current_snapshot != item.get("approved_snapshot_hash"):
         return {"allowed": False, "reason_code": "approval_version_changed", "item": item}
+    if validated_dispatch_payload is None:
+        # The approved hash covers generated_text, not the independently mutable
+        # draft/approved_text columns. Bind all copies before preparing a send.
+        matching_touches = [
+            touch for touch in current_touches
+            if str(touch.get("id") or "") == str(item.get("campaign_touch_id") or "")
+        ]
+        if len(matching_touches) != 1:
+            return {"allowed": False, "reason_code": "campaign_queued_draft_changed", "item": item}
+        touch = matching_touches[0]
+        channel = str(touch.get("channel") or "")
+        if (not item.get("queue_draft_id")
+                or str(item["queue_draft_id"]) != str(touch.get("draft_id") or "")
+                or str(item["queue_draft_id"]) != str(item.get("queued_draft_id") or "")
+                or item.get("queued_draft_status") != "approved"
+                or not str(touch.get("generated_text") or "").strip()
+                or touch.get("approved_text") != touch.get("generated_text")
+                or item.get("queued_draft_body") != touch.get("generated_text")
+                or item.get("queue_channel") != channel
+                or item.get("channel") != channel
+                or item.get("sender_channel") != channel
+                or item.get("queued_draft_channel") != channel
+                or not touch.get("contact_point_id")
+                or str(item.get("contact_point_id") or "") != str(touch["contact_point_id"])
+                or str(item.get("queued_draft_contact_id") or "") != str(touch["contact_point_id"])
+                or str(item.get("queued_draft_lead_id") or "") != str(item.get("lead_id") or "")
+                or str(item.get("workstream_id") or "") != str(item.get("campaign_workstream_id") or "")
+                or str(item.get("queued_draft_workstream_id") or "") != str(item.get("campaign_workstream_id") or "")
+                or str(item.get("sender_account_id") or "") != str(touch.get("sender_account_id") or "")):
+            return {"allowed": False, "reason_code": "campaign_queued_draft_changed", "item": item}
+        recipient = str(item.get("normalized_value") or "")
+        if (channel not in {"email", "telegram", "vk"}
+                or item.get("contact_type") != channel or not recipient.strip()):
+            return {"allowed": False, "reason_code": "campaign_dispatch_contact_invalid", "item": item}
+        # Build after generation/source/hash gates: generic messages keep their
+        # normal AI provenance requirement. Never fall back to stale lead fields.
+        validated_dispatch_payload = {
+            "id": str(item["id"]), "lead_id": str(item["lead_id"]),
+            "campaign_touch_id": str(item["campaign_touch_id"]),
+            "draft_id": str(item["queue_draft_id"]),
+            "sender_account_id": str(item.get("sender_account_id") or ""),
+            "idempotency_key": str(item.get("idempotency_key") or f"outreach:{queue_id}"),
+            "channel": channel, "selected_channel": channel,
+            "contact_type": channel, "contact_value": recipient,
+            "email": recipient if channel == "email" else None,
+            "telegram_url": recipient if channel == "telegram" else None,
+            "phone": None, "whatsapp_url": None,
+            "subject": str(touch.get("subject") or ""),
+            "approved_text": str(touch["generated_text"]),
+            "generated_text": str(touch["generated_text"]),
+        }
     cursor.execute(
         """
         SELECT id, status, channel, sequence_index

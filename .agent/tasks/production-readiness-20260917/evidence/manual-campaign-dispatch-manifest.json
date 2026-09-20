@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "label": "campaign-identity-source-manifest",
+  "captured_at": "2026-09-20T19:20:22.346238+00:00",
+  "command": [
+    "/usr/bin/shasum",
+    "-a",
+    "256",
+    "src/services/outreach_safety_service.py",
+    "src/services/outreach_dispatch_service.py",
+    "tests/test_manual_campaign_dispatch_identity.py",
+    "tests/test_riderra_template_authorization.py",
+    ".agent/tasks/production-readiness-20260917/support/manual_campaign_dispatch_pure_check.py"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 39.974,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "b62b88334f854b9acaffec83dc5d504180396928626362fc3275e46b368ff7ac  src/services/outreach_safety_service.py\nab8b0fa06db12e547c64d9b87071ca1faba30e3b71747291a8e3363cc6d6fde3  src/services/outreach_dispatch_service.py\nf40fd00f738642c4a562566b6ecd21938937c8e8394cd6dc22b34c4a971ef087  tests/test_manual_campaign_dispatch_identity.py\n884ddbab9891d8bee4e49eada30246705b958c5302ecc58aaf182f1ee1cbcba4  tests/test_riderra_template_authorization.py\n93004ae7597dc5257c4e0632021534c5ac4f7b6edcbeab4718b8363ea2f1a8e2  .agent/tasks/production-readiness-20260917/support/manual_campaign_dispatch_pure_check.py\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}
