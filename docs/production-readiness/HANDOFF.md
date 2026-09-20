@@ -1,5 +1,34 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, detail URL/request scope
+
+Branch codex/production-readiness-20260917, parentd72475e3. Own implementation is
+only JourneyWorkspaceFocus.tsx;20new Focus tests. Source and targeted independent
+review PASS. InitialRED3fail/7pass; expandedRED8fail/11pass on unchanged source.
+Keyed focus panel, lifetime/generation guards, access-error clearing, immediate
+one-shot command handoff and latest query preservation fix the reproduced slice.
+Workspace children stay mounted; same-intent transient failures keep edits.
+
+Targeted104passes/5actual files16.72s; quality49518.454ms passes with one existing
+lint warning. Build12.72s and199JS integrity pass; artifact is private temporary
+journey-detail-build-20260921.ScKt6f/dist. Build asset-list stdout is truncated,
+not its terminal result/stderr; integrity capture is complete.14input manifest
+hashes match after full. Frozen full791tests/137files pass317.37s/capture319678.171ms,
+no timeout/truncation; stderr equals prior known negative/jsdom diagnostics.
+Final independent closure is in journey-detail-review.md. No audit job remains.
+See evidence/journey-detail-notes.md, review and captures for exact limits.
+
+Do not re-open production just because login is available: Today authentication
+was already confirmed. Nine foreign paths remain excluded. No push/deploy/DB/
+Docker/cleanup/provider writes. Disk remains below10GiB image floor; aggregate/
+restore preparation denials and unsafe-reset INCONCLUSIVE effects persist.
+Latest disk6,788,632KiB (~6.47GiB). Original whole-project acceptanceFAIL, not a
+final production-ready release. Resume broad remaining gates from the existing
+readiness ledger; do not repeat this completed slice or retry denied aggregate/
+restore preparation through another route. Current backend aggregate, clean
+image/AMD64, real-API browser/compiled artifact proof, partner demo and whole-DoD
+review remain open. Do not equate additional isolated UI fixes with their closure.
+
 ## Latest checkpoint — 21 September, action form/request scope
 
 Branch codex/production-readiness-20260917, parent544fbe96. Own application change

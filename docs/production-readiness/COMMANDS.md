@@ -1,5 +1,32 @@
 # Verified commands and evidence
 
+## Detail URL/request scope — 21 September, parentd72475e3
+
+Task evidence/journey-detail-* contains exact commands. Named tmux sessions,
+env-i Node22/GtHPOV no-egress guard chain, envDir:false configs, private arm64
+Python capture. No backend suite or DB. Source/test/guard manifest has14inputs.
+
+| Suffix | Actual outcome | Duration ms |
+| --- | --- | ---: |
+| red | Causal3fail/7pass,10tests,6.26s; complete |8465.478|
+| expanded-red | Causal8fail/11pass,19tests,6.53s; complete |8757.466|
+| targeted |104passes/5actual files,16.72s; empty stderr |18960.526|
+| manifest |14inputs, all hashes match after full |35.3|
+| quality |App/node TS + full lint;1existing auth_new.ts115 warning |49518.454|
+| build |Successful12.72s; stdout asset list truncated at30000 chars; stderr complete |14375.571|
+| integrity |199reachable JS files pass; nonfatal Darwin temp fallback warning |287.79|
+| full |Frozen791passes/137files,317.37s; complete, no timeout |319678.171|
+| precommit |14hashes, staged diff-check, Gitleaks211907bytes/no findings; overallFAIL/onlyAC10PASS retained |1408.2|
+
+Targeted selection contained two unmatched stale Telegram filenames; actual
+coverage is5files (Focus, base/scope/i18n Card, Today), not7. Full suite includes
+the actual TelegramControlPage and Progress specs. No timeout/truncation in
+the test captures. Build used fresh private output ScKt6f/dist, entryindex-CcDNxgy1.js,
+CSSindex-BM6vOqzw.css; existing dist untouched. No production rollout or native
+browser/real-API proof. All14hashes match after full. Full stderr14259characters
+byte-equals prior journey-scope-full, retaining known negative/jsdom diagnostics.
+Final bounded independent closure: evidence/journey-detail-review.md; wholeFAIL.
+
 ## Journey action form/request scope — 21 September, parent544fbe96
 
 Exact commands/logs: task evidence/journey-scope-*. Named localos-journey-scope-*

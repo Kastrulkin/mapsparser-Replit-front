@@ -1,5 +1,20 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, detail URL/request scope
+
+- [x] Parentd72475e3 committed; initialRED3fail/7pass, expandedRED8fail/11pass.
+- [x] Fix only Focus panel state/request/navigation ownership; preserve children.
+- [x] Final20new Focus cases;104targeted checks/5files pass16.72s.
+- [x] App/node TypeScript and lint49518.454ms pass, one existing warning.
+- [x] Build12.72s,199JS integrity;14frozen input hashes match after build.
+- [x] Independent actual source and targeted evidence review PASS.
+- [x] Frozen791frontend/137files pass317.37s/capture319678.171ms;14hashes match.
+  Full stderr byte-equals previous known negative/jsdom diagnostics. Final
+  bounded independent closure recorded in journey-detail-review.md.
+
+No production/DB/provider writes, Docker, cleanup, push or deploy. Nine foreign
+paths remain excluded. Original wholeFAIL and unresolved acceptance gates persist.
+
 ## Latest checkpoint — 21 September, action form/request scope
 
 - [x] Previous package committed544fbe96; no own residue before this slice.

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "journey-detail-quality",
+  "captured_at": "2026-09-20T22:05:07.204637+00:00",
+  "command": [
+    "/bin/sh",
+    "-c",
+    "cd frontend && node node_modules/typescript/bin/tsc -p tsconfig.app.json --noEmit && node node_modules/typescript/bin/tsc -p tsconfig.node.json --noEmit && node node_modules/eslint/bin/eslint.js . --max-warnings 1"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 49518.454,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "\n/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/src/lib/auth_new.ts\n  115:82  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any\n\n\u2716 1 problem (0 errors, 1 warning)\n\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

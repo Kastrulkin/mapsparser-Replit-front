@@ -1,5 +1,22 @@
 # UX and browser verification — working evidence
 
+## Selected action follows URL intent — 21 September, parentd72475e3
+
+Owner task: work on the action currently selected in the URL without losing the
+underlying workspace draft. UX-JOURNEY-DETAIL-LOAD-09 is now causally reproduced:
+initial3fail/7pass; expanded8fail/11pass includes same-ID reload order, cached card
+after401/403/404, and rollback of unrelated URL params by a late command. Only
+the focus panel is keyed; current requests are generation/lifetime guarded and
+command handoff preserves current query state. Transient failure retains edits;
+loss of access hides the focused card, leaving workspace children mounted.
+
+Twenty new mocked-router cases cover StrictMode, query switch/removal, immediate
+handoff and no seed reuse, child and card edits, errors/Retry and departed commands.
+Targeted104checks/5files pass; original claims about telemetry/loading are bounded
+by the first failing assertion in RED. This is not backend/cross-tenant mutation
+or native browser evidence. Final quality/build/full results: COMMANDS and task
+evidence/journey-detail-*. Previous source-only status below is historical.
+
 ## Action form and late response isolation — 21 September, parent544fbe96
 
 Owner task: edit the currently selected next action and retain only that action's

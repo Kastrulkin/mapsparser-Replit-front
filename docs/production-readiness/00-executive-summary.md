@@ -1,5 +1,13 @@
 # LocalOS readiness executive summary — working, not final
 
+Latest21September continuation (parentd72475e3) fixes the detail-loading boundary:
+an old response cannot replace the URL-selected action or restore obsolete query
+parameters. Workspace drafts survive switching and transient failures; loss of
+access hides the focused card. Expanded causal8fail/11pass becomes104targeted
+passes; TypeScript/lint, build and199JS integrity pass. Full791frontend/137files
+passes; exact evidence is in COMMANDS. This supersedes the source-only detail candidate below, not the
+original whole-projectFAIL. No production rollout or data change.
+
 Latest21September continuation (parent544fbe96) separates the current action's
 form and asynchronous results from previously selected actions. Old drafts and
 late errors/callbacks no longer contaminate a new card; refreshing the same

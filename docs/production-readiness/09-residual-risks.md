@@ -1,5 +1,14 @@
 # Residual risks — working register
 
+21September afterd72475e3: UX-JOURNEY-DETAIL-LOAD-09 is no longer source-only.
+Expanded8causal failures are corrected;104targeted checks, types/lint/build and
+199JS integrity pass. Only current URL intent can update focus; loss of access
+clears it while same-intent transient errors keep edits. No native browser,
+real-API or cross-tenant-write proof. Final full check is recorded in COMMANDS.
+The older candidate wording below is historical. Real LanguageProvider remount,
+image/full-backend/browser/demo/original DoD gates remain; wholeFAIL, existing
+denials and prior unsafe-reset INCONCLUSIVE effects are unchanged.
+
 21September after544fbe96: UX-JOURNEY-ACTION-SCOPE-08 has causal local proof and
 a bounded correction, superseding the source-only status below.105focused/
 adjacent checks pass; new-action form and late command/clipboard continuations

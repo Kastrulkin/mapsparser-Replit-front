@@ -288,6 +288,27 @@
       "result": "Causal4fail/6pass8.40s/capture10687.735ms; frozen105focused/adjacent passes38.12s/capture40349.497ms,14newscope cases. Full frozen771frontend/136files passes313.22s/capture314627.727ms, no timeout/truncation. Quality48761.169ms passes with one existing warning; build13.83s/capture15210.221ms;199JS integrity242.268ms.12hashes match afterward; full stderr equals prior retained negative/jsdom diagnostics.",
       "limits": "Mocked UI/jsdom only; RED field checks fail before B submission, not cross-tenant/backend write evidence. Parent detail GET ordering remains source-only UX-JOURNEY-DETAIL-LOAD-09, not fixed. LanguageProvider async loading/remount, native browser/provider, current image/full backend/demo and original DoD gates remain. WholeFAIL, nine foreign paths, aggregate/restore denials and prior unsafe-reset INCONCLUSIVE effects persist. No push/deploy/production/DB/delete/Docker/provider action."
     },
+    "subsequent_journey_detail_scope": {
+      "parent_commit": "d72475e3",
+      "finding": "UX-JOURNEY-DETAIL-LOAD-09",
+      "scope": "Key only focused panel by business/action URL intent; per-lifetime GET generation; current401/403/404 clears, transient retains edits; one-shot next-action handoff and latest query preservation. Children remain mounted; API/backend/schema/approval unchanged.",
+      "source_manifest": "evidence/journey-detail-manifest.json",
+      "independent_review": "Actual source, targeted104 and frozen791 bounded closure PASS,14hashes independently matched; see evidence/journey-detail-review.md. Not whole-project readiness.",
+      "proof": [
+        "evidence/journey-detail-red.json",
+        "evidence/journey-detail-expanded-red.json",
+        "evidence/journey-detail-targeted.json",
+        "evidence/journey-detail-quality.json",
+        "evidence/journey-detail-build.json",
+        "evidence/journey-detail-integrity.json",
+        "evidence/journey-detail-full.json",
+        "evidence/journey-detail-precommit.json",
+        "evidence/journey-detail-notes.md",
+        "evidence/journey-detail-review.md"
+      ],
+      "result": "Initial3fail/7pass6.26s/capture8465.478ms; expanded8fail/11pass6.53s/capture8757.466ms on unchanged source. Final20Focus cases;104targeted/5files pass16.72s/capture18960.526ms, empty stderr/no timeout/truncation. Quality49518.454ms pass with one existing warning. Build12.72s/capture14375.571ms succeeds with truncated asset-list stdout, complete stderr/result;199JS integrity287.79ms passes. Full frozen791tests/137files pass317.37s/capture319678.171ms, complete/no timeout;14manifest inputs match afterward. Full stderr14259characters byte-equals prior known negative/jsdom diagnostics.",
+      "limits": "Mocked router/UI/jsdom only; no real API/browser/provider/backend/DB/deployed proof. Two nonmatching targeted selectors add no coverage; actual104/5 is authoritative.404 means unavailable, not necessarily deleted. Commands already started are not cancelled or rolled back. Native/full-backend/image/demo/original DoD, LanguageProvider remount and generic binding03 gates remain; wholeFAIL, nine foreign paths, aggregate/restore denials and prior unsafe-reset INCONCLUSIVE effects persist. No push/deploy/production/DB/delete/Docker/provider action."
+    },
     "foreign_worktree_paths_excluded": 9,
     "historical_verdict_file": "verdict.json",
     "historical_verdict_reviewed_commit": "2f224f051e3b3487a2c0d529d40b547c414ccb52"

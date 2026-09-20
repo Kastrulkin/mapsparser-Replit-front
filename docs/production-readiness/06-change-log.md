@@ -1,5 +1,16 @@
 # Production-readiness change log
 
+## Detail intent and request ordering — 21 September, parentd72475e3
+
+Only JourneyWorkspaceFocus implementation changes: keyed focus-only state,
+per-lifetime GET generation, current access-error clearing, one-shot next-action
+handoff and latest-route parameter preservation. Workspace children, same-intent
+drafts, original layout/primitives and API/approval contracts remain unchanged.
+New20case regression module; expanded causal8fail/11pass becomes104targeted passes.
+Root corrected an unreachable Retry fixture before RED; no failed assertions
+weakened. Exact final verification and limits are recorded in COMMANDS and
+evidence/journey-detail-notes.md; no backend/schema/dependency/deployment change.
+
 ## Action form/request lifetime — 21 September, parent544fbe96
 
 UX-JOURNEY-ACTION-SCOPE-08: only JourneyActionCard implementation changes. Keyed

@@ -1,5 +1,17 @@
 # Readiness decisions
 
+## D-065 — Keep detail requests and navigation bound to the current URL intent
+
+Key only the selected-action panel by business/action ID; keep workspace children
+outside it. Each panel lifetime sequences its GETs, ignoring obsolete completion,
+error and finally handlers. Current401/403/404 clears focus;404 means unavailable,
+not necessarily deleted. Network/5xx preserves same-intent edits with Retry.
+Consume authoritative command next_action once in the destination panel while
+canonical GET refreshes; never reuse that seed on revisit. Command navigation
+must clone latest committed query parameters, not its dispatch-time snapshot.
+Invalidate pending GET before handoff; do not cancel/roll back started commands.
+No transport/API/schema or whole-workspace remount is introduced.
+
 ## D-064 — Bind action form and asynchronous continuation to business/action ID
 
 Use a keyed inner form for `[businessId, action.id]`, not version, payload,

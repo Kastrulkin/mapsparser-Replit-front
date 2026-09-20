@@ -1,5 +1,12 @@
 # Production-readiness scorecard — working, not final
 
+21September detail-focus slice (parentd72475e3): expanded causal8fail/11pass
+becomes104targeted passes, with20new router/card regressions. TypeScript/lint,
+build and199JS integrity pass; source/targeted review PASS. See COMMANDS for
+full frozen verification. No original acceptance gate or numerical score is
+promoted. Mocked UI proof does not establish a current deployed/native-browser
+release, complete backend aggregate, image, restore or partner demo. WholeFAIL.
+
 21September action-scope slice (parent544fbe96): causal4fail/6pass becomes105
 targeted/adjacent passes, including14form/async regressions. TypeScript/lint,
 build/199JS integrity and independent bounded review pass.12inputs frozen;
