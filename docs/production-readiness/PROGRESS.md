@@ -1,5 +1,21 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, safe Git onboarding
+
+- [x] Reread original objective through EOF; previous turn classified progress.
+- [x] SEC-DOC-GIT-01: unsafe README credential/staging/publication instructions
+  reproduced by5failed/1passed documentation checks, corrected to6passes.
+- [x] Scoped Ruff,2shell syntax-only checks, unchanged surrounding README and
+  two source hashes pass; independent bounded review accepted. No Git auth action.
+- [x] Reconciled missing UX-DRAFT-REVIEW-ADMISSION-01 backlog row to actual81e67435.
+- [ ] Next safe remaining evidence: frozen-ref strict redacted all-refs history
+  scan/triage. It cannot clear historical credential revocation or image/log gates.
+
+Parent81e67435; documentation/test-only, not an application change. Nine foreign
+paths preserved. Native aggregate/restore preparation still needs renewed explicit
+permission; Mac6,598,736KiB(~6.29GiB) is below10GiB image floor. WholeFAIL and prior
+unsafe-reset INCONCLUSIVE effects remain; no DB/production/cleanup/push/deploy.
+
 ## Latest checkpoint — 21 September, cumulative source and draft-review admission
 
 - [x] Independent source reports reconcile all248changed code/test/config paths

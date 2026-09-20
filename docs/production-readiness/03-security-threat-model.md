@@ -256,3 +256,13 @@ and these scoped tests cannot be reported as full AI-security certification.
 All security reproductions use synthetic users/tenants and mocked providers; native PostgreSQL tests use a fresh loopback-only cluster and explicit disposable targets. Native PostgreSQL is15.15; separate Docker integration uses16.10. Historical Docker/EXT4 failures are retained, not reported as green. After approved no-reset startup, a fresh PG16 write/restart/restore/amcheck probe passed. Full clean6c96192c backend passed4538tests with only7explicit live-provider skips; later source packages require their own focused and final aggregate checks.
 
 Before security sign-off, finish the remaining endpoint role/object matrix, final combined release proof for reconciliation/approval binding, AI adversarial/tool boundaries, upload/archive limits, current-source/image/log/dependency scans and independent whole-diff review. Confirm historical credential revocation through the owner/provider process. Severity and safe testing follow [SECURITY.md](../../SECURITY.md); exact finding acceptance tests remain in the backlog rather than being weakened to match available evidence.
+
+## Git onboarding correction — 21 September, parent81e67435
+
+SEC-DOC-GIT-01 removes unsafe credential-storage and token-in-command examples
+from README's Git workflow. Six read-only documentation checks pass after five
+causal failures; shell syntax and scoped lint pass. The official Git store
+contract is linked from README and the finding notes. Existing keys/config,
+historical use or compromise, revocation and other documentation are not audited
+by this change. No auth/access settings or production data changed; AC6 remains
+FAIL. Exact proof: task evidence/readme-git-safety-*-20260921.*.

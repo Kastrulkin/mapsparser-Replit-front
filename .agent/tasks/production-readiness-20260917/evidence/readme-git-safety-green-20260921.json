@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "label": "readme-git-safety-green",
+  "captured_at": "2026-09-20T23:25:43.474255+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "tests/test_readme_git_workflow.py"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 49.12,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "test_http_command_urls_do_not_embed_credentials (__main__.ReadmeGitWorkflowTests.test_http_command_urls_do_not_embed_credentials) ... ok\ntest_no_plaintext_credential_storage_is_recommended (__main__.ReadmeGitWorkflowTests.test_no_plaintext_credential_storage_is_recommended) ... ok\ntest_push_examples_do_not_target_a_hardcoded_main_branch (__main__.ReadmeGitWorkflowTests.test_push_examples_do_not_target_a_hardcoded_main_branch) ... ok\ntest_section_includes_local_review_and_commit_commands (__main__.ReadmeGitWorkflowTests.test_section_includes_local_review_and_commit_commands) ... ok\ntest_staged_review_precedes_local_commit (__main__.ReadmeGitWorkflowTests.test_staged_review_precedes_local_commit) ... ok\ntest_staging_is_scoped_to_explicit_paths (__main__.ReadmeGitWorkflowTests.test_staging_is_scoped_to_explicit_paths) ... ok\n\n----------------------------------------------------------------------\nRan 6 tests in 0.001s\n\nOK\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "readme-git-safety-quality",
+  "captured_at": "2026-09-20T23:26:58.766532+00:00",
+  "command": [
+    "node",
+    "-e",
+    "const fs=require(\"fs\"),cp=require(\"child_process\"),crypto=require(\"crypto\"),assert=require(\"assert\");const readme=fs.readFileSync(\"README.md\",\"utf8\"),section=readme.split(\"## \u041a\u0430\u043a \u043a\u043e\u043c\u043c\u0438\u0442\u0438\u0442\u044c \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f\\n\")[1].split(\"\\n## \")[0];const blocks=[...section.matchAll(/```bash\\n([\\s\\S]*?)```/g)].map(m=>m[1]);assert.strictEqual(blocks.length,2);for(const block of blocks){const r=cp.spawnSync(\"/bin/bash\",[\"-n\"],{input:block,encoding:\"utf8\"});assert.strictEqual(r.status,0,r.stderr);}const r=cp.spawnSync(\"/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/ruff\",[\"check\",\"--isolated\",\"tests/test_readme_git_workflow.py\"],{encoding:\"utf8\"});assert.strictEqual(r.status,0,r.stdout+r.stderr);const old=cp.execFileSync(\"git\",[\"show\",\"HEAD:README.md\"],{encoding:\"utf8\"});const strip=s=>s.replace(/## \u041a\u0430\u043a \u043a\u043e\u043c\u043c\u0438\u0442\u0438\u0442\u044c \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f\\n[\\s\\S]*?\\n## \u0421\u0442\u0440\u0443\u043a\u0442\u0443\u0440\u0430 \u043f\u0440\u043e\u0435\u043a\u0442\u0430/,\"## \u0421\u0442\u0440\u0443\u043a\u0442\u0443\u0440\u0430 \u043f\u0440\u043e\u0435\u043a\u0442\u0430\");assert.strictEqual(strip(readme),strip(old));cp.execFileSync(\"git\",[\"diff\",\"--check\"]);console.log(JSON.stringify({bashBlocksParsedNotExecuted:blocks.length,ruff:r.stdout.trim(),outsideGitSectionUnchanged:true,files:[\"README.md\",\"tests/test_readme_git_workflow.py\"].map(path=>({path,sha256:crypto.createHash(\"sha256\").update(fs.readFileSync(path)).digest(\"hex\")}))},null,2));"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 2690.392,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\n  \"bashBlocksParsedNotExecuted\": 2,\n  \"ruff\": \"All checks passed!\",\n  \"outsideGitSectionUnchanged\": true,\n  \"files\": [\n    {\n      \"path\": \"README.md\",\n      \"sha256\": \"23552f6e2100e061f29eb798231e402576596ac6e088cd9fe1b7ccc58b34218d\"\n    },\n    {\n      \"path\": \"tests/test_readme_git_workflow.py\",\n      \"sha256\": \"624a649b7dfc0f1aca0b3c014cb19e1c33ccb018ec5bd430e8f29842d7f0bcfd\"\n    }\n  ]\n}\n",
+  "stderr": "git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\ngit: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

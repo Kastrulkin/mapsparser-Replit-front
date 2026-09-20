@@ -1,5 +1,23 @@
 # Verified commands and evidence
 
+## Git onboarding documentation — 21 September, parent81e67435
+
+Exact short commands: evidence/readme-git-safety-*-20260921.json. Cleared env,
+arm64 private Python `-I -S -B`, direct stdlib unittest (not pytest/app imports).
+No credential lookup/config changes, DB/native preparation, Docker or publishing.
+
+| Suffix | Actual result | Duration ms |
+| --- | --- | ---: |
+| red |6documentation checks:5fail/1pass, unsafe copyable examples |51.081|
+| green |Same6checks pass |49.120|
+| quality |Isolated Ruff for new test;2bash blocks syntax-only; README outside Git section unchanged;2hashes |2690.392|
+| precommit |15owned staged files;46118byte strict redacted Gitleaks clean;2hashes/statuses/historical verdict match;9foreign excluded |3690.533|
+
+No timeout/truncation. Nonfatal Darwin temp fallback warnings retained. Independent
+README/test/evidence review is BOUNDED ACCEPTED. This is not a credential-compromise
+test or existing-helper audit. Frontend809passes remains the prior81e67435 evidence,
+not a new run. Runtime unchanged; full backend/image/other original gates stay open.
+
 ## Cumulative review and draft-review admission — 21 September, parent7fd95caa
 
 Exact commands/captures: task evidence/draft-review-admission-*-20260921.json

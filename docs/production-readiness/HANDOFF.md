@@ -1,5 +1,31 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, Git onboarding instructions
+
+Parent81e67435 oncodex/production-readiness-20260917. Original objective fully
+reread and previous turn classifiedprogress. SEC-DOC-GIT-01 corrects only README's
+Git section: no plaintext helper or token-bearing URL recommendation; scoped
+staging, full staged review and separate approved publication. New direct-stdlib
+documentation guard: RED5fail/1pass51.081ms becomes6pass49.120ms. Quality2690.392ms
+passes scoped Ruff,2bash syntax-only checks and unchanged surrounding README;
+two input hashes recorded. Independent source/evidence review boundedaccepted.
+Precommit3690.533ms passes:15owned files/46118byte strict redacted Gitleaks clean;
+hashes/statuses/historical verdict unchanged,9foreign excluded. Final16-file
+package includes that capture and is rechecked before local commit.
+No application change; previous809frontend result is not rerun or relabeled.
+Backlog02 also gains the missing committed draft-review UI finding.
+
+Next safe distinct gate action: strict fully redacted all-refs Git history scan
+with frozen-ref provenance and value-free triage. Current snapshot/delta proof
+does not cover other refs. Reuse existing history findings; do not test or rotate
+real keys, rewrite history, fetch/push, or expose secret values. This can improve
+AC6 coverage only, not waive historical revocation/current image/log/owner gaps.
+
+Native aggregate/restore prep remains denied pending separate renewed permission;
+do not retry via another route. Mac6,598,736KiB(~6.29GiB) is below10GiB image floor.
+Nine foreign paths excluded; no DB/production/provider/Docker/cleanup/push/deploy.
+Original wholeFAIL and prior unsafe-reset INCONCLUSIVE effects persist.
+
 ## Latest checkpoint — 21 September, cumulative review and draft-review UI
 
 Parent7fd95caa. Three independent source-only reports explicitly cover all248

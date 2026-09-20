@@ -1,5 +1,14 @@
 # Readiness decisions
 
+## D-068 — Treat copied Git onboarding commands as a security boundary
+
+Do not recommend plaintext token persistence or credential-bearing command URLs.
+Prefer already-configured secure authentication; never inspect saved credentials
+or mutate global Git settings to validate documentation. Scope staging and review
+the complete index before commit; publication stays a separately approved action.
+Verify examples as text and shell syntax only. A documentation fix does not
+establish that existing credentials are safe or historically revoked.
+
 ## D-067 — Share the review condition between warning and confirmation
 
 An incomplete draft snapshot must not show a recovery warning while offering an

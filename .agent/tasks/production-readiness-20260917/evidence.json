@@ -367,6 +367,21 @@
       "result": "FIX_PROVEN bounded local UI: causal12fail/14pass becomes26targeted passes. App/node TypeScript and lint pass with one existing warning; build17.59s and199JS integrity pass. Initial full unit attempt timed out at300002.76ms, retained as incomplete. Same frozen suite with600s cap passes809tests/137files in317.31s/capture318877.799ms, no timeout/truncation. All14input hashes match afterward; stderr14259characters has the same prior known diagnostic lines, with initial jsdom messages reordered rather than byte-equal output.",
       "limits": "jsdom/local component proof only; frontend completeness does not validate current backend rows/recipient/count or prove provider security. Static independent patch review found no regression; package review is BOUNDED ACCEPTED including809full tests, not a whole-tree/release attestation. No browser or deployment proof. Fourteen input hashes frozen. Current Mac6.35GiB is below10GiB image floor. Aggregate/restore renewed permission remains pending; wholeFAIL, nine foreign paths and prior unsafe-reset INCONCLUSIVE effects are preserved. No production/DB/provider/Docker/cleanup/push/deploy."
     },
+    "subsequent_git_onboarding": {
+      "parent_commit": "81e674353a47160cde366e0b10b6b3e0c12abc08",
+      "finding": "SEC-DOC-GIT-01",
+      "scope": "README Git instructions and direct-stdlib documentation guard only: secure preconfigured auth, no token URL/plaintext helper recommendation, scoped staging/review and separately approved current-branch publication",
+      "proof": [
+        "evidence/readme-git-safety-red-20260921.json",
+        "evidence/readme-git-safety-green-20260921.json",
+        "evidence/readme-git-safety-quality-20260921.json",
+        "evidence/readme-git-safety-precommit-20260921.json",
+        "evidence/readme-git-safety-notes-20260921.md",
+        "evidence/readme-git-safety-review-20260921.md"
+      ],
+      "result": "FIX_PROVEN documentation-only:5fail/1pass becomes6passes, same command. Isolated scoped Ruff,2bash blocks parsed not executed, unchanged README outside Git section and2input hashes pass. Independent source/evidence review BOUNDED ACCEPTED. Precommit capture passes in3690.533ms:15owned staged files,46118byte strict redacted Gitleaks clean,2hashes and original statuses/historical verdict preserved,9foreign files excluded. Latest committed UI finding reconciled into backlog02.",
+      "limits": "No Git credential lookup/config changes, remote publishing or proof of actual compromise/revocation. Test parses only stated copyable command forms, not arbitrary shell/Markdown/prose. Prior809frontend proof unchanged; no full backend/native/browser/image rerun. Original statuses/historical verdict/nine foreign paths/unsafe-reset INCONCLUSIVE effects preserved. Aggregate/restore prep needs renewed permission; image floor unmet. Next safe all-refs history scan improves only bounded evidence, not AC6 or overallFAIL."
+    },
     "foreign_worktree_paths_excluded": 9,
     "historical_verdict_file": "verdict.json",
     "historical_verdict_reviewed_commit": "2f224f051e3b3487a2c0d529d40b547c414ccb52"

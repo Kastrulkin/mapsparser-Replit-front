@@ -1,5 +1,15 @@
 # Production-readiness change log
 
+## Secure Git onboarding — 21 September, parent81e67435
+
+Only README's commit/push section and a stdlib documentation regression test
+change outside readiness records. Remove credential-bearing URL/plaintext helper
+recommendations; require scoped staging/review and separate approved publication.
+RED5fail/1pass becomes6passes; isolated Ruff and2bash syntax checks pass. No Git
+config/credential, application, dependency or runtime change. Backlog02 now also
+includes the previously committed draft-review UI finding. Evidence and limits
+are in COMMANDS and readme-git-safety notes; original wholeFAIL remains.
+
 ## Draft-review admission and cumulative source review — 21 September
 
 Parent `7fd95caa`: five frontend implementation/test paths change, sharing the
