@@ -30,6 +30,20 @@ GATE_LABELS = {
     6: "Есть повод вернуться",
 }
 PROVIDER_LABELS = {"google": "Google", "yandex": "Яндекс", "2gis": "2ГИС"}
+FACT_EVIDENCE = {
+    "connected": "Карточка подключена",
+    "link_missing": "Ссылка на площадку не добавлена",
+    "no_duplicates": "Дубли не обнаружены",
+    "duplicate_unverified": "Площадка не передала надёжный признак дубля",
+    "internal_contacts": "Контакты из профиля бизнеса не доказывают, что они опубликованы на площадке",
+    "internal_schedule": "Внутреннее расписание не доказывает, что часы обновлены на площадке",
+    "internal_services": "Внутренние услуги не доказывают их публикацию на площадке",
+    "internal_prices": "Во внутреннем справочнике цены есть, но нужна проверка площадки",
+    "no_organic_news": "У 2ГИС нет органического канала новостей",
+    "conversion_content": "Публикации оцениваются как конверсионный контент, а не обязательный фактор позиции",
+    "source_error": "Последнее обновление площадки завершилось ошибкой",
+}
+MEASUREMENT_DECISIONS = {"insufficient_data", "continue", "adjust", "replace"}
 
 
 def _row(cursor: Any, value: Any) -> dict[str, Any]:
@@ -134,7 +148,7 @@ def _fact(
     observed_at: Any,
     confidence: float,
     rule_ids: list[str],
-    evidence: str = "",
+    evidence_code: str | None = None,
 ) -> dict[str, Any]:
     return {
         "value": value,
@@ -143,7 +157,8 @@ def _fact(
         "observed_at": observed_at.isoformat() if hasattr(observed_at, "isoformat") else observed_at,
         "confidence": round(max(0.0, min(1.0, confidence)), 2),
         "rule_ids": rule_ids,
-        "evidence": evidence,
+        "evidence": FACT_EVIDENCE[evidence_code] if evidence_code else "",
+        "evidence_code": evidence_code,
     }
 
 
@@ -335,6 +350,7 @@ def _benchmark(cursor: Any, business: dict[str, Any], provider: str) -> dict[str
         "period_days": 90,
         "metrics": metrics,
         "disclaimer": "Ориентир по сопоставимым карточкам, а не доказательство причины результата.",
+        "disclaimer_code": "relative_benchmark",
     }
 
 
@@ -365,18 +381,18 @@ def _provider_state(cursor: Any, business: dict[str, Any], provider: str, link: 
         return "observed" if bool(value) else "missing" if reliable else "unknown"
 
     facts = {
-        "access": _fact(bool(link), "observed" if link else "missing", source, observed_at or (link or {}).get("created_at"), 1.0, _rule_ids(provider, "access"), "Карточка подключена" if link else "Ссылка на площадку не добавлена"),
-        "duplicate": _fact(values["duplicate"], "observed" if values["duplicate"] is False else "missing" if values["duplicate"] is True else "unknown", source, observed_at, confidence, _rule_ids(provider, "duplicate"), "Дубли не обнаружены" if values["duplicate"] is False else "Площадка не передала надёжный признак дубля"),
+        "access": _fact(bool(link), "observed" if link else "missing", source, observed_at or (link or {}).get("created_at"), 1.0, _rule_ids(provider, "access"), "connected" if link else "link_missing"),
+        "duplicate": _fact(values["duplicate"], "observed" if values["duplicate"] is False else "missing" if values["duplicate"] is True else "unknown", source, observed_at, confidence, _rule_ids(provider, "duplicate"), "no_duplicates" if values["duplicate"] is False else "duplicate_unverified"),
         "category": _fact(values["category"], present(values["category"]), source, observed_at, confidence, _rule_ids(provider, "category")),
-        "contacts": _fact({"phone": values["phone"], "website": values["website"]}, present(values["phone"] or values["website"]), source, observed_at, confidence, _rule_ids(provider, "contacts"), "Контакты из профиля бизнеса не доказывают, что они опубликованы на площадке" if not values["phone"] and not values["website"] and (business.get("phone") or business.get("website")) else ""),
-        "schedule": _fact(values["working_hours"], present(values["working_hours"]), source, observed_at, confidence, _rule_ids(provider, "schedule"), "Внутреннее расписание не доказывает, что часы обновлены на площадке" if not values["working_hours"] and business.get("working_hours") else ""),
+        "contacts": _fact({"phone": values["phone"], "website": values["website"]}, present(values["phone"] or values["website"]), source, observed_at, confidence, _rule_ids(provider, "contacts"), "internal_contacts" if not values["phone"] and not values["website"] and (business.get("phone") or business.get("website")) else None),
+        "schedule": _fact(values["working_hours"], present(values["working_hours"]), source, observed_at, confidence, _rule_ids(provider, "schedule"), "internal_schedule" if not values["working_hours"] and business.get("working_hours") else None),
         "action_path": _fact(bool(values["phone"] or values["website"]), present(values["phone"] or values["website"]), source, observed_at, confidence, _rule_ids(provider, "action_path")),
-        "services": _fact(values["services_count"], services_state, source, observed_at, confidence if services_state != "unknown" else 0.5, _rule_ids(provider, "services"), "Внутренние услуги не доказывают их публикацию на площадке" if services_state == "unknown" and internal_services else ""),
-        "prices": _fact(values["prices_count"], "observed" if values["prices_count"] > 0 else "unknown" if priced_services > 0 else "missing" if reliable and values["services_count"] > 0 else "unknown", source, observed_at, confidence if values["prices_count"] else 0.5 if priced_services else confidence, _rule_ids(provider, "prices"), "Во внутреннем справочнике цены есть, но нужна проверка площадки" if priced_services and not values["prices_count"] else ""),
+        "services": _fact(values["services_count"], services_state, source, observed_at, confidence if services_state != "unknown" else 0.5, _rule_ids(provider, "services"), "internal_services" if services_state == "unknown" and internal_services else None),
+        "prices": _fact(values["prices_count"], "observed" if values["prices_count"] > 0 else "unknown" if priced_services > 0 else "missing" if reliable and values["services_count"] > 0 else "unknown", source, observed_at, confidence if values["prices_count"] else 0.5 if priced_services else confidence, _rule_ids(provider, "prices"), "internal_prices" if priced_services and not values["prices_count"] else None),
         "reviews": _fact({"count": values["reviews_count"], "rating": values["rating"]}, "observed" if review_total is not None or reliable else "unknown", source, observed_at, confidence, _rule_ids(provider, "reviews")),
         "review_responses": _fact({"unanswered": values["unanswered_reviews"]}, "missing" if values["unanswered_reviews"] > 0 else "observed" if review_total is not None else "unknown", source, observed_at, confidence, _rule_ids(provider, "review_responses")),
         "photos": _fact(values["photos_count"], "observed" if values["photos_count"] > 0 else "missing" if reliable else "unknown", source, observed_at, confidence, _rule_ids(provider, "photos")),
-        "publications": _fact(values["publications_count"], "not_applicable" if provider == "2gis" else "observed" if values["publications_count"] > 0 else "missing" if reliable else "unknown", source, observed_at, confidence, _rule_ids(provider, "publications"), "У 2ГИС нет органического канала новостей" if provider == "2gis" else "Публикации оцениваются как конверсионный контент, а не обязательный фактор позиции" if provider == "yandex" else ""),
+        "publications": _fact(values["publications_count"], "not_applicable" if provider == "2gis" else "observed" if values["publications_count"] > 0 else "missing" if reliable else "unknown", source, observed_at, confidence, _rule_ids(provider, "publications"), "no_organic_news" if provider == "2gis" else "conversion_content" if provider == "yandex" else None),
     }
     if provider in {"google", "yandex"}:
         verified = values["verified"]
@@ -386,7 +402,8 @@ def _provider_state(cursor: Any, business: dict[str, Any], provider: str, link: 
             if key != "access" and item["state"] != "not_applicable":
                 item["state"] = "blocked"
                 item["confidence"] = 0.0
-                item["evidence"] = "Последнее обновление площадки завершилось ошибкой"
+                item["evidence"] = FACT_EVIDENCE["source_error"]
+                item["evidence_code"] = "source_error"
     return {
         "provider": provider,
         "provider_label": PROVIDER_LABELS[provider],
@@ -471,6 +488,8 @@ def _actions_for_location(location: dict[str, Any], goal: str) -> list[dict[str,
                 "fact": "access",
                 "gate": 0,
                 "gate_label": GATE_LABELS[0],
+                "copy_code": "restore" if source_state == "blocked" else "refresh",
+                "copy_params": {"goal": goal},
                 "title": f"{'Восстановите обновление' if source_state == 'blocked' else 'Обновите данные'} {label}",
                 "reason": "Последнее обновление завершилось ошибкой." if source_state == "blocked" else "Для выбора первого исправления нужен свежий снимок карточки.",
                 "expected_outcome": "Получить достоверное состояние карточки и выбрать первое исправление.",
@@ -497,6 +516,7 @@ def _actions_for_location(location: dict[str, Any], goal: str) -> list[dict[str,
                 continue
             title, reason, cta_label, cta_url = _action_copy(provider, fact_name, str(fact["state"]))
             benchmark_gap = 0
+            copy_params: dict[str, Any] = {"goal": goal}
             metric_name = {"reviews": "reviews_count", "photos": "photos_count", "services": "services_count"}.get(fact_name)
             if metric_name and benchmark.get("sample_size", 0) >= 10:
                 current = _number(provider_state.get("metrics", {}).get(metric_name)) or 0
@@ -504,6 +524,7 @@ def _actions_for_location(location: dict[str, Any], goal: str) -> list[dict[str,
                 if median is not None and current < median:
                     benchmark_gap = 10
                     reason += f" У сопоставимых карточек медиана: {median:g}."
+                    copy_params["benchmark_median"] = median
             gate = int(rule["gate"])
             confidence = float(fact.get("confidence") or 0)
             priority = 10000 - gate * 1000 + int(rule["impact"]) + _goal_relevance(goal, fact_name) + benchmark_gap + round(confidence * 10)
@@ -516,6 +537,8 @@ def _actions_for_location(location: dict[str, Any], goal: str) -> list[dict[str,
                 "fact": fact_name,
                 "gate": gate,
                 "gate_label": GATE_LABELS[gate],
+                "copy_code": "blocked" if fact["state"] == "blocked" else fact_name,
+                "copy_params": copy_params,
                 "title": title,
                 "reason": reason,
                 "expected_outcome": _expected_outcome(goal),
@@ -636,6 +659,7 @@ def _baseline(cursor: Any, business_id: str, end: date | None = None) -> dict[st
         "providers": providers,
         "year_ago_providers": _stats_window(cursor, business_id, year_ago_start, year_ago_end),
         "disclaimer": "Показы и нажатия не являются подтверждёнными клиентами или продажами.",
+        "disclaimer_code": "views_not_sales",
     }
 
 
@@ -700,7 +724,10 @@ def _measurement(cycle: dict[str, Any] | None) -> dict[str, Any]:
     checkpoints = []
     configured_days = _json(cycle.get("measurement_days_json"), [14, 28])
     measurement_days = [int(days) for days in configured_days if str(days).isdigit()] if isinstance(configured_days, list) else [14, 28]
-    result = _json(cycle.get("measurement_json"), {}) or {}
+    stored_result = _json(cycle.get("measurement_json"), {}) or {}
+    # Add display metadata to old rows without mutating the stored JSON object.
+    result = {**stored_result, "disclaimer_code": "platform_actions_not_sales"} if stored_result else {}
+    decision = cycle.get("decision") or result.get("decision")
     completed_days = int(result.get("checkpoint_days") or 0)
     for days in measurement_days or [14, 28]:
         due = started + timedelta(days=days)
@@ -709,8 +736,9 @@ def _measurement(cycle: dict[str, Any] | None) -> dict[str, Any]:
     return {
         "status": str(cycle.get("status") or "active"),
         "checkpoints": checkpoints,
-        "decision": cycle.get("decision"),
-        "decision_reason": cycle.get("decision_reason"),
+        "decision": decision,
+        "decision_reason": cycle.get("decision_reason") or result.get("decision_reason"),
+        "decision_reason_code": decision if decision in MEASUREMENT_DECISIONS else None,
         "result": result or None,
     }
 
@@ -755,6 +783,8 @@ def build_card_growth(cursor: Any, scope: dict[str, Any]) -> dict[str, Any]:
                 "fact": "access",
                 "gate": 0,
                 "gate_label": GATE_LABELS[0],
+                "copy_code": "add_provider",
+                "copy_params": {"goal": goal},
                 "title": "Добавьте площадку для проверки",
                 "reason": "LocalOS пока не знает, какие карточки принадлежат этой точке. Добавьте Google, Яндекс или 2ГИС, чтобы получить первый снимок.",
                 "expected_outcome": "Получить свежие данные карточки и определить первое исправление.",
@@ -1033,9 +1063,11 @@ def record_growth_measurement(cursor: Any, cycle_id: str, checkpoint_days: int) 
         "comparison_period": {"start": comparison_start.isoformat(), "end": comparison_end.isoformat(), "days": observed_days},
         "decision": decision,
         "decision_reason": decision_reason,
+        "decision_reason_code": decision,
         "deltas": deltas,
         "performance": current_performance,
         "disclaimer": "Платформенные действия не являются подтверждёнными клиентами, заказами или продажами.",
+        "disclaimer_code": "platform_actions_not_sales",
     }
     cursor.execute(
         "UPDATE card_growth_cycles SET decision=%s, decision_reason=%s, measurement_json=%s, updated_at=NOW() WHERE id=%s",

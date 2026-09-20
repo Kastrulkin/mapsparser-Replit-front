@@ -1,5 +1,31 @@
 # UX and browser verification — working evidence
 
+## Managed Progress slice — 20 September, parent2fac7241
+
+The owner/manager needs to understand the listing state, choose a goal, act on
+the next correction and read the measurement in the selected language. The
+confirmed failure was a Spanish managed-card scenario rendering Russian system
+headings/action/evidence text. The direct-focus branch, managed panel and audit
+details now select copy by explicit API codes in all10supported locales.
+Business names, provider brands, source identities and numeric facts remain
+data, not translation keys. Dates/numbers are locale-formatted; unknown codes
+fall back safely, including prototype-like values. RU legacy raw copy is kept.
+
+The causal UI capture fails1test/4pass; final focused capture passes15tests in
+9.62s. It covers the actual Russian API-text fixture, Spanish direct action,
+decision/evidence, audit-open focus, error/empty state, scoped goal PUT and all
+10locale keysets/17action codes. Backend212pure contracts pass. Local app build
+and199JS asset integrity pass; full frontend676tests/131files passes305.19s.
+Independent bounded source review PASS. These
+are jsdom/mocked-contract checks, not real API, browser layout or native-speaker
+certification. Goal confirmation is exercised only against a request mock.
+
+Shared JourneyActionCard remains untranslated in the normal managed-action
+branch. Replacing it with the localized direct-focus navigation card would lose
+its execution/approval behavior; it needs a separate presentation-only contract.
+Thus whole UX-LOCALE-07 stays PARTIAL. User-authenticated IAB Today was rechecked
+read-only; live mixed copy is the deployed version, not this unshipped build.
+
 ## Today API-owned copy slice — 20 September, parent 625a5d15
 
 The owner/manager's task is still to choose the next action on Today. The

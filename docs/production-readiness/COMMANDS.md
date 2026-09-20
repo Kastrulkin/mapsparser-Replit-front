@@ -1,5 +1,58 @@
 # Verified commands and evidence
 
+## Managed Progress display contract — 20 September, parent2fac7241
+
+All operations use named readiness-card-copy/readiness-managed tmux sessions.
+Backend: env -i, private arm64 Python3.11.7, -I -B, disabled plugin autoload,
+support/card_growth_pure_check.py explicitly selects two files with no conftest
+or cache. Its process-local bootstrap rejects DB connections, socket operations,
+dotenv reads and child processes before imports. Final recorded counters all0.
+Frontend: Node22, env -i, no dotenv (support/managed_growth_vitest.config.mjs
+envDir:false), mocked request boundary, one worker. Final2 targeted/full/types
+runs additionally preload the existing GtHPOV/no-egress-compatible.cjs chain;
+this is a JS guard, not an OS/native isolation proof. No backend server starts.
+
+| Raw capture suffix (20260920.json) | Result | Duration ms |
+| --- | --- | ---: |
+| card-growth-copy-red |27failed/12passed; missing additive metadata|516.225|
+| card-growth-copy-reviewed |212passed/0.16s; zero recorded guard attempts|487.598|
+| card-growth-copy-quality |scoped Ruff F821/F822/F823;exit0|96.959|
+| managed-progress-ui-red |causal Spanish rendering1failed/4passed|9003.237|
+| managed-progress-ui-final2 |15passed/3files/9.62s;empty stderr|11084.613|
+| managed-growth-types-lint-final2 |app/node TS and lint pass;1existing warning|57763.466|
+| managed-growth-build-reviewed |app build19.80s;exit0|21438.911|
+| managed-growth-build-integrity |199reachable JS assets;exit0|410.232|
+| managed-growth-frontend-full |665passed/7failed plus1suite error;cwd ENOENT only|310913.613|
+| managed-growth-frontend-full2 |676passed/131files/305.19s;exit0|306719.104|
+| managed-growth-precommit-quality |20manifest entries match;staged diff/ledger and Gitleaks pass|1877.860|
+
+Full2 is one complete frontend aggregate, not a union of partial runs. Its child
+first changes cwd to frontend, because static tests use process.cwd/readFileSync;
+Vite root alone does not change those paths. Same frozen source/config/guard,
+no exclusions or assertion weakening. All final captures are untruncated and
+not timed out. Full2 stderr retains expected negative-test diagnostics, not
+an empty-stderr claim; the Vitest result has no failed suites or unhandled errors.
+The precommit checksum reader reports one extra blank input line from jq -r;
+all20actual entries match. Staged Gitleaks finds no leaks (~543470bytes), not a
+whole-history/image/log or historical credential-revocation certification.
+The checked app artifact is /private/tmp/localos-managed-growth-build-20260920.uLLxel/final-dist;
+no production/dist sync. Build child cwd is frontend, imports the canonical
+Vite config with envDir:false, VITE_COOKIE_SESSION_AUTH=true, and a fresh
+external outDir. Existing Yandex PURE-annotation warnings and the explicit
+external-outDir no-empty notice are preserved. Public build is not rerun by
+this package. Source/test/guard/artifact hashes are in managed-growth-source-
+manifest; exact commands, complete outputs and timing are in each raw capture.
+
+Intermediate failures are retained, not counted: first backend green used a
+wrong duplicate fixture key; first types had two incomplete locale records;
+first build used wrong cwd; UI green/reviewed/final have ambiguous selectors,
+LanguageProvider timing or missing jsdom scrollIntoView. Final2 restores a
+scoped scrolling stub and checks real audit-region focus with deterministic
+RAF; native smooth-scroll behavior is not proved. No product scroll code changed.
+Independent source review PASS is scoped to managed panel/direct-focus/audit;
+shared JourneyActionCard and whole-product UX remain unresolved. No native DB,
+new-build browser, current image, deployment or whole-goal PASS claim.
+
 ## Current native Python advisory scan — 20 September, parentaf351060
 
 Private interpreter /private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python,

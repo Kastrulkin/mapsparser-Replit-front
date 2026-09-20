@@ -1,6 +1,40 @@
 # Readiness handoff
 
-## Current checkpoint — 20 September, native advisory closure
+## Current checkpoint — 20 September, managed Progress copy
+
+Parent2fac7241. Scoped source ownership: card_growth_service additive codes,
+ManagedCardGrowthPanel, direct managed-focus and provider audit in ProgressPage,
+three typed copy modules and regressions. No routes, priority, goal PUT scope,
+confirmation controls or data schema changed. The backend preserves old raw
+copy and normalizes legacy nested measurement decision/reason on read.
+
+Reviewed backend212passes0.16s/487.598ms, zero recorded guarded-operation attempts;
+final targeted UI15passes9.62s/11084.613ms with blocked Node networking. App build
+19.80s/21438.911ms and199JS asset integrity410.232ms pass. Full frontend676tests/
+131files pass305.19s/306719.104ms; final app/node TypeScript/lint57763.466ms
+passes with1pre-existing warning. First full's7failures/1suite error were ENOENT
+from root cwd; full2 changes only cwd to frontend, not sources or exclusions.
+Intermediate captures retain ambiguous test selectors, missing jsdom scrolling,
+two incomplete locale fields and the initial build-cwd error; these are not
+hidden or promoted to product findings. Details in raw/managed-growth-evidence-
+notes-20260920.md. Independent source/evidence review is scoped to this package.
+
+Next locale package may adapt shared JourneyActionCard presentation, but must
+preserve command identity/idempotency/approval rather than swap it for the
+direct-navigation card. This reachable branch is an explicit residual, not
+localized by the current slice. Ten dictionaries do not prove native linguistic
+quality or RTL/mobile layout. No new-build native browser or deployment proof.
+Read-only next-slice discovery points to maps/complete_map_task: an optional
+display contract through card_growth_service and lead_journey_service into the
+leadJourney DTO, reusing focus semantic codes without parsing Russian strings.
+Before any implementation, freeze legacy fallback, identical complete payload/
+scope/version, retry-key reuse and unchanged waiting/measurement/approval tests.
+This is a proposal only; no JourneyActionCard or command-service edit was made.
+Keep nine foreign paths excluded, prior unsafe-run effects INCONCLUSIVE, denied
+aggregate/restore preparation and10GiB image floor; latest5,976,336KiB free.
+OverallFAIL, no push, production, migration, Docker or deletion authorization.
+
+## Previous checkpoint — 20 September, native advisory closure
 
 Parentaf351060. No application source/dependency changes. Current private
 macOS arm64 venv remains133/133 equal to its artifact map and the unchanged

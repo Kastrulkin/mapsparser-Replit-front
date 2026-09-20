@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "managed-growth-types",
+  "captured_at": "2026-09-20T17:55:57.968718+00:00",
+  "command": [
+    "/bin/bash",
+    "-c",
+    "cd frontend && npm run typecheck"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 39971.462,
+  "exit_code": 2,
+  "timed_out": false,
+  "stdout": "\n> vite_react_shadcn_ts@0.0.0 typecheck\n> tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit\n\nsrc/components/growth/managedCardGrowthCopyEuropean.ts(151,3): error TS2741: Property 'resultDisclaimer' is missing in type '{ eyebrow: string; title: string; description: string; goal: string; chooseGoal: string; saving: string; confirmGoal: string; goalConfirmed: string; networkGoal: string; saveError: string; waitingUntil: (date: string) => string; ... 42 more ...; actionMessages: Record<...>; }' but required in type 'ManagedCardGrowthCopy'.\nsrc/components/growth/managedCardGrowthCopyEuropean.ts(154,3): error TS2741: Property 'resultDisclaimer' is missing in type '{ eyebrow: string; title: string; description: string; goal: string; chooseGoal: string; saving: string; confirmGoal: string; goalConfirmed: string; networkGoal: string; saveError: string; waitingUntil: (date: string) => string; ... 42 more ...; actionMessages: Record<...>; }' but required in type 'ManagedCardGrowthCopy'.\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "managed-growth-types-lint-reviewed",
+  "captured_at": "2026-09-20T18:05:59.291705+00:00",
+  "command": [
+    "/bin/bash",
+    "-c",
+    "cd frontend && npm run typecheck && npm run lint"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 63515.376,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "\n> vite_react_shadcn_ts@0.0.0 typecheck\n> tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit\n\n\n> vite_react_shadcn_ts@0.0.0 lint\n> eslint . --max-warnings 1\n\n\n/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/src/lib/auth_new.ts\n  115:82  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any\n\n\u2716 1 problem (0 errors, 1 warning)\n\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

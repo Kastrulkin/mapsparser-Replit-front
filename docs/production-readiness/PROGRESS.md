@@ -1,6 +1,31 @@
 # Production-readiness progress
 
-## Current checkpoint — 20 September, current native dependency evidence
+## Current checkpoint — 20 September, managed Progress display contract
+
+- [x] UX-LOCALE-07 managed panel, direct-focus and provider-audit slice now uses
+  additive semantic display codes and ten typed locale dictionaries. Business
+  names, brands, factual values, destinations, priorities and approval controls
+  remain unchanged. Legacy measurement JSON is normalized without a DB write.
+- [x] Backend causal RED27fail/12pass; reviewed212pure passes0.16s/487.598ms,
+  recorded guard counters zero. Frontend causal Spanish failure, then final
+  15passes/3files9.62s/11084.613ms, including audit focus and goal confirmation.
+- [x] Current app build19.80s/21438.911ms and199reachable JS assets pass;
+  scoped backend Ruff and frontend TypeScript/lint pass (one existing warning).
+  Independent bounded source review PASS. Full frontend676tests/131files pass
+  in305.19s/306719.104ms; final TS/lint57763.466ms. First full run's7failures
+  and1suite error were relative-file ENOENT from wrong cwd, retained separately.
+- [ ] Shared JourneyActionCard still exposes Russian commands/API copy in the
+  normal managed-action branch; direct-focus is not a replacement for its
+  execution/approval flow. Whole UX-LOCALE-07 remains PARTIAL, not closed.
+
+Parent2fac7241. No deployment, production/DB mutation, migration, Docker launch
+or cleanup. Native linguistic review and browser verification of this new build
+remain absent. Latest disk5,976,336KiB (~5.70GiB) is below the10GiB image floor.
+Denied aggregate-v2/restore preparation and prior unguarded reset-run
+INCONCLUSIVE effects remain unchanged. Nine foreign dirty paths preserved;
+whole-goal acceptance remains FAIL, with no readiness-score promotion.
+
+## Previous checkpoint — 20 September, current native dependency evidence
 
 - [x] Revalidated the current private arm64 environment:133 distributions exactly
   match the locked artifact inventory and current three requirements manifests;

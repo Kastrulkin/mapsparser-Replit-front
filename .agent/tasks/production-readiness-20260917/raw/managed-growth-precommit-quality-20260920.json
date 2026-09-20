@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "managed-growth-precommit-quality",
+  "captured_at": "2026-09-20T18:24:23.563459+00:00",
+  "command": [
+    "/bin/bash",
+    "-c",
+    "set -euo pipefail\ngit diff --cached --check\n/usr/bin/jq -e '.overall_status == \"FAIL\" and .checkpoint.foreign_worktree_paths_excluded == 9' .agent/tasks/production-readiness-20260917/evidence.json\n/usr/bin/jq -r '.stdout' .agent/tasks/production-readiness-20260917/raw/managed-growth-source-manifest-20260920.json | /usr/bin/shasum -a 256 -c -\ngit diff --cached --no-ext-diff | /usr/local/bin/gitleaks stdin --redact=100 --no-banner"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 1877.86,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "true\nsrc/services/card_growth_service.py: OK\ntests/test_card_growth_copy_contract.py: OK\ntests/test_card_growth_service.py: OK\nfrontend/src/components/growth/ManagedCardGrowthPanel.tsx: OK\nfrontend/src/components/growth/ManagedCardGrowthPanel.test.tsx: OK\nfrontend/src/pages/dashboard/ProgressPage.tsx: OK\nfrontend/src/pages/dashboard/ProgressPage.i18n.test.tsx: OK\nfrontend/src/components/growth/managedCardGrowthCopy.ts: OK\nfrontend/src/components/growth/managedCardGrowthCopyAdditional.ts: OK\nfrontend/src/components/growth/managedCardGrowthCopyEuropean.ts: OK\nfrontend/src/components/growth/managedCardGrowthCopy.test.ts: OK\n.agent/tasks/production-readiness-20260917/support/card_growth_pure_check.py: OK\n.agent/tasks/production-readiness-20260917/support/managed_growth_vitest.config.mjs: OK\n.agent/tasks/production-readiness-20260917/support/managed_growth_build.config.mjs: OK\n/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress.cjs: OK\n/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-local.cjs: OK\n/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-compatible.cjs: OK\n/private/tmp/localos-managed-growth-build-20260920.uLLxel/final-dist/index.html: OK\n/private/tmp/localos-managed-growth-build-20260920.uLLxel/final-dist/assets/index-J5TlPNkg.js: OK\n/private/tmp/localos-managed-growth-build-20260920.uLLxel/final-dist/assets/index-BM6vOqzw.css: OK\n",
+  "stderr": "shasum: WARNING: 1 line is improperly formatted\n\u001b[90m9:24PM\u001b[0m \u001b[32mINF\u001b[0m \u001b[1mscanned ~543470 bytes (543.47 KB) in 996ms\u001b[0m\n\u001b[90m9:24PM\u001b[0m \u001b[32mINF\u001b[0m \u001b[1mno leaks found\u001b[0m\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

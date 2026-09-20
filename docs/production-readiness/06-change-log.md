@@ -1,5 +1,21 @@
 # Production-readiness change log
 
+## Managed Progress system copy — 20 September, parent2fac7241
+
+UX-LOCALE-07 gains optional action/evidence/decision/disclaimer codes while
+retaining old API fields. Measurement reads support historical nested-only
+decisions without changing stored JSON. ManagedCardGrowthPanel, direct-focus
+and provider audit use typed10-locale dictionaries, explicit-code fallbacks and
+locale dates/numbers. Unknown/prototype-like codes cannot index inherited
+properties. Businesses, canonical provider brands, data values, routing and
+confirmation/write boundaries are preserved.
+
+Causal backend27fail/12pass becomes reviewed212pure passes. Spanish causal UI
+1fail/4pass becomes15focused passes; build/integrity and bounded source review
+pass. Final aggregate frontend result is recorded separately in COMMANDS.
+Shared JourneyActionCard is explicitly deferred; no whole-page/production
+localization, native linguistic review, new-build browser or release claim.
+
 ## Current private-environment advisory evidence — 20 September, parentaf351060
 
 No application/dependency edit. Revalidated133 installed versions, completed a

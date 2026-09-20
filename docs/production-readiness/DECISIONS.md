@@ -1,5 +1,24 @@
 # Readiness decisions
 
+## D-055 — Translate managed-card system messages by semantic codes
+
+20 September, parent2fac7241. The owner's Progress task is to understand the
+listing state, select a goal and see the next correction and measurement. The
+layout, destinations, priorities and approval/write boundaries stay unchanged.
+Russian action/evidence/measurement copy from card_growth_service is generated
+system text, not business-authored content. Add optional copy_code/copy_params,
+evidence_code and disclaimer/decision codes while retaining legacy raw text.
+Do not parse action IDs, match Russian strings or translate business names,
+provider brands, source identities or factual values. Old measurement JSON is
+normalized on read without a migration or mutation of the input object.
+
+This package owns ManagedCardGrowthPanel, the direct managed-focus renderer and
+provider audit details. Shared JourneyActionCard and other unkeyed API text
+remain a separate multilingual contract; the package is not whole-page locale
+completion. Ten-locale coverage is not native-speaker linguistic certification.
+Missing/future codes use a localized safe fallback outside RU; the legacy RU
+fallback remains readable. Unknown keys must not access inherited properties.
+
 ## D-054 — Scan the exact installed set without conflating it with the release image
 
 Revalidate the installed133-package map before a strict advisory query, then

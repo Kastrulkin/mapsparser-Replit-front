@@ -115,6 +115,29 @@
       "result": "133 exact installed/audited/artifact versions; strict PyPI audit0skips/0returned advisories/0fixes,15948.290ms,exit0;133license metadata entries,56License-Expression fields. Independent scoped PASS.",
       "limits": "Not Docker/Linux/OS/embedded native libraries/AMD64/bot, whole-history/image/log secret scanning, legal compliance, PyMuPDF entitlement or historical credential revocation. No readiness score promotion."
     },
+    "subsequent_managed_progress_copy": {
+      "parent_commit": "2fac7241",
+      "finding": "UX-LOCALE-07",
+      "scope": "Additive card-growth display metadata, ManagedCardGrowthPanel, direct managed-focus branch and provider audit; shared JourneyActionCard explicitly excluded",
+      "source_manifest": "raw/managed-growth-source-manifest-20260920.json",
+      "proof": [
+        "raw/card-growth-copy-red-20260920.json",
+        "raw/card-growth-copy-reviewed-20260920.json",
+        "raw/card-growth-copy-quality-20260920.json",
+        "raw/managed-progress-ui-red-20260920.json",
+        "raw/managed-progress-ui-final2-20260920.json",
+        "raw/managed-growth-types-lint-final2-20260920.json",
+        "raw/managed-growth-build-reviewed-20260920.json",
+        "raw/managed-growth-build-integrity-20260920.json",
+        "raw/managed-growth-frontend-full-20260920.json",
+        "raw/managed-growth-frontend-full2-20260920.json",
+        "raw/managed-growth-precommit-quality-20260920.json",
+        "raw/managed-growth-evidence-notes-20260920.md"
+      ],
+      "result": "Backend212pure passes0.16s/capture487.598ms, recorded guard attempts all0; frontend15targeted passes9.62s/capture11084.613ms; app/node TypeScript/lint57763.466ms with1existing warning; app build21438.911ms and199JS integrity410.232ms. Full2 frontend676tests/131files passes305.19s/capture306719.104ms, complete/exit0. First full665pass/7fail+1suite error was cwd-only ENOENT, not a successful aggregate.",
+      "independent_review": "Bounded backend and frontend source/evidence PASS after legacy measurement normalization and explicit disclaimer/rating corrections; full2 aggregate review recorded in evidence notes",
+      "limits": "Mocks/process-local guards, not native DB, real API, browser layout/scroll, linguistic certification, Docker/current image or production proof. Shared JourneyActionCard still displays raw Russian action/command copy; replacing it with direct navigation would alter execution semantics. Intermediate fixture/type/build-cwd failures are reconciled separately. Nine foreign paths preserved; overallFAIL and denied aggregate/restore lanes unchanged."
+    },
     "foreign_worktree_paths_excluded": 9,
     "historical_verdict_file": "verdict.json",
     "historical_verdict_reviewed_commit": "2f224f051e3b3487a2c0d529d40b547c414ccb52"

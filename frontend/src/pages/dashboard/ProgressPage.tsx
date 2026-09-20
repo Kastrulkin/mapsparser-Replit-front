@@ -23,6 +23,7 @@ import MapParseTable from '@/components/MapParseTable';
 import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 import { DataHealthRhythmStrip, type GrowthDataHealth } from '@/components/growth/DataHealthRhythmStrip';
 import { ManagedCardGrowthPanel, type ManagedCardGrowth } from '@/components/growth/ManagedCardGrowthPanel';
+import { managedActionCopy, managedCardGrowthCopyForLanguage, managedEvidence, managedFactLabel, managedGateLabel, managedProviderLabel, managedStateLabel } from '@/components/growth/managedCardGrowthCopy';
 import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -60,6 +61,13 @@ type GrowthAction = {
   expected_outcome: string;
   cta_label: string;
   cta_url?: string;
+  provider?: string | null;
+  provider_label?: string | null;
+  fact?: string;
+  gate?: number;
+  gate_label?: string;
+  copy_code?: string | null;
+  copy_params?: { goal?: string; benchmark_median?: number };
   screen?: string;
   target_scope?: { kind?: string; id?: string };
   affected_business_ids?: string[];
@@ -172,21 +180,6 @@ const formatDate = (value: string | null | undefined, language: Language) => {
 
 const formatMoney = (value: number, language: Language) =>
   new Intl.NumberFormat(language, { maximumFractionDigits: 0 }).format(value);
-
-const managedFactStatus = (state?: string) => ({
-  observed: 'Проверено',
-  missing: 'Нужно заполнить',
-  unknown: 'Нет достоверных данных',
-  not_applicable: 'Не применяется',
-  blocked: 'Источник недоступен',
-}[state || ''] || 'Нет данных');
-
-const managedFactLabel = (fact?: string) => ({
-  access: 'Доступ', verified: 'Подтверждение', duplicate: 'Дубли', category: 'Категория',
-  contacts: 'Контакты', schedule: 'Расписание', action_path: 'Запись или заказ',
-  services: 'Услуги', prices: 'Цены', reviews: 'Отзывы', review_responses: 'Ответы на отзывы',
-  photos: 'Фотографии', publications: 'Публикации',
-}[fact || ''] || fact || 'Характеристика');
 
 const AreaRow = ({
   area,
@@ -305,6 +298,7 @@ export const ProgressPage = () => {
   const { language } = useLanguage();
   const copy = progressPageCopyForLanguage(language);
   const runtime = progressRuntimeCopyForLanguage(language);
+  const managedCopy = managedCardGrowthCopyForLanguage(language);
   const [overviewData, setOverviewData] = useState<GrowthOverview | null>(null);
   const [overviewBusinessId, setOverviewBusinessId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -498,6 +492,14 @@ export const ProgressPage = () => {
   const selectedManagedLocation = overview?.card_state?.locations?.find((location) => location.business_id === (selectedAuditBusinessId || currentBusinessId));
   const currentMission = overview?.focus_action || overview?.growth_loop?.focus || overview?.growth_loop?.current_mission || overview?.growth_loop?.mission || null;
   const hasManagedCardGrowth = Boolean(overview?.card_state);
+  const managedFocus = hasManagedCardGrowth && currentMission
+    ? managedActionCopy(language, currentMission.copy_code || undefined, managedProviderLabel(currentMission.provider, currentMission.provider_label), currentMission.copy_params?.goal, currentMission.copy_params?.benchmark_median, {
+      title: currentMission.title,
+      reason: currentMission.reason,
+      cta: currentMission.cta_label,
+      outcome: currentMission.expected_outcome,
+    })
+    : null;
   const openProblemLocation = (location: NonNullable<GrowthOverview['problem_locations']>[number]) => {
     onBusinessChange?.(location.business_id);
     onControlScopeChange?.({ kind: 'business', id: location.business_id, name: location.business_name });
@@ -584,19 +586,19 @@ export const ProgressPage = () => {
         <ManagedCardGrowthPanel businessId={currentBusinessId} growth={overview} onUpdated={refreshAll} />
       ) : null}
 
-      {mapJourneyActions.length ? <section aria-label="Главное действие" className="space-y-3"><div><h2 className="text-balance text-xl font-semibold text-slate-950">{hasManagedCardGrowth ? 'Главное действие' : 'На этой неделе'}</h2><p className="mt-1 text-pretty text-sm text-slate-600">{hasManagedCardGrowth ? 'Сначала выполните этот шаг. После него LocalOS дождётся контрольной даты и сравнит результат.' : 'Выполняйте по одному пункту. После последнего LocalOS предложит обновить данные и сравнить результат.'}</p></div>{mapJourneyActions.slice(0, hasManagedCardGrowth ? 1 : undefined).map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={refreshAll} />)}</section> : null}
+      {mapJourneyActions.length ? <section aria-label={hasManagedCardGrowth ? managedCopy.actionHeading : 'Главное действие'} className="space-y-3"><div><h2 className="text-balance text-xl font-semibold text-slate-950">{hasManagedCardGrowth ? managedCopy.actionHeading : 'На этой неделе'}</h2><p className="mt-1 text-pretty text-sm text-slate-600">{hasManagedCardGrowth ? managedCopy.actionDescription : 'Выполняйте по одному пункту. После последнего LocalOS предложит обновить данные и сравнит результат.'}</p></div>{mapJourneyActions.slice(0, hasManagedCardGrowth ? 1 : undefined).map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={refreshAll} />)}</section> : null}
 
       {hasManagedCardGrowth && !mapJourneyActions.length && currentMission ? (
-        <section aria-label="Главное действие" className="border-y border-slate-200 py-5">
+        <section aria-label={managedCopy.actionHeading} className="border-y border-slate-200 py-5">
           <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Главное действие</div>
-              <h2 className="mt-2 text-balance text-xl font-semibold text-slate-950">{currentMission.title}</h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{currentMission.reason}</p>
-              {currentMission.expected_outcome ? <p className="mt-2 text-sm text-slate-700"><strong>Ожидаемый результат:</strong> {currentMission.expected_outcome}</p> : null}
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{managedCopy.actionHeading}</div>
+              <h2 className="mt-2 text-balance text-xl font-semibold text-slate-950">{managedFocus?.title}</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{managedFocus?.reason}</p>
+              {currentMission.expected_outcome ? <p className="mt-2 text-sm text-slate-700"><strong>{managedCopy.expectedOutcome}:</strong> {managedFocus?.outcome}</p> : null}
             </div>
             <Button type="button" className="min-h-11 w-full md:w-auto" onClick={openMission}>
-              {currentMission.cta_label || 'Продолжить'}<ArrowRight className="ml-2 h-4 w-4" />
+              {managedFocus?.cta}<ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </div>
         </section>
@@ -765,24 +767,24 @@ export const ProgressPage = () => {
           ) : null}
 
           {selectedManagedLocation?.providers.length ? (
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white" aria-label="Состояние по площадкам">
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white" aria-label={managedCopy.auditState}>
               <div className="border-b border-slate-200 px-5 py-4 md:px-6">
-                <h3 className="font-semibold text-slate-950">Состояние по площадкам</h3>
-                <p className="mt-1 text-sm leading-6 text-slate-600">Каждый вывод привязан к источнику и дате снимка. Неизвестные данные не считаются отсутствующими.</p>
+                <h3 className="font-semibold text-slate-950">{managedCopy.auditState}</h3>
+                <p className="mt-1 text-sm leading-6 text-slate-600">{managedCopy.auditDescription}</p>
               </div>
               <div className="divide-y divide-slate-200">
                 {selectedManagedLocation.providers.map((provider) => (
                   <details key={provider.provider} className="px-5 py-4 md:px-6">
                     <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
-                      <span className="font-semibold text-slate-950">{provider.provider_label}</span>
-                      <span className="text-xs text-slate-500">Снимок: {formatDate(provider.observed_at, language) || 'не получен'}</span>
+                      <span className="font-semibold text-slate-950">{managedProviderLabel(provider.provider, provider.provider_label)}</span>
+                      <span className="text-xs text-slate-500">{managedCopy.snapshot(formatDate(provider.observed_at, language) || managedCopy.snapshotMissing)}</span>
                     </summary>
                     <div className="mt-3 divide-y divide-slate-100 border-y border-slate-100">
                       {Object.entries(provider.facts).map(([factName, fact]) => (
                         <div key={factName} className="grid gap-1 py-3 text-sm md:grid-cols-[minmax(140px,0.45fr)_minmax(130px,0.35fr)_minmax(0,1fr)] md:gap-4">
-                          <span className="font-medium text-slate-800">{managedFactLabel(factName)}</span>
-                          <span className={fact.state === 'missing' || fact.state === 'blocked' ? 'text-amber-800' : 'text-slate-600'}>{managedFactStatus(fact.state)}</span>
-                          <span className="text-slate-500">{fact.evidence || `Источник: ${fact.source || provider.provider_label}`}</span>
+                          <span className="font-medium text-slate-800">{managedFactLabel(language, factName)}</span>
+                          <span className={fact.state === 'missing' || fact.state === 'blocked' ? 'text-amber-800' : 'text-slate-600'}>{managedStateLabel(language, fact.state)}</span>
+                          <span className="text-slate-500">{managedEvidence(language, fact.evidence_code, fact.evidence) || `${managedCopy.source}: ${fact.source || managedProviderLabel(provider.provider, provider.provider_label)}`}</span>
                         </div>
                       ))}
                     </div>
