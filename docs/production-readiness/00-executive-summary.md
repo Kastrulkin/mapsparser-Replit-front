@@ -1,5 +1,13 @@
 # LocalOS readiness executive summary — working, not final
 
+Latest20–21September continuation (parent7c080d11) localizes shared task-card
+controls, instructions and dates for the ten existing languages. Raw business
+text and action contracts remain unchanged. Causal4fail/6pass becomes91focused/
+adjacent passes; types/lint, build and199JS integrity pass. Independent bounded
+source/targeted review PASS; final full reconciliation is in COMMANDS. No
+production rollout, browser/mobile or global language-switch persistence claim.
+Original whole acceptance remains FAIL.
+
 Latest20September continuation (parent191488ba) prevents approval or pilot start
 while a different unsaved campaign preview is visible. Saving now reloads and
 shows the exact saved version before enabling those actions; failed reloads

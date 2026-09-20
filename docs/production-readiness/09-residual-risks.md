@@ -1,5 +1,15 @@
 # Residual risks — working register
 
+21September after7c080d11: shared JourneyActionCard Russian chrome is locally
+corrected for ten languages;91focused/adjacent tests pass. UX-LOCALE-07 remains
+partial across the product: raw API/business copy is deliberately not translated,
+other unkeyed strings/native browser/RTL/mobile are not certified. Direct test
+context updates do not cover real LanguageProvider loading/remount and draft
+persistence across it. UX-JOURNEY-ACTION-SCOPE-08 is a separate source-only
+candidate: an unkeyed supported next-action/content-cycle transition may retain
+old form state; no cross-business/entity write or causal test proven yet.
+Original wholeFAIL/denials/prior unsafe-reset INCONCLUSIVE effects persist.
+
 20September after191488ba: UX-CAMPAIGN-CONSENT-03 now has causal UI proof and a
 local correction, superseding its source-only status below. Forty targeted UI
 and288guarded backend checks pass; canonical saved review is required before

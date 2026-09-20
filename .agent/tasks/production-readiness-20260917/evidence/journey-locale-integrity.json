@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "journey-locale-integrity",
+  "captured_at": "2026-09-20T21:00:38.267250+00:00",
+  "command": [
+    "/bin/sh",
+    "-c",
+    "bash scripts/verify_frontend_dist_integrity.sh /private/tmp/localos-journey-locale-build-20260920.VsmIZr/dist"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 181.551,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "Reachable dynamic assets checked: 199 JS files\nOK: frontend/dist integrity check passed\nJS: /assets/index-BpAWkddx.js\nCSS: /assets/index-BM6vOqzw.css\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

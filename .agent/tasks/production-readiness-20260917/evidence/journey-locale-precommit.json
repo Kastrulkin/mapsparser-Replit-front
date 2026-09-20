@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "journey-locale-precommit",
+  "captured_at": "2026-09-20T21:17:43.557466+00:00",
+  "command": [
+    "/bin/sh",
+    "-c",
+    "jq -jr '.stdout' '.agent/tasks/production-readiness-20260917/evidence/journey-locale-manifest.json' | shasum -a 256 -c - && git diff --cached --check && git diff --cached --no-ext-diff | /usr/local/bin/gitleaks stdin --redact=100 --no-banner && jq -e '.overall_status == \"FAIL\" and ([.acceptance_criteria[] | select(.status == \"PASS\") | .id] == [\"AC10\"])' .agent/tasks/production-readiness-20260917/evidence.json"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 1448.675,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "frontend/src/components/journey/JourneyActionCard.tsx: OK\nfrontend/src/i18n/journeyActionCopy.ts: OK\nfrontend/src/components/journey/JourneyActionCard.test.tsx: OK\nfrontend/src/components/journey/JourneyActionCard.i18n.test.tsx: OK\nfrontend/src/i18n/LanguageContext.tsx: OK\nfrontend/src/i18n/LanguageContext.logic.ts: OK\n.agent/tasks/production-readiness-20260917/support/managed_growth_vitest.config.mjs: OK\n.agent/tasks/production-readiness-20260917/support/managed_growth_build.config.mjs: OK\n/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-compatible.cjs: OK\n/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress-local.cjs: OK\n/private/tmp/localos-frontend-current-20260920.GtHPOV/no-egress.cjs: OK\ntrue\n",
+  "stderr": "12:17AM INF scanned ~236870 bytes (236.87 KB) in 512ms\n12:17AM INF no leaks found\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

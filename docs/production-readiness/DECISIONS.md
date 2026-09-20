@@ -1,5 +1,16 @@
 # Readiness decisions
 
+## D-063 — Localize action chrome, not business content or command values
+
+The shared JourneyActionCard must read the existing language context for system
+controls, instructions, placeholders, generic failure and date formatting. Keep
+raw action title/description/CTA, incoming drafts/result text and server Error
+messages unchanged; do not infer translation keys from their bytes. Command and
+outcome/use-case enum values, approval and retry keys remain language-independent.
+Use a typed ten-language copy module, existing primitives and layout. A fresh
+empty automation expected-result default may follow locale until edited; preserve
+incoming, edited and intentionally empty values across locale changes.
+
 ## D-062 — Maton route change is not proven approval account drift
 
 Reject the proposed AI-APPROVAL-BINDING-03 Maton reproduction: the authorized

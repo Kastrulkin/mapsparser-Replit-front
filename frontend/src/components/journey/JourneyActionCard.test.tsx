@@ -3,6 +3,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { LanguageContext } from '@/i18n/LanguageContext.logic';
+import { en } from '@/i18n/locales/en';
 import { runJourneyCommand, type JourneyAction } from '@/lib/leadJourney';
 import { JourneyActionCard } from './JourneyActionCard';
 
@@ -35,6 +37,16 @@ const action: JourneyAction = {
   version: 7,
 };
 
+const renderRussian = (
+  nextAction: JourneyAction,
+  onUpdated: (nextAction?: JourneyAction) => void,
+  surface: 'web' | 'telegram_mini_app' = 'web',
+) => render(
+  <LanguageContext.Provider value={{ language: 'ru', setLanguage: vi.fn(), t: en }}>
+    <JourneyActionCard action={nextAction} businessId="business-1" surface={surface} onUpdated={onUpdated} />
+  </LanguageContext.Provider>,
+);
+
 describe('JourneyActionCard', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -42,7 +54,7 @@ describe('JourneyActionCard', () => {
     vi.mocked(runJourneyCommand).mockResolvedValue({ action, next_action: null });
     const updated = vi.fn();
     const user = userEvent.setup();
-    render(<JourneyActionCard action={action} businessId="business-1" surface="telegram_mini_app" onUpdated={updated} />);
+    renderRussian(action, updated, 'telegram_mini_app');
 
     await user.click(screen.getByRole('combobox'));
     await user.click(await screen.findByRole('option', { name: 'Готов на бартер' }));
@@ -62,7 +74,7 @@ describe('JourneyActionCard', () => {
   it('offers the no-reply follow-up as a separate explicit command', async () => {
     vi.mocked(runJourneyCommand).mockResolvedValue({ action, next_action: null });
     const user = userEvent.setup();
-    render(<JourneyActionCard action={action} businessId="business-1" onUpdated={vi.fn()} />);
+    renderRussian(action, vi.fn());
 
     await user.click(screen.getByRole('button', { name: 'Ответа нет — follow-up' }));
 
@@ -78,7 +90,7 @@ describe('JourneyActionCard', () => {
     };
     vi.mocked(runJourneyCommand).mockResolvedValue({ action: contentAction, next_action: null });
     const user = userEvent.setup();
-    render(<JourneyActionCard action={contentAction} businessId="business-1" surface="telegram_mini_app" onUpdated={vi.fn()} />);
+    renderRussian(contentAction, vi.fn(), 'telegram_mini_app');
 
     const editor = screen.getByPlaceholderText('Проверьте и отредактируйте черновик');
     await user.clear(editor);
@@ -100,7 +112,7 @@ describe('JourneyActionCard', () => {
     };
     vi.mocked(runJourneyCommand).mockResolvedValue({ action: automationAction, next_action: null });
     const user = userEvent.setup();
-    render(<JourneyActionCard action={automationAction} businessId="business-1" surface="telegram_mini_app" onUpdated={vi.fn()} />);
+    renderRussian(automationAction, vi.fn(), 'telegram_mini_app');
 
     const result = screen.getByDisplayValue('Подготовленные материалы для проверки');
     await user.clear(result);
@@ -127,7 +139,7 @@ describe('JourneyActionCard', () => {
       .mockResolvedValueOnce({ action, next_action: nextAction, idempotent_replay: true });
     const updated = vi.fn();
     const user = userEvent.setup();
-    render(<JourneyActionCard action={action} businessId="business-1" onUpdated={updated} />);
+    renderRussian(action, updated);
 
     await user.click(screen.getByRole('button', { name: /Сохранить ответ/ }));
     expect(await screen.findByText('Ошибка соединения')).toBeVisible();

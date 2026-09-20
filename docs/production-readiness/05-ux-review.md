@@ -1,5 +1,25 @@
 # UX and browser verification — working evidence
 
+## Shared task-card language — 20–21 September, parent7c080d11
+
+Owner task: understand and record the next action in the selected interface
+language. Today/Progress/partner/influencer/Mini App callers share JourneyActionCard,
+whose own system labels previously stayed Russian. It now uses typed copy for
+all ten supported languages, a locale-aware due date and an accessible reply
+selector name. Layout/primitives remain unchanged. Business title/description,
+API CTA, incoming drafts, edited values and server Error messages remain verbatim.
+
+Causal4fail/6pass becomes91targeted/adjacent passes, including34locale tests.
+The matrix covers ten languages/enum key parity, raw text, exact clipboard bytes,
+approval/configuration/reply payloads, retry identity and direct context-switch
+absent/default/supplied/edited/empty values. No API/schema/provider change.
+Independent source/targeted review PASS; broader reconciliation in COMMANDS.
+
+Direct context rerender does not test real LanguageProvider's async loading
+fallback/remount. Native browser/mobile/RTL/long-label layout and full-page locale
+coverage remain unverified. A separate next-action retained-draft candidate is
+source-traced in journey-next-action-candidate.md, not repaired by localization.
+
 ## Review the version being approved — 20 September, parent191488ba
 
 Owner task: review the saved message and destination that approval or pilot

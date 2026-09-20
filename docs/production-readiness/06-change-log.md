@@ -1,5 +1,17 @@
 # Production-readiness change log
 
+## Shared task-card chrome — 20–21 September, parent7c080d11
+
+UX-LOCALE-07 continuation: move owned labels into journeyActionCopy for all ten
+languages; read existing language context and format dates accordingly. A null
+expected-result override distinguishes untouched default from incoming/edited/
+empty business text. Wire enums, approval flag, surface, command/version and
+retry keys stay unchanged. Existing five RU tests receive context only;34new
+locale cases plus adjacent pages pass91checks. Type/lint/build/199JS integrity
+pass; final whole-frontend evidence in COMMANDS. Independent bounded review PASS.
+Clipboard harness correction is retained as intermediate failed evidence, not
+a product defect. No deployment or new dependency/backend/schema change.
+
 ## Saved campaign consent binding — 20 September, parent191488ba
 
 UX-CAMPAIGN-CONSENT-03: unify unsaved-review gating for approval/pilot/resume;

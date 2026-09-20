@@ -1,5 +1,26 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, shared action-card locale
+
+- [x] UX-LOCALE-07 shared JourneyActionCard slice: causal4fail/6pass; component
+  chrome now follows all ten existing languages. Raw business/API content and
+  command/approval/idempotency contracts remain unchanged.
+- [x] Final91targeted/adjacent tests pass, including34new locale cases. Clipboard
+  setup-order fixture failure is retained and explained, not a product defect.
+- [x] Full frozen757frontend/135files pass309.20s/capture310547.28ms, untruncated.
+  All11hashes match afterward; stderr equals prior known negative/jsdom logs.
+- [x] TypeScript/lint (one existing warning), build and199JS integrity pass.
+  Independent bounded source/targeted review PASS; final full closure in
+  journey-locale-review.md. No native/browser/provider proof.
+- [ ] Next: UX-JOURNEY-ACTION-SCOPE-08 supported content-cycle form retention,
+  source-only. Reproduce new-action reset and same-action edit preservation
+  before changing state lifetime. Real LanguageProvider remount remains separate.
+
+Branch codex/production-readiness-20260917, parent7c080d11. Nine foreign paths
+excluded; no production/DB/send/push/deploy/cleanup/Docker. Latest measured disk
+6,922,648KiB (~6.60GiB), below10GiB. Aggregate/restore denials and prior unsafe-
+reset INCONCLUSIVE effects persist. Original full DoD/acceptance remains FAIL.
+
 ## Latest checkpoint — campaign preview/consent identity
 
 - [x] UX-CAMPAIGN-CONSENT-03: causal7fail/1pass; exact saved review now required

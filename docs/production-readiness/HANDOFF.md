@@ -1,5 +1,38 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, shared action-card locale
+
+Branch codex/production-readiness-20260917, parent/precommit HEAD7c080d11.
+JourneyActionCard now reads language context and typed ten-language chrome from
+journeyActionCopy.ts. Nullable expected-result override preserves supplied,
+edited and empty values while an absent/untouched default follows context.
+Raw API/owner text, enums, payload, surface, approval and retry keys unchanged.
+Existing5RU tests gained only typed context;34new cases plus adjacent pages91PASS.
+
+Causal RED4fail/6pass7.17s; first expanded90pass/1clipboard setup-order failure
+was a test harness issue. Corrected rerun91pass38.89s/capture41146.947ms. Full
+frozen757frontend/135files pass309.20s/capture310547.28ms, untruncated. All11hashes
+match; full stderr exactly matches prior known negative/jsdom diagnostics.
+Types/lint53358.768ms pass with one existing warning; build12.98s and199JS
+integrity pass. Independent bounded source/targeted review PASS; final full
+closure in journey-locale-review.md. No backend implementation/suite changed/run.
+
+Next concrete work: reproduce UX-JOURNEY-ACTION-SCOPE-08 with supported content
+cycle A review → schedule → publication/result → next cycle → new B review,
+same entity and cleared draft payload. JourneyWorkspaceFocus and Telegram use
+unkeyed nextAction handoffs. Backend removes draft_text, while card mount state
+can retain it. Preserve same-action rerender/locale edits; test late resolve/
+reject before designing a reset/lifetime fence. Read journey-next-action-candidate.md
+and source refs; no cross-business/entity write proven. Do not conflate this with
+real LanguageProvider async fallback/remount, which direct-context tests omit.
+
+Resume with `git status --short` and `git log -1 --oneline`, then focused guarded
+Vitest using COMMANDS' exact captured env-i/no-egress invocation. Do not re-audit
+completed packages or rerun denied aggregate/restore preparations. Nine foreign
+paths remain excluded, wholeFAIL, unsafe-reset INCONCLUSIVE effects unchanged.
+Latest measured disk6,922,648KiB (~6.60GiB), below10GiB image floor. No push/deploy,
+production/DB/provider action, Docker or cleanup; local commit only.
+
 ## Latest checkpoint — campaign preview/consent identity
 
 Branch codex/production-readiness-20260917, parent/precommit HEAD191488ba.

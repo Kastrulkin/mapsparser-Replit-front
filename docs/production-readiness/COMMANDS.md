@@ -1,5 +1,47 @@
 # Verified commands and evidence
 
+## Shared JourneyActionCard locale — 20–21 September, parent7c080d11
+
+Existing task evidence/journey-locale-* holds exact commands and logs. Named
+localos-journey-locale-* tmux, env-i Node22/GtHPOV no-egress-compatible chain,
+envDir:false config, private arm64 Python capture. Frontend API calls mocked;
+process-local guard is not an OS-level child isolation certificate. No backend
+implementation or backend test suite changed/run in this UI-only package.
+
+| Suffix | Actual outcome | Duration ms |
+| --- | --- | ---: |
+| red | Causal4fail/6pass across10cases,7.17s |9592.439|
+| final | Intermediate90pass/1clipboard harness failure,35.24s |36661.264|
+| verified | Authoritative final91pass/5files,38.89s |41146.947|
+| full | Frozen757pass/135files,309.20s |310547.28|
+| quality | App/node TS+lint pass;1existing auth_new.ts115 warning |53358.768|
+| build | Application build12.98s, before test-only additions/correction |15205.897|
+| integrity |199reachable JS files pass |181.551|
+| manifest |11source/test/config/guard inputs; all match after full |37.912|
+| precommit |11hashes, staged diff-check, staged Gitleaks236870bytes/no findings, originalFAIL/onlyAC10PASS retained |1448.675|
+
+Final successful captures exit0/no timeout/truncation. Full stderr byte-equals
+campaign-consent-full.json: known jsdom scroll/navigation and intended negative
+auth/network/error-boundary diagnostics, not an unhandled/failing test result.
+The intermediate filename `final` is not final passing proof: userEvent.setup
+replaced a preinstalled clipboard spy. Root moved spying after setup, retaining
+exact byte/command assertions. No original RED assertion weakened; its last
+wire/retry assertions were not reached until the Spanish option was repaired.
+
+34new cases +5RU controls and52adjacent page cases cover ten-language chrome/key
+parity, context-switch defaults/raw/edited/empty values, exact clipboard bytes,
+reply/configuration/approval wire and retry identity. Existing tests only gained
+a typed RU context harness. Independent bounded source/targeted review PASS;
+final broader closure is in journey-locale-review.md. Real LanguageProvider
+loading/remount, native browser/mobile/RTL and all-page copy remain unverified.
+
+Build artifact /private/tmp/localos-journey-locale-build-20260920.VsmIZr/dist,
+index-BpAWkddx.js/CSS index-BM6vOqzw.css. Existing dist not emptied; retained
+Yandex PURE/external-outDir warnings. No production performance improvement is
+inferred from these local timings. WholeFAIL, nine foreign paths, denials and
+prior unsafe-reset INCONCLUSIVE effects persist. No push/deploy/DB/send/Docker/
+cleanup or new dependency. Only documentation/evidence changed after full tests.
+
 ## Saved campaign consent — 20 September, parent191488ba
 
 Existing task evidence/campaign-consent-* captures contain exact commands and

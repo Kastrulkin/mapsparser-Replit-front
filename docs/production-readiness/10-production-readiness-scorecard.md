@@ -1,5 +1,12 @@
 # Production-readiness scorecard — working, not final
 
+20–21September shared task-card locale slice (parent7c080d11) adds causal4fail/
+6pass →91focused/adjacent passes, typed ten-language system copy, unchanged raw
+data/wire contracts, TS/lint/build/199JS integrity and bounded independent PASS.
+Final full check in COMMANDS. This is component/mocked-page proof, not real
+LanguageProvider loading/remount, browser/mobile/RTL, backend or production proof.
+No numerical score or original acceptance gate is promoted; wholeFAIL persists.
+
 20September consent correction (parent191488ba) binds review to the canonical
 saved campaign version. Causal7fail/1pass becomes40targeted UI passes;288guarded
 backend contracts pass with zero effect attempts. Types/lint (one old warning),
