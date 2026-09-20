@@ -1,6 +1,68 @@
 # Readiness handoff
 
-## Current checkpoint — 20 September, clean dependency parity PASS
+## Current checkpoint — 20 September, aggregate terminal / corrective slices PASS
+
+Application source is frozen at `5cc7c0cd`; current docs HEAD is `4000e41e`.
+Keep all nine foreign paths excluded. The reviewed private runner is `dc5e3d1`;
+guard `93e4…9b590` and probe `30208…bd678`. The runner's full phase is terminal
+exit 1 in tmux `localos-backend-full-a2f974eb33e8`; do not replay it. Corrective
+checks passed separately; a new single aggregate run is still required.
+
+Completed current evidence: the fifth native-preflight attempt PASS;
+dependency-parity migrate
+147 checks PASS; `flask db upgrade` PASS in 13.325643s; collect PASS with 4,910
+tests (10.85s pytest, 11.769505s capture). Raw `backend-full-v1-*` and
+`backend-full-native-preflight{-4}` files are authoritative. The healthy owned
+PG is `e550…6e14`, target nonce `a2f974eb33e8`, loopback 35418 and volume
+`localos-backend-full-5cc-a2f974eb33e8`, with networks of that name (ID
+`9483e233…`) and suffix `-host` (outbound-capable, ID `ab08e571…`). Testcontainers
+may create fixture-owned PostgreSQL containers. Do not reuse foreign containers,
+databases or PG15. Preserve the initial native,
+bridge/no-port, restart and inet-mask harness failures as historical evidence.
+The terminal full capture is 4,910 total / 4,886 pass / 9 fail / 1 error / 14
+skip / 7 warnings, 822.96s pytest and 824329.093ms capture, exit 1, with no
+timeout/truncation and no residual owned group. It does not establish application
+regressions.
+
+Free space is 6,100,560 KiB (~5.82 GiB): 5/2 GiB aggregate floors still apply
+and the 10 GiB image gate is still unmet. Skips: six ChatGPT live-provider, one Yandex live,
+six TypeScript/npm unavailable, and one local native creator opt-in (not a
+provider skip). FFmpeg's three parametrized cases ran and passed; `.webm` was
+the slowest at 17.78s.
+Production IAB login confirmation was observation-only; mixed locale is not a
+new proven bug. Terminal full failures are two missing-`frontend/node_modules`
+E2E environment failures, one legacy guard-message mismatch and seven unavailable
+Docker Compose-plugin contract failures.
+No file-picker permission change, production mutation, provider call, push or
+deploy was performed in this checkpoint.
+
+All corrective slices now pass but do not rewrite the baseline full red:
+`backend-full-v1-corrective-compose-creator-20260920.json` is 9 passed/1.07s,
+1.411542s captured; it uses explicit `LOCALOS_COMPOSE_BINARY` vendor SHA
+`372d…` and runs the prior static/creator local-native check. Private Chromium
+1243 stages are install 11.185866s, probe 974.13ms, exact collect 8, test 8
+passed/46.52s (47.658880s capture), post 702.742ms; shared caches are unchanged
+and browser tree SHA is `b315fb…2fd22`. Compatibility guard proof is 5 passed/
+9.56s, 9.869911s captured plus TCP/DNS 96.377ms. Wrapper
+`05c81f4a5b194a8b24d641567e31e6a724ed4eebc6abf9ffa85c32c95b0b6843` pins the
+original `93e4…9b590` policy and adds only the legacy denial text; application
+and test source remain unchanged.
+
+Post-native did not receive `--fresh`, so `fresh_assertions=false`; it observed
+288 tables, databases `postgres` and the owned base DB, role
+`readiness_test_owner`, and zero sessions. Source audit moved 551 generated `.pyc` (15,676,938 bytes) to
+`/private/tmp/localos-backend-full-20260920.XoKy4o/post-full-bytecode-retained`
+recoverably, without deletion; strict frozen tree passes. External process check
+finds no Bm3ckx/GtHPOV Vite/Chromium orphan. Known foreign Vite `22862:4173`,
+foreign services and owned PG are untouched. `backend-full-post-process-20260920.json`
+is normal-completion-only process inspection, not forced-crash proof: zero owned
+mixed processes, preserved foreign Vite PID 22862/4173, zero stopped. Independent
+compiled-staging-packaging reconciliation supports 4,903 unique non-provider
+tests across captures, not a single-run green; seven live-provider skips remain.
+Restore preparation was safely denied before file creation and awaits
+separate asynchronous user approval; this does not block the overall goal.
+
+## Earlier checkpoint — 20 September, clean dependency parity PASS
 
 Branch unchanged, HEAD before this docs-only checkpoint `8c252df4`; latest
 application source remains `5cc7c0cd`. All nine foreign paths listed below are
@@ -274,7 +336,7 @@ Latest disk 1,871,180 KiB (~1.78 GiB), below unchanged 2 GiB native/build floor;
 full aggregates/image need their larger margins. No cleanup, app stop, push,
 deployment or production mutation. Goal remains active, not complete.
 
-## Current checkpoint — 19 September, Today7c374f1f / resource hold
+## Earlier checkpoint — 19 September, Today7c374f1f / resource hold
 
 Source HEAD7c374f1f adds only four Today copy/test files after docs617a3b90.
 Independent static and evidence reviewPASS for the three static copy surfaces.

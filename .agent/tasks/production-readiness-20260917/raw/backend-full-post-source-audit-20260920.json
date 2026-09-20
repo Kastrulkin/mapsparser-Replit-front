@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "label": "backend-full-post-source-audit",
+  "captured_at": "2026-09-20T14:24:58.972886+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/local/bin:/usr/bin:/bin",
+    "PYTHONDONTWRITEBYTECODE=1",
+    "/usr/bin/arch",
+    "-arm64",
+    "/usr/local/bin/python3.11",
+    "/private/tmp/localos-backend-full-20260920.XoKy4o/post-source-audit.py"
+  ],
+  "cwd": "/private/tmp/localos-backend-full-20260920.XoKy4o",
+  "runtime": "Python 3.9.6 on Darwin arm64",
+  "duration_ms": 2042.613,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"tracked_source_unchanged\": true, \"retained_bytecode_files\": 551, \"retained_bytes\": 15676938, \"retained_at\": \"/private/tmp/localos-backend-full-20260920.XoKy4o/post-full-bytecode-retained\", \"deleted_files\": 0}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

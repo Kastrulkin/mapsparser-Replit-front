@@ -1,6 +1,66 @@
 # Production-readiness progress
 
-## Current checkpoint — 20 September, fresh backend dependencies verified
+## Current checkpoint — 20 September, isolated backend aggregate terminal / corrective slices PASS
+
+- [x] Current documentation HEAD is `4000e41e`; frozen application source stays
+  `5cc7c0cd` with no overlay of the nine foreign paths. The final private runner
+  is `dc5e3d1`, guard `93e4…9b590`, and probe `30208…bd678`.
+- [x] The fifth native-preflight attempt passed. Fresh dependency parity passed 147
+  checks before migration; owned migration passed in 13.325643s. Collection
+  passed: **4,910 tests**, 10.85s pytest / 11.769505s capture.
+- [ ] Full pytest is terminal **not green**: 4,910 total, 4,886 passed, 9 failed,
+  1 error, 14 skipped and 7 warnings; pytest 822.96s, capture 824329.093ms,
+  exit 1. The capture completed without timeout/truncation and the owned process
+  group is absent. It is an environment/harness result, not an application fix.
+- [x] Root-owned base PostgreSQL is container `e550…6e14`, database nonce
+  `a2f974eb33e8`, loopback port 35418 and volume
+  `localos-backend-full-5cc-a2f974eb33e8`. It uses networks
+  `localos-backend-full-5cc-a2f974eb33e8` (ID `9483e233…`) and its outbound-capable
+  `-host` bridge (ID `ab08e571…`); testcontainers may create additional
+  fixture-owned PostgreSQL containers. Foreign Docker resources were not reused.
+  Retain initial native failure, bridge/no-port,
+  restart and inet-mask harness-failure evidence rather than relabelling it.
+
+Keep the 5 GiB start / 2 GiB live floors; current free space is 6,100,560 KiB
+(~5.82 GiB), below the separate 10 GiB image gate. The 14 skips are six intentional ChatGPT
+live-provider cases, one Yandex live case, six unavailable TypeScript/npm cases,
+and one local native creator opt-in (not an external-provider skip). FFmpeg's
+three parameter cases ran and passed; its slowest `.webm` case took 17.78s.
+The 10 non-passing outcomes are two missing-`frontend/node_modules` E2E
+environment failures, one legacy expected-guard-message mismatch, and seven
+unavailable Docker Compose-plugin contract failures. A user-confirmed production
+IAB login was read-only; mixed locale is not a new proven defect. No file-picker
+permission, production, provider, push, deploy or application-source action was
+performed in this checkpoint.
+
+Corrective evidence is now complete, while the original full red is retained:
+private Chromium 1243 install passed in 11.185866s; guarded probe passed in
+974.13ms; exact collection found eight tests; all eight passed in 46.52s
+(47.658880s capture); postcheck passed in 702.742ms with shared caches unchanged
+and private browser tree `b315fb…2fd22`. Compose/creator correction passed 9 in
+1.07s (1.411542s capture); a compatibility wrapper
+`05c81f4a5b194a8b24d641567e31e6a724ed4eebc6abf9ffa85c32c95b0b6843` preserves
+the original `93e4…9b590` guard policy and only restores the legacy expected
+denial message. Source and test files are unchanged. Guard compatibility passed
+5 in 9.56s (9.869911s capture), including actual TCP/DNS probe 96.377ms.
+
+Post-native ran without `--fresh`, so `fresh_assertions=false`: it observed 288
+tables, databases `postgres` and the owned base database, role
+`readiness_test_owner`, and zero sessions rather than making a fresh assertion.
+Source audit found 551 generated `.pyc`
+(15,676,938 bytes), moved recoverably to `post-full-bytecode-retained` without
+deletion; strict frozen-tree verification passed. No Bm3ckx/GtHPOV orphan
+Vite/Chromium process remains; only known foreign Vite `22862:4173`, foreign
+services and owned PG remain. Latest free space is 6,100,560 KiB (~5.82 GiB).
+`backend-full-post-process-20260920.json` records normal-completion process
+inspection only (no forced-crash proof): no owned mixed processes, preserved
+foreign Vite PID 22862 on 4173, and zero processes stopped. Independent
+compiled-staging-packaging reconciliation supports 4,903 unique non-provider
+tests across captures, not one aggregate green run; seven live-provider skips
+remain. Next gates are one clean aggregate rerun, 10 GiB image capacity, separate
+restore approval, real-API browser/demo and original release gates.
+
+## Earlier checkpoint — 20 September, fresh backend dependencies verified
 
 - [x] Fresh private Python 3.11.7 / macOS arm64 environment installed from
   the three SHA-verified manifests in source `5cc7c0cd`. All **133** resolved
@@ -167,7 +227,7 @@ incorrect demo-query expectation and is retained separately. Latest free space
 1,871,180 KiB (~1.78 GiB); native/build guards remain unchanged. Seven foreign
 dirty paths preserved. No push/deploy or full-goal completion; goal ACTIVE.
 
-## Current checkpoint — 19 September, Today static copy7c374f1f; disk guard holds builds
+## Earlier checkpoint — 19 September, Today static copy7c374f1f; disk guard holds builds
 
 - [x] User's production IAB login confirmed by reading the existing Today tree,
  without clicks, credentials, account changes or data actions.

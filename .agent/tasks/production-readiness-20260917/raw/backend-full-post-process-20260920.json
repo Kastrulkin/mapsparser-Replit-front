@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "label": "backend-full-post-process",
+  "captured_at": "2026-09-20T14:36:52.089267+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/local/bin:/usr/bin:/bin",
+    "PYTHONDONTWRITEBYTECODE=1",
+    "/usr/bin/arch",
+    "-arm64",
+    "/usr/local/bin/python3.11",
+    "/private/tmp/localos-backend-full-20260920.XoKy4o/post-process.py"
+  ],
+  "cwd": "/private/tmp/localos-backend-full-20260920.XoKy4o",
+  "runtime": "Python 3.9.6 on Darwin arm64",
+  "duration_ms": 129.509,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"owned_mixed_processes_absent\": true, \"only_node_listener_is_preserved_foreign_vite\": true, \"foreign_vite_pid\": 22862, \"foreign_vite_port\": 4173, \"processes_stopped\": 0}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

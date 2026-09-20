@@ -1,5 +1,72 @@
 # Verified commands and evidence
 
+## Isolated backend aggregate — 20 September, full RED / corrective slices PASS
+
+Frozen application source is `5cc7c0cd`; docs HEAD is `4000e41e`. Private final
+runner SHA256 `dc5e3d12989263eda16d48ac5d722401d116ade33bd64666ef7cd0fd883c46b3`,
+guard SHA256 `93e4d9d7c99e9653a8e95e2735a369c3ab986e02c2afcb6d206aa63d05a9b590`
+and probe SHA256 `30208c1400cc807d5198183d60223a444aa6989615ef13f825b83d61716bd678`
+executed against root-owned base container `e550…6e14`, target nonce
+`a2f974eb33e8`, loopback 35418 and volume `localos-backend-full-5cc-a2f974eb33e8`.
+Its networks are `localos-backend-full-5cc-a2f974eb33e8` (ID `9483e233…`) and
+outbound-capable suffix `-host` bridge (ID `ab08e571…`); testcontainers may make
+fixture-owned PostgreSQL containers. Foreign Docker resources and native PG15 were
+not reused.
+
+| Phase | Result | Evidence |
+| --- | --- | --- |
+| Native preflight | Fifth attempt PASS | `backend-full-v1-native-preflight5-20260920.json`; earlier attempts retained separately |
+| Dependency parity before migration | 147 checks PASS | `backend-full-v1-dependency-parity-migrate-20260920.json` |
+| Migration | PASS, 13.325643s | `backend-full-v1-migrate-20260920.json` |
+| Collection | PASS, 4,910 tests; 10.85s pytest / 11.769505s capture | `backend-full-v1-collect-20260920.json` |
+| Full pytest | Exit 1: 4,886 pass / 9 fail / 1 error / 14 skip / 7 warnings; 822.96s pytest, 824329.093ms capture | `backend-full-v1-full-20260920.json` |
+
+The full process `localos-backend-full-a2f974eb33e8` is terminal; its capture has
+`abort_reason=completed`, no timeout/truncation and no residual owned group, but
+is not a PASS. Retain initial native failure and bridge/no-port, restart and
+inet-mask harness-failure captures. Disk is 6,100,560 KiB (~5.82 GiB): 5 GiB start and 2 GiB
+live floors apply; the independent 10 GiB image gate is not met. No application,
+provider, production, push, deploy or file-picker action occurred.
+
+Non-passing outcomes are infrastructure/contracts: two E2E cases stop because
+the frozen source lacks `frontend/node_modules`; one legacy safety assertion
+expects a prior guard-message prefix; seven release-compose contracts cannot find
+the Docker Compose plugin. Skips are six ChatGPT live-provider, one Yandex live,
+six unavailable TypeScript/npm, and one local native creator opt-in. FFmpeg's
+three cases ran and passed; `.webm` was slowest at 17.78s. The corrective checks
+below resolve these environment gaps; no application defect was established by
+the initial failures.
+
+Corrective evidence, without changing application/test source or replacing the
+baseline full capture:
+
+| Corrective phase | Result | Evidence |
+| --- | --- | --- |
+| Compose + creator | 9 passed, 1.07s pytest / 1411.542ms capture | `backend-full-v1-corrective-compose-creator-20260920.json` |
+| Chromium install | PASS, 11.185866s; private headless 1243 tree `b315fb…2fd22` | `backend-full-v1-mixed-frontend-install-20260920.json` |
+| Mixed probe/collect/test/post | PASS: 974.13ms / exact 8 / 8 passed 46.52s (47658.88ms capture) / 702.742ms | `backend-full-v1-mixed-frontend-{probe,collect,test,post}-20260920.json` |
+| Guard compatibility | 5 passed, 9.56s pytest / 9869.911ms capture; TCP/DNS 96.377ms | `backend-full-v1-{compatibility-guard-probe,corrective-guard-contract}-20260920.json` |
+| Native/source postcheck | `fresh_assertions=false` (no `--fresh`): observed 288 tables, `postgres` + owned DB, `readiness_test_owner`, zero sessions; 551 `.pyc` moved recoverably | `backend-full-v1-post-full-native-20260920.json`, `backend-full-post-source-audit-20260920.json` |
+| Process postcheck | Normal completion only, not forced-crash proof: no owned mixed processes; foreign Vite PID 22862/4173 preserved; zero stopped | `backend-full-post-process-20260920.json` |
+
+The Compose correction uses explicit `LOCALOS_COMPOSE_BINARY` vendor SHA `372d…`.
+Compatibility wrapper SHA256 `05c81f4a5b194a8b24d641567e31e6a724ed4eebc6abf9ffa85c32c95b0b6843`
+pins the original guard `93e4…9b590` and adds only the legacy expected denial
+message. Shared dependency caches are unchanged; no Bm3ckx/GtHPOV Vite/Chromium
+orphan remains. Source audit moved, rather than deleted, 15,676,938 generated
+`.pyc` bytes to private retained proof; strict frozen-tree verification passed.
+Independent compiled-staging-packaging reconciliation supports union coverage of
+4,903 unique non-provider cases with the full baseline; this is not one clean
+aggregate green run. Seven intentional live-provider skips remain. Current free
+space 6,100,560 KiB (~5.82 GiB), below the separate 10 GiB image gate. Restore
+preparation was denied before a file was created and requires separate asynchronous
+approval.
+
+Staged documentation + 27 raw captures passed redacted Gitleaks: exit 0,
+4727.728ms, 855,780 bytes scanned, no findings, timeout or truncation;
+`backend-full-staged-secret-scan-20260920.json`. This is staged-delta coverage,
+not a scan of Git history, Docker layers, private dependencies or foreign edits.
+
 ## Fresh backend dependency environment — 20 September, source 5cc7c0cd
 
 Private root `/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/`.

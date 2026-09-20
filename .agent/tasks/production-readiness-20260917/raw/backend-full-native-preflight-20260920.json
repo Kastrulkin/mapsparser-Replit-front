@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "label": "backend-full-native-preflight",
+  "captured_at": "2026-09-20T13:52:37.863089+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/local/bin:/usr/bin:/bin",
+    "PYTHONPATH=/private/tmp/localos-backend-full-20260920.XoKy4o/guard:/private/tmp/localos-backend-full-20260920.XoKy4o/source/src:/private/tmp/localos-backend-full-20260920.XoKy4o/source",
+    "PYTHONDONTWRITEBYTECODE=1",
+    "PYTHONNOUSERSITE=1",
+    "PYTHON_DOTENV_DISABLED=1",
+    "DOCKER_CONFIG=/private/tmp/localos-backend-full-20260920.XoKy4o/docker-config",
+    "PGPASSFILE=/dev/null",
+    "NETRC=/dev/null",
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "/private/tmp/localos-backend-full-20260920.XoKy4o/db-state.py",
+    "--fresh"
+  ],
+  "cwd": "/private/tmp/localos-backend-full-20260920.XoKy4o/source",
+  "runtime": "Python 3.9.6 on Darwin arm64",
+  "duration_ms": 4783.591,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "Traceback (most recent call last):\n  File \"/private/tmp/localos-backend-full-20260920.XoKy4o/db-state.py\", line 31, in <module>\n    connection = psycopg2.connect(runtime['database_url'], connect_timeout=5)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/tmp/localos-backend-full-20260920.XoKy4o/guard/sitecustomize.py\", line 167, in _guarded_psycopg2_connect\n    return _REAL_PSYCOPG2_CONNECT(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/lib/python3.11/site-packages/psycopg2/__init__.py\", line 122, in connect\n    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\npsycopg2.OperationalError: connection to server at \"127.0.0.1\", port 35418 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?\n\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}
