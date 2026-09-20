@@ -1,5 +1,13 @@
 # Readiness decisions
 
+## D-048 — Acceptance is revision-scoped; historical verdicts stay immutable
+
+The machine-readable evidence ledger must follow current verified source and
+capture scope, not inherit an old PASS indefinitely. Preserve historical passes,
+failures and reviewer verdicts with their revisions; record current gaps separately.
+Cross-capture corrective coverage is not a single green aggregate. A successful
+structural proof-bundle validation cannot certify the facts or close release gates.
+
 ## D-047 — Isolated aggregate uses actual owned network and native verification
 
 Run the frozen aggregate only after dependency parity, a native preflight and

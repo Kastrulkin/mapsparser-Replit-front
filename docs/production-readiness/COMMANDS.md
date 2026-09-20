@@ -1,5 +1,15 @@
 # Verified commands and evidence
 
+## Current proof-ledger validation
+
+`PYTHON_BIN=/usr/local/bin/python3.11 scripts/proof_loop.sh validate production-readiness-20260917`
+passes after the current evidence reconciliation: no missing files or JSON-schema
+errors. This checks package structure only, not factual sufficiency or readiness.
+Durable capture: `raw/evidence-ledger-validation-20260920.json`, exit 0,
+81.026ms, no timeout or output truncation; independent factual reconciliation PASS.
+`status` also reads the retained historical `verdict.json`; use the current
+`evidence.json` checkpoint and raw captures for present acceptance scope.
+
 ## Isolated backend aggregate — 20 September, full RED / corrective slices PASS
 
 Frozen application source is `5cc7c0cd`; evidence commit is `e82e0b55`. Private final

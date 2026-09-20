@@ -2,6 +2,12 @@
 
 ## Current checkpoint — 20 September, isolated backend aggregate terminal / corrective slices PASS
 
+- [x] Formal task `evidence.json` is reconciled with current source `5cc7c0cd`
+  and durable captures. AC3/AC4 historical PASS is preserved but no longer
+  promoted to current-source acceptance; their current result is incomplete
+  (FAIL), not a newly reproduced product regression. The successful v8 paired
+  performance comparison is now included. Independent reconciliation review
+  PASS; this does not replace final whole-project review. Overall remains FAIL.
 - [x] Aggregate/corrective evidence is committed locally in `e82e0b55`;
   frozen application source stays
   `5cc7c0cd` with no overlay of the nine foreign paths. The final private runner

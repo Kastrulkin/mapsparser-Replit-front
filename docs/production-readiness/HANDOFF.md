@@ -4,6 +4,11 @@
 
 Application source is frozen at `5cc7c0cd`; the reviewed aggregate/corrective
 evidence package is committed locally in `e82e0b55` (parent `4000e41e`).
+Documentation reconciliation is committed in `fbbdec6b`. The formal task
+`evidence.json` now separates current acceptance from historical checkpoints:
+AC3/AC4 are incomplete for the current combination, AC7 includes the successful
+v8 paired measurement, and overall remains FAIL. `verdict.json` is still the
+immutable independent snapshot at `2f224f05`; never relabel it as a current verdict.
 Keep all nine foreign paths excluded. The reviewed private runner is `dc5e3d1`;
 guard `93e4…9b590` and probe `30208…bd678`. The runner's full phase is terminal
 exit 1 in tmux `localos-backend-full-a2f974eb33e8`; do not replay it. Corrective

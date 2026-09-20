@@ -1,6 +1,17 @@
 {
   "task_id": "production-readiness-20260917",
   "overall_status": "FAIL",
+  "checkpoint": {
+    "observed_date": "2026-09-20",
+    "documentation_commit": "fbbdec6bfc94322689a826ec1066cc7750cb067c",
+    "application_source_commit": "5cc7c0cddc1df4356f23e1e6c6e0f0b68d849721",
+    "frontend_tree": "0af96cd4614e0a1c5b658339b0a73d1a7bec9e46",
+    "evidence_package_commit": "e82e0b55b050d8d1a715d6b03a18c52e0239bad2",
+    "assessment_kind": "current_evidence_reconciliation_not_final_verdict",
+    "foreign_worktree_paths_excluded": 9,
+    "historical_verdict_file": "verdict.json",
+    "historical_verdict_reviewed_commit": "2f224f051e3b3487a2c0d529d40b547c414ccb52"
+  },
   "acceptance_criteria": [
     {
       "id": "AC1",
@@ -9,10 +20,24 @@
       "proof": [
         "docs/production-readiness/01-system-map.md",
         "docs/production-readiness/02-audit-backlog.md",
-        "docs/production-readiness/PROGRESS.md"
+        "docs/production-readiness/PROGRESS.md",
+        "raw/backend-deps-v2-install-locked-20260920.json",
+        "raw/backend-deps-v2-inventory-parity-20260920.json",
+        "raw/backend-deps-v2-artifact-lock-20260920.json"
       ],
       "gaps": [
-        "Independent AC1 reconciliation remains FAIL. System map now enumerates source deployment variants, role workers, runner/migrator, timers/CI, auth-role/org and provider boundaries plus demo audience and every baseline item. Formatter is explicitly not configured. Baseline clean locked backend install is absent; standalone startup log and detailed Trivy results were rechecked at their exact ephemeral paths and are missing; Docker baseline stdout is truncated. Current merged production service/topology inventory and the explicitly unchecked Stage1 areas remain unproven. Later successful tests do not recreate missing historical evidence."
+        "The current private macOS arm64 environment now has a hash-locked installation and exact metadata parity for 133 distributions; the earlier missing-package preparation gap is closed for that environment. Missing historical baseline startup/Trivy evidence is not recreated. Current deployed topology and unchecked Stage 1 areas still require evidence-backed closure; see the system-map area ledger."
+      ],
+      "historical_checkpoint": {
+        "status": "FAIL",
+        "gaps": [
+          "Independent AC1 reconciliation remains FAIL. System map now enumerates source deployment variants, role workers, runner/migrator, timers/CI, auth-role/org and provider boundaries plus demo audience and every baseline item. Formatter is explicitly not configured. Baseline clean locked backend install is absent; standalone startup log and detailed Trivy results were rechecked at their exact ephemeral paths and are missing; Docker baseline stdout is truncated. Current merged production service/topology inventory and the explicitly unchecked Stage1 areas remain unproven. Later successful tests do not recreate missing historical evidence."
+        ],
+        "scope_notes": [],
+        "note": "Preserved pre-reconciliation checkpoint; not current-source acceptance."
+      },
+      "scope_notes": [
+        "Current assessment applies to the source/evidence checkpoint identified at the top of this ledger. Historical details are preserved separately and in the original raw captures."
       ]
     },
     {
@@ -63,16 +88,30 @@
         "raw/operator-mobile-review-confirmation-red-retry-3dca5fda.json",
         "raw/operator-mobile-review-capability-red.json",
         "272794a4 common mobile stored-write and review capability gates",
-        "raw/operator-mobile-confirm-green-3dca5fda.json"
+        "raw/operator-mobile-confirm-green-3dca5fda.json",
+        "5cc7c0cd reviewed media SSRF/write-role fix",
+        "raw/social-media-root-guarded-20260920.json",
+        "raw/social-media-secret-delta-20260920.json"
       ],
       "gaps": [
-        "Reviewed local auth/webhook/scope/data/SSRF and stored-role fixes are committed. SEC-RBAC-06 direct10fail/27pass and mobile-confirm4fail/6pass causal REDs plus SUB-MOBILE-01 subscription2fail/2pass are fixed in reviewed272794a4: combined104passed156.03s/capture160.365553s exit0/untruncated, zero surviving disposable fixture DBs. Five direct gates, common pending-target write admission before any executor and actual review_replies capability prefix are proven locally; no real model/provider effect. Durable social intent/reconciliation fixes duplicate-send risk; reviewed13c1f36a binds approved target/account/media descriptor, main252pass/9viewer skips plus separateviewer9pass/0skip. No combined261aggregate, immutable external object-byte or exactly-once guarantee. Historical revocation, wider platform role/tool matrices, final aggregate/image and operational gates remain. No audit deployment."
+        "Read-only reconciliation at fbbdec6b found no listed confirmed P0 and no remaining confirmed unfixed local source defect among existing P1 entries; this is a bounded backlog review, not a new universal security verdict. Historical credential revocation, final image/supply-chain proof, release/provider rebind and authorized recovery remain open P1 gates. Wider role/tool matrices are investigations, not reproduced bugs. No production change or external send is authorized by local fixes."
+      ],
+      "historical_checkpoint": {
+        "status": "FAIL",
+        "gaps": [
+          "Reviewed local auth/webhook/scope/data/SSRF and stored-role fixes are committed. SEC-RBAC-06 direct10fail/27pass and mobile-confirm4fail/6pass causal REDs plus SUB-MOBILE-01 subscription2fail/2pass are fixed in reviewed272794a4: combined104passed156.03s/capture160.365553s exit0/untruncated, zero surviving disposable fixture DBs. Five direct gates, common pending-target write admission before any executor and actual review_replies capability prefix are proven locally; no real model/provider effect. Durable social intent/reconciliation fixes duplicate-send risk; reviewed13c1f36a binds approved target/account/media descriptor, main252pass/9viewer skips plus separateviewer9pass/0skip. No combined261aggregate, immutable external object-byte or exactly-once guarantee. Historical revocation, wider platform role/tool matrices, final aggregate/image and operational gates remain. No audit deployment."
+        ],
+        "scope_notes": [],
+        "note": "Preserved pre-reconciliation checkpoint; not current-source acceptance."
+      },
+      "scope_notes": [
+        "Current assessment applies to the source/evidence checkpoint identified at the top of this ledger. Historical details are preserved separately and in the original raw captures."
       ]
     },
     {
       "id": "AC3",
       "text": "Frontend checks and real user flows",
-      "status": "PASS",
+      "status": "FAIL",
       "proof": [
         "raw/baseline-frontend-install.json",
         "raw/baseline-frontend-lint.json",
@@ -115,18 +154,34 @@
         "raw/frontend-perf-272-retry-command.json",
         "raw/staging-runtime-errors-red.json (8fail/7pass, extracted original collector)",
         "raw/staging-runtime-errors-green.json (21pure unit tests, no browser)",
-        "raw/staging-runtime-errors-quality.json (scoped strictTS/lint)"
+        "raw/staging-runtime-errors-quality.json (scoped strictTS/lint)",
+        "raw/frontend-current-unit-compatible-20260920.json",
+        "raw/frontend-current-typecheck-20260920.json",
+        "raw/frontend-current-lint-20260920.json",
+        "raw/frontend-current-build-compatible-20260920.json",
+        "raw/frontend-current-integrity-20260920.json",
+        "raw/backend-full-v1-mixed-frontend-test-20260920.json"
       ],
-      "gaps": [],
+      "gaps": [
+        "The frozen frontend tree 0af96cd4614e0a1c5b658339b0a73d1a7bec9e46 passes 642 units/129 files, TypeScript, lint (one warning), both builds and artifact integrity. Dependencies were reused with parity checks, not freshly installed in this run. Eight corrective browser/TypeScript-gate cases pass. The full 117-case real-API matrix remains historical and does not certify the later frontend/backend combination; a current real-API/adverse-state verification is still required. Current FAIL means criterion not fully established, not a newly reproduced frontend defect."
+      ],
       "scope_notes": [
-        "Current272native backend + exact unchanged built frontend passes117/117 realAPI desktop/laptop/mobile cases, capture261.027621s exit0/untruncated. FreshDB5768975 removed/reaped; first114pass3maps-env failures retained withDB5761996. Only3compiled-runner cases remain separately historical204frontend/f0ccbackend120/120; no current immutable-image/compiled claim. At that run the owner review/finance console filter hardcoded18000, so no global clean-console guarantee on dynamicport. TEST-E2E-04 now passes21pure collector tests and scoped strictTS/lint with independent review; browser rerun remains pending. Exact3d frontend stages pass591unit/126files,72mockbrowser,fullTS,lint0errors/1warning,bothbuilds; original captureexit1/562.759479s wrongfinal artifactpath remains, separate artifactproofexit0/13.475289s verifies699sourceblobs/257artifacts/11+3HTMLrefs. Frontend60/60 exploratory observations now pass with zero page errors/overflow on historicalf0ccbackend; current-image/compiled runtime remains a separate release gate.",
-        "Independent exact-criterion review confirms clean install remains applicable (package manifests/lock unchanged), source-matched frontend stages and current native117 cover critical desktop/laptop/mobile flows, tenant negatives, tested offline/stale/error/empty/slow/late states and Axe/contrast/keyboard/focus. Historical three compiled cases and original fixed-port console filter limits are retained despite the later unit-proven harness fix; no current immutable image or universal accessibility/absence-of-console-errors claim."
-      ]
+        "Current assessment applies to the source/evidence checkpoint identified at the top of this ledger. Historical details are preserved separately and in the original raw captures."
+      ],
+      "historical_checkpoint": {
+        "status": "PASS",
+        "gaps": [],
+        "scope_notes": [
+          "Current272native backend + exact unchanged built frontend passes117/117 realAPI desktop/laptop/mobile cases, capture261.027621s exit0/untruncated. FreshDB5768975 removed/reaped; first114pass3maps-env failures retained withDB5761996. Only3compiled-runner cases remain separately historical204frontend/f0ccbackend120/120; no current immutable-image/compiled claim. At that run the owner review/finance console filter hardcoded18000, so no global clean-console guarantee on dynamicport. TEST-E2E-04 now passes21pure collector tests and scoped strictTS/lint with independent review; browser rerun remains pending. Exact3d frontend stages pass591unit/126files,72mockbrowser,fullTS,lint0errors/1warning,bothbuilds; original captureexit1/562.759479s wrongfinal artifactpath remains, separate artifactproofexit0/13.475289s verifies699sourceblobs/257artifacts/11+3HTMLrefs. Frontend60/60 exploratory observations now pass with zero page errors/overflow on historicalf0ccbackend; current-image/compiled runtime remains a separate release gate.",
+          "Independent exact-criterion review confirms clean install remains applicable (package manifests/lock unchanged), source-matched frontend stages and current native117 cover critical desktop/laptop/mobile flows, tenant negatives, tested offline/stale/error/empty/slow/late states and Axe/contrast/keyboard/focus. Historical three compiled cases and original fixed-port console filter limits are retained despite the later unit-proven harness fix; no current immutable image or universal accessibility/absence-of-console-errors claim."
+        ],
+        "note": "Preserved pre-reconciliation checkpoint; not current-source acceptance."
+      }
     },
     {
       "id": "AC4",
       "text": "Backend and database integration suite",
-      "status": "PASS",
+      "status": "FAIL",
       "proof": [
         "raw/baseline-backend-tests.json",
         "docs/production-readiness/COMMANDS.md",
@@ -161,12 +216,31 @@
         "raw/full-backend-3dca5fda-retry.json",
         "raw/full-backend-272794a4.json",
         "raw/operator-mobile-confirm-green-3dca5fda.json",
-        "raw/python-f821-272794a4.json"
+        "raw/python-f821-272794a4.json",
+        "raw/backend-full-v1-migrate-20260920.json",
+        "raw/backend-full-v1-collect-20260920.json",
+        "raw/backend-full-v1-full-20260920.json",
+        "raw/backend-full-v1-corrective-compose-creator-20260920.json",
+        "raw/backend-full-v1-corrective-guard-contract-20260920.json",
+        "raw/backend-full-v1-mixed-frontend-test-20260920.json",
+        "raw/backend-full-v1-post-full-native-20260920.json",
+        "raw/backend-full-post-source-audit-20260920.json",
+        "raw/backend-full-post-process-20260920.json"
       ],
-      "gaps": [],
+      "gaps": [
+        "Frozen source 5cc7c0cd migrated and collected 4910 cases. The single full capture remains exit 1: 4886 passed, 9 failed, 1 error, 14 skipped, 7 warnings. Independently reconciled corrective slices cover 4903 distinct non-provider cases across runs; seven live-provider cases remain intentionally skipped. This is not one full-green run. V2 runner preparation was policy-denied under the earlier read-only restriction; a separate user permission request is pending. The static-only guard/probe preparation is not test execution."
+      ],
       "scope_notes": [
-        "Exact272794a4 main suite:4728passed/7intentional live-provider skips/6warnings in656.63s; capture669.910516s exit0/not timed out/untruncated. Fresh migration and tests rc0,stagecompletevalidtrue. Fresh DB readiness_full_test_272794a4_882526c8cf0e OID5025701 ownerreadiness_test_owner removed after normal success; independent catalog lookup confirmed absence. Independent scoped reviewer confirms AC4 local synthetic auth/concurrency/replay/timeout/partial-failure contracts met. Six ChatGPT and one Yandex live tests intentionally excluded: no live-provider/production or exhaustive future-matrix claim. Earlier failed-run DBs and captures remain preserved."
-      ]
+        "Current assessment applies to the source/evidence checkpoint identified at the top of this ledger. Historical details are preserved separately and in the original raw captures."
+      ],
+      "historical_checkpoint": {
+        "status": "PASS",
+        "gaps": [],
+        "scope_notes": [
+          "Exact272794a4 main suite:4728passed/7intentional live-provider skips/6warnings in656.63s; capture669.910516s exit0/not timed out/untruncated. Fresh migration and tests rc0,stagecompletevalidtrue. Fresh DB readiness_full_test_272794a4_882526c8cf0e OID5025701 ownerreadiness_test_owner removed after normal success; independent catalog lookup confirmed absence. Independent scoped reviewer confirms AC4 local synthetic auth/concurrency/replay/timeout/partial-failure contracts met. Six ChatGPT and one Yandex live tests intentionally excluded: no live-provider/production or exhaustive future-matrix claim. Earlier failed-run DBs and captures remain preserved."
+        ],
+        "note": "Preserved pre-reconciliation checkpoint; not current-source acceptance."
+      }
     },
     {
       "id": "AC5",
@@ -193,10 +267,24 @@
         "raw/docker-build-f0cc182a.json",
         "raw/docker-build-f0cc182a-retry.json",
         "raw/docker-smoke-f0cc182a.json",
-        "raw/compiled-update-f0cc182a.json"
+        "raw/compiled-update-f0cc182a.json",
+        "raw/backend-full-v1-migrate-20260920.json",
+        "raw/backend-full-v1-native-preflight5-20260920.json",
+        "raw/backend-full-v1-post-full-native-20260920.json"
       ],
       "gaps": [
-        "Historical cleanf0cc ARM64 Node22 bothfrontend image build55.386s; initial PATH/helper failure retained. Exactimage b43efb29cbd176d75c97cfa769adbebe7e7e20a1d467cd1c0a561538305cc93d,1070645450bytes; nonroot/read-only/offlineChromium153,pypdf6.16.1,pipcheck smoke3.721s passes. Onlyownedstagingapp recreated preservingPG/Redis/runner/ingress. Full synthetic restore and earlier10preview/5compiledrun pass. Current272native117browser now passes but cannot substitute for a current canonical image. Current build is blocked by local Mac headroom; AMD64 is an additional target-specific check, not a universal AC5 requirement. Release/supply-chain proof remains."
+        "Fresh isolated PostgreSQL 16 migration and current native integration evidence exist for source 5cc7c0cd. The canonical current-source image, browser-worker runtime, signal/recovery and current restore rehearsal remain unverified. Historical image/rollback/restore captures remain scoped to their original revisions. Latest inspected free disk is about 5.80 GiB, below the unchanged 10 GiB image floor; synthetic restore preparation also awaits its separate permission. No current image or production-backup proof follows from the native suite."
+      ],
+      "historical_checkpoint": {
+        "status": "FAIL",
+        "gaps": [
+          "Historical cleanf0cc ARM64 Node22 bothfrontend image build55.386s; initial PATH/helper failure retained. Exactimage b43efb29cbd176d75c97cfa769adbebe7e7e20a1d467cd1c0a561538305cc93d,1070645450bytes; nonroot/read-only/offlineChromium153,pypdf6.16.1,pipcheck smoke3.721s passes. Onlyownedstagingapp recreated preservingPG/Redis/runner/ingress. Full synthetic restore and earlier10preview/5compiledrun pass. Current272native117browser now passes but cannot substitute for a current canonical image. Current build is blocked by local Mac headroom; AMD64 is an additional target-specific check, not a universal AC5 requirement. Release/supply-chain proof remains."
+        ],
+        "scope_notes": [],
+        "note": "Preserved pre-reconciliation checkpoint; not current-source acceptance."
+      },
+      "scope_notes": [
+        "Current assessment applies to the source/evidence checkpoint identified at the top of this ledger. Historical details are preserved separately and in the original raw captures."
       ]
     },
     {
@@ -228,10 +316,26 @@
         "raw/secret-delta-24e-to-34618037.json",
         "raw/trivy-vulnerability-db.json",
         "raw/docker-base-manifest-platforms-20260918.json",
-        "raw/docker-base-pins-root-20260918.json"
+        "raw/docker-base-pins-root-20260918.json",
+        "raw/backend-deps-v2-artifact-lock-20260920.json",
+        "raw/backend-deps-v2-inventory-parity-20260920.json",
+        "raw/social-media-secret-delta-20260920.json",
+        "raw/backend-full-staged-secret-scan-20260920.json",
+        "raw/backend-full-handoff-secret-scan-20260920.json"
       ],
       "gaps": [
-        "Finalf0cc tracked-source98vs94baseline candidates:4delta prose false positives; post-remediation28commit delta1prose false positive. Historical privileged exposure/revocation unknown. Exactimmutableb43 strict PyPI audit checked104Python distributions/0skips,12records/6unique advisories only in pip24.0. Reviewed65ca8836 pins26.2;2e121912 app101constraints plus3Docker pins pass11static checks, image/version/re-audit pending. PyMuPDF license confirmation and finalimage/log/OS/native/npm/license scans pending. Real runner/policy/finance hostile-row test24e0d4cd independently passes1/0.79s with exact root capture2.743835s, no row-supplied approval/tenant/capability, foreign403/no effects and owner target-only writes, no providers/SQL errors. Broader AI/tool matrix remains; fixture omissions were not product bugs."
+        "Latest scoped source/documentation secret scans pass; dependency parity covers 133 private macOS distributions. Neither substitutes for current resolved vulnerability/license triage or current image/layer/log/OS/native/bot scans. Historical privileged credential revocation and PyMuPDF license basis await owner confirmation. No live credential test, key rotation or history rewrite is authorized. The threat-model and targeted AI/role/SSRF controls remain bounded evidence, not universal tool isolation proof."
+      ],
+      "historical_checkpoint": {
+        "status": "FAIL",
+        "gaps": [
+          "Finalf0cc tracked-source98vs94baseline candidates:4delta prose false positives; post-remediation28commit delta1prose false positive. Historical privileged exposure/revocation unknown. Exactimmutableb43 strict PyPI audit checked104Python distributions/0skips,12records/6unique advisories only in pip24.0. Reviewed65ca8836 pins26.2;2e121912 app101constraints plus3Docker pins pass11static checks, image/version/re-audit pending. PyMuPDF license confirmation and finalimage/log/OS/native/npm/license scans pending. Real runner/policy/finance hostile-row test24e0d4cd independently passes1/0.79s with exact root capture2.743835s, no row-supplied approval/tenant/capability, foreign403/no effects and owner target-only writes, no providers/SQL errors. Broader AI/tool matrix remains; fixture omissions were not product bugs."
+        ],
+        "scope_notes": [],
+        "note": "Preserved pre-reconciliation checkpoint; not current-source acceptance."
+      },
+      "scope_notes": [
+        "Current assessment applies to the source/evidence checkpoint identified at the top of this ledger. Historical details are preserved separately and in the original raw captures."
       ]
     },
     {
@@ -267,10 +371,22 @@
         "raw/frontend-perf-272-command.json",
         "raw/frontend-perf-272-retry.json",
         "raw/frontend-perf-272-retry-command.json",
-        "raw/journey-measure-postfix-272794a4-command.json (FAIL: outer PermissionError; incomplete comparison)"
+        "raw/journey-measure-postfix-272794a4-command.json (FAIL: outer PermissionError; incomplete comparison)",
+        "raw/journey-measure-v8-2d875357-272794a4-command.json"
       ],
       "gaps": [
-        "Independent exact-criterion review identifies missing successful auth-baseline quantiles: original302 auth fails50/50 and successful quantiles remain null. Five-flow original before/after retains700/750 versus750/750 and150/150invariants each, no general speedup. Supplemental paired2d875357-to-272794a4 attempt failed at2026-09-18T16:05:23Z with outer PermissionError errno1, no final inner JSON. Only31 child samples exist (10warmups and21serial); incomplete comparison and residual synthetic DB5999213 are preserved, not accepted performance evidence. Supervisor cause remains unproven. Other bounded evidence remains valid: sustained HTTP240/240; frontend60/60 historical-backend observations; business GET9reads0DDL versus prior9reads3DDL. Production/large-data/queue capacity is a residual limitation, not an automatic AC7 failure."
+        "The previously missing paired working-reference comparison is complete: 2d875357 versus 272794a4, 750 measured requests and 150 invariants per reference, five journey distributions; independently reviewed with no general speedup claim. Earlier interruption and original authentication-baseline failures remain historical. Bounded HTTP and frontend observations also exist. The ledger no longer treats that paired comparison as missing; remaining closure is an independent assessment of coverage/equivalence for later changed paths and material bottlenecks. These small synthetic measurements do not establish production or queue capacity."
+      ],
+      "historical_checkpoint": {
+        "status": "FAIL",
+        "gaps": [
+          "Independent exact-criterion review identifies missing successful auth-baseline quantiles: original302 auth fails50/50 and successful quantiles remain null. Five-flow original before/after retains700/750 versus750/750 and150/150invariants each, no general speedup. Supplemental paired2d875357-to-272794a4 attempt failed at2026-09-18T16:05:23Z with outer PermissionError errno1, no final inner JSON. Only31 child samples exist (10warmups and21serial); incomplete comparison and residual synthetic DB5999213 are preserved, not accepted performance evidence. Supervisor cause remains unproven. Other bounded evidence remains valid: sustained HTTP240/240; frontend60/60 historical-backend observations; business GET9reads0DDL versus prior9reads3DDL. Production/large-data/queue capacity is a residual limitation, not an automatic AC7 failure."
+        ],
+        "scope_notes": [],
+        "note": "Preserved pre-reconciliation checkpoint; not current-source acceptance."
+      },
+      "scope_notes": [
+        "Current assessment applies to the source/evidence checkpoint identified at the top of this ledger. Historical details are preserved separately and in the original raw captures."
       ]
     },
     {
@@ -290,10 +406,23 @@
         "docs/production-readiness/RELEASE_PROFILE.md",
         "3ac13d87 isolated synthetic real-API CI job",
         "raw/ci-real-api-contract-root.json",
-        "docs/production-readiness/REAL_API_CI.md"
+        "docs/production-readiness/REAL_API_CI.md",
+        "raw/backend-full-v1-corrective-compose-creator-20260920.json",
+        "raw/backend-full-v1-full-20260920.json"
       ],
       "gaps": [
-        "Working operator runbook independently approved against real deploy/restore/schema-check helpers. Reviewed52292e6e /ready preserves /health and passes24nativePG/route/CLI/schema/ratchet checks9.25s (capture10.005698s), but is not in the current image or production. Reviewed a00ac558 adds opt-in base+release application digest references, no build/code binds, check-only runtime roles and explicit migrator; actual13render/startup contracts pass3.68s, capture4.301181s exit0/zero skips. Runtime release/image/rollback/data-transfer and real-API CI execution remain unproven; tagged infrastructure images unchanged. Historical maintenance is not clean release proof. Production transport/recovery requires separate authority."
+        "Current aggregate/corrective captures exercise local health/readiness, callback, migration and Compose contracts; they are not current canonical-image startup, immutable release/rollback, hosted CI execution or production recovery evidence. The documented deployment smoke includes mutating phases and must not be run as a read-only diagnostic. Exact-image verification and authorized operational rehearsal remain open; source tests do not certify deployed behavior."
+      ],
+      "historical_checkpoint": {
+        "status": "FAIL",
+        "gaps": [
+          "Working operator runbook independently approved against real deploy/restore/schema-check helpers. Reviewed52292e6e /ready preserves /health and passes24nativePG/route/CLI/schema/ratchet checks9.25s (capture10.005698s), but is not in the current image or production. Reviewed a00ac558 adds opt-in base+release application digest references, no build/code binds, check-only runtime roles and explicit migrator; actual13render/startup contracts pass3.68s, capture4.301181s exit0/zero skips. Runtime release/image/rollback/data-transfer and real-API CI execution remain unproven; tagged infrastructure images unchanged. Historical maintenance is not clean release proof. Production transport/recovery requires separate authority."
+        ],
+        "scope_notes": [],
+        "note": "Preserved pre-reconciliation checkpoint; not current-source acceptance."
+      },
+      "scope_notes": [
+        "Current assessment applies to the source/evidence checkpoint identified at the top of this ledger. Historical details are preserved separately and in the original raw captures."
       ]
     },
     {
@@ -304,10 +433,24 @@
         "/tmp/localos-readiness-staging-smoke.log historical synthetic seed and five-flow API smoke",
         "docs/production-readiness/08-partner-demo.md",
         "raw/demo-272.json (FAIL: partial view-only probe)",
-        "raw/demo-272-command.json"
+        "raw/demo-272-command.json",
+        "docs/production-readiness/HANDOFF.md",
+        "raw/demo-v2-rehearsal-20260919.md",
+        "raw/demo-rehearsal-current-ui-20260919.md"
       ],
       "gaps": [
-        "First supervised view-only probe failed exit1/154.773944s: context screenshot still loading; reviews showed seeded draft/manual-publication boundary; content marker timed out because default selection was a newer reconciliation plan. Exact synthetic read-only SQL confirms original planned item still exists; no product defect proved. Finance/partnership were not reached. Prepared-only retry explicitly selects original plan_id and waits for loaded business/map markers; no reseed/reset. No completed10–15minute rehearsal or fallback verification."
+        "Later partial synthetic rehearsals supersede the earliest Content-only attempt: lifecycle cleanup, several views, an earlier finance preview/apply/duplicate path and the corrected partnership drawer were separately observed. No complete paced 10-15 minute rehearsal with fallback is proven. Native file-picker access was denied and remains unapproved; the prepared v3 read-policy helper did not run a server/browser and pins an older frontend. Production IAB login is read-only observation, not demo proof or permission to bypass the picker."
+      ],
+      "historical_checkpoint": {
+        "status": "FAIL",
+        "gaps": [
+          "First supervised view-only probe failed exit1/154.773944s: context screenshot still loading; reviews showed seeded draft/manual-publication boundary; content marker timed out because default selection was a newer reconciliation plan. Exact synthetic read-only SQL confirms original planned item still exists; no product defect proved. Finance/partnership were not reached. Prepared-only retry explicitly selects original plan_id and waits for loaded business/map markers; no reseed/reset. No completed10–15minute rehearsal or fallback verification."
+        ],
+        "scope_notes": [],
+        "note": "Preserved pre-reconciliation checkpoint; not current-source acceptance."
+      },
+      "scope_notes": [
+        "Current assessment applies to the source/evidence checkpoint identified at the top of this ledger. Historical details are preserved separately and in the original raw captures."
       ]
     },
     {
@@ -325,12 +468,26 @@
         "docs/production-readiness/07-production-runbook.md",
         "docs/production-readiness/08-partner-demo.md",
         "docs/production-readiness/09-residual-risks.md",
-        "docs/production-readiness/10-production-readiness-scorecard.md"
+        "docs/production-readiness/10-production-readiness-scorecard.md",
+        "fbbdec6b reviewed current documentation reconciliation",
+        "docs/production-readiness/01-system-map.md",
+        "docs/production-readiness/02-audit-backlog.md",
+        "docs/production-readiness/03-security-threat-model.md",
+        "docs/production-readiness/05-ux-review.md",
+        "docs/production-readiness/06-change-log.md"
       ],
       "gaps": [],
       "scope_notes": [
-        "Independent read-only review accepts all requested00–10 reports,PROGRESS/HANDOFF/DECISIONS/COMMANDS/SECURITY, area ledger, current evidence and residual-risk register. Current4728backend/117nativebrowser/240HTTP/60frontend results are distinguished from historical failures and current-image/provider/production/demo gates. Every0–5score has evidence and a stated limitation; no averaged readiness score. PASS accepts documentation completeness/current truthfulness only; AC1/2/5/6/7/8/9/11 and overallFAIL are not waived."
-      ]
+        "All requested 00-10 reports, PROGRESS/HANDOFF/DECISIONS/COMMANDS and SECURITY exist. The current ledger now scopes historical passes and failures to their original revisions, links the current native/corrective and frontend captures, and keeps all release gates visible. Documentation PASS is not a readiness score promotion or a substitute for incomplete AC1-9/AC11. Independent read-only reconciliation review passed on 20 September; it was not a final whole-project verdict."
+      ],
+      "historical_checkpoint": {
+        "status": "PASS",
+        "gaps": [],
+        "scope_notes": [
+          "Independent read-only review accepts all requested00–10 reports,PROGRESS/HANDOFF/DECISIONS/COMMANDS/SECURITY, area ledger, current evidence and residual-risk register. Current4728backend/117nativebrowser/240HTTP/60frontend results are distinguished from historical failures and current-image/provider/production/demo gates. Every0–5score has evidence and a stated limitation; no averaged readiness score. PASS accepts documentation completeness/current truthfulness only; AC1/2/5/6/7/8/9/11 and overallFAIL are not waived."
+        ],
+        "note": "Preserved pre-reconciliation checkpoint; not current-source acceptance."
+      }
     },
     {
       "id": "AC11",
@@ -341,10 +498,24 @@
         "docs/production-readiness/FRESH_REVIEW_20260918.md",
         "docs/production-readiness/FRESH_REVIEW_272794A4.md",
         "raw/full-backend-272794a4.json",
-        "verdict.json"
+        "verdict.json",
+        "raw/backend-full-v1-full-20260920.json",
+        "docs/production-readiness/HANDOFF.md",
+        "fbbdec6b scoped seven-document independent review"
       ],
       "gaps": [
-        "Fresh fork-none whole-diff inventory/risk review of30262a5b..272794a4 covers179paths and records overallFAIL, no additional reproducedP0/P1 in stated coverage. It predates later4728backend,117nativebrowser,240HTTP and60frontend results; attributed root addenda record later scoped reviews, not a fresh reviewer reread. Earlier2f224f05 verdict.json stays immutable historical evidence. Currentimage/compiled/scans/demo and final all-DoD reconciliation remain incomplete; do not turn selected passes into overallPASS."
+        "The retained verdict.json is an immutable independent snapshot at 2f224f05, not the current verdict. Later whole-diff and scoped reviews/fixes exist, including the current aggregate/corrective evidence review, but no final all-DoD independent review with a single green current aggregate, current canonical image, scans and completed demo is proven. Keep overall FAIL and do not rewrite a historical verdict."
+      ],
+      "historical_checkpoint": {
+        "status": "FAIL",
+        "gaps": [
+          "Fresh fork-none whole-diff inventory/risk review of30262a5b..272794a4 covers179paths and records overallFAIL, no additional reproducedP0/P1 in stated coverage. It predates later4728backend,117nativebrowser,240HTTP and60frontend results; attributed root addenda record later scoped reviews, not a fresh reviewer reread. Earlier2f224f05 verdict.json stays immutable historical evidence. Currentimage/compiled/scans/demo and final all-DoD reconciliation remain incomplete; do not turn selected passes into overallPASS."
+        ],
+        "scope_notes": [],
+        "note": "Preserved pre-reconciliation checkpoint; not current-source acceptance."
+      },
+      "scope_notes": [
+        "Current assessment applies to the source/evidence checkpoint identified at the top of this ledger. Historical details are preserved separately and in the original raw captures."
       ]
     }
   ],
@@ -367,6 +538,7 @@
     "alembic_migrations/versions/20260902_add_creator_relationships_portal.py",
     "alembic_migrations/versions/20260902_add_creator_offer_distribution.py"
   ],
+  "changed_files_scope": "Historical non-exhaustive implementation inventory; use git diff 30262a5bf7b468e0a6f5a0e3d8262dbef119e075..5cc7c0cddc1df4356f23e1e6c6e0f0b68d849721 for committed source scope. Foreign worktree changes are excluded.",
   "commands_for_fresh_verifier": [
     "git status --short --branch",
     "git diff --check",
@@ -377,6 +549,7 @@
     "Goal remains active and incomplete; evidence is a checkpoint, not a production-ready verdict.",
     "Raw captures are local-only; inspect exit_code, timed_out and output scope, not the capture helper's exit code.",
     "No new production release from this audit; do not publish sensitive scan files or resolved Compose configuration.",
-    "Earlier temporary archives/scanner reports/traces/dumps were lost across host interruption; use durable repository raw captures and fresh resource identity checks."
+    "Earlier temporary archives/scanner reports/traces/dumps were lost across host interruption; use durable repository raw captures and fresh resource identity checks.",
+    "V2 local aggregate preparation and synthetic restore have separate pending permission requests after explicit safety-review denials; automatic goal continuation does not grant those permissions."
   ]
 }

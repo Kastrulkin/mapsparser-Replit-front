@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "label": "evidence-ledger-validation",
+  "captured_at": "2026-09-20T15:04:27.718470+00:00",
+  "command": [
+    "/bin/bash",
+    "scripts/proof_loop.sh",
+    "validate",
+    "production-readiness-20260917"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 81.026,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\n  \"repo_root\": \"/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\\u0412\\u0441\\u044f\\u043a\\u043e\\u0435/SEO \\u0441 \\u0420\\u0435\\u043f\\u043b\\u0438\\u0442 \\u043d\\u0430 \\u041a\\u0443\\u0440\\u0441\\u043e\\u0440\\u0435\",\n  \"task_id\": \"production-readiness-20260917\",\n  \"task_dir\": \"/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\\u0412\\u0441\\u044f\\u043a\\u043e\\u0435/SEO \\u0441 \\u0420\\u0435\\u043f\\u043b\\u0438\\u0442 \\u043d\\u0430 \\u041a\\u0443\\u0440\\u0441\\u043e\\u0440\\u0435/.agent/tasks/production-readiness-20260917\",\n  \"valid\": true,\n  \"missing_files\": [],\n  \"errors\": []\n}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}
