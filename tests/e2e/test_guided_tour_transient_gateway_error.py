@@ -18,7 +18,7 @@ def vite_app():
 def test_guided_tour_advances_and_keeps_local_progress_when_progress_save_gets_502(vite_app):
     app_url = vite_app.url
     port = vite_app.port
-    progress_puts = 0
+    progress_save_requests: list[tuple[str, str]] = []
     page_errors: list[str] = []
 
     with sync_playwright() as playwright:
@@ -35,7 +35,6 @@ def test_guided_tour_advances_and_keeps_local_progress_when_progress_save_gets_5
         page.on("pageerror", lambda error: page_errors.append(str(error)))
 
         def handle_api(route):
-            nonlocal progress_puts
             request = route.request
             path = request.url.split("/api", 1)[-1].split("?", 1)[0]
 
@@ -82,8 +81,8 @@ def test_guided_tour_advances_and_keeps_local_progress_when_progress_save_gets_5
                 return
 
             if path == "/guided-tours/roga-i-kopyta-v1/progress" and request.method == "PUT":
-                progress_puts += 1
-                if progress_puts == 2:
+                progress_save_requests.append((request.method, path))
+                if len(progress_save_requests) == 2:
                     route.fulfill(
                         status=502,
                         content_type="text/html",
@@ -112,17 +111,32 @@ def test_guided_tour_advances_and_keeps_local_progress_when_progress_save_gets_5
 
         start_button = page.get_by_role("button", name="Начать знакомство")
         expect(start_button).to_be_visible()
-        start_button.click()
+        with page.expect_response(
+            lambda response: response.request.method == "PUT"
+            and response.url.split("/api", 1)[-1].split("?", 1)[0] == "/guided-tours/roga-i-kopyta-v1/progress"
+            and response.status == 200,
+            timeout=5_000,
+        ):
+            start_button.click()
 
         step_indicator = page.get_by_text("Шаг 2 из 44", exact=True)
         expect(step_indicator).to_be_visible()
-        page.get_by_role("button", name="Дальше").click()
+        with page.expect_response(
+            lambda response: response.request.method == "PUT"
+            and response.url.split("/api", 1)[-1].split("?", 1)[0] == "/guided-tours/roga-i-kopyta-v1/progress"
+            and response.status == 502,
+            timeout=5_000,
+        ):
+            page.get_by_role("button", name="Дальше").click()
 
-        page.wait_for_timeout(100)
         rendered_step = page.get_by_text(re.compile(r"^Шаг \d+ из 44$"))
         assert not page_errors, f"Unexpected unhandled errors: {page_errors}"
         expect(rendered_step).to_have_text("Шаг 3 из 44")
         expect(page.get_by_text("Не удалось сохранить прогресс. Попробуйте ещё раз.", exact=True)).to_have_count(0)
+        assert progress_save_requests == [
+            ("PUT", "/guided-tours/roga-i-kopyta-v1/progress"),
+            ("PUT", "/guided-tours/roga-i-kopyta-v1/progress"),
+        ]
         local_progress = page.evaluate("Object.values(sessionStorage).find(value => value.includes('today-overview'))")
         assert local_progress
 

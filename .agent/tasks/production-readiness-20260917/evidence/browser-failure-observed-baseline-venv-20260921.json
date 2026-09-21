@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "label": "browser-failure-observed-baseline-venv",
+  "captured_at": "2026-09-21T12:08:56.590668+00:00",
+  "command": [
+    "venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/e2e/test_guided_tour_transient_gateway_error.py",
+    "tests/e2e/test_telegram_mini_app_operator_error.py"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin x86_64",
+  "duration_ms": 64222.13,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "E.                                                                       [100%]\n==================================== ERRORS ====================================\n_ ERROR at setup of test_guided_tour_advances_and_keeps_local_progress_when_progress_save_gets_502 _\n\n    @pytest.fixture(scope=\"module\")\n    def vite_app():\n        app = IsolatedViteApp(\"/dashboard/operator\")\n        try:\n>           app.start()\n\ntests/e2e/test_guided_tour_transient_gateway_error.py:12: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\nself = <tests.e2e.vite_harness.IsolatedViteApp object at 0x10ec88b90>\n\n    def start(self) -> None:\n        _require_frontend_dependencies()\n        self.port = _available_loopback_port()\n        self.url = f\"http://127.0.0.1:{self.port}{self.path}\"\n        self._diagnostics = tempfile.TemporaryFile(mode=\"w+t\", encoding=\"utf-8\")\n        try:\n            self._process = subprocess.Popen(\n                [\n                    \"npm\", \"--prefix\", \"frontend\", \"run\", \"dev\", \"--\",\n                    \"--host\", \"127.0.0.1\", \"--port\", str(self.port), \"--strictPort\",\n                ],\n                cwd=REPO_ROOT,\n                stdout=self._diagnostics,\n                stderr=subprocess.STDOUT,\n                start_new_session=True,\n            )\n            deadline = time.monotonic() + 15\n            while time.monotonic() < deadline:\n                exit_code = self._process.poll()\n                if exit_code is not None:\n                    detail = self._startup_diagnostics()\n                    raise RuntimeError(f\"Vite exited before readiness (exit code {exit_code}): {detail}\")\n                try:\n                    response = urlopen(self.url, timeout=0.25)\n                    try:\n                        ready = response.status == 200\n                    finally:\n                        response.close()\n                    if ready:\n                        exit_code = self._process.poll()\n                        if exit_code is not None:\n                            detail = self._startup_diagnostics()\n                            raise RuntimeError(f\"Vite exited after readiness response (exit code {exit_code}): {detail}\")\n                        return\n                except OSError:\n                    time.sleep(0.1)\n            detail = self._startup_diagnostics()\n>           raise AssertionError(f\"Vite did not become ready on its isolated loopback port: {detail}\")\nE           AssertionError: Vite did not become ready on its isolated loopback port: > vite_react_shadcn_ts@0.0.0 dev\nE           > vite --host 127.0.0.1 --port 49674 --strictPort\nE           \nE           \nE             VITE v7.3.5  ready in 1815 ms\nE           \nE             \u279c  Local:   http://127.0.0.1:49674/\n\ntests/e2e/vite_harness.py:87: AssertionError\n=========================== short test summary info ============================\nERROR tests/e2e/test_guided_tour_transient_gateway_error.py::test_guided_tour_advances_and_keeps_local_progress_when_progress_save_gets_502\n1 passed, 1 error in 53.24s\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

@@ -11,7 +11,13 @@ def test_operator_hides_raw_json_parse_errors_from_the_user():
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             page = browser.new_page(viewport={"width": 393, "height": 852})
+            operator_chat_requests: list[tuple[str, str]] = []
+
             def handle_api(route):
+                request = route.request
+                path = request.url.split("/api", 1)[-1].split("?", 1)[0]
+                if request.method == "POST" and path == "/operator/chat":
+                    operator_chat_requests.append((request.method, path))
                 route.fulfill(
                     status=200,
                     content_type="text/html",
@@ -25,6 +31,7 @@ def test_operator_hides_raw_json_parse_errors_from_the_user():
 
             expect(page.get_by_text("Сервис временно вернул некорректный ответ. Попробуйте ещё раз.")).to_be_visible()
             expect(page.get_by_text("Unexpected token", exact=False)).to_have_count(0)
+            assert operator_chat_requests == [("POST", "/operator/chat")]
             browser.close()
     finally:
         app.stop()
