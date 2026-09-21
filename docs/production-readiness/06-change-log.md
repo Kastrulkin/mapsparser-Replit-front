@@ -1,5 +1,12 @@
 # Production-readiness change log
 
+## Current offline aggregate — 22 September, parent99a407bf
+
+Evidence-only package runs the explicit current-source snapshot across5487
+collected scenarios under OS denial.4347pass/48fail/1092skip, not green. It
+locates33failures at a second permanent test hook and preserves11capability
+denials plus4other checks. No app/runtime or production changes in this package.
+
 ## Image candidate mapping — 22 September, parente44bd538
 
 Audit-only streaming mapper binds all219 candidates to historical members/config;

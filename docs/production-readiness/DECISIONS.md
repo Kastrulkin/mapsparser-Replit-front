@@ -1,5 +1,15 @@
 # Readiness decisions
 
+## D-110 — Use the whole current offline run as a diagnostic, not false acceptance
+
+Retain all setup failures, skips and denied capabilities in the strict full result.
+Do not attribute OS isolation failures to the product or subtract them to claim
+green. Verify dynamic parameter IDs only through bounded payload equivalence,
+retaining the original raw mismatch. Safe exception class/errno/frame coordinates
+let the next fix target a demonstrated cause without storing private diagnostics.
+Replace test-global permanent guards only with equally restrictive scoped guards
+and prove cleanup causally; keep existing foreign changes separate.
+
 ## D-109 — Reuse secret triage only with exact byte identity
 
 Map each redacted image candidate to its exact historical member before assigning

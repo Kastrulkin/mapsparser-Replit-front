@@ -1,5 +1,38 @@
 # Readiness handoff
 
+## Latest checkpoint — 22 September, full current offline NONPASS
+
+Parent99a407bf on codex/production-readiness-20260917. Mapper package committed
+after independent review and strict staged scan:223243bytes,diff1b82b40d,0findings,
+782.246ms; normal commit438.033ms. Same13foreignpaths are not accepted/staged.
+
+One full run is now terminal: /private/tmp/localos-current-full-aB5f/evidence/full-v9.json.
+Archived in task current-full-offline-20260922 with exact c6d2091d runner/policy/
+freeze/nodes/controls. Snapshotbasee44bd538 +only parser/author test overlays.
+5487unique,4347callpass44callfail4setupfail1092skip14subtestpass,0collectionerror;
+67.139s child/70.154s wrapper, no truncation/timeout, source6164files unchanged.
+Do not replay this full attempt. It is NONPASS, not integration or readiness.
+Two ZIPtimestamp parameter IDs differ only in validated metadata; keep rawfail.
+
+Nearest code fix: tests/test_legacy_parser_leaf_diagnostics.py:185 permanent
+audit hook causes33downstreamfailures. Dedicated leaf_guard_fix owns this file
+and a new regression only; no staging until causal proof+independent review.
+Other families:11OS capability denials;2Vite;1dist;1ratchet. Original parser4,
+childguard1,author1 all pass in this full collection. No new broad coverage credit.
+
+Image predicate v2 also terminal37.381s at private
+/private/tmp/localos-readiness-20260921.hfLYPi/native/evidence/image-private-key-predicates-v2.json;
+all17identities/6members bound, structural observations only, triage review pending.
+Do not repeat its Docker export. No actual key values saved or sent.
+
+Read-only continuation:
+```sh
+jq '{status,nonpass_reasons,duration_seconds}' .agent/tasks/production-readiness-20260917/evidence/current-full-offline-20260922/full-v9.json
+git status --short
+```
+Whole goal ACTIVE/FAIL. Disk about13GiB. Cleanup COMPLETE, allcurrentvolumes/
+containers preserved; no production/existing DB/provider changes, push or deploy.
+
 ## Latest checkpoint — 22 September, mapped image evidence
 
 Parent e44bd538ecf6ce19012df310a36f818915205077, branch

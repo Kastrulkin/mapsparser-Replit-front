@@ -1,5 +1,17 @@
 # Verified commands and evidence
 
+## Current full offline v9 — 22 September
+
+Named tmux audit-current-full-v9 executed nativevenv Python -B
+/private/tmp/localos-current-full-aB5f/run_current_full_v9.py full. Exact source
+c6d2091d is archived; immutablev9 controlPASS2.749s precedes onefullrun. Full
+argv/clean environment/OS policy are in the archived runner and capture.
+5487nodes,4347pass/48fail/1092skip,14subtestpass,67.139s child70.154s wrapper,
+exit1, no truncation; two metadata-onlyZIPtimestamp IDdifferences verified.
+Strict outcome remains NONPASS. All6164files match identifiedbase+2overlays.
+Do not rerun the exclusive attempt or use oldv5/v7worker helpers. Full/source
+bindings, controls and seven-file manifest are in current-full-offline-20260922.
+
 ## Image mapping and source-triage binding — 22 September
 
 Named tmux audit-image-map-v1 ran support/image_candidate_map_hflypi.py --attempt

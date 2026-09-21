@@ -1,5 +1,23 @@
 # Production-readiness progress
 
+## Latest checkpoint — 22 September, current offline aggregate complete
+
+- [x] Explicit e44bd538+two-test-overlays whole offline run:5487unique nodes,
+  4347callpass,44callfail,4setupfail,1092skip,14additional passing subtests,
+  zero collection errors. Child67.139s/wrapper70.154s, exit1: NONPASS.
+- [x] Independently verified6164-file snapshot and unchanged post-run manifest;
+  all six earlier scoped correction cases pass. Two raw node IDs vary only by
+  validated DOCX/XLSX ZIP timestamps; original strict nonpass remains preserved.
+- [x] Failure breakdown:33another permanent test hook,11intentional capability
+  denials,2Vite prerequisites,1dist check,1module ratchet. No false all-green claim.
+- [ ] Fix tests/test_legacy_parser_leaf_diagnostics.py scoped isolation with causal
+  regression; retain all13foreign paths. Integration/provider/performance/browser,
+  security/history/image closure, CI/demo/final whole-diff review still remain.
+
+Mapper package locally committed99a407bf: strict223243-byte staged scan clean
+782.246ms; commit438.033ms. No push/deploy. Full report is task
+`current-full-offline-results-20260922.md`. Original goal ACTIVE/FAIL.
+
 ## Latest checkpoint — 22 September, image candidates mapped
 
 - [x] Pinned image mapping completes in 37.123s: all219 candidates,20layers,
