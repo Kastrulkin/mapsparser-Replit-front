@@ -1,5 +1,45 @@
 # Verified commands and evidence
 
+## Selected-agent requests — 21 September, parentb9cb7dea
+
+Task `evidence/agent-requests-*-20260921.json` captures retain exact commands,
+cwd, exit, timings and output. Long commands used named tmux sessions; managed
+configs disable env-file reads. Final quality/build/full run sequentially with
+frozen source checks and a2GiB free-space guard before/after each stage.
+
+| Capture suffix | Actual result | Duration ms |
+| --- | --- | ---: |
+| red |90s timeout, no result: fresh context object caused harness render loop |90018.650|
+| causal-red |5fail/3pass plus2harness errors from unexposed callback; not final proof |11738.462|
+| verified-red |Corrected8cases:6assertion failures/2pass |12890.634|
+| final-baseline |Immutable parent9cases:6fail/3pass |7037.289|
+| green |Intermediate workspace,9request+5schedule cases:14pass |10074.145|
+| quality |Intermediate workspace TS/lint pass, one existing warning |65941.670|
+| review-baseline |Final10cases on immutable parent:7fail/3pass |5926.484|
+| review-green |Final workspace,10request+5schedule:15pass |7686.926|
+| quality-final |Both TS projects/full lint pass; one existing auth_new.ts115 warning; wrapper copy guard pass |48550.741|
+| build |Fresh private Vite build passes |14622.934|
+| integrity |199reachable JS files verified |205.322|
+| full-unit |824tests/139files pass,321.36s Vitest |322609.470|
+| precommit |28owned files/273431staged bytes,19hashes/12captures, strict staged scan and original records pass |5732.813|
+
+Only the first capture timed out; none is truncated. Its verified orphan worker
+was stopped once after confirming exact PID/process-group ownership, not by
+killing other node/tmux jobs. Final focused stderr retains controlled
+`Error: old A failure`; no test exception is suppressed. Full-suite fixture/
+jsdom/router diagnostics are not a clean-console proof. Build retains four
+known dependency PURE-annotation warnings and the private outDir notice.
+The copy script checks the page wrapper, not all workspace text.
+
+Final manifest binds19source/config/dependency hashes and12capture digests.
+Primary final hashes were verified by the sequential runner at each stage.
+This is local frontend acceptance only; no native DB/provider/browser/Docker
+or production acceptance is implied.
+
+The final package adds the precommit capture and this reconciliation (29files);
+its exact index/source/capture/secret checks are repeated before committing.
+The recorded28-file result is not relabeled as a29-file scan.
+
 ## Schedule settings — 21 September, parentbd487501
 
 Task `evidence/agent-schedule-*-20260921.json` captures include exact command,

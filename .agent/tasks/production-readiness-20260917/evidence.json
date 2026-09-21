@@ -2,6 +2,25 @@
   "task_id": "production-readiness-20260917",
   "overall_status": "FAIL",
   "checkpoint": {
+    "subsequent_selected_agent_request_scope": {
+      "parent_commit": "b9cb7dea2b3fcf651a976e64a6e986b306bf9ca9",
+      "finding": "UX-AGENT-REQUEST-SCOPE-01",
+      "scope": "Synchronous selected business/employee ref, per-key detail/review latest revisions and monotonic scope generation; detail payload identity checked before cache; primary state/error/review requires selected identity. Same-id no-op, same-event select+load, functional run-tracking adapter and derived-fallback review clearing retained.",
+      "proof": [
+        "evidence/agent-requests-notes-20260921.md",
+        "evidence/agent-requests-manifest-20260921.json",
+        "evidence/agent-requests-review-baseline-20260921.json",
+        "evidence/agent-requests-review-green-20260921.json",
+        "evidence/agent-requests-quality-final-20260921.json",
+        "evidence/agent-requests-build-20260921.json",
+        "evidence/agent-requests-integrity-20260921.json",
+        "evidence/agent-requests-full-unit-20260921.json",
+        "evidence/local-disk-reconciliation-20260921.md"
+      ],
+      "result": "Final10cases:7parent failures/3positive controls; current15pass including5schedule. Full824/139 passes321.36s/322609.470ms; TS/lint(one existing warning)/build/199-JS integrity pass.19source hashes/12capture digests; independent bounded review ACCEPT.",
+      "provenance": "First capture timeout and second capture harness errors retained, not causal product proof. Subsequent8/9case captures refer to their own intermediate bytes. Final10case immutable-parent Vite load hook validates source hash and logs exact test hash; no working-source reversal. Three primary file hashes checked before/after each final sequential quality/build/full stage.",
+      "limits": "Mocked view/API/approval POST/run tracking; no deployed or full-tenant claim. Separate list/prefetch/integration/source/run-completion races remain. Original AC/verdict/whole FAIL preserved. Concurrent foreign work excluded, not reverted. Disk4176000KiB below10GiB image floor; native aggregate/restore preparation still denied pending renewed authority. No production/DB/schema/provider/Docker/cleanup/push/deploy."
+    },
     "subsequent_authenticated_ui_schedule_hydration": {
       "parent_commit": "bd487501dd22733f92fa5cce80766ead60a554ec",
       "finding": "UX-AGENT-SCHEDULE-01",

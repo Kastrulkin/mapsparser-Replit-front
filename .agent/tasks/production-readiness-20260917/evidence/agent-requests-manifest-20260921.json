@@ -1,0 +1,236 @@
+{
+  "schema_version": 1,
+  "finding": "UX-AGENT-REQUEST-SCOPE-01",
+  "diagnosis": "FIX_PROVEN (local ten-case selected detail/review request contract)",
+  "parent_commit": "b9cb7dea2b3fcf651a976e64a6e986b306bf9ca9",
+  "source_hashes": [
+    {
+      "path": "frontend/src/pages/dashboard/AgentBlueprintsWorkspace.tsx",
+      "sha256": "7c213391643036744d5907080b9cdaf05ab34814ad87e78f7d97a0e5a1862ed3"
+    },
+    {
+      "path": "frontend/src/pages/dashboard/AgentBlueprintsWorkspace.requests.test.tsx",
+      "sha256": "20e70b115884b4adadc1dc65b6ace8dc6adf097185b1f33c468d777d7f634393"
+    },
+    {
+      "path": "frontend/src/pages/dashboard/AgentBlueprintsWorkspace.schedule.test.tsx",
+      "sha256": "b3b544bca2cd80e157974f45ea56c1238afa838755b393e5f6c175988c8c79e5"
+    },
+    {
+      "path": "frontend/src/pages/dashboard/agents/employee.tsx",
+      "sha256": "bda37826330d7092c1294615f66e56be355b5137a39f4e5bf6e3149212d9c3c2"
+    },
+    {
+      "path": "frontend/src/pages/dashboard/agents/view.tsx",
+      "sha256": "b8aa85143a3ec6fa5aaf66e868a436f6109bd9f150c7ef3c2f53abf98f00b05b"
+    },
+    {
+      "path": "frontend/src/pages/dashboard/agents/model.ts",
+      "sha256": "3ce298644e6d44074425cf651e2c56a9f3d590e838bdf9328339409a6d252b98"
+    },
+    {
+      "path": "frontend/src/pages/dashboard/agents/types.ts",
+      "sha256": "977a401d0d6b98473b37ee9ea6fc107d63dac53a0f6ec5842d020305bcf1201d"
+    },
+    {
+      "path": "frontend/src/pages/dashboard/agents/useAgentRunTracking.ts",
+      "sha256": "01e4a3f372774c23dc58cc3a55c31b5ea2e8b1add55a5fdfdbb46ab2862bb3cd"
+    },
+    {
+      "path": "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+      "sha256": "5676bb21c197bd83af7ac017a479f6ae0d69803c2396b454403b1ad17b623bf3"
+    },
+    {
+      "path": "frontend/src/components/DashboardLayout.tsx",
+      "sha256": "fcbcd5bf13f82b2069a2348aa7a29be9057dd894e88657ef25eaa534a5f1f9b0"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/support/agent_requests_baseline_vitest.config.mjs",
+      "sha256": "5453edc9c038980cf01128d2f92a129bc2c969bad2147a24ad000e657ad0dea1"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/support/managed_growth_vitest.config.mjs",
+      "sha256": "8d3b4c0cdf9780b91b1b6cb30deb897f40b621c50634b846938264b4a3f91148"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/support/managed_growth_build.config.mjs",
+      "sha256": "bfd4522902bbd6eb96c959bb23d5f6220b23b5022bee118509c8caa0d86e6892"
+    },
+    {
+      "path": "frontend/src/test/setup.ts",
+      "sha256": "69a8b4154ed580dbd502bb31ac1fecc4217bbb1c4211630a3880cf5dba69f3e3"
+    },
+    {
+      "path": "frontend/vite.config.ts",
+      "sha256": "038739486b4ebdda76cca5a70507511150b20acac90fdc2d0453b8e9ce81b23f"
+    },
+    {
+      "path": "frontend/package.json",
+      "sha256": "21671716cdd1edc4ded1a3a7935b055de6142608f523c2e1725e8bfbb3212052"
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "sha256": "a4e1362910fe02f286e950840fd79141fd411533b7743aa79f8c1a450ddece8b"
+    },
+    {
+      "path": "scripts/verify_frontend_dist_integrity.sh",
+      "sha256": "a351b5cc083697d4953d6d1e9d59b88e0b8c8e5353077912f3dd767e3e059741"
+    },
+    {
+      "path": "scripts/check_agents_product_ui_copy.py",
+      "sha256": "aa1dbcca0dd21d4240e4e1dc303a70fc56f62dc8c75683213664cd9a41717c0c"
+    }
+  ],
+  "captures": [
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-requests-build-20260921.json",
+      "sha256": "7f215449e377cc017eab5d9aedfa17a038dee2997a3b9b8ffe872a579d946c29",
+      "exit_code": 0,
+      "duration_ms": 14622.934,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-requests-causal-red-20260921.json",
+      "sha256": "75d247dacc05272a5c1b018e089bdbe720221fba5c5f0284113e336d779f376d",
+      "exit_code": 1,
+      "duration_ms": 11738.462,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-requests-final-baseline-20260921.json",
+      "sha256": "24e95b066a2ed55f5e5db6bba4c33de8024cd6e31ce5770ddf8e2efa04c4bab7",
+      "exit_code": 1,
+      "duration_ms": 7037.289,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-requests-full-unit-20260921.json",
+      "sha256": "86218d152dff5dd6d5502363a27b6a883b439002406f279942f18db3610af780",
+      "exit_code": 0,
+      "duration_ms": 322609.47,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-requests-green-20260921.json",
+      "sha256": "de28908eeb89426a5dd8346223e0ccc173f606edcf8560ba19da2c4adb4704db",
+      "exit_code": 0,
+      "duration_ms": 10074.145,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-requests-integrity-20260921.json",
+      "sha256": "28c5a8b563faa68d73501eeed4df146e923ea266683a82fe1e08453c986d6e4a",
+      "exit_code": 0,
+      "duration_ms": 205.322,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-requests-quality-20260921.json",
+      "sha256": "08dc47a227c3e756657e6e02c6cea959d2b82fd06a1a811a8100d1fd9fa8c4e1",
+      "exit_code": 0,
+      "duration_ms": 65941.67,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-requests-quality-final-20260921.json",
+      "sha256": "0f64490dba3b2500d548db36023d18efc4e3b24527f622ef7c5655e92c83b118",
+      "exit_code": 0,
+      "duration_ms": 48550.741,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-requests-red-20260921.json",
+      "sha256": "a6fa1283d86bda658aeae75eba69e377b293e9a3eb96acc9d35f18f13d1e1501",
+      "exit_code": null,
+      "duration_ms": 90018.65,
+      "timed_out": true,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-requests-review-baseline-20260921.json",
+      "sha256": "e068ffba65e1513eef85b60dd041d92aa31a7032bc7623937e5a9a00608636f5",
+      "exit_code": 1,
+      "duration_ms": 5926.484,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-requests-review-green-20260921.json",
+      "sha256": "b75ee24510a90549255680e08b0c80905cb6c73f368710d4af2f000f69a2168d",
+      "exit_code": 0,
+      "duration_ms": 7686.926,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-requests-verified-red-20260921.json",
+      "sha256": "0c3c141922c8b22d29d9e3063be5d0d19641174c0588f3d5f4b09ec2568c02e5",
+      "exit_code": 1,
+      "duration_ms": 12890.634,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    }
+  ],
+  "authoritative_proof": {
+    "baseline": "agent-requests-review-baseline-20260921.json",
+    "baseline_result": "7 assertion failures / 3 compatibility passes on immutable parent",
+    "current": "agent-requests-review-green-20260921.json",
+    "current_result": "15 passes: 10 request cases and 5 schedule cases",
+    "full": "agent-requests-full-unit-20260921.json",
+    "full_result": "824 tests / 139 files, 321.36s Vitest; capture322609.470ms",
+    "quality": "Both TS projects pass; full ESLint0errors/1existing auth_new.ts115 explicit-any warning; page-wrapper copy guard passes",
+    "build": "Fresh private Vite build;199 reachable JS files pass integrity"
+  },
+  "implementation": "Synchronous selected business/employee ref, per-key detail/review latest revisions and monotonic scope generation; detail payload identity checked before cache; primary state/error/review requires selected identity. Same-id no-op, same-event select+load, functional run-tracking adapter and derived-fallback review clearing retained.",
+  "review": {
+    "reviewer": "/root/whole_diff_frontend_review",
+    "result": "ACCEPT (bounded source, tests and final evidence)",
+    "correction": "Reviewer found registry-derived fallback selection retaining old review; final effect and tenth test correct it.",
+    "stderr_comparison": "Compared full824 with prior schedule814: unchanged prior fixture/jsdom diagnostics, sole new heading is intentional caught late-A rejection. No unhandled error or failed test.",
+    "implementation_owner": "/root/whole_diff_access_review",
+    "root_verification": "Root owns regression tests, capture commands, source binding and final packaging."
+  },
+  "provenance": "First capture timeout and second capture harness errors retained, not causal product proof. Subsequent8/9case captures refer to their own intermediate bytes. Final10case immutable-parent Vite load hook validates source hash and logs exact test hash; no working-source reversal. Three primary file hashes checked before/after each final sequential quality/build/full stage.",
+  "environment": "Local macOS; env-i managed configs disable env files; mocks and throwing fetch block actual workspace calls. Named tmux;2GiB minimum free-space guard for final checks; no Docker/native backend.",
+  "protected_records": [
+    {
+      "path": ".agent/tasks/production-readiness-20260917/spec.md",
+      "sha256": "fc52b4b03b85ba266c797b985da3e193b9b2b16e815df30829446c94281c938a"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/verdict.json",
+      "sha256": "71b5cdee4d4594baf935de8b8313b7f1e3c06e1c4b19fb40ffd519645c3259ea"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/problems.md",
+      "sha256": "7254dc19edca6fd6f9b6eff8c8f761d6488afc2f94679e84f7706e148f3eed22"
+    }
+  ],
+  "limits": [
+    "Mocked view, API and run tracking: not full real-view/browser/API integration.",
+    "No server authorization bypass or observed cross-tenant disclosure is inferred from UI misrouting or defensive malformed-response tests.",
+    "Registry list ordering, separate prefetch/cache path, integration/source reads and run/mutation-completion races remain outside scope.",
+    "No production/data/schema/provider/send/payment/Docker/cleanup/push/deploy action.",
+    "Native aggregate/restore preparation denial and image headroom gates remain. Whole FAIL; original acceptance criteria/historical verdict unchanged."
+  ]
+}

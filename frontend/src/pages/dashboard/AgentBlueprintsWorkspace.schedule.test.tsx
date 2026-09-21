@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Suspense } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -313,13 +313,16 @@ describe('AgentBlueprintsWorkspace schedule hydration', () => {
     await user.click(screen.getByRole('button', { name: 'Выбрать второй сценарий' }));
     await waitFor(() => expect(screen.getByTestId('schedule-time')).toHaveTextContent('17:00'));
 
-    resolveFirstDetails({
-      data: {
-        blueprint: { id: 'blueprint-1', business_id: 'business-1' }, versions: [], runs: [], approval_queue: [], execution_mode: 'scheduled',
-        execution_contract: { candidate: { schedule: { time: '18:00', timezone: 'Europe/Moscow' } } },
-      },
+    await act(async () => {
+      resolveFirstDetails({
+        data: {
+          blueprint: { id: 'blueprint-1', business_id: 'business-1' }, versions: [], runs: [], approval_queue: [], execution_mode: 'scheduled',
+          execution_contract: { candidate: { schedule: { time: '18:00', timezone: 'Europe/Moscow' } } },
+        },
+      });
+      await deferredFirstDetails;
     });
-    await waitFor(() => expect(screen.getByTestId('loaded-blueprint-id')).toHaveTextContent('blueprint-1'));
+    expect(screen.getByTestId('loaded-blueprint-id')).toHaveTextContent('blueprint-2');
     await waitFor(() => expect(screen.getByTestId('schedule-time')).toHaveTextContent('17:00'));
     expect(mocks.post).not.toHaveBeenCalled();
   });

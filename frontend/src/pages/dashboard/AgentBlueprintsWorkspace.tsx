@@ -3,7 +3,7 @@ import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { newAuth } from '@/lib/auth_new';
 import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
 import { api } from '@/services/api';
-import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { useLocation, useOutletContext } from 'react-router-dom';
 import { parseAgentConfig, uploadAgentSource } from './agents/api';
 import {
@@ -203,6 +203,10 @@ export const AgentBlueprintsWorkspace = () => {
   const requestedDeepLinkRef = useRef('');
   const runRequestRevisionRef = useRef(0);
   const runBusinessRef = useRef(currentBusinessId);
+  const selectedBlueprintRequestRef = useRef({ businessId: currentBusinessId, blueprintId: selectedBlueprintId });
+  const detailRequestRevisionsRef = useRef<Record<string, number>>({});
+  const reviewRequestRevisionsRef = useRef<Record<string, number>>({});
+  const requestScopeGenerationRef = useRef(0);
   runBusinessRef.current = currentBusinessId;
   const googleAuthStatus = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -250,6 +254,55 @@ export const AgentBlueprintsWorkspace = () => {
     () => blueprints.find((item) => item.id === selectedBlueprintId) || blueprints[0] || null,
     [blueprints, selectedBlueprintId],
   );
+
+  const selectBlueprint = useCallback((nextBlueprintId: SetStateAction<string | null>) => {
+    const currentBlueprintId = selectedBlueprintRequestRef.current.businessId === currentBusinessId
+      ? selectedBlueprintRequestRef.current.blueprintId
+      : null;
+    const blueprintId = typeof nextBlueprintId === 'function'
+      ? nextBlueprintId(currentBlueprintId)
+      : nextBlueprintId;
+    if (currentBlueprintId === blueprintId) {
+      return;
+    }
+    selectedBlueprintRequestRef.current = { businessId: currentBusinessId, blueprintId };
+    setBlueprintDetails(null);
+    setAgentReview(null);
+    setError(null);
+    setSelectedBlueprintId(blueprintId);
+  }, [currentBusinessId]);
+
+  const selectBlueprintFromRunTracking = useCallback<Dispatch<SetStateAction<string>>>((nextBlueprintId) => {
+    const currentBlueprintId = selectedBlueprintRequestRef.current.businessId === currentBusinessId
+      ? selectedBlueprintRequestRef.current.blueprintId || ''
+      : '';
+    const blueprintId = typeof nextBlueprintId === 'function'
+      ? nextBlueprintId(currentBlueprintId)
+      : nextBlueprintId;
+    selectBlueprint(blueprintId || null);
+  }, [currentBusinessId, selectBlueprint]);
+
+  useEffect(() => {
+    const nextSelection = {
+      businessId: currentBusinessId,
+      blueprintId: selectedBlueprint?.id || null,
+    };
+    const selectionChanged = selectedBlueprintRequestRef.current.businessId !== nextSelection.businessId
+      || selectedBlueprintRequestRef.current.blueprintId !== nextSelection.blueprintId;
+    selectedBlueprintRequestRef.current = nextSelection;
+    if (selectionChanged) {
+      setAgentReview(null);
+    }
+  }, [currentBusinessId, selectedBlueprint?.id]);
+
+  useEffect(() => {
+    requestScopeGenerationRef.current += 1;
+    detailRequestRevisionsRef.current = {};
+    reviewRequestRevisionsRef.current = {};
+    setBlueprintDetails(null);
+    setAgentReview(null);
+    setAgentDetailsById({});
+  }, [currentBusinessId]);
 
   const setScheduleTimeWithDirtyState = useCallback((value: string) => {
     scheduleHydrationRef.current.timeDirty = true;
@@ -389,7 +442,7 @@ export const AgentBlueprintsWorkspace = () => {
         ? response.data.today_summary
         : null);
       if (!selectedBlueprintId && items.length > 0) {
-        setSelectedBlueprintId(items[0].id);
+        selectBlueprint(items[0].id);
       }
     } catch (requestError) {
       console.error(requestError);
@@ -397,7 +450,7 @@ export const AgentBlueprintsWorkspace = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentBusinessId, demoMode, selectedBlueprintId]);
+  }, [currentBusinessId, demoMode, selectBlueprint, selectedBlueprintId]);
 
   useEffect(() => {
     void loadBlueprints();
@@ -433,7 +486,7 @@ export const AgentBlueprintsWorkspace = () => {
       const blueprint = response.data?.blueprint;
       await loadBlueprints();
       if (blueprint?.id) {
-        setSelectedBlueprintId(blueprint.id);
+        selectBlueprint(blueprint.id);
         setWorkspaceMode('scenario');
       }
       setDecisionNotice(response.data?.created === false
@@ -445,7 +498,7 @@ export const AgentBlueprintsWorkspace = () => {
     } finally {
       setUsingTemplateKey('');
     }
-  }, [currentBusinessId, loadBlueprints, usingTemplateKey]);
+  }, [currentBusinessId, loadBlueprints, selectBlueprint, usingTemplateKey]);
 
   const loadLegacyMigrationPlan = useCallback(async () => {
     if (!currentBusinessId) {
@@ -509,7 +562,18 @@ export const AgentBlueprintsWorkspace = () => {
   }, [loadPersonaAgents]);
 
   const loadBlueprintDetails = useCallback(async (blueprintId: string) => {
-    setError(null);
+    const requestBusinessId = currentBusinessId;
+    const requestScopeGeneration = requestScopeGenerationRef.current;
+    const requestKey = `${requestBusinessId || ''}:${blueprintId}`;
+    const requestRevision = (detailRequestRevisionsRef.current[requestKey] || 0) + 1;
+    detailRequestRevisionsRef.current[requestKey] = requestRevision;
+    const selectionMatchesRequest = () => (
+      selectedBlueprintRequestRef.current.businessId === requestBusinessId
+      && selectedBlueprintRequestRef.current.blueprintId === blueprintId
+    );
+    if (selectionMatchesRequest()) {
+      setError(null);
+    }
     try {
       const params = runStatusFilter === 'all' ? {} : { run_status: runStatusFilter };
       const response = await api.get(`/agent-blueprints/${blueprintId}`, { params });
@@ -542,16 +606,37 @@ export const AgentBlueprintsWorkspace = () => {
         execution_contract: response.data?.execution_contract && typeof response.data.execution_contract === 'object' ? response.data.execution_contract : undefined,
         compiled_access: response.data?.compiled_access && typeof response.data.compiled_access === 'object' ? response.data.compiled_access : undefined,
       };
-      setBlueprintDetails(details);
+      const responseBlueprint = details.blueprint;
+      const responseMatchesRequest = responseBlueprint?.id === blueprintId
+        && responseBlueprint.business_id === requestBusinessId;
+      const requestIsLatest = requestScopeGenerationRef.current === requestScopeGeneration
+        && detailRequestRevisionsRef.current[requestKey] === requestRevision;
+      if (!requestIsLatest) {
+        return;
+      }
+      if (!responseMatchesRequest) {
+        if (selectionMatchesRequest()) {
+          setBlueprintDetails(null);
+          setError('Данные выбранного агента не совпадают с текущим бизнесом.');
+        }
+        return;
+      }
       setAgentDetailsById((current) => ({
         ...current,
         [blueprintId]: details,
       }));
+      if (selectionMatchesRequest()) {
+        setBlueprintDetails(details);
+      }
     } catch (requestError) {
       console.error(requestError);
-      setError('Не удалось загрузить историю агента.');
+      if (requestScopeGenerationRef.current === requestScopeGeneration
+        && detailRequestRevisionsRef.current[requestKey] === requestRevision
+        && selectionMatchesRequest()) {
+        setError('Не удалось загрузить историю агента.');
+      }
     }
-  }, [runStatusFilter]);
+  }, [currentBusinessId, runStatusFilter]);
 
   useEffect(() => {
     if (selectedBlueprint?.id) {
@@ -653,13 +738,26 @@ export const AgentBlueprintsWorkspace = () => {
   }, [agentDetailsById, blueprints, currentBusinessId]);
 
   const loadBlueprintReview = useCallback(async (blueprintId: string) => {
+    const requestBusinessId = currentBusinessId;
+    const requestScopeGeneration = requestScopeGenerationRef.current;
+    const requestKey = `${requestBusinessId || ''}:${blueprintId}`;
+    const requestRevision = (reviewRequestRevisionsRef.current[requestKey] || 0) + 1;
+    reviewRequestRevisionsRef.current[requestKey] = requestRevision;
+    const selectionMatchesRequest = () => (
+      selectedBlueprintRequestRef.current.businessId === requestBusinessId
+      && selectedBlueprintRequestRef.current.blueprintId === blueprintId
+    );
     try {
       const response = await api.get(`/agent-blueprints/${blueprintId}/review`);
-      setAgentReview(response.data?.review || null);
+      if (requestScopeGenerationRef.current === requestScopeGeneration
+        && reviewRequestRevisionsRef.current[requestKey] === requestRevision
+        && selectionMatchesRequest()) {
+        setAgentReview(response.data?.review || null);
+      }
     } catch (requestError) {
       console.error(requestError);
     }
-  }, []);
+  }, [currentBusinessId]);
 
   const loadRun = useCallback(async (runId: string, options: { openResults?: boolean; showLoading?: boolean } = {}) => {
     const requestRevision = ++runRequestRevisionRef.current;
@@ -711,7 +809,7 @@ export const AgentBlueprintsWorkspace = () => {
       return;
     }
     requestedDeepLinkRef.current = requestKey;
-    setSelectedBlueprintId(blueprint.id);
+    selectBlueprint(blueprint.id);
     if (!requestedRunId) return;
     setExplicitRunTarget({ blueprintId: blueprint.id, runId: requestedRunId });
     const requestRevision = ++runRequestRevisionRef.current;
@@ -726,10 +824,10 @@ export const AgentBlueprintsWorkspace = () => {
       setActiveRun(run); setWorkspaceMode('results');
       await loadBlueprintDetails(blueprint.id);
     }).catch(() => { if (requestedDeepLinkRef.current === requestKey && requestRevision === runRequestRevisionRef.current && requestBusiness === runBusinessRef.current) setError('Запуск из ссылки не найден или недоступен.'); });
-  }, [blueprints, currentBusinessId, loadBlueprintDetails, location.search]);
+  }, [blueprints, currentBusinessId, loadBlueprintDetails, location.search, selectBlueprint]);
 
   const { waitForAgentRun } = useAgentRunTracking({ currentBusinessId, blueprints, blueprintDetails, selectedBlueprint, runAnimation, compiledRunContext, explicitRunTarget,
-  requestedDeepLinkRef, setSelectedBlueprintId, setRunAnimation, setActiveRun, setWorkspaceMode, setError,
+  requestedDeepLinkRef, setSelectedBlueprintId: selectBlueprintFromRunTracking, setRunAnimation, setActiveRun, setWorkspaceMode, setError,
   syncRunAnimation, finishRunAnimation, failRunAnimation, loadBlueprintDetails, loadBlueprintReview, loadBlueprints });
 
   useEffect(() => {
@@ -861,7 +959,7 @@ export const AgentBlueprintsWorkspace = () => {
       const blueprint = response.data?.blueprint;
       await loadBlueprints();
       if (blueprint?.id) {
-        setSelectedBlueprintId(blueprint.id);
+        selectBlueprint(blueprint.id);
         await loadBlueprintDetails(blueprint.id);
         await loadBlueprintReview(blueprint.id);
         await loadSourceCatalog(blueprint.id);
@@ -977,7 +1075,7 @@ export const AgentBlueprintsWorkspace = () => {
       const handoff = normalizePostCreateHandoff(response.data?.post_create_handoff);
       await loadBlueprints();
       if (blueprint?.id) {
-        setSelectedBlueprintId(blueprint.id);
+        selectBlueprint(blueprint.id);
         await loadBlueprintDetails(blueprint.id);
         await loadBlueprintReview(blueprint.id);
         await loadSourceCatalog(blueprint.id);
@@ -1056,7 +1154,7 @@ export const AgentBlueprintsWorkspace = () => {
             internal_source: builderInternalSource,
           });
         }
-        setSelectedBlueprintId(blueprint.id);
+        selectBlueprint(blueprint.id);
         await loadBlueprintDetails(blueprint.id);
         await loadBlueprintReview(blueprint.id);
         await loadSourceCatalog(blueprint.id);
@@ -1440,7 +1538,7 @@ export const AgentBlueprintsWorkspace = () => {
         body: { reason_code: reasonCode },
       });
       const remaining = blueprints.filter((item) => item.id !== blueprint.id);
-      setSelectedBlueprintId(remaining[0]?.id || null);
+      selectBlueprint(remaining[0]?.id || null);
       setBlueprintDetails(null);
       setActiveRun(null);
       setWorkspaceMode('overview');
@@ -2128,7 +2226,7 @@ export const AgentBlueprintsWorkspace = () => {
   const workspaceView = (
     <AgentBlueprintsView
       scope={{
-      location, currentBusinessId, blueprints, agentTemplates, templatesLoading, usingTemplateKey, useAgentTemplate, selectedBlueprintId, setSelectedBlueprintId, blueprintDetails, agentDetailsById, activeRun, setActiveRun, loading,
+      location, currentBusinessId, blueprints, agentTemplates, templatesLoading, usingTemplateKey, useAgentTemplate, selectedBlueprintId, setSelectedBlueprintId: selectBlueprint, blueprintDetails, agentDetailsById, activeRun, setActiveRun, loading,
       actionLoading, error, agentSearch, setAgentSearch, agentRegistryFilter, setAgentRegistryFilter, runAnimation, runStatusFilter, setRunStatusFilter, runSource,
       setRunSource, runCity, setRunCity, runCategory, setRunCategory, runLimit, setRunLimit, runParameters, setRunParameters, runParameterErrors,
       setRunParameterErrors, createWizardOpen, setCreateWizardOpen, createWizardStep, setCreateWizardStep, workspaceMode, setWorkspaceMode, availablePersonaAgents, agentPrompt, setAgentPrompt,

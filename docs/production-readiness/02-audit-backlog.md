@@ -1,5 +1,23 @@
 # Audit backlog — evidence, not a readiness claim
 
+## 21 September selected-agent request integrity, parentb9cb7dea
+
+- **UX-AGENT-REQUEST-SCOPE-01**, P1 before demo/production, high confidence:
+  late A details overwrite selected B and route the real review approval
+  handler to A's run/approval in a mocked API reproduction. Business impact:
+  user can approve a different employee's work than the one displayed.
+  Cause: unconditional detail/review response commit, without identity/order.
+  Minimal correction: selected identity, per-key latest revision and monotonic
+  business generation guards, validated response identity before cache admission,
+  compatible selection entrypoints and cleared review on derived selection.
+  Medium async compatibility risk, small runtime scope; no backend policy change.
+  Acceptance: final immutable-parent10cases7fail/3pass become10pass, plus5schedule
+  regressions; independent review correction included; full824/139, TS/lint,
+  build/199-JS integrity pass. Locally FIX_PROVEN; not server authorization or
+  cross-tenant proof. List/integration/source/run-completion races remain separate.
+  Exact source/capture hashes: task agent-requests-manifest-20260921.json;
+  cause, test-harness provenance and limits: agent-requests-notes-20260921.md.
+
 ## 21 September service/leaf follow-up, parentc587b20f
 
 - **SEC-APIFY-TRACE-01**, P1 before production: raw URLs/inputs/provider errors/

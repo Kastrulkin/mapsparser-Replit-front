@@ -1,5 +1,36 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, selected-agent request scope
+
+Parent `b9cb7dea2b3fcf651a976e64a6e986b306bf9ca9`; read Git for the resulting
+local package commit. Runtime scope is only AgentBlueprintsWorkspace selected
+detail/review requests, cache admission and selection entrypoints. Ten new
+request tests use the real workspace/approval handler with a small mocked view,
+mocked API and denied fetch; five schedule tests remain, with stale identity
+assertion strengthened. No actual POST/provider call occurs.
+
+Authoritative proof: `agent-requests-review-baseline`7fail/3pass on immutable
+parent versus `agent-requests-review-green`15pass including schedule. Final
+workspace7c213391…, requests20e70b11…, scheduleb3b544bc…; independent bounded
+review accepted after correcting derived fallback review retention.
+Final quality48550.741ms, build14622.934ms, integrity205.322ms/199JS, full unit
+322609.470ms/824tests/139files. Manifest binds19source hashes and12captures.
+Earlier harness timeout/errors and intermediate source/test results are
+retained and qualified in notes, never relabeled as final proof.
+
+No new live-browser interaction was performed in this checkpoint; preceding
+authenticated route observations remain observations of an unknown deployed
+revision. Current patch is unshipped. Remaining registry/integration/source/
+run-completion async boundaries need separate reproduction; do not claim full
+workspace or tenant isolation from this test harness.
+
+Foreign backend/docs/tests are being edited concurrently in another lane.
+Exclude them, never revert them or treat old foreign hashes as a current freeze.
+Disk4176000KiB is below10GiB image floor; inventory note contains no deletion
+authorization. Native full/restore prep remains denied: do not retry through
+another path. Original spec/AC/historical verdict, whole FAIL and secret-lifecycle
+gates remain unchanged. No production/DB/schema/provider/Docker/cleanup/push/deploy.
+
 ## Latest checkpoint — 21 September, schedule hydration
 
 Parent `bd487501dd22733f92fa5cce80766ead60a554ec`; read Git for resulting local

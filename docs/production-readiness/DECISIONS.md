@@ -1,5 +1,23 @@
 # Readiness decisions
 
+## D-077 — Bind selected reads to identity and request order
+
+An approval button must consume details belonging to the employee currently
+shown. Clearing state when selection changes is insufficient: older requests
+can still resolve later. Guard both primary detail/review state and per-employee
+cache with request identity/order; reject mismatched detail payload identity.
+Use a monotonic business-scope generation so resetting revision maps cannot
+make an old response current again. Keep synchronous select-plus-load callers
+and functional run-tracking setters compatible; reselecting the current employee
+must remain a no-op. Registry-derived fallback selection must clear old review.
+
+Keep this patch local to selected reads, not a refactor of every async action.
+Ten final request cases distinguish seven parent failures from three positive
+compatibility controls; five existing schedule tests stay green and the stale
+schedule test now also requires the correct detail identity. Real approval
+handler routing is tested only against a mock POST. No server authorization
+bypass, cross-tenant disclosure or deployed correction is inferred.
+
 ## D-076 — Hydrate the selected schedule without erasing in-flight edits
 
 Scenario and Settings must read the same candidate-or-active version. A candidate

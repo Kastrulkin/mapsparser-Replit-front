@@ -1,5 +1,21 @@
 # Production-readiness change log
 
+## Selected-agent request integrity — 21 September, parentb9cb7dea
+
+UX-AGENT-REQUEST-SCOPE-01: selected detail/review requests now require current
+identity and request order; detail payload identity is checked before caching.
+A monotonic business generation fences reset counters. Selection entrypoints
+retain same-id no-op, functional run-tracking and immediate select-plus-load
+contracts; registry-derived selection clears old review. Approval API/payloads,
+activation and provider execution are unchanged.
+
+Ten new request cases plus five strengthened existing schedule cases pass;
+immutable parent has7fail/3pass on the final ten cases. Independent review
+accepted after the derived-selection correction. Full frontend824/139, both
+TypeScript projects, lint(one existing warning), build and199-JS integrity pass.
+Earlier harness failures are retained with provenance. No broad async-race,
+backend, production or whole-readiness closure is claimed.
+
 ## Agent schedule settings — 21 September, parentbd487501
 
 UX-AGENT-SCHEDULE-01 fixes version/legacy schedule divergence observed in the

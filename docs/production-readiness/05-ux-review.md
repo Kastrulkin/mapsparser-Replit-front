@@ -1,5 +1,25 @@
 # UX and browser verification — working evidence
 
+## Selected employee owns the review and approval — 21 September
+
+Owner task: select an employee, inspect that employee's result and decide on it.
+UX-AGENT-REQUEST-SCOPE-01 reproduced a reachable late-A/selected-B race:
+the real approval handler posted A's run/approval identity through a mocked API
+while B was displayed. The UI clears old state but previously accepted older
+responses unconditionally. Per-request identity/order and business-generation
+guards now protect primary details/reviews and cache admission.
+
+Ten final cases produce7parent failures/3compatibility passes and all pass
+after the patch; five existing schedule cases also pass. Review found an
+additional derived selection after registry removal retaining old review;
+that correction is included. Same-employee reselection and synchronous
+select-plus-load are explicit positive controls. Independent bounded review,
+824full frontend tests, TS/lint/build and199-JS integrity support local closure.
+
+Small view harness, mocked API/run tracking and synthetic pending run GET are
+intentional. No real view/browser/action/tenant-isolation matrix is claimed.
+No layout, navigation or approval-policy redesign and no production mutation.
+
 ## Draft confirmation matches review availability — 21 September
 
 Owner task: review the exact prepared text before approving it, or reject an

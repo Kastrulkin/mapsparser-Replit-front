@@ -1,5 +1,21 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, selected-agent read/approval integrity
+
+- [x] UX-AGENT-REQUEST-SCOPE-01: a late response for A could overwrite B's details and route the real UI approval handler to A. Locally fixed identity/order guards for selected details/reviews and cache admission.
+- [x] Final immutable-parent ten-case proof:7fail/3pass; current ten request plus five schedule cases:15pass. Same-selection and same-event compatibility retained; independent review's derived-selection review leak corrected and tested.
+- [x] Final frontend824tests/139files pass (322609.470ms capture); both TypeScript projects, lint with one existing warning, build and199-JS asset integrity pass.
+- [x] Final source is frozen;19source/harness/dependency hashes and12immutable captures are bound in `agent-requests-manifest-20260921.json`.
+- [ ] Remaining list/integration/source/run-completion races, real-view/API/browser matrices and full release gates are not closed by these mocked workspace tests.
+- [ ] Original AC1–9/11 FAIL, AC10 PASS and whole FAIL remain unchanged.
+
+Local disk was4176000KiB (~3.98GiB) after validation, below10GiB Docker floor.
+Read-only inventory did not establish a safe5GiB cleanup set or the cause of
+space fluctuation. Native aggregate/restore preparation remains denied pending
+renewed scoped authority. No production/DB/provider, cleanup, push or deploy.
+Concurrent foreign changes are preserved and excluded from this package;
+their changing count must not be relabeled as our edits.
+
 ## Latest checkpoint — 21 September, authenticated UI and schedule settings
 
 - [x] Previous privacy package committed as `bd487501`; nine foreign dirty paths preserved.

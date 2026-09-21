@@ -1,5 +1,25 @@
 # Residual risks — working register
 
+Latest21September, parentb9cb7dea: UX-AGENT-REQUEST-SCOPE-01 is locally
+FIX_PROVEN for selected detail/review request identity/order and the ten-case
+contract. Final824frontend tests/139files and bounded independent review pass.
+This supersedes the previous checkpoint's specific primary-detail/review race,
+not every async path. Registry list refresh, separate prefetch/cache reads,
+integration/source loaders and mutation/run-completion races remain outside
+this correction. Complete real-view/API/business-switch/create/save matrices
+and deployed behavior are not certified.
+
+One existing lint warning and fixture/build diagnostics remain. Raw functional
+Apify IPC persistence in a debug bundle and normal validation-message queue
+persistence are source-only follow-up candidates; no new causal proof or fix
+for them is included here. Original backend/native/restore/image/real-API/demo/
+CI/secret-lifecycle and whole-readiness gates remain unchanged.
+
+Disk4176000KiB after validation is below10GiB Docker floor. Read-only inventory
+does not prove the cause of fluctuation or authorize deleting dependencies,
+evidence, volumes or Docker.raw. Native aggregate/restore prep remains denied
+pending renewed scoped authority. Browser login does not override these gates.
+
 Latest21September, parentbd487501: UX-AGENT-SCHEDULE-01 locally FIX_PROVEN for
 the five-case schedule hydration contract; full frontend814/138 and bounded
 review pass. Live browser observation was read-only on three routes, with unknown
