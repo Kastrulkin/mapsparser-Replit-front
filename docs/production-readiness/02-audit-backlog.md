@@ -19,7 +19,12 @@ pure tests and retain every39 case until current evidence closes it. Verificatio
 is exact node membership and arithmetic; runtime completion remains OPEN.
 Fix risk is documentation-only. Required before claiming backend audit complete.
 
-## Imported PostgreSQL fixture coverage — 21 September
+## Historical imported PostgreSQL fixture gap — superseded
+
+Historical evidence only: the earlier OPEN status and next action below are
+superseded by the resolved TEST-INVENTORY-IMPORTED-PG-01 entry above. The full
+operator module has now passed28/28 on isolated PostgreSQL; retain this section
+to explain the original21skips, not to prescribe another run.
 
 **TEST-INVENTORY-IMPORTED-PG-01 — P2, audit coverage, OPEN.** Static grouping
 missed pg imported from test_operator_voice_pg; actual856attempt passed835and
