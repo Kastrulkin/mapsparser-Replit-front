@@ -544,17 +544,17 @@ class YandexMapsInterceptionParser:
         Returns:
             Словарь с данными в том же формате, что и parser.py
         """
-        print(f"🔍 Начинаем парсинг через Network Interception: {url}")
+        print(f"🔍 Начинаем парсинг через Network Interception: {debug_url_summary(url)}")
         print("DEBUG: VERSION 2026-01-29 REDIRECT FIX + TIMEOUTS")
         
         if not url or not url.startswith(('http://', 'https://')):
-            raise ValueError(f"Некорректная ссылка: {url}")
+            raise ValueError("Некорректная ссылка: требуется HTTP(S) URL")
         
         self.org_id = self.extract_org_id(url)
         if not self.org_id:
-            raise ValueError(f"Не удалось извлечь org_id из URL: {url}")
+            raise ValueError("Не удалось извлечь org_id из URL")
         
-        print(f"📋 Извлечен org_id: {self.org_id}")
+        print("📋 org_id извлечен")
 
         def _is_captcha_page(title: str) -> bool:
             """Проверка капчи по заголовку (регистронезависимо, рус/англ)."""
@@ -582,11 +582,11 @@ class YandexMapsInterceptionParser:
         try:
             if self.debug_bundle_dir:
                 os.makedirs(self.debug_bundle_dir, exist_ok=True)
-        except Exception as e:
-            print(f"⚠️ Не удалось создать debug bundle dir {self.debug_bundle_dir}: {e}")
+        except Exception:
+            print("⚠️ Не удалось создать debug bundle dir")
         else:
             if self.debug_bundle_dir:
-                print(f"[DEBUG_BUNDLE] {self.debug_bundle_dir}")
+                print("[DEBUG_BUNDLE] enabled")
 
         context = session.context
         page = session.page
@@ -677,8 +677,8 @@ class YandexMapsInterceptionParser:
                                     filepath = os.path.join(self.debug_bundle_dir, filename)
                                     with open(filepath, "w", encoding="utf-8") as f:
                                         json.dump(debug_value_shape(json_data), f, ensure_ascii=False, indent=2)
-                                except Exception as e:
-                                    print(f"Failed to save debug json: {e}")
+                                except Exception:
+                                    print("Failed to save debug json")
 
                             # Check for organization data (search or location-info)
                             if json_data:
@@ -706,7 +706,7 @@ class YandexMapsInterceptionParser:
                                         "location-info",
                                     ]
                                 ):
-                                    print(f"✅ Перехвачен важный API запрос: {url[:100]}...")
+                                    print(f"✅ Перехвачен важный API запрос: {debug_url_summary(url)}")
                         except Exception:
                             # Не JSON, пропускаем
                             pass
@@ -784,7 +784,7 @@ class YandexMapsInterceptionParser:
         # Double check if we are still stuck on Captcha
         title = _safe_page_title()
         if _is_captcha_page(title):
-            print(f"❌ Капча не была решена за отведённое время. Заголовок: {title}")
+            print("❌ Капча не была решена за отведённое время")
             # Возвращаем специальную ошибку, чтобы воркер знал о капче
             return {"error": "captcha_detected", "captcha_url": page.url}
 
@@ -803,7 +803,7 @@ class YandexMapsInterceptionParser:
         # Проверка редиректа на главную или другую страницу
         current_url = page.url
         title = _safe_page_title()
-        print(f"📍 Текущий URL: {current_url}, Заголовок: {title}")
+        print(f"📍 Текущая страница: {debug_url_summary(current_url)}, title_present={bool(title)}")
         if "showcaptcha" in (current_url or "").lower():
             print("⚠️ Обнаружен showcaptcha URL, возвращаем captcha_detected")
             return {"error": "captcha_detected", "captcha_url": current_url}
@@ -828,9 +828,9 @@ class YandexMapsInterceptionParser:
                     pass
                 page.wait_for_timeout(3000)
                 current_url = page.url
-                print(f"📍 После перехода на overview: {current_url}")
-            except Exception as e:
-                print(f"⚠️ Не удалось перейти на overview: {e}")
+                print(f"📍 После перехода на overview: {debug_url_summary(current_url)}")
+            except Exception:
+                print("⚠️ Не удалось перейти на overview")
 
         # Более строгая проверка: ищем заголовок организации
         is_business_card = False
@@ -1020,9 +1020,9 @@ class YandexMapsInterceptionParser:
                 print("ℹ️ Вкладка Отзывы не найдена (селектор)")
         except LookupError:
             self.review_stop_reason = "skipped_for_parser_mode"
-        except Exception as e:
+        except Exception:
             self.review_stop_reason = "interaction_error"
-            print(f"⚠️ Ошибка при обработке отзывов: {e}")
+            print("⚠️ Ошибка при обработке отзывов")
 
         # 3. Кликаем и скроллим Фото (Photos)
         try:
@@ -1035,7 +1035,7 @@ class YandexMapsInterceptionParser:
                 # Пытаемся получить количество фото
                 try:
                     photos_text = photos_tab.inner_text()
-                    print(f"ℹ️ Текст вкладки фото: {photos_text}")
+                    print(f"ℹ️ Текст вкладки фото получен: {bool(photos_text)}")
                     match = re.search(r"(\\d+)", photos_text)
                     if match:
                         extra_photos_count = int(match.group(1))
@@ -1049,8 +1049,8 @@ class YandexMapsInterceptionParser:
                 print("ℹ️ Вкладка Фото не найдена")
         except LookupError:
             pass
-        except Exception as e:
-            print(f"⚠️ Ошибка при обработке фото: {e}")
+        except Exception:
+            print("⚠️ Ошибка при обработке фото")
 
         # 4. Кликаем и скроллим Новости (News/Posts)
         try:
@@ -1066,8 +1066,8 @@ class YandexMapsInterceptionParser:
                 print("ℹ️ Вкладка Новости не найдена")
         except LookupError:
             pass
-        except Exception as e:
-            print(f"⚠️ Ошибка при обработке новостей: {e}")
+        except Exception:
+            print("⚠️ Ошибка при обработке новостей")
 
         # 5. Кликаем и скроллим Товары/Услуги (Prices/Goods)
         try:
@@ -1090,7 +1090,7 @@ class YandexMapsInterceptionParser:
                             # Check visibility to avoid hidden elements
                             if found.first.is_visible():
                                 services_tab = found.first
-                                print(f"✅ Нашли таб услуг по тексту: {text}")
+                                print("✅ Нашли таб услуг по тексту")
                                 break
                     except Exception:
                         pass
@@ -1105,8 +1105,8 @@ class YandexMapsInterceptionParser:
                 print("ℹ️ Вкладка Цены/Услуги не найдена")
         except LookupError:
             pass
-        except Exception as e:
-            print(f"⚠️ Ошибка при обработке услуг: {e}")
+        except Exception:
+            print("⚠️ Ошибка при обработке услуг")
 
         # Проверка верификации через HTML (так как в JSON это может быть спрятано)
         is_verified = False
@@ -1128,8 +1128,8 @@ class YandexMapsInterceptionParser:
                         break
                 except Exception:
                     continue
-        except Exception as e:
-            print(f"Ошибка проверки верификации: {e}")
+        except Exception:
+            print("Ошибка проверки верификации")
 
         print(f"📦 Перехвачено {len(self.api_responses)} API запросов")
 
@@ -1193,8 +1193,8 @@ class YandexMapsInterceptionParser:
                     data["products"] = final_products
                 else:
                     print("⚠️ HTML парсинг услуг тоже не вернул результатов")
-            except Exception as e:
-                print(f"⚠️ Ошибка Hybrid Mode для услуг: {e}")
+            except Exception:
+                print("⚠️ Ошибка Hybrid Mode для услуг")
 
         if not data.get("title") and not data.get("overview", {}).get("title"):
             print("⚠️ Не удалось извлечь данные через API, используем HTML парсинг как fallback")
@@ -1207,16 +1207,16 @@ class YandexMapsInterceptionParser:
                     og_title = page.locator("meta[property='og:title']").get_attribute("content")
                     if og_title:
                         meta_title = og_title.split("|")[0].strip()  # "Name | City" -> "Name"
-                        print(f"✅ Нашли заголовок в og:title: {meta_title}")
+                        print("✅ Нашли заголовок в og:title")
 
                     # title tag
                     if not meta_title:
                         page_title = _safe_page_title()
                         if page_title:
                             meta_title = page_title.split("-")[0].strip()  # "Name - Yandex Maps" -> "Name"
-                            print(f"✅ Нашли заголовок в page title: {meta_title}")
-                except Exception as e:
-                    print(f"⚠️ Ошибка извлечения мета-заголовка: {e}")
+                            print("✅ Нашли заголовок в page title")
+                except Exception:
+                    print("⚠️ Ошибка извлечения мета-заголовка")
 
                 # 0.1 Попытка извлечь заголовок через user selector (если мета не сработала или для надежности)
                 if not meta_title:
@@ -1224,9 +1224,9 @@ class YandexMapsInterceptionParser:
                         h1_el = page.query_selector("div.orgpage-header-view__header-wrapper > h1")
                         if h1_el:
                             meta_title = h1_el.inner_text().strip()
-                            print(f"✅ Нашли заголовок через CSS селектор: {meta_title}")
-                    except Exception as e:
-                        print(f"⚠️ Ошибка CSS селектора заголовка: {e}")
+                            print("✅ Нашли заголовок через CSS селектор")
+                    except Exception:
+                        print("⚠️ Ошибка CSS селектора заголовка")
 
                 if meta_title:
                     if "overview" not in data:
@@ -1260,7 +1260,7 @@ class YandexMapsInterceptionParser:
                             "meta[property='business:contact_data:street_address']"
                         ).get_attribute("content")
                         if meta_address:
-                            print(f"✅ Нашли адрес в meta: {meta_address}")
+                            print("✅ Нашли адрес в meta")
                             data["address"] = meta_address
                         else:
                             # 2. CSS Selector
@@ -1271,13 +1271,13 @@ class YandexMapsInterceptionParser:
                             )
                             if address_el:
                                 addr_text = address_el.inner_text()
-                                print(f"✅ Нашли адрес через CSS: {addr_text}")
+                                print("✅ Нашли адрес через CSS")
                                 data["address"] = addr_text
-                    except Exception as e:
-                        print(f"⚠️ Ошибка извлечения адреса HTML: {e}")
+                    except Exception:
+                        print("⚠️ Ошибка извлечения адреса HTML")
 
-            except Exception as e:
-                print(f"⚠️ Error extracting title from meta/css: {e}")
+            except Exception:
+                print("⚠️ Error extracting title from meta/css")
 
             # Передаем селектор пользователя в парсер
             try:
@@ -1345,8 +1345,8 @@ class YandexMapsInterceptionParser:
                         current.extend(products_html)
                         data["products"] = current
 
-            except Exception as e:
-                print(f"⚠️ Ошибка user-selector HTML parsing: {e}")
+            except Exception:
+                print("⚠️ Ошибка user-selector HTML parsing")
 
             # Пробуем еще раз получить title если нет
             if not data.get("title"):
@@ -1473,9 +1473,9 @@ class YandexMapsInterceptionParser:
                         f.write(debug_html_placeholder(html_content))
 
                 # Authenticated screenshots can expose private page content.
-                print(f"💾 Value-free debug bundle saved: {summary_name}, {html_name}")
-            except Exception as e:
-                print(f"⚠️ Failed to save debug bundle: {e}")
+                print("💾 Value-free debug bundle saved")
+            except Exception:
+                print("⚠️ Failed to save debug bundle")
 
         # DEV-лог по итоговым полям
         try:
@@ -1493,12 +1493,12 @@ class YandexMapsInterceptionParser:
                 quality_score = meta.get("quality_score")
 
             print(
-                f"DEV summary: title='{str(data.get('title', ''))[:80]}', "
+                f"DEV summary: title_present={bool(data.get('title'))}, "
                 f"address_present={bool(data.get('address'))}, "
-                f"rating='{data.get('rating', '')}', "
-                f"reviews_count={data.get('reviews_count')}, "
+                f"rating_present={bool(data.get('rating'))}, "
+                f"reviews_count_present={data.get('reviews_count') is not None}, "
                 f"categories_count={categories_count}, "
-                f"quality_score={quality_score}"
+                f"quality_score_present={quality_score is not None}"
             )
         except Exception:
             pass
@@ -1543,13 +1543,13 @@ class YandexMapsInterceptionParser:
                 try:
                     with open(os.path.join(bundle_dir, "payload.json"), "w", encoding="utf-8") as f:
                         json.dump(debug_value_shape(data), f, ensure_ascii=False, indent=2)
-                except Exception as e:
-                    print(f"⚠️ Failed to write payload.json: {e}")
-            except Exception as e:
-                print(f"⚠️ Failed to write canonical debug bundle files: {e}")
+                except Exception:
+                    print("⚠️ Failed to write payload.json")
+            except Exception:
+                print("⚠️ Failed to write canonical debug bundle files")
 
         print(
-            f"✅ Парсинг завершен. Найдено: название='{data.get('title', '')}', адрес='{data.get('address', '')}'"
+            f"✅ Парсинг завершен. title_present={bool(data.get('title'))}, address_present={bool(data.get('address'))}"
         )
 
         # Финальный safeguard: если org API не загрузился и после fallback всё ещё пусто по критичным полям,
@@ -1677,7 +1677,7 @@ class YandexMapsInterceptionParser:
             if best_products:
                 print(
                     f"✅ Brute Force выбрал лучший набор услуг: {len(best_products)} "
-                    f"(score={best_score:.2f}) из {best_source_url[-80:]}"
+                    f"(score={best_score:.2f}), source={debug_url_summary(best_source_url)}"
                 )
                 current_products = data.get('products', [])
                 current_products.extend(best_products)
@@ -2234,8 +2234,8 @@ class YandexMapsInterceptionParser:
                             date = datetime.fromtimestamp(date_raw / 1000.0).isoformat()
                         else:  # Секунды
                             date = datetime.fromtimestamp(date_raw).isoformat()
-                    except Exception as e:
-                        print(f"⚠️ Ошибка парсинга timestamp {date_raw}: {e}")
+                    except Exception:
+                        print("⚠️ Ошибка парсинга timestamp отзыва")
                         date = str(date_raw)
                 # Если это строка ISO формата
                 elif isinstance(date_raw, str):
@@ -2254,9 +2254,9 @@ class YandexMapsInterceptionParser:
             
             # Логируем дату отзыва (только для первых 5 отзывов)
             if date and len(reviews) < 5:
-                print(f"📅 Дата отзыва извлечена: {date}")
+                print("📅 Дата отзыва извлечена")
             elif not date and len(reviews) < 5:
-                print(f"⚠️ Дата отзыва не найдена. Доступные поля: {list(item.keys())}")
+                print(f"⚠️ Дата отзыва не найдена. field_count={len(item)}")
             
             # Извлекаем ответ организации (проверяем все возможные варианты)
             response_text = None
@@ -2299,15 +2299,15 @@ class YandexMapsInterceptionParser:
                         owner_comment.get('published_at')
                     )
                     if response_text:
-                        print(f"✅ Извлечен ответ организации: {response_text[:100]}...")
+                        print("✅ Извлечен ответ организации")
                 else:
                     response_text = str(owner_comment)
                     if response_text:
-                        print(f"✅ Извлечен ответ организации (строка): {response_text[:100]}...")
+                        print("✅ Извлечен ответ организации (строка)")
             
             # Логируем дату отзыва
             if date:
-                print(f"📅 Дата отзыва: {date}")
+                print("📅 Дата отзыва присутствует")
             
             if text:
                 review_data = {
@@ -2322,7 +2322,7 @@ class YandexMapsInterceptionParser:
                     'has_response': bool(response_text)
                 }
                 if response_text:
-                    print(f"✅ Отзыв с ответом: автор={author_name}, рейтинг={rating}, ответ={response_text[:50]}...")
+                    print("✅ Отзыв с ответом")
                 return review_data
             return None
         
@@ -2428,7 +2428,7 @@ class YandexMapsInterceptionParser:
                         if len(data[key]) > 0:
                             item0 = data[key][0]
                             if isinstance(item0, dict):
-                                print(f"🔍 DEBUG POSTS: Found list in '{key}', Item keys: {list(item0.keys())}")
+                                print(f"🔍 DEBUG POSTS: Found list in '{key}', field_count={len(item0)}")
 
                         for item in data[key]:
                             if isinstance(item, dict):
@@ -2461,8 +2461,8 @@ class YandexMapsInterceptionParser:
                                                 date = datetime.fromtimestamp(date_raw / 1000.0).isoformat()
                                             else:  # Секунды
                                                 date = datetime.fromtimestamp(date_raw).isoformat()
-                                        except Exception as e:
-                                            print(f"⚠️ Error parsing timestamp {date_raw}: {e}")
+                                        except Exception:
+                                            print("⚠️ Error parsing post timestamp")
                                     # Если это строка ISO формата
                                     elif isinstance(date_raw, str):
                                         try:
@@ -2473,9 +2473,9 @@ class YandexMapsInterceptionParser:
                                             date = date_raw
                                 
                                 if not date:
-                                    print(f"⚠️ DEBUG POSTS: No date found for item. Keys: {list(item.keys())}")
+                                    print(f"⚠️ DEBUG POSTS: No date found for item. field_count={len(item)}")
                                     if 'date' in item:
-                                        print(f"   Date field content: {item['date']}")
+                                        print("   Date field present but not parsed")
 
                                 post = {
                                     'title': item.get('title', ''),
@@ -2497,7 +2497,7 @@ class YandexMapsInterceptionParser:
         if posts:
             print(f"✅ Извлечено {len(posts)} новостей/постов")
             # Логируем первую новость для отладки
-            print(f"📰 Пример новости: {posts[0].get('title', '')[:50]}... ({posts[0].get('date', 'нет даты')})")
+            print(f"📰 Первая новость: title_present={bool(posts[0].get('title'))}, date_present={bool(posts[0].get('date'))}")
         return posts
     
     def _extract_products_from_api(self, json_data: Any) -> List[Dict[str, Any]]:
@@ -2655,7 +2655,7 @@ class YandexMapsInterceptionParser:
             
             return data
         except Exception as e:
-            print(f"❌ Ошибка при fallback парсинге: {e}")
+            print("❌ Ошибка при fallback парсинге")
             return {'error': str(e), 'url': url}
 
 
@@ -2681,7 +2681,7 @@ def parse_yandex_card(
     # Валидация разрешённых kwargs для сессии
     unknown = set(session_kwargs.keys()) - ALLOWED_SESSION_KWARGS
     if unknown:
-        msg = f"Unknown session kwargs in parse_yandex_card: {unknown}"
+        msg = f"Unknown session kwargs in parse_yandex_card: count={len(unknown)}"
         env = os.getenv("FLASK_ENV", "").lower()
         is_debug_env = env in ("development", "dev", "debug", "test", "testing")
         if is_debug_env:

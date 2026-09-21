@@ -1,5 +1,42 @@
 # Verified commands and evidence
 
+## Parser console confidentiality — 21 September, parent074ee5a0
+
+Exact commands are retained in `evidence/parser-diagnostic-*-20260921.json`.
+Environment-isolated Python, sockets/process spawning/SQLite denied, conftest
+and third-party pytest autoload disabled. No native DB or real browser/provider.
+
+| Capture basename | Actual result | Duration ms |
+| --- | --- | ---: |
+| parser-diagnostic-input-red | Actual-module rejected input leaked synthetic marker to stdout and ValueError; exit1 | 149.291 |
+| parser-diagnostic-logs-red | Six causal privacy failures, payload/branch assertions reached; exit1 | 501.663 |
+| parser-diagnostic-logs-green | Same six cases pass in0.17s | 465.935 |
+| parser-diagnostic-input-green | Same actual-module probe: rejection preserved, marker absent; exit0 | 162.939 |
+| parser-diagnostic-logs-quality | Initial scoped Ruff/diff and normalized non-diagnostic AST equivalence pass | 278.238 |
+| parser-diagnostic-logs-final | Expanded12 plus17 adjacent tests:29pass in0.53s; eight source hashes | 834.243 |
+| parser-diagnostic-logs-final-quality | Final test Ruff, parser undefined-name checks, diff, AST equivalence and eight hash bindings pass | 281.307 |
+| git-history-runtime-six-proof | exit1: hardened arg0 check disproves initial row684 env-name classification; retained failed evidence | 370.538 |
+| git-history-runtime-six-proof-verified | Exact six redacted-Match/object/AST bindings; four nonsecret content identifiers, two UNKNOWN | 462.090 |
+| parser-diagnostic-precommit | 25owned files/139224staged bytes; nine captures/eight source hashes/six history rows; strict scan clean; nine foreign paths excluded | 7163.087 |
+
+No timeout/truncation. Quality Git child records a nonfatal Darwin temp-path
+warning; outer stderr is empty. Normalization removes print expressions,
+unused exception bindings and the two validation/unknown-kwarg diagnostic
+messages only; exact remaining AST equals the parent. This is source-scope
+evidence, not a full parser/session/provider or full-backend runtime test.
+The two early unrun harness defects were corrected before causal RED; no
+fixture failure is counted as a product failure. Independent review withdrew
+an arbitrary-key suspicion because the printed key is a fixed four-item enum.
+
+The history successor replaces an incorrect five-nonsecret proposal: row684
+is an environment DEFAULT, not its name. No exact placeholder proof; it and
+row686 stay UNKNOWN. The proof script uses explicit isolated Git child env,
+verifies raw object headers and whole redacted Match equality, and never emits
+candidate values/value hashes. Unclassified queue is now115history+tree11=116.
+These classifications do not clear privileged/provider credential lifecycle.
+The final26-file package adds the precommit capture and repeats the checks;
+the earlier25-file staged byte count is not relabeled as the final package.
+
 ## Provider history and parser debug files — 21 September, parent bf277dbf
 
 Exact commands and source hashes are in the named task evidence captures.

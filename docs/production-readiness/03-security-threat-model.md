@@ -4,6 +4,20 @@ Status: incomplete security assessment, not a production approval. Baseline `302
 
 ## Assets and adversaries
 
+21 September, parent074ee5a0: SEC-PARSER-LOG-01 is reproduced by six synthetic
+diagnostic cases, corrected locally and checked by29 pure cases plus source
+review. URL components, provider fields/keys and exception details no longer
+flow directly through this parser's runtime print expressions. Core data stays
+intact. Console sinks in dependencies/worker, intentional CLI result output,
+raw returned error URLs, historical logs and deployed revisions retain separate
+boundaries; this is not universal logging or credential-lifecycle clearance.
+
+Six frozen historical runtime rows have exact object/whole-redacted-Match/AST
+proof: four are static content-key identifiers; an os.getenv default and a
+constructor credential argument remain UNKNOWN. The initial default-as-name
+classification failed hardened verification and is withdrawn.115history+tree11
+=116 remain unclassified/UNKNOWN; classified access material remains a risk.
+
 21 September follow-up, parent bf277dbf: 572 frozen debug-directory scanner
 rows bind to provider fields (510 hittoken, 26 aesKey, 8 clientKey, 28 ordToken;
 249 distinct values). This classifies storage context only. Purpose, privilege,

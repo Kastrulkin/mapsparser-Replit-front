@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "label": "parser-diagnostic-logs-final-quality",
+  "captured_at": "2026-09-21T01:44:27.393989+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "-c",
+    "import ast, pathlib, subprocess, json, hashlib\nenv={\"PATH\":\"/usr/bin:/bin\",\"GIT_CONFIG_NOSYSTEM\":\"1\",\"GIT_CONFIG_GLOBAL\":\"/dev/null\",\"GIT_NO_REPLACE_OBJECTS\":\"1\",\"GIT_TERMINAL_PROMPT\":\"0\"}\nbaseline=subprocess.run([\"/usr/bin/git\",\"cat-file\",\"blob\",\"074ee5a01841d7e52adaa7fe5395a60217c24add:src/parser_interception.py\"],env=env,check=True,capture_output=True).stdout.decode()\ncurrent=pathlib.Path(\"src/parser_interception.py\").read_text()\nclass NormalizeDiagnostics(ast.NodeTransformer):\n    def visit_Expr(self,node):\n        if isinstance(node.value,ast.Call) and isinstance(node.value.func,ast.Name) and node.value.func.id==\"print\":\n            return ast.Pass()\n        return self.generic_visit(node)\n    def visit_ExceptHandler(self,node):\n        self.generic_visit(node)\n        if node.name and not any(isinstance(n,ast.Name) and n.id==node.name for stmt in node.body for n in ast.walk(stmt)):\n            node.name=None\n        return node\n    def visit_Raise(self,node):\n        if isinstance(node.exc,ast.Call) and isinstance(node.exc.func,ast.Name) and node.exc.func.id==\"ValueError\" and node.exc.args and not isinstance(node.exc.args[0],ast.Name):\n            node.exc.args=[ast.Constant(value=\"validation-message\")]\n        return self.generic_visit(node)\n    def visit_Assign(self,node):\n        if len(node.targets)==1 and isinstance(node.targets[0],ast.Name) and node.targets[0].id==\"msg\" and isinstance(node.value,ast.JoinedStr) and any(isinstance(n,ast.Constant) and isinstance(n.value,str) and n.value.startswith(\"Unknown session kwargs in parse_yandex_card:\") for n in node.value.values):\n            node.value=ast.Constant(value=\"unknown-kwargs-diagnostic\")\n        return self.generic_visit(node)\nassert ast.dump(NormalizeDiagnostics().visit(ast.parse(baseline)))==ast.dump(NormalizeDiagnostics().visit(ast.parse(current))),\"Non-diagnostic AST changed\"\nprint(json.dumps({\"non_diagnostic_ast_equal\":True,\"parent\":\"074ee5a0\",\"parser_sha256\":hashlib.sha256(current.encode()).hexdigest()}))\n\ncommands=[\n[\"/usr/bin/arch\",\"-arm64\",\"/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/ruff\",\"check\",\"--no-cache\",\"tests/test_parser_diagnostic_logs.py\"],\n[\"/usr/bin/arch\",\"-arm64\",\"/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/ruff\",\"check\",\"--no-cache\",\"--select\",\"F821,F822,F823\",\"src/parser_interception.py\",\"tests/test_parser_diagnostic_logs.py\"],\n[\"/usr/bin/git\",\"diff\",\"--check\"]]\nfor command in commands:\n    result=subprocess.run(command,env=env,capture_output=True,text=True)\n    print(json.dumps({\"command\":command,\"exit_code\":result.returncode,\"stdout\":result.stdout,\"stderr\":result.stderr}))\n    if result.returncode: raise SystemExit(result.returncode)\n\ncapture=json.loads(pathlib.Path(\".agent/tasks/production-readiness-20260917/evidence/parser-diagnostic-logs-final-20260921.json\").read_text())\nassert capture[\"exit_code\"]==0 and not capture[\"timed_out\"] and not capture[\"stdout_truncated\"] and not capture[\"stderr_truncated\"]\nhashes=json.loads(capture[\"stdout\"].splitlines()[0])[\"source_sha256\"]\nassert len(hashes)==8\nassert all(hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()==value for p,value in hashes.items())\nprint(json.dumps({\"final_source_hashes_reconciled\":len(hashes)}))\n"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 281.307,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"non_diagnostic_ast_equal\": true, \"parent\": \"074ee5a0\", \"parser_sha256\": \"a9737321cb60869d632f0d155bc0905b2e72c5caf6950507b8bb137a0ee04a0a\"}\n{\"command\": [\"/usr/bin/arch\", \"-arm64\", \"/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/ruff\", \"check\", \"--no-cache\", \"tests/test_parser_diagnostic_logs.py\"], \"exit_code\": 0, \"stdout\": \"All checks passed!\\n\", \"stderr\": \"\"}\n{\"command\": [\"/usr/bin/arch\", \"-arm64\", \"/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/ruff\", \"check\", \"--no-cache\", \"--select\", \"F821,F822,F823\", \"src/parser_interception.py\", \"tests/test_parser_diagnostic_logs.py\"], \"exit_code\": 0, \"stdout\": \"All checks passed!\\n\", \"stderr\": \"\"}\n{\"command\": [\"/usr/bin/git\", \"diff\", \"--check\"], \"exit_code\": 0, \"stdout\": \"\", \"stderr\": \"git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\\n\"}\n{\"final_source_hashes_reconciled\": 8}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

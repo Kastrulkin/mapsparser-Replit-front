@@ -1,5 +1,25 @@
 # Readiness decisions
 
+## D-072 — Replace raw log values at each parser diagnostic sink
+
+Historical secret triage must bind argument positions, not only callee names:
+an environment variable name and its default are different security contracts.
+Keep failed classification evidence and UNKNOWN when exact semantics do not
+prove a value nonsecret. A singleton candidate can additionally be checked
+against the whole report Match after replacing only the redacted scalar.
+
+Runtime console messages are a separate boundary from opt-in debug files.
+Use explicit static events, counts, presence flags and fixed URL categories;
+do not introduce a global print override or a best-effort secret-name regex.
+Raw exception messages and arbitrary provider keys are not safe diagnostics.
+Retain typed errors and application results; reduced forensic detail is an
+intentional privacy tradeoff. Debug event location still identifies the phase.
+
+Require causal privacy tests, preserved result assertions, adjacent units and
+independent source review. A normalized AST comparison supports the narrow
+diagnostic scope but cannot prove external helper, worker or live log safety.
+No blanket claim about old files/logs, provider dependencies or deployed code.
+
 ## D-071 — Keep provider diagnostics useful without persisting raw content
 
 Field names do not prove that arbitrary provider values are safe. Classify

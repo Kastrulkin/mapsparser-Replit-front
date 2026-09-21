@@ -2,6 +2,21 @@
   "task_id": "production-readiness-20260917",
   "overall_status": "FAIL",
   "checkpoint": {
+    "subsequent_runtime_history_triage": {
+      "parent_commit": "074ee5a01841d7e52adaa7fe5395a60217c24add",
+      "proof": ["evidence/git-history-runtime-six-proof-20260921.json", "evidence/git-history-runtime-six-proof-verified-20260921.json", "evidence/git-history-runtime-six-review-20260921.md"],
+      "result": "Rows92–95 exact static content keys NONSECRET;684environment default and686constructor credential argument UNKNOWN. Six raw Git-object/whole-redacted-Match/AST bindings verified462.090ms. Initial incorrect684env-name claim fails370.538ms and is withdrawn.",
+      "remaining_unclassified": "115 history plus tree11 = 116; previous privileged/provider material remains uncleared",
+      "limits": "No value, value hash, live key/provider test, current all-object absence or revocation claim. Original scanner outcomes, AC statuses, historical verdict and overall FAIL unchanged."
+    },
+    "subsequent_parser_console_patch": {
+      "parent_commit": "074ee5a01841d7e52adaa7fe5395a60217c24add",
+      "finding": "SEC-PARSER-LOG-01",
+      "scope": "Explicit runtime parser print and validation-message substitutions; parsing data and remaining AST preserved",
+      "proof": ["evidence/parser-diagnostic-logs-red-20260921.json", "evidence/parser-diagnostic-logs-final-20260921.json", "evidence/parser-diagnostic-logs-final-quality-20260921.json", "evidence/parser-diagnostic-input-red-20260921.json", "evidence/parser-diagnostic-input-green-20260921.json", "evidence/parser-diagnostic-logs-review-20260921.md"],
+      "result": "Six causal failures become six passes; final29pure checks0.53s/capture834.243ms, eight hashes reconciled; scoped Ruff and normalized non-diagnostic AST parity pass.",
+      "limits": "AST-isolated synthetic cases plus actual-module pure units, not live browser/provider/full-backend/image/production proof. Dependency/worker/CLI diagnostics, raw application results and old logs/files remain separate. Original statuses and whole FAIL unchanged."
+    },
     "subsequent_parser_debug_file_patch": {
       "parent_commit": "bf277dbf8125c4b6ce37a2edb8dff64780926ab1",
       "finding": "SEC-DEBUG-BUNDLE-01",
@@ -791,7 +806,7 @@
         "evidence/parser-debug-bundle-review-20260921.md"
       ],
       "gaps": [
-        "Frozen 7cf0cd24 scans retain 711 history and 42 tree candidates with exit 1. Twenty priority history locations corroborate two service-role, one Wordstat and 17 anon-role occurrences. An additive guarded proof classifies 572 history rows as provider field material only (249 distinct values), not non-secret or revoked. Tree sidecar classifies 31 non-secrets and retains 10 Docs access components plus 1 UNKNOWN; 120 unclassified/UNKNOWN = 119 history + tree11. Graph 3117 and scanner 3095 are different metrics; exact 22 membership remains unproven. Docker-context configuration and parser debug-file persistence have scoped local corrections only. No signature, validity, expiry, revocation, RLS, image, layer, runtime, log or all-object security clearance. AC6 remains FAIL.",
+        "Frozen 7cf0cd24 scans retain 711 history and 42 tree candidates with exit 1. Twenty priority history locations corroborate two service-role, one Wordstat and 17 anon-role occurrences. An additive guarded proof classifies 572 history rows as provider field material only (249 distinct values), not non-secret or revoked. Tree sidecar classifies 31 non-secrets and retains 10 Docs access components plus 1 UNKNOWN; Four additional static content identifiers are proven non-secret; rows684/686 remain UNKNOWN. 116 unclassified/UNKNOWN = 115 history + tree11. Graph 3117 and scanner 3095 are different metrics; exact 22 membership remains unproven. Docker-context configuration, parser debug-file persistence and runtime parser console diagnostics have scoped local corrections only. No signature, validity, expiry, revocation, RLS, image, layer, runtime, log or all-object security clearance. AC6 remains FAIL.",
         "Strict full committed-source scan at334c9d4b has101 classified non-secret matches; the131-commit branch delta has7 classified synthetic/prose matches. Neither replaces all-ref history, runtime/image/log inspection or historical revocation. Current frontend528-entry lock audit returns0advisories;528 license declarations have explicit provenance. Private macOS133-distribution strict PyPI scan returns0advisories/0skips with exact audited/installed parity. Declaration inventory is not legal compliance or installed/release artifact integrity. Current image/layer/log/OS/embedded-native/AMD64/bot scans remain open. Historical privileged credential revocation and PyMuPDF license basis await owner confirmation. No live credential test, key rotation or history rewrite is authorized. Targeted AI/role/SSRF controls remain bounded evidence, not universal tool isolation proof."
       ],
       "historical_checkpoint": {

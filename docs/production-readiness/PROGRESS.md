@@ -1,5 +1,31 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, parser console confidentiality
+
+- [x] Previous login-only turn added no new goal completion evidence; current
+  HEAD074ee5a0 and nine foreign paths revalidated before this correction.
+- [x] SEC-PARSER-LOG-01: six synthetic cases reproduce raw values in parser
+  diagnostics; six pass after explicit value-free substitutions.
+- [x] Expanded final29 pure checks pass (12 new, 17 adjacent); actual-module
+  invalid-input probe also changes from privacy failure to pass.
+- [x] Scoped Ruff, eight source hashes and non-diagnostic AST equivalence pass.
+  Independent bounded review is recorded in the task evidence.
+- [x] Frozen history rows92–95 are static content identifiers. Rows684/686 stay
+  UNKNOWN; an initial os.getenv argument-position error is corrected and the
+  failed check retained. Remaining:115history + tree11 =116unclassified/UNKNOWN,
+  not a count of all remaining security risks.
+- [x] Precommit7163.087ms:25owned files/139224 staged bytes, strict secret scan
+  clean, nine captures/eight source hashes and six historical rows reconciled.
+  Final package adds the precommit capture and is verified again before commit.
+- [ ] Whole-project release gates remain incomplete. No production, DB,
+  Docker, provider, cleanup, push or deployment action was taken.
+
+Next: remaining frozen-history classifications and current diagnostic boundaries
+outside this parser; then the separately authorized aggregate/restore/image,
+real-API/demo/CI and final whole-DoD gates. Native preparation authority remains
+pending after denial; do not retry through another route. The last disk reading
+is historical, not a fresh headroom check. Original overall FAIL is unchanged.
+
 ## Latest checkpoint — 21 September, provider history and safe parser artifacts
 
 - [x] Previous turn was progress: committed `bf277dbf`; original objective and

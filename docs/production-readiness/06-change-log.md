@@ -1,5 +1,21 @@
 # Production-readiness change log
 
+## Parser console diagnostics — 21 September, parent074ee5a0
+
+SEC-PARSER-LOG-01 replaces raw URL, business fields, review/post details,
+arbitrary keys and exception interpolation with bounded diagnostic events.
+ValueError messages no longer echo the rejected input; types/admission and
+parser results are preserved. No helper, dependency, API payload or schema change.
+Six causal failures become six passes; final29 pure tests and eight-source-hash
+quality checks pass. Independent bounded review and exact timings are in COMMANDS.
+This is separate from the previous debug-file fix; existing logs, dependencies,
+CLI output, worker behavior and production are not certified or modified.
+
+The parallel six-row history proof clears only four static content-key
+identifiers. Two credential/default literals remain UNKNOWN. It corrects an
+initial argument-position mistake without suppressing or editing scanner rows.
+115history findings plus tree11 remain unclassified/UNKNOWN.
+
 ## Provider history and parser debug-file boundary — 21 September, parent bf277dbf
 
 Offline exact matching classifies all 572 historical debug-directory rows into

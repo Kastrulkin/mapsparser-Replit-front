@@ -7,6 +7,12 @@ must be observed afresh; the 17 September maintenance record is historical.
 
 ## Before any server action
 
+Local-only parser console correction (21 September): diagnostics retain event
+context, counts and presence/route categories, not raw URLs, provider content,
+arbitrary keys or exception messages. Do not reconstruct missing detail by
+dumping application results or old bundles into shared logs. This source patch
+has no release proof and does not sanitize worker/dependency/CLI output.
+
 Local-only parser debug-file change (21 September): keep
 `PARSER_DEBUG_BUNDLES_ENABLED` disabled unless diagnostics are explicitly needed.
 The pending revision writes bounded value-free shapes, URL categories and HTML

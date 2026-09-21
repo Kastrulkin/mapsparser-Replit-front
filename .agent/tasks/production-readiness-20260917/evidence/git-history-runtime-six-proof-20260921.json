@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "label": "git-history-runtime-six-proof",
+  "captured_at": "2026-09-21T01:48:07.004021+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    ".agent/tasks/production-readiness-20260917/support/git_history_runtime_six_20260921.py"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 370.538,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "{\"status\": \"failed\", \"error_type\": \"AssertionError\"}\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

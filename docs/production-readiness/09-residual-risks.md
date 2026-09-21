@@ -1,5 +1,19 @@
 # Residual risks — working register
 
+21 September, parent074ee5a0: the previously open raw console interpolation
+within `parser_interception.py` is now locally corrected (SEC-PARSER-LOG-01).
+Final29 pure checks and source review do not certify BrowserSession, worker,
+HTML-scraper dependencies, CLI raw result output, raw error return data,
+historical logs/files, full browser flow or production. Diagnostic details are
+intentionally reduced; static events and counters retain phase visibility.
+No native aggregate/restore, image, hosted CI or complete demo gate is promoted.
+
+The latest history queue is115history+tree11=116unclassified/UNKNOWN. Only four
+static content identifiers were cleared in this package. Rows684/686 remain
+unknown credential/default material; no live validation, rotation or expiry/
+revocation proof. Their current blobs differ, which does not prove the matched
+values are absent elsewhere. Earlier dated counts below remain historical.
+
 21 September, parent bf277dbf: 572 historical debug findings are now bound to
 four provider fields (249 distinct values), not declared non-secret or revoked.
 120 history/tree findings remain unclassified/UNKNOWN. All previously confirmed

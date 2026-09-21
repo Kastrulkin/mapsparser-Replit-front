@@ -1,5 +1,44 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, parser console correction
+
+Parent074ee5a01841d7e52adaa7fe5395a60217c24add; branch
+`codex/production-readiness-20260917`; baseline30262a5b. Only
+`src/parser_interception.py` changes runtime behavior in this package:
+diagnostic strings become static/presence/counts/fixed URL categories.
+Validation ValueError messages omit raw input, retaining exception type and
+admission. No parsing data/control-flow change in the normalized AST comparison.
+
+New `tests/test_parser_diagnostic_logs.py`: six causal privacy failures become
+six passes; final29 tests include 12 new diagnostics and17 prior parser/helper/
+orchestrator checks. Exact guarded commands, timings and eight source hashes:
+`evidence/parser-diagnostic-logs-final-20260921.json` and its final-quality
+capture. Real-module invalid-input red/green probes supplement AST-isolated
+tests, not a live browser/provider test. Independent review and limitations
+are in `evidence/parser-diagnostic-logs-review-20260921.md`.
+
+Continue using the final capture's explicit five-file test command; do not run
+unguarded pytest or native preparation. CLI raw result output, BrowserSession,
+worker, scraper dependencies, old logs/files and current images remain distinct
+boundaries. Native aggregate/restore permission remains pending after denials;
+Docker requires a fresh authorized headroom check (last ~6.06GiB, not current).
+Historical unsafe-reset effects remain INCONCLUSIVE. Nine foreign paths,
+historical verdict and AC1–9/11 FAIL / AC10 PASS / whole FAIL are preserved.
+No production/DB/provider/cleanup/push/deploy action was taken.
+
+History six-row successor proof462.090ms reproduces exact redacted whole-Match
+bindings plus isolated raw Git-object hashes. Four static content keys are
+nonsecret; os.getenv DEFAULT row684 and constructor argument686 stay UNKNOWN.
+Initial wrong argument-position classification failed370.538ms and is retained.
+Current unclassified queue115history + tree11 =116; existing provider/privileged
+material and its lifecycle risks are not cleared. Reproduce with the explicit
+command in `git-history-runtime-six-proof-verified-20260921.json`.
+
+Precommit7163.087ms checks25owned files/139224 staged bytes, nine captures,
+eight source hashes, six historical bindings, immutable verdict/AC statuses
+and nine excluded foreign file hashes. Strict staged scan is clean. The
+final26-file package adds that capture and gets the same checks again.
+
 ## Latest checkpoint — 21 September, provider fields and parser diagnostics
 
 Parent `bf277dbf8125c4b6ce37a2edb8dff64780926ab1`, branch

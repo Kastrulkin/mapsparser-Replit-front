@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "label": "parser-diagnostic-input-red",
+  "captured_at": "2026-09-21T01:37:33.380000+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-B",
+    "-c",
+    "import sys, pathlib, hashlib, json, io, contextlib\ndef forbid_external(event,args):\n    if event in {\"socket.connect\",\"subprocess.Popen\",\"os.system\",\"os.posix_spawn\",\"sqlite3.connect\"}:\n        raise RuntimeError(\"External I/O forbidden in diagnostic reproduction\")\nsys.addaudithook(forbid_external)\nsys.path.insert(0,str(pathlib.Path(\"src\").resolve()))\nfrom parser_interception import YandexMapsInterceptionParser\nmarker=\"synthetic-parser-private-log-marker\"\noutput=io.StringIO()\nredirect=contextlib.redirect_stdout(output)\nerror=\"\"\nredirect.__enter__()\ntry:\n    YandexMapsInterceptionParser().parse_yandex_card(marker,session=None)\nexcept ValueError as caught:\n    error=str(caught)\nfinally:\n    redirect.__exit__(None,None,None)\nprint(json.dumps({\"parser_sha256\":hashlib.sha256(pathlib.Path(\"src/parser_interception.py\").read_bytes()).hexdigest(),\"url_rejected\":bool(error),\"synthetic_marker_in_stdout\":marker in output.getvalue(),\"synthetic_marker_in_error\":marker in error,\"external_io_guard\":True}))\nassert marker not in output.getvalue(), \"Private input appears in parser stdout\"\nassert marker not in error, \"Private input appears in validation error\"\n"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 149.291,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "{\"parser_sha256\": \"b60cd0174901ce77a342d834ee38addd205320bae42967a027a4dbb763b404f2\", \"url_rejected\": true, \"synthetic_marker_in_stdout\": true, \"synthetic_marker_in_error\": true, \"external_io_guard\": true}\n",
+  "stderr": "Traceback (most recent call last):\n  File \"<string>\", line 20, in <module>\nAssertionError: Private input appears in parser stdout\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

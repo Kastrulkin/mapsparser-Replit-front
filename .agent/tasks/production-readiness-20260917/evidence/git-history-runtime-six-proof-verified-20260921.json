@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "label": "git-history-runtime-six-proof-verified",
+  "captured_at": "2026-09-21T01:51:50.454441+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    ".agent/tasks/production-readiness-20260917/support/git_history_runtime_six_20260921.py"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 462.09,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"report_sha256\": \"7fbbbdb37d231b6b5a32d56d66d6ec24f4a5f0f64f95d4a6113f448f8acc2732\", \"rows\": [{\"classification\": \"HISTORICAL_STATIC_CONTENT_KEY_LITERAL_NONSECRET\", \"commit\": \"1607cd8931fa62eeeeec9c24824f6318d573c395\", \"current_blob_differs\": true, \"git_blob_oid\": \"ffdbb90ac1f603d7a9ac6968c20978614236913d\", \"git_object_hash_verified\": true, \"line\": 462, \"path\": \"src/services/outreach_playbook.py\", \"raw_blob_sha1\": \"eaac42f8c0b396fddb9e78176b862ec439d70c37\", \"raw_blob_sha256\": \"83b324276341358f60aff20d6f6fff29a3c9d3aa54e14b8fe267f222e5febaac\", \"redacted_whole_match_equal\": true, \"report_match_masked\": true, \"row_id\": 92, \"single_candidate_on_exact_line\": true}, {\"classification\": \"HISTORICAL_STATIC_CONTENT_KEY_LITERAL_NONSECRET\", \"commit\": \"1607cd8931fa62eeeeec9c24824f6318d573c395\", \"current_blob_differs\": true, \"git_blob_oid\": \"ffdbb90ac1f603d7a9ac6968c20978614236913d\", \"git_object_hash_verified\": true, \"line\": 481, \"path\": \"src/services/outreach_playbook.py\", \"raw_blob_sha1\": \"eaac42f8c0b396fddb9e78176b862ec439d70c37\", \"raw_blob_sha256\": \"83b324276341358f60aff20d6f6fff29a3c9d3aa54e14b8fe267f222e5febaac\", \"redacted_whole_match_equal\": true, \"report_match_masked\": true, \"row_id\": 93, \"single_candidate_on_exact_line\": true}, {\"classification\": \"HISTORICAL_STATIC_CONTENT_KEY_LITERAL_NONSECRET\", \"commit\": \"1607cd8931fa62eeeeec9c24824f6318d573c395\", \"current_blob_differs\": true, \"git_blob_oid\": \"ffdbb90ac1f603d7a9ac6968c20978614236913d\", \"git_object_hash_verified\": true, \"line\": 497, \"path\": \"src/services/outreach_playbook.py\", \"raw_blob_sha1\": \"eaac42f8c0b396fddb9e78176b862ec439d70c37\", \"raw_blob_sha256\": \"83b324276341358f60aff20d6f6fff29a3c9d3aa54e14b8fe267f222e5febaac\", \"redacted_whole_match_equal\": true, \"report_match_masked\": true, \"row_id\": 94, \"single_candidate_on_exact_line\": true}, {\"classification\": \"HISTORICAL_STATIC_CONTENT_KEY_LITERAL_NONSECRET\", \"commit\": \"0b8a1927b19494891569907c6369a2c33c848312\", \"current_blob_differs\": true, \"git_blob_oid\": \"969041f311e37d40f9faad703b530a9eee9af2a1\", \"git_object_hash_verified\": true, \"line\": 344, \"path\": \"src/services/outreach_playbook.py\", \"raw_blob_sha1\": \"cc5e84290dfc2a2439ba0dfb9eeede29843fd6e6\", \"raw_blob_sha256\": \"683d548b73d4fcb7a8c3d23f8ee05df1cb2d57128442c4538095b6862cb96a0e\", \"redacted_whole_match_equal\": true, \"report_match_masked\": true, \"row_id\": 95, \"single_candidate_on_exact_line\": true}, {\"classification\": \"HISTORICAL_ENVIRONMENT_DEFAULT_LITERAL_UNKNOWN\", \"commit\": \"06ee25d93651e64627b5013d557d895d7c332647\", \"current_blob_differs\": true, \"git_blob_oid\": \"45df763c0508861fc7dfa868812be5e38d5f8fdd\", \"git_object_hash_verified\": true, \"line\": 9, \"path\": \"src/wordstat_config.py\", \"raw_blob_sha1\": \"89882f81e1f92b5ecca85dd0985074fdaa9b98c0\", \"raw_blob_sha256\": \"f94f8af5df36ff0b8f2f67c45386034e4ac9c7b72ba8e97a3bf135ba6ab0b1e2\", \"redacted_whole_match_equal\": true, \"report_match_masked\": true, \"row_id\": 684, \"single_candidate_on_exact_line\": true}, {\"classification\": \"HISTORICAL_HARDCODED_CLIENT_SECRET_LITERAL_UNKNOWN\", \"commit\": \"06ee25d93651e64627b5013d557d895d7c332647\", \"current_blob_differs\": true, \"git_blob_oid\": \"1210ba4092a367897460e25a2c7f1bad565c891c\", \"git_object_hash_verified\": true, \"line\": 187, \"path\": \"src/wordstat_client.py\", \"raw_blob_sha1\": \"2943eb749e08653cfd969aa874abc860921e6c98\", \"raw_blob_sha256\": \"50cdb6093bfb34a4505d1ef6568297c57331ef5ff4cfcde82f78fb9967785d6c\", \"redacted_whole_match_equal\": true, \"report_match_masked\": true, \"row_id\": 686, \"single_candidate_on_exact_line\": true}]}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}
