@@ -1,5 +1,20 @@
 # Production-readiness change log
 
+## Provider history and parser debug-file boundary — 21 September, parent bf277dbf
+
+Offline exact matching classifies all 572 historical debug-directory rows into
+four provider fields; 249 distinct values, no non-secret/validity claim. The
+guarded successor capture and independent review supersede the initial method's
+implicit caller-environment dependency. 120 history/tree rows remain unclassified.
+
+SEC-DEBUG-BUNDLE-01 removes raw provider data from newly generated parser debug
+files through a stdlib-only bounded shape/URL/HTML helper. JSON response names
+no longer contain URL fragments; raw screenshots are omitted. Canonical file
+names remain, but payloads are metadata rather than replayable provider data.
+In-memory parser inputs/results are unchanged. Synthetic RED failed causally;
+new regression checks and existing parser unit tests pass. Exact final counts,
+durations and source hashes are in COMMANDS/task captures. No migration or rollout.
+
 ## Tree secret triage and Docker artifact fence — 21 September, parent08c383e1
 
 SEC-BUILD-CONTEXT-02 adds tmp-google-docs-* to.dockerignore and one static

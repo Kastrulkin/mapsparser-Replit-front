@@ -1,5 +1,16 @@
 # Residual risks — working register
 
+21 September, parent bf277dbf: 572 historical debug findings are now bound to
+four provider fields (249 distinct values), not declared non-secret or revoked.
+120 history/tree findings remain unclassified/UNKNOWN. All previously confirmed
+privileged/provider access lifecycle gates remain open.
+
+SEC-DEBUG-BUNDLE-01 locally minimizes new parser file artifacts; its opt-in is
+still disabled by default. This does not erase old bundles, prove filesystem
+ACLs/retention or sanitize all existing console messages (raw URL/title/address
+and exception diagnostics need a separate pass). Full parser/browser/image and
+deployed revision proof remain absent. Whole readiness stays FAIL.
+
 21 September, parent08c383e1: tree sidecar leaves692unresolved=691history+1tree;
 ten additional historical Google Docs resource-access URI components are not
 classified safe by default expiry.31tree rows are verified non-secret. New

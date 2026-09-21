@@ -1,5 +1,35 @@
 # Verified commands and evidence
 
+## Provider history and parser debug files — 21 September, parent bf277dbf
+
+Exact commands and source hashes are in the named task evidence captures.
+Historical matching reads raw Git objects as data in a named tmux session; it
+never executes captured source or requests its URLs. Parser tests use synthetic
+data only; actual adjacent module imports have socket/process/SQLite I/O denied,
+pytest conftest disabled and third-party plugin autoload disabled. No DB prep.
+
+| Capture basename | Actual result | Duration ms |
+| --- | --- | ---: |
+| git-history-debug-proof | 572 rows; 536 field bindings/36 UNKNOWN; implicit caller Git guards, contextual only | 4303.990 |
+| git-history-debug-proof-verified | Explicit Git child guards; 572 field bindings/249 distinct values; source digest recorded | 6029.264 |
+| parser-debug-bundle-red | 1 fail/1 pass; synthetic response persisted; causal regression | 142.814 |
+| parser-debug-bundle-green | 5 new checks pass before final assertion expansion | 91.599 |
+| parser-debug-bundle-adjacent | 12 existing parser units pass; actual parser import, I/O denied | 868.012 |
+| parser-debug-bundle-final | 17 combined checks pass in 0.23s; seven exact source hashes | 539.002 |
+| parser-debug-bundle-quality | New helper/test Ruff, parser F821/F822/F823, Node syntax and diff checks pass; seven source hashes still match | 2938.348 |
+| parser-debug-precommit | 29 owned files/613462 staged bytes; strict scan clean; seven captures/hashes reconciled; 572 offline bindings reproduced; nine foreign paths excluded | 10806.085 |
+
+No capture timed out or truncated. Quality includes a nonfatal Darwin temp-path
+warning from its Git child; it is not a completely silent run. Neither the
+AST-extracted response callback nor static sink guards establish a full live
+browser/env-flag flow. No provider, production, Docker, full aggregate or native
+DB validation occurred. Use the verified history successor and preserve the RED.
+The final 30-file package adds the precommit capture and gets the same checks
+again before committing; the recorded 29-file byte count is not relabeled.
+
+Continue this bounded pure suite with the exact `parser-debug-bundle-final`
+capture command; do not substitute unguarded full pytest/native DB preparation.
+
 ## Tree triage and Docker context — 21 September, parent08c383e1
 
 Exact commands in task evidence/git-tree-*-20260921.json. Offline stdlib AST/JSON/

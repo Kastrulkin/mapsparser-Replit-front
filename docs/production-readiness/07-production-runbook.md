@@ -7,6 +7,15 @@ must be observed afresh; the 17 September maintenance record is historical.
 
 ## Before any server action
 
+Local-only parser debug-file change (21 September): keep
+`PARSER_DEBUG_BUNDLES_ENABLED` disabled unless diagnostics are explicitly needed.
+The pending revision writes bounded value-free shapes, URL categories and HTML
+placeholders, without screenshots. `payload.json` and the URL text files are
+diagnostic metadata, not replay inputs. Existing files are not rewritten by this
+change and may contain private data: do not paste legacy bundles or run the
+page.html-printing support helper on them in shared logs. Retention/removal and
+access decisions need separate authority. This is not deployment permission.
+
 Local-only pending change AI-APPROVAL-DRAFT-IDENTITY-04 (20 September): after an
 authorized future rollout, versionless/stale draft approvals intentionally fail
 closed. Do not backfill consent or bulk-approve old decisions. The user should

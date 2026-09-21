@@ -1,5 +1,29 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, provider history and safe parser artifacts
+
+- [x] Previous turn was progress: committed `bf277dbf`; original objective and
+  current worktree revalidated. Nine unrelated paths remain preserved.
+- [x] Classify 572 historical debug findings by exact source fields, not by
+  secret-name heuristics: 510 hittoken, 26 aesKey, 8 clientKey, 28 ordToken.
+  There are 249 distinct values; no non-secret or validity clearance is claimed.
+- [x] Reproduce SEC-DEBUG-BUNDLE-01: synthetic private JSON persisted by the
+  real response callback (1 fail / 1 pass); correct all parser debug file sinks.
+  Preserve the in-memory result; bound metadata and omit raw HTML/screenshots.
+- [x] Initial five new checks and twelve adjacent parser units pass; final
+  combined run and evidence/source reconciliation are recorded in COMMANDS.
+- [x] Precommit: 29 owned files, strict staged secret scan clean, seven source
+  hashes reconciled and 572 offline historical bindings reproduced.
+- [ ] 119 history findings plus tree11 remain unclassified/UNKNOWN (120 total).
+  OAuth transcript provenance alone is insufficient to clear its three rows.
+- [ ] Next: complete current parser-log confidentiality checks and remaining
+  history classifications; full-flow/image/production proof is still missing.
+
+The 572-row classification reduces the unclassified queue, not the security
+risk count. Historical credential lifecycle, exact 22-commit counter membership,
+native aggregate/restore authority, Docker headroom and original whole FAIL
+remain open. Old diagnostic files were not deleted and production is unchanged.
+
 ## Latest checkpoint — 21 September, tree triage and Docker context
 
 - [x] Previous login-only turn was no progress; original objective reread and

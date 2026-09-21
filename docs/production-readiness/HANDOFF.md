@@ -1,5 +1,44 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, provider fields and parser diagnostics
+
+Parent `bf277dbf8125c4b6ce37a2edb8dff64780926ab1`, branch
+`codex/production-readiness-20260917`, baseline `30262a5b`. Previous turn made
+progress through the committed Docker fence; this package adds historical
+classification and a separate current parser debug-file correction.
+
+Use `evidence/git-history-debug-proof-verified-20260921.json`, not the initial
+capture, for guarded immutable-object proof: 572 rows / 542 source specs /
+4,254,907 bytes, four provider fields, 249 equality groups, 6,029.264 ms.
+No values/hashes of values were emitted. The initial 536 classified + 36 UNKNOWN
+result is retained. Independent review confirms preserved bindings and explicit
+Git child environment. Original metadata/scan exits and historical verdict stay
+unchanged. Remaining unclassified: 119 history + tree11 = 120. Do not clear the
+three OAuth transcript rows from test names/fixture provenance alone.
+
+SEC-DEBUG-BUNDLE-01: new `src/core/parser_debug_artifacts.py`, scoped changes in
+`src/parser_interception.py`, and `tests/test_parser_debug_bundle_safety.py`.
+RED callback test actually wrote its synthetic marker (1 fail / 1 pass,
+142.814 ms). Value-free bounded schema, enum URL summaries and placeholder HTML
+now cover debug file sinks; raw screenshots/URL filenames are removed. Parsing
+data is not modified. Final pure-unit evidence includes existing parser cases,
+with sockets/processes/SQLite denied and no pytest conftest/plugin autoload.
+This is not a full browser-session, env-flag, image or production test.
+
+Precommit passes in 10,806.085 ms: 29 owned files/613,462 staged bytes, strict
+secret scan clean, seven captures and seven source hashes reconciled, 572
+offline bindings reproduced and nine foreign paths excluded. Final 30-file
+package adds that capture and is checked again before the local commit.
+
+Next safe task: finish remaining exact-context history classifications and
+reproduce/fix parser diagnostic-log URL/title/exception leakage separately.
+Old diagnostic files and their ACLs/retention remain unverified; do not print
+old page.html files or clean them up without authority. Native aggregate/restore
+prep remains denied pending renewed permission; no DB workaround. Last measured
+Mac space ~6.06 GiB is below the 10 GiB Docker floor; no Docker was invoked.
+Nine foreign paths remain excluded, prior unsafe-reset effects INCONCLUSIVE,
+AC1–9/11 FAIL, AC10 PASS, whole FAIL. No push/deploy/provider/production writes.
+
 ## Latest checkpoint — 21 September, tree triage and Docker context
 
 Parent08c383e14de9b555c7ea4591319ccf4c88905cf7; branch unchanged. Frozen scan

@@ -2,6 +2,22 @@
   "task_id": "production-readiness-20260917",
   "overall_status": "FAIL",
   "checkpoint": {
+    "subsequent_parser_debug_file_patch": {
+      "parent_commit": "bf277dbf8125c4b6ce37a2edb8dff64780926ab1",
+      "finding": "SEC-DEBUG-BUNDLE-01",
+      "scope": "New parser debug-file persistence only; value-free schema/URL/HTML summaries and no raw screenshots, with unchanged in-memory parser data",
+      "proof": ["evidence/parser-debug-bundle-red-20260921.json", "evidence/parser-debug-bundle-final-20260921.json", "evidence/parser-debug-bundle-quality-20260921.json", "evidence/parser-debug-bundle-review-20260921.md"],
+      "result": "Causal1fail/1pass142.814ms; final17pure passes0.23s/capture539.002ms. Seven current source hashes match; new helper/test Ruff and parser F821/F822/F823 pass. Independent bounded review accepted.",
+      "limits": "Response callback executes from exact source AST; other sink coverage combines helper tests, static guards and review. Existing adjacent parser tests import the actual parser with external I/O denied. No full browser/env-flag/live-provider/image/current-aggregate proof. Existing logs and old artifacts are separate unresolved boundaries. No production change or acceptance promotion."
+    },
+    "subsequent_history_debug_triage": {
+      "parent_commit": "bf277dbf8125c4b6ce37a2edb8dff64780926ab1",
+      "scope": "572 frozen historical provider-debug findings; field-material classification, not secret clearance",
+      "proof": ["evidence/git-history-debug-proof-verified-20260921.json", "evidence/git-history-debug-triage-review-20260921.md"],
+      "result": "510 settings.hittoken, 26 HTML aesKey, 8 HTML clientKey, 28 JSON ordToken; 249 distinct values; 542 source specs/4254907 bytes; exit0/6029.264ms, no timeout/truncation/stderr",
+      "remaining_unclassified": "119 history rows plus tree11 UNKNOWN = 120; previously classified access material and all owner/provider lifecycle gates remain open",
+      "limits": "No validity, expiry, privilege, purpose, current-presence or revocation proof. No source data executed, URLs requested, deletion, history rewrite, DB, Docker or production action. Original AC statuses and whole FAIL unchanged."
+    },
     "observed_date": "2026-09-20",
     "documentation_commit": "fbbdec6bfc94322689a826ec1066cc7750cb067c",
     "application_source_commit": "5cc7c0cddc1df4356f23e1e6c6e0f0b68d849721",
@@ -768,10 +784,14 @@
         "evidence/git-tree-triage-20260921.json",
         "evidence/git-tree-triage-notes-20260921.md",
         "evidence/git-tree-triage-review-20260921.md",
-        "evidence/git-tree-docker-context-review-20260921.md"
+        "evidence/git-tree-docker-context-review-20260921.md",
+        "evidence/git-history-debug-proof-verified-20260921.json",
+        "evidence/git-history-debug-triage-review-20260921.md",
+        "evidence/parser-debug-bundle-final-20260921.json",
+        "evidence/parser-debug-bundle-review-20260921.md"
       ],
       "gaps": [
-        "Frozen 7cf0cd24 scans retain 711 history and 42 tree candidates with exit 1. Twenty priority history locations corroborate two service-role, one Wordstat and 17 anon-role occurrences. Tree sidecar classifies 31 values as non-secret, retains 10 Docs image-access URI components and one UNKNOWN; 692 unresolved = 691 history plus tree row 11. Graph count 3117 and scanner count 3095 are different metrics; exact 22-member difference remains unproven. SEC-BUILD-CONTEXT-02 corrects provider-artifact exclusion with static proof only. No signature, validity, expiry, revocation, RLS, image, layer, runtime, log or all-object security clearance. AC6 remains FAIL.",
+        "Frozen 7cf0cd24 scans retain 711 history and 42 tree candidates with exit 1. Twenty priority history locations corroborate two service-role, one Wordstat and 17 anon-role occurrences. An additive guarded proof classifies 572 history rows as provider field material only (249 distinct values), not non-secret or revoked. Tree sidecar classifies 31 non-secrets and retains 10 Docs access components plus 1 UNKNOWN; 120 unclassified/UNKNOWN = 119 history + tree11. Graph 3117 and scanner 3095 are different metrics; exact 22 membership remains unproven. Docker-context configuration and parser debug-file persistence have scoped local corrections only. No signature, validity, expiry, revocation, RLS, image, layer, runtime, log or all-object security clearance. AC6 remains FAIL.",
         "Strict full committed-source scan at334c9d4b has101 classified non-secret matches; the131-commit branch delta has7 classified synthetic/prose matches. Neither replaces all-ref history, runtime/image/log inspection or historical revocation. Current frontend528-entry lock audit returns0advisories;528 license declarations have explicit provenance. Private macOS133-distribution strict PyPI scan returns0advisories/0skips with exact audited/installed parity. Declaration inventory is not legal compliance or installed/release artifact integrity. Current image/layer/log/OS/embedded-native/AMD64/bot scans remain open. Historical privileged credential revocation and PyMuPDF license basis await owner confirmation. No live credential test, key rotation or history rewrite is authorized. Targeted AI/role/SSRF controls remain bounded evidence, not universal tool isolation proof."
       ],
       "historical_checkpoint": {

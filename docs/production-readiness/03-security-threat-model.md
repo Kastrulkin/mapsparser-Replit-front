@@ -4,6 +4,15 @@ Status: incomplete security assessment, not a production approval. Baseline `302
 
 ## Assets and adversaries
 
+21 September follow-up, parent bf277dbf: 572 frozen debug-directory scanner
+rows bind to provider fields (510 hittoken, 26 aesKey, 8 clientKey, 28 ordToken;
+249 distinct values). This classifies storage context only. Purpose, privilege,
+validity and revocation remain unknown; 119 history rows plus tree11 are still
+unclassified. The separate current producer candidate SEC-DEBUG-BUNDLE-01 was
+reproduced with a synthetic response callback and corrected at its debug-file
+boundary. New diagnostics omit raw values/HTML/URLs/screenshots. Existing logs,
+bundles, deployed images and full browser-session behavior retain separate gates.
+
 21 September tree follow-up at 08c383e1: 42 rows adjudicated conservatively as
 31 non-secret source digests, fixtures and identifiers; 10 Google Docs image-access
 URI components (one repeated query value); one UNKNOWN. Another 691 history rows

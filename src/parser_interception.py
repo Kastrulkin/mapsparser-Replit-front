@@ -16,6 +16,7 @@ import os
 from datetime import datetime
 
 from browser_session import BrowserSession, BrowserSessionManager
+from core.parser_debug_artifacts import debug_html_placeholder, debug_url_summary, debug_value_shape
 
 DEBUG_DIR = os.getenv("DEBUG_DIR", "/app/debug_data")
 
@@ -672,12 +673,10 @@ class YandexMapsInterceptionParser:
                             if self.debug_bundle_dir:
                                 try:
                                     os.makedirs(self.debug_bundle_dir, exist_ok=True)
-                                    clean_url = url.split("?")[0].replace("/", "_").replace(":", "")[-50:]
-                                    timestamp = int(time.time() * 1000)
-                                    filename = f"{timestamp}_{clean_url}.json"
+                                    filename = f"response_{time.time_ns()}.json"
                                     filepath = os.path.join(self.debug_bundle_dir, filename)
                                     with open(filepath, "w", encoding="utf-8") as f:
-                                        json.dump(json_data, f, ensure_ascii=False, indent=2)
+                                        json.dump(debug_value_shape(json_data), f, ensure_ascii=False, indent=2)
                                 except Exception as e:
                                     print(f"Failed to save debug json: {e}")
 
@@ -858,7 +857,7 @@ class YandexMapsInterceptionParser:
                     html_redirect = page.content()
                     os.makedirs(self.debug_bundle_dir, exist_ok=True)
                     with open(os.path.join(self.debug_bundle_dir, "redirect_page.html"), "w", encoding="utf-8") as f:
-                        f.write(html_redirect or "")
+                        f.write(debug_html_placeholder(html_redirect))
                 except Exception:
                     pass
 
@@ -885,7 +884,7 @@ class YandexMapsInterceptionParser:
                         html_failed = page.content()
                         os.makedirs(self.debug_bundle_dir, exist_ok=True)
                         with open(os.path.join(self.debug_bundle_dir, "failed_page_final.html"), "w", encoding="utf-8") as f:
-                            f.write(html_failed or "")
+                            f.write(debug_html_placeholder(html_failed))
                     except Exception:
                         pass
         else:
@@ -1396,13 +1395,6 @@ class YandexMapsInterceptionParser:
 
                 # Информация о cookies и доменах
                 cookie_domains = set()
-                final_host = ""
-                try:
-                    parsed = urlparse(final_url)
-                    final_host = parsed.hostname or ""
-                except Exception:
-                    final_host = ""
-
                 try:
                     cookies = context.cookies()
                     for c in cookies:
@@ -1419,26 +1411,23 @@ class YandexMapsInterceptionParser:
                 }
 
                 timestamp = int(time.time() * 1000)
-                safe_org = (self.org_id or "unknown")[:32]
-                summary_name = f"debug_{timestamp}_{safe_org}.json"
-                html_name = f"debug_{timestamp}_{safe_org}.html"
-                screenshot_name = f"debug_{timestamp}_{safe_org}.png"
+                summary_name = f"debug_{timestamp}.json"
+                html_name = f"debug_{timestamp}.html"
 
                 summary_path = os.path.join(debug_dir, summary_name)
                 html_path = os.path.join(debug_dir, html_name)
-                screenshot_path = os.path.join(debug_dir, screenshot_name)
 
                 debug_summary = {
-                    "final_url": final_url,
-                    "page_title": page_title,
+                    "final_url": debug_url_summary(final_url),
+                    "page_title_length": len(page_title),
                     "html_length": html_length,
                     "intercepted_json_count": intercepted_json_count,
-                    "last_10_json_urls": last_10_urls,
-                    "top_3_largest_json_urls": top_3_urls,
-                    "cookie_domains": sorted(cookie_domains),
-                    "final_host": final_host,
+                    "last_10_json_urls": [debug_url_summary(item) for item in last_10_urls],
+                    "top_3_largest_json_urls": [debug_url_summary(item) for item in top_3_urls],
+                    "cookie_domain_count": len(cookie_domains),
                     "blocked_flags": blocked_flags,
-                    "org_id": self.org_id,
+                    "org_id_present": bool(self.org_id),
+                    "raw_content_omitted": True,
                 }
 
                 # Поиск ключевых путей в крупнейших JSON-ответах
@@ -1472,21 +1461,19 @@ class YandexMapsInterceptionParser:
                         continue
 
                 if found_key_paths:
-                    debug_summary["found_key_paths"] = found_key_paths
+                    debug_summary["found_key_path_counts"] = {
+                        key: len(items) for key, items in found_key_paths.items()
+                    }
 
                 with open(summary_path, "w", encoding="utf-8") as f:
                     json.dump(debug_summary, f, ensure_ascii=False, indent=2)
 
                 if html_content:
                     with open(html_path, "w", encoding="utf-8") as f:
-                        f.write(html_content)
+                        f.write(debug_html_placeholder(html_content))
 
-                try:
-                    page.screenshot(path=screenshot_path, full_page=True)
-                except Exception:
-                    pass
-
-                print(f"💾 Debug bundle saved: {summary_name}, {html_name}, {screenshot_name}")
+                # Authenticated screenshots can expose private page content.
+                print(f"💾 Value-free debug bundle saved: {summary_name}, {html_name}")
             except Exception as e:
                 print(f"⚠️ Failed to save debug bundle: {e}")
 
@@ -1523,25 +1510,25 @@ class YandexMapsInterceptionParser:
                 bundle_dir = self.debug_bundle_dir
                 os.makedirs(bundle_dir, exist_ok=True)
 
-                # HTML последней страницы — всегда сохраняем
+                # Keep the canonical artifact name without persisting raw HTML.
                 try:
                     page_html = page.content()
                 except Exception:
                     page_html = html_content or ""
                 with open(os.path.join(bundle_dir, "page.html"), "w", encoding="utf-8") as f:
-                    f.write(page_html or "")
+                    f.write(debug_html_placeholder(page_html))
 
                 # Исходный URL
                 try:
                     with open(os.path.join(bundle_dir, "request_url.txt"), "w", encoding="utf-8") as f:
-                        f.write(initial_url or "")
+                        json.dump(debug_url_summary(initial_url), f)
                 except Exception:
                     pass
 
                 # Финальный URL
                 try:
                     with open(os.path.join(bundle_dir, "final_url.txt"), "w", encoding="utf-8") as f:
-                        f.write(final_url or "")
+                        json.dump(debug_url_summary(final_url), f)
                 except Exception:
                     pass
 
@@ -1552,10 +1539,10 @@ class YandexMapsInterceptionParser:
                 except Exception:
                     pass
 
-                # Сырой payload (итоговый card_data)
+                # Shape only; the in-memory parser result remains unchanged.
                 try:
                     with open(os.path.join(bundle_dir, "payload.json"), "w", encoding="utf-8") as f:
-                        json.dump(data, f, ensure_ascii=False, indent=2)
+                        json.dump(debug_value_shape(data), f, ensure_ascii=False, indent=2)
                 except Exception as e:
                     print(f"⚠️ Failed to write payload.json: {e}")
             except Exception as e:

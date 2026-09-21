@@ -1,5 +1,18 @@
 # Readiness decisions
 
+## D-071 — Keep provider diagnostics useful without persisting raw content
+
+Field names do not prove that arbitrary provider values are safe. Classify
+historical findings conservatively and keep owner/provider lifecycle gates open.
+For new parser debug files, retain a bounded schema, lengths/counts and fixed
+route/state categories instead of raw values, arbitrary keys, URLs, HTML or
+screenshots. This intentionally reduces forensic detail; the core parsing
+result remains unchanged. Do not silently enable a raw-content override.
+
+Existing bundles, console logs and deployed images are separate boundaries.
+Do not call a file-write regression pass a global log/data confidentiality proof.
+Preserve initial failed checks and require independent source/evidence review.
+
 ## D-070 — Classify resource URLs by their contract; fence packaging separately
 
 An image contentUri can carry access even when it is not an API key. Preserve
