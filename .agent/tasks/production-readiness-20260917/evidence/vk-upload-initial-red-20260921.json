@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "label": "vk-upload-initial-red",
+  "captured_at": "2026-09-21T07:42:11.990289+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-B",
+    "-c",
+    "import pathlib,sys,unittest,hashlib,json\nexpected=[{\"path\":\"src/services/social_posts/media_delivery.py\",\"sha256\":\"a1c452d32802254522d7a8dcc74c2d2b23b3acd86245b59c10608241b3eeb264\"},{\"path\":\"src/services/social_posts/recommendations_handoff.py\",\"sha256\":\"cda8a11bcf7c8513651d6c66cc61c32da8c16104f183d87f5227a66e11aa0375\"},{\"path\":\"src/core/outbound_network.py\",\"sha256\":\"6f019e96cbdf3fdb09c2ced2f10769a32fee87107ce28e8ae40adac6feb02b63\"},{\"path\":\"tests/test_vk_media_upload_destination.py\",\"sha256\":\"b4cf071d061895948cdc3ad6f1693dd055ca05236305795e811f6b3dd6941b8e\"}]\nfor row in expected:\n    assert hashlib.sha256(pathlib.Path(row[\"path\"]).read_bytes()).hexdigest()==row[\"sha256\"],row[\"path\"]\nprint(json.dumps({\"source_hashes\":expected}),flush=True)\ndef guard(event,args):\n    if event.startswith(\"socket.\") or event in {\"subprocess.Popen\",\"os.system\",\"os.posix_spawn\",\"os.fork\"}:\n        raise RuntimeError(\"Forbidden external effect: \"+event)\n    if event==\"open\" and isinstance(args[0],str) and pathlib.Path(args[0]).name.startswith(\".env\"):\n        raise RuntimeError(\"Forbidden environment file\")\n    if event==\"import\" and str(args[0]).split(\".\")[0] in {\"psycopg2\",\"psycopg\",\"docker\"}:\n        raise RuntimeError(\"Forbidden database/container import\")\nsys.addaudithook(guard)\np=pathlib.Path(\"tests/test_vk_media_upload_destination.py\").resolve()\nexec(compile(p.read_text(),str(p),\"exec\"),{\"__name__\":\"__main__\",\"__file__\":str(p)})\n"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 262.883,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"source_hashes\": [{\"path\": \"src/services/social_posts/media_delivery.py\", \"sha256\": \"a1c452d32802254522d7a8dcc74c2d2b23b3acd86245b59c10608241b3eeb264\"}, {\"path\": \"src/services/social_posts/recommendations_handoff.py\", \"sha256\": \"cda8a11bcf7c8513651d6c66cc61c32da8c16104f183d87f5227a66e11aa0375\"}, {\"path\": \"src/core/outbound_network.py\", \"sha256\": \"6f019e96cbdf3fdb09c2ced2f10769a32fee87107ce28e8ae40adac6feb02b63\"}, {\"path\": \"tests/test_vk_media_upload_destination.py\", \"sha256\": \"b4cf071d061895948cdc3ad6f1693dd055ca05236305795e811f6b3dd6941b8e\"}]}\n",
+  "stderr": "\n----------------------------------------------------------------------\nRan 0 tests in 0.000s\n\nOK\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

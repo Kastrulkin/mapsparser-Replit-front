@@ -1,5 +1,89 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, VK private upload destinations
+
+Package parent is `8be8e45a`; check `git log -1 --oneline` and
+`git status --short` for current commit/staging state. No deployment.
+Root owns `src/core/outbound_network.py`,
+`src/services/social_posts/media_delivery.py` and new
+`tests/test_vk_media_upload_destination.py` for this package, alongside the
+five cumulative-review documentation files below. Thirteen foreign
+paths remain excluded. No production, DB, Docker, provider write or cleanup.
+
+Current code uses a new bounded HTTPS/public-IP-pinned POST, original TLS
+Host/SNI verification, explicit HTTP(S) proxy CONNECT, no direct fallback,
+redirect or retry. Existing callback POST and public-media GET remain unchanged.
+VK API get-server/save calls retain existing routing. Full upload JSON is kept
+up to 1 MB; HTTP/decode/empty-invalid/oversized/transport errors stop before
+save with finite local errors. Parsed provider error payloads remain unchanged.
+This is private/rebinding SSRF protection, NOT a verified allowlist of all VK
+upload hosts or protection against a malicious public host returned by a
+compromised provider. No host list was invented; that remaining trust decision
+must stay visible. Three real urllib3 construction/CONNECT-configuration tests
+and independent static review pass; real TLS/proxy interoperability is untested.
+
+Current evidence (all in task evidence, suffix `-20260921.json`):
+`vk-upload-initial-red` erroneously ran ZERO tests, retained as harness failure;
+`vk-upload-causal-red` ran original six: 5 failures/1 pass;
+`vk-upload-six-baseline` same adapted six at immutable HEAD: 5 failures/1 pass;
+`vk-upload-six-green` six current passes;
+`vk-upload-causal12-baseline` final causal subset: 11 failures/1 pass/0 errors,
+585.821 ms capture; `vk-upload-guarded22-green` all 22 current tests pass,
+496.045 ms capture (0.384 s tests), untruncated/no timeout. The extra ten are
+current-only hardening checks, not twelve more baseline reproductions.
+Four source/test hashes are embedded in captures. No assertions were weakened.
+Network, subprocess-after-guard, DB/Docker imports and env-file reads were
+blocked; API/media/HTTP response boundaries are synthetic. This is not native
+or provider runtime proof. Ruff for new test/core and diff-check pass.
+
+Final source-bound evidence supersedes those intermediate counts:
+`vk-upload-final12-baseline`: 11 failures/1 control/0 errors, 446.770 ms;
+`vk-upload-final25-green`: all25 pass, 671.103 ms;
+`vk-upload-adjacent24`: 24 existing selected network assertions pass, 487.616 ms;
+`vk-upload-quality`: Ruff, exact unaffected-AST parity, diff and preserved
+foreign/historical hashes pass, 358.472 ms. No timeout/output truncation.
+See `vk-upload-notes-20260921.md` and `vk-upload-manifest-20260921.json`.
+Private/rebinding scope is locally FIX_PROVEN, not full P1-BE-01 closure.
+
+Strict initial staged-diff secret scan passed on367775 bytes with no findings;
+the final staged bytes must be scanned again after these documentation updates.
+Use Git for commit identity; never infer a push/deploy. Next: complete missing
+cumulative assertion reviews and release gates, not another whole re-inventory.
+No native aggregate/restore or image retry without its required authority/gate.
+Reviewers
+assigned the 28/26 backend-assertion groups hit service access errors and provided
+NO new coverage; the remaining 29-path group has not been assigned. Do not count
+the missing83 backend paths as reviewed. The supplemental reviewer now covered
+the3 deferred infra assertions and reported test-quality gaps (see cumulative
+notes); no execution proof. Native aggregate/restore denial
+and the 10 GiB image floor remain unchanged. Whole goal remains FAIL/active.
+
+## Latest checkpoint — 21 September, cumulative review at 8be8e45a
+
+Additive partial source review is in task evidence
+`cumulative-review-notes-20260921.md`; the immutable 793-path blob inventory is
+`cumulative-review-inventory-20260921.json`. Baseline is `30262a5`; reviewed head is
+`8be8e45a5a2930607311becebf05a3d456d100b0`. Thirteen foreign hashes and the
+historical spec/verdict/problems are preserved. No new runtime test or fix.
+
+Fresh reviewers covered frontend changed hunks (75 paths), backend changed
+source hunks (55), infrastructure (29), and 24 infrastructure test paths.
+Backend assertion coverage is only 1 whole file and 1 partial block; 83 paths
+remain inventory-only. Three infrastructure tests and semantic reconciliation
+of most of the 522 evidence/docs paths remain. Do not call this complete AC11.
+
+Retained P1-BE-01 is the pre-existing VK response-derived raw upload transport,
+not a reproduced new regression. Next: guarded local private/rebinding-target
+test without network/provider/DB, then the smallest causal fix. Mutable ingress
+and CI action tags are P2 hardening; APT/artifact drift is an existing residual.
+The frontend recipient/ID P1 was withdrawn after backend contract validation.
+
+User login was verified read-only in the existing IAB; task list and empty
+History render, available console warnings/errors were absent. Deployed
+revision/locale intent remain unknown. No run, save, approval, publication or
+send. Whole FAIL / AC1–9,11 FAIL / AC10 PASS remain; native preparation denial,
+10 GiB image floor and no production/push/deploy/cleanup constraints remain.
+
 ## Latest checkpoint — 21 September, proxy diagnostics
 
 Parent `ae609660cfb5f0d5a087164efb49b352b8507e9e`; finding

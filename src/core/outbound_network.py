@@ -5,7 +5,7 @@ import os
 import socket
 import urllib.request as urllib_request
 from dataclasses import dataclass
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 import certifi
 import urllib3
@@ -202,6 +202,74 @@ def public_pinned_get(
             response.release_conn()
     finally:
         pool.close()
+
+
+def public_pinned_https_post(
+    value: str,
+    body: bytes,
+    headers: dict[str, str],
+    timeout: int = 20,
+    max_bytes: int = 1_000_001,
+) -> OutboundHttpFetchResponse:
+    """Post to a validated public IP, preserving TLS identity and explicit proxy routing."""
+    if urlsplit(str(value or "").strip()).scheme != "https":
+        raise ValueError("A public HTTPS upload destination is required")
+    if not 1 <= max_bytes <= 10_000_001:
+        raise ValueError("Invalid response byte limit")
+    clean_url, public_addresses, port = _public_addresses_for_url(value)
+    parsed = urlsplit(clean_url)
+    hostname = str(parsed.hostname or "").casefold().rstrip(".")
+    host_label = f"[{hostname}]" if ":" in hostname else hostname
+    host_header = host_label if port == 443 else f"{host_label}:{port}"
+    pinned_ip = public_addresses[0]
+    pinned_label = f"[{pinned_ip}]" if ":" in pinned_ip else pinned_ip
+    pinned_url = urlunsplit(("https", f"{pinned_label}:{port}", parsed.path or "/", parsed.query, ""))
+    pool_options = {
+        "timeout": urllib3.Timeout(total=timeout),
+        "retries": False,
+        "cert_reqs": "CERT_REQUIRED",
+        "ca_certs": certifi.where(),
+        "assert_hostname": hostname,
+        "server_hostname": hostname,
+    }
+    proxy_url = resolve_outbound_http_proxy()
+    if proxy_url:
+        proxy = urlsplit(proxy_url)
+        if proxy.scheme not in {"http", "https"} or not proxy.hostname:
+            raise ValueError("Invalid outbound HTTP proxy")
+        proxy_headers = {}
+        if proxy.username is not None:
+            proxy_headers = urllib3.make_headers(
+                proxy_basic_auth=f"{unquote(proxy.username)}:{unquote(proxy.password or '')}",
+            )
+        proxy_host = f"[{proxy.hostname}]" if ":" in proxy.hostname else proxy.hostname
+        proxy_netloc = proxy_host if proxy.port is None else f"{proxy_host}:{proxy.port}"
+        clean_proxy = urlunsplit((proxy.scheme, proxy_netloc, "", "", ""))
+        manager = urllib3.ProxyManager(
+            clean_proxy,
+            proxy_headers=proxy_headers,
+            use_forwarding_for_https=False,
+            **pool_options,
+        )
+    else:
+        manager = urllib3.PoolManager(**pool_options)
+    try:
+        response = manager.urlopen(
+            "POST", pinned_url, body=body,
+            headers={**headers, "Host": host_header},
+            redirect=False, retries=False, preload_content=False, decode_content=False,
+        )
+        try:
+            return OutboundHttpFetchResponse(
+                status_code=int(response.status),
+                headers={str(key).lower(): str(item) for key, item in response.headers.items()},
+                body=response.read(max_bytes),
+            )
+        finally:
+            response.close()
+            response.release_conn()
+    finally:
+        manager.clear()
 
 
 class _PublicRedirectHandler(urllib_request.HTTPRedirectHandler):

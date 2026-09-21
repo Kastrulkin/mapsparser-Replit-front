@@ -2,6 +2,28 @@
   "task_id": "production-readiness-20260917",
   "overall_status": "FAIL",
   "checkpoint": {
+    "subsequent_vk_upload_destination": {
+      "parent_commit": "8be8e45a5a2930607311becebf05a3d456d100b0",
+      "finding": "SEC-VK-UPLOAD-DESTINATION-01",
+      "status": "FIX_PROVEN_LOCAL_PRIVATE_REBINDING_SCOPE",
+      "proof": ["evidence/vk-upload-notes-20260921.md", "evidence/vk-upload-manifest-20260921.json"],
+      "result": "Final causal12 on immutable parent:11 assertion failures/1 control/0 errors,446.770ms. All25 current tests pass671.103ms,24 adjacent assertions pass487.616ms,quality358.472ms. Scoped independent runtime/test reviews ACCEPT.",
+      "behavior": "Dedicated HTTPS public-IP-pinned upload with logical Host/SNI/certificate verification and explicit HTTP(S) proxy CONNECT, no redirect/retry/direct fallback, bounded JSON response. Existing callback/media/fixed VK API/approval/DB behavior preserved.",
+      "provenance": "Initial zero-test exit0 is retained harness failure, not PASS; six/22-case records are intermediate. Three final tests use actual urllib3 construction with connect intercepted, not real TLS/proxy interoperability. Baseline and current use the same final test bytes.",
+      "limits": "Malicious public upload host trust remains open; no guessed allowlist. Parsed provider error payloads remain unchanged; no absolute slow-response deadline claim. No full app/facade/database/provider/native aggregate proof. No production/DB/schema/Docker/cleanup/push/deploy;13foreign/3historical hashes preserved. WholeFAIL and original AC status remain unchanged.",
+      "supplemental_review": "Three deferred infra assertion paths now statically reviewed; P2 TEST-APPROVAL-AUDIT-01, TEST-HEALTH-DB-GUARD-01 and TEST-README-GIT-GUARD-01 recorded, not runtime failures.83backend assertion paths and most historical evidence semantic reconciliation remain."
+    },
+    "subsequent_cumulative_source_review_8be8e45a": {
+      "snapshot_scope": "Historical pre-VK/pre-supplemental review state. Its deferred/next wording is superseded by subsequent_vk_upload_destination and the supplemental cumulative notes; it is not the current action queue.",
+      "baseline_commit": "30262a5bf7b468e0a6f5a0e3d8262dbef119e075",
+      "reviewed_commit": "8be8e45a5a2930607311becebf05a3d456d100b0",
+      "proof": ["evidence/cumulative-review-notes-20260921.md", "evidence/cumulative-review-inventory-20260921.json"],
+      "status": "PARTIAL_REVIEW_NOT_RUNTIME_PROOF",
+      "coverage": "793 changed-path blob inventory. Fresh changed-hunk reviews: frontend75/backend-source55/infrastructure29; infrastructure24 changed-assertion paths. Backend test semantic review only1full/1partial; other83 inventory-only,3infrastructure tests deferred;522evidence/docs not fully reconciled.",
+      "findings": "Pre-existing VK response-derived raw upload target P1-BE-01 source candidate, not reproduced. Mutable ingress image/CI action tags P2 hardening. Frontend missing-recipient/ID P1 withdrawn after backend contract validation; APT/artifact drift deduplicated with existing residual.",
+      "browser": "User login observed in existing IAB /dashboard/agents; SuperAdmin task list and no-runs History render, available warning/error logs empty at read. Initial AX/DOM lag resolved by screenshot. Unknown deployed revision and locale intent. No save/run/approval/send/publication/settings change.",
+      "limits": "No new runtime test, fix, aggregate, image, nativeDB/restore or CI execution.13foreign hashes/spec/verdict/problems preserved; wholeFAIL and AC states unchanged. Native preparation denial not retried. No productionDB/schema mutation, provider effect, cleanup,push,deploy. Next safe gate: isolated VK upload destination reproduction plus outstanding assertions/evidence review."
+    },
     "subsequent_proxy_diagnostic_projection": {
       "parent_commit": "ae609660cfb5f0d5a087164efb49b352b8507e9e",
       "finding": "SEC-PROXY-DIAGNOSTICS-01",

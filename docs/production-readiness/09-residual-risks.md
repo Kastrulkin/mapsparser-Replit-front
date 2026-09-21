@@ -1,5 +1,16 @@
 # Residual risks — working register
 
+Latest21September, parent `8be8e45a`: VK private/rebinding upload targets are
+locally corrected (25targeted/24adjacent checks). The remaining part of
+P1-BE-01 is provider trust: a malicious public HTTPS host can still receive
+approved media. Impact is potential media disclosure under a compromised
+provider-response assumption; likelihood is unmeasured. HTTPS/public pinning
+is temporary partial protection, not a host allowlist. Verify the provider's
+upload-host contract before restricting hosts; no list is invented here.
+Real TLS/proxy/provider interoperability and an absolute slow-response deadline
+are unproven. Valid provider error JSON is preserved, not universally sanitized.
+Original release gates, denied native preparation and whole FAIL remain.
+
 Latest 21 September, parent `ae609660`: SEC-PROXY-DIAGNOSTICS-01 is locally
 FIX_PROVEN only for preflight-derived map/review diagnostic sinks and the
 proxy-stat exception console. Raw preflight/policy inputs are intentionally

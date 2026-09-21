@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "kind": "bounded_local_vk_upload_proof_not_whole_readiness",
+  "parent_commit": "8be8e45a5a2930607311becebf05a3d456d100b0",
+  "overall_status": "FAIL",
+  "source_hashes": [
+    {
+      "path": "src/services/social_posts/media_delivery.py",
+      "sha256": "f5f41e4baf056ee2c712e4be2becb20dc4cee0fb038099b974658a7c9700de44"
+    },
+    {
+      "path": "src/services/social_posts/recommendations_handoff.py",
+      "sha256": "cda8a11bcf7c8513651d6c66cc61c32da8c16104f183d87f5227a66e11aa0375"
+    },
+    {
+      "path": "src/core/outbound_network.py",
+      "sha256": "37419106dc9853f9c8730dc8ebaf35976aa1ad7685fef060a68119b68af67210"
+    },
+    {
+      "path": "tests/test_vk_media_upload_destination.py",
+      "sha256": "69d886ad928397c09a8f42e2f857b9010843bff271cea9a24406292b5073611e"
+    },
+    {
+      "path": "src/core/telegram_network.py",
+      "sha256": "43d4b698b99c2a9cc4d2994b9661db116e70a2df2970a8dbba4682e420b49e6f"
+    },
+    {
+      "path": "tests/test_outbound_network.py",
+      "sha256": "e0b3e6ef056b3a244c50e9cc8d7571f29761663f7d9e94b1053b414df81cdd6e"
+    },
+    {
+      "path": "tests/test_action_orchestrator_callback_ssrf.py",
+      "sha256": "e556f6fdd833a285f1cae1be3464bca0a4b24fa456aabc22c95dd5db998e94dc"
+    },
+    {
+      "path": "tests/test_social_media_delivery_ssrf.py",
+      "sha256": "6b433eca7abbad585ef1d3a2c57aaa810efef351fa81da2f20b4504ce0798f49"
+    },
+    {
+      "path": "tests/test_contact_intelligence_ssrf.py",
+      "sha256": "aaf328d295bedc6a837668fdb37c649eba646f3b8384aba5082638355fdba05a"
+    }
+  ],
+  "captures": [
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/vk-upload-adjacent24-20260921.json",
+      "sha256": "08da7ff0654f845bcaedc330bb4945ae01ffa53553732198791fa84f70af0417",
+      "exit_code": 0,
+      "duration_ms": 487.616,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "classification": "SELECTED_ADJACENT_24_PASS"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/vk-upload-causal-red-20260921.json",
+      "sha256": "ae72ae8339a954676e2860d8d7f341df13c124405bfadfdc91ecc5df3784064b",
+      "exit_code": 1,
+      "duration_ms": 184.371,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "classification": "INTERMEDIATE_HISTORY"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/vk-upload-causal12-baseline-20260921.json",
+      "sha256": "d873e9d2228dfe77fa25ba9e9ea8b391db41f8208733bc7d3e1415b0096306c3",
+      "exit_code": 1,
+      "duration_ms": 585.821,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "classification": "INTERMEDIATE_HISTORY"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/vk-upload-final12-baseline-20260921.json",
+      "sha256": "d606485e9b0fa38900d6399047f46e3b0d8828f83814c0db0f93a17f53c30d90",
+      "exit_code": 1,
+      "duration_ms": 446.77,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "classification": "CAUSAL_11_FAILURES_1_CONTROL"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/vk-upload-final25-green-20260921.json",
+      "sha256": "2db89aaf6097ad6eb21362ef6cdf48da19c25b0e7cc57b92900762fc35085d8e",
+      "exit_code": 0,
+      "duration_ms": 671.103,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "classification": "CURRENT_25_PASS"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/vk-upload-guarded22-green-20260921.json",
+      "sha256": "4f11606e445b13e0870e30b2195e1fa1be85a97bff8d024daf395980116cb16c",
+      "exit_code": 0,
+      "duration_ms": 496.045,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "classification": "INTERMEDIATE_HISTORY"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/vk-upload-initial-red-20260921.json",
+      "sha256": "78e02fde79c21e5f2d9c630bf7fcb0f4392bdc504efb6a5e4e13fa29426ed56e",
+      "exit_code": 0,
+      "duration_ms": 262.883,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "classification": "HARNESS_ZERO_TEST_NOT_PASS"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/vk-upload-quality-20260921.json",
+      "sha256": "8c042f05c1154771d0fa190ea8c7f19b73c77ce1971c913f4a2e12ec5149d6bd",
+      "exit_code": 0,
+      "duration_ms": 358.472,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "classification": "QUALITY_PASS"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/vk-upload-six-baseline-20260921.json",
+      "sha256": "9893a13b7456e2eda884cb45642b380e0e90b33d5b1c527d4937490fa1d9888b",
+      "exit_code": 1,
+      "duration_ms": 390.826,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "classification": "INTERMEDIATE_HISTORY"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/vk-upload-six-green-20260921.json",
+      "sha256": "07f8762e2894dd2222b79ab0f5c0bac49bb522c2a93fa200340fa93e4afb3f26",
+      "exit_code": 0,
+      "duration_ms": 199.222,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "classification": "INTERMEDIATE_HISTORY"
+    }
+  ],
+  "notes": {
+    "path": ".agent/tasks/production-readiness-20260917/evidence/vk-upload-notes-20260921.md",
+    "sha256": "e13d143d8e39062cc6a2a2b707700242b630d910877bba21b70c91f3b09df93e"
+  }
+}

@@ -512,7 +512,7 @@ def _publish_telegram_media_post(
 def _vk_api_request(url: str, data: dict[str, Any] | None = None, files: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     request_files = files if isinstance(files, list) else []
     if request_files:
-        body, content_type = _multipart_form_data(data or {}, request_files)
+        return _vk_upload_request(url, data or {}, request_files)
     elif data is not None:
         body = urllib.parse.urlencode(data).encode("utf-8")
         content_type = "application/x-www-form-urlencoded"
@@ -529,6 +529,23 @@ def _vk_api_request(url: str, data: dict[str, Any] | None = None, files: list[di
             response.close()
     except Exception:
         return {"error": {"error_msg": str(sys.exc_info()[1])}}
+
+
+def _vk_upload_request(url: str, data: dict[str, Any], files: list[dict[str, Any]]) -> dict[str, Any]:
+    """Provider-issued upload URLs are not trusted network destinations."""
+    try:
+        body, content_type = _multipart_form_data(data, files)
+        response = outbound_network.public_pinned_https_post(
+            url, body=body, headers={"Content-Type": content_type},
+            timeout=20, max_bytes=1_000_001,
+        )
+        if not 200 <= response.status_code < 300 or len(response.body) > 1_000_000:
+            return {"error": {"error_msg": "vk_media_upload_response_invalid"}}
+        payload = _json_dict(response.body.decode("utf-8"))
+        return payload or {"error": {"error_msg": "vk_media_upload_response_invalid"}}
+    except Exception:
+        return {"error": {"error_msg": "vk_media_upload_failed"}}
+
 
 def _upload_vk_wall_photos(
     *,

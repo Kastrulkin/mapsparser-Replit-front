@@ -1,5 +1,47 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, VK private upload destinations
+
+- [x] Pre-existing response-derived upload URL reached unrestricted transport;
+  12 immutable-head causal cases now show 11 failures/1 valid control/0 errors.
+- [x] Local HTTPS/public-IP-pinned upload with proxy CONNECT,
+  original TLS identity, bounded response, no redirect/retry/direct fallback.
+- [x] Final25 isolated tests pass (671.103 ms), including three actual urllib3
+  pool/CONNECT construction checks. Final causal12 parent:11fail/1control,
+  446.770 ms. The13 extra checks are not baseline reproduction counts.
+- [x] 24 unchanged adjacent assertions pass (487.616 ms); exact unaffected AST,
+  scoped Ruff/diff and13foreign/3historical hashes pass (358.472 ms).
+  Independent runtime/test review ACCEPT. Initial zero-test capture is not PASS.
+- [x] Strict initial staged-diff secret scan passes (367775 bytes, no leaks).
+  Final commit identity/staging state must be read from Git; no push/deploy.
+  Exact source/test evidence is in `vk-upload-notes-20260921.md` and its manifest.
+- [ ] Malicious public provider upload hosts remain a separate trust-policy
+  question; no guessed host allowlist and no full VK/provider security claim.
+- [x] Supplemental reviewer covered3 deferred infra assertion paths; test-quality
+  gaps recorded in cumulative notes, not runtime failures.
+- [ ] 83 backend assertion paths remain; earlier parallel reviewers encountered
+  service access failures and supplied no new coverage.
+
+Real proxy/TLS/provider and full app/facade/DB integration remain untested.
+No production/DB/Docker/provider writes/cleanup/push/deploy. Exact state and
+capture names are in HANDOFF; original whole FAIL and AC statuses remain.
+
+## Latest checkpoint — 21 September, cumulative review at 8be8e45a
+
+- [x] Frozen original baseline-to-head inventory: 793 paths with Git blob IDs;
+  13 foreign file hashes and protected historical documents unchanged.
+- [x] Fresh source review: frontend 75 changed paths, backend 55 source paths,
+  infrastructure 29 paths; precise test-review limits are in task evidence
+  `cumulative-review-notes-20260921.md` and its inventory JSON.
+- [x] Live user login, loaded task list and no-runs History observed read-only;
+  no external action or settings change. Unknown deployed revision.
+- [ ] VK upload target candidate needs isolated reproduction; ingress/CI tag
+  pins are P2 hardening. Withdrawn frontend P1 is not carried forward.
+- [ ] 83 backend assertion paths, 3 infrastructure test paths and most evidence
+  semantic reconciliation remain. This is NOT complete whole-diff acceptance.
+- [ ] Whole FAIL / AC1–9,11 FAIL / AC10 PASS unchanged; no native retry, build,
+  Docker, DB/schema, cleanup, provider publication, push or deployment.
+
 ## Latest checkpoint — 21 September, proxy diagnostics
 
 - [x] SEC-PROXY-DIAGNOSTICS-01: arbitrary preflight exception text reached map

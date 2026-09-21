@@ -1,5 +1,23 @@
 # Verified commands and evidence
 
+## VK upload destinations — 21 September, parent `8be8e45a`
+
+Exact guarded commands/output: task `evidence/vk-upload-*-20260921.json`.
+
+| Capture suffix | Actual result | Duration ms |
+| --- | --- | ---: |
+| final12-baseline | Immutable parent, final causal12:11 assertion failures/1 control/0 errors |446.770|
+| final25-green | All25 current tests, including3 real urllib3 construction checks |671.103|
+| adjacent24 |24 selected unchanged network assertions, not full app/facade/DB tests |487.616|
+| quality |Scoped Ruff, unaffected-AST/diff and foreign/historical hash checks |358.472|
+
+Final test captures prohibit sockets, env-file reads and PostgreSQL/Docker
+imports; no app/conftest/plugin collection. Baseline reads immutable Git source
+before its child-process guard. Quality invokes only local Git/Ruff checks.
+The initial zero-test exit0 capture is a retained harness failure, not PASS.
+Other six/22-test captures are intermediate history. No provider/TLS/proxy
+interoperability, aggregate, deployment or whole-readiness proof is claimed.
+
 ## Proxy diagnostics — 21 September, parent `ae609660`
 
 Exact commands/output are in task `evidence/proxy-reason-*-20260921.json`.

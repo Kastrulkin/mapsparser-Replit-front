@@ -1,5 +1,15 @@
 # Production-readiness change log
 
+## VK private upload destinations — 21 September, parent `8be8e45a`
+
+SEC-VK-UPLOAD-DESTINATION-01 corrects the provider-response-derived multipart
+upload sink with HTTPS/public-IP pinning, original Host/SNI/certificate identity,
+explicit proxy CONNECT, no redirects/retries/direct fallback and bounded JSON.
+Existing callback POST, public media GET, fixed VK API routing, approvals and
+database behavior remain unchanged. Final25 tests and24 adjacent assertions
+pass; final causal12 has11 parent failures and1 success control. This is local
+private/rebinding protection, not provider-host allowlisting or deployed proof.
+
 ## Proxy diagnostic projection — 21 September, parent `ae609660`
 
 SEC-PROXY-DIAGNOSTICS-01 separates outward preflight diagnostics from raw

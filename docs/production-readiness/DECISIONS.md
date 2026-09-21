@@ -1,5 +1,19 @@
 # Readiness decisions
 
+## D-081 — Pin provider-issued upload destinations without truncating VK JSON
+
+Treat the returned upload URL as untrusted. Use a dedicated bounded HTTPS POST
+with validated public-IP pinning, original TLS identity and explicit proxy
+CONNECT. Keep fixed VK API routing and existing callback/media transports.
+
+Options: URL validation alone leaves a second-resolution race; reusing callback
+POST truncates valid upload JSON at1,000 characters and loses explicit proxy
+routing; a bounded dedicated helper preserves those contracts (selected).
+No new dependency or business-policy change. Compatibility risk remains for
+real TLS/proxy behavior, not proven by mocked construction tests. A verified
+provider-host allowlist is a separate decision; public pinning cannot prevent
+transfer to a malicious public host. No allowlist was guessed.
+
 ## D-080 — Separate proxy diagnostic text from health-policy input
 
 SEC-PROXY-DIAGNOSTICS-01 uses a finite projection for all preflight-derived

@@ -1,5 +1,29 @@
 # Audit backlog — evidence, not a readiness claim
 
+## 21 September VK upload destination
+
+**SEC-VK-UPLOAD-DESTINATION-01 — P1, security, locally FIX_PROVEN.**
+Part of cumulative P1-BE-01: a provider-issued private/non-HTTPS URL reached
+the multipart transport with approved photo bytes. A malformed/compromised
+provider response is required; no real exploit or production incident proven.
+Cause: unrestricted upload sink. Fix: public-IP-pinned HTTPS POST, original TLS
+identity, proxy CONNECT/no fallback, no redirects/retries, bounded JSON response.
+Evidence: two runtime paths and `tests/test_vk_media_upload_destination.py`,
+task `evidence/vk-upload-notes-20260921.md` and manifest. Final causal12:
+11parent failures/1control to12current passes; all25current and24adjacent pass.
+Independent scoped review accepts. Acceptance: denied target receives no photo;
+normal public upload keeps complete JSON and save flow. High local confidence,
+unmeasured production likelihood; small effort/scope, medium proxy compatibility
+risk. Required before production. Public malicious host policy and real
+provider/proxy execution remain open; P1-BE-01 is not universally closed.
+
+Supplemental static review found three P2 test-quality gaps, not current
+production failures: TEST-APPROVAL-AUDIT-01 (nonliteral unconditional approval
+expression evades audit), TEST-HEALTH-DB-GUARD-01 (health test does not assert
+zero readiness calls), TEST-README-GIT-GUARD-01 (refspec/config-equals variants
+evade token predicates). Exact evidence, risk and acceptance are in cumulative
+review notes. Status: source-supported candidates, reproduction/fix pending.
+
 ## 21 September proxy diagnostics
 
 **SEC-PROXY-DIAGNOSTICS-01 — P1, confidentiality, locally FIX_PROVEN.**
