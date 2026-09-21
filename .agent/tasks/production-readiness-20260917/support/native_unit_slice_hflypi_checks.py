@@ -41,9 +41,48 @@ def main() -> int:
     for old_profile in ("card-growth-v1", "policy-content-v1"):
         assert unit["profile_environment"](old_profile, base_environment) == base_environment
     rejected(lambda: unit["profile_environment"]("agent-social-pure-v1", {"DATABASE_URL": "unreviewed"}))
-    assert set(profiles) == {"card-growth-v1", "policy-content-v1", "agent-social-pure-v1", "governed-operations-pure-v2", "governed-workflows-pure-v1"}
+    assert set(profiles) == {"card-growth-v1", "policy-content-v1", "agent-social-pure-v1", "governed-operations-pure-v2", "governed-workflows-pure-v1", "finance-services-reviews-content-pure-v1"}
     assert unit["profile_environment"]("governed-workflows-pure-v1", base_environment) == configured
     rejected(lambda: unit["profile_environment"]("governed-workflows-pure-v1", {"DATABASE_URL": "unreviewed"}))
+    assert unit["profile_environment"]("finance-services-reviews-content-pure-v1", base_environment) == configured
+    rejected(lambda: unit["profile_environment"]("finance-services-reviews-content-pure-v1", {"DATABASE_URL": "unreviewed"}))
+    assert profiles["finance-services-reviews-content-pure-v1"]["modules"] == {
+        "tests/test_finance_imports.py": 9,
+        "tests/test_finance_kpis.py": 9,
+        "tests/test_finance_routes_contract.py": 1,
+        "tests/test_finance_import_resource_limits.py": 6,
+        "tests/test_finance_roi_scope.py": 3,
+        "tests/test_finance_service_catalog.py": 1,
+        "tests/test_review_reply_output.py": 3,
+        "tests/test_review_response_utils.py": 4,
+        "tests/test_review_snapshot_currentness.py": 4,
+        "tests/test_service_catalog_compression.py": 7,
+        "tests/test_service_keyword_scoring.py": 8,
+        "tests/test_service_problem_regeneration.py": 3,
+        "tests/test_service_safe_wordstat.py": 9,
+        "tests/test_services_sync_logic.py": 2,
+        "tests/test_content_plan_export.py": 3,
+        "tests/test_content_plan_export_api.py": 5,
+        "tests/test_content_plan_network_visibility.py": 1,
+        "tests/test_content_plan_policy.py": 3,
+        "tests/test_content_publish_notifications.py": 5,
+        "tests/test_content_setup_entrypoints.py": 3,
+        "tests/test_content_voice_api_security.py": 3,
+    }
+    assert sum(profiles["finance-services-reviews-content-pure-v1"]["modules"].values()) == 92
+    accepted_modules = {
+        module for name, selected in profiles.items()
+        if name != "finance-services-reviews-content-pure-v1" for module in selected["modules"]
+    }
+    assert accepted_modules.isdisjoint(profiles["finance-services-reviews-content-pure-v1"]["modules"])
+    excluded_real_pg = {
+        "tests/test_finance_daily_pg.py", "tests/test_finance_import_transaction_pg.py",
+        "tests/test_content_learning_schema_pg.py", "tests/test_content_plan_item_metadata_migration.py",
+        "tests/test_content_rules_pg.py", "tests/test_service_compression_apply_concurrency_pg.py",
+        "tests/test_services_content_viewer_readiness.py", "tests/test_services_content_viewer_readiness_guard.py",
+        "tests/test_operator_service_creation.py",
+    }
+    assert excluded_real_pg.isdisjoint(profiles["finance-services-reviews-content-pure-v1"]["modules"])
     assert profiles["governed-workflows-pure-v1"]["modules"] == {
         "tests/test_admin_prospecting_audit_payload.py": 52,
         "tests/test_partner_audit_rollout.py": 39,
@@ -172,7 +211,7 @@ def main() -> int:
             changed_nodes[0] = list(modules)[1] + "::synthetic_extra"
             rejected(lambda: unit["require_module_counts"]({"nodeids": changed_nodes}, modules))
         compile(helper["plugin_source"](profile["targets"]), "<reviewed-unit-runner>", "exec")
-    print("native unit profiles: exact 200/364/524/828/670-node inventories and negative gates passed; operator28 requires separate real-PG run")
+    print("native unit profiles: exact 200/364/524/828/670/92-node inventories and negative gates passed; operator28 requires separate real-PG run")
     return 0
 
 

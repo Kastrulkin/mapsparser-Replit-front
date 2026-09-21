@@ -1,5 +1,26 @@
 # Verified commands and evidence
 
+## Creator rollback and finance/content — 21 September
+
+Each command ran in its own named tmux session, PG strictly serial:
+
+```sh
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_tc_one_hflypi.py --attempt v1 --profile creator-portal-rollback-v1
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_tc_one_hflypi.py --attempt v1 --profile creator-offer-rollback-v1
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_tc_one_hflypi.py --attempt v2 --profile work-review-rollback-v1
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_unit_slice_hflypi.py --attempt v1 --profile finance-services-reviews-content-pure-v1
+```
+
+Sessions respectively audit-native-creator-portal-rollback-v1,
+audit-native-creator-offer-rollback-v1, audit-native-work-review-rollback-v2,
+audit-native-finance-services-reviews-content-v1. Pure ran before the PG series.
+Pytest/capture/wrapper seconds respectively26.72/27.164/30.328,
+64.68/65.138/68.374,42.50/42.952/46.446,2.89/3.577/5.307. Counts4/11/7/92
+all pass with no skips; PG1warning each, pure0warnings, stderr empty throughout.
+Controls/Ruff7/diff capture218.098ms exit0. Seventeen captures/25 hashes:
+task evidence/native-creator-finance-hflypi-20260921/. One-shot paths now exist;
+never rerun with the same attempt. Independent runtime and live postchecks PASS.
+
 ## Full frontend trace830 — 21 September
 
 Named tmux `audit-frontend-full-trace-hflypi-v1` ran:

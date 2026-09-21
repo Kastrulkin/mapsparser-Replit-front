@@ -1,5 +1,16 @@
 # Production-readiness change log
 
+## Creator rollback / finance-content — 21 September, parent eb59fc2f
+
+Added two exact rollback profiles and one21-module pure92 profile in seven
+audit support files, retaining old permission/budget/assertion boundaries.
+Creator4/4, Offer11/11 and adjacent work-review7/7 pass on three separate owned
+tmpfs containers; pure92/92 passes. Controls/Ruff/diff and independent runtime/
+live checks PASS. Generated DBs removed, retained resources and frozen5,720
+blobs preserved, default guard restored.17raw captures/25 hashes and a new
+literal PG status map recorded; old evidence unchanged. No application/schema/
+fixture/production/provider changes or additional broad Docker cleanup.
+
 ## Full frontend trace830 — 21 September, parent453eea52
 
 Added two audit-only trace/control helpers, hash-gated temporary instrumentation,

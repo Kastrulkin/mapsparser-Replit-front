@@ -1,5 +1,20 @@
 # Readiness decisions
 
+## D-099 — Share rollback plumbing, not database authority or test counts
+
+Represent the three reviewed rollback families by fixed profile/name/cleanup
+maps, with cross-family denial controls and unchanged old DSN binding policy.
+Run Creator Portal4 and Offer11 independently, then the original work-review7
+as adjacent regression because its shared adapter changed. One zero-leftover
+database observation plus original fixture teardown is required per run.
+Do not count that repeated7 as new coverage or treat DSN admissions as DDL proof.
+
+Pure finance/content92 uses the unchanged default guard and only a nonconnectable
+metadata URI. Exact actual node/module counts and all no-skip gates remain.
+Reconcile historical PG inventory with literal successful runtime nodeids in a
+new status artifact, preserving prior inventory and failures. Passing bounded
+slices does not close the current-source aggregate or whole production audit.
+
 ## D-098 — Green instrumented full run is non-reproduction, not a fix
 
 Diagnose the frontend flake on full default-worker830 scope with hash-gated

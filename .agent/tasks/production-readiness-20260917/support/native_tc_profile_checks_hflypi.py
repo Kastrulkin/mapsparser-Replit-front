@@ -119,6 +119,8 @@ def check_adapter_profile_bindings() -> None:
         "capabilities-phase1-v1": "native-tc-capabilities-phase1",
         "operator-service-creation-v1": "native-tc-operator-service-creation",
         "work-review-rollback-v1": "native-tc-work-review-rollback",
+        "creator-portal-rollback-v1": "native-tc-creator-portal-rollback",
+        "creator-offer-rollback-v1": "native-tc-creator-offer-rollback",
     }
     parent_profiles = assignments["PARENT_DATABASE_PROFILES"]
     assert isinstance(parent_profiles, ast.Call) and len(parent_profiles.args) == 1
@@ -128,7 +130,7 @@ def check_adapter_profile_bindings() -> None:
     assert ast.literal_eval(voice_profiles.args[0]) == {"operator-service-creation-v1"}
 
 
-def check_work_review_dsn_admission() -> None:
+def check_rollback_dsn_admission() -> None:
     source = Path(__file__).with_name("native_tc_adapter_hflypi.py")
     tree = ast.parse(source.read_text())
     functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in {"deny", "validate_dsn"}]
@@ -137,11 +139,13 @@ def check_work_review_dsn_admission() -> None:
         for node in tree.body
         if isinstance(node, ast.Assign)
         for target in node.targets
-        if isinstance(target, ast.Name) and target.id in {"WORK_REVIEW_ROLLBACK_PROFILE", "WORK_REVIEW_DATABASE_PATTERN"}
+        if isinstance(target, ast.Name) and target.id == "ROLLBACK_DATABASE_PATTERNS"
     }
-    assert ast.literal_eval(assignments["WORK_REVIEW_ROLLBACK_PROFILE"]) == "work-review-rollback-v1"
-    pattern = ast.literal_eval(assignments["WORK_REVIEW_DATABASE_PATTERN"].args[0])
-    assert pattern == r"work_review_rollback_[0-9a-f]{32}"
+    pattern_namespace = {"re": re}
+    pattern_module = ast.fix_missing_locations(ast.Module(body=[ast.Assign(targets=[ast.Name(id="ROLLBACK_DATABASE_PATTERNS", ctx=ast.Store())], value=assignments["ROLLBACK_DATABASE_PATTERNS"], type_comment=None)], type_ignores=[]))
+    exec(compile(pattern_module, str(source), "exec"), pattern_namespace)
+    patterns = pattern_namespace["ROLLBACK_DATABASE_PATTERNS"]
+    assert set(patterns) == {"work-review-rollback-v1", "creator-portal-rollback-v1", "creator-offer-rollback-v1"}
     environment = {
         "LOCALOS_HFLYPI_TC_MODE": "work-review-rollback-v1",
         "LOCALOS_HFLYPI_TC_CAPABILITY": "/private/tmp/capability.json",
@@ -153,33 +157,45 @@ def check_work_review_dsn_admission() -> None:
         "Path": Path,
         "re": re,
         "PREFIX": "LOCALOS_HFLYPI_TC_",
-        "WORK_REVIEW_ROLLBACK_PROFILE": "work-review-rollback-v1",
-        "WORK_REVIEW_DATABASE_PATTERN": re.compile(pattern),
+        "ROLLBACK_DATABASE_PATTERNS": patterns,
         "native_tc_relay_hflypi": SimpleNamespace(validate_capability=lambda path, port: {"session_id": "abcdefgh", "container_id": "owned"}),
         "record": lambda event, **fields: events.append((event, fields)),
     }
     exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), "exec"), namespace)
     validate = namespace["validate_dsn"]
     base = {"host": "127.0.0.1", "port": "12345", "user": "test", "password": "test"}
-    valid_generated = "work_review_rollback_0123456789abcdef0123456789abcdef"
-    for database in ("postgres", valid_generated):
-        validate({**base, "dbname": database})
-    assert [fields["database"] for event, fields in events if event == "dsn_admitted"] == ["postgres", valid_generated]
-    for database in ("test", "postgresql", "work_review_rollback_ABCDEF0123456789abcdef01234567", "work_review_rollback_0123456789abcdef0123456789abcdeg", "work_review_rollback_0123456789abcdef0123456789abcdef_extra"):
+    valid_databases = {
+        "work-review-rollback-v1": "work_review_rollback_0123456789abcdef0123456789abcdef",
+        "creator-portal-rollback-v1": "creator_portal_rollback_0123456789abcdef0123456789abcdef",
+        "creator-offer-rollback-v1": "creator_offer_rollback_0123456789abcdef0123456789abcdef",
+    }
+    for profile, generated in valid_databases.items():
+        environment["LOCALOS_HFLYPI_TC_MODE"] = profile
+        validate({**base, "dbname": "postgres"})
+        validate({**base, "dbname": generated})
+        for foreign in set(valid_databases.values()) - {generated}:
+            try:
+                validate({**base, "dbname": foreign})
+            except PermissionError:
+                pass
+            else:
+                raise AssertionError("rollback profile admitted another profile's disposable database")
+        for malformed in (generated.upper(), generated[:-1], generated + "_extra"):
+            try:
+                validate({**base, "dbname": malformed})
+            except PermissionError:
+                pass
+            else:
+                raise AssertionError("rollback profile admitted malformed disposable database")
+    environment["LOCALOS_HFLYPI_TC_MODE"] = "client-info-v1"
+    validate({**base, "dbname": "test"})
+    for generated in valid_databases.values():
         try:
-            validate({**base, "dbname": database})
+            validate({**base, "dbname": generated})
         except PermissionError:
             pass
         else:
-            raise AssertionError("foreign work-review database was admitted")
-    environment["LOCALOS_HFLYPI_TC_MODE"] = "client-info-v1"
-    validate({**base, "dbname": "test"})
-    try:
-        validate({**base, "dbname": valid_generated})
-    except PermissionError:
-        pass
-    else:
-        raise AssertionError("legacy test-only profile admitted work-review database")
+            raise AssertionError("legacy test-only profile admitted rollback database")
 
 
 def fixture_nodeids() -> list[str]:
@@ -213,7 +229,7 @@ def check_relay_budgets() -> None:
     functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "connection_budget"]
     assert len(assignments) == 1 and len(functions) == 1
     budgets = ast.literal_eval(assignments[0].value)
-    assert budgets == {"card-growth-v1": 32, "client-info-v1": 32, "capabilities-phase1-v1": 1024, "operator-service-creation-v1": 32, "work-review-rollback-v1": 512}
+    assert budgets == {"card-growth-v1": 32, "client-info-v1": 32, "capabilities-phase1-v1": 1024, "operator-service-creation-v1": 32, "work-review-rollback-v1": 512, "creator-portal-rollback-v1": 512, "creator-offer-rollback-v1": 512}
     namespace = {"MAX_CONNECTIONS": 32, "PROFILE_CONNECTION_BUDGETS": budgets}
     exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), "exec"), namespace)
     budget = namespace["connection_budget"]
@@ -223,6 +239,8 @@ def check_relay_budgets() -> None:
     assert budget("capabilities-phase1-v1") == 1024
     assert budget("operator-service-creation-v1") == 32
     assert budget("work-review-rollback-v1") == 512
+    assert budget("creator-portal-rollback-v1") == 512
+    assert budget("creator-offer-rollback-v1") == 512
     for foreign in ("unknown", "capabilities-phase1-v2"):
         try:
             budget(foreign)
@@ -249,6 +267,8 @@ def check_relay_evidence_bounds(namespace) -> None:
     assert validate("capabilities-phase1-v1", final(171, 1024))[0] == 171
     assert validate("operator-service-creation-v1", final(21, 32))[0] == 21
     assert validate("work-review-rollback-v1", final(75, 512))[0] == 75
+    assert validate("creator-portal-rollback-v1", final(54, 512))[0] == 54
+    assert validate("creator-offer-rollback-v1", final(159, 512))[0] == 159
     for candidate in (final(170, 1024), final(1025, 1024), final(171, 32)):
         try:
             validate("capabilities-phase1-v1", candidate)
@@ -270,18 +290,26 @@ def check_relay_evidence_bounds(namespace) -> None:
             pass
         else:
             raise AssertionError("work-review relay evidence outside its literal bounds was accepted")
+    for profile, minimum in (("creator-portal-rollback-v1", 54), ("creator-offer-rollback-v1", 159)):
+        for candidate in (final(minimum - 1, 512), final(513, 512), final(minimum, 32)):
+            try:
+                validate(profile, candidate)
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError("creator rollback relay evidence outside its literal bounds was accepted")
 
 
 def main() -> None:
     check_parent_database()
     check_adapter_profile_bindings()
-    check_work_review_dsn_admission()
+    check_rollback_dsn_admission()
     check_relay_budgets()
     namespace = runpy.run_path(str(Path(__file__).with_name("native_tc_one_hflypi.py")))
     profiles = namespace["PROFILES"]
     parse = namespace["parse_test"]
     check_relay_evidence_bounds(namespace)
-    assert set(profiles) == {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1", "work-review-rollback-v1"}
+    assert set(profiles) == {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1", "work-review-rollback-v1", "creator-portal-rollback-v1", "creator-offer-rollback-v1"}
     assert profiles["card-growth-v1"]["count"] == 1
     assert profiles["client-info-v1"] == {"target": "tests/test_client_info_gate.py", "count": 8, "prefix": "native-tc-client-info"}
     capabilities = profiles["capabilities-phase1-v1"]
@@ -308,7 +336,41 @@ def main() -> None:
         "exact_nodeids": True,
         "prefix": "native-tc-work-review-rollback",
     }
-    assert sitecustomize_modes() == {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1", "work-review-rollback-v1"}
+    assert profiles["creator-portal-rollback-v1"] == {
+        "targets": [
+            "tests/test_creator_portal_migration_rollback.py::test_empty_creator_portal_schema_downgrades_without_cascade",
+            "tests/test_creator_portal_migration_rollback.py::test_creator_portal_data_blocks_downgrade_and_remains_present[relationship]",
+            "tests/test_creator_portal_migration_rollback.py::test_creator_portal_data_blocks_downgrade_and_remains_present[review_field]",
+            "tests/test_creator_portal_migration_rollback.py::test_concurrent_portal_writer_cannot_commit_during_downgrade",
+        ],
+        "count": 4,
+        "exact_nodeids": True,
+        "prefix": "native-tc-creator-portal-rollback",
+    }
+    assert profiles["creator-offer-rollback-v1"] == {
+        "targets": [
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_empty_offer_distribution_schema_reverses",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_populated_offer_distribution_blocks_and_retains_data[business_preference]",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_populated_offer_distribution_blocks_and_retains_data[offer_preference]",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_populated_offer_distribution_blocks_and_retains_data[distribution_run]",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_populated_offer_distribution_blocks_and_retains_data[recipient]",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_mutated_campaign_columns_block_downgrade[reviewed_by]",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_mutated_campaign_columns_block_downgrade[reviewed_at]",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_mutated_campaign_columns_block_downgrade[distribution_locked_at]",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_standalone_offer_message_blocks_downgrade_and_is_retained",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_existing_collaboration_message_survives_empty_distribution_downgrade",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_concurrent_writer_cannot_commit_after_data_guard_before_drop",
+        ],
+        "count": 11,
+        "exact_nodeids": True,
+        "prefix": "native-tc-creator-offer-rollback",
+    }
+    assert namespace["ROLLBACK_PROFILE_RULES"] == {
+        "work-review-rollback-v1": {"database_pattern": r"work_review_rollback_[0-9a-f]{32}", "child_admissions": 14, "minimum_connections": 75, "cleanup_event": "work_review_database_cleanup_checked"},
+        "creator-portal-rollback-v1": {"database_pattern": r"creator_portal_rollback_[0-9a-f]{32}", "child_admissions": 8, "minimum_connections": 54, "cleanup_event": "creator_portal_database_cleanup_checked"},
+        "creator-offer-rollback-v1": {"database_pattern": r"creator_offer_rollback_[0-9a-f]{32}", "child_admissions": 21, "minimum_connections": 159, "cleanup_event": "creator_offer_database_cleanup_checked"},
+    }
+    assert sitecustomize_modes() == {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1", "work-review-rollback-v1", "creator-portal-rollback-v1", "creator-offer-rollback-v1"}
 
     def capture(state):
         return {"stdout": "HFLYPI_TC_ONE_RESULT=" + json.dumps(state), "exit_code": 0, "timed_out": False}
@@ -352,7 +414,7 @@ def main() -> None:
         pass
     else:
         raise AssertionError("non-boolean bootstrap mode was accepted")
-    print("native TC profiles: 5 exact profiles, parent-DSN lifecycle and negative result gates passed")
+    print("native TC profiles: 7 exact profiles, rollback DSN isolation and negative result gates passed")
 
 
 if __name__ == "__main__":

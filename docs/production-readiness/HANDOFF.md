@@ -1,5 +1,80 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, Creator rollback / finance-content
+
+Branch `codex/production-readiness-20260917`, parent `eb59fc2f`. Seven support
+files were prepared before the cleanup reply; they are now exercised unchanged.
+Creator Portal4/4 (26.72 s pytest), Offer11/11 (64.68 s), work-review regression
+v2 7/7 (42.50 s), pure finance/services/reviews/content92/92 (2.89 s) all pass.
+No skips/errors. PG stdout retains one upstream import warning per run; stderr
+empty. Controls/Ruff/diff218.098 ms pass. Independent pre-exec/runtime/live PASS.
+
+PG connections54/159/75, migration children8/21/14; each owned generated DB is
+gone before its tmpfs container removal. Retained23 containers/4 images/all20
+volumes/23 networks equal the saved baseline. Frozen5,720 blobs/modes preserved,
+default guard07d3...1150 restored, extras/capabilities absent, network empty.
+All runtime is terminal; existing v1/v2 evidence paths must not be replayed.
+Seventeen raw captures/25 hashes in task native-creator-finance-hflypi-20260921/;
+report native-creator-finance-results-20260921.md. Do not replay Docker cleanup.
+
+Accepted frozen slices2,794/5,481 in118 modules,2,687 unclosed; work-review v2
+adds no coverage. Exact shared-PG reconciliation87accepted/17pending/13modules
+is in evidence/native-pg-shared-fixture-status-hflypi-20260921.json, keeping the
+original65/39 map immutable. Next command for inspection, NOT another test run:
+
+```sh
+jq '.pending_modules' .agent/tasks/production-readiness-20260917/evidence/native-pg-shared-fixture-status-hflypi-20260921.json
+```
+
+All17 fixture paths were reviewed. Shared conftest postgres_container is module-
+scoped; one17-node process would try to create13containers and violate the
+intentional single-container adapter gate. Do not override fixture scope or
+reuse one DB across modules. Prepare13 literal profiles together, then execute
+separately with the existing one-container lifecycle and fresh processes:
+
+| Proposed profile | Nodes | Database / migration requirements |
+| --- | ---: | --- |
+| author-daily-gate-pg-v1 | 2 | test; at least2 parent connections +1 child |
+| knowledge-schema-pg-v1 | 1 | test;1 parent +1 child |
+| outreach-pain-library-pg-v1 | 2 | test;2 parent +1 child; vector path mocked |
+| riderra-template-pg-v1 | 3 | test;3 parent; TEMP tables, no migration child |
+| sales-room-proposal-race-pg-v1 | 1 | test; at least4 parent +1 child |
+| sales-room-deadlock-pg-v1 | 1 | test; at least3 parent +1 child |
+| telegram-shared-audience-pg-v1 | 1 | test;1 parent +1 child; no Telegram API |
+| web-tracking-pg-v1 | 1 | test;1 parent +4 children;5,000 synthetic rows |
+| worker-captcha-pg-v1 | 1 | test; child; test-owned DATABASE_URL, parser mocked |
+| worker-expired-pg-v1 | 1 | same boundary, fresh process for worker globals |
+| worker-resume-pg-v1 | 1 | same boundary, fresh process for worker globals |
+| finance-import-transaction-pg-v1 | 1 | postgres + localos_data_fin_01_<32hex>; no child |
+| service-compression-race-pg-v1 | 1 | postgres + service_compression_race_<32hex>; child |
+
+These names are proposals, not CLI modes yet. Finance needs exactly named
+owned DB cleanup and at least4 direct connections; service compression at least8
+total with lock polling, bounded512 upper limit. Both create/force-drop only
+their fixture-owned synthetic DB. Riderra/finance need explicit no-Flask-child
+acceptance; do not weaken that requirement globally. Other old/default budgets
+remain32 unless fixture evidence justifies a named exception. Do not broaden
+parent bind_parent_database; tests derive/set the owned DSN themselves. Reject
+inherited DATABASE_URL. Providers/auth seams are mocked, no external sends.
+First runtime after implementation/review: author-daily-gate2, then remaining
+profiles serially. No runnable new profile or current-source pass is claimed.
+
+Separate read-only recon proposes31 security/tenant/parser/media modules161nodes;
+actual strict collection and fixture checks are still required, no run claimed.
+
+After backend scope, reuse `scripts/readiness_journey_measure.py` for one paired
+five-flow ABBA measurement, rather than new test rigs. Historical baseline272794a4
+is available; choose a new clean current-source archive and review exact guarded
+loopback test DSN first. Candidate5warmups/50serial/0load is NOT executed. Its
+concurrent mode measures fixture/migration correctness, not capacity; website
+fetch is outside current content seed coverage. Current-source/performance gap stays.
+
+Approximately15 GiB free, recheck5/2/10 GiB floors. Foreign13 paths retained,
+tracked diff40afa014...4d2a4c6d1 and five untracked hashes unchanged. Index must
+contain only this reviewed package before local commit. Whole spec/verdict/problems
+FAIL unchanged; security/browser/frontend flake/CI/demo/final gates still open.
+No production/provider/push/deploy authority is inferred from local test success.
+
 ## Latest checkpoint — 21 September, full frontend diagnostic
 
 Branch codex/production-readiness-20260917, parent453eea52. PG7 committed diff

@@ -116,6 +116,40 @@ PROFILES = {
         "exact_nodeids": True,
         "prefix": "native-tc-work-review-rollback",
     },
+    "creator-portal-rollback-v1": {
+        "targets": [
+            "tests/test_creator_portal_migration_rollback.py::test_empty_creator_portal_schema_downgrades_without_cascade",
+            "tests/test_creator_portal_migration_rollback.py::test_creator_portal_data_blocks_downgrade_and_remains_present[relationship]",
+            "tests/test_creator_portal_migration_rollback.py::test_creator_portal_data_blocks_downgrade_and_remains_present[review_field]",
+            "tests/test_creator_portal_migration_rollback.py::test_concurrent_portal_writer_cannot_commit_during_downgrade",
+        ],
+        "count": 4,
+        "exact_nodeids": True,
+        "prefix": "native-tc-creator-portal-rollback",
+    },
+    "creator-offer-rollback-v1": {
+        "targets": [
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_empty_offer_distribution_schema_reverses",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_populated_offer_distribution_blocks_and_retains_data[business_preference]",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_populated_offer_distribution_blocks_and_retains_data[offer_preference]",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_populated_offer_distribution_blocks_and_retains_data[distribution_run]",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_populated_offer_distribution_blocks_and_retains_data[recipient]",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_mutated_campaign_columns_block_downgrade[reviewed_by]",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_mutated_campaign_columns_block_downgrade[reviewed_at]",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_mutated_campaign_columns_block_downgrade[distribution_locked_at]",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_standalone_offer_message_blocks_downgrade_and_is_retained",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_existing_collaboration_message_survives_empty_distribution_downgrade",
+            "tests/test_creator_offer_distribution_migration_rollback.py::test_concurrent_writer_cannot_commit_after_data_guard_before_drop",
+        ],
+        "count": 11,
+        "exact_nodeids": True,
+        "prefix": "native-tc-creator-offer-rollback",
+    },
+}
+ROLLBACK_PROFILE_RULES = {
+    "work-review-rollback-v1": {"database_pattern": r"work_review_rollback_[0-9a-f]{32}", "child_admissions": 14, "minimum_connections": 75, "cleanup_event": "work_review_database_cleanup_checked"},
+    "creator-portal-rollback-v1": {"database_pattern": r"creator_portal_rollback_[0-9a-f]{32}", "child_admissions": 8, "minimum_connections": 54, "cleanup_event": "creator_portal_database_cleanup_checked"},
+    "creator-offer-rollback-v1": {"database_pattern": r"creator_offer_rollback_[0-9a-f]{32}", "child_admissions": 21, "minimum_connections": 159, "cleanup_event": "creator_offer_database_cleanup_checked"},
 }
 OLD_GUARD_SHA256 = "07d3e2dc19cbb0f9e542a6d0835ea17b5efcc5713391c152a833e6efefd61150"
 MIN_START = 5 * 1024**3
@@ -368,8 +402,9 @@ def parse_test(payload: dict[str, object], profile: dict[str, object]) -> dict[s
 
 
 def relay_evidence(profile: str, final: object) -> tuple[int, list[object]]:
-    expected_budget = 1024 if profile == "capabilities-phase1-v1" else 512 if profile == "work-review-rollback-v1" else 32
-    minimum_connections = 171 if profile == "capabilities-phase1-v1" else 75 if profile == "work-review-rollback-v1" else 21 if profile == "operator-service-creation-v1" else 2
+    rollback_rule = ROLLBACK_PROFILE_RULES.get(profile)
+    expected_budget = 1024 if profile == "capabilities-phase1-v1" else 512 if rollback_rule is not None else 32
+    minimum_connections = 171 if profile == "capabilities-phase1-v1" else rollback_rule["minimum_connections"] if rollback_rule is not None else 21 if profile == "operator-service-creation-v1" else 2
     if not isinstance(final, dict):
         raise RuntimeError("relay final evidence is invalid")
     connections = final.get("connections")
@@ -488,7 +523,7 @@ def audit_journals(events: Path, relay_artifact: Path, profile: str) -> dict[str
     unbindings = [row for row in event_rows if row.get("event") == "parent_database_unbound"]
     voice_bindings = [row for row in event_rows if row.get("event") == "operator_voice_test_dsn_bound"]
     voice_unbindings = [row for row in event_rows if row.get("event") == "operator_voice_test_dsn_unbound"]
-    work_review_cleanup = [row for row in event_rows if row.get("event") == "work_review_database_cleanup_checked"]
+    rollback_rule = ROLLBACK_PROFILE_RULES.get(profile)
     if profile in {"client-info-v1", "capabilities-phase1-v1"}:
         if len(bindings) != 1 or len(unbindings) != 1 or bindings[0].get("pid") != parent_pid or bindings[0].get("port") != port or bindings[0].get("database") != "test" or unbindings[0].get("pid") != parent_pid:
             raise RuntimeError("parent Flask database configuration lifecycle is incomplete")
@@ -499,20 +534,23 @@ def audit_journals(events: Path, relay_artifact: Path, profile: str) -> dict[str
             raise RuntimeError("operator voice test DSN lifecycle is incomplete")
     elif voice_bindings or voice_unbindings:
         raise RuntimeError("unexpected operator voice test DSN lifecycle")
-    if profile == "work-review-rollback-v1":
+    if rollback_rule is not None:
         databases = [row.get("database") for row in admitted]
-        generated = {database for database in databases if isinstance(database, str) and re.fullmatch(r"work_review_rollback_[0-9a-f]{32}", database)}
+        pattern = rollback_rule["database_pattern"]
+        cleanup_event = rollback_rule["cleanup_event"]
+        generated = {database for database in databases if isinstance(database, str) and re.fullmatch(pattern, database)}
         parent_admin = [row for row in admitted if row.get("pid") == parent_pid and row.get("database") == "postgres"]
-        child_generated = [row for row in admitted if row.get("pid") != parent_pid and isinstance(row.get("database"), str) and re.fullmatch(r"work_review_rollback_[0-9a-f]{32}", row["database"])]
-        if len(generated) != 1 or len(parent_admin) != 2 or len(child_generated) < 14 or len(work_review_cleanup) != 1 or work_review_cleanup[0].get("pid") != parent_pid or work_review_cleanup[0].get("remaining") != 0:
-            raise RuntimeError("work-review disposable database lifecycle evidence is incomplete")
-    elif work_review_cleanup:
-        raise RuntimeError("unexpected work-review disposable database cleanup evidence")
+        child_generated = [row for row in admitted if row.get("pid") != parent_pid and isinstance(row.get("database"), str) and re.fullmatch(pattern, row["database"])]
+        cleanup = [row for row in event_rows if row.get("event") == cleanup_event]
+        if len(generated) != 1 or len(parent_admin) != 2 or len(child_generated) < rollback_rule["child_admissions"] or len(cleanup) != 1 or cleanup[0].get("pid") != parent_pid or cleanup[0].get("remaining") != 0:
+            raise RuntimeError("rollback disposable database lifecycle evidence is incomplete")
+    elif any(row.get("event") in {rule["cleanup_event"] for rule in ROLLBACK_PROFILE_RULES.values()} for row in event_rows):
+        raise RuntimeError("unexpected rollback disposable database cleanup evidence")
     final = relay_rows[-1] if relay_rows else {}
     connections, executions = relay_evidence(profile, final)
     if not all(isinstance(row, dict) and row.get("returncode") == 0 and row.get("exit_mode") == "graceful" and row.get("stderr_bytes") == 0 for row in executions):
         raise RuntimeError("relay Docker exec evidence is incomplete")
-    return {"event_rows": len(event_rows), "relay_rows": len(relay_rows), "connections": connections, "flask_child_dsn_admitted": profile != "operator-service-creation-v1", "operator_voice_dsn_admitted": profile == "operator-service-creation-v1", "work_review_disposable_database_checked": profile == "work-review-rollback-v1"}
+    return {"event_rows": len(event_rows), "relay_rows": len(relay_rows), "connections": connections, "flask_child_dsn_admitted": profile != "operator-service-creation-v1", "operator_voice_dsn_admitted": profile == "operator-service-creation-v1", "rollback_disposable_database_checked": rollback_rule is not None, "work_review_disposable_database_checked": profile == "work-review-rollback-v1"}
 
 
 def require_empty_network(relay_module: object) -> dict[str, object]:

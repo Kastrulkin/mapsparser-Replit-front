@@ -32,11 +32,26 @@ PROFILE_PREFIXES = {
     "capabilities-phase1-v1": "native-tc-capabilities-phase1",
     "operator-service-creation-v1": "native-tc-operator-service-creation",
     "work-review-rollback-v1": "native-tc-work-review-rollback",
+    "creator-portal-rollback-v1": "native-tc-creator-portal-rollback",
+    "creator-offer-rollback-v1": "native-tc-creator-offer-rollback",
 }
 PARENT_DATABASE_PROFILES = frozenset({"client-info-v1", "capabilities-phase1-v1"})
 OPERATOR_VOICE_TEST_DSN_PROFILES = frozenset({"operator-service-creation-v1"})
-WORK_REVIEW_ROLLBACK_PROFILE = "work-review-rollback-v1"
-WORK_REVIEW_DATABASE_PATTERN = re.compile(r"work_review_rollback_[0-9a-f]{32}")
+ROLLBACK_DATABASE_PATTERNS = {
+    "work-review-rollback-v1": re.compile(r"work_review_rollback_[0-9a-f]{32}"),
+    "creator-portal-rollback-v1": re.compile(r"creator_portal_rollback_[0-9a-f]{32}"),
+    "creator-offer-rollback-v1": re.compile(r"creator_offer_rollback_[0-9a-f]{32}"),
+}
+ROLLBACK_CLEANUP_SQL_PATTERNS = {
+    "work-review-rollback-v1": r"^work_review_rollback_[0-9a-f]{32}$",
+    "creator-portal-rollback-v1": r"^creator_portal_rollback_[0-9a-f]{32}$",
+    "creator-offer-rollback-v1": r"^creator_offer_rollback_[0-9a-f]{32}$",
+}
+ROLLBACK_CLEANUP_EVENTS = {
+    "work-review-rollback-v1": "work_review_database_cleanup_checked",
+    "creator-portal-rollback-v1": "creator_portal_database_cleanup_checked",
+    "creator-offer-rollback-v1": "creator_offer_database_cleanup_checked",
+}
 _active = None
 _relay = None
 _started = False
@@ -66,8 +81,9 @@ def validate_dsn(parsed: dict[str, str]) -> None:
     database = parsed.get("dbname")
     profile = os.environ.get(PREFIX + "MODE", "")
     allowed_database = database == "test"
-    if profile == WORK_REVIEW_ROLLBACK_PROFILE:
-        allowed_database = database == "postgres" or isinstance(database, str) and WORK_REVIEW_DATABASE_PATTERN.fullmatch(database) is not None
+    rollback_pattern = ROLLBACK_DATABASE_PATTERNS.get(profile)
+    if rollback_pattern is not None:
+        allowed_database = database == "postgres" or isinstance(database, str) and rollback_pattern.fullmatch(database) is not None
     if parsed.get("host") != "127.0.0.1" or not allowed_database or parsed.get("user") != "test" or parsed.get("password") != "test":
         deny("DSN is outside the single synthetic test database")
     port = parsed.get("port", "")
@@ -238,7 +254,9 @@ def install() -> None:
             unbind_parent_database()
         except BaseException:
             failures.append(type(sys.exception()).__name__)
-        if profile == WORK_REVIEW_ROLLBACK_PROFILE and instance._container is not None:
+        cleanup_pattern = ROLLBACK_CLEANUP_SQL_PATTERNS.get(profile)
+        cleanup_event = ROLLBACK_CLEANUP_EVENTS.get(profile)
+        if cleanup_pattern is not None and cleanup_event is not None and instance._container is not None:
             try:
                 result = instance._container.exec_run(
                     [
@@ -249,13 +267,13 @@ def install() -> None:
                         "postgres",
                         "-At",
                         "-c",
-                        "SELECT COUNT(*) FROM pg_database WHERE datname ~ '^work_review_rollback_[0-9a-f]{32}$'",
+                        f"SELECT COUNT(*) FROM pg_database WHERE datname ~ '{cleanup_pattern}'",
                     ]
                 )
                 output = result.output.decode().strip() if isinstance(result.output, bytes) else str(result.output).strip()
                 if result.exit_code != 0 or output != "0":
-                    deny("work-review disposable database remains before container cleanup")
-                record("work_review_database_cleanup_checked", remaining=0)
+                    deny("rollback disposable database remains before container cleanup")
+                record(cleanup_event, remaining=0)
             except BaseException:
                 failures.append(type(sys.exception()).__name__)
         if _relay is not None:

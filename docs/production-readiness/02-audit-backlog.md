@@ -1,5 +1,17 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Creator rollback / finance-content coverage — 21 September
+
+No new product bug was proven. Creator Portal4 and Offer11 pass unchanged on
+isolated PostgreSQL, including populated-data refusal and concurrent writers;
+prior work-review7 passes as regression after shared adapter changes. Pure92
+finance/services/reviews/content tests pass with unchanged network/DB denial.
+Exact lifecycle/source/guard and independent runtime checks PASS. Evidence:
+task native-creator-finance-results-20260921.md and its25-hash manifest.
+Coverage2,794/5,481 in118 slices is not aggregate/current-source proof. Literal
+shared-fixture reconciliation leaves17PGnodes/13modules, not the historical32
+below. Remaining runtime/security/performance/browser/final gates stay OPEN.
+
 ## Full frontend flake diagnostic — 21 September
 
 Frozen default-worker830/830 passes with bounded phase tracing; all3 candidates,

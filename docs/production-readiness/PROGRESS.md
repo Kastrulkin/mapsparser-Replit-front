@@ -1,5 +1,30 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, Creator rollback15 and pure92
+
+- [x] Continued with actual runtime after the cleanup-only reconciliation;
+  completed cleanup was not repeated. Parent `eb59fc2f`.
+- [x] Creator Portal4/4 and Offer11/11 pass on separate owned PostgreSQL/tmpfs
+  containers; populated-data guards and concurrent writers are tested.
+- [x] Work-review7/7 rerun passes after shared adapter changes; regression only,
+  not seven more coverage nodes. All three temporary containers were removed.
+- [x] Finance/services/reviews/content92/92 across21 modules pass, zero skips.
+  Controls/Ruff/diff218.098 ms pass; independent pre-exec/runtime/live checks PASS.
+- [x] Frozen5,720 blobs/default guard restored; retained23containers/4images/
+  all20volumes/23networks unchanged. Host has about15 GiB free.
+- [ ] Accepted frozen slices2,794/5,481 across118 modules;2,687 remain. Shared
+  conftest PG87/104 accepted,17 pending/13 modules; current-source aggregate open.
+- [x] Remaining17 PG fixtures reviewed: module-scoped containers require13
+  separate lifecycles; a catch-all profile would violate existing isolation.
+- [ ] Next: prepare the13 literal module profiles as one reviewed batch, retain
+  separate containers/processes, start with author gate2; no global DB widening.
+- [ ] Security/browser/frontend flake/performance/CI/demo/final gates stay open.
+
+Seven audit support files,17 captures/25 hashes and seven readiness docs only;
+new PG status inventory preserves the original historical map. See task
+native-creator-finance-results-20260921.md. No product/assertion/production/
+provider/push/deploy change;13 foreign paths and historical whole-goal FAIL stay.
+
 ## Latest checkpoint — 21 September, full frontend trace830
 
 - [x] Work-review PG7 committed locally as `453eea52`; normal hook, strict

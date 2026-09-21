@@ -142,6 +142,32 @@ PROFILES = {
         },
         "prefix": "native-unit-governed-workflows", "timeout": 180,
     },
+    "finance-services-reviews-content-pure-v1": {
+        "modules": {
+            "tests/test_finance_imports.py": 9,
+            "tests/test_finance_kpis.py": 9,
+            "tests/test_finance_routes_contract.py": 1,
+            "tests/test_finance_import_resource_limits.py": 6,
+            "tests/test_finance_roi_scope.py": 3,
+            "tests/test_finance_service_catalog.py": 1,
+            "tests/test_review_reply_output.py": 3,
+            "tests/test_review_response_utils.py": 4,
+            "tests/test_review_snapshot_currentness.py": 4,
+            "tests/test_service_catalog_compression.py": 7,
+            "tests/test_service_keyword_scoring.py": 8,
+            "tests/test_service_problem_regeneration.py": 3,
+            "tests/test_service_safe_wordstat.py": 9,
+            "tests/test_services_sync_logic.py": 2,
+            "tests/test_content_plan_export.py": 3,
+            "tests/test_content_plan_export_api.py": 5,
+            "tests/test_content_plan_network_visibility.py": 1,
+            "tests/test_content_plan_policy.py": 3,
+            "tests/test_content_publish_notifications.py": 5,
+            "tests/test_content_setup_entrypoints.py": 3,
+            "tests/test_content_voice_api_security.py": 3,
+        },
+        "prefix": "native-unit-finance-services-reviews-content", "timeout": 180,
+    },
 }
 MIN_START = 5 * 1024**3
 METADATA_ONLY_DATABASE_URL = "postgresql+psycopg2://metadata_only@127.0.0.1:1/localos_metadata_only"
@@ -151,7 +177,7 @@ def profile_environment(profile_name: str, environment: dict[str, str]) -> dict[
     if "DATABASE_URL" in environment:
         raise RuntimeError("pure-unit environment must not inherit a database URL")
     result = dict(environment)
-    if profile_name in {"agent-social-pure-v1", "governed-operations-pure-v2", "governed-workflows-pure-v1"}:
+    if profile_name in {"agent-social-pure-v1", "governed-operations-pure-v2", "governed-workflows-pure-v1", "finance-services-reviews-content-pure-v1"}:
         # Flask's migration metadata extension needs a URI, not a connection.
         # Port 1 remains denied by the unchanged psycopg/socket guard.
         result["DATABASE_URL"] = METADATA_ONLY_DATABASE_URL
