@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the reviewed hfLYPi pure-unit card-growth slice after explicit review.
+"""Run a named, reviewed hfLYPi pure-unit slice after explicit review.
 
 The launcher has no Testcontainers mode, database URL, provider credential or
 Docker command.  It reuses only process/result helpers from the reviewed
@@ -27,10 +27,22 @@ EVIDENCE = NATIVE / "evidence"
 VENV = NATIVE / "venv/bin/python"
 INSTALLED_GUARD = SOURCE / "src/sitecustomize.py"
 DEFAULT_GUARD_SHA256 = "07d3e2dc19cbb0f9e542a6d0835ea17b5efcc5713391c152a833e6efefd61150"
-TARGET = "tests/test_card_growth_copy_contract.py"
-PROFILE = {"target": TARGET, "count": 200}
+PROFILES = {
+    "card-growth-v1": {
+        "modules": {"tests/test_card_growth_copy_contract.py": 200},
+        "prefix": "native-unit-card-growth", "timeout": 90,
+    },
+    "policy-content-v1": {
+        "modules": {
+            "tests/test_founder_outreach_campaigns.py": 174,
+            "tests/test_legacy_agent_approval_policy.py": 69,
+            "tests/test_content_plan_generation.py": 67,
+            "tests/test_agent_template_validation_fixtures.py": 54,
+        },
+        "prefix": "native-unit-policy-content", "timeout": 120,
+    },
+}
 MIN_START = 5 * 1024**3
-MAX_RUNTIME = 90
 
 
 def valid_attempt(value: str) -> str:
@@ -39,15 +51,32 @@ def valid_attempt(value: str) -> str:
     return value
 
 
+def require_module_counts(callback: dict[str, object], modules: dict[str, int]) -> dict[str, int]:
+    nodes = callback.get("nodeids")
+    if not isinstance(nodes, list) or not all(isinstance(node, str) for node in nodes):
+        raise RuntimeError("unit slice node inventory is missing")
+    observed = {module: sum(node.startswith(module + "::") for node in nodes) for module in modules}
+    if observed != modules or sum(observed.values()) != len(nodes):
+        raise RuntimeError("unit slice per-module counts differ from the reviewed inventory")
+    return observed
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--attempt", required=True, type=valid_attempt)
+    parser.add_argument("--profile", choices=tuple(PROFILES), default="card-growth-v1")
     values = parser.parse_args()
-    destination = EVIDENCE / f"native-unit-card-growth-{values.attempt}.json"
+    selected = PROFILES[values.profile]
+    modules = selected["modules"]
+    profile = {"targets": list(modules), "count": sum(modules.values())}
+    timeout = selected["timeout"]
+    destination = EVIDENCE / f"{selected['prefix']}-{values.attempt}.json"
     output: dict[str, object] = {
         "attempt": values.attempt,
-        "target": TARGET,
-        "expected_count": PROFILE["count"],
+        "profile": values.profile,
+        "targets": profile["targets"],
+        "expected_count": profile["count"],
+        "expected_module_counts": modules,
         "phase": "preflight",
     }
     guard_helpers = None
@@ -77,13 +106,14 @@ def main() -> int:
         output["guard_helpers_sha256"] = shared["digest"](SUPPORT / "native_guard_checks_hflypi.py")
         output["phase"] = "test"
         capture = shared["result"](
-            ["/usr/bin/arch", "-arm64", str(VENV), "-B", "-c", shared["plugin_source"](TARGET)],
+            ["/usr/bin/arch", "-arm64", str(VENV), "-B", "-c", shared["plugin_source"](profile["targets"])],
             environment,
-            MAX_RUNTIME,
-            started + MAX_RUNTIME,
+            timeout,
+            started + timeout,
         )
         output["test"] = capture
-        output["callbacks"] = shared["parse_test"](capture, PROFILE)
+        output["callbacks"] = shared["parse_test"](capture, profile)
+        output["observed_module_counts"] = require_module_counts(output["callbacks"], modules)
         output["phase"] = "passed"
     except BaseException:
         error = sys.exception()

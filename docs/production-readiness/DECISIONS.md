@@ -1,5 +1,17 @@
 # Readiness decisions
 
+## D-090 — Enforce per-module evidence and keep flaky-test conclusions bounded
+
+A total pass count cannot prove the expected module mix. The named364-node
+pure profile must match each of174/69/67/54counts and unique allowed nodeids,
+with no skip/error. Keep the default guard and existing TC policy unchanged.
+
+Five isolated frontend successes are NOT_REPRODUCED in that invocation, not a
+fix for the prior full-suite failure and not proof of worker scheduling as its
+cause. Preserve raw outputs. A runner that returns0 solely on source integrity
+is not an acceptance gate; inspect actual counts/statuses and harden the helper
+separately without rewriting historical evidence or changing product tests.
+
 ## D-089 — Separate test-environment failures from endpoint defects
 
 The client-info fixture configures DATABASE_URL only for its Alembic child;

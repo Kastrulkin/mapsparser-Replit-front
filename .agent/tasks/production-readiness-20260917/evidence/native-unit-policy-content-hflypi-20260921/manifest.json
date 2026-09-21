@@ -1,0 +1,19 @@
+{
+  "schema": "hflypi-policy-content-evidence-v1",
+  "source_commit": "99849935de26e2932613f2a73cf515dff49104a1",
+  "scope": "Four unchanged modules,364 passed,not full5481 suite",
+  "files": [
+    {
+      "path": "native-unit-policy-content-v1.json",
+      "sha256": "6548ddf7b72e6c0006fb7e83f93f485fb871a2395194604af9bd8a29e677d29e"
+    },
+    {
+      "path": "native-unit-policy-content-v1.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "static-final.json",
+      "sha256": "d4adc84e3c6128923b71460f054c40d59d331dad9529812e54387131f2bc4949"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "command": [
+    "/usr/local/opt/node@22/bin/npm",
+    "test",
+    "--",
+    "src/components/SEOKeywordsTab.i18n.test.tsx",
+    "src/pages/dashboard/ContentPage.i18n.test.tsx"
+  ],
+  "duration_ms": 6583.803,
+  "environment_keys": [
+    "NODE_OPTIONS",
+    "NO_COLOR",
+    "NPM_CONFIG_AUDIT",
+    "NPM_CONFIG_CACHE",
+    "NPM_CONFIG_FUND",
+    "NPM_CONFIG_UPDATE_NOTIFIER",
+    "NPM_CONFIG_USERCONFIG",
+    "PATH",
+    "PYTHON_DOTENV_DISABLED",
+    "TMPDIR"
+  ],
+  "exit_code": 0,
+  "free_bytes_after": 6302953472,
+  "repeat": 3,
+  "stderr": "",
+  "stdout": "\n> vite_react_shadcn_ts@0.0.0 test\n> vitest run src/components/SEOKeywordsTab.i18n.test.tsx src/pages/dashboard/ContentPage.i18n.test.tsx\n\n\n RUN  v4.1.11 /private/tmp/localos-readiness-20260921.hfLYPi/source/frontend\n\n ✓ src/components/SEOKeywordsTab.i18n.test.tsx (1 test) 608ms\n     ✓ renders the Turkish demo negative-keyword controls without Cyrillic fallback copy  606ms\n ✓ src/pages/dashboard/ContentPage.i18n.test.tsx (2 tests) 360ms\n     ✓ renders the Greek audience heading and useful empty state without Russian copy  309ms\n\n Test Files  2 passed (2)\n      Tests  3 passed (3)\n   Start at  19:40:51\n   Duration  4.55s (transform 1.62s, setup 810ms, import 2.07s, tests 968ms, environment 3.24s)\n\n",
+  "stopped_reason": null
+}

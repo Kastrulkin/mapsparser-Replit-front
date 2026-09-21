@@ -208,7 +208,10 @@ def require_probe(payload: dict[str, object], mode: str, guard_hash: str) -> Non
             raise RuntimeError("child proof does not establish guarded distinct process")
 
 
-def plugin_source(target: str) -> str:
+def plugin_source(target: str | list[str]) -> str:
+    targets = [target] if isinstance(target, str) else target
+    if not targets or not all(isinstance(item, str) for item in targets):
+        raise ValueError("literal pytest targets are required")
     return """
 import json
 import pytest
@@ -228,11 +231,11 @@ class Results:
             if report.skipped: state['skipped'] += 1
     def pytest_sessionfinish(self, session, exitstatus):
         state['pytest_exitstatus'] = int(exitstatus)
-result = pytest.main([%r, '-q', '-p', 'no:cacheprovider'], plugins=[Results()])
+result = pytest.main(%r + ['-q', '-p', 'no:cacheprovider'], plugins=[Results()])
 state['pytest_return'] = int(result)
 print('HFLYPI_TC_ONE_RESULT=' + json.dumps(state, sort_keys=True))
 raise SystemExit(result)
-""" % target
+""" % targets
 
 
 def parse_test(payload: dict[str, object], profile: dict[str, object]) -> dict[str, object]:
@@ -249,10 +252,12 @@ def parse_test(payload: dict[str, object], profile: dict[str, object]) -> dict[s
     if any(parsed.get(key) != value for key, value in expected.items()) or payload.get("exit_code") != 0 or payload.get("timed_out") is True:
         raise RuntimeError("unchanged native slice did not pass every expected node without skip")
     nodeids = parsed.get("nodeids")
-    target = profile["target"]
+    targets = profile.get("targets", [profile.get("target")])
+    if not isinstance(targets, list) or not targets or not all(isinstance(target, str) for target in targets):
+        raise RuntimeError("native slice has no literal target allowlist")
     if not isinstance(nodeids, list) or len(nodeids) != profile["count"] or len(set(nodeids)) != len(nodeids):
         raise RuntimeError("native slice did not report unique expected nodes")
-    if not all(isinstance(node, str) and (node == target or node.startswith(target + "::")) for node in nodeids):
+    if not all(isinstance(node, str) and any(node == target or node.startswith(target + "::") for target in targets) for node in nodeids):
         raise RuntimeError("native slice collected a node outside its literal target")
     return parsed
 

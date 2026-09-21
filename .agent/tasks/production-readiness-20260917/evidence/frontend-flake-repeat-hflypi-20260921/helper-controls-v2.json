@@ -1,0 +1,9 @@
+{
+  "checks": {
+    "all_five_exact_passes": true,
+    "config_change_is_not_enough": true,
+    "four_passes_are_not_enough": true,
+    "identity_mismatch_is_not_enough": true,
+    "missing_test_count_is_not_enough": true
+  }
+}

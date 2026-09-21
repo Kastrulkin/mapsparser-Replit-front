@@ -1,5 +1,26 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, 364 policy/content tests and flake repeats
+
+- [x] Four frozen backend modules pass364/364 with exact174/69/67/54 counts:
+  campaign rules, approval policy, content plans and template validation.
+  Pytest1.94s, wrapper4.084s; no skip/error/DB/provider/TC mode. Independent
+  runtime review PASS; default guard and5720frozen blobs preserved.
+- [x] Five unchanged-default frontend targeted repeats each pass3/3.
+  NOT_REPRODUCED in this scope; original full-suite failures remain unresolved.
+  Raw results were inspected, not inferred from the original helper exit code.
+- [x] Repeat helper hardened separately: five pure acceptance controls and
+  independent static review pass. Historical repeats were not rerun; new
+  exceptional-process cleanup remains static-review-only.
+- [ ] Frozen backend cumulative573/5481,4908unexecuted; not a full aggregate.
+- [ ] Separate synthetic legacy-parser privacy reproduction in progress.
+
+No product/test changes for these runs, production, push or deploy. Parent
+ea1a5036; raw evidence/limits are in task `native-policy-content-results-hflypi-20260921.md`.
+Next: complete the bounded P1 reproduction/fix if proved, then remaining
+backend/PG/aggregate and frontend suite-interaction checks. Whole-goal FAIL
+and security/browser/performance/CI completion requirements remain open.
+
 ## Latest checkpoint — 21 September, client-info and 200 pure-unit cases
 
 - [x] Unchanged `/api/client-info` module passes8/8 with real PostgreSQL,

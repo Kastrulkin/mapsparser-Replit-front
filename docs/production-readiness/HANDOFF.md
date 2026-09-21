@@ -1,5 +1,35 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, 573 frozen backend nodes verified
+
+Parent ea1a5036. New exact four-module pure profile `policy-content-v1` passed
+364/364: founder outreach174, legacy approval69, content generation67, template
+validation54. Pytest1.94s/capture2.490s/total4.084s, no skip/error; independent
+review matched raw callbacks/counts/hashes. Source99849935 remains frozen;
+5720tracked blobs and installed guard07d3... unchanged. No TC/DB/provider mode.
+Old200-node CLI default retained; helper now admits only named literal profiles.
+Evidence: `native-unit-policy-content-hflypi-20260921/` and result note.
+
+Fresh cumulative573/5481,4908unexecuted (85mappedPGgroup +4823other), across
+seven separate module slices. Not a full-suite or current-production claim.
+Five default-config frontend targeted repeats are all3/3, but only establish
+NOT_REPRODUCED for isolated modules. Keep original v5 full-suite failure open.
+Raw captures: `frontend-flake-repeat-hflypi-20260921/`; never infer success
+solely from the original repeat-helper exit code (source-only acceptance).
+Later v2 helper hardening and five pure controls are reviewed separately;
+provenance preserves the executed v1 hash. No v2 test-loop or exceptional
+process-cleanup runtime proof is claimed.
+
+Next source lane: synthetic reproduction of SEC-PARSER-LEGACY-LOG-01 at
+parser_config import fallback and yandex_maps_scraper outward exceptions.
+New test `tests/test_legacy_parser_exception_privacy.py` is owned pending work,
+not one of the13foreign dirty paths; this audit-only checkpoint does not claim
+a security fix. Do not change the frozen archive for that reproduction.
+Continue remaining backend/PG/aggregate and frontend suite-interaction proof
+after the bounded security package. Maintain5GiB start/2GiB live floors;
+latest free~5.86GiB. No cache replay/production/provider/push/deploy action.
+Goal active; historical whole-goal FAIL and broad completion gates remain.
+
 ## Latest checkpoint — 21 September, 209 fresh backend nodes passed
 
 Supersedes the next-client-info status below. Actual unchanged client-info

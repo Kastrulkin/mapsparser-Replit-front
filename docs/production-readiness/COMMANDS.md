@@ -1,5 +1,35 @@
 # Verified commands and evidence
 
+## Policy/content364 and frontend default repeats — 21 September
+
+Named tmux `audit-native-unit-policy-content-hflypi-v1`:
+
+```sh
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_unit_slice_hflypi.py --attempt v1 --profile policy-content-v1
+```
+
+Actual364/364/no skips/errors, exact174/69/67/54module counts, pytest1.94s,
+capture2.490s/wrapper4.084s; guard/default environment and5720source blobs
+verified. Static controls/Ruff3files/diff check exit0 in262.1ms. Raw archive
+`native-unit-policy-content-hflypi-20260921/`; no Docker/DB/provider operations.
+
+Frontend repeat launcher executed five sequential invocations from frozen
+`/private/tmp/localos-readiness-20260921.hfLYPi/source/frontend`:
+
+```sh
+/usr/local/opt/node@22/bin/npm test -- src/components/SEOKeywordsTab.i18n.test.tsx src/pages/dashboard/ContentPage.i18n.test.tsx
+```
+
+Existing Node guard was required via NODE_OPTIONS in the recorded clean env;
+no worker/test-timeout override. Each raw result2files/3tests passed, exit0/
+stderr0, tracked source and package/config hashes unchanged. Inspect recorded
+commands/environment/outputs in `frontend-flake-repeat-hflypi-20260921/`;
+classification NOT_REPRODUCED only, not a full-suite fix. Historical helper
+exit0 alone is not acceptance evidence. No product/source/deployment action.
+The v2 helper's five pure classification controls pass separately; source
+compiles and independent static review accepts bounded cleanup. v2 was not
+used for these historical repeats; see helper provenance/control artifacts.
+
 ## Client-info integration and pure-unit batch — 21 September
 
 Named tmux `audit-native-tc-client-info-hflypi-v1`, then `...-v2`:
