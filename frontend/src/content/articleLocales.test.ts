@@ -11,8 +11,11 @@ import ar from "./article-locales/ar.json";
 import ha from "./article-locales/ha.json";
 import tr from "./article-locales/tr.json";
 import { mergeLocalizedArticles } from "./useLocalizedArticles";
+import type { ArticleContent } from "./contentTypes";
 
-const localizedArticles = [
+type TranslationLanguage = "en" | "fr" | "es" | "el" | "de" | "th" | "ar" | "ha" | "tr";
+
+const localizedArticles: Array<{ language: TranslationLanguage; articles: ArticleContent[]; copy: typeof contentCopy.en }> = [
   { language: "en", articles: en, copy: contentCopy.en },
   { language: "fr", articles: fr, copy: contentCopy.fr },
   { language: "es", articles: es, copy: contentCopy.es },
@@ -28,13 +31,16 @@ const cyrillic = /[А-Яа-яЁё]/;
 
 describe("article translations", () => {
   localizedArticles.forEach(({ language, articles, copy }) => {
-    it(`keeps translated articles intact and falls back to Russian for new articles in ${language}`, () => {
-      const mergedArticles = mergeLocalizedArticles(articles);
+    it(`contains every published article in ${language} without a Russian fallback`, () => {
+      const mergedArticles = mergeLocalizedArticles(language, articles);
 
-      expect(mergedArticles.map((article) => article.slug)).toEqual(expect.arrayContaining(publishedArticles.map((article) => article.slug)));
+      expect(mergedArticles.map((article) => article.slug).sort()).toEqual(publishedArticles.map((article) => article.slug).sort());
       expect(new Set(mergedArticles.map((article) => article.slug)).size).toBe(publishedArticles.length);
-      expect(mergedArticles.slice(0, articles.length)).toEqual(articles);
-      expect(JSON.stringify(articles)).not.toMatch(cyrillic);
+      expect(JSON.stringify(mergedArticles)).not.toMatch(cyrillic);
+      publishedArticles.filter((article) => article.video).forEach((source) => {
+        const translated = mergedArticles.find((article) => article.slug === source.slug);
+        expect(translated?.video?.youtubeId).toBe(source.video?.youtubeId);
+      });
     });
 
     it(`contains translated resource navigation in ${language}`, () => {
@@ -61,7 +67,7 @@ describe("article translations", () => {
   it("keeps every Compiled AI article aligned with the v2 runtime boundary", () => {
     const articleSets = [
       { language: "ru", articles: publishedArticles },
-      ...localizedArticles.map(({ language, articles }) => ({ language, articles })),
+      ...localizedArticles.map(({ language, articles }) => ({ language, articles: mergeLocalizedArticles(language, articles) })),
     ];
 
     articleSets.forEach(({ language, articles }) => {

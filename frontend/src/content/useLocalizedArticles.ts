@@ -2,6 +2,7 @@ import type { Language } from '@/i18n/LanguageContext.logic';
 import { useEffect, useState } from "react";
 import { publishedArticles } from "./articles";
 import type { ArticleContent } from "./contentTypes";
+import { localizedVideoArticles } from "./videoArticleTranslations";
 
 const loadArticles = async (language: Language): Promise<ArticleContent[]> => {
   switch (language) {
@@ -18,12 +19,21 @@ const loadArticles = async (language: Language): Promise<ArticleContent[]> => {
   }
 };
 
-export const mergeLocalizedArticles = (localizedArticles: ArticleContent[]) => {
-  const localizedSlugs = new Set(localizedArticles.map((article) => article.slug));
-  return [
-    ...localizedArticles,
-    ...publishedArticles.filter((article) => !localizedSlugs.has(article.slug)),
-  ];
+export const mergeLocalizedArticles = (language: Exclude<Language, "ru">, localizedArticles: ArticleContent[]) => {
+  const articles = [...localizedArticles, ...localizedVideoArticles(language)];
+  const expectedSlugs = new Set(publishedArticles.map((article) => article.slug));
+  const actualSlugs = new Set(articles.map((article) => article.slug));
+  if (actualSlugs.size !== expectedSlugs.size || [...expectedSlugs].some((slug) => !actualSlugs.has(slug))) {
+    throw new Error(`Incomplete ${language} article translation set`);
+  }
+  const titles = new Map(articles.map((article) => [`/articles/${article.slug}`, article.title]));
+  return articles.map((article) => ({
+    ...article,
+    related: article.related.map((item) => ({
+      ...item,
+      title: titles.get(item.href) ?? item.title,
+    })),
+  }));
 };
 
 export const useLocalizedArticles = (language: Language) => {
@@ -37,7 +47,7 @@ export const useLocalizedArticles = (language: Language) => {
 
     void loadArticles(language).then((loaded) => {
       if (active) {
-        setArticles(language === "ru" ? loaded : mergeLocalizedArticles(loaded));
+        setArticles(language === "ru" ? loaded : mergeLocalizedArticles(language, loaded));
         setIsLoading(false);
       }
     });
