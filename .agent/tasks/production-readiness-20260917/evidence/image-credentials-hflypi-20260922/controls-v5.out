@@ -1,0 +1,2 @@
+OCI credential controls: clean, renamed, deleted lower layer, config, chunk boundary, failure timeout and redacted mapping PASS
+EXIT=0

@@ -1,5 +1,14 @@
 # Readiness decisions
 
+## D-107 — Preserve redacted findings and runtime provenance honestly
+
+All-layer credential scan completion is not a clean result: retain all219
+candidates until exact-content triage. Never discard by rule/path alone.
+An on-disk hash sampled after a worker edit is not loaded-code identity; keep
+the exact prelaunch snapshot and timeline qualification. Future self-contained
+proof must freeze its controller and all imported helpers and bind hashes before
+execution. No live credential validation or rotation.
+
 ## D-106 — Preserve startup errors without changing runtime policy
 
 Guard pool shutdown only when initialization never created the pool. Do not

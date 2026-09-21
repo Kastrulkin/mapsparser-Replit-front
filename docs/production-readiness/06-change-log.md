@@ -1,5 +1,12 @@
 # Production-readiness change log
 
+## All-layer credential evidence — 22 September, parentcb4271d7
+
+Audit-only streaming scanner and synthetic controls cover every historical
+regular file and OCI config under bounded default Gitleaks rules. Actual v2
+completes with219redacted candidates; triage still OPEN. Failedv1 and exact
+prelaunch/source-race qualification retained. No product/runtime/DB mutation.
+
 ## Runner startup diagnostic fix — 22 September, parent936be8f9
 
 RUNNER-INIT-01: skip shutdown of a not-yet-created pool while preserving parent

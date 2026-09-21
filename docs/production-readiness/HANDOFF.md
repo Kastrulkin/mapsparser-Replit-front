@@ -1,5 +1,31 @@
 # Readiness handoff
 
+## Latest checkpoint — 22 September, terminal credential scan
+
+Parent cb4271d7 on codex/production-readiness-20260917. Both image attempts are
+terminal; earlier live-scan instructions below are historical. V1 fails123.521s;
+v2 completes913.092s with219untriaged candidates over20layers+config (217+2).
+Rawv2 digest02fa7241514f55ae81ce184f6df88733696eca17927169b771dc0f4c4229a95e.
+No clean result or confirmed-secret count. Task image-credentials-results-20260922.md
+and image-credentials-hflypi-20260922 preserve12hashes/raws/exactruntime snapshots.
+The c76 controller field is a post-start disk hash: runtime919a is independently
+qualified by prelaunch/start00:54:34/edit00:55:28 timeline; imported57a1 unchanged.
+Controls v6 PASS2,833.075ms with currentc76/77144c7d, no image rescan.
+
+Next image action: one bounded metadata-mapping stream for exact219 candidates,
+then evidence-backed triage; never expose candidate values or use live services.
+Do not relax acceptance, generalize17private-key rule matches to real secrets,
+rotate keys, rewrite history, push or deploy. SEC-BUILD-CONTEXT-02 stays OPEN.
+Read-only continuation:
+```sh
+jq '{status,finding_count,duration_seconds,layers:(.layers|length)}' .agent/tasks/production-readiness-20260917/evidence/image-credentials-hflypi-20260922/image-credentials-v2.json
+```
+
+Parallel backend checkpoint: /private/tmp/localos-current-six-HY29 is explicit
+HEAD936be8f9 plus parser/author test overlays, six ordered cases pass0.59s.
+Independent final evidence acceptance pending; repoHEAD advanced separately.
+Do not stage the13foreign paths or call that snapshot whole current worktree.
+
 ## Latest checkpoint — 22 September, runner initialization
 
 Parent 936be8f9 on codex/production-readiness-20260917. RUNNER-INIT-01 guard

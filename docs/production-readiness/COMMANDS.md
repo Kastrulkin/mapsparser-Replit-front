@@ -1,5 +1,18 @@
 # Verified commands and evidence
 
+## Image credential stream — 22 September
+
+Named tmux audit-image-credentials-v1/v2 executed support/image_credentials_hflypi.py
+with --attempt v1/v2 in a clean environment. V1 initial4fe28cdf failed123.521s;
+v2 executed frozen919a snapshot (not finaldiskc76) for913.092s, ending with219
+redacted candidates across20layers+config. Exact flags are in raw JSON:
+default Gitleaks stdin, redact100, ignore-gitleaks-allow, ignore-file/dev/null;
+600s per scan/630s watchdog/1200s export, no extraction or external upload.
+Do not replay attempt names. Runtime qualification and exact source snapshots
+are in task image-credentials-results-20260922.md and12-entry manifest.
+audit-image-controls-v6 runs synthetic controls plus Ruff, exit0/2,833.075ms,
+current scanner c76/controls77144c7d; no Docker export in this control command.
+
 ## Compiled runner initialization — 22 September
 
 Named tmux audit-runner-init-adjacent-v2 ran the exact 11-node command captured

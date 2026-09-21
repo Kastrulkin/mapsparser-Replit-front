@@ -1,5 +1,14 @@
 # Residual risks — working register
 
+## Current update — image scan candidates need triage
+
+Completed all20layers+config of pinned audit image;219redacted matches are
+untriaged, not verified secrets or false positives.17private-key labels merit
+prompt exact-source review, not live validation. A real exposure could require
+an explicit remediation/rotation decision. SEC-BUILD-CONTEXT-02 remains OPEN.
+Runtime source919a differs from post-start reported diskhashc76; preserve the
+qualified provenance note with raw results. No production readiness promotion.
+
 ## Current update — full backend failures are now observed
 
 Two exact5481 attempts reproduce4338pass51failure1092skip under zero-network

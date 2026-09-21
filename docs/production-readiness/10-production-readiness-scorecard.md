@@ -1,5 +1,9 @@
 # Production-readiness scorecard — working, not final
 
+22September: all-layer credential scan completed913.092s with219untriaged
+candidates; security gate remains OPEN, scores unchanged. Coverage integrity is
+not absence of credentials. Runner startup fix locally verified separately.
+
 22September full backend evidence, parentc1dd64ee: two5481-node frozen attempts
 both FAIL (4338pass51failure1092skip). Sandbox/source integrity PASS does not
 promote application readiness. Scores unchanged; current-source/integration,

@@ -1,5 +1,23 @@
 # Production-readiness progress
 
+## Latest checkpoint — 22 September, all-layer credential scan complete
+
+- [x] V2 scanned all 20 layers plus config of pinned audit image9d6edac8 in
+  913.092 s; 219 redacted candidates, not confirmed secrets and not a clean result.
+  Rules:200generic/17private-key/1JWT/1curl-auth. V1 incomplete failure retained.
+- [x] Independent coverage/accounting/provenance review passes. Current pure
+  controls/Ruff pass2,833.075ms. V2 executed archived919a, not its post-start
+  disk-hashc76 field; timeline qualification is mandatory in the results report.
+- [x] Runner fix committed locally cb4271d7; strict staged27,929-byte scan clean
+  340.589ms, normal commit hook353.189ms. Original full backend remains FAIL.
+- [ ] Next image step: exact candidate/member mapping and evidence-backed triage,
+  no plaintext keys, broad suppression, live credential checks or rotations.
+- [ ] Existing test overlays have a six-case scoped pass pending final evidence
+  acceptance; foreign13 still untouched/uncommitted. No full-current-tree claim.
+
+No live scan remains for image v1/v2; do not replay them. Disk about14GiB free,
+no production/existing DB/provider writes, push/deploy or cleanup repeated.
+
 ## Latest checkpoint — 22 September, runner startup fix
 
 - [x] RUNNER-INIT-01 locally FIX_PROVEN: preserve original bind failure when
