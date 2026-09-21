@@ -28,6 +28,7 @@ import { PublicBrandBackdrop } from "@/components/PublicBrandBackdrop";
 import SeoMeta from "@/components/SeoMeta";
 import { Button } from "@/components/ui/button";
 import { useLocalizedCases } from "@/content/useLocalizedCollections";
+import { publicHomeContent } from "@/content/publicHomeContent";
 import { Language, useLanguage } from '@/i18n/LanguageContext.logic';
 import landingTranslations from "@/i18n/homeLandingTranslations.json";
 
@@ -115,11 +116,10 @@ type LandingCopy = {
 };
 
 const ruCopy: LandingCopy = {
-  metaTitle: "LocalOS — меньше рутины для владельца локального бизнеса",
-  metaDescription:
-    "LocalOS проверяет карты и отзывы, готовит публикации, анализирует услуги и показатели и выполняет регулярные задачи. Владелец подключается только там, где нужно решение.",
+  metaTitle: publicHomeContent.title,
+  metaDescription: publicHomeContent.description,
   eyebrow: "LocalOS для локального бизнеса",
-  title: "Не держите весь бизнес в голове",
+  title: publicHomeContent.heading,
   intro:
     "LocalOS берёт на себя карты, отзывы, публикации, услуги и показатели. ИИ готовит сценарий, вы подтверждаете, скрипт выполняет. Вы подключаетесь, когда нужно решение.",
   seeTasks: "Посмотреть, что можно передать LocalOS",

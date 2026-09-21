@@ -12,6 +12,7 @@ import { useLanguage } from './i18n/LanguageContext.logic';
 
 const Index = lazy(() => import("./pages/Index"));
 const About = lazy(() => import("./pages/About"));
+const Pricing = lazy(() => import("./pages/Pricing"));
 const Login = lazy(() => import("./pages/Login"));
 const SetPassword = lazy(() => import("./pages/SetPassword"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
@@ -329,6 +330,7 @@ const AppShell = () => {
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/about" element={<About />} />
+          <Route path="/pricing" element={<Pricing />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/policy" element={<Policy />} />
           <Route path="/privacy" element={<Policy />} />

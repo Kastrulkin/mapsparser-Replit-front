@@ -11,7 +11,11 @@ import { ArrowUpRight, BriefcaseBusiness, Clock3, Factory, PackageCheck, Store, 
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-const About = () => {
+type AboutProps = {
+  pricingOnly?: boolean;
+};
+
+const About = ({ pricingOnly = false }: AboutProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t, language } = useLanguage();
@@ -90,12 +94,12 @@ const About = () => {
   return (
     <div className="min-h-screen bg-background">
       <SeoMeta
-        description={story.metaDescription}
-        path="/about"
-        title={story.metaTitle}
+        description={pricingOnly ? "Тарифы LocalOS: Карты — 1 200 ₽, Привлечение — 5 000 ₽, Управление — 25 000 ₽ в месяц. Публикации и отправки выполняются после подтверждения." : story.metaDescription}
+        path={pricingOnly ? "/pricing" : "/about"}
+        title={pricingOnly ? "Тарифы LocalOS для локального бизнеса" : story.metaTitle}
       />
 
-      <section className="relative overflow-hidden border-b border-white/10 bg-slate-950 px-4 py-20 text-white sm:px-6 sm:py-24 lg:px-8 lg:py-32">
+      {!pricingOnly ? <section className="relative overflow-hidden border-b border-white/10 bg-slate-950 px-4 py-20 text-white sm:px-6 sm:py-24 lg:px-8 lg:py-32">
         <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-primary/20 blur-3xl" aria-hidden="true" />
         <div className="pointer-events-none absolute -bottom-32 left-1/3 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl" aria-hidden="true" />
         <div className="relative mx-auto grid max-w-7xl items-end gap-14 lg:grid-cols-12 lg:gap-20">
@@ -121,9 +125,9 @@ const About = () => {
             </div>
           </div>
         </div>
-      </section>
+      </section> : null}
 
-      <section className="bg-white px-4 py-20 sm:px-6 sm:py-24 lg:px-8 lg:py-32">
+      {!pricingOnly ? <section className="bg-white px-4 py-20 sm:px-6 sm:py-24 lg:px-8 lg:py-32">
         <div className="mx-auto max-w-7xl">
           <div className="grid gap-14 lg:grid-cols-12 lg:gap-20">
             <aside className="lg:col-span-4">
@@ -191,12 +195,16 @@ const About = () => {
             </div>
           </div>
         </div>
-      </section>
+      </section> : null}
 
       {/* Pricing Section */}
       <section id="pricing" className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-orange-50/30">
         <div className="max-w-7xl mx-auto text-center">
-          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">{t.about.pricingTitle}</h2>
+          {pricingOnly ? (
+            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">Тарифы LocalOS</h1>
+          ) : (
+            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">{t.about.pricingTitle}</h2>
+          )}
           <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-12">{planCopy.subtitle}</p>
 
           <p className="text-sm text-muted-foreground mb-8">{planCopy.approval}</p>

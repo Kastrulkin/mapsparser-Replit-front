@@ -2,6 +2,7 @@ from legacy_routes import shared as _shared
 from core.frontend_asset_compatibility import resolve_current_lazy_chunk
 from core.auth_helpers import verify_business_access
 from core.html_head import replace_or_insert_tag as _replace_or_insert_tag
+from core.public_page_html import load_public_page, load_public_shell, replace_public_page_body
 from core.readiness import database_ready
 
 globals().update(_shared.runtime_namespace)
@@ -315,6 +316,11 @@ def _render_spa_index(path: str = ""):
     routes = seo_data.get("routes") if isinstance(seo_data.get("routes"), dict) else {}
     default_seo = seo_data.get("default") if isinstance(seo_data.get("default"), dict) else {}
     route_seo = routes.get(route_path) if isinstance(routes.get(route_path), dict) else default_seo
+    public_page = load_public_page(FRONTEND_DIST_DIR, route_path)
+    if public_page is not None:
+        index_html = load_public_shell(FRONTEND_DIST_DIR, index_html)
+        route_seo = {**route_seo, "title": public_page["title"], "description": public_page["description"]}
+        index_html = replace_public_page_body(index_html, public_page)
     title = route_seo.get("title") or default_seo.get("title") or "LocalOS.pro - Локальное продвижение локального бизнеса"
     description = route_seo.get("description") or default_seo.get("description") or ""
     og_type = route_seo.get("ogType") or default_seo.get("ogType") or "website"
@@ -1393,6 +1399,10 @@ def spa_fallback(path):
     if os.path.isfile(full_path):
         # Если файл существует в dist, отдаем его напрямую
         return send_from_directory(FRONTEND_DIST_DIR, path)
+
+    if load_public_page(FRONTEND_DIST_DIR, _normalize_content_route(path)) is not None:
+        # Reserved public pages must not be interpreted as database-backed offer slugs.
+        return _render_spa_index(path)
 
     if _is_public_offer_slug(path):
         response = send_from_directory(os.path.join(PUBLIC_FRONTEND_DIST_DIR, 'public-audit'), 'index.html')
