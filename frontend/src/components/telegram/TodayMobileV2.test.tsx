@@ -1,13 +1,21 @@
 import '@testing-library/jest-dom/vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { AnimatePresence } from 'framer-motion';
+import type { ReactElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { TodayMobileV2 } from './TodayMobileV2';
+
+// Navigation and scope assertions use real final styles without a wall-clock entrance animation.
+// Browser checks retain the normal animation; no visibility assertion is replaced here.
+function renderToday(ui: ReactElement) {
+  return render(<AnimatePresence initial={false}>{ui}</AnimatePresence>);
+}
 
 describe('TodayMobileV2', () => {
   it('opens the preferred content plan in its own location', async () => {
     const openTarget = vi.fn();
-    render(<TodayMobileV2
+    renderToday(<TodayMobileV2
       data={{ scope: { kind: 'network', id: 'network-1' },
         preference: { primary_flow: 'content', available_flows: ['overview', 'content'] },
         focus_action: { title: 'Обычная задача', priority: 20 },
@@ -20,7 +28,7 @@ describe('TodayMobileV2', () => {
   });
 
   it('keeps urgent work above the preferred content plan', async () => {
-    render(<TodayMobileV2
+    renderToday(<TodayMobileV2
       data={{ preference: { primary_flow: 'content', available_flows: ['content'] },
         work_sections: { needs_decision: [{ id: 'failed-1', title: 'Ошибка обновления', flow: 'maps', urgency: 'urgent' }] } }}
       loading={false} slowLoading={false} command="" setCommand={vi.fn()} ask={vi.fn()}
@@ -30,7 +38,7 @@ describe('TodayMobileV2', () => {
   });
 
   it('keeps the ЛокалОС assignment field visible in Russian', () => {
-    render(
+    renderToday(
       <TodayMobileV2
         data={{ scope: { kind: 'business', id: 'business-1', name: 'Тестовый бизнес' } }}
         loading={false}
@@ -51,7 +59,7 @@ describe('TodayMobileV2', () => {
 
   it('opens a network card problem directly in the card screen for that location', async () => {
     const openTarget = vi.fn();
-    render(
+    renderToday(
       <TodayMobileV2
         data={{
           scope: { kind: 'network', id: 'network-1', name: 'Сеть салонов' },
@@ -80,7 +88,7 @@ describe('TodayMobileV2', () => {
   });
 
   it('uses natural Russian declension for community message counts', () => {
-    render(
+    renderToday(
       <TodayMobileV2
         data={{
           scope: { kind: 'business', id: 'business-1', name: 'Салон' },
@@ -103,7 +111,7 @@ describe('TodayMobileV2', () => {
 
   it('shows a useful business history reminder and opens the right business', async () => {
     const openTarget = vi.fn();
-    render(
+    renderToday(
       <TodayMobileV2
         data={{
           scope: { kind: 'business', id: 'business-1', name: 'Органика' },

@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { Suspense } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AgentExecutionModePanel } from './agents/employee';
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -80,8 +81,8 @@ vi.mock('./agents/useAgentRunTracking', () => ({
   }),
 }));
 
-vi.mock('./agents/view', async () => {
-  const { AgentExecutionModePanel } = await import('./agents/employee');
+// Load the real panel before test execution, not during the lazy view's first render.
+vi.mock('./agents/view', () => {
   return {
     AgentBlueprintsView: ({ scope }: { scope: WorkspaceHarnessScope }) => (
       <section>
