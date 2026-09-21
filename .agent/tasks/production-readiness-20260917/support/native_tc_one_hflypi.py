@@ -215,12 +215,19 @@ def plugin_source(target: str | list[str]) -> str:
     return """
 import json
 import pytest
-state = {'collected': None, 'nodeids': [], 'passed': 0, 'failed': 0, 'skipped': 0, 'xfailed': 0, 'setup_failed': 0, 'call_failed': 0, 'child_calls': []}
+from _pytest.subtests import SubtestReport
+state = {'collected': None, 'nodeids': [], 'passed': 0, 'failed': 0, 'skipped': 0, 'xfailed': 0, 'setup_failed': 0, 'call_failed': 0, 'child_calls': [], 'subtests_passed': 0, 'subtests_failed': 0, 'subtests_skipped': 0, 'subtests_xfailed': 0}
 class Results:
     def pytest_collection_finish(self, session):
         state['collected'] = len(session.items)
         state['nodeids'] = [item.nodeid for item in session.items]
     def pytest_runtest_logreport(self, report):
+        if isinstance(report, SubtestReport):
+            if report.passed: state['subtests_passed'] += 1
+            if report.failed: state['subtests_failed'] += 1
+            if report.skipped: state['subtests_skipped'] += 1
+            if getattr(report, 'wasxfail', None): state['subtests_xfailed'] += 1
+            return
         if report.when == 'call':
             if report.passed: state['passed'] += 1
             if report.failed: state['failed'] += 1; state['call_failed'] += 1
@@ -248,9 +255,11 @@ def parse_test(payload: dict[str, object], profile: dict[str, object]) -> dict[s
     parsed = json.loads(rows[0].split("=", 1)[1])
     if not isinstance(parsed, dict):
         raise RuntimeError("test callback payload invalid")
-    expected = {"collected": profile["count"], "passed": profile["count"], "failed": 0, "skipped": 0, "xfailed": 0, "setup_failed": 0, "call_failed": 0, "pytest_exitstatus": 0, "pytest_return": 0}
+    expected = {"collected": profile["count"], "passed": profile["count"], "failed": 0, "skipped": 0, "xfailed": 0, "setup_failed": 0, "call_failed": 0, "pytest_exitstatus": 0, "pytest_return": 0, "subtests_failed": 0, "subtests_skipped": 0, "subtests_xfailed": 0}
     if any(parsed.get(key) != value for key, value in expected.items()) or payload.get("exit_code") != 0 or payload.get("timed_out") is True:
         raise RuntimeError("unchanged native slice did not pass every expected node without skip")
+    if not isinstance(parsed.get("subtests_passed"), int) or parsed["subtests_passed"] < 0:
+        raise RuntimeError("native slice subtest accounting missing or invalid")
     nodeids = parsed.get("nodeids")
     targets = profile.get("targets", [profile.get("target")])
     if not isinstance(targets, list) or not targets or not all(isinstance(target, str) for target in targets):

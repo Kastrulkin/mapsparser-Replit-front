@@ -89,8 +89,9 @@ def main() -> None:
         target = profile["target"]
         nodeids = [target] if count == 1 else [target + "::test_case_" + str(index) for index in range(count)]
         state = {"collected": count, "passed": count, "failed": 0, "skipped": 0, "xfailed": 0, "setup_failed": 0, "call_failed": 0, "pytest_exitstatus": 0, "pytest_return": 0, "nodeids": nodeids}
+        state.update(subtests_passed=0, subtests_failed=0, subtests_skipped=0, subtests_xfailed=0)
         assert parse(capture(state), profile) == state
-        for key in ("failed", "skipped", "xfailed", "setup_failed", "call_failed", "pytest_exitstatus", "pytest_return"):
+        for key in ("failed", "skipped", "xfailed", "setup_failed", "call_failed", "pytest_exitstatus", "pytest_return", "subtests_failed", "subtests_skipped", "subtests_xfailed"):
             denied({**state, key: 1}, profile)
         denied({**state, "passed": count - 1}, profile)
         denied({**state, "collected": count + 1}, profile)

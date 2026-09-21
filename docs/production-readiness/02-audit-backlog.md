@@ -1,5 +1,16 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Native subtest accounting — 21 September
+
+**TEST-HARNESS-SUBTEST-01 — P2, audit evidence, locally FIX_PROVEN.** Callback
+counted two successful SubtestReport records as collected parents. Failedv1was
+still rejected by its2failures/exit1, but passed totals were misleading and
+would reject a fully passing batch. Same actual installed-report RED→GREEN,
+separate subtest counters/negative gates, and unchanged524parent+2subtest v2
+verify the correction. Scope is the audit harness, not runtime product logic.
+Risk/impact/cause/acceptance/provenance: task
+`native-agent-social-results-20260921.md`; frozen aggregate remains incomplete.
+
 ## Approved cleanup reliability — 21 September
 
 **OPS-CACHE-DEPENDENCIES-01 — P2, local audit executor FIX_PROVEN.** BuildKit

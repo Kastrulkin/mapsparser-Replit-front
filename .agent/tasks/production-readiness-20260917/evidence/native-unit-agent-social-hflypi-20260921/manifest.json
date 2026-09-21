@@ -1,0 +1,19 @@
+{
+  "algorithm": "sha256",
+  "files": {
+    "native-unit-agent-social-v1.json": "8319358250f70df27f5a776b88072059caeccd17500e6d74eddd195225fe186a",
+    "native-unit-agent-social-v2.json": "10d82990a5b258aa5f8c0e4aab6742d04f448ec80bff5b975966ceeab4a9f35e",
+    "static-final.json": "6917fae0112233c41bf31776969f64f6a896ac9a92d36141b9bdb18b5ae5a946",
+    "../native-subtest-accounting-red-20260921.json": "4cb15dc8b5f1161adc99c4e52ab76009e4b7213934d62df979853918824a4235",
+    "../native-subtest-accounting-green-20260921.json": "56bf632864d57c6dda8676b060c18fcd4aee412971fc4e6b3c97e6bee35c2f0c"
+  },
+  "provenance": {
+    "frozen_source": "99849935de26e2932613f2a73cf515dff49104a1",
+    "v2_executed_launcher_sha256": "707ab7c03f68d1c4a3d9d8a4b4fc84b3711c34fa2fd79d67df10f9f42c2aab68",
+    "current_launcher_sha256": "03f026f34b34aab82e49045a69cebf5efd825c2c67ed15ddcc3ffa6d74630fa9",
+    "post_run_change": "Only introductory docstring now explains metadata-only DATABASE_URL; executable code unchanged, no rerun claimed",
+    "independent_reconstruction": "Replacing only current module docstring with git4328a91a docstring reproduces v2 executed launcher SHA256 exactly; read-only, no runtime execution",
+    "v2_shared_helpers_sha256": "398c9c4b19582b7aa40539493e38189a27cba7b8315afaefe4b1f76931035259",
+    "same_red_green_control_sha256": "9cb774cd29c4ecaba27b5a5be673066b3089e3cbab369510d352ebd9a41561f9"
+  }
+}

@@ -1,5 +1,19 @@
 # Readiness decisions
 
+## D-094 — Count parent nodes separately from subtests
+
+Pytest's installed SubtestReport is a separate callback outcome, not another
+collected test. Track its pass/fail/skip/xfail counters independently; reject
+nonpassing subtests while retaining exact parent/node/module/exit requirements.
+Exercise actual installed report types, not only hand-written result payloads.
+Keep failed historical evidence and count only distinct successful parent nodes.
+
+A mocked Flask registration test may need a syntactically valid metadata URI
+without needing a database connection. Bind a fixed passwordless denied port
+only for that literal profile; keep inherited URI rejection, dotenv disabled
+and unchanged socket/libpq guard. Do not weaken assertions or enable TC/DB
+permissions to satisfy metadata construction. This is not API/DB runtime proof.
+
 ## D-093 — Confirm exact deletion, not successful prune exit
 
 Approved old-container/image disposal changes the retained resource baseline;

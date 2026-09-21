@@ -1,5 +1,21 @@
 # Verified commands and evidence
 
+## Agent/social524 native slice — 21 September
+
+Named tmux `audit-native-agent-social-hflypi-v1` and `...-v2` used the frozen
+ARM64 interpreter, clean environment and installed default guard. Final run:
+
+```sh
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_unit_slice_hflypi.py --attempt v2 --profile agent-social-pure-v1
+```
+
+524uniqueparents+2subtests pass,0fail/skip/xfail, exit0/stderr0; pytest5.59s,
+capture6.542s/wrapper8.763s. Exact13module counts and5720source blobs verified.
+Actual-report counter regression:151.0msRED→164.5msGREEN with same test bytes.
+Profile/TCcontrols+Ruff5files+dated diff check exit0in256.7ms (nonfatal Git
+temporary-directory warning retained). Archive and hashes:
+`native-unit-agent-social-hflypi-20260921/`; preserve rejected v1.
+
 ## Approved old Docker cleanup — 21 September
 
 Named tmux `old-audit-docker-cleanup-20260921` ran fixed-ID

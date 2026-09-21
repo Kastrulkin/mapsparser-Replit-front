@@ -1,5 +1,25 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, agent/social524 and harness accounting
+
+- [x] Frozen13module slice passes524collected parents +2subtests, no skip,
+  fail or xfail; pytest5.59s/wrapper8.763s. Independent raw review PASS.
+- [x] Preserved v1's522parent passes/2failures: Flask metadata lacked a URI.
+  Profile-only passwordless guard-denied URI fixes the environment; application
+  source/assertions/provider policy and installed guard unchanged.
+- [x] TEST-HARNESS-SUBTEST-01: same actual-report control RED→GREEN; separate
+  parent/subtest accounting, negative gates and static controls pass.
+- [x] Cumulative1097distinct frozen backend nodes/5481in20module slices;
+  4384remain (85mappedPGgroup+4299other). Not full aggregate/current-runtime.
+- [ ] Next:57mapped capabilities-phase1PG nodes. Add reviewed literal profile
+  using existing owned-relay parent binding; do not widen DSN/guard/permissions.
+
+Evidence: task `native-agent-social-results-20260921.md` and versioned archive.
+Cleanup below is complete and locally committed08d39906; current capacity
+~17.70GiB, still preflight each run. Native checkpoint is a separate package.
+Whole-goal FAIL, frontend default-full flake, security/browser/performance/CI
+and final readiness gates remain open. No production/provider/push/deploy.
+
 ## Latest checkpoint — 21 September, approved Docker cleanup complete
 
 - [x] User-approved exact6old synthetic containers+6images removed. Retained

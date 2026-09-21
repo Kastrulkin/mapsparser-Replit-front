@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Run a named, reviewed hfLYPi pure-unit slice after explicit review.
 
-The launcher has no Testcontainers mode, database URL, provider credential or
-Docker command.  It reuses only process/result helpers from the reviewed
+The launcher has no Testcontainers mode, connectable database URL, provider
+credential or Docker command. One profile supplies a guard-denied metadata-only
+URI for Flask engine construction. It reuses process/result helpers from the reviewed
 single-node launcher.  The default frozen guard receives its mandatory local
 identity environment and still rejects Testcontainers startup.
 """
@@ -41,8 +42,38 @@ PROFILES = {
         },
         "prefix": "native-unit-policy-content", "timeout": 120,
     },
+    "agent-social-pure-v1": {
+        "modules": {
+            "tests/test_social_post_service.py": 162,
+            "tests/test_agent_blueprint_api_generic_runs.py": 56,
+            "tests/test_agent_blueprint_compiler.py": 54,
+            "tests/test_agent_blueprint_capabilities.py": 49,
+            "tests/test_agent_blueprint_runtime_connections.py": 47,
+            "tests/test_agent_blueprint_builder_sessions.py": 32,
+            "tests/test_agent_blueprint_async_contracts.py": 30,
+            "tests/test_agent_draft_approval_identity.py": 25,
+            "tests/test_agent_blueprint_reviews_outreach.py": 18,
+            "tests/test_agent_blueprint_contracts_migrations.py": 15,
+            "tests/test_agent_blueprint_builder_scenarios.py": 15,
+            "tests/test_agent_blueprint_runtime_policy.py": 13,
+            "tests/test_agent_blueprint_fake_approval_order.py": 8,
+        },
+        "prefix": "native-unit-agent-social", "timeout": 180,
+    },
 }
 MIN_START = 5 * 1024**3
+METADATA_ONLY_DATABASE_URL = "postgresql+psycopg2://metadata_only@127.0.0.1:1/localos_metadata_only"
+
+
+def profile_environment(profile_name: str, environment: dict[str, str]) -> dict[str, str]:
+    if "DATABASE_URL" in environment:
+        raise RuntimeError("pure-unit environment must not inherit a database URL")
+    result = dict(environment)
+    if profile_name == "agent-social-pure-v1":
+        # Flask's migration metadata extension needs a URI, not a connection.
+        # Port 1 remains denied by the unchanged psycopg/socket guard.
+        result["DATABASE_URL"] = METADATA_ONLY_DATABASE_URL
+    return result
 
 
 def valid_attempt(value: str) -> str:
@@ -99,6 +130,7 @@ def main() -> int:
             raise RuntimeError("unexpected frozen blob count")
         environment = guard_helpers["environment"](DEFAULT_GUARD_SHA256)
         environment.pop("LOCALOS_HFLYPI_PROBE_DSN", None)
+        environment = profile_environment(values.profile, environment)
         environment["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
         output["environment_keys"] = sorted(environment)
         output["launcher_sha256"] = shared["digest"](Path(__file__))

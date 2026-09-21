@@ -1,5 +1,33 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, agent/social native result
+
+Branch codex/production-readiness-20260917, parent08d39906 (cleanup-only18files,
+normal hook PASS; committed diff matches reviewed f3871380...0c33d4).
+Frozen99849935 remains unchanged;
+v2passes524parents+2subtests across13literal modules, pytest5.59s/wrapper8.763s.
+5720blobs and guard07d3... verified both sides. v1rejected522parents/2failures
+is preserved. Missing Flask metadata URI was a harness configuration issue,
+not a product defect. New profile-only fixed passwordless127.0.0.1:1 URI is
+denied by unchanged guard; no real DB/TC/provider setup. Separate callback fix
+prevents counting subtests as parents; actual-report RED/GREEN and acceptance
+controls pass. See `native-agent-social-results-20260921.md` and manifest.
+
+Fresh cumulative1097/5481in20module slices;4384remaining, not full aggregate or
+later changed-source proof. Next reviewed candidate: exact57mapped nodeids in
+tests/test_capabilities_api_phase1.py (60functions includes3pure adjacent ones).
+Only add named profile/native-tc-capabilities-phase1 prefix and existing
+client-info-style parent DATABASE_URL owned-relay binding. Keep300smax runtime,
+same DSN/guard/internal network/no-volume policy. Fixture makes synthetic
+test_<uuid> schema and ActionOrchestrator migration005; providers monkeypatched.
+Implementation/pre-exec review still pending; no runnable new profile claimed.
+
+Latest Docker retained baseline23containers/4images/20volumes/23networks;
+approved old cleanup is complete, do not replay.13foreign paths unchanged.
+Original historical spec/verdict/problems remain FAIL and untouched. Source
+security fixes after frozen99849935 need their own/current aggregate proof.
+No production/provider/push/deploy. Continue broad goal; do not mark complete.
+
 ## Latest checkpoint — 21 September, approved Docker cleanup
 
 Branch codex/production-readiness-20260917, parent4328a91a. User answered yes

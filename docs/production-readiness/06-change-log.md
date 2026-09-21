@@ -1,5 +1,14 @@
 # Production-readiness change log
 
+## Native agent/social checkpoint — 21 September
+
+Added literal13module/524parent pure profile and profile-only guard-denied
+metadata URI needed by two Flask registration checks. No application/fixture/
+assertion changes. Corrected audit callback parent/subtest accounting with
+actual installed-report causal controls and negative acceptance gates. v1failure
+preserved, v2passes524parents+2subtests;5720frozen source blobs/guard unchanged.
+Cumulative1097/5481distinct nodes, not full aggregate or deployed-source proof.
+
 ## Approved local Docker cleanup — 21 September, parent4328a91a
 
 Removed exactly6completed old synthetic containers,6images and21unshared old
