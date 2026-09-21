@@ -1,5 +1,33 @@
 # Readiness decisions
 
+## D-088 — Prove the real migration child through scoped owned transport
+
+The internal-only Docker network does not publish a usable host port on this
+Mac. Preserve that boundary; change only the test-reported endpoint to an
+owned, bounded loopback relay through exact Docker exec. Use the actual
+Testcontainers lifecycle and unchanged application fixtures/assertions, not
+a fake success or a non-internal-network fallback. One successful connection
+is not enough: the first accepted slice proves both Flask child and parent.
+
+Admission requires private capability bytes bound to a live parent PID,
+actual Testcontainers session, nonce, port, immutable image and exact internal
+network; inspect Docker afresh per DSN and accepted connection. Python child
+environments must inherit the parent's mode exactly, including absence—never
+let a stripped child enable a parent-disabled transport. Keep default TC deny.
+
+Negative capability evidence must identify the intended denial cause; a
+different invalid filename must not mask a broken session or expiry check.
+Cleanup ownership is single-claim and exact-label/identity verified; no volume
+deletion. A crash between creation and journaling may recover only one new
+inventory-delta container after the same identity checks, never an existing ID.
+Preserve original runtime guard bytes after the bounded experiment. Static
+crash-cleanup review is not a forced-crash runtime result.
+
+Accept one-node evidence only with actual no-skip pytest callbacks, parent and
+Flask-child admissions, all relay execs0/graceful/no stderr, absent created
+container/capabilities, empty owned network and unchanged unrelated resources.
+This milestone is1/5481fresh tests, not a full-suite or readiness declaration.
+
 ## D-087 — Pin native architecture and prove the guard before the aggregate
 
 On this Mac, launch native Python under tmux with explicit `arch -arm64`.

@@ -1,5 +1,29 @@
 # Verified commands and evidence
 
+## Native Testcontainers one-node slice — 21 September
+
+Executed only after independent static review, in named tmux
+`audit-native-tc-one-hflypi-v1`:
+
+```sh
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_tc_one_hflypi.py --attempt v1
+```
+
+Actual: one unchanged card-growth migration test passed/no skips in8.66s,
+complete wrapper13.992s. Guards10/10 plus real child propagation and8causal
+capability negatives pass. Two relay connections, both exec0/graceful/no
+stderr. New tmpfs container removed, existing29Docker identities/states
+unchanged, internal network empty, capabilities absent,5720source blobs
+unchanged and original installed guard07d3... restored. No production writes.
+Seven captured files+manifest in task `evidence/native-tc-one-hflypi-20260921/`.
+Static helper/Ruff(5files)/diff check exit0,200.3ms. Runtime result independently
+accepted. Do not replay v1 or claim the remaining93PG/5387other nodes passed.
+
+Next candidate only, not yet executed: `tests/test_client_info_gate.py`
+(8collected nodes, one TC lifecycle, same synthetic DB). Review mode/expected
+counts and connection budget before extending; do not grant arbitrary nodes,
+new database names, new containers or external destinations from this proof.
+
 ## Native guard runtime and internal relay probes — 21 September
 
 - tmux `audit-native-guard-hflypi-20260921`, support/native_guard_checks_hflypi.py:

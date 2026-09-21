@@ -1,5 +1,34 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, real Testcontainers migration slice passed
+
+Supersedes the adapter-pending status below. Unchanged card-growth migration
+node passes 1/1 with no skip/error: real owned PG16 Testcontainers lifecycle,
+Flask/Alembic child, psycopg schema assertions. Pytest8.66s, capture9.123s,
+whole slice13.992s. Ten guard denials, real guarded child and eight
+cause-specific capability denials pass; exactly two relay execs exit0/graceful
+with empty stderr. Independent runtime review accepts this scope only.
+
+Raw seven-file archive+manifest: task
+`evidence/native-tc-one-hflypi-20260921/`; explanation and limitations:
+`evidence/native-tc-one-results-hflypi-20260921.md`. Created tmpfs container
+3463cd0148fb... removed, retained internal network empty; all29pre-existing
+Docker identities/states unchanged. No existing DB/volume or production write.
+
+The launcher restored installed guard07d3... and removed its two hash-checked
+runtime-extra modules. Current support guard is cc6a... with explicit optional
+`card-growth-v1` adapter; default still denies TC. Do not rerun one-shot old
+install/collection scripts or treat support and restored runtime as equal.
+Frozen5720tracked blobs verified both sides; original source99849935 remains.
+
+Fresh backend evidence is now1/5481passed;93of94shared-PG nodes plus5387other
+nodes remain unexecuted. Next: reviewed multi-test single-container fixture
+slice, then broader PG family and aggregate. Do not repeat the completed
+one-node proof, cache cleanup/build/restore/frontend setup. Retain5GiB start/
+2GiB live floors and ARM64 tmux invocation; post-slice free~5.92GiB.
+13foreign dirty paths and historical whole-goal FAIL preserved. Goal active;
+no push/deploy. Parent audit checkpoint a244aa10.
+
 ## Latest checkpoint — 21 September, guard startup and real child proof complete
 
 This supersedes the uninstalled/DRAFT runtime status below. Installed private

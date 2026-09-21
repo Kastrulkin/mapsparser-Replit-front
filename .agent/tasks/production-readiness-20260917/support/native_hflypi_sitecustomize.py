@@ -1,13 +1,13 @@
-"""DRAFT / UNEXECUTED fail-closed guard source for the ``hfLYPi`` aggregate.
+"""Fail-closed guard source for the ``hfLYPi`` frozen-source audit.
 
 Copy these bytes to frozen ``source/src/sitecustomize.py`` and put that path
 first in ``PYTHONPATH``.  That preserves the guard in Alembic children whose
 ``tests/conftest.py`` replaces PYTHONPATH with ``<archive>/src:<archive>``.
 The wrapper must set a literal Docker socket, disable Ryuk, use the literal
 Testcontainers host override, blank providers, and clean exact labels itself.
-Do not install this draft yet: only AST/fake-Popen checks have run. Actual
-child initialization and owned-network registration still require proof;
-Testcontainers startup is deliberately disabled pending that review.
+The default mode still denies Testcontainers. A separately hash-pinned adapter
+can enable only the one-node internal-only card-growth migration experiment.
+This is a trusted-test safety guard, not a sandbox for hostile native code.
 """
 
 from __future__ import annotations
@@ -45,6 +45,12 @@ AGGREGATE_GUARD_ACTIVE_PID = os.getpid()
 DOCKER_SOCKET = ""
 _testcontainer_ports: set[int] = set()
 _owned_listener_ports: set[int] = set()
+_tc_adapter = None
+TC_ENVIRONMENTS = (
+    "LOCALOS_HFLYPI_TC_MODE", "LOCALOS_HFLYPI_TC_ADAPTER_SHA256",
+    "LOCALOS_HFLYPI_TC_RELAY_SHA256", "LOCALOS_HFLYPI_TC_OWNER_PID",
+    "LOCALOS_HFLYPI_TC_CAPABILITY", "LOCALOS_HFLYPI_TC_JOURNAL",
+)
 
 
 def _deny(message: str) -> None:
@@ -107,9 +113,13 @@ def _child_environment(requested: dict[str, str], source_root: Path, guard_sha25
         "PYTHONNOUSERSITE": "1",
         "LOCALOS_HFLYPI_EXPECTED_GUARD_SHA256": guard_sha256,
     }
-    session = os.environ.get(PARENT_SESSION_ENV, "")
-    if session:
-        required[PARENT_SESSION_ENV] = session
+    for key in (PARENT_SESSION_ENV, *TC_ENVIRONMENTS):
+        if os.environ.get(key):
+            required[key] = os.environ[key]
+        else:
+            if environment.get(key):
+                _deny(f"child may not enable parent-disabled {key}")
+            environment.pop(key, None)
     for key, value in required.items():
         supplied = environment.get(key)
         if supplied is not None and supplied != value:
@@ -247,6 +257,12 @@ def _validate_dsn(dsn: object, kwargs: dict[str, object]) -> None:
     if parsed.get("hostaddr") or parsed.get("service") or parsed.get("options") or host not in NATIVE_HOSTS or not port.isdigit():
         _deny("PostgreSQL DSN is not explicit literal loopback")
     number = int(port)
+    if _tc_adapter is not None:
+        try:
+            _tc_adapter.validate_dsn(parsed)
+        except PermissionError:
+            _deny("Testcontainers relay capability or DSN is not authorized")
+        return
     if number in _testcontainer_ports or _verified_testcontainer_port(number):
         return
     if number != NATIVE_PORT:
@@ -366,11 +382,28 @@ def _register_postgres(container: object, session: str) -> None:
 
 
 def _patch_testcontainers() -> None:
+    global _tc_adapter
     if os.environ.get("TESTCONTAINERS_RYUK_DISABLED", "").lower() not in {"1", "true"}:
         raise RuntimeError("TESTCONTAINERS_RYUK_DISABLED=true is required; wrapper owns exact labelled cleanup")
     if os.environ.get("TESTCONTAINERS_HOST_OVERRIDE", "") != "127.0.0.1":
         raise RuntimeError("TESTCONTAINERS_HOST_OVERRIDE must be literal 127.0.0.1")
     _testcontainers_network()
+    mode = os.environ.get("LOCALOS_HFLYPI_TC_MODE", "")
+    if mode:
+        if mode != "card-growth-v1":
+            _deny("unsupported Testcontainers adapter mode")
+        for module, key in (
+            ("native_tc_adapter_hflypi", "LOCALOS_HFLYPI_TC_ADAPTER_SHA256"),
+            ("native_tc_relay_hflypi", "LOCALOS_HFLYPI_TC_RELAY_SHA256"),
+        ):
+            path = FROZEN_SOURCE_ROOT / "src" / f"{module}.py"
+            expected = os.environ.get(key, "")
+            if not re.fullmatch(r"[0-9a-f]{64}", expected) or not path.is_file() or path.is_symlink() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+                _deny("Testcontainers adapter source is not pinned")
+        import native_tc_adapter_hflypi
+        _tc_adapter = native_tc_adapter_hflypi
+        _tc_adapter.install()
+        return
     from testcontainers.core.container import DockerContainer
 
     original = DockerContainer.start

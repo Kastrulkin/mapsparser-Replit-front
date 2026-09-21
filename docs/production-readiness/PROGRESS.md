@@ -1,5 +1,26 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, first fresh PostgreSQL integration node
+
+- [x] Actual unchanged card-growth migration test:1passed/no skips/errors,
+  pytest8.66s; full isolated slice13.992s. Real Testcontainers startup, Flask
+  migration child and native psycopg schema assertions, not mocked DB proof.
+- [x] Ten guarded IO denials, actual child propagation and eight distinct
+  capability denial causes. Two admitted PG connections, both Docker exec0/
+  graceful/empty stderr. Independent scoped runtime review PASS.
+- [x] New tmpfs test container removed and network empty; all29existing Docker
+  identities/states preserved. Capability removed, original guard restored,
+  temporary runtime modules removed,5720frozen tracked blobs/modes unchanged.
+- [x] Seven raw/static captures+manifest archived in task
+  `evidence/native-tc-one-hflypi-20260921/`. No production/provider/push/deploy.
+- [ ] Remaining93shared-PG nodes and5387other fresh backend tests unexecuted;
+  no full94/5481PASS claim. Forced-crash cleanup remains static-review-only.
+
+Support-only transport fixes were reviewed before execution; no application,
+fixture, migration or assertion edits. Next bounded step is a multi-test
+single-container module, then the broader fixture family/aggregate. Full
+readiness and historical whole-goal FAIL remain unchanged.
+
 ## Latest checkpoint — 21 September, real native guard probes
 
 - [x] Native guard now executes successfully: all10negative cases deny before

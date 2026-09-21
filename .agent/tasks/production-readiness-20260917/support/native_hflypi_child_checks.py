@@ -46,6 +46,9 @@ def _helpers() -> dict[str, object]:
         ),
         "LIBPQ_OVERRIDE_ENVIRONMENTS": ("PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE", "PGOPTIONS"),
     }
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "TC_ENVIRONMENTS" for target in node.targets):
+            namespace["TC_ENVIRONMENTS"] = ast.literal_eval(node.value)
     module = ast.Module(body=body, type_ignores=[])
     exec(compile(module, str(GUARD), "exec"), namespace)
     return namespace
@@ -103,6 +106,30 @@ def main() -> int:
     assert propagated["LOCALOS_HFLYPI_EXPECTED_GUARD_SHA256"] == HASH
     for key in helpers["GUARD_HASH_ENVIRONMENTS"]:
         assert propagated[key] == HASH
+
+    # TC capabilities and pinned adapter hashes must survive a stripped env,
+    # and a child's conflicting value must not silently replace the parent.
+    keys = (helpers["PARENT_SESSION_ENV"], *helpers["TC_ENVIRONMENTS"])
+    saved = {key: os.environ.get(key) for key in keys}
+    try:
+        for key in keys:
+            os.environ.pop(key, None)
+        for key in keys:
+            _denied(lambda key=key: child_environment({key: "foreign-value"}, SOURCE_ROOT, HASH))
+        disabled_environment = child_environment({key: "" for key in keys}, SOURCE_ROOT, HASH)
+        assert not any(key in disabled_environment for key in keys)
+        for key in keys:
+            os.environ[key] = "owned-value"
+        tc_environment = child_environment({"PATH": "/usr/bin"}, SOURCE_ROOT, HASH)
+        for key in keys:
+            assert tc_environment[key] == "owned-value"
+            _denied(lambda key=key: child_environment({key: "foreign-value"}, SOURCE_ROOT, HASH))
+    finally:
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
     _denied(lambda: child_environment({"TESTCONTAINERS_HOST_OVERRIDE": "localhost"}, SOURCE_ROOT, HASH))
     _denied(lambda: child_environment({"DOCKER_HOST": "tcp://127.0.0.1:2375"}, SOURCE_ROOT, HASH))

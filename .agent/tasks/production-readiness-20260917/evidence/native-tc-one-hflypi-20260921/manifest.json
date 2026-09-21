@@ -1,0 +1,35 @@
+{
+  "schema": "hflypi-native-tc-one-evidence-v1",
+  "source_commit": "99849935de26e2932613f2a73cf515dff49104a1",
+  "runtime_scope": "One unchanged card-growth migration test; not the 94-node fixture family or the full 5481 backend suite",
+  "files": [
+    {
+      "path": "native-tc-one-v1-child.json",
+      "sha256": "38e3f5cbadefa703d01f6d968c764a4336f9d9820d066d76caa51c1305298671"
+    },
+    {
+      "path": "native-tc-one-v1-events.jsonl",
+      "sha256": "18524947ed04b22b3c82e6c1eb3e93f4fa7645adac328b078ceb3b7930313379"
+    },
+    {
+      "path": "native-tc-one-v1-negative.json",
+      "sha256": "11bd1549446d6266980758d995b2574d9014c5c877a9b1fb93fc39359ece52d6"
+    },
+    {
+      "path": "native-tc-one-v1-relay.json",
+      "sha256": "70a3c3639b406de9b1ca9354ceb51fba90dd8a4a21ca3d758614c60d2849b780"
+    },
+    {
+      "path": "native-tc-one-v1.json",
+      "sha256": "249c3672e8a719eb27748215ebb13647f599f6a09d11f94964ee51e0340fd1aa"
+    },
+    {
+      "path": "native-tc-one-v1.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "static-final.json",
+      "sha256": "9cff626911ce49be6c5033aa4fb065aca4014bb710a936c3cdcf160ffaa720a2"
+    }
+  ]
+}
