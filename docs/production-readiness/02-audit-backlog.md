@@ -1,5 +1,16 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Work-review rollback coverage — 21 September
+
+Existing guarded rollback is verified on frozen99849935: all seven unchanged
+cases pass, including populated-data refusal and concurrent writer exclusion.
+No new product defect/fix claimed. Audit-only named DB/relay profile preserves
+legacy permissions; real teardown and zero-leftover DB check pass. Evidence:
+task native-work-review-rollback-results-20260921.md. Shared-fixture PG pending
+count now32/15 modules, superseding39 below; full backend/current-source and
+other rollback families remain open. Default-full frontend flake also remains
+unproven; diagnostic instrumentation is not itself a fix.
+
 ## Imported PostgreSQL fixture coverage resolved — 21 September
 
 **TEST-INVENTORY-IMPORTED-PG-01 — P2, locally FIX_PROVEN (audit harness only).**

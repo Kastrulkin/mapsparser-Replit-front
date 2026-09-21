@@ -1,5 +1,16 @@
 # Production-readiness change log
 
+## Work-review rollback7 — 21 September, parent7981ba84
+
+Added only an audit profile for seven exact frozen rollback tests, scoped
+generated database admission and a read-only teardown check. Default and old
+profiles retain previous boundaries. Actual7/7 pass,75 clean connections,
+43.32 s pytest; owned tmpfs data discarded, all existing containers/volumes
+retained, frozen source/default guard restored. One test-library import warning
+remains. Controls/Ruff/diff and independent pre-execution/live runtime reviews
+PASS. No application/fixture/assertion/production changes.
+Completed Docker cleanup reconciled against live inventory without repeating it.
+
 ## Native operator and workflows — 21 September, parent0ef33e3a
 
 Added one owned bootstrap/voice-DSN profile for full operator28 and one default-

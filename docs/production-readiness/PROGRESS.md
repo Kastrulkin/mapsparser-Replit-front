@@ -1,5 +1,30 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, work-review rollback7
+
+- [x] Previous reviewed operator/workflows package is committed as `968dcee6`,
+  with historical-status clarification `7981ba84`.
+- [x] All seven unchanged work-review rollback cases pass on one owned tmpfs
+  PostgreSQL container: pytest 43.32 s, wrapper 47.916 s, no skips/errors.
+  One deprecated Testcontainers import warning remains in captured stdout.
+- [x] Exact generated-DB boundary, 75 clean connections, zero leftover test DB,
+  owned teardown, retained23 container identities and 5,720 frozen blobs pass.
+  Default guard restored. Profile controls/Ruff/diff pass; pre-exec review PASS.
+- [x] Approved Docker cleanup was rechecked, not replayed: 23 containers,
+  4 images, all20 volumes, 24 cache records; only40.96 kB reclaimable cache.
+  Around17 GiB host free. No production/provider/push/deploy operations.
+- [ ] Accepted slices2,687/5,481 across95 module slices;2,794 remain, not a
+  full aggregate. Shared-conftest PG:72/104 accepted,32 pending/15 modules.
+- [x] Independent runtime review PASS, including live resource/guard checks.
+- [x] PG-only evidence package assembled for a scoped local commit; concurrent
+  frontend trace support and foreign paths are excluded from that package.
+- [ ] Next: full830 default-worker frontend trace; then separate Creator
+  Portal4 and Offer Distribution11 rollback profiles. Broad audit gates remain.
+
+Parent `7981ba84`; five PG support files, raw evidence and readiness docs only.
+See task `native-work-review-rollback-results-20260921.md`. Concurrent frontend
+trace work is a separate package; foreign13 dirty paths and historical FAIL stay.
+
 ## Latest checkpoint — 21 September, operator PG28 and workflows670
 
 - [x] Previous turn made verified progress: reviewed checkpoint `0ef33e3a`.

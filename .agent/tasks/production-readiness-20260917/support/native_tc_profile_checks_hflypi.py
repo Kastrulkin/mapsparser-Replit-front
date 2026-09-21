@@ -4,6 +4,7 @@
 import ast
 import json
 from pathlib import Path
+import re
 import runpy
 from types import SimpleNamespace
 
@@ -117,6 +118,7 @@ def check_adapter_profile_bindings() -> None:
         "client-info-v1": "native-tc-client-info",
         "capabilities-phase1-v1": "native-tc-capabilities-phase1",
         "operator-service-creation-v1": "native-tc-operator-service-creation",
+        "work-review-rollback-v1": "native-tc-work-review-rollback",
     }
     parent_profiles = assignments["PARENT_DATABASE_PROFILES"]
     assert isinstance(parent_profiles, ast.Call) and len(parent_profiles.args) == 1
@@ -124,6 +126,60 @@ def check_adapter_profile_bindings() -> None:
     voice_profiles = assignments["OPERATOR_VOICE_TEST_DSN_PROFILES"]
     assert isinstance(voice_profiles, ast.Call) and len(voice_profiles.args) == 1
     assert ast.literal_eval(voice_profiles.args[0]) == {"operator-service-creation-v1"}
+
+
+def check_work_review_dsn_admission() -> None:
+    source = Path(__file__).with_name("native_tc_adapter_hflypi.py")
+    tree = ast.parse(source.read_text())
+    functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in {"deny", "validate_dsn"}]
+    assignments = {
+        target.id: node.value
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name) and target.id in {"WORK_REVIEW_ROLLBACK_PROFILE", "WORK_REVIEW_DATABASE_PATTERN"}
+    }
+    assert ast.literal_eval(assignments["WORK_REVIEW_ROLLBACK_PROFILE"]) == "work-review-rollback-v1"
+    pattern = ast.literal_eval(assignments["WORK_REVIEW_DATABASE_PATTERN"].args[0])
+    assert pattern == r"work_review_rollback_[0-9a-f]{32}"
+    environment = {
+        "LOCALOS_HFLYPI_TC_MODE": "work-review-rollback-v1",
+        "LOCALOS_HFLYPI_TC_CAPABILITY": "/private/tmp/capability.json",
+        "LOCALOS_HFLYPI_TESTCONTAINERS_SESSION_ID": "abcdefgh",
+    }
+    events = []
+    namespace = {
+        "os": SimpleNamespace(environ=environment),
+        "Path": Path,
+        "re": re,
+        "PREFIX": "LOCALOS_HFLYPI_TC_",
+        "WORK_REVIEW_ROLLBACK_PROFILE": "work-review-rollback-v1",
+        "WORK_REVIEW_DATABASE_PATTERN": re.compile(pattern),
+        "native_tc_relay_hflypi": SimpleNamespace(validate_capability=lambda path, port: {"session_id": "abcdefgh", "container_id": "owned"}),
+        "record": lambda event, **fields: events.append((event, fields)),
+    }
+    exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), "exec"), namespace)
+    validate = namespace["validate_dsn"]
+    base = {"host": "127.0.0.1", "port": "12345", "user": "test", "password": "test"}
+    valid_generated = "work_review_rollback_0123456789abcdef0123456789abcdef"
+    for database in ("postgres", valid_generated):
+        validate({**base, "dbname": database})
+    assert [fields["database"] for event, fields in events if event == "dsn_admitted"] == ["postgres", valid_generated]
+    for database in ("test", "postgresql", "work_review_rollback_ABCDEF0123456789abcdef01234567", "work_review_rollback_0123456789abcdef0123456789abcdeg", "work_review_rollback_0123456789abcdef0123456789abcdef_extra"):
+        try:
+            validate({**base, "dbname": database})
+        except PermissionError:
+            pass
+        else:
+            raise AssertionError("foreign work-review database was admitted")
+    environment["LOCALOS_HFLYPI_TC_MODE"] = "client-info-v1"
+    validate({**base, "dbname": "test"})
+    try:
+        validate({**base, "dbname": valid_generated})
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("legacy test-only profile admitted work-review database")
 
 
 def fixture_nodeids() -> list[str]:
@@ -157,7 +213,7 @@ def check_relay_budgets() -> None:
     functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "connection_budget"]
     assert len(assignments) == 1 and len(functions) == 1
     budgets = ast.literal_eval(assignments[0].value)
-    assert budgets == {"card-growth-v1": 32, "client-info-v1": 32, "capabilities-phase1-v1": 1024, "operator-service-creation-v1": 32}
+    assert budgets == {"card-growth-v1": 32, "client-info-v1": 32, "capabilities-phase1-v1": 1024, "operator-service-creation-v1": 32, "work-review-rollback-v1": 512}
     namespace = {"MAX_CONNECTIONS": 32, "PROFILE_CONNECTION_BUDGETS": budgets}
     exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), "exec"), namespace)
     budget = namespace["connection_budget"]
@@ -166,6 +222,7 @@ def check_relay_budgets() -> None:
     assert budget("client-info-v1") == 32
     assert budget("capabilities-phase1-v1") == 1024
     assert budget("operator-service-creation-v1") == 32
+    assert budget("work-review-rollback-v1") == 512
     for foreign in ("unknown", "capabilities-phase1-v2"):
         try:
             budget(foreign)
@@ -191,6 +248,7 @@ def check_relay_evidence_bounds(namespace) -> None:
     assert validate("card-growth-v1", final(2, 32))[0] == 2
     assert validate("capabilities-phase1-v1", final(171, 1024))[0] == 171
     assert validate("operator-service-creation-v1", final(21, 32))[0] == 21
+    assert validate("work-review-rollback-v1", final(75, 512))[0] == 75
     for candidate in (final(170, 1024), final(1025, 1024), final(171, 32)):
         try:
             validate("capabilities-phase1-v1", candidate)
@@ -205,17 +263,25 @@ def check_relay_evidence_bounds(namespace) -> None:
             pass
         else:
             raise AssertionError("operator service creation relay evidence outside its literal bounds was accepted")
+    for candidate in (final(74, 512), final(513, 512), final(75, 32)):
+        try:
+            validate("work-review-rollback-v1", candidate)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("work-review relay evidence outside its literal bounds was accepted")
 
 
 def main() -> None:
     check_parent_database()
     check_adapter_profile_bindings()
+    check_work_review_dsn_admission()
     check_relay_budgets()
     namespace = runpy.run_path(str(Path(__file__).with_name("native_tc_one_hflypi.py")))
     profiles = namespace["PROFILES"]
     parse = namespace["parse_test"]
     check_relay_evidence_bounds(namespace)
-    assert set(profiles) == {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1"}
+    assert set(profiles) == {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1", "work-review-rollback-v1"}
     assert profiles["card-growth-v1"]["count"] == 1
     assert profiles["client-info-v1"] == {"target": "tests/test_client_info_gate.py", "count": 8, "prefix": "native-tc-client-info"}
     capabilities = profiles["capabilities-phase1-v1"]
@@ -228,7 +294,21 @@ def main() -> None:
         "prefix": "native-tc-capabilities-phase1",
     }
     assert profiles["operator-service-creation-v1"] == {"target": "tests/test_operator_service_creation.py", "count": 28, "prefix": "native-tc-operator-service-creation", "bootstrap_postgres": True}
-    assert sitecustomize_modes() == {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1"}
+    assert profiles["work-review-rollback-v1"] == {
+        "targets": [
+            "tests/test_work_review_migration_rollback.py::test_empty_work_review_schema_downgrades_without_cascade",
+            "tests/test_work_review_migration_rollback.py::test_work_review_data_blocks_downgrade_and_remains_present[reviewer]",
+            "tests/test_work_review_migration_rollback.py::test_work_review_data_blocks_downgrade_and_remains_present[link]",
+            "tests/test_work_review_migration_rollback.py::test_work_review_data_blocks_downgrade_and_remains_present[settings]",
+            "tests/test_work_review_migration_rollback.py::test_work_review_data_blocks_downgrade_and_remains_present[journal_fields]",
+            "tests/test_work_review_migration_rollback.py::test_work_review_data_blocks_downgrade_and_remains_present[work_journal_action]",
+            "tests/test_work_review_migration_rollback.py::test_concurrent_writer_cannot_commit_between_guard_and_destructive_ddl",
+        ],
+        "count": 7,
+        "exact_nodeids": True,
+        "prefix": "native-tc-work-review-rollback",
+    }
+    assert sitecustomize_modes() == {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1", "work-review-rollback-v1"}
 
     def capture(state):
         return {"stdout": "HFLYPI_TC_ONE_RESULT=" + json.dumps(state), "exit_code": 0, "timed_out": False}
@@ -272,7 +352,7 @@ def main() -> None:
         pass
     else:
         raise AssertionError("non-boolean bootstrap mode was accepted")
-    print("native TC profiles: 4 exact profiles, parent-DSN lifecycle and negative result gates passed")
+    print("native TC profiles: 5 exact profiles, parent-DSN lifecycle and negative result gates passed")
 
 
 if __name__ == "__main__":

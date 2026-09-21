@@ -31,9 +31,12 @@ PROFILE_PREFIXES = {
     "client-info-v1": "native-tc-client-info",
     "capabilities-phase1-v1": "native-tc-capabilities-phase1",
     "operator-service-creation-v1": "native-tc-operator-service-creation",
+    "work-review-rollback-v1": "native-tc-work-review-rollback",
 }
 PARENT_DATABASE_PROFILES = frozenset({"client-info-v1", "capabilities-phase1-v1"})
 OPERATOR_VOICE_TEST_DSN_PROFILES = frozenset({"operator-service-creation-v1"})
+WORK_REVIEW_ROLLBACK_PROFILE = "work-review-rollback-v1"
+WORK_REVIEW_DATABASE_PATTERN = re.compile(r"work_review_rollback_[0-9a-f]{32}")
 _active = None
 _relay = None
 _started = False
@@ -60,7 +63,12 @@ def record(event: str, **fields) -> None:
 
 
 def validate_dsn(parsed: dict[str, str]) -> None:
-    if parsed.get("host") != "127.0.0.1" or parsed.get("dbname") != "test" or parsed.get("user") != "test" or parsed.get("password") != "test":
+    database = parsed.get("dbname")
+    profile = os.environ.get(PREFIX + "MODE", "")
+    allowed_database = database == "test"
+    if profile == WORK_REVIEW_ROLLBACK_PROFILE:
+        allowed_database = database == "postgres" or isinstance(database, str) and WORK_REVIEW_DATABASE_PATTERN.fullmatch(database) is not None
+    if parsed.get("host") != "127.0.0.1" or not allowed_database or parsed.get("user") != "test" or parsed.get("password") != "test":
         deny("DSN is outside the single synthetic test database")
     port = parsed.get("port", "")
     if not port.isdigit():
@@ -69,7 +77,7 @@ def validate_dsn(parsed: dict[str, str]) -> None:
     result = native_tc_relay_hflypi.validate_capability(Path(path), int(port))
     if result.get("session_id") != os.environ.get("LOCALOS_HFLYPI_TESTCONTAINERS_SESSION_ID"):
         deny("capability session differs from parent Testcontainers session")
-    record("dsn_admitted", port=int(port), database="test", container_id=result.get("container_id"))
+    record("dsn_admitted", port=int(port), database=database, container_id=result.get("container_id"))
 
 
 def bind_parent_database(port: int) -> None:
@@ -230,6 +238,26 @@ def install() -> None:
             unbind_parent_database()
         except BaseException:
             failures.append(type(sys.exception()).__name__)
+        if profile == WORK_REVIEW_ROLLBACK_PROFILE and instance._container is not None:
+            try:
+                result = instance._container.exec_run(
+                    [
+                        "psql",
+                        "-U",
+                        "test",
+                        "-d",
+                        "postgres",
+                        "-At",
+                        "-c",
+                        "SELECT COUNT(*) FROM pg_database WHERE datname ~ '^work_review_rollback_[0-9a-f]{32}$'",
+                    ]
+                )
+                output = result.output.decode().strip() if isinstance(result.output, bytes) else str(result.output).strip()
+                if result.exit_code != 0 or output != "0":
+                    deny("work-review disposable database remains before container cleanup")
+                record("work_review_database_cleanup_checked", remaining=0)
+            except BaseException:
+                failures.append(type(sys.exception()).__name__)
         if _relay is not None:
             try:
                 _relay.close()

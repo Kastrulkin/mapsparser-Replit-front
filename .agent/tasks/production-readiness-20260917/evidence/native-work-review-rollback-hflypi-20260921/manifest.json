@@ -1,0 +1,18 @@
+{
+  "frozen_source": "99849935de26e2932613f2a73cf515dff49104a1",
+  "parent_checkpoint": "7981ba84",
+  "scope": "Audit support and frozen real-PG rollback evidence; no product edits or production changes.",
+  "sha256": {
+    ".agent/tasks/production-readiness-20260917/support/native_tc_one_hflypi.py": "6cdfcf02a3b961778c8528b3875b5e720d4ef483bd509b6696e099b52c21a00c",
+    ".agent/tasks/production-readiness-20260917/support/native_tc_adapter_hflypi.py": "b8193807a2843e093cd71af3e2d27a114a54454a9508928ea4c6da3ff5f32ba2",
+    ".agent/tasks/production-readiness-20260917/support/native_tc_relay_hflypi.py": "b49046c3149066a55bc12a7f30688eebcb47025f591480e5e09f3d58ad5c1720",
+    ".agent/tasks/production-readiness-20260917/support/native_hflypi_sitecustomize.py": "508e443e780038b4a62cab80f6f667bb299eec915b12f5148a927ba682ebb7e7",
+    ".agent/tasks/production-readiness-20260917/support/native_tc_profile_checks_hflypi.py": "1b9f9ac48dbff5fe7b124efb6c42a2b2644bbad13c545a78c8e2d8a379669ab3",
+    ".agent/tasks/production-readiness-20260917/evidence/native-work-review-rollback-hflypi-20260921/native-tc-work-review-rollback-v1.json": "bfcfacb8ba9250853ceecda44c0f122a1b541892745f35d76e74509fefc08992",
+    ".agent/tasks/production-readiness-20260917/evidence/native-work-review-rollback-hflypi-20260921/native-tc-work-review-rollback-v1-events.jsonl": "1d9c7bc1ffee9da730ff8e24f8a42e191f2919f28c8cb13b5159482d62ada525",
+    ".agent/tasks/production-readiness-20260917/evidence/native-work-review-rollback-hflypi-20260921/native-tc-work-review-rollback-v1-relay.json": "a4028dac83b9bd7624c0d9c33870ea698b7cc21cce66f068a547b5a1ee543d8b",
+    ".agent/tasks/production-readiness-20260917/evidence/native-work-review-rollback-hflypi-20260921/native-tc-work-review-rollback-v1-negative.json": "dcd41729e5e51001093354a71f72828957cb50473c8c424f8cae1356e7cd23ed",
+    ".agent/tasks/production-readiness-20260917/evidence/native-work-review-rollback-hflypi-20260921/native-tc-work-review-rollback-v1-child.json": "c3a30688d117ef75a440f3079b605323a609176d4a8b71867f92e3ebf0bc99b0",
+    ".agent/tasks/production-readiness-20260917/evidence/native-work-review-rollback-hflypi-20260921/work-review-rollback-profile-controls-v1.json": "060a349240d5b7c6116762421e9679cc81e39eb4f0dd4c2478b51e6661bc107a"
+  }
+}

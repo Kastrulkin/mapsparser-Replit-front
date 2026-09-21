@@ -1,5 +1,21 @@
 # Readiness decisions
 
+## D-097 — Disposable migration databases need profile-local boundaries
+
+Allow admin postgres plus one strictly named generated database only through
+the verified owned relay and only in the exact work-review rollback profile.
+Keep parent DATABASE_URL unset and old profile permissions unchanged. Record
+14 real migration-child admissions, original fixture teardown and a read-only
+zero-leftover-database observation before removal; DSN admission is not proof
+of CREATE/DROP. Size only this profile at512 total connections for bounded lock
+polling; observed75 is evidence, not permission to widen concurrent/time limits.
+Next migration families need their own reviewed names and node inventories.
+
+Completed cleanup is not repeated just because a historical pending prompt
+reappears. Reconcile exact Docker inventory and usable cache bytes first; current
+40.96 kB separately reclaimable cache does not justify deleting retained images,
+containers or any volumes. Free-space samples are not attributed wholly to cleanup.
+
 ## D-096 — Imported PG fixtures need owned configuration, not skipped assertions
 
 Run the entire operator-service module unchanged on one approved temporary PG

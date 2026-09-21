@@ -1,5 +1,23 @@
 # Verified commands and evidence
 
+## Work-review rollback7 — 21 September
+
+Named tmux `audit-native-work-review-rollback-hflypi-v1` ran:
+
+```sh
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_tc_one_hflypi.py --attempt v1 --profile work-review-rollback-v1
+```
+
+Actual7/7/no skips/errors, pytest43.32 s/capture43.876 s/wrapper47.916 s.
+One deprecation warning in stdout; stderr empty.75 clean relay connections,
+zero leftover generated DB, owned container removed, retained23 containers,
+restored guard and5,720 frozen blobs verified. Profile controls/Ruff5/diff
+capture185.672 ms/exit0. Six captures/11 hashes archived in task
+`native-work-review-rollback-hflypi-20260921/`. Do not overwrite/replay v1.
+Read-only Docker follow-up used the Docker.app bundled CLI with `system df`,
+`ps -a`, `volume ls -q`:23 containers/4 images/20 volumes; cache24
+records/40.96 kB reclaimable. No additional cleanup was needed or performed.
+
 ## Operator PG28 and governed workflows670 — 21 September
 
 Executed sequentially in named tmux sessions (pure first, then owned PG):

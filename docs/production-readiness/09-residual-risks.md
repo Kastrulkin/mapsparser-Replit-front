@@ -1,6 +1,6 @@
 # Residual risks — working register
 
-## Current operational state — 21 September, after checkpoint 0ef33e3a
+## Current operational state — 21 September, after checkpoint 7981ba84
 
 The historical disk and denied-stand notes below are superseded: approved
 cleanup is complete, the latest host sample has about 17 GiB free, and owned
@@ -8,10 +8,13 @@ synthetic PostgreSQL runs are authorized and working. All existing volumes
 and the retained 23 containers remain preserved. Recheck capacity before each
 run; no authority for production, provider effects, push or deployment follows.
 
-Accepted backend slices now cover 2,680 of 5,481 frozen nodes. The full mixed
+Accepted backend slices now cover 2,687 of 5,481 frozen nodes. Seven work-review
+rollback cases now pass, including data guards/concurrent writer exclusion;
+owned generated DB cleanup, retained resources and source restoration pass.
+The full mixed
 operator-service module passes28/28, including21 real-PG cases; the earlier
 skipped run remains rejected. The shared-conftest PG inventory is corrected to
-104 dependent nodes/19 modules,39 pending/16 modules. Neither these slices nor
+104 dependent nodes/19 modules,32 pending/15 modules. Neither these slices nor
 the passing capped frontend run close the full aggregate/current-source,
 default-full frontend flake, security, browser, performance, CI or final gates.
 See PROGRESS.md and HANDOFF.md for the current continuation checkpoint; the

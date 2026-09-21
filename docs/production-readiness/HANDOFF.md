@@ -1,5 +1,39 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, work-review rollback verified
+
+Branch `codex/production-readiness-20260917`, parent `7981ba84`. Previous turn
+was progress; cleanup is already complete, never replay its one-shot removals.
+New exact7 work-review profile passes all unchanged frozen99849935 tests:
+43.32 s pytest /43.876 s capture /47.916 s wrapper, zero skips/errors, one
+deprecated Testcontainers import warning in stdout. Profile controls/Ruff/diff
+pass185.672 ms; independent pre-execution and live runtime reviews PASS.
+
+75 clean relay connections, one generated DB, two admin admissions and14
+migration-child calls. A read-only owned-container query sees zero matching DBs
+after fixture teardown. Only owned808ff16c...tmpfs container removed; retained
+23 containers unchanged, network/capabilities empty, guard07d3...restored and
+5,720 frozen blobs match. No production/provider/push/deploy or existing DB use.
+Results/11 hashes: task native-work-review-rollback-hflypi-20260921/ and report.
+
+Accepted slices2,687/5,481 in95 module slices;2,794 remain. Shared-fixture PG
+72/104 accepted,32 pending in15 modules. This is not current-source aggregate.
+Next exact candidates: Creator Portal4 /8 Flask child calls, generated database
+creator_portal_rollback_<32hex>; Offer Distribution11 /21 child calls,
+creator_offer_rollback_<32hex>. Create separately reviewed named profiles;
+do not reuse work-review mode or widen global DB policy. Static budget estimates
+54 and159 minimum connections with512 conservative ceilings are not live proof.
+
+Separate frontend trace helper is being prepared for full830 default workers,
+without changing assertions/timeouts/frozen files. It still needs pre-execution
+review and actual runtime; do not count a draft helper as completed diagnosis.
+Current Docker inventory23 containers/4 images/20 volumes is retained, cache24
+records has only40.96 kB reclaimable;~17 GiB free, recheck5/2/10 GiB floors.
+Foreign13 paths retained, with current8-tracked diff hash40afa014...4d2a4c6d1;
+do not assume equality to an older summary hash or stage those files. Keep
+original spec/verdict/problems FAIL. Security/browser/performance/CI/demo/final
+gates remain open. Do not replay existing v1 evidence paths.
+
 ## Latest checkpoint — 21 September, operator fixture gap resolved
 
 Branch `codex/production-readiness-20260917`; parent `0ef33e3a`. Previous goal
