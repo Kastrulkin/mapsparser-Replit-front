@@ -32,6 +32,7 @@ PROFILE_PREFIXES = {
     "capabilities-phase1-v1": "native-tc-capabilities-phase1",
     "operator-service-creation-v1": "native-tc-operator-service-creation",
     "operator-voice-pg-v1": "native-tc-operator-voice-pg",
+    "operator-editorial-pg-v1": "native-tc-operator-editorial-pg",
     "work-review-rollback-v1": "native-tc-work-review-rollback",
     "creator-portal-rollback-v1": "native-tc-creator-portal-rollback",
     "creator-offer-rollback-v1": "native-tc-creator-offer-rollback",
@@ -50,7 +51,7 @@ PROFILE_PREFIXES = {
     "service-compression-race-pg-v1": "native-tc-service-compression-race-pg",
 }
 PARENT_DATABASE_PROFILES = frozenset({"client-info-v1", "capabilities-phase1-v1"})
-OPERATOR_VOICE_TEST_DSN_PROFILES = frozenset({"operator-service-creation-v1", "operator-voice-pg-v1"})
+OPERATOR_VOICE_TEST_DSN_PROFILES = frozenset({"operator-service-creation-v1", "operator-voice-pg-v1", "operator-editorial-pg-v1"})
 OWNED_DATABASE_PATTERNS = {
     "work-review-rollback-v1": re.compile(r"work_review_rollback_[0-9a-f]{32}"),
     "creator-portal-rollback-v1": re.compile(r"creator_portal_rollback_[0-9a-f]{32}"),
@@ -74,9 +75,11 @@ OWNED_CLEANUP_EVENTS = {
 }
 OWNED_SCHEMA_CLEANUP_SQL_PATTERNS = {
     "operator-voice-pg-v1": r"^voice_[0-9a-f]{32}$",
+    "operator-editorial-pg-v1": r"^voice_[0-9a-f]{32}$",
 }
 OWNED_SCHEMA_CLEANUP_EVENTS = {
     "operator-voice-pg-v1": "operator_voice_schema_cleanup_checked",
+    "operator-editorial-pg-v1": "operator_voice_schema_cleanup_checked",
 }
 INHERITED_DATABASE_URL_REFUSAL_PROFILES = frozenset({
     "author-daily-gate-pg-v1", "knowledge-schema-pg-v1", "outreach-pain-library-pg-v1",
@@ -85,6 +88,7 @@ INHERITED_DATABASE_URL_REFUSAL_PROFILES = frozenset({
     "worker-expired-pg-v1", "worker-resume-pg-v1", "finance-import-transaction-pg-v1",
     "service-compression-race-pg-v1",
     "operator-voice-pg-v1",
+    "operator-editorial-pg-v1",
 })
 _active = None
 _relay = None

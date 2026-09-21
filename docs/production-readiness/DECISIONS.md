@@ -1,5 +1,19 @@
 # Readiness decisions
 
+## D-103 — Preserve complete scenarios and classify fixtures by implementation
+
+Run four coherent editorial modules together, including their one fixtureless
+case:63 whole nodes versus62 PG lifetimes. Keep voice-DSN authority temporary,
+no parent DATABASE_URL/child, and use a new128 lifetime ceiling without changing
+other profiles or concurrent/time limits. Set-based v4 reconciliation respects
+the explicit module order; repeated nodes never increase accepted coverage.
+
+Do not equate an absent `pg`/`postgres_container` dependency with a unit test.
+Actual residual fixture source exposes30 further direct-psycopg2 definitions
+affecting266 nodes and one local HTTP fixture affecting3. Preserve55 exact
+source definitions/hash/counts and explicit test-body uncertainty before broad
+execution. Static4,405 candidate complement is not a runtime safety certificate.
+
 ## D-102 — Whole voice module with bounded, temporary DSN authority
 
 Run all382 unchanged voice scenarios on one owned tmpfs PG container. Reuse

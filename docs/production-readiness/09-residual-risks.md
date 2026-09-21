@@ -1,5 +1,16 @@
 # Residual risks — working register
 
+## Current update — editorial63 and remaining fixture topology
+
+Editorial/rewrite/revision/followup scenarios now pass63/63 without skips;
+62 use isolated PostgreSQL. Exact accepted frozen total3,256/5,481,2,225 open.
+This does not close the full/current-source aggregate. Fixture analysis found
+266 other real-PG nodes and3 real-loopback nodes outside the earlier807-node
+classification. The4,405 complement remains only a candidate scope; fixtureless
+test bodies may still perform I/O. No new product defect is inferred from this
+test-admission gap. Readiness/security/browser/performance/CI/demo gates remain
+open; original wholeFAIL and one upstream Testcontainers warning retained.
+
 ## Current update — Operator voice382, parent dbeaa8c8
 
 The entire frozen voice-PG module now passes382/382 without skips, including

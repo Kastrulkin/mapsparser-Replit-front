@@ -1,5 +1,16 @@
 # Production-readiness change log
 
+## Editorial Operator and admission inventory — 22 September, parent36116cab
+
+Added one literal four-module profile in five audit support files. All63
+unchanged cases pass,62 actual PG connections/no child/zero leftover schemas;
+source and retained resources preserved. Independent runtime/package review PASS.
+Six raw captures plus controls/source hashes retained. Accepted frozen nodes
+3,256/5,481; full aggregate remains open. Static residual inventory records55
+source-backed fixture definitions and266 further PG/3 loopback nodes; no unsafe
+"everything else is unit-only" inference. No product/assertion/provider or
+production change; completed cleanup not repeated.
+
 ## Operator voice382 — 21 September, parent dbeaa8c8
 
 Added one exact audit-only PG profile in five support files: temporary voice

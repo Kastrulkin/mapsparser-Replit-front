@@ -108,6 +108,17 @@ PROFILES = {
         "prefix": "native-tc-operator-voice-pg",
         "bootstrap_postgres": True,
     },
+    "operator-editorial-pg-v1": {
+        "targets": [
+            "tests/test_operator_editorial_pg.py",
+            "tests/test_operator_post_rewrite_pg.py",
+            "tests/test_operator_plan_revision_pg.py",
+            "tests/test_operator_followups_pg.py",
+        ],
+        "count": 63,
+        "prefix": "native-tc-operator-editorial-pg",
+        "bootstrap_postgres": True,
+    },
     "work-review-rollback-v1": {
         "targets": [
             "tests/test_work_review_migration_rollback.py::test_empty_work_review_schema_downgrades_without_cascade",
@@ -214,6 +225,12 @@ OPERATOR_VOICE_PROFILE_RULES = {
     "operator-voice-pg-v1": {
         "minimum_connections": 389,
         "budget": 512,
+        "schema_pattern": r"voice_[0-9a-f]{32}",
+        "cleanup_event": "operator_voice_schema_cleanup_checked",
+    },
+    "operator-editorial-pg-v1": {
+        "minimum_connections": 62,
+        "budget": 128,
         "schema_pattern": r"voice_[0-9a-f]{32}",
         "cleanup_event": "operator_voice_schema_cleanup_checked",
     },
@@ -581,7 +598,7 @@ def audit_journals(events: Path, relay_artifact: Path, profile: str) -> dict[str
         raise RuntimeError("parent process did not admit its relay DSN")
     shared_rule = SHARED_FIXTURE_PROFILE_RULES.get(profile)
     voice_rule = OPERATOR_VOICE_PROFILE_RULES.get(profile)
-    child_minimum = shared_rule["child_admissions"] if shared_rule is not None else 0 if profile in {"operator-service-creation-v1", "operator-voice-pg-v1"} else 1
+    child_minimum = shared_rule["child_admissions"] if shared_rule is not None else 0 if profile in {"operator-service-creation-v1", "operator-voice-pg-v1", "operator-editorial-pg-v1"} else 1
     child_admitted = [row for row in admitted if row.get("pid") != parent_pid and row.get("container_id") == container_id and row.get("port") == port]
     if len(child_admitted) < child_minimum:
         raise RuntimeError("required Flask migration child admissions are incomplete")
@@ -604,7 +621,7 @@ def audit_journals(events: Path, relay_artifact: Path, profile: str) -> dict[str
             raise RuntimeError("parent Flask database configuration lifecycle is incomplete")
     elif bindings or unbindings:
         raise RuntimeError("unexpected parent Flask database configuration")
-    if profile in {"operator-service-creation-v1", "operator-voice-pg-v1"}:
+    if profile in {"operator-service-creation-v1", "operator-voice-pg-v1", "operator-editorial-pg-v1"}:
         if len(voice_bindings) != 1 or len(voice_unbindings) != 1 or voice_bindings[0].get("pid") != parent_pid or voice_bindings[0].get("port") != port or voice_bindings[0].get("database") != "test" or voice_unbindings[0].get("pid") != parent_pid:
             raise RuntimeError("operator voice test DSN lifecycle is incomplete")
     elif voice_bindings or voice_unbindings:
@@ -642,7 +659,7 @@ def audit_journals(events: Path, relay_artifact: Path, profile: str) -> dict[str
     connections, executions = relay_evidence(profile, final)
     if not all(isinstance(row, dict) and row.get("returncode") == 0 and row.get("exit_mode") == "graceful" and row.get("stderr_bytes") == 0 for row in executions):
         raise RuntimeError("relay Docker exec evidence is incomplete")
-    return {"event_rows": len(event_rows), "relay_rows": len(relay_rows), "connections": connections, "flask_child_dsn_admitted": bool(child_admitted), "operator_voice_dsn_admitted": profile in {"operator-service-creation-v1", "operator-voice-pg-v1"}, "operator_voice_schema_cleanup_checked": voice_rule is not None, "rollback_disposable_database_checked": rollback_rule is not None, "named_disposable_database_checked": shared_rule is not None and "database_pattern" in shared_rule, "work_review_disposable_database_checked": profile == "work-review-rollback-v1"}
+    return {"event_rows": len(event_rows), "relay_rows": len(relay_rows), "connections": connections, "flask_child_dsn_admitted": bool(child_admitted), "operator_voice_dsn_admitted": profile in {"operator-service-creation-v1", "operator-voice-pg-v1", "operator-editorial-pg-v1"}, "operator_voice_schema_cleanup_checked": voice_rule is not None, "rollback_disposable_database_checked": rollback_rule is not None, "named_disposable_database_checked": shared_rule is not None and "database_pattern" in shared_rule, "work_review_disposable_database_checked": profile == "work-review-rollback-v1"}
 
 
 def require_empty_network(relay_module: object) -> dict[str, object]:

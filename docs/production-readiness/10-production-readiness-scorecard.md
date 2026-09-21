@@ -1,5 +1,11 @@
 # Production-readiness scorecard — working, not final
 
+22September editorial checkpoint, parent36116cab:63/63 unchanged frozen tests
+pass (62 real-PG); independent runtime/live/package checks PASS. Accepted slices
+3,256/5,481, not same-run/current-source proof. The newly enumerated266 further
+PG nodes and3 local HTTP nodes make remaining admission work explicit, not
+complete. No numerical score or original acceptance gate is promoted; wholeFAIL.
+
 21September Operator voice checkpoint, parentdbeaa8c8:382/382 unchanged frozen
 PG scenarios pass with zero skips. Owned DB/schema teardown, default guard and
 source preservation pass; provider methods are doubled. This strengthens the

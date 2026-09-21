@@ -19,7 +19,7 @@ def check_parent_database() -> None:
     events = []
     namespace = {"os": SimpleNamespace(environ=environment, getpid=lambda: 42), "PREFIX": "LOCALOS_HFLYPI_TC_", "_database_url": None,
                  "PARENT_DATABASE_PROFILES": frozenset({"client-info-v1", "capabilities-phase1-v1"}),
-                 "OPERATOR_VOICE_TEST_DSN_PROFILES": frozenset({"operator-service-creation-v1", "operator-voice-pg-v1"}), "_operator_voice_test_dsn": None,
+                 "OPERATOR_VOICE_TEST_DSN_PROFILES": frozenset({"operator-service-creation-v1", "operator-voice-pg-v1", "operator-editorial-pg-v1"}), "_operator_voice_test_dsn": None,
                  "validate_dsn": lambda parsed: validated.append(parsed), "record": lambda event, **fields: events.append(event)}
     exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), "exec"), namespace)
     bind, unbind = namespace["bind_parent_database"], namespace["unbind_parent_database"]
@@ -69,7 +69,7 @@ def check_parent_database() -> None:
     environment["LOCALOS_HFLYPI_TC_MODE"] = "card-growth-v1"
     bind(12345)
     assert "DATABASE_URL" not in environment and len(validated) == 2
-    for mode in ("operator-service-creation-v1", "operator-voice-pg-v1"):
+    for mode in ("operator-service-creation-v1", "operator-voice-pg-v1", "operator-editorial-pg-v1"):
         environment["LOCALOS_HFLYPI_TC_MODE"] = mode
         for value in ("", "foreign"):
             environment["OPERATOR_VOICE_TEST_DSN"] = value
@@ -101,7 +101,7 @@ def check_parent_database() -> None:
         environment["OPERATOR_VOICE_TEST_DSN"] = namespace["_operator_voice_test_dsn"]
         unbind_voice()
         assert "OPERATOR_VOICE_TEST_DSN" not in environment and namespace["_operator_voice_test_dsn"] is None
-    assert events == ["parent_database_bound", "parent_database_unbound"] * 2 + ["operator_voice_test_dsn_bound", "operator_voice_test_dsn_unbound"] * 2
+    assert events == ["parent_database_bound", "parent_database_unbound"] * 2 + ["operator_voice_test_dsn_bound", "operator_voice_test_dsn_unbound"] * 3
 
 
 def check_adapter_profile_bindings() -> None:
@@ -120,6 +120,7 @@ def check_adapter_profile_bindings() -> None:
         "capabilities-phase1-v1": "native-tc-capabilities-phase1",
         "operator-service-creation-v1": "native-tc-operator-service-creation",
         "operator-voice-pg-v1": "native-tc-operator-voice-pg",
+        "operator-editorial-pg-v1": "native-tc-operator-editorial-pg",
         "work-review-rollback-v1": "native-tc-work-review-rollback",
         "creator-portal-rollback-v1": "native-tc-creator-portal-rollback",
         "creator-offer-rollback-v1": "native-tc-creator-offer-rollback",
@@ -142,7 +143,7 @@ def check_adapter_profile_bindings() -> None:
     assert ast.literal_eval(parent_profiles.args[0]) == {"client-info-v1", "capabilities-phase1-v1"}
     voice_profiles = assignments["OPERATOR_VOICE_TEST_DSN_PROFILES"]
     assert isinstance(voice_profiles, ast.Call) and len(voice_profiles.args) == 1
-    assert ast.literal_eval(voice_profiles.args[0]) == {"operator-service-creation-v1", "operator-voice-pg-v1"}
+    assert ast.literal_eval(voice_profiles.args[0]) == {"operator-service-creation-v1", "operator-voice-pg-v1", "operator-editorial-pg-v1"}
     inherited = assignments["INHERITED_DATABASE_URL_REFUSAL_PROFILES"]
     assert isinstance(inherited, ast.Call) and len(inherited.args) == 1
     assert ast.literal_eval(inherited.args[0]) == {
@@ -152,12 +153,15 @@ def check_adapter_profile_bindings() -> None:
         "worker-expired-pg-v1", "worker-resume-pg-v1", "finance-import-transaction-pg-v1",
         "service-compression-race-pg-v1",
         "operator-voice-pg-v1",
+        "operator-editorial-pg-v1",
     }
     assert ast.literal_eval(assignments["OWNED_SCHEMA_CLEANUP_SQL_PATTERNS"]) == {
         "operator-voice-pg-v1": r"^voice_[0-9a-f]{32}$",
+        "operator-editorial-pg-v1": r"^voice_[0-9a-f]{32}$",
     }
     assert ast.literal_eval(assignments["OWNED_SCHEMA_CLEANUP_EVENTS"]) == {
         "operator-voice-pg-v1": "operator_voice_schema_cleanup_checked",
+        "operator-editorial-pg-v1": "operator_voice_schema_cleanup_checked",
     }
 
 
@@ -266,6 +270,7 @@ def check_relay_budgets() -> None:
         "card-growth-v1": 32, "client-info-v1": 32, "capabilities-phase1-v1": 1024,
         "operator-service-creation-v1": 32, "work-review-rollback-v1": 512,
         "operator-voice-pg-v1": 512,
+        "operator-editorial-pg-v1": 128,
         "creator-portal-rollback-v1": 512, "creator-offer-rollback-v1": 512,
         "author-daily-gate-pg-v1": 32, "knowledge-schema-pg-v1": 32,
         "outreach-pain-library-pg-v1": 32, "riderra-template-pg-v1": 32,
@@ -284,6 +289,7 @@ def check_relay_budgets() -> None:
     assert budget("capabilities-phase1-v1") == 1024
     assert budget("operator-service-creation-v1") == 32
     assert budget("operator-voice-pg-v1") == 512
+    assert budget("operator-editorial-pg-v1") == 128
     assert budget("work-review-rollback-v1") == 512
     assert budget("creator-portal-rollback-v1") == 512
     assert budget("creator-offer-rollback-v1") == 512
@@ -315,6 +321,7 @@ def check_relay_evidence_bounds(namespace) -> None:
     assert validate("capabilities-phase1-v1", final(171, 1024))[0] == 171
     assert validate("operator-service-creation-v1", final(21, 32))[0] == 21
     assert validate("operator-voice-pg-v1", final(389, 512))[0] == 389
+    assert validate("operator-editorial-pg-v1", final(62, 128))[0] == 62
     assert validate("work-review-rollback-v1", final(75, 512))[0] == 75
     assert validate("creator-portal-rollback-v1", final(54, 512))[0] == 54
     assert validate("creator-offer-rollback-v1", final(159, 512))[0] == 159
@@ -339,6 +346,13 @@ def check_relay_evidence_bounds(namespace) -> None:
             pass
         else:
             raise AssertionError("operator voice relay evidence outside its literal bounds was accepted")
+    for candidate in (final(61, 128), final(129, 128), final(62, 32)):
+        try:
+            validate("operator-editorial-pg-v1", candidate)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("operator editorial relay evidence outside its literal bounds was accepted")
     for candidate in (final(74, 512), final(513, 512), final(75, 32)):
         try:
             validate("work-review-rollback-v1", candidate)
@@ -396,13 +410,19 @@ def check_operator_voice_contract(namespace) -> None:
             "schema_pattern": r"voice_[0-9a-f]{32}",
             "cleanup_event": "operator_voice_schema_cleanup_checked",
         },
+        "operator-editorial-pg-v1": {
+            "minimum_connections": 62,
+            "budget": 128,
+            "schema_pattern": r"voice_[0-9a-f]{32}",
+            "cleanup_event": "operator_voice_schema_cleanup_checked",
+        },
     }
     source = Path(__file__).with_name("native_tc_one_hflypi.py").read_text()
-    assert 'profile in {"operator-service-creation-v1", "operator-voice-pg-v1"}' in source
-    assert 'child_minimum = shared_rule["child_admissions"] if shared_rule is not None else 0 if profile in {"operator-service-creation-v1", "operator-voice-pg-v1"} else 1' in source
+    assert 'profile in {"operator-service-creation-v1", "operator-voice-pg-v1", "operator-editorial-pg-v1"}' in source
+    assert 'child_minimum = shared_rule["child_admissions"] if shared_rule is not None else 0 if profile in {"operator-service-creation-v1", "operator-voice-pg-v1", "operator-editorial-pg-v1"} else 1' in source
     assert "operator voice disposable schema cleanup evidence is incomplete" in source
     adapter = Path(__file__).with_name("native_tc_adapter_hflypi.py").read_text()
-    assert '"operator-voice-pg-v1": r"^voice_[0-9a-f]{32}$"' in adapter
+    assert '"operator-editorial-pg-v1": r"^voice_[0-9a-f]{32}$"' in adapter
     assert "SELECT COUNT(*) FROM pg_namespace WHERE nspname ~" in adapter
     assert "owned operator voice schema remains before container cleanup" in adapter
 
@@ -443,7 +463,7 @@ def main() -> None:
         "finance-import-transaction-pg-v1": ["tests/test_finance_import_transaction_pg.py::test_concurrent_duplicate_does_not_poison_following_finance_import_row"],
         "service-compression-race-pg-v1": ["tests/test_service_compression_apply_concurrency_pg.py::test_second_compression_apply_blocks_then_returns_idempotent_result"],
     }
-    assert set(profiles) == {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1", "operator-voice-pg-v1", "work-review-rollback-v1", "creator-portal-rollback-v1", "creator-offer-rollback-v1", *shared_profiles}
+    assert set(profiles) == {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1", "operator-voice-pg-v1", "operator-editorial-pg-v1", "work-review-rollback-v1", "creator-portal-rollback-v1", "creator-offer-rollback-v1", *shared_profiles}
     assert profiles["card-growth-v1"]["count"] == 1
     assert profiles["client-info-v1"] == {"target": "tests/test_client_info_gate.py", "count": 8, "prefix": "native-tc-client-info"}
     capabilities = profiles["capabilities-phase1-v1"]
@@ -457,6 +477,7 @@ def main() -> None:
     }
     assert profiles["operator-service-creation-v1"] == {"target": "tests/test_operator_service_creation.py", "count": 28, "prefix": "native-tc-operator-service-creation", "bootstrap_postgres": True}
     assert profiles["operator-voice-pg-v1"] == {"target": "tests/test_operator_voice_pg.py", "count": 382, "prefix": "native-tc-operator-voice-pg", "bootstrap_postgres": True}
+    assert profiles["operator-editorial-pg-v1"] == {"targets": ["tests/test_operator_editorial_pg.py", "tests/test_operator_post_rewrite_pg.py", "tests/test_operator_plan_revision_pg.py", "tests/test_operator_followups_pg.py"], "count": 63, "prefix": "native-tc-operator-editorial-pg", "bootstrap_postgres": True}
     assert profiles["work-review-rollback-v1"] == {
         "targets": [
             "tests/test_work_review_migration_rollback.py::test_empty_work_review_schema_downgrades_without_cascade",
@@ -571,7 +592,7 @@ def main() -> None:
         pass
     else:
         raise AssertionError("non-boolean bootstrap mode was accepted")
-    print("native TC profiles: 21 exact profiles, owned-DSN isolation and negative result gates passed")
+    print("native TC profiles: 22 exact profiles, owned-DSN isolation and negative result gates passed")
 
 
 if __name__ == "__main__":

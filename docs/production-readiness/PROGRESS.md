@@ -1,5 +1,27 @@
 # Production-readiness progress
 
+## Latest checkpoint — 22 September, editorial Operator and fixture inventory
+
+- [x] Previous382 package committed as `36116cab`; exact reviewed diff and
+  normal hook pass. Strict staged scan403,533 bytes/no findings683.897 ms.
+- [x] Four unchanged Operator modules pass63/63 (62 real-PG fixtures, one
+  fixtureless): pytest10.47 s/capture13.065 s/wrapper16.498 s, zero skips.
+- [x] Relay62/128, no child, zero leftover voice schemas; source/default guard
+  and retained Docker IDs23/4/20/23 unchanged. Independent runtime/package PASS.
+- [x] Exact new63 disjoint nodes: accepted3,256/5,481,2,225 remain. Controls,
+  focused Ruff and diff check pass228.167 ms; one upstream import warning remains.
+- [x] Residual fixture inventory now exposes266 additional real-PG nodes and
+  three loopback HTTP nodes within the previously unclassified4,674. Full55
+  fixture definitions/source hashes are recorded;4,405 complement is not yet
+  certified safe and2,018 fixtureless bodies still require I/O classification.
+- [ ] Next: broad explicit admission manifest, remaining real-PG families and
+  full/current-source aggregate; no silent integration-test exclusion.
+- [ ] Image/general secrets, frontend flake, browser, five-flow performance,
+  CI/demo/final gates remain open. Whole-goal FAIL remains unchanged.
+
+Parent `36116cab`; audit support/evidence only. Foreign13 paths preserved;
+about13 GiB free. No repeated cleanup, production/provider write, push or deploy.
+
 ## Latest checkpoint — 21 September, Operator voice PostgreSQL
 
 - [x] Full frozen `test_operator_voice_pg.py`: 382/382 pass, zero skips or

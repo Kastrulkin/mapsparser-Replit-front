@@ -1,5 +1,21 @@
 # Verified commands and evidence
 
+## Editorial Operator63 — 22 September
+
+Named tmux `audit-native-operator-editorial-pg-v1` ran once and is terminal:
+
+```sh
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_tc_one_hflypi.py --attempt v1 --profile operator-editorial-pg-v1
+```
+
+63/63,62 PG fixtures, no skips/errors; pytest10.47 s/child13.065 s/wrapper16.498 s.
+Relay62, zero remaining voice schemas, no child; source/guard/retained resources
+preserved. Named tmux `audit-native-editorial-controls-v1` captured22-profile
+controls/Ruff F821/F822/F823/diff check:228.167 ms PASS. One bootstrap import
+warning remains. Six captures and11 hashes in task editorial archive; immutable
+attemptv1 must not be replayed. Admission-plan JSON is read-only metadata/AST
+analysis, not a test run; exact definitions and node-set hash algorithm recorded.
+
 ## Operator voice PostgreSQL382 — 21 September
 
 Named tmux `audit-native-operator-voice-pg-v1` executed once, now terminal:

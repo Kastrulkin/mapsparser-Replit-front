@@ -1,0 +1,72 @@
+{"event": "start_requested", "image": "sha256:4f26f01433671ee540195bff27f4890acca58cb49cf6d61ea12008d842ec0699", "network_id": "6fc9dbcb68ce40e46030cec829ed4613840327eda4109cd09de4ada422a4a0b4", "pid": 10715, "session_id": "7f223fea-e16c-40d7-bf38-38c6a5ffeccc", "time": 1790025075.431278}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "event": "container_created", "pid": 10715, "session_id": "7f223fea-e16c-40d7-bf38-38c6a5ffeccc", "time": 1790025075.778841}
+{"capability_path": "/private/tmp/localos-readiness-20260921.hfLYPi/native/capabilities/native-tc-relay-7f223fea-e16c-40d7-bf38-38c6a5ffeccc-4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93-10715.json", "container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "event": "relay_started", "pid": 10715, "port": 58225, "time": 1790025075.801975}
+{"checks": [{"case": "stale_expiry", "denied": true, "reason": "capability parent or expiry is invalid"}, {"case": "nonce", "denied": true, "reason": "capability identity is unsafe"}, {"case": "session", "denied": true, "reason": "container labels do not grant relay access"}, {"case": "container", "denied": true, "reason": "Docker does not authorize the relay container"}, {"case": "wrong_port", "denied": true, "reason": "capability relay target is invalid"}, {"case": "world_readable", "denied": true, "reason": "capability mode is unsafe"}, {"case": "foreign_path", "denied": true, "reason": "capability path is not canonical"}, {"case": "symlink", "denied": true, "reason": "capability path is not canonical"}], "event": "capability_denials", "pid": 10715, "time": 1790025075.893408}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025075.909847}
+{"database": "test", "event": "operator_voice_test_dsn_bound", "pid": 10715, "port": 58225, "time": 1790025075.910012}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025077.616184}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025078.0779479}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025078.231542}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025078.396033}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025078.5465448}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025078.6918552}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025078.8453271}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025078.977458}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025079.137014}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025079.270606}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025079.452559}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025079.618421}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025079.752634}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025079.882038}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025080.0244758}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025080.1759412}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025080.3277261}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025080.521939}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025080.697402}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025080.876383}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025081.085943}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025081.2715242}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025081.468041}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025081.626355}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025081.783077}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025081.942764}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025082.082923}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025082.2275572}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025082.382594}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025082.5265138}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025082.66957}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025082.839457}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025082.999224}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025083.167014}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025083.289531}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025083.427807}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025083.565692}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025083.722847}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025083.8495638}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025083.983402}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025084.1227431}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025084.274994}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025084.394637}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025084.538274}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025084.719041}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025084.8711932}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025085.0225122}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025085.1992152}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025085.360855}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025085.506159}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025085.659482}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025085.810595}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025085.980599}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025086.1553228}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025086.351043}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025086.5282402}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025086.685042}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025086.851821}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025087.0161128}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025087.1454358}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025087.2962198}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "database": "test", "event": "dsn_admitted", "pid": 10715, "port": 58225, "time": 1790025087.4386098}
+{"event": "operator_voice_test_dsn_unbound", "pid": 10715, "time": 1790025087.65022}
+{"event": "operator_voice_schema_cleanup_checked", "pid": 10715, "remaining": 0, "time": 1790025087.727663}
+{"container_id": "4cd7da6f1b7ed72d0293caf25174b55478147066f012d98ad9db8adcc7c71d93", "event": "container_removed", "pid": 10715, "time": 1790025088.032537}
+{"errors": [], "event": "cleanup", "pid": 10715, "time": 1790025088.0329049}

@@ -1,5 +1,41 @@
 # Readiness handoff
 
+## Latest checkpoint — 22 September, editorial63 and exact fixture blockers
+
+Branch `codex/production-readiness-20260917`, parent `36116cab`. Previous
+voice382 commit matches reviewed binary diff72dc89c9...0c0b59; normal hook
+PASS254.923 ms, strict staged scan403,533 bytes/no findings683.897 ms.
+
+Editorial profile targets full editorial27/rewrite13/revision7/followups16.
+Actual63/63 pass (62 PG, one fixtureless), no skips/errors; pytest10.47 s,
+child13.065 s, wrapper16.498 s. Controls/Ruff/diff228.167 ms pass. One bootstrap
+Testcontainers deprecation warning is retained. Runtime/live/package independent
+review PASS; exact set matches v4 and no prior accepted prefix overlaps.
+Accepted frozen total3,256/5,481;2,225 open, not a full/current-source aggregate.
+Owned tmpfs container removed;62 clean relay connections within128, no child,
+zero voice schemas; frozen5,720/default guard07d3 and Docker IDs23/4/20/23 intact.
+
+Evidence: task `native-operator-editorial-hflypi-20260922/` (six raw captures,
+11 hashes) and results report. Existing attemptv1 is terminal and immutable.
+The exact command is recorded in COMMANDS; do not rerun the same attempt.
+
+New static plan `native-remaining-admission-plan-20260922.json` resolves the
+807 known non-default IDs from actual fixture provenance, leaving4,674. Among
+them55 frozen fixture definitions/863 uses expose266 additional PG nodes and
+three loopback runner nodes. The remaining4,405 are candidates, not proved safe:
+2,018 of4,674 have no fixture metadata, so test-body I/O remains unclassified.
+All55 definitions include source line/hash/count and reviewed category; node-set
+hash serialization is explicit. Do not repeat the earlier failed assumption
+that only `pg` and shared Testcontainers fixtures need integration configuration.
+
+Next broad gate: classify body-level I/O for the4,405 candidate scope, then run
+an exact default-deny aggregate and separately account for every PG/browser/live
+provider class. Remaining imported voice-DSN modules and additional PG families
+need profile-specific environment/fixture review; no blanket DB binding.
+Security/image work is a separate package. Preserve original whole FAIL,
+foreign13, current stand/all volumes;13 GiB free,5/2/10 GiB floors. No production,
+provider sends, push/deploy or repeat cleanup. Historical checkpoints follow.
+
 ## Latest checkpoint — 21 September, Operator voice382 accepted runtime
 
 Branch `codex/production-readiness-20260917`, parent `dbeaa8c8`. Serial tmux
