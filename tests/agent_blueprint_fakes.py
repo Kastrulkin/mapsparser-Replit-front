@@ -333,7 +333,15 @@ class FakeCursor:
         if normalized_query.startswith("select * from agent_approvals") and "approval_type = 'drafts'" in normalized_query:
             matches = [item for item in self.tables["agent_approvals"].values()
                        if item["run_id"] == params[0] and item.get("approval_type") == "drafts" and item.get("status") == "approved"]
-            self.last_result = matches[-1] if matches else None
+            # Mirror the runner query's PostgreSQL ordering exactly:
+            # decided_at DESC defaults to NULLS FIRST, then id DESC.
+            matches.sort(key=lambda item: str(item.get("id") or ""), reverse=True)
+            matches.sort(
+                key=lambda item: item.get("decided_at") or datetime.min.replace(tzinfo=timezone.utc),
+                reverse=True,
+            )
+            matches.sort(key=lambda item: item.get("decided_at") is not None)
+            self.last_result = matches[0] if matches else None
             return None
         if normalized_query.startswith("select * from agent_approvals"):
             run_id = params[0]
@@ -547,6 +555,7 @@ class FakeCursor:
                 approval["status"] = "approved"
                 approval["decided_by_user_id"] = params[0]
                 approval["decision_reason"] = params[1]
+                approval["decided_at"] = datetime.now(timezone.utc)
             return None
         if normalized_query.startswith(("update agent_run_steps set status = 'completed'", "update agent_run_steps set status='completed'")):
             step = self.tables["agent_run_steps"].get(params[1])

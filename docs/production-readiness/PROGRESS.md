@@ -1,5 +1,32 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, resumed after isolated SEO release
+
+- [x] Separately authorized SEO overlay is live: `public-seo-20260921`, source
+  checkpoint `42015acb`. See `docs/PUBLIC_HTML_CRAWLABILITY.md`; this does not
+  deploy the audit branch. Main source TS/lint passes; scoped tests 6 frontend,
+  14 renderer/fallback pass. Original private dist remains unchanged.
+- [x] `TEST-APPROVAL-FAKE-ORDER-01` is locally FIX_PROVEN: the same eight pure
+  tests have 5 failures/3 controls before the fake correction and 8 passes after.
+  Independent verifier reran 8/8 and accepted ordering, UTC timestamp and scope.
+  This is test-double fidelity, not a production or native PostgreSQL finding.
+- [x] Authorized cleanup completed separately: latest Mac free space about
+  12 GiB, so the historical disk blocker is no longer current. No new Docker
+  image build or native aggregate/restore was run in this checkpoint.
+- [ ] Next P2: exact failing-request observation in guided-tour/Telegram mini-app
+  tests; CAPTCHA retry timing still requires its authorized owned native proof.
+- [ ] Current full aggregate/image, security closure, paired performance,
+  hosted CI/recovery/demo and historical evidence reconciliation remain.
+
+Whole-goal FAIL is unchanged; no acceptance criterion is upgraded by this small
+checkpoint. Thirteen foreign paths and historical spec/verdict/problems remain
+preserved. Audit code was not deployed. Prior native preparation/restore denial
+is not bypassed by disk cleanup. User asked to resume work; the app goal
+controller still returns `paused`, and its tools cannot set it to active.
+Manual bounded work resumed; autonomous goal continuation needs user-side resume.
+External browser verification of the SEO release from this Mac remains unknown
+because of TLS timeouts, despite successful server-host HTTPS verification.
+
 ## Latest checkpoint — 21 September, safety guards and completed test-path review
 
 - [x] Independent changed-hunk/assertion review now covers all112 test-tree

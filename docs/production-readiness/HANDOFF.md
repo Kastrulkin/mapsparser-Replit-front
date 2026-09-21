@@ -1,5 +1,41 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, SEO released and audit resumed locally
+
+Branch `codex/production-readiness-20260917`; original baseline `30262a5`.
+SEO source checkpoint `42015acb8f1e86544cc6297955813a89bb30abe5`; read Git for
+the resulting fake-test package commit. No push of this branch occurred.
+The separately authorized production overlay is documented in
+`docs/PUBLIC_HTML_CRAWLABILITY.md`; it is NOT the audit branch deployed.
+Neighbor article task confirmed separate worktree and no concurrent deployment;
+it received exact release hashes, source checkpoint and merge boundaries.
+
+`TEST-APPROVAL-FAKE-ORDER-01` is closed locally by changes only to
+`tests/agent_blueprint_fakes.py` plus its previously paused eight-case test.
+The fake now models SQL `decided_at DESC, id DESC` including NULLS FIRST and
+aware UTC NOW on the exact approval update. Evidence prefix:
+`.agent/tasks/production-readiness-20260917/evidence/approval-fake-order-`.
+RED: 5 failures/3 controls; GREEN: 8 passes. Independent read-only verifier
+reran 8/8 and accepted. No application/native PG/provider interaction.
+
+Next concrete task: `TEST-BROWSER-FAILURE-OBSERVED-01` in cumulative-test-review:
+assert the guided-tour second PUT and Telegram mini-app injected failing
+request actually occur. Preserve failing mutant evidence; use bounded isolated
+fixtures. CAPTCHA retry-after timing remains a separate native lifecycle gate.
+Do not re-initialize proof-loop or repeat completed 112-path assertion review.
+Exact pure approval commands are retained in red/green JSON; structural status:
+`bash scripts/proof_loop.sh status production-readiness-20260917`.
+
+Latest disk measurement is approximately 12 GiB free after separately approved
+cleanup; no Docker rebuild was started here. Native aggregate/restore's prior
+permission denial remains in force. No production DB/schema operations, general
+audit deployment, provider sends or credential changes were performed.
+The 13 foreign paths and historical spec/verdict/problems are preserved.
+Whole-goal FAIL remains. App goal state is still paused; only user/system can
+resume its controller, although the user authorized this manual work turn.
+External Mac-to-production TLS times out; localhost preview and server-host
+HTTPS checks pass, not an external browser success claim.
+
 ## Latest checkpoint — 21 September, safety guards
 
 VK package is committed locally as386a16867782430f68177a926425a44d0722de24

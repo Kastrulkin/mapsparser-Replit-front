@@ -1,5 +1,24 @@
 # Verified commands and evidence
 
+## Approval fake ordering and separate SEO release — 21 September
+
+Pure approval-fake commands, complete output and durations are preserved in
+task `evidence/approval-fake-order-red-20260921.json` (5 failures/3 passes) and
+`approval-fake-order-green-20260921.json` (8 passes; captured 511.246 ms).
+Independent verifier reran the same suite with `python3 -I -B`: 8 passes.
+The unittest harness blocks socket construction and application/DB/dotenv
+imports; it reads the actual runner SQL through AST, without loading the app,
+pytest conftest or native DB. The regression draft assertions were not weakened.
+
+SEO source/release evidence is separate in `outputs/seo-public-release-20260921/`:
+`main-frontend-raw-green.json` 6/6; `main-backend-final.json` 14/14;
+`main-quality-final.json` app/tooling TypeScript and scoped ESLint exit0;
+`local-http-final.json` exact overlay route/asset byte checks;
+`production-final.json` second live verifier and container file hashes.
+Earlier environment/fixture failures are retained, not counted as product RED.
+Do not rerun the release deploy script: the overlay is already applied and its
+preconditions intentionally reject duplicate activation. No audit push/deploy.
+
 ## Safety guards — 21 September, parent386a1686
 
 Exact guarded commands/results: task `evidence/safety-guards-*-20260921.json`.

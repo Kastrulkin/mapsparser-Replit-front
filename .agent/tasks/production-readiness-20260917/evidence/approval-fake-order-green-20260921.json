@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "label": "approval-fake-order-green-20260921",
+  "captured_at": "2026-09-21T11:41:06.403148+00:00",
+  "command": [
+    "/usr/local/bin/python3",
+    "-I",
+    "-c",
+    "import builtins,socket,sys,unittest;sys.path.insert(0,'.');socket.socket=lambda *a,**k:(_ for _ in ()).throw(RuntimeError('network disabled'));_i=builtins.__import__;builtins.__import__=lambda n,*a,**k: (_ for _ in ()).throw(ImportError('blocked '+n)) if n.startswith(('src.','sqlalchemy','psycopg','dotenv')) else _i(n,*a,**k);suite=unittest.defaultTestLoader.loadTestsFromName('tests.test_agent_blueprint_fake_approval_order');result=unittest.TextTestRunner(verbosity=2).run(suite);raise SystemExit(not result.wasSuccessful())"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin x86_64",
+  "duration_ms": 511.246,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "test_approval_update_does_not_touch_foreign_or_missing_row (tests.test_agent_blueprint_fake_approval_order.FakeApprovalOrderTests.test_approval_update_does_not_touch_foreign_or_missing_row) ... ok\ntest_approval_update_records_time_used_by_selection (tests.test_agent_blueprint_fake_approval_order.FakeApprovalOrderTests.test_approval_update_records_time_used_by_selection) ... ok\ntest_decision_time_wins_over_insertion_order_and_id (tests.test_agent_blueprint_fake_approval_order.FakeApprovalOrderTests.test_decision_time_wins_over_insertion_order_and_id) ... ok\ntest_equal_decision_times_use_descending_id (tests.test_agent_blueprint_fake_approval_order.FakeApprovalOrderTests.test_equal_decision_times_use_descending_id) ... ok\ntest_filters_run_type_and_status_before_ordering (tests.test_agent_blueprint_fake_approval_order.FakeApprovalOrderTests.test_filters_run_type_and_status_before_ordering) ... ok\ntest_missing_legacy_time_is_null_and_equal_nulls_use_id (tests.test_agent_blueprint_fake_approval_order.FakeApprovalOrderTests.test_missing_legacy_time_is_null_and_equal_nulls_use_id) ... ok\ntest_no_match_clears_previous_result (tests.test_agent_blueprint_fake_approval_order.FakeApprovalOrderTests.test_no_match_clears_previous_result) ... ok\ntest_null_decision_time_keeps_postgres_desc_nulls_first (tests.test_agent_blueprint_fake_approval_order.FakeApprovalOrderTests.test_null_decision_time_keeps_postgres_desc_nulls_first) ... ok\n\n----------------------------------------------------------------------\nRan 8 tests in 0.292s\n\nOK\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

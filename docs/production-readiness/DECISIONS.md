@@ -1,5 +1,21 @@
 # Readiness decisions
 
+## D-083 — Resume from the saved audit checkpoint; keep SEO release separate
+
+The authorized public SEO overlay uses a production snapshot and protected
+private-asset hashes, not a full deployment of the dirty audit branch. Its
+source checkpoint is `42015acb`; deployment evidence is in the dedicated SEO
+document. Article work must merge only the overlapping renderer/manifest/
+sitemap boundaries against that actual release.
+
+Resume audit with the existing approval fake-order draft instead of starting a
+new inventory. PostgreSQL DESC uses NULLS FIRST, so the fake must model nulls,
+decision time and id explicitly rather than insertion order. Record UTC NOW on
+successful exact-target approval updates. No product runtime change is needed.
+Eight deterministic tests and independent review prove this limited correction;
+they are not substitutes for native integration/whole-image acceptance.
+Disk headroom does not waive a prior permission denial or authorize audit deploy.
+
 ## D-082 — Test the safety gates with valid negative and positive mutations
 
 Strengthen only the existing CI/test boundaries: explicit verified-or-denied
