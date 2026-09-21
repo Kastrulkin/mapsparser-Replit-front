@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import ast
 import copy
-from contextlib import redirect_stdout
+from contextlib import ExitStack, redirect_stdout
 import io
+import os
 from pathlib import Path
 import re
+import socket
+import sqlite3
+import subprocess
 import sys
 import unittest
+from unittest.mock import patch
 
 
 SOURCE_PATH = Path(__file__).parents[1] / "src" / "yandex_maps_scraper.py"
@@ -103,6 +108,29 @@ def _capture(callback):
     return result, output.getvalue()
 
 
+def _deny_external_side_effects(*_args, **_kwargs):
+    raise AssertionError("unexpected external side effect")
+
+
+def _guard_external_side_effects(stack):
+    targets = [
+        "socket.socket.connect",
+        "socket.socket.connect_ex",
+        "subprocess.Popen",
+        "os.system",
+        "os.posix_spawn",
+        "os.posix_spawnp",
+        "sqlite3.connect",
+    ]
+    targets.extend(
+        f"os.{name}"
+        for name in ("spawnv", "spawnve", "spawnvp", "spawnvpe")
+        if hasattr(os, name)
+    )
+    for target in targets:
+        stack.enter_context(patch(target, side_effect=_deny_external_side_effects))
+
+
 def _print_probe(statement):
     function = ast.parse(
         """
@@ -171,20 +199,10 @@ class _OverviewPage:
 
 
 class LegacyParserLeafDiagnosticLogsTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        def deny_external_side_effects(event, _args):
-            if event in {
-                "socket.connect",
-                "subprocess.Popen",
-                "os.system",
-                "os.posix_spawn",
-                "os.spawn",
-                "sqlite3.connect",
-            }:
-                raise AssertionError(f"unexpected external side effect: {event}")
-
-        sys.addaudithook(deny_external_side_effects)
+    def setUp(self):
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        _guard_external_side_effects(stack)
 
     def test_all_declared_changed_leaf_sinks_are_fixed_nonempty_events(self):
         leaked = {}
@@ -234,6 +252,53 @@ class LegacyParserLeafDiagnosticLogsTests(unittest.TestCase):
         self.assertEqual(result, {"rating": "", "reviews_count": 0, "items": []})
         self.assertNotIn(SYNTHETIC_MARKER, stdout)
         self.assertIn("Ошибка при парсинге рейтинга с главной", stdout)
+
+
+class LegacyParserLeafDiagnosticGuardTests(unittest.TestCase):
+    def test_guard_denies_network_while_active_and_restores_it_afterward(self):
+        original_connect = socket.socket.connect
+        original_connect_ex = socket.socket.connect_ex
+        stack = ExitStack()
+        probe = socket.socket()
+        try:
+            _guard_external_side_effects(stack)
+            with self.assertRaisesRegex(AssertionError, "unexpected external side effect"):
+                probe.connect(("127.0.0.1", 1))
+            with self.assertRaisesRegex(AssertionError, "unexpected external side effect"):
+                probe.connect_ex(("127.0.0.1", 1))
+        finally:
+            stack.close()
+            probe.close()
+
+        self.assertIs(socket.socket.connect, original_connect)
+        self.assertIs(socket.socket.connect_ex, original_connect_ex)
+
+    def test_guard_denies_remaining_external_entry_points_while_active(self):
+        stack = ExitStack()
+        try:
+            _guard_external_side_effects(stack)
+            for callback in (
+                lambda: sqlite3.connect(":memory:"),
+                lambda: subprocess.Popen(["not-run"]),
+                lambda: os.system("not-run"),
+                lambda: os.posix_spawn("not-run", ["not-run"], {}),
+            ):
+                with self.assertRaisesRegex(AssertionError, "unexpected external side effect"):
+                    callback()
+        finally:
+            stack.close()
+
+    def test_guard_restores_popen_after_exception_path(self):
+        original_popen = subprocess.Popen
+        stack = ExitStack()
+        with self.assertRaisesRegex(RuntimeError, "synthetic test failure"):
+            try:
+                _guard_external_side_effects(stack)
+                raise RuntimeError("synthetic test failure")
+            finally:
+                stack.close()
+
+        self.assertIs(subprocess.Popen, original_popen)
 
 
 if __name__ == "__main__":

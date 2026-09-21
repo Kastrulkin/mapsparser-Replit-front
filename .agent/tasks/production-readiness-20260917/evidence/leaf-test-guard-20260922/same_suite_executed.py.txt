@@ -1,0 +1,52 @@
+"""Run the three legacy diagnostics and check whether their guard leaks."""
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import socket
+import sys
+import tempfile
+
+import pytest
+
+
+if len(sys.argv) != 2:
+    raise SystemExit("expected source root")
+
+source = Path(sys.argv[1])
+test = source / "tests" / "test_legacy_parser_leaf_diagnostics.py"
+writable = Path("/private/tmp/localos-leaf-guard-20260922/writable")
+for variable in ("TMPDIR", "TMP", "TEMP"):
+    os.environ[variable] = str(writable)
+tempfile.tempdir = str(writable)
+
+pytest_code = pytest.main(
+    [
+        f"{test}::LegacyParserLeafDiagnosticLogsTests",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "--basetemp",
+        str(writable / "same-suite-pytest"),
+    ]
+)
+probe = socket.socket()
+try:
+    probe.connect(("127.0.0.1", 1))
+except AssertionError:
+    post_suite_status = "leaked_guard"
+except OSError:
+    post_suite_status = "sandbox_denied_without_leak"
+else:
+    post_suite_status = "unexpected_connection"
+finally:
+    probe.close()
+
+result = {"pytest_code": pytest_code, "post_suite_status": post_suite_status}
+print(json.dumps(result, sort_keys=True))
+raise SystemExit(
+    0
+    if pytest_code == 0 and post_suite_status == "sandbox_denied_without_leak"
+    else 1
+)

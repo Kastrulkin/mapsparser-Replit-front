@@ -1,5 +1,12 @@
 # Production-readiness change log
 
+## Scoped leaf diagnostic guard — 22 September
+
+TEST-LEAF-GUARD-01: replace permanent audit-hook contamination with reversible
+per-test entry-point guards. Original3parserassertions preserved,3regressions
+added; identical RED/GREEN and independent review pass. Root adjacent38pass1fail
+exposes a separate restoreadmission issue; no all-green or runtimechangeclaim.
+
 ## Private-key structural observations — 22 September, parentd20dc1ad
 
 Evidence-only6member/17hit read-only stream,37.381s. Three delimiter observations

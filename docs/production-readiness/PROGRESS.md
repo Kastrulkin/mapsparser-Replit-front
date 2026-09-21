@@ -1,5 +1,20 @@
 # Production-readiness progress
 
+## Latest checkpoint — 22 September, leaf test isolation fixed
+
+- [x] TEST-LEAF-GUARD-01: per-test reversible guard replaces permanent audit hook;
+  original3assertions unchanged,3guard regressions added. Independent code PASS.
+- [x] Identical-suite RED leaked hook/exit1 -> GREEN noleak/exit0; expanded6pass.
+  Root exact33previouslyblocked+6 aggregate38pass/1fail, no leakedhook/skip.
+- [ ] Remaining adjacent failure is a separate real restore-admission fail-open
+  when a here-string cannot create its temporary file. FakeDocker-only diagnosis;
+  fix under implementation, no real DB/Docker operation and no green-suite claim.
+- [x] Image observations committed in prior package; broad image triage staysopen.
+
+Owned code:tests/test_legacy_parser_leaf_diagnostics.py only for this package.
+Evidence leaf-test-guard-results-20260922.md. Whole goal ACTIVE/FAIL, foreign13
+preserved; no production, deploy/push, provider effects or repeatedcleanup.
+
 ## Latest checkpoint — 22 September, bounded private-key observations
 
 - [x] Exact6member/17candidate structural stream completes37.381s, matching

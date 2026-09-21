@@ -1,5 +1,25 @@
 # Readiness handoff
 
+## Latest checkpoint — 22 September, leaf-hook proof accepted
+
+Leaf-test patch SHA152c0163 is independently reviewed; original3same-suite
+RED534.811ms/exit1leak ->GREEN544.823ms/exit0noleak. Expanded6pass537.312ms.
+Root exact33affected+6target aggregate38pass/1fail34.299s; old global-hook failures
+are gone, but this is not an all-green aggregate. Current fulloffline remains
+4347pass/48fail/1092skip until a new final snapshot is actually run.
+
+One failure uncovers a different real safety defect in scripts/postgres-restore-latest.sh:
+here-string temporaryfile denial bypasses binding-validation loop, reaching fake
+CREATE DATABASE/restore. Only synthetic Docker was invoked. leaf_guard_fix now
+owns a separate minimal I/O-free binding-validation patch and regression in
+tests/test_postgres_restore_helper_safety.py; do not stage with the leaf-test fix.
+Nearest task: review that repair and its exact failedcase/fullfakehelper tests.
+
+Archive leaf-test-guard-20260922 contains causal/expanded/adjacent captures and
+exact helper/policy snapshots. Failedadjacentv1 retained (harnesscollectonly).
+All13foreignpaths remain preserved, trackedforeigndiff40afa014 unchanged.
+No goalstatuschange, production/existing DB/provider writes, push/deploy or cleanup.
+
 ## Latest checkpoint — 22 September, private-key observations retained
 
 Parentd20dc1ad, samebranch. Latest committed fulloffline package:14files,

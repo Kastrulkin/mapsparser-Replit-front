@@ -1,5 +1,16 @@
 # Verified commands and evidence
 
+## Leaf test guard proof — 22 September
+
+Identical same_suite_probe.py334d7d6e on frozen-original vs patchedroot under
+respective deny-all policies: original3passthenleak/exit1,534.811ms; patchedsame3
+passnoleak/exit0,544.823ms. Expanded6pass537.312ms. Exact commands are captured.
+Named tmux audit-leaf-adjacent-v2 runs exact33priorhookfailures after sixleafcases:
+38pass1fail,33.61s pytest/34.299s captured, noleak/skip. Harness3a09a0f7,
+policy9b8d3ffc,source152c0163; env-i uses only unreachablemetadataDSN.
+Onefail is fake restore-admission under temp-redirection denial, separatefix.
+Task leaf-test-guard-20260922 preserves failedv1collection and validv2 outcome.
+
 ## Image PEM structural stream — 22 September
 
 Named tmux audit-image-pem-v2 runs nativevenv Python -B

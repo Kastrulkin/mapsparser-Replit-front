@@ -1,5 +1,14 @@
 # Readiness decisions
 
+## D-112 — Scope diagnostic test guards and retain newly exposed failures
+
+Use unittest cleanup registered before patch setup, not permanent process-wide
+audit hooks, for isolated AST-based diagnostic tests. Prove active denial and
+post-test restoration including exception paths with identical baseline/patch
+scenarios. If removing test contamination exposes a real later defect, preserve
+the failed aggregate and fix that defect separately; never suppress its assertion
+or count the contaminated old failure as a harmless test issue forever.
+
 ## D-111 — Delimiter observations do not clear an image
 
 An exact AST delimiter constant or NUL-bounded ELF marker can explain a detector

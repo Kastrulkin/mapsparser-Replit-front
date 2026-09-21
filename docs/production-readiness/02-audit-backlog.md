@@ -1,5 +1,27 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Leaf-test contamination and restore-admission follow-up — 22 September
+
+**TEST-LEAF-GUARD-01 — P2, before final test sign-off, locally FIX_PROVEN.**
+A permanent audit hook in one test class caused33 unrelated subsequent failures.
+High confidence/likelihood in full-suite order; test-only blast radius. Reversible
+per-test guards preserve exercised API denials, original3assertions unchanged,
+3guard regressions added. Identical-suite RED leaked hook -> GREEN no leak;
+expanded6pass and independent code review PASS. Exact33affected+6 aggregate is
+38pass/1fail, not green: the remaining restore issue below is separate. Evidence
+task leaf-test-guard-results-20260922.md. All13foreign paths remain untouched.
+
+**RESTORE-PORTS-TEMP-01 — P1 conditional, before using restore helper, open repair.**
+On shell temporary-file creation denial, `done <<< "$ports"` can skip loopback
+validation while script execution continues to CREATE DATABASE/restore. Exact
+mixedbinding fake-Docker test reproduces failure under OS denial; no real DB,
+provider or production effect. High causal confidence, environment-dependent
+likelihood; impact is bypass of a local restore admission boundary, not proven
+exposure. Proposed small fix: I/O-free per-binding validation, unchanged identity/
+confirmation/archive gates. Acceptance: same unsafe case rejects before marker,
+synthetic read-failure regression, valid loopback still works, full fake-helper
+suite and independent review. No production rollout or real restore authorized.
+
 ## Runner startup error masking — 22 September
 
 **RUNNER-INIT-01 — P2, reliability, locally FIX_PROVEN.** A failed bind calls
