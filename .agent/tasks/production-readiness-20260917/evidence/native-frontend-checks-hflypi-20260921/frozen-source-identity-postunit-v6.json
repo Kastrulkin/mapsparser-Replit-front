@@ -1,0 +1,10 @@
+{
+  "checked_tracked_blobs": 5720,
+  "commit": "99849935de26e2932613f2a73cf515dff49104a1",
+  "mismatch_count": 0,
+  "mismatches": [],
+  "resolved_commit": "99849935de26e2932613f2a73cf515dff49104a1",
+  "scope": "Tracked commit blobs and executable/symlink modes only. Untracked archive extras such as node_modules and private caches are outside comparison.",
+  "source": "/private/tmp/localos-readiness-20260921.hfLYPi/source",
+  "tracked_symlink_blobs": 0
+}

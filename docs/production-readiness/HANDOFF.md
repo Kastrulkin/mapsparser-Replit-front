@@ -1,5 +1,55 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, enough capacity for clean checks again
+
+This top checkpoint supersedes older status snapshots below; retain their
+historical failures/results but do not rerun completed setup from them.
+
+User resumed manual audit work and authorized cache cleanup. Exact five cache
+targets/removed1,185,968KiB are recorded in task `cache-cleanup-20260921.json`;
+no Docker image/container/volume, current Codex runtime, history, source or DB
+removed. Subsequently, exactly nine unshared/reclaimable BuildKit cache IDs were
+pruned (~396.83MB), with matching image/container/volume inventories and exact
+cache-ID difference. Total regenerable cache ~1.50GiB; raw evidence is
+`cache-buildkit-leaves-hflypi-20260921.json`. Do not replay completed cleanup.
+An optional old test app/ingress cleanup question is outstanding but is not a
+blocker now. Do not remove those containers without the specific answer.
+
+Frontend prep v3 completed in existing hfLYPi frozen source:470packages, private
+Chromium smoke exit0, unchanged manifests. Six captures are archived under
+`native-frontend-prep-hflypi-v3/`. Native Python DSN read-only SELECT verifies
+the existing synthetic base/head. Clean TS/lint pass; final capped frontend
+unit v6 is830/830,143files,197.257s with `--maxWorkers=2`. Post-run5720tracked
+blobs/modes match99849935 exactly (zero symlinks/mismatches).28captures+manifest
+are in `native-frontend-checks-hflypi-20260921/`. Default-parallel v5's2failures
+remain an unresolved async/scheduling-sensitivity finding, not a product fix.
+Respect5GiB aggregate/2GiB live floors; native prep
+ended at~6.32GiB, not a guarantee of current capacity.
+
+Child-guard source changes remain DRAFT/UNEXECUTED for integration. Independent
+review accepts the corrected pure AST/fake-Popen propagation/negative checks
+as draft evidence only, not real child startup. All Testcontainers starts are
+deliberately disabled pending actual owned-network proof. A separate bounded
+internal-bridge/tmpfs PostgreSQL probe executed safely but failed before native
+connection: actual5432published bindings were empty. Exact new container was
+stopped; container/network metadata retained. Do not replay creation or silently
+fall back to a non-internal network. No existing DB/container was modified.
+Do not install the draft guard or start the full native aggregate from these
+support checks alone. See `native-child-guard-review-hflypi-20260921.md` and
+`native-testcontainers-network-plan-hflypi-20260921.md`.
+
+Next concrete task: review an owned host-connectivity/egress profile using
+`native-tc-internal-result-hflypi-20260921.md`, then real guard initialization/
+child negative-positive probes before fresh native collection. Do not repeat
+image/migrations/restore or clean frontend setup. Parent of this checkpoint is
+36b2e53f; resulting local commit is read from Git. No application source changed
+in this checkpoint; the13foreign dirty paths remain excluded.
+
+The app goal initially remained paused; get_goal has no resume operation and
+CUA access to Codex was denied. No alternate UI/state mutation was attempted.
+A later get_goal read now reports active; the controller resume is complete.
+No production/push/deploy and no change to historical whole-goal verdict.
+
 ## Latest checkpoint — 21 September, isolated recovery completed
 
 The user approved a NEW local synthetic lane; the historical unanswered

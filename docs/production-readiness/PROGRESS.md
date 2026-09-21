@@ -1,5 +1,42 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, cache cleanup and audit resumed
+
+- [x] User requested audit continuation and safe cache cleanup. Removed only
+  four inactive Playwright browser cache directories1208/1234 and npm `_cacache`:
+  1,185,968KiB (~1.13GiB), reinstallable. Histories, runtime bundles, DBs and
+  Docker images/containers/volumes retained. Exact capture: `cache-cleanup-20260921.json`.
+- [x] Additionally removed exactly nine unshared BuildKit cache IDs (~396.83MB).
+  Independent review and postcheck confirm exact ID removal with unchanged
+  image/container/volume inventories. Total regenerable cache removed ~1.50GiB;
+  host free-space delta is recorded separately, not equated with this total.
+- [x] Fresh frontend prep v3 now passes:470npm packages, unchanged manifests,
+  private matching Chromium installed and actual native browser launch passes.
+- [x] Clean frontend TypeScript passes39.585s; lint passes15.302s with0errors/
+  1existing `any` warning. Native synthetic PG read-only identity/head matches.
+- [x] Fresh full frontend unit v6 passes **830/830 in143files**,197.257s,
+  `--maxWorkers=2`, unchanged assertions/source and active common-API network
+  guard. Post-run5720tracked blobs match frozen99849935 exactly;28raw captures
+  and hashes are archived in `native-frontend-checks-hflypi-20260921/`.
+- [ ] Default-parallel v5 still has2async/render failures (828/830), unlike
+  the scoped3/3 and capped full green. Scheduling sensitivity is plausible,
+  not a proven cause or a fixed product defect. Earlier guard failures retained.
+- [x] Native guard helper/fake-Popen negatives pass independent draft review.
+- [ ] Actual guard initialization/child propagation and Testcontainers network
+  proof remain required before native aggregate execution. Draft is not installed.
+- [x] Dedicated internal-bridge/tmpfs PostgreSQL proof executed safely: FAIL
+  before native connection because Docker published no host port. New container
+  stopped; metadata/network retained. No existing DB/container touched and no
+  non-internal fallback. See `native-tc-internal-result-hflypi-20260921.md`.
+
+At prep completion free space was~6.32GiB. Earlier swap observation showed
+13,312MiB allocated/11,746.81MiB used; swap was not deleted. Do not attribute
+all free-space fluctuations to cache cleanup. The goal initially remained
+paused and Codex UI computer-use was denied; no bypass was attempted. A later
+`get_goal` read reports **active**, so the user-side resume is now reflected
+by the controller. Whole-goal FAIL, production/no-deploy and foreign-file
+boundaries are unchanged. Details: `cache-resume-20260921.md`.
+
 ## Latest checkpoint — 21 September, authorized isolated image and recovery
 
 - [x] User explicitly approved the new synthetic-only Docker/volume/migration/

@@ -5,16 +5,19 @@ first in ``PYTHONPATH``.  That preserves the guard in Alembic children whose
 ``tests/conftest.py`` replaces PYTHONPATH with ``<archive>/src:<archive>``.
 The wrapper must set a literal Docker socket, disable Ryuk, use the literal
 Testcontainers host override, blank providers, and clean exact labels itself.
-Do not use this draft until the launcher-level child-environment propagation
-policy has been independently reviewed.
+Do not install this draft yet: only AST/fake-Popen checks have run. Actual
+child initialization and owned-network registration still require proof;
+Testcontainers startup is deliberately disabled pending that review.
 """
 
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 import re
 import socket
+import subprocess
 import sys
 
 
@@ -28,6 +31,15 @@ POSTGRES_IMAGE = "pgvector/pgvector:0.8.0-pg16-trixie"
 PARENT_SESSION_ENV = "LOCALOS_HFLYPI_TESTCONTAINERS_SESSION_ID"
 TESTCONTAINERS_NETWORK_ENV = "LOCALOS_HFLYPI_TESTCONTAINERS_NETWORK"
 TESTCONTAINERS_NETWORK = "localos-readiness-hflypi_internal"
+FROZEN_SOURCE_ROOT = Path("/private/tmp/localos-readiness-20260921.hfLYPi/source")
+GUARD_HASH_ENVIRONMENTS = (
+    "LOCALOS_READINESS_ENDPOINT_GUARD_SHA256",
+    "LOCALOS_CALLBACK_RECOVERY_GUARD_SHA256",
+    "LOCALOS_AGENT_FINANCE_UNTRUSTED_ROWS_GUARD_SHA256",
+    "LOCALOS_VIEWER_MUTATION_GUARD_SHA256",
+    "LOCALOS_SOCIAL_VIEWER_GUARD_SHA256",
+)
+LIBPQ_OVERRIDE_ENVIRONMENTS = ("PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE", "PGOPTIONS")
 AGGREGATE_GUARD_ACTIVE_PID = os.getpid()
 DOCKER_SOCKET = ""
 _testcontainer_ports: set[int] = set()
@@ -49,6 +61,115 @@ def _testcontainers_network() -> str:
     if os.environ.get(TESTCONTAINERS_NETWORK_ENV, "") != TESTCONTAINERS_NETWORK:
         raise RuntimeError(f"{TESTCONTAINERS_NETWORK_ENV} must name the owned internal network")
     return TESTCONTAINERS_NETWORK
+
+
+def _child_kind(command: object, uses_shell: object) -> str:
+    """Classify only direct Python invocations; shell Python is refused."""
+    if isinstance(command, (list, tuple)) and command:
+        executable = Path(str(command[0])).name.lower()
+        words = [str(value) for value in command]
+        if executable in {"sh", "bash", "zsh"} and any("python" in value.lower() for value in words[1:]):
+            _deny("shell-launched Python child is not covered by the native guard")
+        if executable.startswith("python"):
+            if uses_shell:
+                _deny("Python child may not use shell execution")
+            options = [value[1:] for value in words[1:] if value.startswith("-") and not value.startswith("--")]
+            if any(any(flag in {"E", "I", "S"} for flag in value) for value in options):
+                _deny("Python child may not disable site initialization")
+            return "python"
+        return "other"
+    if isinstance(command, str) and not uses_shell:
+        pieces = command.split()
+        if pieces and Path(pieces[0]).name.lower().startswith("python"):
+            if len(pieces) != 1:
+                _deny("string Python command must use an argv sequence")
+            return "python"
+    if uses_shell and isinstance(command, str) and "python" in command.lower():
+        _deny("shell-launched Python child is not covered by the native guard")
+    return "other"
+
+
+def _child_environment(requested: dict[str, str], source_root: Path, guard_sha256: str) -> dict[str, str]:
+    """Return the only safe environment for a direct guarded Python child."""
+    if source_root.resolve() != FROZEN_SOURCE_ROOT or not re.fullmatch(r"[0-9a-f]{64}", guard_sha256):
+        _deny("child guard source or hash is not pinned")
+    environment = dict(requested)
+    required = {
+        "LOCALOS_HFLYPI_DOCKER_SOCKET": DOCKER_SOCKET,
+        "LOCALOS_HFLYPI_SOURCE_ROOT": str(source_root),
+        "DOCKER_HOST": f"unix://{DOCKER_SOCKET}",
+        "TESTCONTAINERS_RYUK_DISABLED": "true",
+        "TESTCONTAINERS_HOST_OVERRIDE": "127.0.0.1",
+        TESTCONTAINERS_NETWORK_ENV: TESTCONTAINERS_NETWORK,
+        "PYTHON_DOTENV_DISABLED": "1",
+    }
+    session = os.environ.get(PARENT_SESSION_ENV, "")
+    if session:
+        required[PARENT_SESSION_ENV] = session
+    for key, value in required.items():
+        supplied = environment.get(key)
+        if supplied is not None and supplied != value:
+            _deny(f"child environment conflicts with guarded {key}")
+        environment[key] = value
+    for key in GUARD_HASH_ENVIRONMENTS:
+        supplied = environment.get(key)
+        if supplied is not None and supplied != guard_sha256:
+            _deny(f"child environment conflicts with pinned {key}")
+        environment[key] = guard_sha256
+    for key in LIBPQ_OVERRIDE_ENVIRONMENTS:
+        if environment.get(key):
+            _deny(f"child environment carries forbidden {key}")
+        environment.pop(key, None)
+    environment["PYTHONPATH"] = os.pathsep.join((str(source_root / "src"), str(source_root)))
+    return environment
+
+
+def _safe_container_kwargs(current: object) -> dict[str, object]:
+    """Admit only Testcontainers options demonstrated harmless in this draft."""
+    if not isinstance(current, dict):
+        _deny("testcontainer startup kwargs are invalid")
+    unsupported = set(current) - {"labels", "platform"}
+    if unsupported:
+        _deny("testcontainer startup options exceed the native draft policy")
+    labels = current.get("labels", {})
+    if not isinstance(labels, dict) or not all(isinstance(key, str) and isinstance(value, str) for key, value in labels.items()):
+        _deny("testcontainer labels are invalid")
+    platform = current.get("platform")
+    if platform is not None and not isinstance(platform, str):
+        _deny("testcontainer platform is invalid")
+    return dict(current)
+
+
+def _patch_subprocess() -> None:
+    """Keep direct Python subprocesses guarded when tests pass a small env."""
+    original = subprocess.Popen
+    if getattr(original, "_hflypi_guarded", False):
+        return
+    guard_file = Path(__file__).resolve()
+    if guard_file != FROZEN_SOURCE_ROOT / "src" / "sitecustomize.py":
+        raise RuntimeError("native guard is not loaded from the frozen source archive")
+    guard_sha256 = hashlib.sha256(guard_file.read_bytes()).hexdigest()
+
+    def guarded_popen(*arguments, **keywords):
+        command = arguments[0] if arguments else keywords.get("args")
+        if len(arguments) > 1:
+            _deny("Popen positional options are not permitted")
+        if keywords.get("executable") is not None:
+            _deny("Popen executable override is not permitted")
+        if _child_kind(command, keywords.get("shell", False)) == "python":
+            requested = keywords.get("env")
+            source = os.environ if requested is None else requested
+            try:
+                source_environment = dict(source)
+            except (TypeError, ValueError):
+                _deny("Python child environment must be a string dictionary")
+            updated = dict(keywords)
+            updated["env"] = _child_environment(source_environment, FROZEN_SOURCE_ROOT, guard_sha256)
+            keywords = updated
+        return original(*arguments, **keywords)
+
+    setattr(guarded_popen, "_hflypi_guarded", True)
+    subprocess.Popen = guarded_popen
 
 
 def _host(value: object) -> str:
@@ -245,9 +366,8 @@ def _patch_testcontainers() -> None:
         raise RuntimeError("TESTCONTAINERS_RYUK_DISABLED=true is required; wrapper owns exact labelled cleanup")
     if os.environ.get("TESTCONTAINERS_HOST_OVERRIDE", "") != "127.0.0.1":
         raise RuntimeError("TESTCONTAINERS_HOST_OVERRIDE must be literal 127.0.0.1")
-    network_name = _testcontainers_network()
+    _testcontainers_network()
     from testcontainers.core.container import DockerContainer
-    from testcontainers.core.labels import SESSION_ID
 
     original = DockerContainer.start
     if getattr(original, "_hflypi_guarded", False):
@@ -257,28 +377,8 @@ def _patch_testcontainers() -> None:
         if str(getattr(container, "image", "")) != POSTGRES_IMAGE:
             _deny("only approved PostgreSQL 16 testcontainers may start")
         current = getattr(container, "_kwargs", {})
-        updated = dict(current) if isinstance(current, dict) else {}
-        raw_labels = updated.get("labels", {})
-        labels = dict(raw_labels) if isinstance(raw_labels, dict) else {}
-        labels.update({AUDIT_LABEL: AUDIT_LABEL_VALUE, NONCE_LABEL: NONCE})
-        updated["labels"] = labels
-        updated["network"] = network_name
-        with_kwargs = getattr(container, "with_kwargs", None)
-        if not callable(with_kwargs):
-            _deny("testcontainer does not support labelled startup")
-        with_kwargs(**updated)
-        ports = getattr(container, "ports", {})
-        if not isinstance(ports, dict):
-            _deny("testcontainer PostgreSQL port map is invalid")
-        postgres_keys = [key for key in ports if str(key).split("/", 1)[0] == "5432"]
-        if not postgres_keys:
-            postgres_keys = ["5432/tcp"]
-        for key in postgres_keys:
-            ports[key] = ("127.0.0.1", 0)
-        result = original(container, *arguments, **keywords)
-        _register_postgres(getattr(container, "get_wrapped_container")(), str(SESSION_ID))
-        os.environ[PARENT_SESSION_ENV] = str(SESSION_ID)
-        return result
+        _safe_container_kwargs(current)
+        _deny("Testcontainers launch is disabled pending dual-owned-network review")
 
     setattr(guarded_start, "_hflypi_guarded", True)
     DockerContainer.start = guarded_start
@@ -301,6 +401,7 @@ def _initialize() -> None:
     DOCKER_SOCKET = _docker_socket()
     socket.socket = _GuardedSocket
     sys.addaudithook(_audit)
+    _patch_subprocess()
     _patch_psycopg2()
     _patch_testcontainers()
 

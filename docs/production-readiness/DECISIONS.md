@@ -1,5 +1,30 @@
 # Readiness decisions
 
+## D-086 — Reclaim regenerable cache without mistaking runtime or swap for cache
+
+Limit removal to exact inspected browser/npm cache directories and record
+allocated sizes/free-space before-after. Retain active Codex runtime bundles,
+histories, credentials, DBs and Docker volumes. macOS swap is active memory
+state, not a deletable cache; do not attribute unrelated free-space fluctuations
+to cleanup. Ask separately before deleting old stopped test containers.
+
+Use recovered capacity to finish fresh dependencies and static/unit proof.
+Keep new native guard-helper checks distinct from executed child propagation
+and full aggregate acceptance. Resuming manual work is not changing the app
+goal controller; do not bypass the Codex UI computer-use restriction.
+
+Preserve network-denial API semantics in the trusted frontend test preload:
+in-memory localhost resolution may support Vite startup, but no real DNS or
+TCP connection is allowed. Fetch must return a rejected Promise, not a
+synchronous throw that invents a component crash. Retain incompatible guard
+attempts as harness findings, without weakening product assertions. This
+common-Node-API preload is not a security sandbox for arbitrary native code.
+
+Before Testcontainers integration, prefer a fresh dedicated internal bridge
+with a loopback-only published PostgreSQL port. Prove actual host connectivity
+first; do not silently attach to the existing synthetic database's ingress
+network or equate dual-network attachment with egress isolation.
+
 ## D-085 — Execute the approved synthetic lane without broadening its authority
 
 Use the user's explicit new approval for uniquely owned test containers,

@@ -1,0 +1,27 @@
+{
+  "command": [
+    "/usr/local/opt/node@22/bin/npm",
+    "test"
+  ],
+  "duration_ms": 9492.808,
+  "environment_keys": [
+    "NODE_OPTIONS",
+    "NO_COLOR",
+    "NPM_CONFIG_AUDIT",
+    "NPM_CONFIG_CACHE",
+    "NPM_CONFIG_FUND",
+    "NPM_CONFIG_UPDATE_NOTIFIER",
+    "NPM_CONFIG_USERCONFIG",
+    "PATH",
+    "PYTHON_DOTENV_DISABLED",
+    "TMPDIR"
+  ],
+  "exit_code": 1,
+  "free_bytes_after": 7359885312,
+  "label": "native-frontend-unit-v3",
+  "stderr": "\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af Startup Error \u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\nError: hfLYPi unit network guard denied dns.promises.lookup\n    at Object.denyNetworkAccess [as lookup] (/private/tmp/localos-readiness-20260921.hfLYPi/native/unit_network_guard_v3.cjs:12:11)\n    at getLocalhostAddressIfDiffersFromDNS (file:///private/tmp/localos-readiness-20260921.hfLYPi/source/frontend/node_modules/vite/dist/node/chunks/config.js:2343:64)\n    at resolveHostname (file:///private/tmp/localos-readiness-20260921.hfLYPi/source/frontend/node_modules/vite/dist/node/chunks/config.js:2356:31)\n    at PluginContext.buildStart (file:///private/tmp/localos-readiness-20260921.hfLYPi/source/frontend/node_modules/vite/dist/node/chunks/config.js:27487:42)\n    at EnvironmentPluginContainer.hookParallel (file:///private/tmp/localos-readiness-20260921.hfLYPi/source/frontend/node_modules/vite/dist/node/chunks/config.js:28739:41)\n    at EnvironmentPluginContainer.buildStart (file:///private/tmp/localos-readiness-20260921.hfLYPi/source/frontend/node_modules/vite/dist/node/chunks/config.js:28750:57)\n    at file:///private/tmp/localos-readiness-20260921.hfLYPi/source/frontend/node_modules/vite/dist/node/chunks/config.js:25712:46\n    at initServer (file:///private/tmp/localos-readiness-20260921.hfLYPi/source/frontend/node_modules/vite/dist/node/chunks/config.js:25716:5)\n    at _createServer (file:///private/tmp/localos-readiness-20260921.hfLYPi/source/frontend/node_modules/vite/dist/node/chunks/config.js:25730:15)\n    at createViteServer (file:///private/tmp/localos-readiness-20260921.hfLYPi/source/frontend/node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:8902:17)\n\n\n\n",
+  "stderr_truncated": false,
+  "stdout": "\n> vite_react_shadcn_ts@0.0.0 test\n> vitest run\n\n",
+  "stdout_truncated": false,
+  "stopped_reason": null
+}

@@ -1,5 +1,48 @@
 # Verified commands and evidence
 
+## Cache recovery and clean frontend checks — 21 September
+
+- Named tmux `audit-cache-cleanup-20260921`: support/cache_cleanup_20260921.py
+  removed exactly five inspected Playwright/npm cache directories, 1,185,968KiB
+  (~1.13GiB), 1.421s. Exact targets and disk readings are in
+  `evidence/cache-cleanup-20260921.json`; no Docker images/containers/volumes or app data removed.
+- Named tmux `audit-cache-leaves-hflypi-20260921`: independently reviewed
+  support/cache_buildkit_leaf_cleanup_hflypi.py completed nine exact-ID cache
+  prunes (~396.83MB). Raw28commands include builder/socket identity and immediate
+  ID eligibility checks; postcheck matches the exact removed cache set and
+  unchanged images/containers/volumes. Evidence: `cache-buildkit-leaves-hflypi-20260921.json`.
+- Named tmux `audit-native-front-hflypi-v3-20260921`: clean npm470packages,
+  private matching Chromium and actual native static-page browser smoke pass.
+  Six captures plus hashes: `evidence/native-frontend-prep-hflypi-v3/`.
+- Frozen frontend `npm run typecheck`: exit0,39.585s; `npm run lint`: exit0,
+  15.302s, zero errors/one existing warning. Full guarded unit attempts are
+  separate captures, not implied successful by these static checks.
+- Explicit native read-only PostgreSQL SELECT of database/user/Alembic head:
+  `readiness_full_test_hflypi` / `audit_owner` / `20260907_001`. Existing owned
+  loopback35418 only; no migration or data change in this check.
+- `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -I -B .agent/tasks/production-readiness-20260917/support/native_hflypi_child_checks.py`:
+  pure AST/fake-Popen negative-control+green exit0; no actual guarded child or
+  Docker/DB execution. Reviewer accepts DRAFT checkpoint only. AST and scoped
+  Ruff for four support Python files pass; no runtime-readiness claim.
+
+The goal initially remained paused, but a later get_goal read returned active.
+No alternate Codex UI/state manipulation, replacement goal or audit deployment.
+
+Final clean frontend captures are archived with28entry hashes under
+`native-frontend-checks-hflypi-20260921/`: v3startup guard error; v4sync-fetch
+guard error (828/830); v5corrected-guard Progress6/6, full828/830 with two
+different async/render failures; v6unchanged guard, scoped3/3 and full830/830,
+143files,197.257s, `npm test -- --maxWorkers=2`. No assertions/timeouts/source
+were changed.5720post-run frozen Git blobs/modes match exact99849935, zero
+symlinks/mismatches. Default-parallel sensitivity remains unresolved.
+
+Named tmux `audit-tc-internal-hflypi-20260921` ran the separately reviewed
+support/native_tc_internal_probe_hflypi.py: FAIL4.056s before native SELECT,
+because actual published bindings were empty on the dedicated internal bridge.
+Root rechecked owner/name/image then stopped only the exact new tmpfs container.
+Raw probe/postcheck/result notes are `native-tc-internal-*-hflypi*.{json,md}`;
+no non-internal fallback and no existing DB/container change.
+
 ## Authorized isolated lane hfLYPi — 21 September
 
 Principal check commands/stdout/stderr and capture hashes are archived under task evidence

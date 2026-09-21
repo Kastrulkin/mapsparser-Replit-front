@@ -1,0 +1,27 @@
+{
+  "command": [
+    "/usr/local/opt/node@22/bin/npm",
+    "run",
+    "lint"
+  ],
+  "duration_ms": 15301.95,
+  "environment_keys": [
+    "NO_COLOR",
+    "NPM_CONFIG_AUDIT",
+    "NPM_CONFIG_CACHE",
+    "NPM_CONFIG_FUND",
+    "NPM_CONFIG_UPDATE_NOTIFIER",
+    "NPM_CONFIG_USERCONFIG",
+    "PATH",
+    "PYTHON_DOTENV_DISABLED",
+    "TMPDIR"
+  ],
+  "exit_code": 0,
+  "free_bytes_after": 6807556096,
+  "label": "native-frontend-lint-v3",
+  "stderr": "",
+  "stderr_truncated": false,
+  "stdout": "\n> vite_react_shadcn_ts@0.0.0 lint\n> eslint . --max-warnings 1\n\n\n/private/tmp/localos-readiness-20260921.hfLYPi/source/frontend/src/lib/auth_new.ts\n  115:82  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any\n\n\u2716 1 problem (0 errors, 1 warning)\n\n",
+  "stdout_truncated": false,
+  "stopped_reason": null
+}

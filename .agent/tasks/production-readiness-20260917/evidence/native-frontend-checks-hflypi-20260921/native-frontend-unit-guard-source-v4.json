@@ -1,0 +1,6 @@
+{
+  "copied_guard_path": "/private/tmp/localos-readiness-20260921.hfLYPi/native/evidence/unit_network_guard_v4.cjs",
+  "guard_path": "/private/tmp/localos-readiness-20260921.hfLYPi/native/unit_network_guard_v4.cjs",
+  "guard_sha256": "2dd23df788ef0302449530579b4189ffcb802c63ab035aa68c9e0f390f795eee",
+  "scope": "Trusted frozen frontend unit tests only; deny network initiation while preserving IPC and worker threads."
+}
