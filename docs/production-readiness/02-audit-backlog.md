@@ -1,5 +1,16 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Shared PostgreSQL remainder verified — 21 September
+
+All 17 previously pending nodes pass unchanged across 13 owned PG lifecycles,
+including concurrent sales-room reads, finance duplicate recovery, service
+compression idempotency, worker CAPTCHA states and tenant-isolated tracking.
+Exact shared-conftest inventory is now 104/104. No new product defect was proven.
+Source/guard/resource invariants and independent runtime acceptance pass; see
+task native-shared-pg17-results-20260921.md. Frozen accepted slices 2,811/5,481
+are not a full same-run/current-source aggregate. Direct-DSN/Operator/browsers,
+image-layer security, performance and whole readiness gates remain OPEN.
+
 ## Creator rollback / finance-content coverage — 21 September
 
 No new product bug was proven. Creator Portal4 and Offer11 pass unchanged on

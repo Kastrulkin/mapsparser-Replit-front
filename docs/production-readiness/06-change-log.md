@@ -1,5 +1,14 @@
 # Production-readiness change log
 
+## Shared PG17 — 21 September, parent 94759560
+
+Added 13 literal audit-only profiles in five support files; retained global
+limits and old DSN permissions. All 17 scenarios pass on isolated PG with
+original assertions. Source/default guard and retained Docker resource sets
+match; independent pre-execution/runtime/live review PASS. Archived 65 PG raw
+captures and two static captures; reconciled shared-PG status to 104/104.
+No application/schema/production/provider change or repeated broad cleanup.
+
 ## Creator rollback / finance-content — 21 September, parent eb59fc2f
 
 Added two exact rollback profiles and one21-module pure92 profile in seven

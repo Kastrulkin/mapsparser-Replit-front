@@ -1,5 +1,26 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, remaining shared PostgreSQL scenarios
+
+- [x] All 17 remaining shared-fixture PG nodes pass in 13 isolated processes
+  and owned tmpfs containers. Zero skipped/failed/xfail; one upstream import
+  deprecation warning per process. Independent runtime/live review PASS.
+- [x] Exact shared-conftest reconciliation: 104/104 accepted, zero pending.
+  This is not all PostgreSQL testing: direct-DSN and Operator lanes remain.
+- [x] Retained Docker sets equal the approved-cleanup baseline: 23 containers,
+  4 images, all 20 volumes, 23 networks. Guard restored; 5,720 frozen blobs
+  unchanged. Completed cleanup was not replayed; approximately 15 GiB free.
+- [ ] Accepted frozen slices: 2,811/5,481 distinct nodes; 2,670 unclosed.
+  A full same-run/current-source aggregate is still required.
+- [ ] Build a complete fixture-based admission inventory before the broad
+  pure/default-guard aggregate; do not silently exclude integration nodes.
+- [ ] Security/image layers, frontend flake, browser observations, five-flow
+  performance, CI/demo and final independent review remain open.
+
+Parent `94759560`; audit support/evidence only. See task evidence
+`native-shared-pg17-results-20260921.md`. Historical whole-goal FAIL and all
+13 foreign dirty paths are preserved. No production/provider/push/deploy.
+
 ## Latest checkpoint — 21 September, Creator rollback15 and pure92
 
 - [x] Continued with actual runtime after the cleanup-only reconciliation;

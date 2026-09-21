@@ -111,7 +111,7 @@ def check_adapter_profile_bindings() -> None:
         for node in tree.body
         if isinstance(node, ast.Assign)
         for target in node.targets
-        if isinstance(target, ast.Name) and target.id in {"PROFILE_PREFIXES", "PARENT_DATABASE_PROFILES", "OPERATOR_VOICE_TEST_DSN_PROFILES"}
+        if isinstance(target, ast.Name) and target.id in {"PROFILE_PREFIXES", "PARENT_DATABASE_PROFILES", "OPERATOR_VOICE_TEST_DSN_PROFILES", "INHERITED_DATABASE_URL_REFUSAL_PROFILES"}
     }
     assert ast.literal_eval(assignments["PROFILE_PREFIXES"]) == {
         "card-growth-v1": "native-tc-one",
@@ -121,6 +121,19 @@ def check_adapter_profile_bindings() -> None:
         "work-review-rollback-v1": "native-tc-work-review-rollback",
         "creator-portal-rollback-v1": "native-tc-creator-portal-rollback",
         "creator-offer-rollback-v1": "native-tc-creator-offer-rollback",
+        "author-daily-gate-pg-v1": "native-tc-author-daily-gate-pg",
+        "knowledge-schema-pg-v1": "native-tc-knowledge-schema-pg",
+        "outreach-pain-library-pg-v1": "native-tc-outreach-pain-library-pg",
+        "riderra-template-pg-v1": "native-tc-riderra-template-pg",
+        "sales-room-proposal-race-pg-v1": "native-tc-sales-room-proposal-race-pg",
+        "sales-room-deadlock-pg-v1": "native-tc-sales-room-deadlock-pg",
+        "telegram-shared-audience-pg-v1": "native-tc-telegram-shared-audience-pg",
+        "web-tracking-pg-v1": "native-tc-web-tracking-pg",
+        "worker-captcha-pg-v1": "native-tc-worker-captcha-pg",
+        "worker-expired-pg-v1": "native-tc-worker-expired-pg",
+        "worker-resume-pg-v1": "native-tc-worker-resume-pg",
+        "finance-import-transaction-pg-v1": "native-tc-finance-import-transaction-pg",
+        "service-compression-race-pg-v1": "native-tc-service-compression-race-pg",
     }
     parent_profiles = assignments["PARENT_DATABASE_PROFILES"]
     assert isinstance(parent_profiles, ast.Call) and len(parent_profiles.args) == 1
@@ -128,9 +141,18 @@ def check_adapter_profile_bindings() -> None:
     voice_profiles = assignments["OPERATOR_VOICE_TEST_DSN_PROFILES"]
     assert isinstance(voice_profiles, ast.Call) and len(voice_profiles.args) == 1
     assert ast.literal_eval(voice_profiles.args[0]) == {"operator-service-creation-v1"}
+    inherited = assignments["INHERITED_DATABASE_URL_REFUSAL_PROFILES"]
+    assert isinstance(inherited, ast.Call) and len(inherited.args) == 1
+    assert ast.literal_eval(inherited.args[0]) == {
+        "author-daily-gate-pg-v1", "knowledge-schema-pg-v1", "outreach-pain-library-pg-v1",
+        "riderra-template-pg-v1", "sales-room-proposal-race-pg-v1", "sales-room-deadlock-pg-v1",
+        "telegram-shared-audience-pg-v1", "web-tracking-pg-v1", "worker-captcha-pg-v1",
+        "worker-expired-pg-v1", "worker-resume-pg-v1", "finance-import-transaction-pg-v1",
+        "service-compression-race-pg-v1",
+    }
 
 
-def check_rollback_dsn_admission() -> None:
+def check_owned_dsn_admission() -> None:
     source = Path(__file__).with_name("native_tc_adapter_hflypi.py")
     tree = ast.parse(source.read_text())
     functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in {"deny", "validate_dsn"}]
@@ -139,13 +161,13 @@ def check_rollback_dsn_admission() -> None:
         for node in tree.body
         if isinstance(node, ast.Assign)
         for target in node.targets
-        if isinstance(target, ast.Name) and target.id == "ROLLBACK_DATABASE_PATTERNS"
+        if isinstance(target, ast.Name) and target.id == "OWNED_DATABASE_PATTERNS"
     }
     pattern_namespace = {"re": re}
-    pattern_module = ast.fix_missing_locations(ast.Module(body=[ast.Assign(targets=[ast.Name(id="ROLLBACK_DATABASE_PATTERNS", ctx=ast.Store())], value=assignments["ROLLBACK_DATABASE_PATTERNS"], type_comment=None)], type_ignores=[]))
+    pattern_module = ast.fix_missing_locations(ast.Module(body=[ast.Assign(targets=[ast.Name(id="OWNED_DATABASE_PATTERNS", ctx=ast.Store())], value=assignments["OWNED_DATABASE_PATTERNS"], type_comment=None)], type_ignores=[]))
     exec(compile(pattern_module, str(source), "exec"), pattern_namespace)
-    patterns = pattern_namespace["ROLLBACK_DATABASE_PATTERNS"]
-    assert set(patterns) == {"work-review-rollback-v1", "creator-portal-rollback-v1", "creator-offer-rollback-v1"}
+    patterns = pattern_namespace["OWNED_DATABASE_PATTERNS"]
+    assert set(patterns) == {"work-review-rollback-v1", "creator-portal-rollback-v1", "creator-offer-rollback-v1", "finance-import-transaction-pg-v1", "service-compression-race-pg-v1"}
     environment = {
         "LOCALOS_HFLYPI_TC_MODE": "work-review-rollback-v1",
         "LOCALOS_HFLYPI_TC_CAPABILITY": "/private/tmp/capability.json",
@@ -157,7 +179,7 @@ def check_rollback_dsn_admission() -> None:
         "Path": Path,
         "re": re,
         "PREFIX": "LOCALOS_HFLYPI_TC_",
-        "ROLLBACK_DATABASE_PATTERNS": patterns,
+        "OWNED_DATABASE_PATTERNS": patterns,
         "native_tc_relay_hflypi": SimpleNamespace(validate_capability=lambda path, port: {"session_id": "abcdefgh", "container_id": "owned"}),
         "record": lambda event, **fields: events.append((event, fields)),
     }
@@ -168,6 +190,8 @@ def check_rollback_dsn_admission() -> None:
         "work-review-rollback-v1": "work_review_rollback_0123456789abcdef0123456789abcdef",
         "creator-portal-rollback-v1": "creator_portal_rollback_0123456789abcdef0123456789abcdef",
         "creator-offer-rollback-v1": "creator_offer_rollback_0123456789abcdef0123456789abcdef",
+        "finance-import-transaction-pg-v1": "localos_data_fin_01_0123456789abcdef0123456789abcdef",
+        "service-compression-race-pg-v1": "service_compression_race_0123456789abcdef0123456789abcdef",
     }
     for profile, generated in valid_databases.items():
         environment["LOCALOS_HFLYPI_TC_MODE"] = profile
@@ -179,14 +203,14 @@ def check_rollback_dsn_admission() -> None:
             except PermissionError:
                 pass
             else:
-                raise AssertionError("rollback profile admitted another profile's disposable database")
+                raise AssertionError("profile admitted another profile's disposable database")
         for malformed in (generated.upper(), generated[:-1], generated + "_extra"):
             try:
                 validate({**base, "dbname": malformed})
             except PermissionError:
                 pass
             else:
-                raise AssertionError("rollback profile admitted malformed disposable database")
+                raise AssertionError("profile admitted malformed disposable database")
     environment["LOCALOS_HFLYPI_TC_MODE"] = "client-info-v1"
     validate({**base, "dbname": "test"})
     for generated in valid_databases.values():
@@ -195,7 +219,7 @@ def check_rollback_dsn_admission() -> None:
         except PermissionError:
             pass
         else:
-            raise AssertionError("legacy test-only profile admitted rollback database")
+            raise AssertionError("legacy test-only profile admitted owned disposable database")
 
 
 def fixture_nodeids() -> list[str]:
@@ -229,7 +253,18 @@ def check_relay_budgets() -> None:
     functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "connection_budget"]
     assert len(assignments) == 1 and len(functions) == 1
     budgets = ast.literal_eval(assignments[0].value)
-    assert budgets == {"card-growth-v1": 32, "client-info-v1": 32, "capabilities-phase1-v1": 1024, "operator-service-creation-v1": 32, "work-review-rollback-v1": 512, "creator-portal-rollback-v1": 512, "creator-offer-rollback-v1": 512}
+    assert budgets == {
+        "card-growth-v1": 32, "client-info-v1": 32, "capabilities-phase1-v1": 1024,
+        "operator-service-creation-v1": 32, "work-review-rollback-v1": 512,
+        "creator-portal-rollback-v1": 512, "creator-offer-rollback-v1": 512,
+        "author-daily-gate-pg-v1": 32, "knowledge-schema-pg-v1": 32,
+        "outreach-pain-library-pg-v1": 32, "riderra-template-pg-v1": 32,
+        "sales-room-proposal-race-pg-v1": 32, "sales-room-deadlock-pg-v1": 32,
+        "telegram-shared-audience-pg-v1": 32, "web-tracking-pg-v1": 32,
+        "worker-captcha-pg-v1": 32, "worker-expired-pg-v1": 32,
+        "worker-resume-pg-v1": 32, "finance-import-transaction-pg-v1": 32,
+        "service-compression-race-pg-v1": 512,
+    }
     namespace = {"MAX_CONNECTIONS": 32, "PROFILE_CONNECTION_BUDGETS": budgets}
     exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), "exec"), namespace)
     budget = namespace["connection_budget"]
@@ -241,6 +276,8 @@ def check_relay_budgets() -> None:
     assert budget("work-review-rollback-v1") == 512
     assert budget("creator-portal-rollback-v1") == 512
     assert budget("creator-offer-rollback-v1") == 512
+    for profile, expected in budgets.items():
+        assert budget(profile) == expected
     for foreign in ("unknown", "capabilities-phase1-v2"):
         try:
             budget(foreign)
@@ -298,18 +335,75 @@ def check_relay_evidence_bounds(namespace) -> None:
                 pass
             else:
                 raise AssertionError("creator rollback relay evidence outside its literal bounds was accepted")
+    rules = namespace["SHARED_FIXTURE_PROFILE_RULES"]
+    for profile, rule in rules.items():
+        minimum = rule["minimum_connections"]
+        budget = rule["budget"]
+        assert validate(profile, final(minimum, budget))[0] == minimum
+        for candidate in (final(minimum - 1, budget), final(budget + 1, budget), final(minimum, 512 if budget == 32 else 32)):
+            try:
+                validate(profile, candidate)
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError("shared fixture relay evidence outside its literal bounds was accepted")
+
+
+def check_shared_fixture_contracts(namespace) -> None:
+    rules = namespace["SHARED_FIXTURE_PROFILE_RULES"]
+    no_child_profiles = {"riderra-template-pg-v1", "finance-import-transaction-pg-v1"}
+    assert {profile for profile, rule in rules.items() if rule["child_admissions"] == 0} == no_child_profiles
+    assert rules["finance-import-transaction-pg-v1"]["minimum_connections"] == 4
+    assert rules["finance-import-transaction-pg-v1"]["budget"] == 32
+    assert rules["service-compression-race-pg-v1"]["minimum_connections"] == 8
+    assert rules["service-compression-race-pg-v1"]["budget"] == 512
+    for profile in ("outreach-pain-library-pg-v1", "worker-captcha-pg-v1", "worker-expired-pg-v1", "worker-resume-pg-v1"):
+        assert rules[profile]["minimum_connections"] == 4
+    source = Path(__file__).with_name("native_tc_one_hflypi.py").read_text()
+    assert "if child_minimum == 0 and child_admitted:" in source
+    assert "len(child_generated) < shared_rule[\"child_admissions\"]" in source
+    assert "named disposable database lifecycle evidence is incomplete" in source
+    adapter = Path(__file__).with_name("native_tc_adapter_hflypi.py").read_text()
+    assert "inherited database configuration must be absent before owned start" in adapter
+    assert "owned disposable database remains before container cleanup" in adapter
 
 
 def main() -> None:
     check_parent_database()
     check_adapter_profile_bindings()
-    check_rollback_dsn_admission()
+    check_owned_dsn_admission()
     check_relay_budgets()
     namespace = runpy.run_path(str(Path(__file__).with_name("native_tc_one_hflypi.py")))
     profiles = namespace["PROFILES"]
     parse = namespace["parse_test"]
     check_relay_evidence_bounds(namespace)
-    assert set(profiles) == {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1", "work-review-rollback-v1", "creator-portal-rollback-v1", "creator-offer-rollback-v1"}
+    check_shared_fixture_contracts(namespace)
+    shared_profiles = {
+        "author-daily-gate-pg-v1": [
+            "tests/test_author_daily_gate.py::test_author_gate_query_executes_on_migrated_postgres",
+            "tests/test_author_daily_gate.py::test_author_gate_null_predicates_are_conservative_on_postgres",
+        ],
+        "knowledge-schema-pg-v1": ["tests/test_knowledge_layer.py::test_knowledge_schema_applies_on_postgres"],
+        "outreach-pain-library-pg-v1": [
+            "tests/test_outreach_human_language_gate.py::test_pain_library_refresh_executes_with_real_psycopg2",
+            "tests/test_outreach_human_language_gate.py::test_language_retrieval_executes_with_real_psycopg2_without_vector",
+        ],
+        "riderra-template-pg-v1": [
+            "tests/test_riderra_template_authorization.py::test_migrated_event_allowlist_accepts_snapshot_and_rejects_unknown",
+            "tests/test_riderra_template_authorization.py::test_daily_company_cap_sql_executes_atomically_on_isolated_postgres",
+            "tests/test_riderra_template_authorization.py::test_dispatch_claims_author_and_noncreator_riderra_on_isolated_postgres",
+        ],
+        "sales-room-proposal-race-pg-v1": ["tests/test_sales_room_proposal_version_concurrency.py::test_concurrent_first_reads_create_one_proposal_version_without_errors"],
+        "sales-room-deadlock-pg-v1": ["tests/test_sales_rooms_concurrency.py::test_concurrent_public_sales_room_reads_do_not_deadlock"],
+        "telegram-shared-audience-pg-v1": ["tests/test_telegram_research.py::test_shared_audience_decision_does_not_leak_between_businesses"],
+        "web-tracking-pg-v1": ["tests/test_web_tracking_postgres.py::test_postgres_migration_idempotent_ingestion_and_tenant_isolation"],
+        "worker-captcha-pg-v1": ["tests/test_worker_captcha_flow.py::test_worker_schedules_automatic_captcha_retry"],
+        "worker-expired-pg-v1": ["tests/test_worker_expired_flow.py::test_worker_marks_captcha_expired_after_ttl"],
+        "worker-resume-pg-v1": ["tests/test_worker_resume_flow.py::test_worker_resume_clears_captcha_fields"],
+        "finance-import-transaction-pg-v1": ["tests/test_finance_import_transaction_pg.py::test_concurrent_duplicate_does_not_poison_following_finance_import_row"],
+        "service-compression-race-pg-v1": ["tests/test_service_compression_apply_concurrency_pg.py::test_second_compression_apply_blocks_then_returns_idempotent_result"],
+    }
+    assert set(profiles) == {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1", "work-review-rollback-v1", "creator-portal-rollback-v1", "creator-offer-rollback-v1", *shared_profiles}
     assert profiles["card-growth-v1"]["count"] == 1
     assert profiles["client-info-v1"] == {"target": "tests/test_client_info_gate.py", "count": 8, "prefix": "native-tc-client-info"}
     capabilities = profiles["capabilities-phase1-v1"]
@@ -370,7 +464,29 @@ def main() -> None:
         "creator-portal-rollback-v1": {"database_pattern": r"creator_portal_rollback_[0-9a-f]{32}", "child_admissions": 8, "minimum_connections": 54, "cleanup_event": "creator_portal_database_cleanup_checked"},
         "creator-offer-rollback-v1": {"database_pattern": r"creator_offer_rollback_[0-9a-f]{32}", "child_admissions": 21, "minimum_connections": 159, "cleanup_event": "creator_offer_database_cleanup_checked"},
     }
-    assert sitecustomize_modes() == {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1", "work-review-rollback-v1", "creator-portal-rollback-v1", "creator-offer-rollback-v1"}
+    assert namespace["SHARED_FIXTURE_PROFILE_RULES"] == {
+        "author-daily-gate-pg-v1": {"minimum_connections": 3, "child_admissions": 1, "budget": 32},
+        "knowledge-schema-pg-v1": {"minimum_connections": 2, "child_admissions": 1, "budget": 32},
+        "outreach-pain-library-pg-v1": {"minimum_connections": 4, "child_admissions": 1, "budget": 32},
+        "riderra-template-pg-v1": {"minimum_connections": 3, "child_admissions": 0, "budget": 32},
+        "sales-room-proposal-race-pg-v1": {"minimum_connections": 5, "child_admissions": 1, "budget": 32},
+        "sales-room-deadlock-pg-v1": {"minimum_connections": 4, "child_admissions": 1, "budget": 32},
+        "telegram-shared-audience-pg-v1": {"minimum_connections": 2, "child_admissions": 1, "budget": 32},
+        "web-tracking-pg-v1": {"minimum_connections": 5, "child_admissions": 4, "budget": 32},
+        "worker-captcha-pg-v1": {"minimum_connections": 4, "child_admissions": 1, "budget": 32},
+        "worker-expired-pg-v1": {"minimum_connections": 4, "child_admissions": 1, "budget": 32},
+        "worker-resume-pg-v1": {"minimum_connections": 4, "child_admissions": 1, "budget": 32},
+        "finance-import-transaction-pg-v1": {"minimum_connections": 4, "child_admissions": 0, "budget": 32, "database_pattern": r"localos_data_fin_01_[0-9a-f]{32}", "cleanup_event": "finance_import_database_cleanup_checked"},
+        "service-compression-race-pg-v1": {"minimum_connections": 8, "child_admissions": 1, "budget": 512, "database_pattern": r"service_compression_race_[0-9a-f]{32}", "cleanup_event": "service_compression_database_cleanup_checked"},
+    }
+    for name, targets in shared_profiles.items():
+        profile = profiles[name]
+        assert profile["count"] == len(targets) and profile["exact_nodeids"] is True
+        if len(targets) > 1:
+            assert profile["targets"] == targets
+        else:
+            assert profile["target"] == targets[0]
+    assert sitecustomize_modes() == set(profiles)
 
     def capture(state):
         return {"stdout": "HFLYPI_TC_ONE_RESULT=" + json.dumps(state), "exit_code": 0, "timed_out": False}
@@ -414,7 +530,7 @@ def main() -> None:
         pass
     else:
         raise AssertionError("non-boolean bootstrap mode was accepted")
-    print("native TC profiles: 7 exact profiles, rollback DSN isolation and negative result gates passed")
+    print("native TC profiles: 20 exact profiles, owned-DSN isolation and negative result gates passed")
 
 
 if __name__ == "__main__":

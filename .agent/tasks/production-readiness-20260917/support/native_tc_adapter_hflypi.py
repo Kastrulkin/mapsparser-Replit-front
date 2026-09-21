@@ -34,24 +34,50 @@ PROFILE_PREFIXES = {
     "work-review-rollback-v1": "native-tc-work-review-rollback",
     "creator-portal-rollback-v1": "native-tc-creator-portal-rollback",
     "creator-offer-rollback-v1": "native-tc-creator-offer-rollback",
+    "author-daily-gate-pg-v1": "native-tc-author-daily-gate-pg",
+    "knowledge-schema-pg-v1": "native-tc-knowledge-schema-pg",
+    "outreach-pain-library-pg-v1": "native-tc-outreach-pain-library-pg",
+    "riderra-template-pg-v1": "native-tc-riderra-template-pg",
+    "sales-room-proposal-race-pg-v1": "native-tc-sales-room-proposal-race-pg",
+    "sales-room-deadlock-pg-v1": "native-tc-sales-room-deadlock-pg",
+    "telegram-shared-audience-pg-v1": "native-tc-telegram-shared-audience-pg",
+    "web-tracking-pg-v1": "native-tc-web-tracking-pg",
+    "worker-captcha-pg-v1": "native-tc-worker-captcha-pg",
+    "worker-expired-pg-v1": "native-tc-worker-expired-pg",
+    "worker-resume-pg-v1": "native-tc-worker-resume-pg",
+    "finance-import-transaction-pg-v1": "native-tc-finance-import-transaction-pg",
+    "service-compression-race-pg-v1": "native-tc-service-compression-race-pg",
 }
 PARENT_DATABASE_PROFILES = frozenset({"client-info-v1", "capabilities-phase1-v1"})
 OPERATOR_VOICE_TEST_DSN_PROFILES = frozenset({"operator-service-creation-v1"})
-ROLLBACK_DATABASE_PATTERNS = {
+OWNED_DATABASE_PATTERNS = {
     "work-review-rollback-v1": re.compile(r"work_review_rollback_[0-9a-f]{32}"),
     "creator-portal-rollback-v1": re.compile(r"creator_portal_rollback_[0-9a-f]{32}"),
     "creator-offer-rollback-v1": re.compile(r"creator_offer_rollback_[0-9a-f]{32}"),
+    "finance-import-transaction-pg-v1": re.compile(r"localos_data_fin_01_[0-9a-f]{32}"),
+    "service-compression-race-pg-v1": re.compile(r"service_compression_race_[0-9a-f]{32}"),
 }
-ROLLBACK_CLEANUP_SQL_PATTERNS = {
+OWNED_CLEANUP_SQL_PATTERNS = {
     "work-review-rollback-v1": r"^work_review_rollback_[0-9a-f]{32}$",
     "creator-portal-rollback-v1": r"^creator_portal_rollback_[0-9a-f]{32}$",
     "creator-offer-rollback-v1": r"^creator_offer_rollback_[0-9a-f]{32}$",
+    "finance-import-transaction-pg-v1": r"^localos_data_fin_01_[0-9a-f]{32}$",
+    "service-compression-race-pg-v1": r"^service_compression_race_[0-9a-f]{32}$",
 }
-ROLLBACK_CLEANUP_EVENTS = {
+OWNED_CLEANUP_EVENTS = {
     "work-review-rollback-v1": "work_review_database_cleanup_checked",
     "creator-portal-rollback-v1": "creator_portal_database_cleanup_checked",
     "creator-offer-rollback-v1": "creator_offer_database_cleanup_checked",
+    "finance-import-transaction-pg-v1": "finance_import_database_cleanup_checked",
+    "service-compression-race-pg-v1": "service_compression_database_cleanup_checked",
 }
+INHERITED_DATABASE_URL_REFUSAL_PROFILES = frozenset({
+    "author-daily-gate-pg-v1", "knowledge-schema-pg-v1", "outreach-pain-library-pg-v1",
+    "riderra-template-pg-v1", "sales-room-proposal-race-pg-v1", "sales-room-deadlock-pg-v1",
+    "telegram-shared-audience-pg-v1", "web-tracking-pg-v1", "worker-captcha-pg-v1",
+    "worker-expired-pg-v1", "worker-resume-pg-v1", "finance-import-transaction-pg-v1",
+    "service-compression-race-pg-v1",
+})
 _active = None
 _relay = None
 _started = False
@@ -81,9 +107,9 @@ def validate_dsn(parsed: dict[str, str]) -> None:
     database = parsed.get("dbname")
     profile = os.environ.get(PREFIX + "MODE", "")
     allowed_database = database == "test"
-    rollback_pattern = ROLLBACK_DATABASE_PATTERNS.get(profile)
-    if rollback_pattern is not None:
-        allowed_database = database == "postgres" or isinstance(database, str) and rollback_pattern.fullmatch(database) is not None
+    owned_pattern = OWNED_DATABASE_PATTERNS.get(profile)
+    if owned_pattern is not None:
+        allowed_database = database == "postgres" or isinstance(database, str) and owned_pattern.fullmatch(database) is not None
     if parsed.get("host") != "127.0.0.1" or not allowed_database or parsed.get("user") != "test" or parsed.get("password") != "test":
         deny("DSN is outside the single synthetic test database")
     port = parsed.get("port", "")
@@ -198,6 +224,8 @@ def install() -> None:
             deny("unexpected synthetic PostgreSQL credentials or environment")
         if profile in PARENT_DATABASE_PROFILES and "DATABASE_URL" in os.environ:
             deny("parent database configuration must be absent before owned start")
+        if profile in INHERITED_DATABASE_URL_REFUSAL_PROFILES and "DATABASE_URL" in os.environ:
+            deny("inherited database configuration must be absent before owned start")
         if profile in OPERATOR_VOICE_TEST_DSN_PROFILES and "OPERATOR_VOICE_TEST_DSN" in os.environ:
             deny("operator voice test DSN must be absent before owned start")
         client = instance.get_docker_client().client
@@ -254,8 +282,8 @@ def install() -> None:
             unbind_parent_database()
         except BaseException:
             failures.append(type(sys.exception()).__name__)
-        cleanup_pattern = ROLLBACK_CLEANUP_SQL_PATTERNS.get(profile)
-        cleanup_event = ROLLBACK_CLEANUP_EVENTS.get(profile)
+        cleanup_pattern = OWNED_CLEANUP_SQL_PATTERNS.get(profile)
+        cleanup_event = OWNED_CLEANUP_EVENTS.get(profile)
         if cleanup_pattern is not None and cleanup_event is not None and instance._container is not None:
             try:
                 result = instance._container.exec_run(
@@ -272,7 +300,7 @@ def install() -> None:
                 )
                 output = result.output.decode().strip() if isinstance(result.output, bytes) else str(result.output).strip()
                 if result.exit_code != 0 or output != "0":
-                    deny("rollback disposable database remains before container cleanup")
+                    deny("owned disposable database remains before container cleanup")
                 record(cleanup_event, remaining=0)
             except BaseException:
                 failures.append(type(sys.exception()).__name__)

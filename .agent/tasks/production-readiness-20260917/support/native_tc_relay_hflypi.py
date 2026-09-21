@@ -42,6 +42,19 @@ PROFILE_CONNECTION_BUDGETS = {
     "work-review-rollback-v1": 512,
     "creator-portal-rollback-v1": 512,
     "creator-offer-rollback-v1": 512,
+    "author-daily-gate-pg-v1": 32,
+    "knowledge-schema-pg-v1": 32,
+    "outreach-pain-library-pg-v1": 32,
+    "riderra-template-pg-v1": 32,
+    "sales-room-proposal-race-pg-v1": 32,
+    "sales-room-deadlock-pg-v1": 32,
+    "telegram-shared-audience-pg-v1": 32,
+    "web-tracking-pg-v1": 32,
+    "worker-captcha-pg-v1": 32,
+    "worker-expired-pg-v1": 32,
+    "worker-resume-pg-v1": 32,
+    "finance-import-transaction-pg-v1": 32,
+    "service-compression-race-pg-v1": 512,
 }
 SESSION_PATTERN = re.compile(r"[A-Za-z0-9_-]{8,128}")
 CAPABILITY_KEYS = {

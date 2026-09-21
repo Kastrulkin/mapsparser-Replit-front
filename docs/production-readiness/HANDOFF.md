@@ -1,5 +1,38 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, shared PostgreSQL inventory closed
+
+Branch `codex/production-readiness-20260917`, parent `94759560`. All 13 new
+literal profiles executed serially, 17/17 nodes pass without skips/errors.
+Independent raw/runtime/live acceptance PASS. The 65 raw artifacts, two static
+captures and five support hashes are in native-shared-pg17-hflypi-20260921/;
+report native-shared-pg17-results-20260921.md and refreshed shared-PG status
+give exact node reconciliation. All 104 shared-conftest dependent nodes are
+accepted; this does not close other/direct-DSN/Operator integration tests.
+
+Accepted frozen slices 2,811/5,481; 2,670 unclosed. No current-source aggregate
+claim. Frozen application snapshot 99849935 differs from current HEAD in only
+src/parser_config.py, src/yandex_maps_scraper.py and the added regression
+tests/test_legacy_parser_exception_privacy.py; those separate checks do not
+substitute for a current-source aggregate.
+
+All test runs terminal. Only owned temporary PG containers were removed;
+retained resource-ID sets are exactly 23 containers/4 images/20 volumes/23
+networks. Default guard 07d3...1150 restored; source 5,720 blobs/modes unchanged;
+internal network/capability directory empty. No cleanup replay: the earlier
+approved six-container/six-image/21-cache-record operation is complete.
+
+Next: full 5,481-node fixture metadata and an explicit admission partition
+(default guard, shared PG, direct/Operator DSN, browser, live-provider, unknown).
+Do not infer dependency from module names or call collect-only a test pass.
+Full aggregate, SEC-BUILD-CONTEXT-02 image/layer scan, frontend flake, browser,
+performance, CI/demo/final gates stay open. Existing image private-assets smoke
+only verified frontend dist integrity, not absence of private data in layers.
+
+Approximately 15 GiB free; recheck 5/2/10 GiB floors. Preserve foreign 13 paths
+and historical spec/verdict/problems FAIL. No production/provider/push/deploy.
+Older checkpoints below retain history and are superseded by this latest state.
+
 ## Latest checkpoint — 21 September, Creator rollback / finance-content
 
 Branch `codex/production-readiness-20260917`, parent `eb59fc2f`. Seven support

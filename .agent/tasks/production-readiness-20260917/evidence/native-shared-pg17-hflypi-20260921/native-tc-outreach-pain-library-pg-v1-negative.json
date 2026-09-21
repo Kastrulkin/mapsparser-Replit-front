@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+    "-B",
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/native_hflypi_probe_v1.py",
+    "negative"
+  ],
+  "duration_seconds": 0.272,
+  "exit_code": 0,
+  "stderr": "",
+  "stdout": "{\"checks\": [{\"case\": \"external_tcp\", \"denied\": true}, {\"case\": \"foreign_local\", \"denied\": true}, {\"case\": \"udp\", \"denied\": true}, {\"case\": \"dns\", \"denied\": true}, {\"case\": \"postgres_foreign_host\", \"denied\": true}, {\"case\": \"postgres_foreign_database\", \"denied\": true}, {\"case\": \"postgres_explicit_options\", \"denied\": true}, {\"case\": \"postgres_pghostaddr\", \"denied\": true}, {\"case\": \"postgres_pgoptions\", \"denied\": true}, {\"case\": \"postgres_pgservice\", \"denied\": true}], \"guard_path\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/sitecustomize.py\", \"guard_sha256\": \"a4a0f6150f9f59ddbe40ad7557b819088544a9f28d8d6663d991ae382106b48e\", \"provenance\": {\"docker_socket\": \"/Users/alexdemyanov/.docker/run/docker.sock\", \"native_port\": 35418, \"nonce\": \"hfLYPi\", \"owned_listener_ports\": [52945], \"pid\": 2458, \"ryuk\": \"disabled; wrapper cleans exact labels\", \"testcontainer_ports\": []}}\n",
+  "stopped_reason": null,
+  "timed_out": false
+}

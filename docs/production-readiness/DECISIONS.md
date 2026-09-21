@@ -1,5 +1,20 @@
 # Readiness decisions
 
+## D-100 — Close exact shared-PG nodes without broadening fixture authority
+
+Use one literal profile/process/container for each module-scoped fixture.
+Finance and service compression admit only their named generated database plus
+admin postgres, require actual fixture teardown and zero-leftover observation.
+Only compression gains a 512-connection budget; other new profiles retain 32.
+Keep inherited DATABASE_URL rejection, old binding permissions and global
+concurrent/time limits. Riderra/finance explicitly require no migration child;
+other profiles retain their own child requirements. All 17 actual passes close
+the exact shared-conftest 104-node inventory, not every PG or full backend test.
+
+Repeated historical cleanup approval is reconciled against actual resource IDs;
+never replay a completed one-shot removal. Existing volumes and current stand
+remain retained.
+
 ## D-099 — Share rollback plumbing, not database authority or test counts
 
 Represent the three reviewed rollback families by fixed profile/name/cleanup

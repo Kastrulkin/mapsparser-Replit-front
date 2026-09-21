@@ -145,11 +145,64 @@ PROFILES = {
         "exact_nodeids": True,
         "prefix": "native-tc-creator-offer-rollback",
     },
+    "author-daily-gate-pg-v1": {
+        "targets": [
+            "tests/test_author_daily_gate.py::test_author_gate_query_executes_on_migrated_postgres",
+            "tests/test_author_daily_gate.py::test_author_gate_null_predicates_are_conservative_on_postgres",
+        ],
+        "count": 2,
+        "exact_nodeids": True,
+        "prefix": "native-tc-author-daily-gate-pg",
+    },
+    "knowledge-schema-pg-v1": {"target": "tests/test_knowledge_layer.py::test_knowledge_schema_applies_on_postgres", "count": 1, "exact_nodeids": True, "prefix": "native-tc-knowledge-schema-pg"},
+    "outreach-pain-library-pg-v1": {
+        "targets": [
+            "tests/test_outreach_human_language_gate.py::test_pain_library_refresh_executes_with_real_psycopg2",
+            "tests/test_outreach_human_language_gate.py::test_language_retrieval_executes_with_real_psycopg2_without_vector",
+        ],
+        "count": 2,
+        "exact_nodeids": True,
+        "prefix": "native-tc-outreach-pain-library-pg",
+    },
+    "riderra-template-pg-v1": {
+        "targets": [
+            "tests/test_riderra_template_authorization.py::test_migrated_event_allowlist_accepts_snapshot_and_rejects_unknown",
+            "tests/test_riderra_template_authorization.py::test_daily_company_cap_sql_executes_atomically_on_isolated_postgres",
+            "tests/test_riderra_template_authorization.py::test_dispatch_claims_author_and_noncreator_riderra_on_isolated_postgres",
+        ],
+        "count": 3,
+        "exact_nodeids": True,
+        "prefix": "native-tc-riderra-template-pg",
+    },
+    "sales-room-proposal-race-pg-v1": {"target": "tests/test_sales_room_proposal_version_concurrency.py::test_concurrent_first_reads_create_one_proposal_version_without_errors", "count": 1, "exact_nodeids": True, "prefix": "native-tc-sales-room-proposal-race-pg"},
+    "sales-room-deadlock-pg-v1": {"target": "tests/test_sales_rooms_concurrency.py::test_concurrent_public_sales_room_reads_do_not_deadlock", "count": 1, "exact_nodeids": True, "prefix": "native-tc-sales-room-deadlock-pg"},
+    "telegram-shared-audience-pg-v1": {"target": "tests/test_telegram_research.py::test_shared_audience_decision_does_not_leak_between_businesses", "count": 1, "exact_nodeids": True, "prefix": "native-tc-telegram-shared-audience-pg"},
+    "web-tracking-pg-v1": {"target": "tests/test_web_tracking_postgres.py::test_postgres_migration_idempotent_ingestion_and_tenant_isolation", "count": 1, "exact_nodeids": True, "prefix": "native-tc-web-tracking-pg"},
+    "worker-captcha-pg-v1": {"target": "tests/test_worker_captcha_flow.py::test_worker_schedules_automatic_captcha_retry", "count": 1, "exact_nodeids": True, "prefix": "native-tc-worker-captcha-pg"},
+    "worker-expired-pg-v1": {"target": "tests/test_worker_expired_flow.py::test_worker_marks_captcha_expired_after_ttl", "count": 1, "exact_nodeids": True, "prefix": "native-tc-worker-expired-pg"},
+    "worker-resume-pg-v1": {"target": "tests/test_worker_resume_flow.py::test_worker_resume_clears_captcha_fields", "count": 1, "exact_nodeids": True, "prefix": "native-tc-worker-resume-pg"},
+    "finance-import-transaction-pg-v1": {"target": "tests/test_finance_import_transaction_pg.py::test_concurrent_duplicate_does_not_poison_following_finance_import_row", "count": 1, "exact_nodeids": True, "prefix": "native-tc-finance-import-transaction-pg"},
+    "service-compression-race-pg-v1": {"target": "tests/test_service_compression_apply_concurrency_pg.py::test_second_compression_apply_blocks_then_returns_idempotent_result", "count": 1, "exact_nodeids": True, "prefix": "native-tc-service-compression-race-pg"},
 }
 ROLLBACK_PROFILE_RULES = {
     "work-review-rollback-v1": {"database_pattern": r"work_review_rollback_[0-9a-f]{32}", "child_admissions": 14, "minimum_connections": 75, "cleanup_event": "work_review_database_cleanup_checked"},
     "creator-portal-rollback-v1": {"database_pattern": r"creator_portal_rollback_[0-9a-f]{32}", "child_admissions": 8, "minimum_connections": 54, "cleanup_event": "creator_portal_database_cleanup_checked"},
     "creator-offer-rollback-v1": {"database_pattern": r"creator_offer_rollback_[0-9a-f]{32}", "child_admissions": 21, "minimum_connections": 159, "cleanup_event": "creator_offer_database_cleanup_checked"},
+}
+SHARED_FIXTURE_PROFILE_RULES = {
+    "author-daily-gate-pg-v1": {"minimum_connections": 3, "child_admissions": 1, "budget": 32},
+    "knowledge-schema-pg-v1": {"minimum_connections": 2, "child_admissions": 1, "budget": 32},
+    "outreach-pain-library-pg-v1": {"minimum_connections": 4, "child_admissions": 1, "budget": 32},
+    "riderra-template-pg-v1": {"minimum_connections": 3, "child_admissions": 0, "budget": 32},
+    "sales-room-proposal-race-pg-v1": {"minimum_connections": 5, "child_admissions": 1, "budget": 32},
+    "sales-room-deadlock-pg-v1": {"minimum_connections": 4, "child_admissions": 1, "budget": 32},
+    "telegram-shared-audience-pg-v1": {"minimum_connections": 2, "child_admissions": 1, "budget": 32},
+    "web-tracking-pg-v1": {"minimum_connections": 5, "child_admissions": 4, "budget": 32},
+    "worker-captcha-pg-v1": {"minimum_connections": 4, "child_admissions": 1, "budget": 32},
+    "worker-expired-pg-v1": {"minimum_connections": 4, "child_admissions": 1, "budget": 32},
+    "worker-resume-pg-v1": {"minimum_connections": 4, "child_admissions": 1, "budget": 32},
+    "finance-import-transaction-pg-v1": {"minimum_connections": 4, "child_admissions": 0, "budget": 32, "database_pattern": r"localos_data_fin_01_[0-9a-f]{32}", "cleanup_event": "finance_import_database_cleanup_checked"},
+    "service-compression-race-pg-v1": {"minimum_connections": 8, "child_admissions": 1, "budget": 512, "database_pattern": r"service_compression_race_[0-9a-f]{32}", "cleanup_event": "service_compression_database_cleanup_checked"},
 }
 OLD_GUARD_SHA256 = "07d3e2dc19cbb0f9e542a6d0835ea17b5efcc5713391c152a833e6efefd61150"
 MIN_START = 5 * 1024**3
@@ -403,8 +456,9 @@ def parse_test(payload: dict[str, object], profile: dict[str, object]) -> dict[s
 
 def relay_evidence(profile: str, final: object) -> tuple[int, list[object]]:
     rollback_rule = ROLLBACK_PROFILE_RULES.get(profile)
-    expected_budget = 1024 if profile == "capabilities-phase1-v1" else 512 if rollback_rule is not None else 32
-    minimum_connections = 171 if profile == "capabilities-phase1-v1" else rollback_rule["minimum_connections"] if rollback_rule is not None else 21 if profile == "operator-service-creation-v1" else 2
+    shared_rule = SHARED_FIXTURE_PROFILE_RULES.get(profile)
+    expected_budget = 1024 if profile == "capabilities-phase1-v1" else 512 if rollback_rule is not None else shared_rule["budget"] if shared_rule is not None else 32
+    minimum_connections = 171 if profile == "capabilities-phase1-v1" else rollback_rule["minimum_connections"] if rollback_rule is not None else shared_rule["minimum_connections"] if shared_rule is not None else 21 if profile == "operator-service-creation-v1" else 2
     if not isinstance(final, dict):
         raise RuntimeError("relay final evidence is invalid")
     connections = final.get("connections")
@@ -510,8 +564,13 @@ def audit_journals(events: Path, relay_artifact: Path, profile: str) -> dict[str
         raise RuntimeError("Testcontainers start, container and relay identities differ")
     if not any(row.get("pid") == parent_pid and row.get("container_id") == container_id and row.get("port") == port for row in admitted):
         raise RuntimeError("parent process did not admit its relay DSN")
-    if profile != "operator-service-creation-v1" and not any(row.get("pid") != parent_pid and row.get("container_id") == container_id and row.get("port") == port for row in admitted):
-        raise RuntimeError("Flask migration child did not admit its inherited relay DSN")
+    shared_rule = SHARED_FIXTURE_PROFILE_RULES.get(profile)
+    child_minimum = shared_rule["child_admissions"] if shared_rule is not None else 0 if profile == "operator-service-creation-v1" else 1
+    child_admitted = [row for row in admitted if row.get("pid") != parent_pid and row.get("container_id") == container_id and row.get("port") == port]
+    if len(child_admitted) < child_minimum:
+        raise RuntimeError("required Flask migration child admissions are incomplete")
+    if child_minimum == 0 and child_admitted:
+        raise RuntimeError("profile without Flask child admitted a child relay DSN")
     expected_denials = {"stale_expiry", "nonce", "session", "container", "wrong_port", "world_readable", "foreign_path", "symlink"}
     checks = denials[0].get("checks")
     observed_denials = {(row.get("case"), row.get("denied")) for row in checks if isinstance(row, dict)} if isinstance(checks, list) else set()
@@ -546,11 +605,22 @@ def audit_journals(events: Path, relay_artifact: Path, profile: str) -> dict[str
             raise RuntimeError("rollback disposable database lifecycle evidence is incomplete")
     elif any(row.get("event") in {rule["cleanup_event"] for rule in ROLLBACK_PROFILE_RULES.values()} for row in event_rows):
         raise RuntimeError("unexpected rollback disposable database cleanup evidence")
+    if shared_rule is not None and "database_pattern" in shared_rule:
+        pattern = shared_rule["database_pattern"]
+        generated = {row.get("database") for row in admitted if isinstance(row.get("database"), str) and re.fullmatch(pattern, row["database"])}
+        parent_admin = [row for row in admitted if row.get("pid") == parent_pid and row.get("database") == "postgres"]
+        child_generated = [row for row in child_admitted if isinstance(row.get("database"), str) and re.fullmatch(pattern, row["database"])]
+        cleanup_event = shared_rule["cleanup_event"]
+        profile_cleanup = [row for row in event_rows if row.get("event") == cleanup_event]
+        if len(generated) != 1 or len(parent_admin) != 2 or len(child_generated) < shared_rule["child_admissions"] or len(profile_cleanup) != 1 or profile_cleanup[0].get("pid") != parent_pid or profile_cleanup[0].get("remaining") != 0:
+            raise RuntimeError("named disposable database lifecycle evidence is incomplete")
+    elif shared_rule is not None and any(row.get("event") in {rule["cleanup_event"] for rule in SHARED_FIXTURE_PROFILE_RULES.values() if "cleanup_event" in rule} for row in event_rows):
+        raise RuntimeError("unexpected named disposable database cleanup evidence")
     final = relay_rows[-1] if relay_rows else {}
     connections, executions = relay_evidence(profile, final)
     if not all(isinstance(row, dict) and row.get("returncode") == 0 and row.get("exit_mode") == "graceful" and row.get("stderr_bytes") == 0 for row in executions):
         raise RuntimeError("relay Docker exec evidence is incomplete")
-    return {"event_rows": len(event_rows), "relay_rows": len(relay_rows), "connections": connections, "flask_child_dsn_admitted": profile != "operator-service-creation-v1", "operator_voice_dsn_admitted": profile == "operator-service-creation-v1", "rollback_disposable_database_checked": rollback_rule is not None, "work_review_disposable_database_checked": profile == "work-review-rollback-v1"}
+    return {"event_rows": len(event_rows), "relay_rows": len(relay_rows), "connections": connections, "flask_child_dsn_admitted": bool(child_admitted), "operator_voice_dsn_admitted": profile == "operator-service-creation-v1", "rollback_disposable_database_checked": rollback_rule is not None, "named_disposable_database_checked": shared_rule is not None and "database_pattern" in shared_rule, "work_review_disposable_database_checked": profile == "work-review-rollback-v1"}
 
 
 def require_empty_network(relay_module: object) -> dict[str, object]:

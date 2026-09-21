@@ -1,5 +1,24 @@
 # Verified commands and evidence
 
+## Remaining shared PostgreSQL scenarios — 21 September
+
+Named tmux sessions audit-native-author-daily-gate-pg-v1 and
+audit-native-shared-pg17-remaining-v1 executed serially:
+
+```sh
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_tc_one_hflypi.py --attempt v1 --profile author-daily-gate-pg-v1
+```
+
+The same command then ran once for each literal profile: knowledge-schema-pg-v1,
+outreach-pain-library-pg-v1, riderra-template-pg-v1,
+sales-room-proposal-race-pg-v1, sales-room-deadlock-pg-v1,
+telegram-shared-audience-pg-v1, web-tracking-pg-v1, worker-captcha-pg-v1,
+worker-expired-pg-v1, worker-resume-pg-v1, finance-import-transaction-pg-v1,
+service-compression-race-pg-v1. All 17 nodes pass; exact timings, warning and
+connection/child counts are in task native-shared-pg17-results-20260921.md.
+The 67 captures/72 hashes retain controls v1 (290.630 ms) and v2 (320.586 ms),
+both exit 0 with empty stderr. Existing one-shot attempts must not be replayed.
+
 ## Creator rollback and finance/content — 21 September
 
 Each command ran in its own named tmux session, PG strictly serial:

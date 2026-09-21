@@ -1,6 +1,6 @@
 # Residual risks — working register
 
-## Current operational state — 21 September, after checkpoint eb59fc2f
+## Current operational state — 21 September, after checkpoint 94759560
 
 The historical disk and denied-stand notes below are superseded: approved
 cleanup is complete, the latest host sample has about 15 GiB free, and owned
@@ -8,7 +8,7 @@ synthetic PostgreSQL runs are authorized and working. All existing volumes
 and the retained 23 containers remain preserved. Recheck capacity before each
 run; no authority for production, provider effects, push or deployment follows.
 
-Accepted backend slices now cover 2,794 of 5,481 frozen nodes in118 module slices.
+Accepted backend slices now cover 2,811 of 5,481 frozen nodes; 2,670 remain.
 Creator Portal4 and Offer11 now pass, as do92 finance/services/reviews/content
 tests. Seven work-review cases pass again as regression, never double-counted.
 Rollback coverage includes data guards/concurrent writer exclusion;
@@ -16,7 +16,9 @@ owned generated DB cleanup, retained resources and source restoration pass.
 The full mixed
 operator-service module passes28/28, including21 real-PG cases; the earlier
 skipped run remains rejected. The shared-conftest PG inventory is corrected to
-104 dependent nodes/19 modules,17 pending/13 modules. Neither these slices nor
+104 dependent nodes/19 modules, all 104 accepted after 13 additional owned
+lifecycles/17 passing tests. Other direct-DSN and Operator PG lanes remain open.
+Neither these slices nor
 the passing capped/full-traced frontend runs close the full aggregate/current-source,
 default-full frontend flake, security, browser, performance, CI or final gates.
 See PROGRESS.md and HANDOFF.md for the current continuation checkpoint; the
