@@ -1,5 +1,34 @@
 # Readiness handoff
 
+## Latest checkpoint — 22 September, capability lane completed
+
+Current code commit5b7f63a9 on codex/production-readiness-20260917 (parentb12cfcb2).
+Frontend package is committed, independently reviewed, strict staged scan clean;
+840/840 full unit tests, tsc/lint and both builds passed. No source changes pending
+from this phase; thirteen foreign paths remain, tracked diff hash40afa014 unchanged.
+
+Linux capability v4 is accepted:13/13 and39passing stages,13.256s, no skip/xfail/
+timeout/truncation/input drift. Frozen snapshotb12+two named test overlays, not full
+dirty tree; image9d6edac8, nonroot/networknone/readonly/tmpfs/resource bounds.
+Mounted pure-Python pytest/PTB profile means no stock-image dependency assertion.
+v1serialization preflight, v2collection-only missingTelegram, v3actual11pass2fail
+snapshotmode retained. v4 restores only owner-executable bit of the owned script,
+not repository files; exact helperf9ababbb and mode-aware manifests archived in
+task evidence/capability-linux-20260922. Independent runtime review PASS.
+
+All23existing container IDs/states unchanged; task-owned ephemeral containersgone.
+Cleanup COMPLETE, no repeatprune. About13GiB free. No production/DB/provider/push/
+deploy. Goal ACTIVE/FAIL; do not recalculate old whole-backend NONPASS as green.
+
+Next concrete work: inspect tests/test_action_orchestrator_callback_recovery_pg.py
+and prepare its missing13-node native profile on a fresh migrated disposable DB.
+It requires LOCALOS_CALLBACK_RECOVERY_TEST_DATABASE_URL, pinned guard-first
+sitecustomize and loopback35418/readiness_full_test_* admission; preserve those
+checks and existing databases. A relay can retain the logical admission without
+publishing a new unsafe host port. Do not rerun already-proven restore/capability
+slices merely to accumulate counts. Broader security/performance/browser/CI/demo
+and final whole-diff review remain open.
+
 ## Latest checkpoint — 22 September, frontend extraction and full unit pass
 
 Branch codex/production-readiness-20260917; parent b12cfcb2. Owned source changes:

@@ -1,0 +1,115 @@
+"""Bounded capability diagnostic for the exact previously denied test nodes."""
+from __future__ import annotations
+
+import collections
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+
+SOURCE = Path("/work")
+TESTDEPS = Path("/testdeps")
+EXPECTED_SOURCE = "323c3de031dd2c9213759cf988da46fa47ce933db0d45f6e115d2540222d1405"
+EXPECTED_TESTDEPS = "ed4f33f3a1d7a99b8d965bbdf53ea84455b36a1762e316b99aba136a57407117"
+NODES = (
+    "tests/test_audit_ingress_proxy.py::test_proxy_preserves_browser_auth_headers_and_set_cookie_without_external_access",
+    "tests/test_audit_ingress_proxy.py::test_proxy_rejects_connect_and_absolute_form_before_any_upstream_connection",
+    "tests/test_audit_ingress_proxy.py::test_proxy_rejects_empty_transfer_encoding_and_duplicate_content_length",
+    "tests/test_audit_ingress_proxy.py::test_proxy_bounds_request_body_and_client_read_time",
+    "tests/test_audit_ingress_proxy.py::test_proxy_bounds_response_body_and_preserves_head_content_length",
+    "tests/test_compiled_runner_load.py::test_real_runtime_replay_is_atomic_and_never_calls_model",
+    "tests/test_compiled_runner_load.py::test_slow_requests_are_bounded_and_server_recovers",
+    "tests/test_compiled_runtime_errors.py::test_real_runner_script_rejection_is_failed_preview_not_input_or_transport",
+    "tests/test_compiled_script_artifact.py::test_isolated_runner_executes_approved_source_not_oracle",
+    "tests/test_compiled_script_artifact.py::test_actual_source_divergence_is_visible_against_pilot_oracle",
+    "tests/test_telegram_polling.py::test_unused_transport_does_not_start_restart_watchdog",
+    "tests/test_frontend_dist_integrity.py::test_integrity_check_rejects_missing_dynamic_import",
+    "tests/test_frontend_dist_integrity.py::test_integrity_check_accepts_complete_dynamic_import",
+)
+
+
+def manifest(root: Path) -> str:
+    rows = []
+    for path in sorted(candidate for candidate in root.rglob("*") if candidate.is_file()):
+        rows.append(
+            f"{path.relative_to(root)}\0{path.stat().st_mode & 0o777:o}\0{path.stat().st_size}\0"
+            f"{hashlib.sha256(path.read_bytes()).hexdigest()}\n"
+        )
+    return hashlib.sha256("".join(rows).encode()).hexdigest()
+
+
+sys.path[0:0] = [str(TESTDEPS), str(SOURCE), str(SOURCE / "src")]
+import pytest
+
+
+state = {"nodes": [], "reports": []}
+
+
+class Collector:
+    def pytest_collection_finish(self, session):
+        state["nodes"] = [item.nodeid for item in session.items]
+
+    def pytest_runtest_logreport(self, report):
+        state["reports"].append(
+            {
+                "nodeid": report.nodeid,
+                "when": report.when,
+                "outcome": report.outcome,
+                "xfail": bool(getattr(report, "wasxfail", False)),
+            }
+        )
+
+
+source_before = manifest(SOURCE)
+testdeps_before = manifest(TESTDEPS)
+if source_before != EXPECTED_SOURCE or testdeps_before != EXPECTED_TESTDEPS:
+    raise SystemExit("input_manifest_drift")
+
+code = pytest.main(
+    [
+        *NODES,
+        "-vv",
+        "-p",
+        "no:cacheprovider",
+        "--tb=short",
+        "--show-capture=no",
+        "--basetemp",
+        "/tmp/pytest",
+    ],
+    plugins=[Collector()],
+)
+
+expected_stages = collections.Counter(
+    (nodeid, stage) for nodeid in NODES for stage in ("setup", "call", "teardown")
+)
+actual_stages = collections.Counter((row["nodeid"], row["when"]) for row in state["reports"])
+reasons = []
+if state["nodes"] != list(NODES):
+    reasons.append("node_mismatch")
+if actual_stages != expected_stages:
+    reasons.append("stage_mismatch")
+if code != 0:
+    reasons.append("pytest_nonzero")
+if any(row["outcome"] != "passed" or row["xfail"] for row in state["reports"]):
+    reasons.append("nonpass_or_xfail")
+source_after = manifest(SOURCE)
+testdeps_after = manifest(TESTDEPS)
+if source_after != source_before or testdeps_after != testdeps_before:
+    reasons.append("input_drift")
+
+print(
+    "CAPABILITY_EXACT13="
+    + json.dumps(
+        {
+            "node_count": len(state["nodes"]),
+            "pytest_exit": int(code),
+            "reasons": reasons,
+            "reports": state["reports"],
+            "source_manifest": source_after,
+            "testdeps_manifest": testdeps_after,
+        },
+        sort_keys=True,
+    )
+)
+raise SystemExit(0 if not reasons else 1)

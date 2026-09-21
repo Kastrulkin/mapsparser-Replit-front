@@ -1,5 +1,25 @@
 # Production-readiness progress
 
+## Latest checkpoint — 22 September, isolated capability tests pass
+
+- [x] Exact13 Linux profile: 11 previously capability-denied cases plus two dist
+  fixtures pass, 39 passing stages, no skip/xfail/timeout, 13.26 s capture.
+- [x] Preserve setup failures and v3's11pass/2fail: missing profile dependencies,
+  manifest serialization, and lost snapshot execute bit were harness issues.
+  No application change or assertion suppression was used to obtain v4.
+- [x] Independent runtime review PASS; pinned image, read-only source/dependency
+  mounts, network-none, non-root, no ports/socket/credentials/DB. Existing23
+  container identities/states preserved; owned ephemeral containers removed.
+- [x] Frontend source/evidence package locally committed5b7f63a9 after independent
+  review and strict zero-finding staged scan. Full frontend840/840 and both builds pass.
+- [ ] Next: native PostgreSQL callback-recovery family (13 nodes), then remaining
+  browser/E2E, security/image/history, performance, CI/demo and final full audit.
+
+Evidence: task evidence/capability-linux-results-20260922.md. Pure-Python test
+packages are mounted; this is not stock-image dependency certification or a full
+backend pass. Whole goal ACTIVE/FAIL. Cleanup COMPLETE, about13GiB free, foreign13
+paths preserved; no production, existing DB, providers, push or deploy.
+
 ## Latest checkpoint — 22 September, frontend module limits restored
 
 - [x] ARCH-FRONTEND-RATCHET-01: workspace 2,260 → 2,024 lines; employee

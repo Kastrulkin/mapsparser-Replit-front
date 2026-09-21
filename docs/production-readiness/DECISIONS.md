@@ -1,5 +1,15 @@
 # Readiness decisions
 
+## D-115 — Capability tests need explicit runtime and executable-mode identity
+
+Use a network-none Linux test container when the required behavior includes local
+listeners that an offline host policy deliberately denies. Mount only inspected
+compatible pure-Python test packages, not a host environment or credentials; name
+that runtime limitation explicitly. Preserve Git's required owner-execute bits in
+private snapshots and hash modes with content. Dependency/import/mode failures
+are not product findings or passes. A later scoped green result does not rewrite
+the historical full-suite result or certify a stock deployment image.
+
 ## D-114 — Extract connection actions without changing React lifecycle
 
 Resolve the demonstrated module-size gate by moving cohesive connection handlers

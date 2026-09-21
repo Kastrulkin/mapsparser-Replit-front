@@ -1,0 +1,53 @@
+Capability-denied isolated Docker diagnostic — final provenance
+
+Scope
+- Source snapshot is `git archive b12cfcb25925162811a37408dee2820138ca22fa`, not the dirty workspace.
+- Only two explicit overlays were copied into that owned snapshot:
+  - tests/test_legacy_parser_diagnostic_logs.py SHA-256 6b36812601c2df579ac660e01976fee066f3c7a3f5bf3e0c7010799838da49ba
+  - tests/test_author_daily_gate.py SHA-256 21a1a4c9c3337bb516a8c80a354b860d6ba380bf1c4ce0aed4ba0bc5196f782c
+- Source snapshot contains 6,216 regular files. No workspace source was modified by this diagnostic.
+- The working tree's unrelated foreign changes were neither copied (other than the two named overlays), staged, reverted, or edited.
+
+Container boundary
+- Pinned pre-existing local image: sha256:9d6edac8b6948e239c0bab54564f92f829e5b9dfc93f3ca0626060ffb4e60853.
+- Image entrypoint was overridden; the application entrypoint was never invoked.
+- Final named container used --network none, --read-only, no host ports, no Docker socket,
+  no credentials mount, --user 501:20, --cap-drop ALL, no-new-privileges, CPU/memory/PID
+  bounds, /tmp tmpfs, and read-only /work, /testdeps, and /runner mounts.
+- DATABASE_URL was a metadata-only loopback placeholder; no database or production service was used.
+- The final owned --rm container is absent after completion. Existing-container identity baseline
+  was not captured by this subtask before its first probe, so no claim is made about unrelated
+  container IDs; only task-owned names were checked.
+
+Dependency layer
+- No pull, install, build, image mutation, native extension, or host site-packages mount occurred.
+- Existing local pure-Python packages copied into owned read-only /testdeps:
+  pytest 9.1.1; pluggy 1.6.0; iniconfig 2.3.0; packaging 26.3; Pygments 2.21.0;
+  python-telegram-bot 20.8; httpx 0.26.0; httpcore 1.0.9; h11 0.16.0; sniffio 1.3.1;
+  certifi 2026.7.22; anyio 4.15.1; idna 3.20; typing_extensions 4.16.0.
+- The final dependency snapshot has 1,666 regular files. Its pure-Python WHEEL metadata and
+  import closure were reviewed before v4.
+
+Final v4 proof
+- Runner: /private/tmp/localos-capabilities-b12-xkj8c7/runner/run_exact13.py
+- Runner SHA-256: f9ababbb9a3c54ef86295ac9552837d312acc44f53c205ae0be1bebf647b2c1e
+- Source mode-aware manifest SHA-256: 323c3de031dd2c9213759cf988da46fa47ce933db0d45f6e115d2540222d1405
+- Dependency mode-aware manifest SHA-256: ed4f33f3a1d7a99b8d965bbdf53ea84455b36a1762e316b99aba136a57407117
+- The one Git-tracked executable needed by the dist fixture had Git mode 100755. The private
+  snapshot initially had 0600 due to local hardening, then only that snapshot file was changed
+  to owner-executable 0700; content SHA remained a351b5cc083697d4953d6d1e9d59b88e0b8c8e5353077912f3dd767e3e059741.
+- exact13-v4.json: 13 requested nodes; 39 setup/call/teardown reports; all passed; no xfail,
+  skip, timeout, truncation, or input-manifest drift.
+
+Preserved preliminary evidence
+- exact13.json: v1 runner-only input-manifest serialization preflight failure; pytest did not run.
+- exact13-v2.json: v2 collection-only failure because the app image omitted the separate Telegram
+  runtime profile; pytest test bodies did not run.
+- exact13-v3.json: all 13 collected; 11 passed and two dist calls failed before script execution
+  because the owned snapshot had lost the tracked execute bit. This was a harness mode defect,
+  not a product permission defect.
+- No preliminary failure was overwritten or relabeled as product success.
+
+Limitation
+- This is evidence for exactly these 13 isolated Linux capability tests, not a full test suite,
+  Docker Compose integration test, production check, or production deployment.

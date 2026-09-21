@@ -1,5 +1,17 @@
 # Verified commands and evidence
 
+## Linux capability profile — 22 September
+
+Named tmux exact13v4 runs the pinned local image with networknone/read-only/
+UID501:20/capdropALL/no-new-privileges, 1CPU/1GiB/128PIDs and512MiB tmpfs.
+Entrypoint env-i invokes Python3.11.16 -B -I /runner/run_exact13.py with only
+read-only source/testdeps/runner mounts, no real provider/DB credentials, and
+only a nonconnectable metadata-only DATABASE_URL placeholder.
+13requested nodes,39passing stages,exit0,13,256.059ms, no skip/xfail/truncation.
+Exact argv and frozen runnerf9ababbb are archived in task
+evidence/capability-linux-20260922 with failed preliminary attempts and provenance.
+No stock-image dependency or full integration claim. Do not replay completed tests.
+
 ## Frontend module extraction — 22 September
 
 Named tmux audit-frontend-ratchet-v2, fresh frontend snapshot with existing cloned

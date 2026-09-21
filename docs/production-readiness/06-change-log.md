@@ -1,5 +1,14 @@
 # Production-readiness change log
 
+## Capability diagnostic — 22 September, parent5b7f63a9
+
+Evidence-only exact13 Linux run closes the limited listener/process/dist fixture
+checks previously denied by the offline profile:13/13,39passing stages. Required
+test packages are read-only local pure-Python copies; no app code/image mutation.
+Capture missing prerequisites, manifest-format error and temporary snapshot mode
+fix honestly. Existingcontainers preserved; only own ephemeral containersremoved.
+Full backend/security/production readiness remains open.
+
 ## Frontend module limits — 22 September, parent b12cfcb2
 
 Move seven unchanged connection actions to a typed per-render factory, and two
