@@ -1,5 +1,15 @@
 # Residual risks — working register
 
+Latest 21 September, parent `ae609660`: SEC-PROXY-DIAGNOSTICS-01 is locally
+FIX_PROVEN only for preflight-derived map/review diagnostic sinks and the
+proxy-stat exception console. Raw preflight/policy inputs are intentionally
+retained internally; other completeness/card/native metric fields, host:port,
+CAPTCHA, DLQ/handler paths and existing rows/artifacts remain outside this fix.
+135 tests + 4 subtests and bounded review are not full-worker, native DB,
+provider, image or deployed confidentiality proof. Whole FAIL / original AC
+statuses, denied native preparation, historical-secret lifecycle uncertainty
+and the below-10-GiB image gate remain unchanged.
+
 Latest 21 September, parent 6ac6dc: SEC-PARSEQUEUE-REASON-01 is locally corrected
 only at the validator normal-terminal/retry reason boundary. Final 13-case
 immutable comparison is 8 assertion failures / 5 passes to 13 passes; final broad

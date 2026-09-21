@@ -1,5 +1,23 @@
 # Verified commands and evidence
 
+## Proxy diagnostics — 21 September, parent `ae609660`
+
+Exact commands/output are in task `evidence/proxy-reason-*-20260921.json`.
+
+| Capture suffix | Actual result | Duration ms |
+| --- | --- | ---: |
+| initial-red | Initial 3 tests: 2 assertion failures, 1 pass | 623.102 |
+| verified-baseline | Final 7 tests on immutable parent: 5 failures, 2 passes, 0 errors | 925.375 |
+| verified-green | Same final 7 tests pass | 786.558 |
+| adjacent | 16 exact existing AST-isolated test functions pass | 411.193 |
+| quality | Scoped Ruff, protected AST boundaries and diff checks pass | 589.819 |
+| broad | 135 tests + 4 subtests; 17 files, 31 stable source hashes | 15877.751 |
+
+Tests prohibit network, env-file and real DB access; no full worker import.
+Broad intentionally retains the earlier owned IPC synthetic fork. The baseline
+reads immutable source via local Git before installing its test guard; quality
+uses local Git/Ruff subprocesses. No provider or production check is claimed.
+
 ## Parse-queue reason projection — 21 September, parent `6ac6dc`
 
 Task `evidence/parse-reason-*-20260921.json` contains exact isolated commands,

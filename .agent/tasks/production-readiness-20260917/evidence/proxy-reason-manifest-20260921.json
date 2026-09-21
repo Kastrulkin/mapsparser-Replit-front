@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "finding": "SEC-PROXY-DIAGNOSTICS-01",
+  "parent_commit": "ae609660cfb5f0d5a087164efb49b352b8507e9e",
+  "scope": "Finite preflight-derived map/review diagnostics; proxy-stat exception console; raw preflight and proxy-health inputs remain internal and unchanged",
+  "source_hashes": [
+    {
+      "path": "tests/test_parser_interception.py",
+      "sha256": "90a017fe56b4dc86d51a53c93fa13e4274bc27b47e2689fc4b6516141d3b2e00"
+    },
+    {
+      "path": "tests/test_parser_interception_review_responses.py",
+      "sha256": "a4eae46da7f305d11f64008b775aa99d454467fad62a87f8ad88dfab6bf31cdc"
+    },
+    {
+      "path": "tests/test_parser_orchestrator.py",
+      "sha256": "2ccb591c57a7ec6590a2fdab1137cae22a94ceefc230eb19d30a35dbb1067e36"
+    },
+    {
+      "path": "tests/test_parser_debug_bundle_safety.py",
+      "sha256": "b0f691e584b322d3a3865223d367e9749dc909bf5d46f16bdfdeffbfad985748"
+    },
+    {
+      "path": "tests/test_parser_diagnostic_logs.py",
+      "sha256": "489bb061a99567111540bd9bbf91853a2f21bcce93f444ae53c8b8bedcfff56e"
+    },
+    {
+      "path": "tests/test_worker_parser_diagnostic_logs.py",
+      "sha256": "4a2221cbea7d7190beaab53bc8b104d4adb6c641492d8a579f5325d77d66513b"
+    },
+    {
+      "path": "tests/test_worker_parser_artifact_safety.py",
+      "sha256": "b8c87149889fc94ad41aaff6a0d33fdf025668f5b0fb39598702115ca1bd3cc1"
+    },
+    {
+      "path": "tests/test_legacy_parser_leaf_diagnostics.py",
+      "sha256": "86d6651a6e9c4deeeb38a3307fb63a0f40a8c46194a6aba5a422ad88e1dd5a70"
+    },
+    {
+      "path": "tests/test_apify_diagnostic_privacy.py",
+      "sha256": "a4b85f2494c6f225c9488124938efc7deb109c6f16851dfe71c6ce54d20f7024"
+    },
+    {
+      "path": "tests/test_prospecting_service_apify_business_parse.py",
+      "sha256": "4a191e0021e2b0990bfdd3a760f854092bd03f3c45acf8e5268758df5869c56f"
+    },
+    {
+      "path": "tests/test_prospecting_service_apify_proxy.py",
+      "sha256": "37b66610a063035056f8110397da82c3074359234cf72349761e99eb1e47bfe9"
+    },
+    {
+      "path": "tests/test_prospecting_service_normalize.py",
+      "sha256": "6873eb5ab3fc56c5b5133a5a46af05a6809ddb26005a8948f5f3296a8521ef0b"
+    },
+    {
+      "path": "tests/test_worker_apify_ipc_safety.py",
+      "sha256": "c490c7f3f982978d890b024d00bc2634fc4004140debaeefcc35783bced84be2"
+    },
+    {
+      "path": "src/worker.py",
+      "sha256": "c88fee3044cbb07b1ae8b474d570f6466de4ae57146e0a5c259cb0842d327141"
+    },
+    {
+      "path": "src/parser_interception.py",
+      "sha256": "a9737321cb60869d632f0d155bc0905b2e72c5caf6950507b8bb137a0ee04a0a"
+    },
+    {
+      "path": "src/browser_session.py",
+      "sha256": "2750f4062e259c4d4b3a193fe6d9c263eedf92e495a7de5c62c34bb691e9af63"
+    },
+    {
+      "path": "src/core/parser_debug_artifacts.py",
+      "sha256": "a364d4d27e842c21a1bc9f8fdfd61bf7021eea4301ee541eab14f0194864f5be"
+    },
+    {
+      "path": "src/yandex_maps_scraper.py",
+      "sha256": "1b5312a8fb74b0a079eb2cbec69a659b1f19abd93d78075f82a8a18c678d7d50"
+    },
+    {
+      "path": "src/services/prospecting_service.py",
+      "sha256": "6061f9e9b05c49228d7046f70680781f2edd0d4bf40bb5886e5d75f81d72170e"
+    },
+    {
+      "path": "src/legacy_routes/parsing_networks.py",
+      "sha256": "b92ef5889886ac8723997d7f134b29e3230a0ccabc50dd664969baf8fbb3a76b"
+    },
+    {
+      "path": "tests/test_worker_services_quality.py",
+      "sha256": "6afcbb3031d54e77068acc20a879be9fdfc56b5468c5775fbeb67ee870965bea"
+    },
+    {
+      "path": "tests/test_worker_failure_reason_safety.py",
+      "sha256": "2867396ee4055b29456a38930e7945d8ae0378a87061747e2b00a312e54befb6"
+    },
+    {
+      "path": "tests/test_parsing_failure_taxonomy.py",
+      "sha256": "26af0eae891c3d94a2d399885b1eebaffe34e23df6a5f71545cddceba932abb9"
+    },
+    {
+      "path": "tests/test_parsed_payload_validation.py",
+      "sha256": "42c100fb5b09058ae3202b009ba2d8770f1d2eab7d12baa949acc1af9a3c4dc6"
+    },
+    {
+      "path": "src/parsing_failure_taxonomy.py",
+      "sha256": "30d07b3b3c2119fd6fc46c27b69b9be1a78c1c96e2262db4b547dff931e63dcc"
+    },
+    {
+      "path": "src/parsed_payload_validation.py",
+      "sha256": "ae1e85ee5d7dc52a6fda1aafbe10eaedf84c42617fc312f2557eb3a073462d1d"
+    },
+    {
+      "path": "src/core/sensitive_text.py",
+      "sha256": "7d6a460ed8848806c69a33abca3c47b86a88c13f298d3d07497529e76ebbd778"
+    },
+    {
+      "path": "src/services/operator_refresh_result.py",
+      "sha256": "d64775129e0a917eb592ebc92db5d3e78a588e231b5b817cee7d87b2753d60a4"
+    },
+    {
+      "path": "src/services/operator_news_generation.py",
+      "sha256": "c47aa37f4189098039af7eaffee8ae762bcf0acaff13a147a65217c3209c91e7"
+    },
+    {
+      "path": "tests/test_worker_proxy_diagnostic_safety.py",
+      "sha256": "cf29e935a0bd2f1fc3633597ecf5643801fd96701a30dff7eab93f6f59e1811e"
+    },
+    {
+      "path": "src/services/yandex_review_delta_sync.py",
+      "sha256": "b224f2bef61d4b2ce83b9a11a0cb64e52cf4ec77d9cc44a6f2dcedd38091ff52"
+    }
+  ],
+  "captures": [
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/proxy-reason-initial-red-20260921.json",
+      "sha256": "1744f092d45ba9d5c7744c48b29247b30bcb292c9275d862c81a1a3bb599e1da",
+      "exit_code": 1,
+      "duration_ms": 623.102,
+      "captured_at": "2026-09-21T06:07:48.603481+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/proxy-reason-verified-baseline-20260921.json",
+      "sha256": "db0103ae26a0ebcf4206eafd190066eafd0b4ace5ecca1996b0fd80118243486",
+      "exit_code": 1,
+      "duration_ms": 925.375,
+      "captured_at": "2026-09-21T06:13:34.479346+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/proxy-reason-verified-green-20260921.json",
+      "sha256": "a2e1542cb4571dcc30416fcff528ef41543be223828c65f25d9f6950282034e0",
+      "exit_code": 0,
+      "duration_ms": 786.558,
+      "captured_at": "2026-09-21T06:14:30.049351+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/proxy-reason-adjacent-20260921.json",
+      "sha256": "49ba96ddbe28822634969ff25cf33acbd02c4d5a792d41a524744de13c91e840",
+      "exit_code": 0,
+      "duration_ms": 411.193,
+      "captured_at": "2026-09-21T06:16:00.193876+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/proxy-reason-quality-20260921.json",
+      "sha256": "a58fa294c98a001f0c29d2bb5232b6e9ee80f9c3500c11d9a771057fa5d97f1d",
+      "exit_code": 0,
+      "duration_ms": 589.819,
+      "captured_at": "2026-09-21T06:15:55.877771+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/proxy-reason-broad-20260921.json",
+      "sha256": "4dfed4ebe81deba84712ac34ac98d434e418bf730eb7a7202ef6c7c8af406424",
+      "exit_code": 0,
+      "duration_ms": 15877.751,
+      "captured_at": "2026-09-21T06:16:14.230754+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    }
+  ],
+  "verification": {
+    "status": "FIX_PROVEN locally; whole readiness FAIL",
+    "causal_comparison": "Same final 7 tests: immutable parent 5 assertion failures and 2 passes, no errors; current 7 passes. Baseline uses git-show worker bytes via source stdin; no working-file reversal.",
+    "broader": "135 tests and 4 subtests across 17 files; 31 source hashes stable before/after. Guarded local tests, no full-worker import, network, subprocess, env-file or DB use; existing owned IPC synthetic fork is intentional.",
+    "adjacent": "16 exact existing proxy/review/validator/retry test functions, actual AST-isolated worker and pure completeness/validation functions; no real DB/provider.",
+    "quality": "New test Ruff; worker F821/F822/F823; diff check; exact AST parity outside scoped functions and normalized diagnostic edits. Original preflight body, proxy health SQL/cleanup, map control and review fallback contract preserved.",
+    "independent_review": "Accepted exact frozen runtime/test scope; does not certify whole worker or deployed behavior."
+  },
+  "provenance": {
+    "initial_red": "Initial 3 cases on earlier test bytes: 2 assertion failures and 1 pass; retained separately. No initial green capture.",
+    "final": "Final test SHA cf29e935a0bd2f1fc3633597ecf5643801fd96701a30dff7eab93f6f59e1811e; worker SHA c88fee3044cbb07b1ae8b474d570f6466de4ae57146e0a5c259cb0842d327141. Static helper scaffold correction and reviews-full extension preceded final baseline; no captured harness failure or weakened assertion.",
+    "performance": "Durations are local synthetic test durations, not service latency or a runtime performance improvement claim."
+  },
+  "limits": [
+    "Raw preflight return and in-memory proxy policy reason remain functional data; they are not claimed sanitized.",
+    "Other completeness/card/native metric fields, host:port, CAPTCHA, DLQ/handler paths, old rows/artifacts/history remain outside this finding.",
+    "No top-level worker, native PostgreSQL, provider, Docker/image or production/deployed proof.",
+    "Original acceptance criteria, verdict, problems and whole FAIL preserved; denied native aggregate/restore preparation not retried.",
+    "Local disk checkpoint 4108936 KiB (~3.92 GiB) remains below 10 GiB image floor.",
+    "No production or database/schema mutation, external provider call, cleanup, push or deployment; foreign work preserved."
+  ]
+}

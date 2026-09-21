@@ -1,5 +1,27 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, proxy diagnostics
+
+- [x] SEC-PROXY-DIAGNOSTICS-01: arbitrary preflight exception text reached map
+  logs and review metrics/queue warnings. Finite diagnostic projection now
+  covers these sinks and the proxy-stat DB-exception log.
+- [x] Same final 7 tests: immutable parent `ae609660` has 5 assertion failures
+  and 2 passes; current has 7 passes. No harness errors.
+- [x] Broad: 135 tests + 4 subtests in 15.19 s; 16 existing adjacent tests pass.
+  Scoped Ruff, AST/diff checks and independent reviews pass. Manifest binds
+  31 source hashes and 6 captures.
+- [ ] Whole FAIL; AC1–9/11 FAIL and AC10 PASS remain unchanged.
+
+Raw preflight input remains internal for unchanged proxy-health classification.
+No production, DB/schema, provider, Docker, cleanup, push or deploy action.
+Other worker diagnostic producers and historical rows/artifacts remain open.
+Disk checkpoint: 4108936 KiB (~3.92 GiB), below the 10 GiB image floor; denied
+native aggregate/restore preparation was not retried.
+
+Next: fresh independent cumulative source/diff review from baseline
+`30262a5bf7b468e0a6f5a0e3d8262dbef119e075` to the exact new commit. Source
+review does not replace the missing aggregate/image/demo gates.
+
 ## Latest checkpoint — 21 September, parse-queue failure reasons
 
 - [x] SEC-PARSEQUEUE-REASON-01: validator error code/message text could enter

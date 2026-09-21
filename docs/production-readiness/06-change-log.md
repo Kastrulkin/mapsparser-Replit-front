@@ -1,5 +1,16 @@
 # Production-readiness change log
 
+## Proxy diagnostic projection — 21 September, parent `ae609660`
+
+SEC-PROXY-DIAGNOSTICS-01 separates outward preflight diagnostics from raw
+internal proxy-health input. Map logs/native failure reasons and review
+metrics/warnings use a finite projection; proxy-stat DB exceptions emit a
+fixed code. Existing preflight execution, circuit breaker, SQL/counters,
+cleanup and review delta/full/native-only behavior are preserved.
+Same final 7 tests move from 5 failures / 2 passes to 7 passes. Broad
+135 tests + 4 subtests, 16 adjacent cases, quality and independent review pass.
+No deployment or historical data cleanup is included.
+
 ## Parse-queue failure reason projection — 21 September, parent `6ac6dc`
 
 SEC-PARSEQUEUE-REASON-01 replaces normal validator storage/log reason text

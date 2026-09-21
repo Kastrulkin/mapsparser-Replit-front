@@ -1,5 +1,19 @@
 # Readiness decisions
 
+## D-080 — Separate proxy diagnostic text from health-policy input
+
+SEC-PROXY-DIAGNOSTICS-01 uses a finite projection for all preflight-derived
+map/review diagnostics and a fixed code for proxy-stat write exceptions.
+Keep the original raw preflight reason only in the internal health-policy path:
+its fatal-token checks and SQL/counter/cleanup behavior are unchanged.
+
+Options: regex redaction alone misses arbitrary private text; projecting the
+preflight return itself could change the circuit breaker; projecting at the
+actual diagnostic sinks preserves policy while removing untrusted outward text.
+The selected helper retains known statuses, bounded HTTP codes and known
+request class names, otherwise a generic failure. The tradeoff is less free-form
+diagnostic detail. This is not a sanitizer for every worker error producer.
+
 ## D-079 — Project parser failure reasons at the persistence boundary
 
 An error result may contain provider-controlled code/message text. Its raw

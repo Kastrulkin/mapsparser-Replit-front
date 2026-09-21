@@ -2,6 +2,24 @@
   "task_id": "production-readiness-20260917",
   "overall_status": "FAIL",
   "checkpoint": {
+    "subsequent_proxy_diagnostic_projection": {
+      "parent_commit": "ae609660cfb5f0d5a087164efb49b352b8507e9e",
+      "finding": "SEC-PROXY-DIAGNOSTICS-01",
+      "scope": "Finite preflight-derived map/review diagnostics; proxy-stat exception console; raw preflight and proxy-health inputs remain internal and unchanged",
+      "proof": [
+        "evidence/proxy-reason-notes-20260921.md",
+        "evidence/proxy-reason-manifest-20260921.json",
+        "evidence/proxy-reason-verified-baseline-20260921.json",
+        "evidence/proxy-reason-verified-green-20260921.json",
+        "evidence/proxy-reason-adjacent-20260921.json",
+        "evidence/proxy-reason-quality-20260921.json",
+        "evidence/proxy-reason-broad-20260921.json"
+      ],
+      "result": "Same final 7 tests: immutable parent 5 assertion failures / 2 passes / 0 errors becomes 7 passes (0.656 s). Broad 135 tests + 4 subtests, 15.19 s / 15877.751 ms; 16 adjacent existing AST-isolated tests pass 411.193 ms; quality passes 589.819 ms. 31 source hashes / 6 captures bound; independent bounded review ACCEPT.",
+      "behavior": "Finite statuses, bounded HTTP codes and known request class names replace preflight-derived log/metric/warning text. Raw reason still reaches unchanged proxy-health classification; original preflight function, SQL control/counter/cleanup, full-vs-delta review flow and native-only policy are preserved.",
+      "provenance": "Initial 3-test RED is retained separately; final baseline uses immutable ae609660 worker via stdin, no source reversal. Static optional-helper scaffold correction preceded final baseline; no captured harness errors. Broad intentionally allows existing owned IPC synthetic fork; quality uses local Git/Ruff subprocesses.",
+      "limits": "Raw preflight return and in-memory proxy policy reason remain functional data; they are not claimed sanitized. Other completeness/card/native metric fields, host:port, CAPTCHA, DLQ/handler paths, old rows/artifacts/history remain outside this finding. No top-level worker, native PostgreSQL, provider, Docker/image or production/deployed proof. Original acceptance criteria, verdict, problems and whole FAIL preserved; denied native aggregate/restore preparation not retried. Local disk checkpoint 4108936 KiB (~3.92 GiB) remains below 10 GiB image floor. No production or database/schema mutation, external provider call, cleanup, push or deployment; foreign work preserved."
+    },
     "subsequent_safe_parser_failure_reasons": {
       "parent_commit": "6ac6dc915969fdd96c183be26ba527561b2f7560",
       "finding": "SEC-PARSEQUEUE-REASON-01",

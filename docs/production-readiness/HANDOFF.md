@@ -1,5 +1,34 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, proxy diagnostics
+
+Parent `ae609660cfb5f0d5a087164efb49b352b8507e9e`; finding
+SEC-PROXY-DIAGNOSTICS-01 is locally FIX_PROVEN, not whole-worker acceptance.
+Worker `c88fee3044cbb07b1ae8b474d570f6466de4ae57146e0a5c259cb0842d327141`
+projects preflight diagnostics while keeping raw proxy-health input unchanged.
+Final test `cf29e935a0bd2f1fc3633597ecf5643801fd96701a30dff7eab93f6f59e1811e`
+has immutable-parent 5 failures / 2 passes / 0 errors, then 7 current passes.
+
+Proof: task `evidence/proxy-reason-manifest-20260921.json` binds 31 source
+hashes and 6 captures. Baseline 925.375 ms; green 786.558 ms; broad 135 tests
++ 4 subtests in 15.19 s / captured 15877.751 ms; adjacent 16 existing
+AST-isolated tests 411.193 ms; quality 589.819 ms. Independent source/test and
+evidence reviews accept the scope. Initial 3-test RED is separate provenance.
+No assertions were weakened or captured harness errors reclassified.
+
+The preflight function, health SQL/circuit-breaker/cleanup, map control and
+review fallback contracts are unchanged outside diagnostic substitutions.
+Reviews delta/full and native-only paths use finite outward reason text.
+Other completeness/card/host:port/CAPTCHA/DLQ/handler diagnostics and existing
+rows/artifacts remain open. Raw preflight return is deliberately internal data.
+
+Whole FAIL and original AC statuses remain; no production/DB/schema/provider/
+Docker/cleanup/push/deploy action. Native preparation remains denied and disk
+4108936 KiB is below 10 GiB. Foreign work is excluded from this package.
+Next: review the cumulative committed diff from original baseline `30262a5`
+at the exact post-package commit, keeping source coverage distinct from the
+missing aggregate, canonical image, native measurements and demo rehearsal.
+
 ## Latest checkpoint — 21 September, parse-queue reason projection
 
 Parent `6ac6dc915969fdd96c183be26ba527561b2f7560`. Scope is only the

@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "label": "proxy-reason-verified-green",
+  "captured_at": "2026-09-21T06:14:30.049351+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-B",
+    "-c",
+    "import hashlib,json,pathlib,runpy,sys\npaths=[\"src/worker.py\",\"tests/test_worker_proxy_diagnostic_safety.py\",\"src/core/sensitive_text.py\"]\nexpected=[\"c88fee3044cbb07b1ae8b474d570f6466de4ae57146e0a5c259cb0842d327141\",\"cf29e935a0bd2f1fc3633597ecf5643801fd96701a30dff7eab93f6f59e1811e\",\"7d6a460ed8848806c69a33abca3c47b86a88c13f298d3d07497529e76ebbd778\"]\nbefore=[{\"path\":p,\"sha256\":hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()} for p in paths]\nassert [item[\"sha256\"] for item in before]==expected\ndef guard(event,args):\n    if event in {\"socket.connect\",\"subprocess.Popen\",\"os.system\",\"os.posix_spawn\",\"os.spawn\",\"os.fork\",\"sqlite3.connect\"}:\n        raise AssertionError(\"External effects forbidden\")\n    if event==\"open\" and isinstance(args[0],str) and pathlib.Path(args[0]).name.startswith(\".env\"):\n        raise AssertionError(\"Environment file read forbidden\")\nsys.addaudithook(guard)\nprint(json.dumps({\"source_hashes\":before,\"parent_commit\":\"ae609660cfb5f0d5a087164efb49b352b8507e9e\",\"guards\":True}),flush=True)\nsys.argv=[paths[1],\"-v\"]\ncode=0\ntry:\n    runpy.run_path(paths[1],run_name=\"__main__\")\nexcept SystemExit as result:\n    code=result.code or 0\nfor item in before:\n    assert hashlib.sha256(pathlib.Path(item[\"path\"]).read_bytes()).hexdigest()==item[\"sha256\"]\nassert \"worker\" not in sys.modules\nprint(json.dumps({\"source_hashes_unchanged\":True,\"full_worker_imported\":False}),flush=True)\nraise SystemExit(code)"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin x86_64",
+  "duration_ms": 786.558,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"source_hashes\": [{\"path\": \"src/worker.py\", \"sha256\": \"c88fee3044cbb07b1ae8b474d570f6466de4ae57146e0a5c259cb0842d327141\"}, {\"path\": \"tests/test_worker_proxy_diagnostic_safety.py\", \"sha256\": \"cf29e935a0bd2f1fc3633597ecf5643801fd96701a30dff7eab93f6f59e1811e\"}, {\"path\": \"src/core/sensitive_text.py\", \"sha256\": \"7d6a460ed8848806c69a33abca3c47b86a88c13f298d3d07497529e76ebbd778\"}], \"parent_commit\": \"ae609660cfb5f0d5a087164efb49b352b8507e9e\", \"guards\": true}\n{\"source_hashes_unchanged\": true, \"full_worker_imported\": false}\n",
+  "stderr": "test_proxy_failure_decision_and_cleanup_keep_fatal_and_transient_controls (__main__.WorkerProxyDiagnosticSafetyTests.test_proxy_failure_decision_and_cleanup_keep_fatal_and_transient_controls) ... ok\ntest_proxy_stats_exception_console_omits_raw_reason_and_db_error (__main__.WorkerProxyDiagnosticSafetyTests.test_proxy_stats_exception_console_omits_raw_reason_and_db_error) ... ok\ntest_request_exception_reason_stays_internal_but_selected_proxy_console_is_value_free (__main__.WorkerProxyDiagnosticSafetyTests.test_request_exception_reason_stays_internal_but_selected_proxy_console_is_value_free) ... ok\ntest_reviews_delta_apify_fallback_warning_and_metrics_omit_preflight_value (__main__.WorkerProxyDiagnosticSafetyTests.test_reviews_delta_apify_fallback_warning_and_metrics_omit_preflight_value) ... ok\ntest_reviews_delta_preflight_failure_keeps_raw_mark_input_but_not_stdout_or_worker_error (__main__.WorkerProxyDiagnosticSafetyTests.test_reviews_delta_preflight_failure_keeps_raw_mark_input_but_not_stdout_or_worker_error) ... ok\ntest_reviews_full_apify_fallback_preserves_full_route_and_zero_delta_limit (__main__.WorkerProxyDiagnosticSafetyTests.test_reviews_full_apify_fallback_preserves_full_route_and_zero_delta_limit) ... ok\ntest_successful_preflight_keeps_ok_status_and_elapsed_contract (__main__.WorkerProxyDiagnosticSafetyTests.test_successful_preflight_keeps_ok_status_and_elapsed_contract) ... ok\n\n----------------------------------------------------------------------\nRan 7 tests in 0.656s\n\nOK\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

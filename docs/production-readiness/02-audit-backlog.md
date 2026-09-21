@@ -1,5 +1,27 @@
 # Audit backlog — evidence, not a readiness claim
 
+## 21 September proxy diagnostics
+
+**SEC-PROXY-DIAGNOSTICS-01 — P1, confidentiality, locally FIX_PROVEN.**
+A bounded part of SEC-WORKER-REMAINING-LOG-01; the parent finding stays open.
+Arbitrary proxy-preflight exception text reached ordinary map logs, review
+metrics and queue warning/error boundaries. This could expose private values
+contained in transport errors to log/queue readers; the tests use synthetic
+markers, not real user data. Cause: credential-pattern redaction followed by
+free-form diagnostic forwarding.
+
+Evidence: `src/worker.py`, `tests/test_worker_proxy_diagnostic_safety.py`,
+task `evidence/proxy-reason-manifest-20260921.json`. Final 7-test comparison:
+5 parent assertion failures / 2 passes / 0 errors becomes 7 passes. Broad
+135 + 4 subtests, 16 adjacent cases and independent review pass.
+Fix: finite outward projection, fixed proxy-stat write-error code, original
+raw health-policy input retained. Small effort/blast radius; medium
+compatibility risk controlled by exact AST parity and fallback/counter tests.
+Confidence high for the reproduced sinks; production frequency is unmeasured.
+Acceptance: marker absent from console, native-only error and delta/full
+warning SQL while policy input, fallback selection, limits and cleanup survive.
+Required before production. Other producers, deployed state and old rows remain.
+
 ## 21 September Apify IPC transport
 
 - **SEC-APIFY-IPC-01**, P1 before production, high confidence: raw functional

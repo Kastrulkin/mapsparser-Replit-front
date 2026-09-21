@@ -655,8 +655,8 @@ def _mark_proxy_result(proxy_id: Optional[str], *, success: bool, reason: str = 
                 (fatal_proxy_reason, min_samples, min_score, proxy_id),
             )
         conn.commit()
-    except Exception as e:
-        print(f"⚠️ Не удалось обновить статистику прокси {proxy_id}: {e}; reason={reason}", flush=True)
+    except Exception:
+        print(f"⚠️ Не удалось обновить статистику прокси {proxy_id}: proxy_stats_write_failed", flush=True)
     finally:
         try:
             if cursor:
@@ -668,6 +668,23 @@ def _mark_proxy_result(proxy_id: Optional[str], *, success: bool, reason: str = 
                 conn.close()
         except Exception:
             pass
+
+
+def _proxy_preflight_diagnostic_reason(reason: Any) -> str:
+    """Project preflight diagnostics without changing raw proxy-health input."""
+    code = str(reason or "").strip()
+    if code in {
+        "ok", "direct_native", "proxy_unavailable", "proxy_server_missing",
+        "forbidden", "rate_limited", "limited", "captcha", "empty_body", "org_id_missing",
+    } or re.fullmatch(r"http_[45][0-9]{2}", code):
+        return code
+    error_class = code.partition(":")[0]
+    if error_class in {
+        "RequestException", "ProxyError", "ConnectionError", "Timeout",
+        "ConnectTimeout", "ReadTimeout", "SSLError",
+    }:
+        return error_class
+    return "proxy_preflight_failed"
 
 
 def _preflight_yandex_proxy(url: str, active_proxy: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -4815,7 +4832,7 @@ def _process_yandex_reviews_delta_task(queue_dict: Dict[str, Any]) -> None:
         else:
             preflight = _preflight_yandex_proxy(url, active_proxy)
         metrics["proxy_preflight_ms"] = int(preflight.get("elapsed_ms") or 0)
-        metrics["proxy_preflight_reason"] = str(preflight.get("reason") or "")
+        metrics["proxy_preflight_reason"] = _proxy_preflight_diagnostic_reason(preflight.get("reason"))
         native_data: Dict[str, Any] = {"error": "proxy_preflight_failed"}
 
         if bool(preflight.get("ok")):
@@ -4910,8 +4927,8 @@ def _process_yandex_reviews_delta_task(queue_dict: Dict[str, Any]) -> None:
             metrics["fallback_reason"] = completeness_reason
             _mark_proxy_result(proxy_id, success=False, reason=completeness_reason)
         else:
-            metrics["fallback_reason"] = str(preflight.get("reason") or "proxy_preflight_failed")
-            _mark_proxy_result(proxy_id, success=False, reason=metrics["fallback_reason"])
+            metrics["fallback_reason"] = metrics["proxy_preflight_reason"]
+            _mark_proxy_result(proxy_id, success=False, reason=str(preflight.get("reason") or "proxy_preflight_failed"))
 
         if not use_apify_fallback:
             metrics["route"] = "native_only_failed"
@@ -5724,12 +5741,14 @@ def _execute_map_card_task(
             proxy_preflight = _preflight_yandex_proxy(url, active_proxy)
             print(
                 f"🌐 Proxy preflight id={proxy_id} ok={bool(proxy_preflight.get('ok'))} "
-                f"reason={proxy_preflight.get('reason')} elapsed_ms={proxy_preflight.get('elapsed_ms')}",
+                f"reason={_proxy_preflight_diagnostic_reason(proxy_preflight.get('reason'))} "
+                f"elapsed_ms={proxy_preflight.get('elapsed_ms')}",
                 flush=True,
             )
             if not bool(proxy_preflight.get("ok")):
                 native_failure_reason = f"proxy_preflight:{proxy_preflight.get('reason') or 'failed'}"
                 _mark_proxy_result(proxy_id, success=False, reason=native_failure_reason)
+                native_failure_reason = f"proxy_preflight:{_proxy_preflight_diagnostic_reason(proxy_preflight.get('reason'))}"
                 active_proxy = None
                 proxy_id = ""
         if active_proxy:
