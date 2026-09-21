@@ -1,5 +1,17 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Runner startup error masking — 22 September
+
+**RUNNER-INIT-01 — P2, reliability, locally FIX_PROVEN.** A failed bind calls
+`BoundedHTTPServer.server_close` before pool initialization; missing pool masks
+the original failure with `AttributeError`. Guard only optional pool shutdown,
+keep parent close and normal wait=True shutdown. Same two lifecycle tests show
+RED before/GREEN after; 11 adjacent cases pass, independent review passes.
+Low-risk two-line guard, high causal confidence, startup-error scope; production
+likelihood unmeasured, no live/network-listener proof or deployment. Acceptance:
+preserve original bind exception, close parent, shut down an existing pool.
+Full evidence/risk/rollback: task compiled-runner-initialization-results-20260922.md.
+
 ## Complete fixture metadata — 21 September
 
 TEST-FIXTURE-METADATA-01 is locally FIX_PROVEN for the audit collector's atime

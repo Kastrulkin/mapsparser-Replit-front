@@ -1,5 +1,21 @@
 # Production-readiness progress
 
+## Latest checkpoint — 22 September, runner startup fix
+
+- [x] RUNNER-INIT-01 locally FIX_PROVEN: preserve original bind failure when
+  server_close runs before pool creation. Identical two-test RED/GREEN and 11
+  adjacent tests pass; independent review of fix and two-test rerun pass.
+- [x] Prior full backend evidence committed as 936be8f9, exact reviewed diff
+  233a2d2a...f4b8df; strict 9,717,067-byte staged scan zero findings (22.459 s),
+  normal commit hook pass (785.727 ms). Both full runs remain FAIL.
+- [ ] Next: verify existing foreign scoped-hook/author corrections against an
+  explicitly identified current snapshot. Preserve all 13 foreign paths.
+- [ ] Image credential v2 scan is still separate and pending; never label its
+  post-start disk hash as runtime provenance. Whole audit remains OPEN/FAIL.
+
+Runner package changes only server.py, two regression tests and evidence/docs;
+no production, existing DB, provider, push/deploy or Docker cleanup repeated.
+
 ## Latest checkpoint — 22 September, two whole backend attempts
 
 - [x] Full frozen5,481-node v1/v2 executed with no class exclusions. Each has

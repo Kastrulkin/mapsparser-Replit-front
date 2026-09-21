@@ -1,5 +1,17 @@
 # Verified commands and evidence
 
+## Compiled runner initialization — 22 September
+
+Named tmux audit-runner-init-adjacent-v2 ran the exact 11-node command captured
+in task evidence/compiled-runner-initialization-20260922/adjacent-v2.json.
+Clean environment includes PATH, PYTHON_DOTENV_DISABLED=1,
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1, PYTHONDONTWRITEBYTECODE=1 and owned TMPDIR;
+the sandbox denies network and writes except owned temp and /dev/null.
+Result11pass/0.36s, wrapper633.992ms. V1 lacked TMPDIR and failed before tests.
+RED/GREEN capture222.180ms binds baselineba59b653, patchedserverefcf9524 and
+test305cb499; its archived historical script used then-current HEADc1dd64ee.
+Focused Ruff F821/F822/F823 and git diff --check pass; no integration claim.
+
 ## OS-sandbox full backend — 22 September
 
 Named tmux audit-sandbox-controls-v1..v4: first two rejected; v3 PASS9/v4 PASS10.

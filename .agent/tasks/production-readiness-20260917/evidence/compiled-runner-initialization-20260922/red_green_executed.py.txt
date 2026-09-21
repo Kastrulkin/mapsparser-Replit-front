@@ -1,0 +1,46 @@
+"""Same mocked lifecycle assertions against HEAD and the patched working file."""
+import hashlib
+import json
+from pathlib import Path
+import runpy
+import subprocess
+import sys
+import types
+
+import pytest
+
+ROOT = Path('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре')
+RELATIVE = 'docker/compiled-script-runner/server.py'
+baseline = subprocess.run(['git', 'show', 'HEAD:' + RELATIVE], cwd=ROOT, check=True, capture_output=True).stdout
+tests = runpy.run_path(str(ROOT / 'tests/test_compiled_runner_initialization.py'))
+green_loader = tests['test_bind_failure_preserves_original_permission_error'].__globals__['load_runner_module']
+
+
+def red_loader():
+    module = types.ModuleType('baseline_runner_initialization')
+    module.__file__ = str(ROOT / RELATIVE)
+    exec(compile(baseline, 'baseline_runner.py', 'exec'), module.__dict__)
+    return module
+
+
+results = {}
+for label, loader in [('baseline', red_loader), ('patched', green_loader)]:
+    results[label] = {}
+    for name in ['test_bind_failure_preserves_original_permission_error', 'test_initialized_server_shuts_down_created_pool']:
+        function = tests[name]
+        function.__globals__['load_runner_module'] = loader
+        patcher = pytest.MonkeyPatch()
+        try:
+            function(patcher)
+            results[label][name] = 'passed'
+        except BaseException:
+            results[label][name] = type(sys.exception()).__name__
+        finally:
+            patcher.undo()
+assert results['baseline']['test_bind_failure_preserves_original_permission_error'] == 'AttributeError'
+assert results['baseline']['test_initialized_server_shuts_down_created_pool'] == 'passed'
+assert set(results['patched'].values()) == {'passed'}
+print(json.dumps({'baseline_sha256': hashlib.sha256(baseline).hexdigest(),
+                  'patched_sha256': hashlib.sha256((ROOT / RELATIVE).read_bytes()).hexdigest(),
+                  'tests_sha256': hashlib.sha256((ROOT / 'tests/test_compiled_runner_initialization.py').read_bytes()).hexdigest(),
+                  'results': results, 'network_bind': 'mocked before bind; no network requests'}, sort_keys=True))

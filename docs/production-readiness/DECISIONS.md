@@ -1,5 +1,13 @@
 # Readiness decisions
 
+## D-106 — Preserve startup errors without changing runtime policy
+
+Guard pool shutdown only when initialization never created the pool. Do not
+catch the original bind error, broaden socket permission, alter assertions or
+claim sandbox denials are a production defect. A deterministic same-test
+RED/GREEN comparison plus adjacent pure cases is the acceptance boundary.
+Real listener/request validation stays a separate integration gate.
+
 ## D-105 — Whole collection with inherited capability denial and honest outcomes
 
 Add OS network/write constraints around the Python guard, verify native-child/

@@ -1,5 +1,12 @@
 # Production-readiness change log
 
+## Runner startup diagnostic fix — 22 September, parent936be8f9
+
+RUNNER-INIT-01: skip shutdown of a not-yet-created pool while preserving parent
+server close and the original initialization exception. Two regression cases
+show causal RED/GREEN; 11 adjacent cases pass. No API/runtime permission or DB
+changes and no deploy. Full backend baseline and original readiness stay FAIL.
+
 ## Whole frozen backend baseline — 22 September, parentc1dd64ee
 
 Added audit-only inherited OS sandbox with10real negative controls and strict

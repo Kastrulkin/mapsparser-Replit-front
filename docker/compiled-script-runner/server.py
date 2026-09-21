@@ -186,7 +186,9 @@ class BoundedHTTPServer(HTTPServer):
 
     def server_close(self):
         super().server_close()
-        self.pool.shutdown(wait=True)
+        pool = getattr(self, "pool", None)
+        if pool is not None:
+            pool.shutdown(wait=True)
 
 
 if __name__ == "__main__":

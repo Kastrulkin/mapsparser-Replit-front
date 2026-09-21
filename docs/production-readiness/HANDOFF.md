@@ -1,5 +1,27 @@
 # Readiness handoff
 
+## Latest checkpoint — 22 September, runner initialization
+
+Parent 936be8f9 on codex/production-readiness-20260917. RUNNER-INIT-01 guard
+and tests are a separate local fix package; report and seven-entry manifest in
+task compiled-runner-initialization-20260922. RED/GREEN222.180ms, adjacent11
+PASS633.992ms; initial adjacent attempt failed before tests for missing TMPDIR.
+The red/green script's HEAD was c1dd64ee when executed, not the later fixed HEAD.
+Do not rerun historical attempts or infer real HTTP runtime from mocked bind.
+
+Live image scan: tmux audit-image-credentials-v2, output expected at
+/private/tmp/localos-readiness-20260921.hfLYPi/native/evidence/image-credentials-v2.json.
+Started 22 September00:54:34+0300 with scanner919a983f/controls5566414d.
+Worker edited three exception type guards at00:55:28; final disk hashc76f17cd
+is NOT loaded code identity. Exact runtime snapshots and SHA256SUMS-v2-runtime
+are preserved. Imported helper57a1ba58 is unchanged. Do not edit/restart while
+live; inspect terminal output, qualify provenance and retain failed v1.
+
+Next backend step: current scoped-hook four cases, then child no-egress guard,
+then corrected author case in one isolated process/snapshot. Foreign files
+remain uncommitted and unaccepted until verification. No broad readiness claim.
+Read-only continuation: `git status --short` and `tmux list-sessions`.
+
 ## Latest checkpoint — 22 September, full backend diagnostic baseline
 
 Parent c1dd64ee on codex/production-readiness-20260917. Full frozen5481 v1/v2
