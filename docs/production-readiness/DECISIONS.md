@@ -1,5 +1,19 @@
 # Readiness decisions
 
+## D-102 — Whole voice module with bounded, temporary DSN authority
+
+Run all382 unchanged voice scenarios on one owned tmpfs PG container. Reuse
+the voice-DSN binding lifecycle, not parent DATABASE_URL permission. Only this
+new profile gains512 lifetime connections; concurrent8, connection120 s,
+relay600 s and runner300 s limits remain unchanged. Static389 was a lower
+bound, not an expected exact count; actual393 is within the reviewed limit.
+
+Require no Flask child and a read-only zero-leftover voice-schema observation
+before owned container removal, in addition to original fixture teardown.
+DSN journal rows are not CREATE/DROP statement evidence. Passing this module
+adds only its disjoint frozen nodes, not current-source/all-PG readiness. Keep
+the upstream import warning and original whole-goal FAIL visible.
+
 ## D-101 — Collect fixture dependencies without executing or rewriting tests
 
 Use pytest's actual resolved fixture definitions with pinned source hashes.

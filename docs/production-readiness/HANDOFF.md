@@ -1,5 +1,39 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, Operator voice382 accepted runtime
+
+Branch `codex/production-readiness-20260917`, parent `dbeaa8c8`. Serial tmux
+`audit-native-operator-voice-pg-v1` is terminal: 382/382 pass, zero skips/errors;
+pytest61.88 s, captured child64.668 s, wrapper68.397 s. The bootstrap import
+emits one upstream deprecation warning in stderr. Controls/Ruff/diff180.743 ms
+pass. No product, fixture or assertion edits were needed for this module.
+
+Profile-local lifetime limit512, observed393; no Flask child admissions. Only
+initially absent OPERATOR_VOICE_TEST_DSN is bound to the owned relay; inherited
+DATABASE_URL is rejected and no parent DATABASE_URL is set. Original fixture
+teardown plus read-only pg_namespace check report zero remaining voice schemas;
+this is not independent proof of an exact CREATE/DROP statement count.
+Owned tmpfs container removed, internal network empty, capabilities removed,
+default guard07d3...1150 restored and frozen5,720 blobs unchanged.
+
+Five support files are frozen. Runtime/raw evidence paths
+`native/evidence/native-tc-operator-voice-pg-v1*` already exist: do not replay
+attemptv1. Package/report: task evidence `native-operator-voice-hflypi-20260921/`
+and `native-operator-voice-results-20260921.md`. Independent post-run/package
+review PASS; all382 IDs exactly match v4, no overlap with earlier accepted
+voice nodes. Accepted frozen total3,193/5,481;2,288 remain. Retained Docker
+identity sets23/4/20/23 match baseline. Next immediate step: strict staged scan
+and scoped local commit; historical whole-goal FAIL remains unchanged.
+
+Then continue the direct-DSN fixture inventory with a source-reviewed coherent
+Operator editorial/rewrite/revision/followup group; distinguish whole-module
+counts from nodes actually depending on pg. No blanket all686 permission or
+unsupported fixture lifetime/connection assumptions. Full/current-source
+aggregate, image-layer security, frontend flake, browser, five-journey
+performance, CI/demo/final audit remain open. Approximately14 GiB free;
+5/2/10 GiB floors, current stand and all volumes retained. Cleanup already
+completed; never replay it. Foreign13 tracked diff40afa014...4d2a4c6d1 preserved.
+
 ## Latest checkpoint — 21 September, fixture inventory accepted
 
 Parent `47ac36cf`, the independently reviewed 82-file shared-PG17 commit.

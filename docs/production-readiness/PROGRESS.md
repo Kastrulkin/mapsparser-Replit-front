@@ -1,5 +1,27 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, Operator voice PostgreSQL
+
+- [x] Full frozen `test_operator_voice_pg.py`: 382/382 pass, zero skips or
+  errors; pytest 61.88 s, captured child 64.668 s, wrapper 68.397 s.
+- [x] Exact owned-DB profile observed 393 clean relay connections within its
+  512 lifetime limit, no Flask child and zero remaining temporary voice schemas.
+  Original product code, fixtures and assertions were not changed.
+- [x] Controls/Ruff/diff pass in 180.743 ms. Frozen 5,720 blobs and default
+  guard restored; owned container removed and existing containers preserved.
+- [x] Independent runtime/live/package review PASS: retained Docker identity
+  sets23containers/4images/20volumes/23networks unchanged. Exact382 node IDs
+  match v4 collection; no prior accepted voice nodes. Total3,193/5,481,
+  2,288 unclosed; this is not a same-run/current-source aggregate.
+- [ ] Finish strict staged scan and the scoped local commit.
+- [ ] Reconcile the next coherent direct-DSN modules against actual fixture
+  metadata; full/current-source aggregate and all broad audit gates remain open.
+
+Parent `dbeaa8c8`; five audit-support files plus evidence/readiness docs only.
+One upstream Testcontainers import deprecation warning remains in test stderr.
+Cleanup is already complete, not repeated; approximately 14 GiB free. No
+production, provider, push or deployment changes; foreign 13 paths preserved.
+
 ## Latest checkpoint — 21 September, complete fixture metadata
 
 - [x] PG17 package committed locally as `47ac36cf`; normal hook and strict

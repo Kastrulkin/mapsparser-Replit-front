@@ -39,6 +39,7 @@ PROFILE_CONNECTION_BUDGETS = {
     "client-info-v1": 32,
     "capabilities-phase1-v1": 1024,
     "operator-service-creation-v1": 32,
+    "operator-voice-pg-v1": 512,
     "work-review-rollback-v1": 512,
     "creator-portal-rollback-v1": 512,
     "creator-offer-rollback-v1": 512,

@@ -1,5 +1,16 @@
 # Production-readiness change log
 
+## Operator voice382 — 21 September, parent dbeaa8c8
+
+Added one exact audit-only PG profile in five support files: temporary voice
+DSN, profile-local512 lifetime limit, no child admission and zero-leftover
+schema check. Full unchanged module passes382/382;393 connections,61.88 s
+pytest,68.397 s wrapper. Controls/Ruff/diff pass; source/default guard/owned
+cleanup preserved; independent runtime/live/package review PASS. Exact frozen
+accepted total3,193/5,481, not a current-source aggregate. One upstream bootstrap
+import warning retained. No product,
+fixture, assertion, production, provider or repeat Docker-cleanup change.
+
 ## Full fixture inventory — 21 September, parent 47ac36cf
 
 Added two audit-only collect/control helpers. Fixed absent metadata-only URI,

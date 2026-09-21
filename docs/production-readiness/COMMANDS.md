@@ -1,5 +1,21 @@
 # Verified commands and evidence
 
+## Operator voice PostgreSQL382 — 21 September
+
+Named tmux `audit-native-operator-voice-pg-v1` executed once, now terminal:
+
+```sh
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_tc_one_hflypi.py --attempt v1 --profile operator-voice-pg-v1
+```
+
+382/382 pass, zero skips/errors; pytest61.88 s/capture64.668 s/wrapper68.397 s.
+393 relay connections, no Flask child, zero leftover voice schemas; default
+guard/source/owned teardown pass. One bootstrap Testcontainers deprecation
+warning in stderr. Named tmux `audit-native-voice-controls-v1` captured profile
+controls, Ruff F821/F822/F823 over five files and git diff --check:180.743 ms,
+exit0. Exact raw commands/results are in the task native-operator-voice archive.
+Existing attemptv1 evidence is immutable; do not rerun the same command/path.
+
 ## Complete collect-only fixture inventory — 21 September
 
 Named tmux audit-native-fixture-inventory-v1/v2/v3/v4 ran successive immutable

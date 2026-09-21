@@ -7,7 +7,8 @@ The wrapper must set a literal Docker socket, disable Ryuk, use the literal
 Testcontainers host override, blank providers, and clean exact labels itself.
 The default mode still denies Testcontainers. A separately hash-pinned adapter
 can enable only named internal-only card-growth, client-info, capabilities,
-operator-service, rollback or exact shared-fixture PostgreSQL experiments.
+operator-service, operator-voice, rollback or exact shared-fixture PostgreSQL
+experiments.
 This is a trusted-test safety guard, not a sandbox for hostile native code.
 """
 
@@ -391,7 +392,7 @@ def _patch_testcontainers() -> None:
     _testcontainers_network()
     mode = os.environ.get("LOCALOS_HFLYPI_TC_MODE", "")
     if mode:
-        if mode not in {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1", "work-review-rollback-v1", "creator-portal-rollback-v1", "creator-offer-rollback-v1", "author-daily-gate-pg-v1", "knowledge-schema-pg-v1", "outreach-pain-library-pg-v1", "riderra-template-pg-v1", "sales-room-proposal-race-pg-v1", "sales-room-deadlock-pg-v1", "telegram-shared-audience-pg-v1", "web-tracking-pg-v1", "worker-captcha-pg-v1", "worker-expired-pg-v1", "worker-resume-pg-v1", "finance-import-transaction-pg-v1", "service-compression-race-pg-v1"}:
+        if mode not in {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1", "operator-voice-pg-v1", "work-review-rollback-v1", "creator-portal-rollback-v1", "creator-offer-rollback-v1", "author-daily-gate-pg-v1", "knowledge-schema-pg-v1", "outreach-pain-library-pg-v1", "riderra-template-pg-v1", "sales-room-proposal-race-pg-v1", "sales-room-deadlock-pg-v1", "telegram-shared-audience-pg-v1", "web-tracking-pg-v1", "worker-captcha-pg-v1", "worker-expired-pg-v1", "worker-resume-pg-v1", "finance-import-transaction-pg-v1", "service-compression-race-pg-v1"}:
             _deny("unsupported Testcontainers adapter mode")
         for module, key in (
             ("native_tc_adapter_hflypi", "LOCALOS_HFLYPI_TC_ADAPTER_SHA256"),

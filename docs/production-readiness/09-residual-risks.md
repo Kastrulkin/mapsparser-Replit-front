@@ -1,5 +1,20 @@
 # Residual risks — working register
 
+## Current update — Operator voice382, parent dbeaa8c8
+
+The entire frozen voice-PG module now passes382/382 without skips, including
+deduplication, concurrent retries, actor revocation, expired/changed approvals
+and voice asset isolation. Real database journals are exercised with provider
+doubles; this is not real-provider or production proof. One upstream bootstrap
+import deprecation warning remains. The owned tmpfs lifecycle leaves no voice
+schemas and preserves the default guard, source and existing containers.
+Independent runtime/live/package review PASS. Reconciled accepted frozen nodes
+3,193/5,481;2,288 remain, not2,288 proven application failures.
+Full/current-source aggregate and all security/browser/performance/CI/demo/
+final gates remain open. Historical counts below are superseded by the newest
+PROGRESS/HANDOFF and exact node-reconciliation evidence. Cleanup remains
+complete; approximately14 GiB free, no additional deletion needed this stage.
+
 ## Current operational state — 21 September, after checkpoint 94759560
 
 Update after47ac36cf: full5,481 fixture metadata is now available, not a full

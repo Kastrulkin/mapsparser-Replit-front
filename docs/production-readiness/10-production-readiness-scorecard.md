@@ -1,5 +1,11 @@
 # Production-readiness scorecard — working, not final
 
+21September Operator voice checkpoint, parentdbeaa8c8:382/382 unchanged frozen
+PG scenarios pass with zero skips. Owned DB/schema teardown, default guard and
+source preservation pass; provider methods are doubled. This strengthens the
+bounded integration evidence, not full/current-source runtime or production
+readiness. No score or original acceptance gate is promoted; wholeFAIL remains.
+
 21 September continuation (parent `7fd95caa`) adds cumulative source reviews and
 causal proof for the incomplete draft-confirmation UI mismatch: 12 failures
 become 26 targeted passes, with types/lint/build/asset integrity. Exact final

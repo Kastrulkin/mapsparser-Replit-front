@@ -31,6 +31,7 @@ PROFILE_PREFIXES = {
     "client-info-v1": "native-tc-client-info",
     "capabilities-phase1-v1": "native-tc-capabilities-phase1",
     "operator-service-creation-v1": "native-tc-operator-service-creation",
+    "operator-voice-pg-v1": "native-tc-operator-voice-pg",
     "work-review-rollback-v1": "native-tc-work-review-rollback",
     "creator-portal-rollback-v1": "native-tc-creator-portal-rollback",
     "creator-offer-rollback-v1": "native-tc-creator-offer-rollback",
@@ -49,7 +50,7 @@ PROFILE_PREFIXES = {
     "service-compression-race-pg-v1": "native-tc-service-compression-race-pg",
 }
 PARENT_DATABASE_PROFILES = frozenset({"client-info-v1", "capabilities-phase1-v1"})
-OPERATOR_VOICE_TEST_DSN_PROFILES = frozenset({"operator-service-creation-v1"})
+OPERATOR_VOICE_TEST_DSN_PROFILES = frozenset({"operator-service-creation-v1", "operator-voice-pg-v1"})
 OWNED_DATABASE_PATTERNS = {
     "work-review-rollback-v1": re.compile(r"work_review_rollback_[0-9a-f]{32}"),
     "creator-portal-rollback-v1": re.compile(r"creator_portal_rollback_[0-9a-f]{32}"),
@@ -71,12 +72,19 @@ OWNED_CLEANUP_EVENTS = {
     "finance-import-transaction-pg-v1": "finance_import_database_cleanup_checked",
     "service-compression-race-pg-v1": "service_compression_database_cleanup_checked",
 }
+OWNED_SCHEMA_CLEANUP_SQL_PATTERNS = {
+    "operator-voice-pg-v1": r"^voice_[0-9a-f]{32}$",
+}
+OWNED_SCHEMA_CLEANUP_EVENTS = {
+    "operator-voice-pg-v1": "operator_voice_schema_cleanup_checked",
+}
 INHERITED_DATABASE_URL_REFUSAL_PROFILES = frozenset({
     "author-daily-gate-pg-v1", "knowledge-schema-pg-v1", "outreach-pain-library-pg-v1",
     "riderra-template-pg-v1", "sales-room-proposal-race-pg-v1", "sales-room-deadlock-pg-v1",
     "telegram-shared-audience-pg-v1", "web-tracking-pg-v1", "worker-captcha-pg-v1",
     "worker-expired-pg-v1", "worker-resume-pg-v1", "finance-import-transaction-pg-v1",
     "service-compression-race-pg-v1",
+    "operator-voice-pg-v1",
 })
 _active = None
 _relay = None
@@ -302,6 +310,28 @@ def install() -> None:
                 if result.exit_code != 0 or output != "0":
                     deny("owned disposable database remains before container cleanup")
                 record(cleanup_event, remaining=0)
+            except BaseException:
+                failures.append(type(sys.exception()).__name__)
+        schema_cleanup_pattern = OWNED_SCHEMA_CLEANUP_SQL_PATTERNS.get(profile)
+        schema_cleanup_event = OWNED_SCHEMA_CLEANUP_EVENTS.get(profile)
+        if schema_cleanup_pattern is not None and schema_cleanup_event is not None and instance._container is not None:
+            try:
+                result = instance._container.exec_run(
+                    [
+                        "psql",
+                        "-U",
+                        "test",
+                        "-d",
+                        "test",
+                        "-At",
+                        "-c",
+                        f"SELECT COUNT(*) FROM pg_namespace WHERE nspname ~ '{schema_cleanup_pattern}'",
+                    ]
+                )
+                output = result.output.decode().strip() if isinstance(result.output, bytes) else str(result.output).strip()
+                if result.exit_code != 0 or output != "0":
+                    deny("owned operator voice schema remains before container cleanup")
+                record(schema_cleanup_event, remaining=0)
             except BaseException:
                 failures.append(type(sys.exception()).__name__)
         if _relay is not None:
