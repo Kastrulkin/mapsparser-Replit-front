@@ -1,5 +1,19 @@
 # Readiness decisions
 
+## D-095 — Size a named test profile and trace imported fixtures
+
+A57case real-PG batch needs at least171fixture connections; old32lifetime cap
+is not a valid capacity choice for it. Admit1024only for the literal new profile,
+retain default/old32,8concurrent and all identity/time/IO boundaries. Accept only
+actual171..1024clean connections plus exact57test results and owned teardown;
+the observed326is measurement, not permission for arbitrary host connectivity.
+
+Inspect imported fixtures transitively. OPERATOR_VOICE_TEST_DSN tests are not
+pure merely because the module lacks a direct connect/Testcontainers call.
+Preserve the rejected835/856-with21skips capture. Reclassify the full mixed28
+module into mandatory real-PG work, never waive its assertions or use a dummy
+metadata URI. Separate828pure success from whole856and full5481completion.
+
 ## D-094 — Count parent nodes separately from subtests
 
 Pytest's installed SubtestReport is a separate callback outcome, not another

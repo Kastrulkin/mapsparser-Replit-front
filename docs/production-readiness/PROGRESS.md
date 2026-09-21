@@ -1,5 +1,27 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, real-PG57 and governed828
+
+- [x] Exact57capabilities API tests pass with real isolated PostgreSQL and
+  migrations, no skips/errors. Pytest43.92s/wrapper48.118s, one deprecated-import
+  warning.326clean relay connections; owned tmpfs container removed,23existing
+  containers/5720frozen blobs preserved, default guard restored. Independent
+  runtime acceptance and evidence/manifest review PASS.
+- [x] New named profile has bounded1024lifetime connections (fixture minimum171),
+  old/default32 and8concurrent unchanged. Pure/negative controls and Ruff pass.
+- [x] Governed pure37modules pass828/828, pytest7.80s/wrapper10.662s. Independent
+  pre-exec/runtime review PASS, no DB/provider/TC permissions enabled.
+- [x] Preserved rejectedv1:835pass/21skip of856. Imported pg fixture in operator
+  service module needs an owned DB; not an obsolete test or product failure.
+- [ ] Full operator28 (21DB+7pure) remains mandatory next; not counted complete.
+  Add scoped OPERATOR_VOICE_TEST_DSN/owned bootstrap, not a metadata-only URI.
+- [ ] Accepted complete slices1982/5481in58modules;3499not yet closed, not full
+  aggregate/current-source proof. Whole-goal FAIL and broad gates remain open.
+
+Parent71f966ad. Evidence: task native-capabilities-governed-results-20260921.md
+and9versioned captures/manifest. No product/source/production/provider/push/
+deploy changes;13foreign paths retained. Previous turn classified progress.
+
 ## Latest checkpoint — 21 September, agent/social524 and harness accounting
 
 - [x] Frozen13module slice passes524collected parents +2subtests, no skip,

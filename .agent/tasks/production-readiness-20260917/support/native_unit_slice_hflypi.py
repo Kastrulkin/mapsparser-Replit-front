@@ -2,7 +2,7 @@
 """Run a named, reviewed hfLYPi pure-unit slice after explicit review.
 
 The launcher has no Testcontainers mode, connectable database URL, provider
-credential or Docker command. One profile supplies a guard-denied metadata-only
+credential or Docker command. Named profiles supply a guard-denied metadata-only
 URI for Flask engine construction. It reuses process/result helpers from the reviewed
 single-node launcher.  The default frozen guard receives its mandatory local
 identity environment and still rejects Testcontainers startup.
@@ -60,6 +60,48 @@ PROFILES = {
         },
         "prefix": "native-unit-agent-social", "timeout": 180,
     },
+    "governed-operations-pure-v2": {
+        "modules": {
+            "tests/test_contact_intelligence.py": 61,
+            "tests/test_author_template_authorization.py": 51,
+            "tests/test_web_tracking.py": 47,
+            "tests/test_google_oauth_current_access.py": 42,
+            "tests/test_outreach_safety_learning.py": 39,
+            "tests/test_manual_campaign_dispatch_identity.py": 35,
+            "tests/test_llm_routing.py": 34,
+            "tests/test_worker_services_quality.py": 31,
+            "tests/test_legacy_webhook_auth_security.py": 30,
+            "tests/test_social_publish_provider_outcomes.py": 28,
+            "tests/test_outreach_experiments.py": 28,
+            "tests/test_outreach_personalization_ai.py": 26,
+            "tests/test_lead_journey_service.py": 25,
+            "tests/test_content_plan_site_ssrf.py": 25,
+            "tests/test_social_posts_api.py": 24,
+            "tests/test_outreach_template_service.py": 24,
+            "tests/test_creator_offer_distribution.py": 24,
+            "tests/test_legacy_news_generation_readiness.py": 23,
+            "tests/test_auth_email_case_insensitive.py": 20,
+            "tests/test_content_voice_write_access.py": 19,
+            "tests/test_operator_credit_reservation.py": 15,
+            "tests/test_checkout_payment_providers.py": 15,
+            "tests/test_chat_domain_subscription.py": 15,
+            "tests/test_remaining_api_error_redaction.py": 15,
+            "tests/test_network_member_access.py": 14,
+            "tests/test_outreach_campaign_resume_sender_scope.py": 13,
+            "tests/test_social_media_delivery_ssrf.py": 13,
+            "tests/test_media_upload_signature_security.py": 13,
+            "tests/test_agent_api_security.py": 12,
+            "tests/test_approval_boundaries_audit.py": 10,
+            "tests/test_subscription_capabilities.py": 9,
+            "tests/test_security_headers.py": 9,
+            "tests/test_telegram_control_scope.py": 9,
+            "tests/test_outreach_reply_sync_failure_scope.py": 8,
+            "tests/test_outreach_mixed_scope_budget.py": 8,
+            "tests/test_action_orchestrator_callback_ssrf.py": 7,
+            "tests/test_password_reset_sessions.py": 7,
+        },
+        "prefix": "native-unit-governed-operations", "timeout": 180,
+    },
 }
 MIN_START = 5 * 1024**3
 METADATA_ONLY_DATABASE_URL = "postgresql+psycopg2://metadata_only@127.0.0.1:1/localos_metadata_only"
@@ -69,7 +111,7 @@ def profile_environment(profile_name: str, environment: dict[str, str]) -> dict[
     if "DATABASE_URL" in environment:
         raise RuntimeError("pure-unit environment must not inherit a database URL")
     result = dict(environment)
-    if profile_name == "agent-social-pure-v1":
+    if profile_name in {"agent-social-pure-v1", "governed-operations-pure-v2"}:
         # Flask's migration metadata extension needs a URI, not a connection.
         # Port 1 remains denied by the unchanged psycopg/socket guard.
         result["DATABASE_URL"] = METADATA_ONLY_DATABASE_URL

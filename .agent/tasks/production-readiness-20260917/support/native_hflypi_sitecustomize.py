@@ -6,7 +6,7 @@ first in ``PYTHONPATH``.  That preserves the guard in Alembic children whose
 The wrapper must set a literal Docker socket, disable Ryuk, use the literal
 Testcontainers host override, blank providers, and clean exact labels itself.
 The default mode still denies Testcontainers. A separately hash-pinned adapter
-can enable only the named internal-only card-growth or client-info experiment.
+can enable only named internal-only card-growth, client-info or capabilities experiments.
 This is a trusted-test safety guard, not a sandbox for hostile native code.
 """
 
@@ -390,7 +390,7 @@ def _patch_testcontainers() -> None:
     _testcontainers_network()
     mode = os.environ.get("LOCALOS_HFLYPI_TC_MODE", "")
     if mode:
-        if mode not in {"card-growth-v1", "client-info-v1"}:
+        if mode not in {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1"}:
             _deny("unsupported Testcontainers adapter mode")
         for module, key in (
             ("native_tc_adapter_hflypi", "LOCALOS_HFLYPI_TC_ADAPTER_SHA256"),

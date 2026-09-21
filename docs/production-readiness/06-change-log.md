@@ -1,5 +1,16 @@
 # Production-readiness change log
 
+## Native capabilities and governed operations — 21 September, parent71f966ad
+
+Support-only exact57API profile and profile-scoped connection budget1024;
+default/old32 and concurrent8 unchanged. Real-PG57passes with326cleanconnections,
+owned temporary data discarded,23existing containers preserved. Separate pure
+37module profile828passes after real-PG operator28was correctly reclassified;
+failed835pass/21skip attempt retained. Full operator28remains required next.
+No application/fixture/assertion/migration source change or deployed result.
+Profile/negative/subtest/static checks and independent pre-exec/runtime reviews
+pass. All16manifest hashes and scope/count documentation independently verified.
+
 ## Native agent/social checkpoint — 21 September
 
 Added literal13module/524parent pure profile and profile-only guard-denied

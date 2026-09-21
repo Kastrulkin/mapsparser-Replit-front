@@ -1,5 +1,44 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, PG57 / pure828 complete
+
+Branch codex/production-readiness-20260917; parent71f966ad. Previous turn was
+progress: cleanup08d39906 and native-agent71f966ad, normal hooks/diff hashes
+verified. This checkpoint changes7audit support files, evidence and readiness
+docs only; preserve13foreign paths and original task FAIL/spec/problems.
+
+Actual capabilities57passes/no skips;326real PG connections all graceful/0
+stderr/rejections/failures; ten guard negatives, child propagation and eight
+capability negatives pass. Owned55ef640e...container removed;23existingcontainer
+IDs/states retained, internal network/capabilities empty,5720blobs unchanged,
+default guard07d3...restored and runtime extras removed. Pytest43.92s/total48.118s.
+Only new profile gets1024lifetime connections; old/default32/concurrent8remain.
+One upstream deprecated Testcontainers import warning is retained, not fixed.
+
+Pure governed v1rejected835pass/21skip of856. All21are imported real-PG fixture
+users in operator_service_creation (module28=21PG+7pure). v2correctly isolates
+37other modules and passes828/828/no skips in7.80s(total10.662s). Do not claim
+v1856PASS or count partial7again. Completed-slice count1982/5481/58modules,
+3499still open by this measure; shared-TC mapped remaining28is distinct from
+the operator28module. Archive/manifest and detailed limits: task
+native-capabilities-governed-results-20260921.md.
+
+Next concrete task: add operator-service-creation-v1 profile for whole28module.
+It never requests conftest postgres_container, so generated runner must start
+one approved PostgresContainer through current adapter before pytest and stop
+it in finally. Bind ONLY OPERATOR_VOICE_TEST_DSN after owned capability validation,
+reject preexisting key, unbind exact value; no DATABASE_URL/Flask child needed.
+Fixture creates/drops voice_<uuid> schemas and applies migrations20260711,
+20260727,20260910 plus20260911service creation. Keep32connections, expect21..32;
+retain all existing negative/identity/cleanup/source gates. This profile is not
+implemented yet; do not invoke a guessed CLI. Read current support and fixture
+first. Guard/DSN budgets remain literal; no source/assertion changes for green.
+
+No active runtime remains at this checkpoint. Capacity~17.68GiB; recheck5GiB
+start/2GiBlive,10GiBfullbuild. No production/provider/push/deploy. Remaining
+frontend flake, backend aggregate, security/browser/performance/CI/final gates
+still block whole-goal completion. Do not replay completed setup/cleanup/tests.
+
 ## Latest checkpoint — 21 September, agent/social native result
 
 Branch codex/production-readiness-20260917, parent08d39906 (cleanup-only18files,

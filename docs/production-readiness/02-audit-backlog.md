@@ -1,5 +1,21 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Imported PostgreSQL fixture coverage — 21 September
+
+**TEST-INVENTORY-IMPORTED-PG-01 — P2, audit coverage, OPEN.** Static grouping
+missed pg imported from test_operator_voice_pg; actual856attempt passed835and
+skipped21, correctly rejected. All21need OPERATOR_VOICE_TEST_DSN; no product
+failure proven. Effect: test evidence could hide real service-creation DB paths
+if skip totals were accepted. Root cause: non-transitive fixture inventory.
+Scope: one28node module (21PG+7pure); high local confidence, small test-harness
+effort, no measured production likelihood. Reclassification828pure passes but
+does NOT close this finding. Acceptance: unchanged full28/no skips under new
+owned-TC/relay/isolated-schema fixture with verified21..32PGconnections and exact
+teardown. Risk: wrong DSN/shared data; mitigation is fixed identity/capability,
+absent-env precondition, no volumes/external network and exact cleanup. Needed
+before complete backend audit. Details/captures: task
+native-capabilities-governed-results-20260921.md. Original full goal stays FAIL.
+
 ## Native subtest accounting — 21 September
 
 **TEST-HARNESS-SUBTEST-01 — P2, audit evidence, locally FIX_PROVEN.** Callback

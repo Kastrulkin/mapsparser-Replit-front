@@ -32,6 +32,70 @@ PROFILES = {
         "prefix": "native-tc-one",
     },
     "client-info-v1": {"target": "tests/test_client_info_gate.py", "count": 8, "prefix": "native-tc-client-info"},
+    "capabilities-phase1-v1": {
+        "targets": [
+            "tests/test_capabilities_api_phase1.py::test_capabilities_execute_returns_pending_human",
+            "tests/test_capabilities_api_phase1.py::test_agent_capability_registry_is_business_scoped_and_redacted",
+            "tests/test_capabilities_api_phase1.py::test_capabilities_execute_is_idempotent_for_same_key",
+            "tests/test_capabilities_api_phase1.py::test_capabilities_decision_rejected_and_status_endpoint",
+            "tests/test_capabilities_api_phase1.py::test_capabilities_execute_rejects_tenant_mismatch",
+            "tests/test_capabilities_api_phase1.py::test_capabilities_action_auto_expires_by_ttl",
+            "tests/test_capabilities_api_phase1.py::test_capabilities_actions_list_returns_items",
+            "tests/test_capabilities_api_phase1.py::test_capabilities_action_billing_completed_rejected_expired",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_execute_requires_token",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_execute_pending_human_with_valid_token",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_capabilities_catalog_requires_token",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_capabilities_health_requires_token",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_capabilities_health_with_valid_token",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_callbacks_outbox_replay_requires_token",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_callbacks_outbox_replay_and_cleanup_with_valid_token",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_capabilities_health_trend_with_valid_token",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_billing_reconcile_requires_token",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_billing_reconcile_with_valid_token",
+            "tests/test_capabilities_api_phase1.py::test_user_capabilities_health_trend_authorized",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_action_status_and_billing_with_valid_token",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_actions_list_with_valid_token",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_action_decision_rejected_with_valid_token",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_callbacks_dispatch_requires_token",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_callbacks_metrics_m2m_and_user",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_capabilities_catalog_with_valid_token",
+            "tests/test_capabilities_api_phase1.py::test_capabilities_news_generate_completed_and_persisted",
+            "tests/test_capabilities_api_phase1.py::test_capabilities_news_generate_service_guard_uses_selected_service",
+            "tests/test_capabilities_api_phase1.py::test_capabilities_sales_ingest_completed_and_persisted",
+            "tests/test_capabilities_api_phase1.py::test_capabilities_appointments_create_and_cancel",
+            "tests/test_capabilities_api_phase1.py::test_capabilities_reminders_send_completed",
+            "tests/test_capabilities_api_phase1.py::test_capabilities_action_timeline_user_and_m2m",
+            "tests/test_capabilities_api_phase1.py::test_capabilities_unified_audit_timeline_user_and_m2m",
+            "tests/test_capabilities_api_phase1.py::test_capabilities_unified_audit_timeline_export_user_and_m2m",
+            "tests/test_capabilities_api_phase1.py::test_capabilities_unified_audit_event_bundle_user_and_m2m",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_action_read_requires_token_and_uses_action_tenant",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_actions_list_requires_token_and_allows_unfiltered_read",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_action_decision_requires_token_and_uses_action_tenant",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_callback_outbox_retry_then_sent",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_callback_outbox_goes_to_dlq",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_callbacks_outbox_requires_tenant_and_token",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_callbacks_recovery_history_m2m",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_callbacks_recovery_history_export_m2m_markdown",
+            "tests/test_capabilities_api_phase1.py::test_user_callbacks_dispatch_scoped_by_tenant",
+            "tests/test_capabilities_api_phase1.py::test_user_callbacks_recovery_report_returns_report",
+            "tests/test_capabilities_api_phase1.py::test_user_callbacks_recovery_history_returns_recent_runs",
+            "tests/test_capabilities_api_phase1.py::test_user_callbacks_recovery_history_export_markdown",
+            "tests/test_capabilities_api_phase1.py::test_user_support_export_markdown",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_support_export_json_with_action_snapshot",
+            "tests/test_capabilities_api_phase1.py::test_user_support_export_send_records_history",
+            "tests/test_capabilities_api_phase1.py::test_user_support_export_send_history_export_markdown",
+            "tests/test_capabilities_api_phase1.py::test_openclaw_support_export_send_history_export_json",
+            "tests/test_capabilities_api_phase1.py::test_callback_dispatch_signature_and_dedupe_guard",
+            "tests/test_capabilities_api_phase1.py::test_channels_status_returns_channel_list",
+            "tests/test_capabilities_api_phase1.py::test_channels_test_send_telegram_uses_routing",
+            "tests/test_capabilities_api_phase1.py::test_channels_route_preview_returns_fallback_chain",
+            "tests/test_capabilities_api_phase1.py::test_channels_auto_test_send_uses_routing",
+            "tests/test_capabilities_api_phase1.py::test_channels_status_marks_maton_ready_when_bridge_enabled",
+        ],
+        "count": 57,
+        "exact_nodeids": True,
+        "prefix": "native-tc-capabilities-phase1",
+    },
 }
 OLD_GUARD_SHA256 = "07d3e2dc19cbb0f9e542a6d0835ea17b5efcc5713391c152a833e6efefd61150"
 MIN_START = 5 * 1024**3
@@ -266,9 +330,24 @@ def parse_test(payload: dict[str, object], profile: dict[str, object]) -> dict[s
         raise RuntimeError("native slice has no literal target allowlist")
     if not isinstance(nodeids, list) or len(nodeids) != profile["count"] or len(set(nodeids)) != len(nodeids):
         raise RuntimeError("native slice did not report unique expected nodes")
-    if not all(isinstance(node, str) and any(node == target or node.startswith(target + "::") for target in targets) for node in nodeids):
+    if profile.get("exact_nodeids") is True:
+        if set(nodeids) != set(targets):
+            raise RuntimeError("native slice did not collect the exact literal nodes")
+    elif not all(isinstance(node, str) and any(node == target or node.startswith(target + "::") for target in targets) for node in nodeids):
         raise RuntimeError("native slice collected a node outside its literal target")
     return parsed
+
+
+def relay_evidence(profile: str, final: object) -> tuple[int, list[object]]:
+    expected_budget = 1024 if profile == "capabilities-phase1-v1" else 32
+    minimum_connections = 171 if profile == "capabilities-phase1-v1" else 2
+    if not isinstance(final, dict):
+        raise RuntimeError("relay final evidence is invalid")
+    connections = final.get("connections")
+    executions = final.get("exec_results")
+    if not isinstance(connections, int) or connections < minimum_connections or connections > expected_budget or final.get("connection_budget") != expected_budget or final.get("active") != 0 or final.get("rejections") != 0 or final.get("failures") != [] or not isinstance(executions, list) or len(executions) != connections:
+        raise RuntimeError("relay did not meet the profile connection evidence bounds")
+    return connections, executions
 
 
 def cleanup_owned(events: Path, relay_module: object, containers_before: list[dict[str, object]]) -> dict[str, object]:
@@ -378,16 +457,13 @@ def audit_journals(events: Path, relay_artifact: Path, profile: str) -> dict[str
         raise RuntimeError("Testcontainers adapter reported cleanup errors")
     bindings = [row for row in event_rows if row.get("event") == "parent_database_bound"]
     unbindings = [row for row in event_rows if row.get("event") == "parent_database_unbound"]
-    if profile == "client-info-v1":
+    if profile in {"client-info-v1", "capabilities-phase1-v1"}:
         if len(bindings) != 1 or len(unbindings) != 1 or bindings[0].get("pid") != parent_pid or bindings[0].get("port") != port or bindings[0].get("database") != "test" or unbindings[0].get("pid") != parent_pid:
             raise RuntimeError("parent Flask database configuration lifecycle is incomplete")
     elif bindings or unbindings:
         raise RuntimeError("unexpected parent Flask database configuration")
     final = relay_rows[-1] if relay_rows else {}
-    connections = final.get("connections") if isinstance(final, dict) else None
-    executions = final.get("exec_results") if isinstance(final, dict) else None
-    if not isinstance(final, dict) or not isinstance(connections, int) or connections < 2 or final.get("active") != 0 or final.get("rejections") != 0 or final.get("failures") != [] or not isinstance(executions, list) or len(executions) != connections:
-        raise RuntimeError("relay did not close without active connections and failures")
+    connections, executions = relay_evidence(profile, final)
     if not all(isinstance(row, dict) and row.get("returncode") == 0 and row.get("exit_mode") == "graceful" and row.get("stderr_bytes") == 0 for row in executions):
         raise RuntimeError("relay Docker exec evidence is incomplete")
     return {"event_rows": len(event_rows), "relay_rows": len(relay_rows), "connections": connections, "flask_child_dsn_admitted": True}
@@ -449,7 +525,10 @@ def main() -> int:
     source_relay = SUPPORT / "native_tc_relay_hflypi.py"
     targets = {source_adapter: SOURCE / "src/native_tc_adapter_hflypi.py", source_relay: SOURCE / "src/native_tc_relay_hflypi.py"}
     started = time.monotonic()
-    output: dict[str, object] = {"attempt": name, "profile": values.profile, "node": profile["target"], "expected_count": profile["count"], "phase": "preflight"}
+    selected_targets = profile.get("targets", [profile.get("target")])
+    if not isinstance(selected_targets, list) or not selected_targets or not all(isinstance(target, str) for target in selected_targets):
+        raise RuntimeError("profile has no literal test targets")
+    output: dict[str, object] = {"attempt": name, "profile": values.profile, "nodes": selected_targets, "expected_count": profile["count"], "phase": "preflight"}
     installed: list[Path] = []
     guard_installed = False
     relay_module = None
@@ -503,7 +582,7 @@ def main() -> int:
         if shutil.disk_usage(BASE).free < MIN_LIVE:
             raise RuntimeError("disk floor reached before native node")
         output["phase"] = "test"
-        capture = result(["/usr/bin/arch", "-arm64", str(VENV), "-B", "-c", plugin_source(profile["target"])], environment, MAX_RUNTIME, started + MAX_RUNTIME)
+        capture = result(["/usr/bin/arch", "-arm64", str(VENV), "-B", "-c", plugin_source(selected_targets)], environment, MAX_RUNTIME, started + MAX_RUNTIME)
         output["test"] = capture
         output["test_callbacks"] = parse_test(capture, profile)
         output["journals"] = audit_journals(journal, relay_artifact, values.profile)

@@ -26,7 +26,12 @@ NETWORK = "localos-readiness-hflypi-tc-internal"
 NETWORK_ID = "6fc9dbcb68ce40e46030cec829ed4613840327eda4109cd09de4ada422a4a0b4"
 OWNER = "production-readiness-20260917-hfLYPi"
 EVIDENCE = Path("/private/tmp/localos-readiness-20260921.hfLYPi/native/evidence")
-PROFILE_PREFIXES = {"card-growth-v1": "native-tc-one", "client-info-v1": "native-tc-client-info"}
+PROFILE_PREFIXES = {
+    "card-growth-v1": "native-tc-one",
+    "client-info-v1": "native-tc-client-info",
+    "capabilities-phase1-v1": "native-tc-capabilities-phase1",
+}
+PARENT_DATABASE_PROFILES = frozenset({"client-info-v1", "capabilities-phase1-v1"})
 _active = None
 _relay = None
 _started = False
@@ -67,7 +72,7 @@ def validate_dsn(parsed: dict[str, str]) -> None:
 def bind_parent_database(port: int) -> None:
     """Supply required Flask import config only for this owned test lifecycle."""
     global _database_url
-    if os.environ.get(PREFIX + "MODE") != "client-info-v1":
+    if os.environ.get(PREFIX + "MODE") not in PARENT_DATABASE_PROFILES:
         return
     if os.environ.get(PREFIX + "OWNER_PID") != str(os.getpid()) or "DATABASE_URL" in os.environ or _database_url is not None:
         deny("refusing to replace parent database configuration")
@@ -140,7 +145,7 @@ def install() -> None:
             deny("unexpected Testcontainers configuration")
         if instance.username != "test" or instance.password != "test" or instance.dbname != "test" or instance.env != {"POSTGRES_USER": "test", "POSTGRES_PASSWORD": "test", "POSTGRES_DB": "test"}:
             deny("unexpected synthetic PostgreSQL credentials or environment")
-        if profile == "client-info-v1" and "DATABASE_URL" in os.environ:
+        if profile in PARENT_DATABASE_PROFILES and "DATABASE_URL" in os.environ:
             deny("parent database configuration must be absent before owned start")
         client = instance.get_docker_client().client
         check_network(client)
@@ -168,7 +173,7 @@ def install() -> None:
         container_id = instance.get_container_id()
         native_tc_relay_hflypi.verify_container(container_id, _session)
         record("container_created", container_id=container_id, session_id=_session)
-        _relay = native_tc_relay_hflypi.Relay(container_id, _session, _journal.with_name(_journal.stem.replace("-events", "-relay") + ".json"))
+        _relay = native_tc_relay_hflypi.Relay(container_id, _session, _journal.with_name(_journal.stem.replace("-events", "-relay") + ".json"), profile)
         port = _relay.start()
         os.environ[PREFIX + "CAPABILITY"] = str(_relay.capability_path)
         record("relay_started", container_id=container_id, port=port, capability_path=str(_relay.capability_path))

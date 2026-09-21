@@ -1,5 +1,31 @@
 # Verified commands and evidence
 
+## Capabilities PG57 and governed pure828 — 21 September
+
+Named tmux audit-native-capabilities-phase1-hflypi-v1 ran:
+
+```sh
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_tc_one_hflypi.py --attempt v1 --profile capabilities-phase1-v1
+```
+
+57pass/no skip; pytest43.92s/capture44.774s/total48.118s; one upstream import
+deprecation warning.326clean relay execs, exact owned teardown and source/
+guard/resource postchecks pass. Default guard restored before next command.
+
+Named tmux audit-native-governed-operations-hflypi-v2 ran:
+
+```sh
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_unit_slice_hflypi.py --attempt v2 --profile governed-operations-pure-v2
+```
+
+828/828/no skip/fail, pytest7.80s/capture8.577s/total10.662s; exact37module
+counts, default guard and5720blobs unchanged. Preserve earlier v1(835pass/
+21skip of856; missing imported real-PG fixture env), not an accepted full run.
+Final profile/subtest controls, Ruff7 and diff check: exit0/stderr0/389.990ms;
+earlier preflight399.592ms retained.9captures+hashmanifest in task archive
+native-capabilities-governed-hflypi-20260921/. One-shot attempt paths exist:
+do not overwrite or blindly replay them. Operator28needs a new reviewed profile.
+
 ## Agent/social524 native slice — 21 September
 
 Named tmux `audit-native-agent-social-hflypi-v1` and `...-v2` used the frozen

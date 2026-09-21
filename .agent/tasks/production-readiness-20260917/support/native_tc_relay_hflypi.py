@@ -34,6 +34,11 @@ EXEC_GRACE_SECONDS = 4
 MAX_CONNECTIONS = 32
 MAX_CONCURRENT = 8
 STDERR_BYTES = 2048
+PROFILE_CONNECTION_BUDGETS = {
+    "card-growth-v1": 32,
+    "client-info-v1": 32,
+    "capabilities-phase1-v1": 1024,
+}
 SESSION_PATTERN = re.compile(r"[A-Za-z0-9_-]{8,128}")
 CAPABILITY_KEYS = {
     "version",
@@ -82,6 +87,16 @@ def _docker_environment() -> dict[str, str]:
 def _session(session_id: str) -> None:
     if SESSION_PATTERN.fullmatch(session_id) is None:
         raise PermissionError("invalid Testcontainers session identifier")
+
+
+def connection_budget(profile: str) -> int:
+    """Return the literal lifetime cap for one reviewed Testcontainers profile."""
+    if profile == "":
+        return MAX_CONNECTIONS
+    budget = PROFILE_CONNECTION_BUDGETS.get(profile)
+    if not isinstance(budget, int):
+        raise PermissionError("unsupported relay profile")
+    return budget
 
 
 def _tmpfs_is_safe(value: object) -> bool:
@@ -329,13 +344,14 @@ def negative_capability_checks(path: Path, port: int) -> list[dict[str, object]]
 class Relay:
     """Bounded multi-connection loopback relay for a verified owned container."""
 
-    def __init__(self, container_id: str, session_id: str, journal_path: Path) -> None:
+    def __init__(self, container_id: str, session_id: str, journal_path: Path, profile: str = "") -> None:
         _session(session_id)
         self.container_id = container_id
         self.session_id = session_id
         self.journal_path = journal_path
         self.started_at = time.monotonic()
         self.expires_at = time.time() + SERVER_SECONDS
+        self.connection_budget = connection_budget(profile)
         self.stopping = threading.Event()
         self.lock = threading.Lock()
         self.semaphore = threading.BoundedSemaphore(MAX_CONCURRENT)
@@ -427,7 +443,7 @@ class Relay:
             except OSError:
                 return
             with self.lock:
-                full = self.total_connections >= MAX_CONNECTIONS
+                full = self.total_connections >= self.connection_budget
             if full or not self.semaphore.acquire(blocking=False):
                 self.rejections += 1
                 client.close()
@@ -610,6 +626,7 @@ class Relay:
                 "container_id": self.container_id,
                 "session_id": self.session_id,
                 "connections": self.total_connections,
+                "connection_budget": self.connection_budget,
                 "rejections": self.rejections,
                 "active": len(self.bridges),
                 "failures": list(self.failures),
