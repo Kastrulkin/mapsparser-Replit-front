@@ -1,0 +1,76 @@
+{
+  "acceptance_error": null,
+  "archived_network_guard_path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/.agent/tasks/production-readiness-20260917/evidence/native-frontend-checks-hflypi-20260921/unit_network_guard_v6.cjs",
+  "archived_network_guard_sha256": "0af671c1a0302ec5f1357c5c25336044599ca771796ba219b4e6661521b6c547",
+  "assertions_modified": false,
+  "attempt": "v1",
+  "candidate_case_result_count": 3,
+  "cleanup_error": null,
+  "command": [
+    "/usr/local/opt/node@22/bin/npm",
+    "test",
+    "--",
+    "--config",
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/tmp/frontend-flake-trace-v1/vitest-flake-trace-v1.config.mjs"
+  ],
+  "default_worker_configuration": true,
+  "full_830_reported": true,
+  "max_workers_override": false,
+  "network_guard_path": "/private/tmp/localos-readiness-20260921.hfLYPi/native/unit_network_guard_v5.cjs",
+  "network_guard_probe": {
+    "command": [
+      "/usr/local/opt/node@22/bin/node",
+      "-e",
+      "const p=fetch('https://example.invalid'); if(!p||typeof p.then!=='function')throw new Error('fetch not promise'); p.then(()=>{throw new Error('guard resolved unexpectedly')}).catch(e=>{if(!String(e.message).includes('hfLYPi unit network guard denied'))throw e; console.log('network-guard-active')});"
+    ],
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "network-guard-active\n"
+  },
+  "network_guard_sha256": "0af671c1a0302ec5f1357c5c25336044599ca771796ba219b4e6661521b6c547",
+  "post_source_hashes": {
+    "package-lock.json": "a4e1362910fe02f286e950840fd79141fd411533b7743aa79f8c1a450ddece8b",
+    "package.json": "21671716cdd1edc4ded1a3a7935b055de6142608f523c2e1725e8bfbb3212052",
+    "src/components/SEOKeywordsTab.i18n.test.tsx": "e58c35fc8dcb0ede901fb0671870c276e46fbe7a5f384159093d4af4b789742b",
+    "src/components/SEOKeywordsTab.tsx": "ae97ebfe15b48c5254c12145c770a43c55e72924ca0d3db308cee212c13d2360",
+    "src/i18n/LanguageContext.tsx": "52b4405eac4e26397800cdaefc9436a95fdffd9e13d586ac2d0fb3cba17d6a07",
+    "src/pages/dashboard/ContentPage.i18n.test.tsx": "dbe97fc157d2aa932aa686e9dd1f4746a8e3d550633954619ce0a4e601256cbe",
+    "vitest.config.ts": "13f21f00d2974327006ffffc17de4bb0e0a3688bfee8e04d31f16e0e038f9048"
+  },
+  "post_source_identity": {
+    "checked_tracked_blobs": 5720,
+    "commit": "99849935de26e2932613f2a73cf515dff49104a1",
+    "mismatch_count": 0,
+    "mismatches": [],
+    "tracked_symlink_blobs": 0
+  },
+  "pre_source_hashes": {
+    "package-lock.json": "a4e1362910fe02f286e950840fd79141fd411533b7743aa79f8c1a450ddece8b",
+    "package.json": "21671716cdd1edc4ded1a3a7935b055de6142608f523c2e1725e8bfbb3212052",
+    "src/components/SEOKeywordsTab.i18n.test.tsx": "e58c35fc8dcb0ede901fb0671870c276e46fbe7a5f384159093d4af4b789742b",
+    "src/components/SEOKeywordsTab.tsx": "ae97ebfe15b48c5254c12145c770a43c55e72924ca0d3db308cee212c13d2360",
+    "src/i18n/LanguageContext.tsx": "52b4405eac4e26397800cdaefc9436a95fdffd9e13d586ac2d0fb3cba17d6a07",
+    "src/pages/dashboard/ContentPage.i18n.test.tsx": "dbe97fc157d2aa932aa686e9dd1f4746a8e3d550633954619ce0a4e601256cbe",
+    "vitest.config.ts": "13f21f00d2974327006ffffc17de4bb0e0a3688bfee8e04d31f16e0e038f9048"
+  },
+  "pre_source_identity": {
+    "checked_tracked_blobs": 5720,
+    "commit": "99849935de26e2932613f2a73cf515dff49104a1",
+    "mismatch_count": 0,
+    "mismatches": [],
+    "tracked_symlink_blobs": 0
+  },
+  "runtime_trace_event_count": 27,
+  "scope": "Full frozen 830-test default-worker diagnostic; no product source mutation.",
+  "source_hashes_unchanged": true,
+  "temporary_directory_removed": true,
+  "temporary_trace_input_hashes": {
+    "native-frontend-flake-trace-config-v1": "8c00a48585456cca631a8a8b9ddd432e6ffdcbdfb78e856e7f799167ecdaa40c",
+    "native-frontend-flake-trace-plugin-v1": "91dfc481604eaf2747fa27612d8d8bdabe1c35de0da74def68a0c4aaad3c193e",
+    "native-frontend-flake-trace-reporter-v1": "a5e4f0c2aad0600d7be6b36474000f110141b4b3a9ed48a8ba052413d7acce08",
+    "native-frontend-flake-trace-setup-v1": "5c7345accf24ee2c3f2fd1204b84229194aaa9c9473b5bbeebaebc982810eb80"
+  },
+  "timeout_override": false,
+  "trace_complete": true,
+  "trace_event_count": 37
+}

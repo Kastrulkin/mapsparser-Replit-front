@@ -1,5 +1,14 @@
 # Production-readiness change log
 
+## Full frontend trace830 — 21 September, parent453eea52
+
+Added two audit-only trace/control helpers, hash-gated temporary instrumentation,
+bounded framed capture and ownership-safe cleanup. Pre-exec review corrected
+draft cleanup and console-batching gaps before execution. Actual default-worker
+830/830 passes112.35 s;37 events/all3 candidates pass; frozen source/guard retained,
+temp removed. Independent runtime PASS. NOT_REPRODUCED, not an application fix;
+stderr and historical failure remain. No Docker/DB/provider/production change.
+
 ## Work-review rollback7 — 21 September, parent7981ba84
 
 Added only an audit profile for seven exact frozen rollback tests, scoped

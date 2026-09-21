@@ -1,5 +1,30 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, full frontend diagnostic
+
+Branch codex/production-readiness-20260917, parent453eea52. PG7 committed diff
+matches reviewed327b5a22...ecca; normal hook/strict secret scan pass.
+Full default-worker frontend830/830/143 files,112.35 s Vitest/115.115 s capture,
+exit0. Trace37 events/27 runtime markers/3 passing candidates. Classification
+NOT_REPRODUCED, not causal fix or performance gain; prior v5 failures remain.
+No product/assertion/timeout/worker-cap edits. Stderr10,236 chars preserved.
+
+Source5,720 blobs/modes plus7 focused hashes unchanged; Node guard0af671c1...c547
+matches archive/denial probe. Owned config/cache removed. Eight raw/generated
+inputs plus10 hashes retained in task frontend-full-trace-hflypi-20260921/.
+Controls/Ruff/diff2.799 s and independent pre-execution/runtime reviews PASS.
+Never overwrite/replay existing v1 paths. Trace hooks run during render, not
+independent DOM commit. No active test remains;~16 GiB free, recheck floors.
+
+Next: Creator Portal4 and Offer Distribution11 real-PG profiles, with exact
+named generated DB/child lifecycle described below. Backend2,687/5,481 in95
+module slices, PG72/104 accepted and32 pending/15 modules. Read-only recon also
+proposes21 disjoint finance/services/reviews/content pure modules (~92 nodes);
+collection/imported-fixture gates still required. No new slice is claimed run.
+Keep foreign13 paths (tracked diff40afa014...4d2a4c6d1), original FAIL and
+security/browser/performance/current-source/CI/demo/final gates. Approved Docker
+cleanup is complete; do not replay. No production/provider/push/deploy.
+
 ## Latest checkpoint — 21 September, work-review rollback verified
 
 Branch `codex/production-readiness-20260917`, parent `7981ba84`. Previous turn

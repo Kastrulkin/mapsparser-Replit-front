@@ -1,5 +1,13 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Full frontend flake diagnostic — 21 September
+
+Frozen default-worker830/830 passes with bounded phase tracing; all3 candidates,
+source/network/temp-cleanup gates pass. Classification NOT_REPRODUCED. The
+historical two failures remain OPEN for causal diagnosis; no product patch or
+assertion/timeout/worker change. See task frontend-full-trace-results-20260921.md.
+One passing instrumented run does not prove race/order cause or a speedup.
+
 ## Work-review rollback coverage — 21 September
 
 Existing guarded rollback is verified on frozen99849935: all seven unchanged

@@ -1,0 +1,13 @@
+import base from '/private/tmp/localos-readiness-20260921.hfLYPi/source/frontend/vitest.config.ts';
+import { hfLYPiFrontendTrace } from '/private/tmp/localos-readiness-20260921.hfLYPi/native/tmp/frontend-flake-trace-v1/trace-plugin.mjs';
+
+export default {
+  ...base,
+  cacheDir: '/private/tmp/localos-readiness-20260921.hfLYPi/native/tmp/frontend-flake-trace-v1/vite-cache',
+  plugins: [...base.plugins, hfLYPiFrontendTrace()],
+  test: {
+    ...base.test,
+    setupFiles: [...base.test.setupFiles, '/private/tmp/localos-readiness-20260921.hfLYPi/native/tmp/frontend-flake-trace-v1/trace-setup.mjs'],
+    reporters: ['default', '/private/tmp/localos-readiness-20260921.hfLYPi/native/tmp/frontend-flake-trace-v1/trace-reporter.mjs'],
+  },
+};

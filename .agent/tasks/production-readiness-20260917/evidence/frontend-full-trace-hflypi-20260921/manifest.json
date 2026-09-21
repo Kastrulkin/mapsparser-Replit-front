@@ -1,0 +1,17 @@
+{
+  "frozen_source": "99849935de26e2932613f2a73cf515dff49104a1",
+  "parent_checkpoint": "453eea52",
+  "scope": "Full default-worker frontend diagnostic; NOT_REPRODUCED, not a product fix or current-source aggregate.",
+  "sha256": {
+    ".agent/tasks/production-readiness-20260917/support/native_frontend_flake_trace_hflypi.py": "9c1f750c9836154a5b103685cc75a1d7b562d5c65d35114d9a2d2d8c849fc018",
+    ".agent/tasks/production-readiness-20260917/support/native_frontend_flake_trace_hflypi_controls.py": "2a3b22cad7af44cb13518b1f4e1f0d8637f177aacc41f15bd6b1ba98c93eb01a",
+    ".agent/tasks/production-readiness-20260917/evidence/frontend-full-trace-hflypi-20260921/native-frontend-unit-full-trace-v1.json": "6a4975b01403685fe74a055a4dc884d5b6f1e6b900efb3da903b6219900d0075",
+    ".agent/tasks/production-readiness-20260917/evidence/frontend-full-trace-hflypi-20260921/native-frontend-unit-full-trace-events-v1.json": "824d8139173a241ab36793a20d98b3d7b7ea1f307596e58efef94039a9349ea5",
+    ".agent/tasks/production-readiness-20260917/evidence/frontend-full-trace-hflypi-20260921/native-frontend-unit-full-trace-manifest-v1.json": "8af1d5ac5ab943725158ed41d91e4447fa03190b6c33f407db6cae93f03b7bc0",
+    ".agent/tasks/production-readiness-20260917/evidence/frontend-full-trace-hflypi-20260921/native-frontend-flake-trace-plugin-v1": "91dfc481604eaf2747fa27612d8d8bdabe1c35de0da74def68a0c4aaad3c193e",
+    ".agent/tasks/production-readiness-20260917/evidence/frontend-full-trace-hflypi-20260921/native-frontend-flake-trace-setup-v1": "5c7345accf24ee2c3f2fd1204b84229194aaa9c9473b5bbeebaebc982810eb80",
+    ".agent/tasks/production-readiness-20260917/evidence/frontend-full-trace-hflypi-20260921/native-frontend-flake-trace-reporter-v1": "a5e4f0c2aad0600d7be6b36474000f110141b4b3a9ed48a8ba052413d7acce08",
+    ".agent/tasks/production-readiness-20260917/evidence/frontend-full-trace-hflypi-20260921/native-frontend-flake-trace-config-v1": "8c00a48585456cca631a8a8b9ddd432e6ffdcbdfb78e856e7f799167ecdaa40c",
+    ".agent/tasks/production-readiness-20260917/evidence/frontend-full-trace-hflypi-20260921/frontend-flake-trace-controls-v1.json": "f1ea7f8153a0ae785829d3bfe4c91fa85ccde74b4b3aba9ae6b67c5a5d76e278"
+  }
+}

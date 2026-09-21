@@ -1,5 +1,23 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, full frontend trace830
+
+- [x] Work-review PG7 committed locally as `453eea52`; normal hook, strict
+  secret scan and reviewed diff hash match. No push/deploy.
+- [x] Full frozen default-worker frontend diagnostic:830/830 in143 files,
+  Vitest112.35 s/capture115.115 s. Assertions/timeouts/worker cap unchanged.
+- [x] All3 candidates pass;37 events retained. Source5,720 blobs and network
+  guard unchanged; owned temp directory removed. Controls/Ruff/diff and
+  independent pre-execution/runtime reviews PASS.
+- [ ] Historical flake remains OPEN: NOT_REPRODUCED, not FIX_PROVEN. Render
+  markers are not DOM-commit measurements; timing difference is not a speedup.
+- [ ] Backend accepted2,687/5,481 unchanged. Next: distinct Creator Portal4
+  and Offer Distribution11 PG profiles; broad/current-source gates remain.
+
+Parent453eea52. Two trace helpers/evidence/readiness docs only; see task
+frontend-full-trace-results-20260921.md. Retained stderr includes jsdom and
+negative-test logging. Foreign13 paths and historical whole-goal FAIL stay.
+
 ## Latest checkpoint — 21 September, work-review rollback7
 
 - [x] Previous reviewed operator/workflows package is committed as `968dcee6`,

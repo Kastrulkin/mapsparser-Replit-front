@@ -1,5 +1,17 @@
 # Readiness decisions
 
+## D-098 — Green instrumented full run is non-reproduction, not a fix
+
+Diagnose the frontend flake on full default-worker830 scope with hash-gated
+in-memory locale/render/effect traces, not relaxed assertions/timeouts/workers.
+Use installed Vite/Vitest contracts, bounded framed logs and creation-owned
+cleanup. Pure controls must validate raw transforms, drift rejection, generated
+config/reporter and actual batched-console framing before runtime.
+
+Actual830 passes establish NOT_REPRODUCED only. Render markers are not DOM
+commit timestamps, and instrumentation/cache/host load perturb timing. Retain
+historical failures and avoid claiming a causal fix or measured speedup.
+
 ## D-097 — Disposable migration databases need profile-local boundaries
 
 Allow admin postgres plus one strictly named generated database only through

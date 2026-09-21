@@ -1,5 +1,19 @@
 # Verified commands and evidence
 
+## Full frontend trace830 — 21 September
+
+Named tmux `audit-frontend-full-trace-hflypi-v1` ran:
+
+```sh
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/opt/node@22/bin:/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_frontend_flake_trace_hflypi.py
+```
+
+Helper ran `npm test -- --config` with new owned config:830/830/143 files,
+112.35 s Vitest/115.115 s capture, exit0;37 events, all3 candidates pass.
+Source/guard unchanged, temp removed; stderr retained. NOT_REPRODUCED, not fix.
+Controls/Ruff/diff2.799 s exit0;8 captures/generated inputs and10 hashes in task
+frontend-full-trace-hflypi-20260921/. One-shot v1 already exists; do not rerun.
+
 ## Work-review rollback7 — 21 September
 
 Named tmux `audit-native-work-review-rollback-hflypi-v1` ran:

@@ -1,0 +1,685 @@
+{
+  "event_count": 37,
+  "events": [
+    {
+      "kind": "module.start",
+      "module": "src/pages/dashboard/ContentPage.i18n.test.tsx",
+      "observed_epoch_ms": 1790018549607
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018549611,
+      "task_id": "-1065795466_0_0",
+      "trace": {
+        "epoch_ms": 1790018549605,
+        "fields": {
+          "target": "content-i18n"
+        },
+        "perf_ms": 3884.555125,
+        "phase": "test.active",
+        "pid": 95811,
+        "target": "content-i18n",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "3",
+          "VITEST_WORKER_ID": "55"
+        }
+      },
+      "vitest_epoch_ms": 1790018549606
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018549733,
+      "task_id": "-1065795466_0_0",
+      "trace": {
+        "epoch_ms": 1790018549661,
+        "fields": {
+          "language": "el"
+        },
+        "perf_ms": 3940.622667,
+        "phase": "lang.load.start",
+        "pid": 95811,
+        "target": "content-i18n",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "3",
+          "VITEST_WORKER_ID": "55"
+        }
+      },
+      "vitest_epoch_ms": 1790018549661
+    },
+    {
+      "kind": "case.ready",
+      "module": "src/pages/dashboard/ContentPage.i18n.test.tsx",
+      "name": "Content audience workspace localization > renders the Greek audience heading and useful empty state without Russian copy",
+      "observed_epoch_ms": 1790018549737
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018549755,
+      "task_id": "-1065795466_0_0",
+      "trace": {
+        "epoch_ms": 1790018549750,
+        "fields": {
+          "language": "el"
+        },
+        "perf_ms": 4029.746042,
+        "phase": "lang.locale.loaded",
+        "pid": 95811,
+        "target": "content-i18n",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "3",
+          "VITEST_WORKER_ID": "55"
+        }
+      },
+      "vitest_epoch_ms": 1790018549750
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018549772,
+      "task_id": "-1065795466_0_0",
+      "trace": {
+        "epoch_ms": 1790018549765,
+        "fields": {
+          "language": "el"
+        },
+        "perf_ms": 4044.648875,
+        "phase": "lang.fallback.loaded",
+        "pid": 95811,
+        "target": "content-i18n",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "3",
+          "VITEST_WORKER_ID": "55"
+        }
+      },
+      "vitest_epoch_ms": 1790018549765
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018549772,
+      "task_id": "-1065795466_0_0",
+      "trace": {
+        "epoch_ms": 1790018549765,
+        "fields": {
+          "language": "el"
+        },
+        "perf_ms": 4044.781917,
+        "phase": "lang.set.translations",
+        "pid": 95811,
+        "target": "content-i18n",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "3",
+          "VITEST_WORKER_ID": "55"
+        }
+      },
+      "vitest_epoch_ms": 1790018549765
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018549910,
+      "task_id": "-1065795466_0_0",
+      "trace": {
+        "epoch_ms": 1790018549770,
+        "fields": {
+          "language": "el"
+        },
+        "perf_ms": 4050.459333,
+        "phase": "lang.provider.ready",
+        "pid": 95811,
+        "target": "content-i18n",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "3",
+          "VITEST_WORKER_ID": "55"
+        }
+      },
+      "vitest_epoch_ms": 1790018549771
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018550588,
+      "task_id": "-1065795466_0_0",
+      "trace": {
+        "epoch_ms": 1790018550586,
+        "fields": {
+          "target": "content-i18n"
+        },
+        "perf_ms": 4866.527083,
+        "phase": "test.complete",
+        "pid": 95811,
+        "target": "content-i18n",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "3",
+          "VITEST_WORKER_ID": "55"
+        }
+      },
+      "vitest_epoch_ms": 1790018550587
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018550598,
+      "task_id": "-1065795466_0_1",
+      "trace": {
+        "epoch_ms": 1790018550596,
+        "fields": {
+          "target": "content-i18n"
+        },
+        "perf_ms": 4876.501917,
+        "phase": "test.active",
+        "pid": 95811,
+        "target": "content-i18n",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "3",
+          "VITEST_WORKER_ID": "55"
+        }
+      },
+      "vitest_epoch_ms": 1790018550597
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018550609,
+      "task_id": "-1065795466_0_1",
+      "trace": {
+        "epoch_ms": 1790018550605,
+        "fields": {
+          "language": "tr"
+        },
+        "perf_ms": 4884.635125,
+        "phase": "lang.load.start",
+        "pid": 95811,
+        "target": "content-i18n",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "3",
+          "VITEST_WORKER_ID": "55"
+        }
+      },
+      "vitest_epoch_ms": 1790018550605
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018550621,
+      "task_id": "-1065795466_0_1",
+      "trace": {
+        "epoch_ms": 1790018550618,
+        "fields": {
+          "language": "tr"
+        },
+        "perf_ms": 4898.481833,
+        "phase": "lang.locale.loaded",
+        "pid": 95811,
+        "target": "content-i18n",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "3",
+          "VITEST_WORKER_ID": "55"
+        }
+      },
+      "vitest_epoch_ms": 1790018550619
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018550623,
+      "task_id": "-1065795466_0_1",
+      "trace": {
+        "epoch_ms": 1790018550620,
+        "fields": {
+          "language": "tr"
+        },
+        "perf_ms": 4900.327583,
+        "phase": "lang.fallback.loaded",
+        "pid": 95811,
+        "target": "content-i18n",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "3",
+          "VITEST_WORKER_ID": "55"
+        }
+      },
+      "vitest_epoch_ms": 1790018550620
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018550623,
+      "task_id": "-1065795466_0_1",
+      "trace": {
+        "epoch_ms": 1790018550620,
+        "fields": {
+          "language": "tr"
+        },
+        "perf_ms": 4900.436125,
+        "phase": "lang.set.translations",
+        "pid": 95811,
+        "target": "content-i18n",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "3",
+          "VITEST_WORKER_ID": "55"
+        }
+      },
+      "vitest_epoch_ms": 1790018550620
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018550652,
+      "task_id": "-1065795466_0_1",
+      "trace": {
+        "epoch_ms": 1790018550623,
+        "fields": {
+          "language": "tr"
+        },
+        "perf_ms": 4903.023625,
+        "phase": "lang.provider.ready",
+        "pid": 95811,
+        "target": "content-i18n",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "3",
+          "VITEST_WORKER_ID": "55"
+        }
+      },
+      "vitest_epoch_ms": 1790018550623
+    },
+    {
+      "diagnostic": {
+        "duration": 992.6209159999999,
+        "flaky": false,
+        "repeatCount": 0,
+        "retryCount": 0,
+        "slow": true,
+        "startTime": 1790018549603
+      },
+      "kind": "case.result",
+      "module": "src/pages/dashboard/ContentPage.i18n.test.tsx",
+      "name": "Content audience workspace localization > renders the Greek audience heading and useful empty state without Russian copy",
+      "observed_epoch_ms": 1790018550706,
+      "result": {
+        "state": "passed"
+      }
+    },
+    {
+      "kind": "case.ready",
+      "module": "src/pages/dashboard/ContentPage.i18n.test.tsx",
+      "name": "Content audience workspace localization > opens the safe Turkish demo content-plan flow without API mutations or Russian copy",
+      "observed_epoch_ms": 1790018550707
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018550739,
+      "task_id": "-1065795466_0_1",
+      "trace": {
+        "epoch_ms": 1790018550739,
+        "fields": {
+          "target": "content-i18n"
+        },
+        "perf_ms": 5018.68675,
+        "phase": "test.complete",
+        "pid": 95811,
+        "target": "content-i18n",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "3",
+          "VITEST_WORKER_ID": "55"
+        }
+      },
+      "vitest_epoch_ms": 1790018550739
+    },
+    {
+      "diagnostic": {
+        "duration": 144.66900000000078,
+        "flaky": false,
+        "repeatCount": 0,
+        "retryCount": 0,
+        "slow": false,
+        "startTime": 1790018550596
+      },
+      "kind": "case.result",
+      "module": "src/pages/dashboard/ContentPage.i18n.test.tsx",
+      "name": "Content audience workspace localization > opens the safe Turkish demo content-plan flow without API mutations or Russian copy",
+      "observed_epoch_ms": 1790018550744,
+      "result": {
+        "state": "passed"
+      }
+    },
+    {
+      "diagnostic": {
+        "collectDuration": 867.7657920000001,
+        "duration": 1139.49325,
+        "environmentSetupDuration": 1643.322,
+        "importDurations": {},
+        "prepareDuration": 9.14175000000023,
+        "setupDuration": 314.445291
+      },
+      "kind": "module.end",
+      "module": "src/pages/dashboard/ContentPage.i18n.test.tsx",
+      "observed_epoch_ms": 1790018550745,
+      "state": "passed"
+    },
+    {
+      "kind": "module.start",
+      "module": "src/components/SEOKeywordsTab.i18n.test.tsx",
+      "observed_epoch_ms": 1790018574450
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018574468,
+      "task_id": "1862192283_0_0",
+      "trace": {
+        "epoch_ms": 1790018574454,
+        "fields": {
+          "target": "seo-tr"
+        },
+        "perf_ms": 3498.574625,
+        "phase": "test.active",
+        "pid": 95903,
+        "target": "seo-tr",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "7",
+          "VITEST_WORKER_ID": "92"
+        }
+      },
+      "vitest_epoch_ms": 1790018574460
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018574617,
+      "task_id": "1862192283_0_0",
+      "trace": {
+        "epoch_ms": 1790018574519,
+        "fields": {
+          "language": "tr"
+        },
+        "perf_ms": 3563.431584,
+        "phase": "lang.load.start",
+        "pid": 95903,
+        "target": "seo-tr",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "7",
+          "VITEST_WORKER_ID": "92"
+        }
+      },
+      "vitest_epoch_ms": 1790018574519
+    },
+    {
+      "kind": "case.ready",
+      "module": "src/components/SEOKeywordsTab.i18n.test.tsx",
+      "name": "SEOKeywordsTab localization > renders the Turkish demo negative-keyword controls without Cyrillic fallback copy",
+      "observed_epoch_ms": 1790018574619
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018574632,
+      "task_id": "1862192283_0_0",
+      "trace": {
+        "epoch_ms": 1790018574631,
+        "fields": {
+          "language": "tr"
+        },
+        "perf_ms": 3675.207375,
+        "phase": "lang.locale.loaded",
+        "pid": 95903,
+        "target": "seo-tr",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "7",
+          "VITEST_WORKER_ID": "92"
+        }
+      },
+      "vitest_epoch_ms": 1790018574631
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018574645,
+      "task_id": "1862192283_0_0",
+      "trace": {
+        "epoch_ms": 1790018574638,
+        "fields": {
+          "language": "tr"
+        },
+        "perf_ms": 3682.6655,
+        "phase": "lang.fallback.loaded",
+        "pid": 95903,
+        "target": "seo-tr",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "7",
+          "VITEST_WORKER_ID": "92"
+        }
+      },
+      "vitest_epoch_ms": 1790018574638
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018574645,
+      "task_id": "1862192283_0_0",
+      "trace": {
+        "epoch_ms": 1790018574638,
+        "fields": {
+          "language": "tr"
+        },
+        "perf_ms": 3682.818709,
+        "phase": "lang.set.translations",
+        "pid": 95903,
+        "target": "seo-tr",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "7",
+          "VITEST_WORKER_ID": "92"
+        }
+      },
+      "vitest_epoch_ms": 1790018574638
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018574842,
+      "task_id": "1862192283_0_0",
+      "trace": {
+        "epoch_ms": 1790018574644,
+        "fields": {
+          "language": "tr"
+        },
+        "perf_ms": 3689.110292,
+        "phase": "lang.provider.ready",
+        "pid": 95903,
+        "target": "seo-tr",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "7",
+          "VITEST_WORKER_ID": "92"
+        }
+      },
+      "vitest_epoch_ms": 1790018574645
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018574883,
+      "task_id": "1862192283_0_0",
+      "trace": {
+        "epoch_ms": 1790018574873,
+        "fields": {
+          "businessId": "demo-business",
+          "demoMode": true,
+          "language": "tr"
+        },
+        "perf_ms": 3917.597667,
+        "phase": "seo.effect.start",
+        "pid": 95903,
+        "target": "seo-tr",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "7",
+          "VITEST_WORKER_ID": "92"
+        }
+      },
+      "vitest_epoch_ms": 1790018574873
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018574883,
+      "task_id": "1862192283_0_0",
+      "trace": {
+        "epoch_ms": 1790018574874,
+        "fields": {
+          "businessId": "demo-business",
+          "demoMode": true,
+          "language": "tr"
+        },
+        "perf_ms": 3918.531542,
+        "phase": "seo.load.start",
+        "pid": 95903,
+        "target": "seo-tr",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "7",
+          "VITEST_WORKER_ID": "92"
+        }
+      },
+      "vitest_epoch_ms": 1790018574873
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018574883,
+      "task_id": "1862192283_0_0",
+      "trace": {
+        "epoch_ms": 1790018574875,
+        "fields": {
+          "count": 1,
+          "language": "tr"
+        },
+        "perf_ms": 3919.355667,
+        "phase": "seo.demo.data",
+        "pid": 95903,
+        "target": "seo-tr",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "7",
+          "VITEST_WORKER_ID": "92"
+        }
+      },
+      "vitest_epoch_ms": 1790018574873
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018574883,
+      "task_id": "1862192283_0_0",
+      "trace": {
+        "epoch_ms": 1790018574876,
+        "fields": {
+          "count": 1
+        },
+        "perf_ms": 3920.867834,
+        "phase": "seo.demo.set.keywords",
+        "pid": 95903,
+        "target": "seo-tr",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "7",
+          "VITEST_WORKER_ID": "92"
+        }
+      },
+      "vitest_epoch_ms": 1790018574873
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018574884,
+      "task_id": "1862192283_0_0",
+      "trace": {
+        "epoch_ms": 1790018574880,
+        "fields": {
+          "count": 1
+        },
+        "perf_ms": 3924.673584,
+        "phase": "seo.demo.set.grouped",
+        "pid": 95903,
+        "target": "seo-tr",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "7",
+          "VITEST_WORKER_ID": "92"
+        }
+      },
+      "vitest_epoch_ms": 1790018574873
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018575062,
+      "task_id": "1862192283_0_0",
+      "trace": {
+        "epoch_ms": 1790018574886,
+        "fields": {
+          "count": 1,
+          "language": "tr"
+        },
+        "perf_ms": 3930.151209,
+        "phase": "seo.keywords.ready",
+        "pid": 95903,
+        "target": "seo-tr",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "7",
+          "VITEST_WORKER_ID": "92"
+        }
+      },
+      "vitest_epoch_ms": 1790018574886
+    },
+    {
+      "kind": "runtime.trace",
+      "observed_epoch_ms": 1790018575570,
+      "task_id": "1862192283_0_0",
+      "trace": {
+        "epoch_ms": 1790018575566,
+        "fields": {
+          "target": "seo-tr"
+        },
+        "perf_ms": 4610.649584,
+        "phase": "test.complete",
+        "pid": 95903,
+        "target": "seo-tr",
+        "worker": {
+          "VITEST_MODE": "RUN",
+          "VITEST_POOL_ID": "7",
+          "VITEST_WORKER_ID": "92"
+        }
+      },
+      "vitest_epoch_ms": 1790018575566
+    },
+    {
+      "diagnostic": {
+        "duration": 1126.26775,
+        "flaky": false,
+        "repeatCount": 0,
+        "retryCount": 0,
+        "slow": true,
+        "startTime": 1790018574451
+      },
+      "kind": "case.result",
+      "module": "src/components/SEOKeywordsTab.i18n.test.tsx",
+      "name": "SEOKeywordsTab localization > renders the Turkish demo negative-keyword controls without Cyrillic fallback copy",
+      "observed_epoch_ms": 1790018575581,
+      "result": {
+        "state": "passed"
+      }
+    },
+    {
+      "diagnostic": {
+        "collectDuration": 332.72020900000007,
+        "duration": 1129.6961250000004,
+        "environmentSetupDuration": 1525.287166,
+        "importDurations": {},
+        "prepareDuration": 54.59920899999997,
+        "setupDuration": 481.6147920000003
+      },
+      "kind": "module.end",
+      "module": "src/components/SEOKeywordsTab.i18n.test.tsx",
+      "observed_epoch_ms": 1790018575586,
+      "state": "passed"
+    }
+  ]
+}
