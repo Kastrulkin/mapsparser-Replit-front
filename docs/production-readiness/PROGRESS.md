@@ -1,5 +1,27 @@
 # Production-readiness progress
 
+## Latest checkpoint — 22 September, frontend module limits restored
+
+- [x] ARCH-FRONTEND-RATCHET-01: workspace 2,260 → 2,024 lines; employee
+  2,237 → 2,225. Seven unchanged connection handlers and two UI primitives
+  have focused modules. Existing limits and user behavior are unchanged.
+- [x] Size/agent contracts: 58/58. Final frontend TypeScript and full lint pass;
+  lint retains one existing `any` warning. Targeted tests: 27/27.
+- [x] Full frontend unit suite: 840/840 across 144 files, 127.16 s.
+  Dashboard and public builds pass in 25.79 s; third-party annotation warnings remain.
+- [x] Independent source review accepted; unused import removed. Initial newly
+  written test's wrong error-message expectation is corrected; failed evidence retained.
+- [x] Final independent runtime/package review PASS: 16 artifact hashes and all
+  five source hashes verified; package prepared for a scoped local commit.
+- [ ] Isolated capability tests are a separate lane. macOS dist-check failure was shell temporary-file denial,
+  not the old leaf-test hook. No product fix is asserted for that environment issue.
+
+Evidence: task `evidence/frontend-modules-results-20260922.md`. Parent b12cfcb2,
+same branch; foreign thirteen paths preserved. Cleanup remains COMPLETE; about
+13 GiB free. Whole objective ACTIVE/FAIL: unexecuted PostgreSQL fixture families,
+browser/E2E, image/history/security closure, performance, CI/demo and final review remain.
+No production, existing DB, provider, push or deployment changes.
+
 ## Latest checkpoint — 22 September, restore admission corrected locally
 
 - [x] RESTORE-PORTS-TEMP-01: eliminate temp-file-backed validation; every captured

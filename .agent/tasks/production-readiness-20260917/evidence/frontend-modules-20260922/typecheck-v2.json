@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "label": "typecheck-v2",
+  "captured_at": "2026-09-21T23:40:06.153790+00:00",
+  "command": [
+    "env",
+    "-i",
+    "PATH=/usr/local/opt/node@22/bin:/usr/local/bin:/usr/bin:/bin",
+    "HOME=/private/tmp/localos-front-ratchet.FLczSS/tmp",
+    "TMPDIR=/private/tmp/localos-front-ratchet.FLczSS/tmp",
+    "CI=true",
+    "NO_COLOR=1",
+    "NODE_OPTIONS=--require=/private/tmp/localos-readiness-20260921.hfLYPi/native/unit_network_guard_v5.cjs",
+    "/usr/bin/sandbox-exec",
+    "-f",
+    "/private/tmp/localos-front-ratchet.FLczSS/policy.sb",
+    "npm",
+    "run",
+    "typecheck"
+  ],
+  "cwd": "/private/tmp/localos-front-ratchet.FLczSS/source/frontend",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 42545.044,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "\n> vite_react_shadcn_ts@0.0.0 typecheck\n> tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit\n\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

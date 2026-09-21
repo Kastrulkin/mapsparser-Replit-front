@@ -1,5 +1,14 @@
 # Production-readiness change log
 
+## Frontend module limits — 22 September, parent b12cfcb2
+
+Move seven unchanged connection actions to a typed per-render factory, and two
+unchanged UI primitives to a focused module with compatibility export. Workspace
+2,260→2,024; employee2,237→2,225; no ratchet increase or UI redesign. Add ten
+action contract tests. TypeScript/full lint pass, 27 targeted and 840 full frontend
+tests pass, 58 Python contracts pass, both Vite builds pass. One old lint warning
+and third-party build annotations remain. No deployment or provider writes.
+
 ## Restore binding admission — 22 September, parenta1944b9b
 
 RESTORE-PORTS-TEMP-01: I/O-free per-binding check prevents here-string setup failure

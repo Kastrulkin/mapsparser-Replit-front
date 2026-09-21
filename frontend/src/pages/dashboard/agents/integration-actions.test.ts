@@ -1,0 +1,140 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createAgentIntegrationActions } from './integration-actions';
+
+const mocks = vi.hoisted(() => ({ post: vi.fn() }));
+vi.mock('@/services/api', () => ({ api: mocks }));
+
+function options() {
+  const value: Parameters<typeof createAgentIntegrationActions>[0] = {
+    selectedBlueprint: { id: 'agent-a', business_id: 'business-a', name: 'Agent', category: 'operations', status: 'draft' },
+    agentBindingStatus: [], selectedConnectionBindingKey: '',
+    agentIntegrations: [], availableAgentIntegrations: [],
+    sheetSpreadsheetId: ' sheet-a ', sheetName: ' ', sheetAuthRef: ' saved-access ', sheetDailyCap: '0',
+    browserTargetUrls: 'https://example.test', browserDailyCap: '7',
+    telegramBotMode: 'business_bot', telegramDailyCap: '8',
+    whatsappChannelMode: 'whatsapp_business', whatsappDailyCap: '9',
+    matonAuthRef: ' saved-access ', matonChannel: ' ', matonDailyCap: '10',
+    setActionLoading: vi.fn(), setError: vi.fn(), setDecisionNotice: vi.fn(),
+    setSelectedConnectionBindingKey: vi.fn(), setWorkspaceMode: vi.fn(),
+    loadAgentIntegrations: vi.fn().mockResolvedValue(undefined),
+    loadBlueprintDetails: vi.fn().mockResolvedValue(undefined),
+    loadBlueprintReview: vi.fn().mockResolvedValue(undefined),
+    applyPostConnectHandoff: vi.fn(),
+  };
+  return value;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.post.mockResolvedValue({ data: {} });
+});
+
+describe('agent integration actions', () => {
+  it('retains Sheets binding, normalization, limits and refresh-before-handoff order', async () => {
+    const input = options();
+    input.agentBindingStatus = [
+      { key: 'read', provider: 'google_sheets', capability: 'google_sheets.read_rows', status: 'missing' },
+      { key: 'write', provider: 'google_sheets', capability: 'sheets.append_row_request', status: 'missing' },
+    ];
+    input.selectedConnectionBindingKey = 'read';
+    input.availableAgentIntegrations = [{ id: 'existing', provider: 'google_sheets', status: 'active' }];
+    const order: string[] = [];
+    input.loadAgentIntegrations = async id => { order.push(`integrations:${id}`); };
+    input.loadBlueprintDetails = async id => { order.push(`details:${id}`); };
+    input.applyPostConnectHandoff = () => { order.push('handoff'); };
+    await createAgentIntegrationActions(input).saveSheetIntegration();
+    expect(mocks.post).toHaveBeenCalledExactlyOnceWith('/agent-blueprints/agent-a/integrations', {
+      integration_id: 'existing', binding_key: 'read', provider: 'google_sheets', status: 'active',
+      display_name: 'Google Sheets', auth_ref: 'saved-access',
+      config: { spreadsheet_id: 'sheet-a', sheet_name: 'Sheet1', operation: 'read_rows' },
+      limits: { daily_append_cap: 50, frequency_cap_minutes: 0 },
+    });
+    expect(order).toEqual(['integrations:agent-a', 'details:agent-a', 'handoff']);
+    expect(input.setActionLoading).toHaveBeenNthCalledWith(1, true);
+    expect(input.setActionLoading).toHaveBeenLastCalledWith(false);
+    expect(input.setDecisionNotice).toHaveBeenCalledWith('Таблица сохранена.');
+  });
+
+  it('does nothing without a selected agent', async () => {
+    const input = options();
+    input.selectedBlueprint = null;
+    const actions = createAgentIntegrationActions(input);
+    await actions.saveSheetIntegration();
+    await actions.saveBrowserUseIntegration();
+    await actions.saveTelegramIntegration();
+    await actions.saveWhatsappIntegration();
+    await actions.saveMatonIntegration();
+    await actions.chooseProviderRoute('binding', { provider: 'maton' });
+    await actions.attachExistingAgentIntegration({ id: 'integration', provider: 'telegram', status: 'active' });
+    expect(mocks.post).not.toHaveBeenCalled();
+    expect(input.setActionLoading).not.toHaveBeenCalled();
+  });
+
+  const providers: {
+    provider: string;
+    run: (actions: ReturnType<typeof createAgentIntegrationActions>) => Promise<void>;
+    config: Record<string, unknown>;
+    limits: Record<string, number>;
+  }[] = [
+    { provider: 'browser_use', run: actions => actions.saveBrowserUseIntegration(), config: { target_urls: 'https://example.test' }, limits: { daily_page_check_cap: 7, frequency_cap_minutes: 60 } },
+    { provider: 'telegram', run: actions => actions.saveTelegramIntegration(), config: { bot_mode: 'business_bot' }, limits: { daily_message_cap: 8, frequency_cap_minutes: 30 } },
+    { provider: 'whatsapp', run: actions => actions.saveWhatsappIntegration(), config: { channel_mode: 'whatsapp_business' }, limits: { daily_message_cap: 9, frequency_cap_minutes: 30 } },
+    { provider: 'maton', run: actions => actions.saveMatonIntegration(), config: { channel: 'maton_bridge' }, limits: { daily_message_cap: 10, frequency_cap_minutes: 30 } },
+  ];
+  it.each(providers)('preserves $provider connection settings and handoff', async ({ provider, run, config, limits }) => {
+    const input = options();
+    const handoff = { workspace_mode: 'connections' };
+    mocks.post.mockResolvedValue({ data: { post_connect_handoff: handoff } });
+    await run(createAgentIntegrationActions(input));
+    expect(mocks.post).toHaveBeenCalledExactlyOnceWith('/agent-blueprints/agent-a/integrations', expect.objectContaining({ provider, config, limits }));
+    expect(input.loadAgentIntegrations).toHaveBeenCalledWith('agent-a');
+    expect(input.loadBlueprintDetails).toHaveBeenCalledWith('agent-a');
+    expect(input.applyPostConnectHandoff).toHaveBeenCalledWith(handoff);
+  });
+
+  it('returns an API failure to the UI and always clears loading', async () => {
+    const input = options();
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mocks.post.mockRejectedValue(new Error('synthetic offline failure'));
+    try {
+      await createAgentIntegrationActions(input).saveTelegramIntegration();
+      expect(input.setError).toHaveBeenLastCalledWith('synthetic offline failure');
+      expect(input.setActionLoading).toHaveBeenLastCalledWith(false);
+      expect(input.loadAgentIntegrations).not.toHaveBeenCalled();
+      expect(input.applyPostConnectHandoff).not.toHaveBeenCalled();
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
+
+  it('requires a saved Maton access before changing the provider route', async () => {
+    const input = options();
+    input.matonAuthRef = ' ';
+    await createAgentIntegrationActions(input).chooseProviderRoute('binding', { provider: 'maton' });
+    expect(mocks.post).not.toHaveBeenCalled();
+    expect(input.setSelectedConnectionBindingKey).toHaveBeenCalledWith('binding');
+    expect(input.setWorkspaceMode).toHaveBeenCalledWith('connections');
+    expect(input.setError).toHaveBeenCalledWith('Выберите сохранённый Maton.ai key для этого шага.');
+  });
+
+  it('refreshes review after saving a provider route', async () => {
+    const input = options();
+    await createAgentIntegrationActions(input).chooseProviderRoute('binding', { provider: 'maton' });
+    expect(mocks.post).toHaveBeenCalledExactlyOnceWith('/agent-blueprints/agent-a/provider-routes', {
+      binding_key: 'binding', route_provider: 'maton', external_account_id: 'saved-access',
+    });
+    expect(input.loadBlueprintReview).toHaveBeenCalledWith('agent-a');
+  });
+
+  it('retains existing integration data when attaching to a binding', async () => {
+    const input = options();
+    await createAgentIntegrationActions(input).attachExistingAgentIntegration({
+      id: 'existing', provider: 'telegram', status: 'active', display_name: 'Saved chat',
+      auth_ref: 'saved-access', config: { bot_mode: 'business_bot' }, limits: { daily_message_cap: 2 },
+    }, 'binding');
+    expect(mocks.post).toHaveBeenCalledExactlyOnceWith('/agent-blueprints/agent-a/integrations', {
+      integration_id: 'existing', binding_key: 'binding', provider: 'telegram', status: 'active',
+      display_name: 'Saved chat', auth_ref: 'saved-access', config: { bot_mode: 'business_bot' }, limits: { daily_message_cap: 2 },
+    });
+  });
+});

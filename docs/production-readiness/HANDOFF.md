@@ -1,5 +1,37 @@
 # Readiness handoff
 
+## Latest checkpoint — 22 September, frontend extraction and full unit pass
+
+Branch codex/production-readiness-20260917; parent b12cfcb2. Owned source changes:
+AgentBlueprintsWorkspace.tsx, agents/employee.tsx, new integration-actions.ts,
+integration-actions.test.ts, employee-primitives.tsx. Workspace now 2,024 lines,
+employee 2,225; original limits retained. All 249 extracted handler lines exactly
+match parent source. No hooks/effects/state or external-action policy changed.
+
+Final frontend snapshot `/private/tmp/localos-front-ratchet.FLczSS`: TypeScript
+42.55 s, full lint 15.18 s (one old warning), targeted 27/27, full unit 840/840 in
+144 files (127.16 s), both builds 25.79 s. Root Python size/contracts 58/58.
+Original new-test expectation failure retained, then corrected to the established
+Error.message contract. Independent source and final runtime/package reviews PASS;
+all 16 artifact hashes and five source hashes reverified. Ready for local commit.
+Task `evidence/frontend-modules-results-20260922.md` has source hashes and limits.
+
+Separate Docker capability lane: `/private/tmp/localos-capabilities-b12-xkj8c7`.
+Network-none, readonly current b12 snapshot plus only two explicit old test overlays;
+no app entrypoint, ports, Docker socket or existing DB. Missing pytest and then
+Telegram dependencies are harness prerequisites, not product regressions. Preserve
+all failed probes; only compatible existing pure-Python packages may be mounted.
+
+Nearest real PostgreSQL gap identified read-only: 13-node
+tests/test_action_orchestrator_callback_recovery_pg.py (direct psycopg fixture,
+unique callback_recovery UUID schema). It is not covered by completed literal
+native profiles. Prepare a reviewed fresh disposable migrated DB/profile; do not
+rerun already-proven restore fake tests or mutate existing databases.
+
+Foreign 13 paths and tracked hash40afa014 unchanged. Cleanup COMPLETE, no repeated
+prune/removal, about13GiB free. No push/deploy/production/provider writes. Full goal
+ACTIVE/FAIL; retain all older whole-suite nonpasses and broad outstanding gates.
+
 ## Latest checkpoint — 22 September, restore gate repaired and tested
 
 Parenta1944b9b, codex/production-readiness-20260917. Recent local commits:

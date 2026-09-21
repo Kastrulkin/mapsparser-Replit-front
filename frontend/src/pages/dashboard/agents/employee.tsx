@@ -37,10 +37,8 @@ import {
 	getAgentListStatus,
 	humanizeCategory,
 	humanizeMeta,
-	humanizeStatus,
 	resultFieldLabels,
-	statusLabels,
-	statusTone
+	statusLabels
 } from './model';
 import {
 	connectorLabel,
@@ -89,6 +87,9 @@ import {
 } from './runs';
 import { hasCompleteDraftApprovalSnapshot } from './runs.logic';
 import { TimezoneSelect } from './timezone-select';
+import { AgentMiniMetric, StatusBadge } from './employee-primitives';
+
+export { AgentMiniMetric } from './employee-primitives';
 
 const AgentWorkflowGraph = lazy(() => import('./workflow-graph').then((module) => ({ default: module.AgentWorkflowGraph })));
 
@@ -196,19 +197,6 @@ const creditWord = (value: number) => {
   if (lastDigit >= 2 && lastDigit <= 4) return 'кредита';
   return 'кредитов';
 };
-
-const StatusBadge = ({ status }: { status: string }) => (
-  <span className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1', statusTone[status] || 'bg-slate-50 text-slate-600 ring-slate-200')}>
-    {userFacingAgentTechText(humanizeStatus(status))}
-  </span>
-);
-
-export const AgentMiniMetric = ({ label, value }: { label: string; value: string }) => (
-  <div className="rounded-lg bg-white px-3 py-2 ring-1 ring-current/10">
-    <div className="text-[11px] font-medium opacity-70">{label}</div>
-    <div className="mt-1 text-base font-semibold">{value}</div>
-  </div>
-);
 
 export const ConnectorIntelligencePanel = ({ intelligence }: { intelligence?: AgentConnectorIntelligence }) => {
   const bindings = intelligence?.bindings || [];

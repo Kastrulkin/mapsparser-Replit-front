@@ -1,5 +1,19 @@
 # Verified commands and evidence
 
+## Frontend module extraction — 22 September
+
+Named tmux audit-frontend-ratchet-v2, fresh frontend snapshot with existing cloned
+dependencies, cleared environment and inherited OS network/write restrictions:
+`npm run typecheck` exit0/42.55s; `npm run lint` exit0/15.18s (0 errors, 1 old warning);
+targeted Vitest requests/schedule/employee/integration-actions 27/27;
+`npm run test` 840/840, 144 files, 129.45s wrapper;
+`npm run build:all` exit0/25.79s. No timeouts or truncated output.
+Root guarded pytest tests/test_large_module_size_ratchet.py plus
+tests/test_agent_blueprint_api_generic_runs.py: 58 passed/1.27s wrapper.
+Exact commands, source hashes, first-attempt failure and execution policy are in
+task evidence/frontend-modules-20260922 and its sibling result report.
+This reuses installed dependencies; it is not a fresh-install or browser proof.
+
 ## Restore binding admission — 22 September
 
 Same negativewrapper64760c5c/fakeDocker read-failure baseline returns0+create/

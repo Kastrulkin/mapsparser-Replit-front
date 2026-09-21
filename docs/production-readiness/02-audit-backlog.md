@@ -1,5 +1,20 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Frontend size ratchet — 22 September
+
+**ARCH-FRONTEND-RATCHET-01 — P2, maintainability/CI, locally FIX_PROVEN.**
+Existing gate reproducibly rejects workspace2,260>2,087; employee2,237>2,233
+also exceeds its fixed limit. High confidence, deterministic gate impact; no new
+user-visible malfunction inferred. Growth of in-component connection handlers
+and display primitives increases review cost. Small scoped extraction preserves
+249 handler lines exactly, per-render captures, request/refresh/handoff ordering,
+rendered primitives and export compatibility. Workspace2,024 and employee2,225
+are within unchanged limits. Low blast radius, no schema/API/dependency change.
+Acceptance: 58 size/agent contracts, 27 targeted and 840 full frontend unit tests,
+TypeScript/full lint and both builds pass; independent source review accepted.
+One old lint warning, browser checks and broader module debt remain. Evidence:
+task evidence/frontend-modules-results-20260922.md. No production rollout claimed.
+
 ## Leaf-test contamination and restore-admission follow-up — 22 September
 
 **TEST-LEAF-GUARD-01 — P2, before final test sign-off, locally FIX_PROVEN.**

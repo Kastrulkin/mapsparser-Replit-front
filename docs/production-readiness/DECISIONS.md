@@ -1,5 +1,15 @@
 # Readiness decisions
 
+## D-114 — Extract connection actions without changing React lifecycle
+
+Resolve the demonstrated module-size gate by moving cohesive connection handlers
+to a typed factory instantiated on every render and small display primitives to
+their own component module. Keep all handler bodies, captures, request ordering,
+approval boundaries, state and effects unchanged. Do not raise the gate, invent
+memoization, refactor builder lifecycle, or claim a performance gain without a
+measurement. Retain failed new-test attempts; check established contracts before
+calling their initial wrong expectations product defects.
+
 ## D-113 — Validate restore bindings without an I/O failure seam
 
 Security admission over a small already-captured string should not rely on a
