@@ -1,5 +1,34 @@
 # Verified commands and evidence
 
+## Fresh frontend and request-observation checks — 21 September
+
+Exact commands and outputs are in existing task `evidence/` JSON captures:
+
+| Capture | Result |
+| --- | --- |
+| `resume-frontend-unit-20260921.json` | initial 828 pass / 2 harness timing failures |
+| `resume-unit-harness-targeted-20260921.json` | scoped 11/11 pass |
+| `resume-frontend-final-unit-20260921.json` | final 830/830, 143 files; 172.232 s capture |
+| `resume-frontend-final-types-20260921.json` | application/tooling TypeScript pass |
+| `resume-frontend-final-lint-20260921.json` | zero errors / one existing warning |
+| `resume-frontend-build-20260921.json` | application build pass |
+| `resume-frontend-public-build-20260921.json` | public-audit build pass |
+| `browser-failure-observed-final-v2-green-20260921.json` | final exact-request/response pair 2/2 pass; 19.70 s tests |
+
+Commands ran in named local tmux sessions with existing dependencies. The
+support launcher refuses capture-label reuse; do not replay completed labels.
+Both builds preceded only test-file changes, not a runtime source modification.
+Scoped Ruff and diff checks pass; normal commit hooks and strict staged-diff
+secret scans pass. Local commits: `8137f570` and `1f491b75`.
+
+Earlier browser environment errors and the truncated source-mutant failure are
+retained separately; see request-observation notes for hashes/provenance limits.
+Live server-host checks and Mac reachability failures are recorded in
+`live-health-resume-20260921.md`, not counted as a full production smoke PASS.
+No Docker build/write, native aggregate, migration, restore, cleanup, push or
+deploy command was run in this checkpoint. Read-only Docker resource counts
+were unchanged; final Mac free space was 10,938,568 KiB.
+
 ## Approval fake ordering and separate SEO release — 21 September
 
 Pure approval-fake commands, complete output and durations are preserved in

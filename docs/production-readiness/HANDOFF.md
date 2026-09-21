@@ -1,5 +1,50 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, fresh tests packaged; isolated runtime pending
+
+Local commits: `8137f570` (frontend test-harness timing and evidence) and
+`1f491b75` (browser failing-request observation and evidence). No push/deploy.
+Full frontend result is 830/830 in 143 files, app/tooling TypeScript pass,
+lint zero errors/one pre-existing legacy `any` warning, both builds pass.
+Final browser pair passes 2/2 in 19.70 s. Independent review accepted final
+test changes. They preserve assertions and change no production runtime code.
+Evidence prefixes: `resume-frontend-`, `resume-unit-harness-`, and
+`browser-failure-observed-`, under the existing task evidence directory.
+
+Do not repeat the completed 112-path assertion review or overwrite captures.
+The earlier browser mutant log is truncated and its private worktree removed;
+its builder-reported mutation provenance and pre-refinement test hash are
+explicit in the notes. It is not independent final-version mutation proof.
+Existing local dependencies/mocked browser APIs do not satisfy clean-install,
+native PostgreSQL, current complete aggregate, or production acceptance.
+
+All old `/private/tmp` native runtime directories checked this turn are gone.
+The former 4,910 collected/4,903+7 expected count belongs to old source, not
+current HEAD. Since that checkpoint, 33 test paths and requirements changed;
+fresh isolated collection is necessary. An async permission question for a
+new owned Docker/PostgreSQL synthetic-data/backup-restore lane is unanswered.
+Do not recreate denied preparation through another route before that reply.
+If approved, use a frozen current Git export, blank provider credentials,
+reviewed egress guards, fresh dependencies and uniquely owned PG resources;
+never the shared local DBs or the unsafe all-in-one build helper. Recheck the
+10 GiB image floor: final free space 10,938,568 KiB (~10.43 GiB), after an
+earlier ~8.6 GiB reading. No cause for that fluctuation is established.
+
+`live-health-resume-20260921.md` records read-only checks: server-host web and
+readiness routes are healthy; Mac external reachability still fails with an
+unknown boundary. The production Telegram process is alive but its exact
+polling heartbeat file is absent; this alone explains unhealthy status, not
+why polling is absent. No restart, provider call or configuration change was
+made. A production operational change requires separate scoped authorization.
+
+Other remaining gates: security closure/credential-owner proof, real-API
+integration and CAPTCHA retry timing, paired performance, current image,
+synthetic restore/recovery/demo, hosted CI and final evidence reconciliation.
+Concurrent commit `dee9978c` is not part of frontend changes and has no fresh
+complete backend verification here. Preserve the 13 foreign dirty paths and
+historical spec/verdict/problems. Whole-goal FAIL is unchanged; manual work
+does not itself resume the paused app goal controller.
+
 ## Latest checkpoint — 21 September, SEO released and audit resumed locally
 
 Branch `codex/production-readiness-20260917`; original baseline `30262a5`.

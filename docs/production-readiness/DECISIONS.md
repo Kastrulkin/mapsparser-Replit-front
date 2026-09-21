@@ -1,5 +1,21 @@
 # Readiness decisions
 
+## D-084 — Separate test timing, observed failures and native acceptance
+
+Resolve frontend cold-import and entry-animation timing in the test harness,
+not by changing product behavior or extending assertion timeouts. Require the
+exact injected failing browser request and bounded matching response before
+accepting the UI outcome. Keep initial failures, final green captures, source
+hashes and the older mutant's provenance limits explicit.
+
+The 830-unit and two-browser results are current local test evidence, not a
+clean dependency/image or real-API acceptance claim. Old native runtimes were
+removed and old collection counts cannot certify changed current source.
+Ask explicitly before replacing the previously denied preparation with a new
+synthetic-data lane; disk headroom alone is not authority. Do not restart the
+live unhealthy Telegram bot or change network settings during read-only audit.
+Server-host HTTPS success does not prove external Mac reachability.
+
 ## D-083 — Resume from the saved audit checkpoint; keep SEO release separate
 
 The authorized public SEO overlay uses a production snapshot and protected

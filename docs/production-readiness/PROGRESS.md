@@ -1,5 +1,34 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, fresh frontend and browser-test verification
+
+- [x] Local commit `8137f570`: stabilize two unit-test harnesses without changing
+  application code or weakening assertions. Full rerun: **830/830 tests across
+  143 files**; TypeScript passes; lint has zero errors and one existing warning.
+  Application and public-audit builds pass using existing local dependencies.
+- [x] Local commit `1f491b75`: two browser tests now require exact failing API
+  request observation; guided-tour actions wait for the matching 200/502
+  responses. Final **2/2 pass**; independent review accepts both test packages.
+  The earlier source-mutant capture is bounded evidence, not final-version or
+  real-API proof; see `browser-failure-observed-notes-20260921.md`.
+- [x] Read-only production observations: server-host HTTP/HTTPS checks pass.
+  Telegram bot is running but unhealthy, with its polling heartbeat absent.
+  Its historical restart count does not establish a current restart loop.
+- [ ] External Mac reachability still times out; failure boundary is unknown.
+- [ ] Current clean Docker/native aggregate, synthetic migrations/restore,
+  security closure, paired performance, hosted CI and recovery/demo remain.
+
+The previous native temporary runtimes no longer exist. An explicit question
+requests authority for a new isolated synthetic-data lane after prior denied
+preparation actions; no reply has been received at this checkpoint. No retry or
+alternate route around those denials occurred. Mac free space ranged from about
+8.6 to 10.4 GiB; the final reading was 10,938,568 KiB, only slightly above the
+10 GiB image floor. Recheck immediately before any authorized image build.
+No Docker write, cleanup, production/DB change, push or deployment in this turn.
+Concurrent `dee9978c` has no frontend changes; it is not covered by a fresh full
+backend aggregate. Foreign changes are excluded from our commits. Original
+whole-goal FAIL remains; the app goal controller was still paused when read.
+
 ## Latest checkpoint — 21 September, resumed after isolated SEO release
 
 - [x] Separately authorized SEO overlay is live: `public-seo-20260921`, source
