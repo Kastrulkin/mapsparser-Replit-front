@@ -1,5 +1,32 @@
 # Verified commands and evidence
 
+## Schedule settings — 21 September, parentbd487501
+
+Task `evidence/agent-schedule-*-20260921.json` captures include exact command,
+cwd, exit, time and bounded output. Long checks ran in named tmux sessions;
+private Vitest/Vite configs disable env-file reads. No database/provider calls.
+
+| Capture suffix | Actual result | Duration ms |
+| --- | --- | ---: |
+| red |Initial3fail; latent harness no-op handlers later corrected, not final proof |10108.876|
+| causal-red |Corrected3fail; subsequently expanded test bytes |9492.254|
+| final-baseline |Immutable parent5fail; before stale-response assertion strengthening |12637.013|
+| final-green |Same intermediate5cases pass |5687.621|
+| verified-baseline |Final test bytes, immutable parent injection:5fail |13439.965|
+| verified-green |Same final5cases pass,4.21s |5654.975|
+| quality |Both TS projects/full ESLint pass; one existing auth_new.ts115 any warning |54259.885|
+| build |Fresh private Vite build pass; no deploy |19792.826|
+| integrity |199reachable JS assets verified |204.939|
+| full-unit |814tests/138files pass,344.09s Vitest |345434.781|
+
+All ten captures have no timeout or truncation. Focused final green stderr is
+empty; full-suite stderr retains fixture/router warnings and simulated failure
+diagnostics, compared with the preceding809-test run. Build retains four existing
+dependency PURE annotation warnings and the fresh external-outDir notice.
+Manifest binds16source/harness/dependency hashes; no whole-backend or live API
+acceptance follows from these frontend results. Independent bounded review
+accepted the frozen implementation, five tests and baseline injection.
+
 ## Service/leaf diagnostics — 21 September, parentc587b20f
 
 All captures are in task `evidence/`, with exact commands and source hashes.

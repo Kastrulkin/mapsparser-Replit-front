@@ -1,5 +1,19 @@
 # Readiness decisions
 
+## D-076 — Hydrate the selected schedule without erasing in-flight edits
+
+Scenario and Settings must read the same candidate-or-active version. A candidate
+without schedule must not silently borrow the active version's schedule; use the
+backend-compatible legacy fallback. Match business and blueprint identity before
+applying details, and distinguish server hydration from user edits per field.
+Save completion may clear dirty markers only for the same hydration object and
+unchanged edit revisions, including A→B→A selection changes. This does not change
+approval or active-version behavior.
+
+When final regression bytes change, preserve previous captures and rerun against
+immutable parent bytes through a narrow verified load hook, not a working-tree
+reversal. Authenticated production observations are not proof of the local build.
+
 ## D-075 — Preserve diagnostic consumers without retaining provider content
 
 Trace hardening must inspect readers as well as writers. The Apify stage trace

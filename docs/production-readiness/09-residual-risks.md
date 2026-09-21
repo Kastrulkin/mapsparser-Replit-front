@@ -1,5 +1,15 @@
 # Residual risks — working register
 
+Latest21September, parentbd487501: UX-AGENT-SCHEDULE-01 locally FIX_PROVEN for
+the five-case schedule hydration contract; full frontend814/138 and bounded
+review pass. Live browser observation was read-only on three routes, with unknown
+deployed revision; the fix is not deployed. Pending-save, business-switch,
+create-wizard and empty/partial contract matrices lack comprehensive dynamic
+coverage. Existing broader detail-loader races are not claimed fixed.
+One existing lint warning and fixture/build diagnostics remain. No new current
+backend/native/restore/image/real-API/demo/CI or whole-readiness acceptance.
+Production mutation and denied native prep authority are not granted by login.
+
 Latest21September, parentc587b20f:39legacy leaf value-bearing console sinks and
 the Apify trace writer/actor-error print are now locally corrected with86pure
 passes and bounded review. V2 status-reader compatibility is included. This

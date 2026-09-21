@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "finding": "UX-AGENT-SCHEDULE-01",
+  "diagnosis": "FIX_PROVEN (local five-case schedule contract)",
+  "parent_commit": "bd487501dd22733f92fa5cce80766ead60a554ec",
+  "source_hashes": [
+    {
+      "path": "frontend/src/pages/dashboard/AgentBlueprintsWorkspace.tsx",
+      "sha256": "a2e7503d70b8d2b6e9250f09eb4ac68eb85dae38aff9231bf74883eab97fad01"
+    },
+    {
+      "path": "frontend/src/pages/dashboard/AgentBlueprintsWorkspace.schedule.test.tsx",
+      "sha256": "fe802fcb40f9d24cd05c76b0fa374fe6cf9fa2ba8ee76b6a3d396f022c9eed2b"
+    },
+    {
+      "path": "frontend/src/pages/dashboard/agents/employee.tsx",
+      "sha256": "bda37826330d7092c1294615f66e56be355b5137a39f4e5bf6e3149212d9c3c2"
+    },
+    {
+      "path": "frontend/src/pages/dashboard/agents/view.tsx",
+      "sha256": "b8aa85143a3ec6fa5aaf66e868a436f6109bd9f150c7ef3c2f53abf98f00b05b"
+    },
+    {
+      "path": "frontend/src/pages/dashboard/agents/model.ts",
+      "sha256": "3ce298644e6d44074425cf651e2c56a9f3d590e838bdf9328339409a6d252b98"
+    },
+    {
+      "path": "frontend/src/pages/dashboard/agents/types.ts",
+      "sha256": "977a401d0d6b98473b37ee9ea6fc107d63dac53a0f6ec5842d020305bcf1201d"
+    },
+    {
+      "path": "src/api/agent_blueprints_api.py",
+      "sha256": "e2fed3a0c9deead738b708f775ab9863f9dd6e7836ab068db73fe2aa624e2e5b"
+    },
+    {
+      "path": "src/services/agent_trigger_runtime.py",
+      "sha256": "b111147e071353f25b2336405cf0293ebe4fb71eb8beac0e8ee1ddb13509132c"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/support/agent_schedule_baseline_vitest.config.mjs",
+      "sha256": "cc3c58666de29ddd1b5492a8e41f7e2e70e056b250239dceae0a0857b77e2e5b"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/support/managed_growth_vitest.config.mjs",
+      "sha256": "8d3b4c0cdf9780b91b1b6cb30deb897f40b621c50634b846938264b4a3f91148"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/support/managed_growth_build.config.mjs",
+      "sha256": "bfd4522902bbd6eb96c959bb23d5f6220b23b5022bee118509c8caa0d86e6892"
+    },
+    {
+      "path": "frontend/src/test/setup.ts",
+      "sha256": "69a8b4154ed580dbd502bb31ac1fecc4217bbb1c4211630a3880cf5dba69f3e3"
+    },
+    {
+      "path": "frontend/vite.config.ts",
+      "sha256": "038739486b4ebdda76cca5a70507511150b20acac90fdc2d0453b8e9ce81b23f"
+    },
+    {
+      "path": "frontend/package.json",
+      "sha256": "21671716cdd1edc4ded1a3a7935b055de6142608f523c2e1725e8bfbb3212052"
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "sha256": "a4e1362910fe02f286e950840fd79141fd411533b7743aa79f8c1a450ddece8b"
+    },
+    {
+      "path": "scripts/verify_frontend_dist_integrity.sh",
+      "sha256": "a351b5cc083697d4953d6d1e9d59b88e0b8c8e5353077912f3dd767e3e059741"
+    }
+  ],
+  "captures": [
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-schedule-build-20260921.json",
+      "sha256": "b5562f545364e6441a92a5a12bf395f227e9d596c70d0ea322131a90afe4618b",
+      "exit_code": 0,
+      "duration_ms": 19792.826,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-schedule-causal-red-20260921.json",
+      "sha256": "afd7845ba20642031a2810575eee4f5b827943d7101b9177ef6744a3cdfcf569",
+      "exit_code": 1,
+      "duration_ms": 9492.254,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-schedule-final-baseline-20260921.json",
+      "sha256": "a5f71ddf29b5438964b45b9ae87af1f1fc82dbbd179b37c3d18c7a624691c205",
+      "exit_code": 1,
+      "duration_ms": 12637.013,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-schedule-final-green-20260921.json",
+      "sha256": "e2d11f1bdfb33d2be809f24d1ee53d2de1ddcf4d34c853a6fa01bae5e19303d7",
+      "exit_code": 0,
+      "duration_ms": 5687.621,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-schedule-full-unit-20260921.json",
+      "sha256": "6ea337018578593658fc1c6a21df87b63bd52aeec4721816066ef5bfd59a2809",
+      "exit_code": 0,
+      "duration_ms": 345434.781,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-schedule-integrity-20260921.json",
+      "sha256": "ccb4d3420a05224273dac74d378e536b1b764d8fc6c64e58eb43db65c2315138",
+      "exit_code": 0,
+      "duration_ms": 204.939,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-schedule-quality-20260921.json",
+      "sha256": "aac3a2f8f834a2293c1d5b8ff7ce1fec92d7acc10d50d62647a25177a90089cc",
+      "exit_code": 0,
+      "duration_ms": 54259.885,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-schedule-red-20260921.json",
+      "sha256": "8f337f804e3ded6d1b75501b766f1bb2d30758e632386919e6093625b8abcd21",
+      "exit_code": 1,
+      "duration_ms": 10108.876,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-schedule-verified-baseline-20260921.json",
+      "sha256": "be3825fa756b5d77c3f11c19e33f07de56def34d17be783f262cd967f0269357",
+      "exit_code": 1,
+      "duration_ms": 13439.965,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/agent-schedule-verified-green-20260921.json",
+      "sha256": "c74b9eb47d929546d477597602f1fe252b64cac1d1ac82a79099aebd97173b9d",
+      "exit_code": 0,
+      "duration_ms": 5654.975,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    }
+  ],
+  "foreign_paths_unchanged": 9,
+  "head": "bd487501dd22733f92fa5cce80766ead60a554ec",
+  "baseline_workspace_sha256": "5ea7bd7f63f04840afc709d9d575ed254ff8ecb156bca845ea0005cf031913ae",
+  "full_frontend_result": {
+    "test_files": 138,
+    "tests": 814,
+    "vitest_seconds": 344.09,
+    "captured_ms": 345434.781
+  },
+  "independent_review": {
+    "reviewer": "whole_diff_frontend_review",
+    "status": "ACCEPTED",
+    "scope": "Frozen source/test and immutable-parent injection; same 5 assertion failures become 5 passes. Full-suite stderr categories match preceding 809-test capture: expected fixture failure paths, 3 jsdom scrollTo and 1 navigation-not-implemented notices; no new unhandled/failing results."
+  },
+  "limits": [
+    "One existing frontend any lint warning; build dependency warnings retained.",
+    "Browser observation: one SuperAdmin session, three routes, deployed revision unknown, no explicit mutation; not the local build.",
+    "Pending-save/business-switch/create-wizard/empty-partial matrices not exhaustive; broader detail-loader races remain.",
+    "No production/DB/schema/provider/Docker/cleanup/push/deploy. Original whole FAIL/AC/verdict and native permission gates unchanged."
+  ]
+}

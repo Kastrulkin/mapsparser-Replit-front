@@ -74,6 +74,25 @@ import {
 const AgentBlueprintsView = lazy(() => import('./agents/view').then((module) => ({ default: module.AgentBlueprintsView })));
 const CompiledScriptBuilder = lazy(() => import('@/components/agents/CompiledScriptBuilder').then((module) => ({ default: module.CompiledScriptBuilder })));
 
+const scheduleValue = (value: unknown) => (
+  typeof value === 'string' && value.trim() ? value : ''
+);
+
+const selectedSchedule = (blueprint: AgentBlueprint, details: AgentBlueprintDetails | null) => {
+  const workingVersion = details?.execution_contract?.candidate || details?.execution_contract?.active;
+  const workingSchedule = workingVersion?.schedule;
+  const hasWorkingSchedule = Boolean(scheduleValue(workingSchedule?.time) || scheduleValue(workingSchedule?.timezone));
+  const metadata = recordValue(blueprint.metadata_json);
+  const customProcess = recordValue(metadata?.custom_process);
+  const metadataSchedule = recordValue(customProcess?.schedule);
+  const schedule = hasWorkingSchedule ? workingSchedule : metadataSchedule;
+  return {
+    time: scheduleValue(schedule?.time),
+    timezone: scheduleValue(schedule?.timezone),
+    executionMode: workingVersion?.execution_mode || details?.execution_mode || blueprint.execution_mode || 'manual',
+  };
+};
+
 export const AgentBlueprintsWorkspace = () => {
   const location = useLocation();
   const { language } = useLanguage();
@@ -169,6 +188,7 @@ export const AgentBlueprintsWorkspace = () => {
   const [scheduleTime, setScheduleTime] = useState('09:00');
   const [scheduleTimezone, setScheduleTimezone] = useState('Europe/Moscow');
   const [selectedExecutionMode, setSelectedExecutionMode] = useState<AgentExecutionMode>('manual');
+  const scheduleHydrationRef = useRef({ scopeKey: '', hasMatchingDetails: false, timeDirty: false, timezoneDirty: false, modeDirty: false, timeRevision: 0, timezoneRevision: 0, modeRevision: 0 });
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackTrigger, setFeedbackTrigger] = useState('manual_edit');
   const [feedbackVersionNotice, setFeedbackVersionNotice] = useState<FeedbackVersionNotice | null>(null);
@@ -231,22 +251,54 @@ export const AgentBlueprintsWorkspace = () => {
     [blueprints, selectedBlueprintId],
   );
 
+  const setScheduleTimeWithDirtyState = useCallback((value: string) => {
+    scheduleHydrationRef.current.timeDirty = true;
+    scheduleHydrationRef.current.timeRevision += 1;
+    setScheduleTime(value);
+  }, []);
+
+  const setScheduleTimezoneWithDirtyState = useCallback((value: string) => {
+    scheduleHydrationRef.current.timezoneDirty = true;
+    scheduleHydrationRef.current.timezoneRevision += 1;
+    setScheduleTimezone(value);
+  }, []);
+
+  const setSelectedExecutionModeWithDirtyState = useCallback((value: AgentExecutionMode) => {
+    scheduleHydrationRef.current.modeDirty = true;
+    scheduleHydrationRef.current.modeRevision += 1;
+    setSelectedExecutionMode(value);
+  }, []);
+
   useEffect(() => {
-    const metadata = selectedBlueprint?.metadata_json;
-    const customProcess = recordValue(metadata?.custom_process);
-    const schedule = recordValue(customProcess?.schedule);
-    if (schedule && typeof schedule.time === 'string' && schedule.time) {
+    const scopeKey = `${currentBusinessId || ''}:${selectedBlueprint?.id || ''}`;
+    const scopeChanged = scheduleHydrationRef.current.scopeKey !== scopeKey;
+    if (scopeChanged) {
+      scheduleHydrationRef.current = { scopeKey, hasMatchingDetails: false, timeDirty: false, timezoneDirty: false, modeDirty: false, timeRevision: 0, timezoneRevision: 0, modeRevision: 0 };
+      setScheduleTime('09:00');
+      setScheduleTimezone((currentBusiness?.name || '').toLowerCase().includes('tallinn') ? 'Europe/Tallinn' : 'Europe/Moscow');
+      setSelectedExecutionMode('manual');
+    }
+    if (!selectedBlueprint || selectedBlueprint.business_id !== currentBusinessId) {
+      return;
+    }
+    const detailsMatchSelection = blueprintDetails?.blueprint?.id === selectedBlueprint.id
+      && blueprintDetails.blueprint.business_id === selectedBlueprint.business_id;
+    if (detailsMatchSelection) {
+      scheduleHydrationRef.current.hasMatchingDetails = true;
+    } else if (scheduleHydrationRef.current.hasMatchingDetails) {
+      return;
+    }
+    const schedule = selectedSchedule(selectedBlueprint, detailsMatchSelection ? blueprintDetails : null);
+    if (!scheduleHydrationRef.current.timeDirty && schedule.time) {
       setScheduleTime(schedule.time);
     }
-    if (schedule && typeof schedule.timezone === 'string' && schedule.timezone && schedule.timezone !== 'business_timezone') {
+    if (!scheduleHydrationRef.current.timezoneDirty && schedule.timezone && schedule.timezone !== 'business_timezone') {
       setScheduleTimezone(schedule.timezone);
-    } else if ((currentBusiness?.name || '').toLowerCase().includes('tallinn')) {
-      setScheduleTimezone('Europe/Tallinn');
     }
-    if (selectedBlueprint) {
-      setSelectedExecutionMode(agentExecutionMode(selectedBlueprint, blueprintDetails));
+    if (!scheduleHydrationRef.current.modeDirty) {
+      setSelectedExecutionMode(schedule.executionMode);
     }
-  }, [blueprintDetails, currentBusiness?.name, selectedBlueprint]);
+  }, [blueprintDetails, currentBusiness?.name, currentBusinessId, selectedBlueprint]);
 
   const pendingApproval = useMemo(
     () => activeRun?.approvals?.find((item) => item.status === 'pending') || null,
@@ -1230,11 +1282,20 @@ export const AgentBlueprintsWorkspace = () => {
     }
     setActionLoading(true);
     setError(null);
+    const savedHydration = scheduleHydrationRef.current;
+    const savedTimeRevision = savedHydration.timeRevision;
+    const savedTimezoneRevision = savedHydration.timezoneRevision;
     try {
       await api.post(`/agent-blueprints/${selectedBlueprint.id}/schedule`, {
         time: scheduleTime,
         timezone: scheduleTimezone,
       });
+      if (scheduleHydrationRef.current === savedHydration && scheduleHydrationRef.current.timeRevision === savedTimeRevision) {
+        scheduleHydrationRef.current.timeDirty = false;
+      }
+      if (scheduleHydrationRef.current === savedHydration && scheduleHydrationRef.current.timezoneRevision === savedTimezoneRevision) {
+        scheduleHydrationRef.current.timezoneDirty = false;
+      }
       setDecisionNotice('Расписание сохранено. Теперь включите агента.');
       await loadBlueprints();
       await loadBlueprintDetails(selectedBlueprint.id);
@@ -1252,13 +1313,27 @@ export const AgentBlueprintsWorkspace = () => {
     }
     setActionLoading(true);
     setError(null);
+    const savedHydration = scheduleHydrationRef.current;
+    const savedTimeRevision = savedHydration.timeRevision;
+    const savedTimezoneRevision = savedHydration.timezoneRevision;
+    const savedModeRevision = savedHydration.modeRevision;
+    const savedExecutionMode = selectedExecutionMode;
     try {
       await api.post(`/agent-blueprints/${selectedBlueprint.id}/execution-mode`, {
         execution_mode: selectedExecutionMode,
         time: selectedExecutionMode === 'scheduled' ? scheduleTime : undefined,
         timezone: selectedExecutionMode === 'scheduled' ? scheduleTimezone : undefined,
       });
-      setDecisionNotice(selectedExecutionMode === 'scheduled'
+      if (scheduleHydrationRef.current === savedHydration && scheduleHydrationRef.current.modeRevision === savedModeRevision) {
+        scheduleHydrationRef.current.modeDirty = false;
+      }
+      if (savedExecutionMode === 'scheduled' && scheduleHydrationRef.current === savedHydration && scheduleHydrationRef.current.timeRevision === savedTimeRevision) {
+        scheduleHydrationRef.current.timeDirty = false;
+      }
+      if (savedExecutionMode === 'scheduled' && scheduleHydrationRef.current === savedHydration && scheduleHydrationRef.current.timezoneRevision === savedTimezoneRevision) {
+        scheduleHydrationRef.current.timezoneDirty = false;
+      }
+      setDecisionNotice(savedExecutionMode === 'scheduled'
         ? 'Тип запуска и расписание сохранены. После успешного теста агента можно включить.'
         : 'Тип запуска сохранён. Теперь можно проверить агента.');
       await loadBlueprints();
@@ -2066,8 +2141,8 @@ export const AgentBlueprintsWorkspace = () => {
       agentExternalAuthOptions, agentBindingStatus, agentConnectionPlan, selectedConnectionBindingKey, setSelectedConnectionBindingKey, sheetSpreadsheetId, setSheetSpreadsheetId, sheetName, setSheetName, sheetAuthRef,
       setSheetAuthRef, sheetDailyCap, setSheetDailyCap, browserTargetUrls, setBrowserTargetUrls, browserDailyCap, setBrowserDailyCap, telegramBotMode, setTelegramBotMode, telegramDailyCap,
       setTelegramDailyCap, whatsappChannelMode, setWhatsappChannelMode, whatsappDailyCap, setWhatsappDailyCap, matonAuthRef, setMatonAuthRef, matonChannel, setMatonChannel, matonDailyCap,
-      setMatonDailyCap, processRowValues, setProcessRowValues, processPreviewMessage, setProcessPreviewMessage, scheduleTime, setScheduleTime, scheduleTimezone, setScheduleTimezone, selectedExecutionMode,
-      setSelectedExecutionMode, feedbackText, setFeedbackText, feedbackTrigger, setFeedbackTrigger, feedbackVersionNotice, legacyMigrationPlan, legacyMigrationNotice, recentCreatedAgentName, setRecentCreatedAgentName,
+      setMatonDailyCap, processRowValues, setProcessRowValues, processPreviewMessage, setProcessPreviewMessage, scheduleTime, setScheduleTime: setScheduleTimeWithDirtyState, scheduleTimezone, setScheduleTimezone: setScheduleTimezoneWithDirtyState, selectedExecutionMode,
+      setSelectedExecutionMode: setSelectedExecutionModeWithDirtyState, feedbackText, setFeedbackText, feedbackTrigger, setFeedbackTrigger, feedbackVersionNotice, legacyMigrationPlan, legacyMigrationNotice, recentCreatedAgentName, setRecentCreatedAgentName,
       recentPostCreateHandoff, setRecentPostCreateHandoff, showAdvancedAgentTools, deleteCandidate, setDeleteCandidate, decisionNotice, setDecisionNotice, googleAccessJustConnected, selectedBlueprint, pendingApproval,
       pendingApprovals, selectedPendingApproval, queuedButNotDispatched, selectedScenario, systemAgents, migrationStats, applyBuilderScenario, loadBlueprints, loadBlueprintDetails, loadRun, startDialogBuilderSession,
       sendDialogBuilderReply, createAgentFromDialogSession, createAgentFromPrompt, startRun, executeRun, saveSchedule, saveExecutionMode, rebuildScenarioAndRun, rebuildScenario, activateVersion, deleteAgent,

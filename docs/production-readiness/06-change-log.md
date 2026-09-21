@@ -1,5 +1,18 @@
 # Production-readiness change log
 
+## Agent schedule settings — 21 September, parentbd487501
+
+UX-AGENT-SCHEDULE-01 fixes version/legacy schedule divergence observed in the
+authenticated UI. Settings now use matching candidate-or-active contract data,
+with compatible legacy fallback, per-field dirty tracking and scope/revision
+guards. Save payloads, candidate creation and approval/activation remain unchanged.
+Final immutable-parent5fail → current5pass; full frontend814/138, TS/lint/build/
+asset checks and bounded review pass. One old lint warning remains. No production
+save/deploy; pending-save/business-switch/create-wizard matrices remain limited.
+
+Read-only browser notes distinguish three observed deployed routes from local
+causal tests; no deployed revision or new-build runtime proof is asserted.
+
 ## Apify trace and legacy leaf diagnostics — 21 September, parentc587b20f
 
 SEC-APIFY-TRACE-01 adds v2 trace projection with fixed stage names/timestamps,

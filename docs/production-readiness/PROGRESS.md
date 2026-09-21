@@ -1,5 +1,22 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, authenticated UI and schedule settings
+
+- [x] Previous privacy package committed as `bd487501`; nine foreign dirty paths preserved.
+- [x] User-authenticated in-app browser: Today, Operator and Agents observed without explicit mutation. Deployed revision unknown; not a full demo or tenant test.
+- [x] UX-AGENT-SCHEDULE-01: Scenario showed18:00 while Settings showed09:00. Locally corrected settings to hydrate the matching selected version, retain unsaved field edits and reject stale selection details.
+- [x] Same final five regression cases fail on immutable parent and pass after the fix; independent bounded review accepted source/tests/baseline harness.
+- [x] Full frontend814tests/138files pass (345434.781ms captured); both TypeScript projects, full lint (one existing warning), fresh build and199-JS asset integrity pass.
+- [ ] Pending-save/business-switch/create-wizard matrices are source-reviewed, not fully tested. No new-build live browser or production save/deploy claim.
+- [ ] Whole readiness remains FAIL; original AC1–9/11 FAIL and AC10 PASS unchanged.
+
+Source/test hashes and ten immutable command captures are bound in
+`evidence/agent-schedule-manifest-20260921.json` within the existing task bundle.
+Next: current-backend/native aggregate, image/compiled-runner/restore, real-API
+and demo/CI gates when their existing authority/headroom prerequisites are met;
+remaining privacy/lifecycle findings remain open. Native prep denial is not
+overridden by browser login. No push/deploy, DB/schema/provider or cleanup action.
+
 ## Latest checkpoint — 21 September, Apify trace and legacy leaf diagnostics
 
 - [x] Previous c587b20f package is confirmed progress; original objective reread,

@@ -2,6 +2,15 @@
   "task_id": "production-readiness-20260917",
   "overall_status": "FAIL",
   "checkpoint": {
+    "subsequent_authenticated_ui_schedule_hydration": {
+      "parent_commit": "bd487501dd22733f92fa5cce80766ead60a554ec",
+      "finding": "UX-AGENT-SCHEDULE-01",
+      "scope": "Workspace schedule hydration only: selected candidate-or-active contract, legacy fallback, scope/dirty/revision guards. Save payloads and approval/activation unchanged.",
+      "proof": ["evidence/authenticated-browser-readonly-20260921.md", "evidence/agent-schedule-notes-20260921.md", "evidence/agent-schedule-manifest-20260921.json", "evidence/agent-schedule-verified-baseline-20260921.json", "evidence/agent-schedule-verified-green-20260921.json", "evidence/agent-schedule-quality-20260921.json", "evidence/agent-schedule-build-20260921.json", "evidence/agent-schedule-integrity-20260921.json", "evidence/agent-schedule-full-unit-20260921.json"],
+      "result": "Final same five tests fail on verified immutable parent and pass on current source. Full frontend814tests/138files pass344.09s/345434.781ms; both TS projects, lint with one existing warning, fresh build and199-JS integrity pass.16source hashes and10capture digests; independent bounded review accepted.",
+      "provenance": "Initial harness no-op handlers corrected, fixtures expanded and stale-response assertion strengthened; earlier captures retained, not relabeled as final bytes. Narrow parent Vite load hook verifies source and final test hashes; no source reversal. User-authenticated three-route read-only observations have unknown deployed revision.",
+      "limits": "Pending-save/business-switch/create-wizard/empty-partial matrices not exhaustively automated; broader detail-loader races unchanged. No production save, provider send, DB/schema, Docker, cleanup, push or deploy. Original AC/verdict and whole FAIL unchanged; nine foreign paths preserved. Native aggregate/restore denial and release/secret lifecycle gates remain."
+    },
     "subsequent_apify_trace_and_legacy_leaf_diagnostics": {
       "parent_commit": "c587b20f5f28187c1fed04323e6f6b118982282c",
       "findings": ["SEC-APIFY-TRACE-01", "SEC-LEGACY-LEAF-LOG-02"],

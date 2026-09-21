@@ -1,5 +1,33 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, schedule hydration
+
+Parent `bd487501dd22733f92fa5cce80766ead60a554ec`; read Git for resulting local
+commit. Runtime changes only `AgentBlueprintsWorkspace.tsx`; new five-case
+`AgentBlueprintsWorkspace.schedule.test.tsx` mounts workspace state and the real
+execution-mode panel behind a mocked view/API boundary. No POST in these tests.
+Authoritative same-test proof: `agent-schedule-verified-baseline` five failures
+versus `agent-schedule-verified-green` five passes; immutable-parent Vite injection
+does not reverse source. Earlier test iterations/captures remain and are qualified
+in `agent-schedule-notes-20260921.md`.
+
+Full unit814/138 passes, captured345434.781ms; TS/lint passes with one existing
+warning; build passes and199reachable JS assets verify. Independent bounded
+review accepted. Final manifest binds16source/dependency hashes and10captures.
+Do not mistake fixture warnings in full-suite stderr for a clean console or a
+new production incident. Pending-save/business-switch/create-wizard behavior
+has static guards but lacks a complete dynamic matrix.
+
+Authenticated existing IAB tab is left at `/dashboard/agents`, sidebar closed.
+Today was not remounted (possible journey claim); no query-triggered action,
+save/send/run/approval/activation was invoked. Three-route observation only,
+deployed revision unknown. Production still shows unshipped behavior.
+
+Whole FAIL, original acceptance/verdict, nine foreign paths, historical secret
+lifecycle and native aggregate/restore authority gates stay unchanged. Do not
+resume denied native prep through another path. No production/DB/schema/provider,
+Docker/cleanup, push or deployment action in this checkpoint.
+
 ## Latest checkpoint — 21 September, Apify trace and legacy leaf logs
 
 Parent `c587b20f5f28187c1fed04323e6f6b118982282c`; same readiness branch.
