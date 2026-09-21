@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/.agent/tasks/production-readiness-20260917/support/native_guard_diagnostic_hflypi.py", line 60, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/.agent/tasks/production-readiness-20260917/support/native_guard_diagnostic_hflypi.py", line 55, in main
+    launcher["capture"]("negative", [str(NATIVE / "venv/bin/python"), "-B", str(NATIVE / "native_hflypi_probe_v1.py"), "negative"], launcher["environment"](new_hash), attempt="v2")
+  File "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/.agent/tasks/production-readiness-20260917/support/native_guard_checks_hflypi.py", line 260, in capture
+    raise RuntimeError("guard denied probe; preserve evidence and stop")
+RuntimeError: guard denied probe; preserve evidence and stop

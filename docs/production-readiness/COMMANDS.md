@@ -1,5 +1,53 @@
 # Verified commands and evidence
 
+## Native guard runtime and internal relay probes — 21 September
+
+- tmux `audit-native-guard-hflypi-20260921`, support/native_guard_checks_hflypi.py:
+  tracked source verification, exclusive guard/probe installation, negative
+  startup exit78,613.956ms; no child/positive action.
+- tmux `audit-native-guard-diag-hflypi-v2`, support/native_guard_diagnostic_hflypi.py:
+  preserve exactv1guard, atomic diagnosticv2; negative exit78,497.685ms;
+  sanitized ImportError frames point to psycopg2 native extension import.
+- Direct minimal-env native import reports psycopg2 2.9.13; relayv1 under
+  default tmux reports extension `arm64` versus interpreter `x86_64` mismatch.
+- tmux `audit-native-guard-hflypi-v3` stopped at5GiB capacity gate before new
+  artifacts. Later `audit-native-guard-hflypi-v3-capacity` ran the same script:
+  `/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_guard_resume_hflypi.py`.
+  All3probes exit0:10negative cases/2.111149s, stripped child/0.335543s,
+  fresh-identity read-only owned PG/0.399707s. Capture prefix
+  `native/evidence/native-guard-*-v3.json` in retained private runtime.
+- tmux `audit-native-relay-hflypi-v1` and `...-v2`: standalone internal PG
+  feasibility, not Testcontainers. v1 architecture import failure/count0,
+  10.774s; v2 ARM64/count1 but3s connection timeout,13.966s. Exact tmpfs
+  container `423858f...ca318` stopped and identity reverified in both cases.
+  Raw task evidence: `native-internal-pg-relay-probe-hflypi-v1.json` andv2.
+- tmux `audit-native-relay-hflypi-v3`: same standalone flow,15s connect/25s
+  child limit; readonly identity+SELECT1 exit0,3.470s, total14.388s. First
+  upstream bytes follow first client bytes by3.108084s. Internal network/one
+  connection/exact stopped-container checks pass. Docker-exec return255 is
+  recorded and unresolved; do not claim clean relay exit/Testcontainers proof.
+- tmux `audit-native-collection-hflypi-v3`, ARM64 isolated outer launcher
+  `support/native_collection_hflypi.py --attempt v3`:5481tests collected13.22s,
+  capture15.504s/exit0/stderr empty. No test bodies executed. Postverification:
+  tracked5720, SOURCE31514files before/after, changed paths empty, guard stable.
+  Raw capture SHA256`de5bdffd3c61191c9395032b9a927afe75a60d1713a995fcd8917e822a7753b4`.
+- tmux `audit-native-relay-hflypi-v4`: same one-connection SELECT with4s
+  natural-exit grace before any termination. SELECT passes, docker-exec
+  exit0/graceful/stderr0bytes, exact-container teardown passes, total14.123s.
+  Raw v4 capture supersedes the unresolved clean-exit status, not the earlier
+  evidence or the still-missing Testcontainers adapter/multi-connection proof.
+
+Fifteen guard captures/source snapshots/logs are archived and hashed in
+`native-guard-hflypi-20260921/manifest.json`; full collection capture is
+712976bytes (688526bytes stdout), no truncation. Strict default-rules Gitleaks
+stdin scan of that capture, ignore-gitleaks-allow/full redaction/no ignore
+file, reports no leaks; this is not a scan of historical production secrets.
+
+These probes perform no product tests or production changes. Pure child-helper
+checks, scoped Ruff and diff whitespace checks pass; historical failures are
+retained rather than overwritten. Additional result updates appear in the
+current top checkpoint and runtime evidence note.
+
 ## Cache recovery and clean frontend checks — 21 September
 
 - Named tmux `audit-cache-cleanup-20260921`: support/cache_cleanup_20260921.py

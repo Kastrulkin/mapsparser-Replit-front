@@ -1,0 +1,39 @@
+{
+  "command": [
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+    "-B",
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/native_hflypi_probe_v1.py",
+    "own-postgres"
+  ],
+  "docker_preflight": {
+    "container_id": "a099d92bbf720eaa20a9899ef9dc02cde6f8e2f012c00883191e517b53c74226",
+    "docker_context_endpoint": "unix:///Users/alexdemyanov/.docker/run/docker.sock",
+    "image_id": "sha256:4f26f01433671ee540195bff27f4890acca58cb49cf6d61ea12008d842ec0699",
+    "name": "/localos-readiness-hflypi-postgres-1",
+    "networks": {
+      "localos-readiness-hflypi_internal": "879fb9c7d6e60f983f8eba0872ad3677197e3f87ebab8fd3bca75c3e514ce19a",
+      "localos-readiness-hflypi_pg_ingress": "c68f2b706e85fb9cb4a385b8f95a8e7141777c607663b5ace86a67ed4dc7150e"
+    }
+  },
+  "duration_ms": 399.707,
+  "environment_keys": [
+    "DOCKER_HOST",
+    "LOCALOS_HFLYPI_DOCKER_SOCKET",
+    "LOCALOS_HFLYPI_EXPECTED_GUARD_SHA256",
+    "LOCALOS_HFLYPI_PROBE_DSN",
+    "LOCALOS_HFLYPI_SOURCE_ROOT",
+    "LOCALOS_HFLYPI_TESTCONTAINERS_NETWORK",
+    "PATH",
+    "PYTHONDONTWRITEBYTECODE",
+    "PYTHONNOUSERSITE",
+    "PYTHONPATH",
+    "PYTHON_DOTENV_DISABLED",
+    "TESTCONTAINERS_HOST_OVERRIDE",
+    "TESTCONTAINERS_RYUK_DISABLED"
+  ],
+  "exit_code": 0,
+  "free_bytes_after": 6057357312,
+  "label": "own-postgres",
+  "stderr": "",
+  "stdout": "{\"guard_path\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/sitecustomize.py\", \"guard_sha256\": \"07d3e2dc19cbb0f9e542a6d0835ea17b5efcc5713391c152a833e6efefd61150\", \"own_postgres_verified\": true, \"provenance\": {\"docker_socket\": \"/Users/alexdemyanov/.docker/run/docker.sock\", \"native_port\": 35418, \"nonce\": \"hfLYPi\", \"owned_listener_ports\": [55237], \"pid\": 42533, \"ryuk\": \"disabled; wrapper cleans exact labels\", \"testcontainer_ports\": []}}\n"
+}

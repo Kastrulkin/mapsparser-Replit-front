@@ -1,5 +1,37 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, real native guard probes
+
+- [x] Native guard now executes successfully: all10negative cases deny before
+  IO, stripped Python child loads the exact same guard/hash with a distinct PID,
+  and the owned PostgreSQL read-only identity SELECT passes after fresh Docker
+  container/image/network/volume/port verification. Raw attempts are versioned.
+- [x] Reproduced harness architecture mismatch: tmux launched universal Python
+  in Intel mode against ARM64 psycopg2. v1/v2 fail-closed exit78 evidence is
+  preserved. Explicit `/usr/bin/arch -arm64` alone allows the same v2 guard and
+  unchanged probe to pass in v3 (2.111149s /0.335543s /0.399707s).
+- [x] Guard initialization failures now emit bounded exception type/frame
+  coordinates without messages, locals, environment or DSNs, still exit78.
+- [x] Fully internal PG relay v3 proves one read-only identity/SELECT1 after
+  ARM64 pin and15s connection limit: first upstream bytes arrive3.108s after
+  client bytes, beyond v2's3s limit. Total14.388s; exact owned tmpfs container
+  stopped and verified. v1 architecture andv2 timeout captures are retained.
+- [x] Relay v4 adds bounded natural-exit grace: read-only SELECT passes,
+  docker-exec exits0/graceful with empty stderr, owned container is stopped;
+  total14.123s. v3 exit255 remains historical evidence, not silently discarded.
+- [x] Fresh safe collection: **5481tests**,13.22s (15.504s capture), exit0,
+  stderr empty. SOURCE inventory31514files unchanged;5720tracked blobs and
+  exact guard hash reverified. No test bodies or DB/socket/process IO executed
+  during collection.
+- [ ] Full backend execution/Testcontainers adapter still pending. The current
+  guard deliberately disables Testcontainers; relay proves one connection only.
+
+No production, existing DB, application source, push or deployment change.
+Historical whole-goal FAIL and13foreign dirty paths remain unchanged. The
+first v3 launcher attempt stopped below5GiB before producing probe artifacts;
+the later capacity-rechecked attempt ran above the same floor. Do not lower
+floors or attribute free-space fluctuations to these small probe files.
+
 ## Latest checkpoint — 21 September, cache cleanup and audit resumed
 
 - [x] User requested audit continuation and safe cache cleanup. Removed only

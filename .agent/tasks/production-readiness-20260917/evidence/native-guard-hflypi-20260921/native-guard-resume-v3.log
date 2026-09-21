@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/.agent/tasks/production-readiness-20260917/support/native_guard_resume_hflypi.py", line 57, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/.agent/tasks/production-readiness-20260917/support/native_guard_resume_hflypi.py", line 23, in main
+    raise RuntimeError("native probes require at least 5 GiB free")
+RuntimeError: native probes require at least 5 GiB free

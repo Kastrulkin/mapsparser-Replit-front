@@ -1,0 +1,29 @@
+{
+  "command": [
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+    "-B",
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/native_hflypi_probe_v1.py",
+    "negative"
+  ],
+  "duration_ms": 497.685,
+  "environment_keys": [
+    "DOCKER_HOST",
+    "LOCALOS_HFLYPI_DOCKER_SOCKET",
+    "LOCALOS_HFLYPI_EXPECTED_GUARD_SHA256",
+    "LOCALOS_HFLYPI_PROBE_DSN",
+    "LOCALOS_HFLYPI_SOURCE_ROOT",
+    "LOCALOS_HFLYPI_TESTCONTAINERS_NETWORK",
+    "PATH",
+    "PYTHONDONTWRITEBYTECODE",
+    "PYTHONNOUSERSITE",
+    "PYTHONPATH",
+    "PYTHON_DOTENV_DISABLED",
+    "TESTCONTAINERS_HOST_OVERRIDE",
+    "TESTCONTAINERS_RYUK_DISABLED"
+  ],
+  "exit_code": 78,
+  "free_bytes_after": 6417174528,
+  "label": "negative",
+  "stderr": "{\"exception_type\": \"ImportError\", \"frames\": [{\"file\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/sitecustomize.py\", \"function\": \"<module>\", \"line\": 436}, {\"file\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/sitecustomize.py\", \"function\": \"_initialize\", \"line\": 409}, {\"file\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/sitecustomize.py\", \"function\": \"_patch_psycopg2\", \"line\": 322}, {\"file\": \"/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/lib/python3.11/site-packages/psycopg2/__init__.py\", \"function\": \"<module>\", \"line\": 51}], \"nonce\": \"hfLYPi\", \"schema\": \"hflypi-guard-init-v2\"}\n",
+  "stdout": ""
+}

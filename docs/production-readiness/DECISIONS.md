@@ -1,5 +1,30 @@
 # Readiness decisions
 
+## D-087 — Pin native architecture and prove the guard before the aggregate
+
+On this Mac, launch native Python under tmux with explicit `arch -arm64`.
+Universal interpreter path identity alone does not select the architecture
+compatible with installed extensions. Keep failed architecture captures and
+change execution architecture, not product assertions or guard boundaries.
+
+Before positive DB probes, verify the exact synthetic container/image IDs,
+health, labels, loopback binding, named volume and network identities afresh.
+Negative probes have terminal socket/libpq sentinels, so a broken guard does
+not emit packets. Child evidence must validate loaded origin/hash, distinct
+PID and disabled bytecode/user-site, not merely trust exit0.
+
+Keep startup fail-closed. Diagnostic output contains only bounded exception
+type and frame coordinates; never exception messages, args, locals or secrets.
+Do not equate a host relay feasibility probe with approved Testcontainers
+integration. Preserve internal-only topology and exact owned-resource teardown.
+
+Distinguish Docker exec cold-start latency from PostgreSQL wire compatibility:
+the measured first response3.108s exceeded the initial3s feasibility limit.
+Use bounded startup allowance and timing evidence, not changed product-test
+timeouts. After SELECT, allow natural relay exit before escalation; require
+exit0/graceful, empty unexpected stderr and exact-container teardown for clean
+lifecycle acceptance. Collection count5481 is not5481passed tests.
+
 ## D-086 — Reclaim regenerable cache without mistaking runtime or swap for cache
 
 Limit removal to exact inspected browser/npm cache directories and record

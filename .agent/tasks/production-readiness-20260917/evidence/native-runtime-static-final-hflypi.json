@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "native-runtime-static-final",
+  "captured_at": "2026-09-21T15:40:20.600678+00:00",
+  "command": [
+    "/bin/zsh",
+    "-c",
+    "set -e; /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_hflypi_child_checks.py; /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/ruff check --no-cache .agent/tasks/production-readiness-20260917/support/native_hflypi_child_checks.py .agent/tasks/production-readiness-20260917/support/native_hflypi_probe.py .agent/tasks/production-readiness-20260917/support/native_hflypi_sitecustomize.py .agent/tasks/production-readiness-20260917/support/native_guard_checks_hflypi.py .agent/tasks/production-readiness-20260917/support/native_guard_diagnostic_hflypi.py .agent/tasks/production-readiness-20260917/support/native_guard_resume_hflypi.py .agent/tasks/production-readiness-20260917/support/native_collection_hflypi.py .agent/tasks/production-readiness-20260917/support/native_internal_pg_relay_probe_hflypi.py; git diff --check"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 184.112,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "native_hflypi_child_checks: negative_control=expected_unpatched_assertion green=pure_helpers_passed\nAll checks passed!\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

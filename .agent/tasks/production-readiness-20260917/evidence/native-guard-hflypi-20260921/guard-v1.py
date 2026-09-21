@@ -13,7 +13,6 @@ Testcontainers startup is deliberately disabled pending that review.
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 from pathlib import Path
 import re
@@ -410,35 +409,8 @@ def _initialize() -> None:
     _patch_testcontainers()
 
 
-def _report_initialization_failure(error: BaseException) -> None:
-    frames = []
-    current = error.__traceback__
-    while current is not None and len(frames) < 20:
-        frames.append({
-            "file": current.tb_frame.f_code.co_filename,
-            "function": current.tb_frame.f_code.co_name,
-            "line": current.tb_lineno,
-        })
-        current = current.tb_next
-    payload = {"schema": "hflypi-guard-init-v2", "nonce": NONCE, "exception_type": type(error).__name__, "frames": frames}
-    rendered = (json.dumps(payload, sort_keys=True) + "\n").encode()
-    while len(rendered) > 8192 and frames:
-        frames.pop(0)
-        rendered = (json.dumps(payload, sort_keys=True) + "\n").encode()
-    while rendered:
-        written = os.write(2, rendered)
-        if written <= 0:
-            break
-        rendered = rendered[written:]
-
-
 try:
     _initialize()
 except BaseException:
     # CPython otherwise reports a sitecustomize error and continues unguarded.
-    try:
-        _report_initialization_failure(sys.exception())
-    except BaseException:
-        pass
-    finally:
-        os._exit(78)
+    os._exit(78)

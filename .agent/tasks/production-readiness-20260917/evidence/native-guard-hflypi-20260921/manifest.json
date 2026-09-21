@@ -1,0 +1,67 @@
+{
+  "kind": "hfLYPi native guard attempts archive",
+  "frozen_commit": "99849935de26e2932613f2a73cf515dff49104a1",
+  "source": "/private/tmp/localos-readiness-20260921.hfLYPi/native",
+  "entries": [
+    {
+      "path": "guard-v1.py",
+      "sha256": "f622117b6dec26bd134d69fda873846902c6146d0877966910cf1704c0241f3e"
+    },
+    {
+      "path": "guard-v2.py",
+      "sha256": "07d3e2dc19cbb0f9e542a6d0835ea17b5efcc5713391c152a833e6efefd61150"
+    },
+    {
+      "path": "native-guard-checks-v1.log",
+      "sha256": "704ff13ce422ae68028a7476e87fac9cebc4e63622f2fe226b4600d13426e26a"
+    },
+    {
+      "path": "native-guard-child-v3.json",
+      "sha256": "a88690a811f0cfc921440e74f716187bd180b22f81f59e9d76a06e1598c93318"
+    },
+    {
+      "path": "native-guard-diagnostic-v2.log",
+      "sha256": "7666fea96eb2681a791aa643d5951235412e7c689e177380f3a81055716bd25b"
+    },
+    {
+      "path": "native-guard-metadata-v1.json",
+      "sha256": "8ce515439b1b2f0b913ee5a8f76f8c53644303a271101c1fe92c724673f779d9"
+    },
+    {
+      "path": "native-guard-metadata-v2.json",
+      "sha256": "447f488ca30324b5708ce8a327c09c27b976c7b0e0d36543313594cadeb8b779"
+    },
+    {
+      "path": "native-guard-metadata-v3.json",
+      "sha256": "8630934250368df28aaeaac2c97f0ae6ba239159e9ec748be2af456dffabef0e"
+    },
+    {
+      "path": "native-guard-negative-v1.json",
+      "sha256": "7cf8d3027d9d814a7b7da9ed578640ce90a96152d0fba3687fd285861095464f"
+    },
+    {
+      "path": "native-guard-negative-v2.json",
+      "sha256": "cdb062fedf623534f330074f2a9919b9139d16c51565e6ea373278535050d4dd"
+    },
+    {
+      "path": "native-guard-negative-v3.json",
+      "sha256": "5379a646794a21b20b7e2d1d53539a837990b55db98a44fb041d4cbae7c5118f"
+    },
+    {
+      "path": "native-guard-own-postgres-v3.json",
+      "sha256": "c97a69167b60bac664fd705413439df78b78eefd307c8db561253ae0ecc2381d"
+    },
+    {
+      "path": "native-guard-resume-v3-capacity.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "native-guard-resume-v3.log",
+      "sha256": "76658ee4d26de079a61049df408ecd45b76cb96ef1577341936d857455b374d0"
+    },
+    {
+      "path": "probe-v1.py",
+      "sha256": "f25959cf72b135115b130747db7fd60a1eabf2594f9507f1ca310267551487fd"
+    }
+  ]
+}

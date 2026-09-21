@@ -98,6 +98,9 @@ def main() -> int:
     assert propagated["TESTCONTAINERS_RYUK_DISABLED"] == "true"
     assert propagated["TESTCONTAINERS_HOST_OVERRIDE"] == "127.0.0.1"
     assert propagated["LOCALOS_HFLYPI_TESTCONTAINERS_NETWORK"] == "localos-readiness-hflypi_internal"
+    assert propagated["PYTHONDONTWRITEBYTECODE"] == "1"
+    assert propagated["PYTHONNOUSERSITE"] == "1"
+    assert propagated["LOCALOS_HFLYPI_EXPECTED_GUARD_SHA256"] == HASH
     for key in helpers["GUARD_HASH_ENVIRONMENTS"]:
         assert propagated[key] == HASH
 

@@ -1,5 +1,50 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, guard startup and real child proof complete
+
+This supersedes the uninstalled/DRAFT runtime status below. Installed private
+guard: `/private/tmp/localos-readiness-20260921.hfLYPi/source/src/sitecustomize.py`,
+SHA256 `07d3e2dc19cbb0f9e542a6d0835ea17b5efcc5713391c152a833e6efefd61150`.
+It is an explicit untracked frozen-runtime extra, not application code. Preserve
+v1 backup and all raw failed captures; do not rerun one-shot install scripts.
+
+Real v3 probes pass:10negative cases, true stripped-env child with exact guard
+origin/hash and distinct PID, one owned read-only PG identity SELECT. Source
+5720tracked blobs/modes were revalidated. Use explicit `/usr/bin/arch -arm64`
+for every native Python tmux launcher: default tmux inheritance selected Intel
+Python and could not load the ARM64 psycopg extension. v1/v2 exit78 were harness
+initialization failures, not product-test failures. v3 reuses v2 guard bytes
+and v1 probe bytes. No full pytest result follows from these probes.
+
+Dedicated internal PG relay v3 now proves one read-only identity/SELECT1;
+first upstream data arrives3.108s after client data, exceeding v2's arbitrary3s
+limit. With15s connection allowance the same flow passes; total14.388s and
+exact-container stop/identity checks pass. v3 docker-exec255 is retained;
+v4 natural-exit grace then proves clean exec0/graceful/empty stderr plus the
+same SELECT and verified container stop (14.123s). This is one-connection
+feasibility, not a Testcontainers adapter. Internal network is retained.
+
+Safe collection is now complete:5481tests in13.22s,15.504s capture, exit0 and
+stderr empty; SOURCE31514file inventory unchanged and5720tracked blobs/guard
+hash rechecked. Collection terminal hooks denied libpq, sockets and spawning.
+Do not rerun collection or call the count a passed test suite. Raw capture
+`native-collection-hflypi-v3.json`, SHA256
+`de5bdffd3c61191c9395032b9a927afe75a60d1713a995fcd8917e822a7753b4`.
+
+Next: reviewed Testcontainers relay lifecycle/capability adapter and its
+smallest native migration+transaction slice, then full5481execution. Do not
+repeat cache cleanup/build/migrations/
+restore/frontend prep. Respect5GiB start/2GiB live floors.
+
+Exact next-slice map is `native-testcontainers-next-slice-hflypi-20260921.md`:
+19modules/94nodes consume the shared PG fixture (12migration-child modules).
+First test is the card-growth migration schema assertion. No backend test
+bodies have run in this fresh lane, including the remaining5387nodes.
+
+Parent checkpoint commit c671fd34. Only audit support/evidence/docs are owned;
+the13foreign dirty paths and original whole-goal verdict remain preserved.
+Goal active; no push/deploy/production or existing-database mutation.
+
 ## Latest checkpoint — 21 September, enough capacity for clean checks again
 
 This top checkpoint supersedes older status snapshots below; retain their
