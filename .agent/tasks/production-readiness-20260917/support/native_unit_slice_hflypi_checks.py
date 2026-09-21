@@ -41,7 +41,53 @@ def main() -> int:
     for old_profile in ("card-growth-v1", "policy-content-v1"):
         assert unit["profile_environment"](old_profile, base_environment) == base_environment
     rejected(lambda: unit["profile_environment"]("agent-social-pure-v1", {"DATABASE_URL": "unreviewed"}))
-    assert set(profiles) == {"card-growth-v1", "policy-content-v1", "agent-social-pure-v1", "governed-operations-pure-v2"}
+    assert set(profiles) == {"card-growth-v1", "policy-content-v1", "agent-social-pure-v1", "governed-operations-pure-v2", "governed-workflows-pure-v1"}
+    assert unit["profile_environment"]("governed-workflows-pure-v1", base_environment) == configured
+    rejected(lambda: unit["profile_environment"]("governed-workflows-pure-v1", {"DATABASE_URL": "unreviewed"}))
+    assert profiles["governed-workflows-pure-v1"]["modules"] == {
+        "tests/test_admin_prospecting_audit_payload.py": 52,
+        "tests/test_partner_audit_rollout.py": 39,
+        "tests/test_creator_promotion_service.py": 34,
+        "tests/test_content_generation_v2.py": 26,
+        "tests/test_telegram_dashboard_copy.py": 25,
+        "tests/test_organika_regressions.py": 25,
+        "tests/test_operator_mobile_actions.py": 23,
+        "tests/test_public_audit_editor.py": 22,
+        "tests/test_sales_rooms.py": 20,
+        "tests/test_operator_preserved_values.py": 20,
+        "tests/test_outreach_vk_adapter.py": 19,
+        "tests/test_outreach_email_reply_receipt.py": 19,
+        "tests/test_outreach_email_adapter.py": 19,
+        "tests/test_industry_patterns.py": 19,
+        "tests/test_outreach_batch_preparation.py": 18,
+        "tests/test_operator_core.py": 18,
+        "tests/test_content_rules.py": 18,
+        "tests/test_discovered_telegram_sources.py": 17,
+        "tests/test_operator_tool_loop.py": 16,
+        "tests/test_operator_today_api.py": 16,
+        "tests/test_growth_overview.py": 16,
+        "tests/test_finance_crm.py": 16,
+        "tests/test_card_automation.py": 16,
+        "tests/test_guided_tour_api.py": 15,
+        "tests/test_lead_journey_api.py": 15,
+        "tests/test_map_url_normalizer.py": 15,
+        "tests/test_parsed_payload_validation.py": 15,
+        "tests/test_worker_failure_reason_safety.py": 13,
+        "tests/test_contact_intelligence_ssrf.py": 13,
+        "tests/test_beauty_service_optimization.py": 13,
+        "tests/test_content_plan_direction.py": 12,
+        "tests/test_today_work_copy.py": 12,
+        "tests/test_telegram_operator_write_access.py": 12,
+        "tests/test_riderra_systematic_outreach.py": 12,
+        "tests/test_telegram_response_router.py": 10,
+    }
+    assert sum(profiles["governed-workflows-pure-v1"]["modules"].values()) == 670
+    prior_modules = {
+        module for name, selected in profiles.items()
+        if name != "governed-workflows-pure-v1" for module in selected["modules"]
+    }
+    assert prior_modules.isdisjoint(profiles["governed-workflows-pure-v1"]["modules"])
+    assert "tests/test_operator_service_creation.py" not in profiles["governed-workflows-pure-v1"]["modules"]
     assert unit["profile_environment"]("governed-operations-pure-v2", base_environment) == configured
     rejected(lambda: unit["profile_environment"]("governed-operations-pure-v2", {"DATABASE_URL": "unreviewed"}))
     assert profiles["governed-operations-pure-v2"]["modules"] == {
@@ -126,7 +172,7 @@ def main() -> int:
             changed_nodes[0] = list(modules)[1] + "::synthetic_extra"
             rejected(lambda: unit["require_module_counts"]({"nodeids": changed_nodes}, modules))
         compile(helper["plugin_source"](profile["targets"]), "<reviewed-unit-runner>", "exec")
-    print("native unit profiles: exact 200/364/524/828-node inventories and negative gates passed; operator28 requires separate real-PG run")
+    print("native unit profiles: exact 200/364/524/828/670-node inventories and negative gates passed; operator28 requires separate real-PG run")
     return 0
 
 

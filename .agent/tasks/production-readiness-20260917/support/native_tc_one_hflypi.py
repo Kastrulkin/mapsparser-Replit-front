@@ -96,6 +96,12 @@ PROFILES = {
         "exact_nodeids": True,
         "prefix": "native-tc-capabilities-phase1",
     },
+    "operator-service-creation-v1": {
+        "target": "tests/test_operator_service_creation.py",
+        "count": 28,
+        "prefix": "native-tc-operator-service-creation",
+        "bootstrap_postgres": True,
+    },
 }
 OLD_GUARD_SHA256 = "07d3e2dc19cbb0f9e542a6d0835ea17b5efcc5713391c152a833e6efefd61150"
 MIN_START = 5 * 1024**3
@@ -272,9 +278,9 @@ def require_probe(payload: dict[str, object], mode: str, guard_hash: str) -> Non
             raise RuntimeError("child proof does not establish guarded distinct process")
 
 
-def plugin_source(target: str | list[str]) -> str:
+def plugin_source(target: str | list[str], bootstrap_postgres: bool = False) -> str:
     targets = [target] if isinstance(target, str) else target
-    if not targets or not all(isinstance(item, str) for item in targets):
+    if not targets or not all(isinstance(item, str) for item in targets) or not isinstance(bootstrap_postgres, bool):
         raise ValueError("literal pytest targets are required")
     return """
 import json
@@ -302,11 +308,20 @@ class Results:
             if report.skipped: state['skipped'] += 1
     def pytest_sessionfinish(self, session, exitstatus):
         state['pytest_exitstatus'] = int(exitstatus)
-result = pytest.main(%r + ['-q', '-p', 'no:cacheprovider'], plugins=[Results()])
+container = None
+try:
+    if %r:
+        from testcontainers.postgres import PostgresContainer
+        container = PostgresContainer('pgvector/pgvector:0.8.0-pg16-trixie')
+        container.start()
+    result = pytest.main(%r + ['-q', '-p', 'no:cacheprovider'], plugins=[Results()])
+finally:
+    if container is not None:
+        container.stop()
 state['pytest_return'] = int(result)
 print('HFLYPI_TC_ONE_RESULT=' + json.dumps(state, sort_keys=True))
 raise SystemExit(result)
-""" % targets
+""" % (bootstrap_postgres, targets)
 
 
 def parse_test(payload: dict[str, object], profile: dict[str, object]) -> dict[str, object]:
@@ -340,7 +355,7 @@ def parse_test(payload: dict[str, object], profile: dict[str, object]) -> dict[s
 
 def relay_evidence(profile: str, final: object) -> tuple[int, list[object]]:
     expected_budget = 1024 if profile == "capabilities-phase1-v1" else 32
-    minimum_connections = 171 if profile == "capabilities-phase1-v1" else 2
+    minimum_connections = 171 if profile == "capabilities-phase1-v1" else 21 if profile == "operator-service-creation-v1" else 2
     if not isinstance(final, dict):
         raise RuntimeError("relay final evidence is invalid")
     connections = final.get("connections")
@@ -446,7 +461,7 @@ def audit_journals(events: Path, relay_artifact: Path, profile: str) -> dict[str
         raise RuntimeError("Testcontainers start, container and relay identities differ")
     if not any(row.get("pid") == parent_pid and row.get("container_id") == container_id and row.get("port") == port for row in admitted):
         raise RuntimeError("parent process did not admit its relay DSN")
-    if not any(row.get("pid") != parent_pid and row.get("container_id") == container_id and row.get("port") == port for row in admitted):
+    if profile != "operator-service-creation-v1" and not any(row.get("pid") != parent_pid and row.get("container_id") == container_id and row.get("port") == port for row in admitted):
         raise RuntimeError("Flask migration child did not admit its inherited relay DSN")
     expected_denials = {"stale_expiry", "nonce", "session", "container", "wrong_port", "world_readable", "foreign_path", "symlink"}
     checks = denials[0].get("checks")
@@ -457,16 +472,23 @@ def audit_journals(events: Path, relay_artifact: Path, profile: str) -> dict[str
         raise RuntimeError("Testcontainers adapter reported cleanup errors")
     bindings = [row for row in event_rows if row.get("event") == "parent_database_bound"]
     unbindings = [row for row in event_rows if row.get("event") == "parent_database_unbound"]
+    voice_bindings = [row for row in event_rows if row.get("event") == "operator_voice_test_dsn_bound"]
+    voice_unbindings = [row for row in event_rows if row.get("event") == "operator_voice_test_dsn_unbound"]
     if profile in {"client-info-v1", "capabilities-phase1-v1"}:
         if len(bindings) != 1 or len(unbindings) != 1 or bindings[0].get("pid") != parent_pid or bindings[0].get("port") != port or bindings[0].get("database") != "test" or unbindings[0].get("pid") != parent_pid:
             raise RuntimeError("parent Flask database configuration lifecycle is incomplete")
     elif bindings or unbindings:
         raise RuntimeError("unexpected parent Flask database configuration")
+    if profile == "operator-service-creation-v1":
+        if len(voice_bindings) != 1 or len(voice_unbindings) != 1 or voice_bindings[0].get("pid") != parent_pid or voice_bindings[0].get("port") != port or voice_bindings[0].get("database") != "test" or voice_unbindings[0].get("pid") != parent_pid:
+            raise RuntimeError("operator voice test DSN lifecycle is incomplete")
+    elif voice_bindings or voice_unbindings:
+        raise RuntimeError("unexpected operator voice test DSN lifecycle")
     final = relay_rows[-1] if relay_rows else {}
     connections, executions = relay_evidence(profile, final)
     if not all(isinstance(row, dict) and row.get("returncode") == 0 and row.get("exit_mode") == "graceful" and row.get("stderr_bytes") == 0 for row in executions):
         raise RuntimeError("relay Docker exec evidence is incomplete")
-    return {"event_rows": len(event_rows), "relay_rows": len(relay_rows), "connections": connections, "flask_child_dsn_admitted": True}
+    return {"event_rows": len(event_rows), "relay_rows": len(relay_rows), "connections": connections, "flask_child_dsn_admitted": profile != "operator-service-creation-v1", "operator_voice_dsn_admitted": profile == "operator-service-creation-v1"}
 
 
 def require_empty_network(relay_module: object) -> dict[str, object]:
@@ -582,7 +604,7 @@ def main() -> int:
         if shutil.disk_usage(BASE).free < MIN_LIVE:
             raise RuntimeError("disk floor reached before native node")
         output["phase"] = "test"
-        capture = result(["/usr/bin/arch", "-arm64", str(VENV), "-B", "-c", plugin_source(selected_targets)], environment, MAX_RUNTIME, started + MAX_RUNTIME)
+        capture = result(["/usr/bin/arch", "-arm64", str(VENV), "-B", "-c", plugin_source(selected_targets, profile.get("bootstrap_postgres", False))], environment, MAX_RUNTIME, started + MAX_RUNTIME)
         output["test"] = capture
         output["test_callbacks"] = parse_test(capture, profile)
         output["journals"] = audit_journals(journal, relay_artifact, values.profile)

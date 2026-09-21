@@ -1,0 +1,375 @@
+{
+  "attempt": "v1",
+  "capabilities_before": [],
+  "capability_cleanup": {
+    "reason": "capability-absent",
+    "removed": false
+  },
+  "child_probe": {
+    "command": [
+      "/usr/bin/arch",
+      "-arm64",
+      "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+      "-B",
+      "/private/tmp/localos-readiness-20260921.hfLYPi/native/native_hflypi_probe_v1.py",
+      "child"
+    ],
+    "duration_seconds": 0.654,
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "{\"child\": {\"actual_pid\": 90796, \"bytecode_disabled\": true, \"denied\": true, \"origin\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/sitecustomize.py\", \"pid\": 90796, \"sha256\": \"ff59b7aa21d36b553d6662ea9006fbefb51b0437d4f568fb344ea584a80e51a4\", \"user_site_disabled\": true}, \"child_guard_propagated\": true, \"guard_path\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/sitecustomize.py\", \"guard_sha256\": \"ff59b7aa21d36b553d6662ea9006fbefb51b0437d4f568fb344ea584a80e51a4\", \"provenance\": {\"docker_socket\": \"/Users/alexdemyanov/.docker/run/docker.sock\", \"native_port\": 35418, \"nonce\": \"hfLYPi\", \"owned_listener_ports\": [61629], \"pid\": 90795, \"ryuk\": \"disabled; wrapper cleans exact labels\", \"testcontainer_ports\": []}}\n",
+    "stopped_reason": null,
+    "timed_out": false
+  },
+  "duration_seconds": 10.465,
+  "expected_count": 28,
+  "free_bytes_after": 18447757312,
+  "frozen_blobs_after": 5720,
+  "frozen_blobs_before": 5720,
+  "hashes": {
+    "guard": "ff59b7aa21d36b553d6662ea9006fbefb51b0437d4f568fb344ea584a80e51a4",
+    "launcher": "fe009149f7a22a89a2ba8563a964bce0f18bf179425c259e309aaf9aee1dd96e",
+    "native_tc_adapter_hflypi": "904a3909da3c5f9aff51f1663f3e5c86daa780f8774c3ddc3ba0ad10a6206762",
+    "native_tc_relay_hflypi": "df49732e70bd9f3677b686810569e11920bd210e117c14bf768b024c0f759254",
+    "probe": "f25959cf72b135115b130747db7fd60a1eabf2594f9507f1ca310267551487fd",
+    "support_guard": "ff59b7aa21d36b553d6662ea9006fbefb51b0437d4f568fb344ea584a80e51a4"
+  },
+  "journals": {
+    "connections": 21,
+    "event_rows": 30,
+    "flask_child_dsn_admitted": false,
+    "operator_voice_dsn_admitted": true,
+    "relay_rows": 1
+  },
+  "negative_probe": {
+    "command": [
+      "/usr/bin/arch",
+      "-arm64",
+      "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+      "-B",
+      "/private/tmp/localos-readiness-20260921.hfLYPi/native/native_hflypi_probe_v1.py",
+      "negative"
+    ],
+    "duration_seconds": 0.388,
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "{\"checks\": [{\"case\": \"external_tcp\", \"denied\": true}, {\"case\": \"foreign_local\", \"denied\": true}, {\"case\": \"udp\", \"denied\": true}, {\"case\": \"dns\", \"denied\": true}, {\"case\": \"postgres_foreign_host\", \"denied\": true}, {\"case\": \"postgres_foreign_database\", \"denied\": true}, {\"case\": \"postgres_explicit_options\", \"denied\": true}, {\"case\": \"postgres_pghostaddr\", \"denied\": true}, {\"case\": \"postgres_pgoptions\", \"denied\": true}, {\"case\": \"postgres_pgservice\", \"denied\": true}], \"guard_path\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/sitecustomize.py\", \"guard_sha256\": \"ff59b7aa21d36b553d6662ea9006fbefb51b0437d4f568fb344ea584a80e51a4\", \"provenance\": {\"docker_socket\": \"/Users/alexdemyanov/.docker/run/docker.sock\", \"native_port\": 35418, \"nonce\": \"hfLYPi\", \"owned_listener_ports\": [61628], \"pid\": 90794, \"ryuk\": \"disabled; wrapper cleans exact labels\", \"testcontainer_ports\": []}}\n",
+    "stopped_reason": null,
+    "timed_out": false
+  },
+  "network_after_cleanup": {
+    "empty": true,
+    "network_id": "6fc9dbcb68ce40e46030cec829ed4613840327eda4109cd09de4ada422a4a0b4"
+  },
+  "network_after_test": {
+    "empty": true,
+    "network_id": "6fc9dbcb68ce40e46030cec829ed4613840327eda4109cd09de4ada422a4a0b4"
+  },
+  "nodes": [
+    "tests/test_operator_service_creation.py"
+  ],
+  "owned_cleanup": {
+    "already_removed": true,
+    "attempted": true,
+    "container_id": "d28e3a66e5274d9a95ffab5e45526c6329c9c6eccdad515424590c8c7a52d5ff",
+    "recovered_from_start": false
+  },
+  "phase": "passed",
+  "profile": "operator-service-creation-v1",
+  "test": {
+    "command": [
+      "/usr/bin/arch",
+      "-arm64",
+      "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+      "-B",
+      "-c",
+      "\nimport json\nimport pytest\nfrom _pytest.subtests import SubtestReport\nstate = {'collected': None, 'nodeids': [], 'passed': 0, 'failed': 0, 'skipped': 0, 'xfailed': 0, 'setup_failed': 0, 'call_failed': 0, 'child_calls': [], 'subtests_passed': 0, 'subtests_failed': 0, 'subtests_skipped': 0, 'subtests_xfailed': 0}\nclass Results:\n    def pytest_collection_finish(self, session):\n        state['collected'] = len(session.items)\n        state['nodeids'] = [item.nodeid for item in session.items]\n    def pytest_runtest_logreport(self, report):\n        if isinstance(report, SubtestReport):\n            if report.passed: state['subtests_passed'] += 1\n            if report.failed: state['subtests_failed'] += 1\n            if report.skipped: state['subtests_skipped'] += 1\n            if getattr(report, 'wasxfail', None): state['subtests_xfailed'] += 1\n            return\n        if report.when == 'call':\n            if report.passed: state['passed'] += 1\n            if report.failed: state['failed'] += 1; state['call_failed'] += 1\n            if report.skipped: state['skipped'] += 1\n            if getattr(report, 'wasxfail', None): state['xfailed'] += 1\n        elif report.when == 'setup':\n            if report.failed: state['failed'] += 1; state['setup_failed'] += 1\n            if report.skipped: state['skipped'] += 1\n    def pytest_sessionfinish(self, session, exitstatus):\n        state['pytest_exitstatus'] = int(exitstatus)\ncontainer = None\ntry:\n    if True:\n        from testcontainers.postgres import PostgresContainer\n        container = PostgresContainer('pgvector/pgvector:0.8.0-pg16-trixie')\n        container.start()\n    result = pytest.main(['tests/test_operator_service_creation.py'] + ['-q', '-p', 'no:cacheprovider'], plugins=[Results()])\nfinally:\n    if container is not None:\n        container.stop()\nstate['pytest_return'] = int(result)\nprint('HFLYPI_TC_ONE_RESULT=' + json.dumps(state, sort_keys=True))\nraise SystemExit(result)\n"
+    ],
+    "duration_seconds": 6.926,
+    "exit_code": 0,
+    "stderr": "<string>:30: DeprecationWarning: testcontainers.postgres is deprecated, use testcontainers.community.postgres instead\n",
+    "stdout": "............................                                             [100%]\n28 passed in 4.34s\nHFLYPI_TC_ONE_RESULT={\"call_failed\": 0, \"child_calls\": [], \"collected\": 28, \"failed\": 0, \"nodeids\": [\"tests/test_operator_service_creation.py::test_six_inputs_create_exactly_once[False-telegram]\", \"tests/test_operator_service_creation.py::test_six_inputs_create_exactly_once[False-web]\", \"tests/test_operator_service_creation.py::test_six_inputs_create_exactly_once[False-telegram_mini_app]\", \"tests/test_operator_service_creation.py::test_six_inputs_create_exactly_once[True-telegram]\", \"tests/test_operator_service_creation.py::test_six_inputs_create_exactly_once[True-web]\", \"tests/test_operator_service_creation.py::test_six_inputs_create_exactly_once[True-telegram_mini_app]\", \"tests/test_operator_service_creation.py::test_invalid_price_no_write[-1]\", \"tests/test_operator_service_creation.py::test_invalid_price_no_write[NaN]\", \"tests/test_operator_service_creation.py::test_invalid_price_no_write[Infinity]\", \"tests/test_operator_service_creation.py::test_invalid_price_no_write[1.234]\", \"tests/test_operator_service_creation.py::test_invalid_price_no_write[1000000001]\", \"tests/test_operator_service_creation.py::test_invalid_price_no_write[None]\", \"tests/test_operator_service_creation.py::test_similar_service_and_foreign_business\", \"tests/test_operator_service_creation.py::test_google_preserves_previous_and_reconciles_repeat\", \"tests/test_operator_service_creation.py::test_google_changed_snapshot_blocks_write\", \"tests/test_operator_service_creation.py::test_google_ineligible_and_invalid_location\", \"tests/test_operator_service_creation.py::test_create_builds_google_approval_and_stale_local_edit_blocks\", \"tests/test_operator_service_creation.py::test_google_failure_does_not_undo_service\", \"tests/test_operator_service_creation.py::test_manual_task_is_real_scoped_and_deduplicated\", \"tests/test_operator_service_creation.py::test_confirmation_through_chat_has_correct_capability\", \"tests/test_operator_service_creation.py::test_existing_selection_previews_then_updates_without_duplicate\", \"tests/test_operator_service_creation.py::test_expired_and_foreign_confirmation_do_not_write\", \"tests/test_operator_service_creation.py::test_notifications_require_preference_and_current_membership\", \"tests/test_operator_service_creation.py::test_google_omitted_defaults_are_verified\", \"tests/test_operator_service_creation.py::test_service_route_does_not_steal_content_requests[\\\\u041f\\\\u043e\\\\u0434\\\\u0433\\\\u043e\\\\u0442\\\\u043e\\\\u0432\\\\u044c \\\\u043f\\\\u043e\\\\u0441\\\\u0442 \\\\u043f\\\\u0440\\\\u043e \\\\u043d\\\\u043e\\\\u0432\\\\u0443\\\\u044e \\\\u0443\\\\u0441\\\\u043b\\\\u0443\\\\u0433\\\\u0443]\", \"tests/test_operator_service_creation.py::test_service_route_does_not_steal_content_requests[\\\\u0418\\\\u0437\\\\u043c\\\\u0435\\\\u043d\\\\u0438 \\\\u0442\\\\u0435\\\\u043c\\\\u0443 \\\\u043f\\\\u043e\\\\u0441\\\\u0442\\\\u0430 \\\\u043d\\\\u0430 \\\\u043d\\\\u043e\\\\u0432\\\\u0443\\\\u044e \\\\u0443\\\\u0441\\\\u043b\\\\u0443\\\\u0433\\\\u0443]\", \"tests/test_operator_service_creation.py::test_service_route_does_not_steal_content_requests[\\\\u0414\\\\u043e\\\\u0431\\\\u0430\\\\u0432\\\\u044c \\\\u0432 \\\\u043a\\\\u043e\\\\u043d\\\\u0442\\\\u0435\\\\u043d\\\\u0442-\\\\u043f\\\\u043b\\\\u0430\\\\u043d \\\\u043f\\\\u043e\\\\u0441\\\\u0442 \\\\u043f\\\\u0440\\\\u043e \\\\u043d\\\\u043e\\\\u0432\\\\u0443\\\\u044e \\\\u0443\\\\u0441\\\\u043b\\\\u0443\\\\u0433\\\\u0443]\", \"tests/test_operator_service_creation.py::test_negative_instruction_never_creates\"], \"passed\": 28, \"pytest_exitstatus\": 0, \"pytest_return\": 0, \"setup_failed\": 0, \"skipped\": 0, \"subtests_failed\": 0, \"subtests_passed\": 0, \"subtests_skipped\": 0, \"subtests_xfailed\": 0, \"xfailed\": 0}\n",
+    "stopped_reason": null,
+    "timed_out": false
+  },
+  "test_callbacks": {
+    "call_failed": 0,
+    "child_calls": [],
+    "collected": 28,
+    "failed": 0,
+    "nodeids": [
+      "tests/test_operator_service_creation.py::test_six_inputs_create_exactly_once[False-telegram]",
+      "tests/test_operator_service_creation.py::test_six_inputs_create_exactly_once[False-web]",
+      "tests/test_operator_service_creation.py::test_six_inputs_create_exactly_once[False-telegram_mini_app]",
+      "tests/test_operator_service_creation.py::test_six_inputs_create_exactly_once[True-telegram]",
+      "tests/test_operator_service_creation.py::test_six_inputs_create_exactly_once[True-web]",
+      "tests/test_operator_service_creation.py::test_six_inputs_create_exactly_once[True-telegram_mini_app]",
+      "tests/test_operator_service_creation.py::test_invalid_price_no_write[-1]",
+      "tests/test_operator_service_creation.py::test_invalid_price_no_write[NaN]",
+      "tests/test_operator_service_creation.py::test_invalid_price_no_write[Infinity]",
+      "tests/test_operator_service_creation.py::test_invalid_price_no_write[1.234]",
+      "tests/test_operator_service_creation.py::test_invalid_price_no_write[1000000001]",
+      "tests/test_operator_service_creation.py::test_invalid_price_no_write[None]",
+      "tests/test_operator_service_creation.py::test_similar_service_and_foreign_business",
+      "tests/test_operator_service_creation.py::test_google_preserves_previous_and_reconciles_repeat",
+      "tests/test_operator_service_creation.py::test_google_changed_snapshot_blocks_write",
+      "tests/test_operator_service_creation.py::test_google_ineligible_and_invalid_location",
+      "tests/test_operator_service_creation.py::test_create_builds_google_approval_and_stale_local_edit_blocks",
+      "tests/test_operator_service_creation.py::test_google_failure_does_not_undo_service",
+      "tests/test_operator_service_creation.py::test_manual_task_is_real_scoped_and_deduplicated",
+      "tests/test_operator_service_creation.py::test_confirmation_through_chat_has_correct_capability",
+      "tests/test_operator_service_creation.py::test_existing_selection_previews_then_updates_without_duplicate",
+      "tests/test_operator_service_creation.py::test_expired_and_foreign_confirmation_do_not_write",
+      "tests/test_operator_service_creation.py::test_notifications_require_preference_and_current_membership",
+      "tests/test_operator_service_creation.py::test_google_omitted_defaults_are_verified",
+      "tests/test_operator_service_creation.py::test_service_route_does_not_steal_content_requests[\\u041f\\u043e\\u0434\\u0433\\u043e\\u0442\\u043e\\u0432\\u044c \\u043f\\u043e\\u0441\\u0442 \\u043f\\u0440\\u043e \\u043d\\u043e\\u0432\\u0443\\u044e \\u0443\\u0441\\u043b\\u0443\\u0433\\u0443]",
+      "tests/test_operator_service_creation.py::test_service_route_does_not_steal_content_requests[\\u0418\\u0437\\u043c\\u0435\\u043d\\u0438 \\u0442\\u0435\\u043c\\u0443 \\u043f\\u043e\\u0441\\u0442\\u0430 \\u043d\\u0430 \\u043d\\u043e\\u0432\\u0443\\u044e \\u0443\\u0441\\u043b\\u0443\\u0433\\u0443]",
+      "tests/test_operator_service_creation.py::test_service_route_does_not_steal_content_requests[\\u0414\\u043e\\u0431\\u0430\\u0432\\u044c \\u0432 \\u043a\\u043e\\u043d\\u0442\\u0435\\u043d\\u0442-\\u043f\\u043b\\u0430\\u043d \\u043f\\u043e\\u0441\\u0442 \\u043f\\u0440\\u043e \\u043d\\u043e\\u0432\\u0443\\u044e \\u0443\\u0441\\u043b\\u0443\\u0433\\u0443]",
+      "tests/test_operator_service_creation.py::test_negative_instruction_never_creates"
+    ],
+    "passed": 28,
+    "pytest_exitstatus": 0,
+    "pytest_return": 0,
+    "setup_failed": 0,
+    "skipped": 0,
+    "subtests_failed": 0,
+    "subtests_passed": 0,
+    "subtests_skipped": 0,
+    "subtests_xfailed": 0,
+    "xfailed": 0
+  },
+  "unrelated_containers_after": [
+    {
+      "id": "0ac27cea6b3dfbdfdcf934459642bea24e91080691814c3f3ace5c27bdf60375",
+      "name": "localos-readiness-hflypi-web-1",
+      "running": false
+    },
+    {
+      "id": "0fa9e9bbe0f7eb51ac03321b39f2361ea380da8618df5f056143929a8d91f467",
+      "name": "localos-readiness-hflypi-smoke-dependencies",
+      "running": false
+    },
+    {
+      "id": "30155e246757b8aae638c39c3ecfa9ab8909de19bb93c9ecaca26a81be12ca19",
+      "name": "localos-readiness-hflypi-check-source",
+      "running": false
+    },
+    {
+      "id": "423858f43fb80952016d98749da9dab11841403b8a76450ce7d6f46f3b2ca318",
+      "name": "localos-readiness-hflypi-tc-postgres-1",
+      "running": false
+    },
+    {
+      "id": "43fbd7306d20e6aec5ce43c14f7a61b3235a438a1b20bf2186a55d693fbacff5",
+      "name": "localos-readiness-resume-20260918-pg",
+      "running": false
+    },
+    {
+      "id": "44bbd4f5fbc74cebde383dcb4f9a8893512b338aa0662b9e7f346b6c1cdb02ff",
+      "name": "localos-readiness-hflypi-migrate-source",
+      "running": false
+    },
+    {
+      "id": "4740a61e9e765da896ad6f4526cfb1731866662d258181c58c47c32c65c499d0",
+      "name": "localos-readiness-hflypi-smoke-private-assets",
+      "running": false
+    },
+    {
+      "id": "5dd879dc4bb7c64796a3af4e07108edddb1f76d7106699126b1461eca5b53e74",
+      "name": "seo-redis-1",
+      "running": true
+    },
+    {
+      "id": "76e7108a4543f60d7d9aa34a6cfeefdbc027d35b608299539d644644e217176b",
+      "name": "elated_bohr",
+      "running": false
+    },
+    {
+      "id": "78711cc66e0b8fc3ee852c0029f74b5c0b828fdbac387a734338faa914fa99c2",
+      "name": "localos-readiness-20260917-postgres-1",
+      "running": false
+    },
+    {
+      "id": "7a43535423085aa12cfdb819fafaee744f3100862cf1f3065d3434b482f571a6",
+      "name": "localos-readiness-compiled-20260918-redis-1",
+      "running": false
+    },
+    {
+      "id": "7b77a4ba49aabb39ae4e3c87cfcb7acde7b9ead4d9ed000e2da881c2284d06f3",
+      "name": "localos-readiness-hflypi-check-restored",
+      "running": false
+    },
+    {
+      "id": "81af5fdf5a89bb3b9384d30116549ed834e4bd4d26a2ccab322669c17d6971dc",
+      "name": "localos-readiness-hflypi-smoke-nonroot-browser",
+      "running": false
+    },
+    {
+      "id": "83c6450f7e10aeb894197a04c167ec4baa0a222870fde64ae781c7f8a60a30e8",
+      "name": "riderra-main-postgres-1",
+      "running": true
+    },
+    {
+      "id": "9e2ef27cd293a1c4e7223e4b9cfecc3301be7f863a2402c8cd9f8255ce71aaeb",
+      "name": "localos-readiness-hflypi-migrate-repeat",
+      "running": false
+    },
+    {
+      "id": "9e3032a967e2364ee319b4253476ce238aa11e20d13d632a9327f0ed90538956",
+      "name": "localos-restore-proof-20260918-postgres-1",
+      "running": false
+    },
+    {
+      "id": "a099d92bbf720eaa20a9899ef9dc02cde6f8e2f012c00883191e517b53c74226",
+      "name": "localos-readiness-hflypi-postgres-1",
+      "running": true
+    },
+    {
+      "id": "c4d4921b0c077594b4bf86cf9c0588dc8790505f4c1a9ff2991ab8163b21834d",
+      "name": "localos-readiness-hflypi-migrate-native",
+      "running": false
+    },
+    {
+      "id": "c8a753b1e7d1fc49e3f539a23a4e36568ba82e0920e2377721f033c27467bd2d",
+      "name": "localos-readiness-compiled-20260918-postgres-1",
+      "running": false
+    },
+    {
+      "id": "cbe74d81ca987e2ec7cc4f619c5f88cef4671bf7eaed3addaac4bc031784bb27",
+      "name": "localos-readiness-hflypi-app-1",
+      "running": false
+    },
+    {
+      "id": "e550abaad78e5ba43cda042379df7004060188909807f0f750f503309ec76e14",
+      "name": "localos-backend-full-5cc-a2f974eb33e8",
+      "running": false
+    },
+    {
+      "id": "f288e1a93b754e2b456a6e9bfe557ac2497fea1240f206333126d9dbdfb03fb0",
+      "name": "seo-postgres-1",
+      "running": true
+    },
+    {
+      "id": "f85d3d9de490e52cb91c1d48976adc186e14c319e982a9db374665782cb6859e",
+      "name": "localos-readiness-20260917-redis-1",
+      "running": false
+    }
+  ],
+  "unrelated_containers_before": [
+    {
+      "id": "0ac27cea6b3dfbdfdcf934459642bea24e91080691814c3f3ace5c27bdf60375",
+      "name": "localos-readiness-hflypi-web-1",
+      "running": false
+    },
+    {
+      "id": "0fa9e9bbe0f7eb51ac03321b39f2361ea380da8618df5f056143929a8d91f467",
+      "name": "localos-readiness-hflypi-smoke-dependencies",
+      "running": false
+    },
+    {
+      "id": "30155e246757b8aae638c39c3ecfa9ab8909de19bb93c9ecaca26a81be12ca19",
+      "name": "localos-readiness-hflypi-check-source",
+      "running": false
+    },
+    {
+      "id": "423858f43fb80952016d98749da9dab11841403b8a76450ce7d6f46f3b2ca318",
+      "name": "localos-readiness-hflypi-tc-postgres-1",
+      "running": false
+    },
+    {
+      "id": "43fbd7306d20e6aec5ce43c14f7a61b3235a438a1b20bf2186a55d693fbacff5",
+      "name": "localos-readiness-resume-20260918-pg",
+      "running": false
+    },
+    {
+      "id": "44bbd4f5fbc74cebde383dcb4f9a8893512b338aa0662b9e7f346b6c1cdb02ff",
+      "name": "localos-readiness-hflypi-migrate-source",
+      "running": false
+    },
+    {
+      "id": "4740a61e9e765da896ad6f4526cfb1731866662d258181c58c47c32c65c499d0",
+      "name": "localos-readiness-hflypi-smoke-private-assets",
+      "running": false
+    },
+    {
+      "id": "5dd879dc4bb7c64796a3af4e07108edddb1f76d7106699126b1461eca5b53e74",
+      "name": "seo-redis-1",
+      "running": true
+    },
+    {
+      "id": "76e7108a4543f60d7d9aa34a6cfeefdbc027d35b608299539d644644e217176b",
+      "name": "elated_bohr",
+      "running": false
+    },
+    {
+      "id": "78711cc66e0b8fc3ee852c0029f74b5c0b828fdbac387a734338faa914fa99c2",
+      "name": "localos-readiness-20260917-postgres-1",
+      "running": false
+    },
+    {
+      "id": "7a43535423085aa12cfdb819fafaee744f3100862cf1f3065d3434b482f571a6",
+      "name": "localos-readiness-compiled-20260918-redis-1",
+      "running": false
+    },
+    {
+      "id": "7b77a4ba49aabb39ae4e3c87cfcb7acde7b9ead4d9ed000e2da881c2284d06f3",
+      "name": "localos-readiness-hflypi-check-restored",
+      "running": false
+    },
+    {
+      "id": "81af5fdf5a89bb3b9384d30116549ed834e4bd4d26a2ccab322669c17d6971dc",
+      "name": "localos-readiness-hflypi-smoke-nonroot-browser",
+      "running": false
+    },
+    {
+      "id": "83c6450f7e10aeb894197a04c167ec4baa0a222870fde64ae781c7f8a60a30e8",
+      "name": "riderra-main-postgres-1",
+      "running": true
+    },
+    {
+      "id": "9e2ef27cd293a1c4e7223e4b9cfecc3301be7f863a2402c8cd9f8255ce71aaeb",
+      "name": "localos-readiness-hflypi-migrate-repeat",
+      "running": false
+    },
+    {
+      "id": "9e3032a967e2364ee319b4253476ce238aa11e20d13d632a9327f0ed90538956",
+      "name": "localos-restore-proof-20260918-postgres-1",
+      "running": false
+    },
+    {
+      "id": "a099d92bbf720eaa20a9899ef9dc02cde6f8e2f012c00883191e517b53c74226",
+      "name": "localos-readiness-hflypi-postgres-1",
+      "running": true
+    },
+    {
+      "id": "c4d4921b0c077594b4bf86cf9c0588dc8790505f4c1a9ff2991ab8163b21834d",
+      "name": "localos-readiness-hflypi-migrate-native",
+      "running": false
+    },
+    {
+      "id": "c8a753b1e7d1fc49e3f539a23a4e36568ba82e0920e2377721f033c27467bd2d",
+      "name": "localos-readiness-compiled-20260918-postgres-1",
+      "running": false
+    },
+    {
+      "id": "cbe74d81ca987e2ec7cc4f619c5f88cef4671bf7eaed3addaac4bc031784bb27",
+      "name": "localos-readiness-hflypi-app-1",
+      "running": false
+    },
+    {
+      "id": "e550abaad78e5ba43cda042379df7004060188909807f0f750f503309ec76e14",
+      "name": "localos-backend-full-5cc-a2f974eb33e8",
+      "running": false
+    },
+    {
+      "id": "f288e1a93b754e2b456a6e9bfe557ac2497fea1240f206333126d9dbdfb03fb0",
+      "name": "seo-postgres-1",
+      "running": true
+    },
+    {
+      "id": "f85d3d9de490e52cb91c1d48976adc186e14c319e982a9db374665782cb6859e",
+      "name": "localos-readiness-20260917-redis-1",
+      "running": false
+    }
+  ]
+}

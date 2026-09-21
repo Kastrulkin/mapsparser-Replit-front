@@ -1,5 +1,15 @@
 # Production-readiness change log
 
+## Native operator and workflows — 21 September, parent0ef33e3a
+
+Added one owned bootstrap/voice-DSN profile for full operator28 and one default-
+guard pure35module/670 profile, without product/fixture/schema/assertion changes.
+Actual28/28 and670/670 pass; imported-fixture skip gap is resolved with real PG.
+Retained old profile limits and exact teardown/source checks. Corrected stale
+capacity/authority notes and shared-fixture accounting (104 dependent nodes,
+39 pending, not94/28). Final controls/Ruff pass; upstream bootstrap warning
+remains recorded. No production/provider/push/deploy or unrelated-file change.
+
 ## Native capabilities and governed operations — 21 September, parent71f966ad
 
 Support-only exact57API profile and profile-scoped connection budget1024;

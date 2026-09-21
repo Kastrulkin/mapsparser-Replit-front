@@ -1,5 +1,24 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Imported PostgreSQL fixture coverage resolved — 21 September
+
+**TEST-INVENTORY-IMPORTED-PG-01 — P2, locally FIX_PROVEN (audit harness only).**
+The full unchanged operator-service module now passes 28/28 with no skips,
+including all 21 former skips, on one owned PostgreSQL/tmpfs container. Exact
+voice-DSN lifecycle, 21 clean connections, source/guard/resource restoration
+and teardown pass. No product defect was established or assertion weakened.
+The original rejected835/856-with21skips capture remains historical evidence.
+
+**TEST-PG-INVENTORY-02 — P2, audit accounting, corrected statically.** The old
+shared-fixture inventory mixed dependency and target metrics: actual frozen
+fixture/collection join is 104 dependent nodes/19 modules, with39 remaining,
+not94/28. Risk: omit mandatory rollback scenarios while overstating coverage.
+Root cause: unchecked fixture-node accounting; high local confidence, no claim
+of a runtime/product outage. Correction: separate dependency sets from adjacent
+pure tests and retain every39 case until current evidence closes it. Verification
+is exact node membership and arithmetic; runtime completion remains OPEN.
+Fix risk is documentation-only. Required before claiming backend audit complete.
+
 ## Imported PostgreSQL fixture coverage — 21 September
 
 **TEST-INVENTORY-IMPORTED-PG-01 — P2, audit coverage, OPEN.** Static grouping

@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 def check_parent_database() -> None:
     source = Path(__file__).with_name("native_tc_adapter_hflypi.py")
-    names = {"deny", "bind_parent_database", "unbind_parent_database"}
+    names = {"deny", "bind_parent_database", "unbind_parent_database", "bind_operator_voice_test_dsn", "unbind_operator_voice_test_dsn"}
     tree = ast.parse(source.read_text())
     functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in names]
     environment = {"LOCALOS_HFLYPI_TC_MODE": "client-info-v1", "LOCALOS_HFLYPI_TC_OWNER_PID": "42"}
@@ -18,9 +18,11 @@ def check_parent_database() -> None:
     events = []
     namespace = {"os": SimpleNamespace(environ=environment, getpid=lambda: 42), "PREFIX": "LOCALOS_HFLYPI_TC_", "_database_url": None,
                  "PARENT_DATABASE_PROFILES": frozenset({"client-info-v1", "capabilities-phase1-v1"}),
+                 "OPERATOR_VOICE_TEST_DSN_PROFILES": frozenset({"operator-service-creation-v1"}), "_operator_voice_test_dsn": None,
                  "validate_dsn": lambda parsed: validated.append(parsed), "record": lambda event, **fields: events.append(event)}
     exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), "exec"), namespace)
     bind, unbind = namespace["bind_parent_database"], namespace["unbind_parent_database"]
+    bind_voice, unbind_voice = namespace["bind_operator_voice_test_dsn"], namespace["unbind_operator_voice_test_dsn"]
     for key, value in (("DATABASE_URL", ""), ("DATABASE_URL", "foreign"), ("LOCALOS_HFLYPI_TC_OWNER_PID", "43")):
         previous = environment.get(key)
         environment[key] = value
@@ -66,6 +68,38 @@ def check_parent_database() -> None:
     environment["LOCALOS_HFLYPI_TC_MODE"] = "card-growth-v1"
     bind(12345)
     assert "DATABASE_URL" not in environment and len(validated) == 2
+    environment["LOCALOS_HFLYPI_TC_MODE"] = "operator-service-creation-v1"
+    for value in ("", "foreign"):
+        environment["OPERATOR_VOICE_TEST_DSN"] = value
+        try:
+            bind_voice(12345)
+        except PermissionError:
+            pass
+        else:
+            raise AssertionError("foreign operator voice DSN was replaced")
+        assert environment["OPERATOR_VOICE_TEST_DSN"] == value and namespace["_operator_voice_test_dsn"] is None
+        del environment["OPERATOR_VOICE_TEST_DSN"]
+    namespace["validate_dsn"] = deny_capability
+    try:
+        bind_voice(12345)
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("invalid capability bound operator voice DSN")
+    namespace["validate_dsn"] = lambda parsed: validated.append(parsed)
+    bind_voice(12345)
+    assert environment["OPERATOR_VOICE_TEST_DSN"] == "postgresql://test:test@127.0.0.1:12345/test"
+    environment["OPERATOR_VOICE_TEST_DSN"] = "changed"
+    try:
+        unbind_voice()
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("changed operator voice DSN was removed")
+    environment["OPERATOR_VOICE_TEST_DSN"] = namespace["_operator_voice_test_dsn"]
+    unbind_voice()
+    assert "OPERATOR_VOICE_TEST_DSN" not in environment and namespace["_operator_voice_test_dsn"] is None
+    assert events == ["parent_database_bound", "parent_database_unbound"] * 2 + ["operator_voice_test_dsn_bound", "operator_voice_test_dsn_unbound"]
 
 
 def check_adapter_profile_bindings() -> None:
@@ -76,16 +110,20 @@ def check_adapter_profile_bindings() -> None:
         for node in tree.body
         if isinstance(node, ast.Assign)
         for target in node.targets
-        if isinstance(target, ast.Name) and target.id in {"PROFILE_PREFIXES", "PARENT_DATABASE_PROFILES"}
+        if isinstance(target, ast.Name) and target.id in {"PROFILE_PREFIXES", "PARENT_DATABASE_PROFILES", "OPERATOR_VOICE_TEST_DSN_PROFILES"}
     }
     assert ast.literal_eval(assignments["PROFILE_PREFIXES"]) == {
         "card-growth-v1": "native-tc-one",
         "client-info-v1": "native-tc-client-info",
         "capabilities-phase1-v1": "native-tc-capabilities-phase1",
+        "operator-service-creation-v1": "native-tc-operator-service-creation",
     }
     parent_profiles = assignments["PARENT_DATABASE_PROFILES"]
     assert isinstance(parent_profiles, ast.Call) and len(parent_profiles.args) == 1
     assert ast.literal_eval(parent_profiles.args[0]) == {"client-info-v1", "capabilities-phase1-v1"}
+    voice_profiles = assignments["OPERATOR_VOICE_TEST_DSN_PROFILES"]
+    assert isinstance(voice_profiles, ast.Call) and len(voice_profiles.args) == 1
+    assert ast.literal_eval(voice_profiles.args[0]) == {"operator-service-creation-v1"}
 
 
 def fixture_nodeids() -> list[str]:
@@ -107,7 +145,7 @@ def sitecustomize_modes() -> set[str]:
     for node in ast.walk(tree):
         if isinstance(node, ast.Set):
             values = {value.value for value in node.elts if isinstance(value, ast.Constant) and isinstance(value.value, str)}
-            if {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1"}.issubset(values):
+            if {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1"}.issubset(values):
                 modes.update(values)
     return modes
 
@@ -119,7 +157,7 @@ def check_relay_budgets() -> None:
     functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "connection_budget"]
     assert len(assignments) == 1 and len(functions) == 1
     budgets = ast.literal_eval(assignments[0].value)
-    assert budgets == {"card-growth-v1": 32, "client-info-v1": 32, "capabilities-phase1-v1": 1024}
+    assert budgets == {"card-growth-v1": 32, "client-info-v1": 32, "capabilities-phase1-v1": 1024, "operator-service-creation-v1": 32}
     namespace = {"MAX_CONNECTIONS": 32, "PROFILE_CONNECTION_BUDGETS": budgets}
     exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), "exec"), namespace)
     budget = namespace["connection_budget"]
@@ -127,6 +165,7 @@ def check_relay_budgets() -> None:
     assert budget("card-growth-v1") == 32
     assert budget("client-info-v1") == 32
     assert budget("capabilities-phase1-v1") == 1024
+    assert budget("operator-service-creation-v1") == 32
     for foreign in ("unknown", "capabilities-phase1-v2"):
         try:
             budget(foreign)
@@ -151,6 +190,7 @@ def check_relay_evidence_bounds(namespace) -> None:
 
     assert validate("card-growth-v1", final(2, 32))[0] == 2
     assert validate("capabilities-phase1-v1", final(171, 1024))[0] == 171
+    assert validate("operator-service-creation-v1", final(21, 32))[0] == 21
     for candidate in (final(170, 1024), final(1025, 1024), final(171, 32)):
         try:
             validate("capabilities-phase1-v1", candidate)
@@ -158,6 +198,13 @@ def check_relay_evidence_bounds(namespace) -> None:
             pass
         else:
             raise AssertionError("capabilities relay evidence outside its literal bounds was accepted")
+    for candidate in (final(20, 32), final(33, 32), final(21, 1024)):
+        try:
+            validate("operator-service-creation-v1", candidate)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("operator service creation relay evidence outside its literal bounds was accepted")
 
 
 def main() -> None:
@@ -168,7 +215,7 @@ def main() -> None:
     profiles = namespace["PROFILES"]
     parse = namespace["parse_test"]
     check_relay_evidence_bounds(namespace)
-    assert set(profiles) == {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1"}
+    assert set(profiles) == {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1"}
     assert profiles["card-growth-v1"]["count"] == 1
     assert profiles["client-info-v1"] == {"target": "tests/test_client_info_gate.py", "count": 8, "prefix": "native-tc-client-info"}
     capabilities = profiles["capabilities-phase1-v1"]
@@ -180,7 +227,8 @@ def main() -> None:
         "exact_nodeids": True,
         "prefix": "native-tc-capabilities-phase1",
     }
-    assert sitecustomize_modes() == {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1"}
+    assert profiles["operator-service-creation-v1"] == {"target": "tests/test_operator_service_creation.py", "count": 28, "prefix": "native-tc-operator-service-creation", "bootstrap_postgres": True}
+    assert sitecustomize_modes() == {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1"}
 
     def capture(state):
         return {"stdout": "HFLYPI_TC_ONE_RESULT=" + json.dumps(state), "exit_code": 0, "timed_out": False}
@@ -210,7 +258,7 @@ def main() -> None:
         if profile.get("exact_nodeids") is True:
             denied({**state, "nodeids": ["tests/test_foreign.py::test_other"] + nodeids[1:]}, profile)
             denied({**state, "nodeids": [nodeids[0] + "::foreign_child"] + nodeids[1:]}, profile)
-        compile(namespace["plugin_source"](targets), "<reviewed-profile-runner>", "exec")
+        compile(namespace["plugin_source"](targets, profile.get("bootstrap_postgres", False)), "<reviewed-profile-runner>", "exec")
     for malformed in ([], ["tests/test_capabilities_api_phase1.py::test_ok", 1]):
         try:
             namespace["plugin_source"](malformed)
@@ -218,7 +266,13 @@ def main() -> None:
             pass
         else:
             raise AssertionError("malformed target allowlist was accepted")
-    print("native TC profiles: 3 exact profiles, parent-DSN lifecycle and negative result gates passed")
+    try:
+        namespace["plugin_source"](["tests/test_operator_service_creation.py"], "yes")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("non-boolean bootstrap mode was accepted")
+    print("native TC profiles: 4 exact profiles, parent-DSN lifecycle and negative result gates passed")
 
 
 if __name__ == "__main__":

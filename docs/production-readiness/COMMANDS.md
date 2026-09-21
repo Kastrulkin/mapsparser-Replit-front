@@ -1,5 +1,25 @@
 # Verified commands and evidence
 
+## Operator PG28 and governed workflows670 — 21 September
+
+Executed sequentially in named tmux sessions (pure first, then owned PG):
+
+```sh
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_unit_slice_hflypi.py --attempt v1 --profile governed-workflows-pure-v1
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_tc_one_hflypi.py --attempt v1 --profile operator-service-creation-v1
+```
+
+Sessions: `audit-native-governed-workflows-hflypi-v1` and
+`audit-native-operator-service-creation-hflypi-v1`. Results: pure670/670,
+pytest8.26s/capture9.175s/wrapper11.085s; PG28/28,
+pytest4.34s/capture6.926s/wrapper10.465s. Neither skipped any node. PG stderr
+has one deprecated compatibility-import warning; pure stderr is empty.
+PG has21cleanconnections, exact DSN lifecycle/owned teardown and guard/resource
+postchecks. Final pure controls/Ruff7/diff:398.982ms,exit0/stderr0; preflight
+435.179ms retained. Eight raw/static captures +16 hashes archived under task
+`native-operator-workflows-hflypi-20260921/`. Existing attempt paths must not be
+overwritten/replayed. Work-review rollback requires a new reviewed profile.
+
 ## Capabilities PG57 and governed pure828 — 21 September
 
 Named tmux audit-native-capabilities-phase1-hflypi-v1 ran:

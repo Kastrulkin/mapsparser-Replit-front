@@ -1,5 +1,29 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, operator PG28 and workflows670
+
+- [x] Previous turn made verified progress: reviewed checkpoint `0ef33e3a`.
+- [x] Full operator-service module passes 28/28, including the 21 formerly
+  skipped real-PG cases. Pytest 4.34 s; 21 clean relay connections; owned tmpfs
+  container removed, 23 existing containers and frozen source retained.
+  Independent PG pre-execution/runtime acceptance PASS.
+- [x] Exact 35-module pure/mock batch passes 670/670 in 8.26 s, no skips/errors.
+  Default network/DB guard unchanged; independent runtime acceptance PASS.
+- [x] Corrected imported-fixture setup, not product assertions. Final support
+  controls/Ruff/diff pass; one PostgreSQL bootstrap import warning is retained.
+- [x] Corrected stale disk/permission notes in residual risks. About 17 GiB
+  remains free; recheck floors before runs. No production/provider operations.
+- [ ] Accepted slices now 2,680/5,481 across 94 module slices; 2,801 still open.
+  Not a current-source aggregate or whole-goal completion claim.
+- [ ] Shared-conftest PG map corrected to 104 dependency nodes/19 modules,
+  with 39 remaining/16 modules; old 94/28 counts were inaccurate.
+- [ ] Next: dedicated reviewed fixture for all seven work-review rollback
+  cases, plus full-scope diagnosis of the default-worker frontend flake.
+
+Parent `0ef33e3a`; seven audit support files, evidence and readiness docs only.
+Evidence: task `native-operator-workflows-results-20260921.md`. Historical goal
+FAIL, security/browser/performance/CI/final gates and foreign 13 paths remain.
+
 ## Latest checkpoint — 21 September, real-PG57 and governed828
 
 - [x] Exact57capabilities API tests pass with real isolated PostgreSQL and

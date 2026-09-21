@@ -30,8 +30,10 @@ PROFILE_PREFIXES = {
     "card-growth-v1": "native-tc-one",
     "client-info-v1": "native-tc-client-info",
     "capabilities-phase1-v1": "native-tc-capabilities-phase1",
+    "operator-service-creation-v1": "native-tc-operator-service-creation",
 }
 PARENT_DATABASE_PROFILES = frozenset({"client-info-v1", "capabilities-phase1-v1"})
+OPERATOR_VOICE_TEST_DSN_PROFILES = frozenset({"operator-service-creation-v1"})
 _active = None
 _relay = None
 _started = False
@@ -40,6 +42,7 @@ _original_stop = None
 _session = ""
 _journal = None
 _database_url = None
+_operator_voice_test_dsn = None
 
 
 def deny(reason: str) -> None:
@@ -91,6 +94,30 @@ def unbind_parent_database() -> None:
     del os.environ["DATABASE_URL"]
     _database_url = None
     record("parent_database_unbound")
+
+
+def bind_operator_voice_test_dsn(port: int) -> None:
+    """Supply the owned relay DSN for the frozen operator voice fixture only."""
+    global _operator_voice_test_dsn
+    if os.environ.get(PREFIX + "MODE") not in OPERATOR_VOICE_TEST_DSN_PROFILES:
+        return
+    if os.environ.get(PREFIX + "OWNER_PID") != str(os.getpid()) or "OPERATOR_VOICE_TEST_DSN" in os.environ or _operator_voice_test_dsn is not None:
+        deny("refusing to replace operator voice test DSN")
+    validate_dsn({"host": "127.0.0.1", "port": str(port), "dbname": "test", "user": "test", "password": "test"})
+    _operator_voice_test_dsn = f"postgresql://test:test@127.0.0.1:{port}/test"
+    os.environ["OPERATOR_VOICE_TEST_DSN"] = _operator_voice_test_dsn
+    record("operator_voice_test_dsn_bound", port=port, database="test")
+
+
+def unbind_operator_voice_test_dsn() -> None:
+    global _operator_voice_test_dsn
+    if _operator_voice_test_dsn is None:
+        return
+    if os.environ.get("OPERATOR_VOICE_TEST_DSN") != _operator_voice_test_dsn:
+        deny("operator voice test DSN changed during test")
+    del os.environ["OPERATOR_VOICE_TEST_DSN"]
+    _operator_voice_test_dsn = None
+    record("operator_voice_test_dsn_unbound")
 
 
 def check_network(client) -> None:
@@ -147,6 +174,8 @@ def install() -> None:
             deny("unexpected synthetic PostgreSQL credentials or environment")
         if profile in PARENT_DATABASE_PROFILES and "DATABASE_URL" in os.environ:
             deny("parent database configuration must be absent before owned start")
+        if profile in OPERATOR_VOICE_TEST_DSN_PROFILES and "OPERATOR_VOICE_TEST_DSN" in os.environ:
+            deny("operator voice test DSN must be absent before owned start")
         client = instance.get_docker_client().client
         check_network(client)
         # Testcontainers otherwise pulls if the image disappears between its
@@ -182,6 +211,7 @@ def install() -> None:
             deny("negative capability checks did not all fail closed")
         record("capability_denials", checks=checks)
         bind_parent_database(port)
+        bind_operator_voice_test_dsn(port)
         return result
 
     def stop(instance, force=True, delete_volume=True):
@@ -192,6 +222,10 @@ def install() -> None:
             instance.get_docker_client().client.close()
             return
         failures = []
+        try:
+            unbind_operator_voice_test_dsn()
+        except BaseException:
+            failures.append(type(sys.exception()).__name__)
         try:
             unbind_parent_database()
         except BaseException:

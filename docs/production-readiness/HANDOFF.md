@@ -1,5 +1,47 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, operator fixture gap resolved
+
+Branch `codex/production-readiness-20260917`; parent `0ef33e3a`. Previous goal
+turn made progress, with its exact reviewed 24-file diff committed normally.
+This new package modifies seven audit support files, evidence and seven
+readiness documents only. Keep the historical task FAIL/spec/problems and
+all 13 foreign paths; no application source or fixture edits were made.
+
+Frozen `99849935`: operator whole module 28/28/no skips, including 21 real-PG
+cases, 21/32 clean connections, pytest 4.34 s / wrapper 10.465 s. Only owned
+tmpfs container `d28e3a66...` was removed. Default guard `07d3...1150`, 5,720 blobs,
+23 retained container IDs/states and empty internal network were verified.
+One bootstrap deprecation warning is retained in stderr. No parent DATABASE_URL
+binding/Flask child; fixture migrations run in unique synthetic schemas.
+Pure workflows profile: 670/670 in 35 modules, pytest 8.26 s / wrapper 11.085 s,
+no skips/errors, default guard unchanged, independent runtime PASS.
+Final controls/Ruff/diff capture: 398.982 ms, exit 0 / empty stderr.
+
+Accepted slices 2,680/5,481 across 94 module slices; 2,801 still open. The prior
+shared-conftest map was wrong: exact dependency inventory is 104/19 modules,
+65 already accepted and 39 remaining/16 modules. Count client PG7 separately
+from whole8; capabilities PG57 separately from whole60; operator28 is another
+fixture lane. Never deduct historical rollback passes without matching frozen
+node/source evidence. Detailed evidence/limits: task
+`native-operator-workflows-results-20260921.md` and its hash manifest.
+
+Next concrete task: full `tests/test_work_review_migration_rollback.py` (7).
+Read its fixture first. It connects to `postgres`, creates only
+`work_review_rollback_<uuidhex>`, invokes migration children and drops that
+owned synthetic database. Current adapter admits only dbname `test`, so add
+and independently review a dedicated exact database-name/lifecycle profile
+before runtime; determine a measured/bounded connection budget. Do not invoke
+a guessed profile or weaken global DSN rules. No existing volume/data access.
+
+Frontend default-full v5 828/830 vs capped v6 830/830 remains unproven: implicit
+async locale/effect readiness deadlines under parallel load are a candidate,
+not a demonstrated product/order bug. Next useful check is full830 with scoped
+test-only phase tracing, not more isolated repeats or assertion weakening.
+No active runtime remains; approximately 17 GiB free (5 start/2 live/10 build
+floors). Do not replay completed cleanup or one-shot attempt paths. Full
+security/browser/performance/current-source/CI/demo/final gates remain open.
+
 ## Latest checkpoint — 21 September, PG57 / pure828 complete
 
 Branch codex/production-readiness-20260917; parent71f966ad. Previous turn was

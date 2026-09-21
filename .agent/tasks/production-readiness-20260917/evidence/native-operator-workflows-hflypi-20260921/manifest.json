@@ -1,0 +1,30 @@
+{
+  "algorithm": "sha256",
+  "frozen_source": "99849935de26e2932613f2a73cf515dff49104a1",
+  "prior_checkpoint": "0ef33e3a",
+  "files": {
+    "../native-pg-shared-fixture-inventory-hflypi-20260921.json": "fed9656811139d6cafe717c8dbe8156b574c45701c91505d5a1728904bf3b5aa",
+    "native-tc-operator-service-creation-v1.json": "2e9ba3107dbf340223ea13c69c48640e2b3fb85731d740ef5c61768b758aa990",
+    "native-tc-operator-service-creation-v1-events.jsonl": "30ddeff6752a25ab8a61f42992383ba848288cd91d8a93868d5f19a16f711913",
+    "native-tc-operator-service-creation-v1-relay.json": "c154b8ba98ef5c7b927b63c8d9cc09f6be518c5916e8cdec377e861f12c4eb7d",
+    "native-tc-operator-service-creation-v1-negative.json": "af62ea9de7b9495b080cb51920f8b5ee305ee9355f2c53747eb74b7636efd2b6",
+    "native-tc-operator-service-creation-v1-child.json": "ca1d86954fec74680b9efac3c30a9cc70d39029b2f62e7697a9b822420ed3823",
+    "native-unit-governed-workflows-v1.json": "7cf1f76d071b21feed177cf87ac3e86a7f964de2133627e051f75f8102ecaaf5",
+    "../native-operator-workflows-static-v1-20260921.json": "a83a413bb116f7d01f1809c6aeb975c3c8ca4598f408d9990713b447ce73fa44",
+    "../native-operator-workflows-static-v2-20260921.json": "77c37575c64a37cf653857d6d374a2d0d9eb710ebec77158d9c34bfdf22355ab",
+    "../../support/native_tc_one_hflypi.py": "fe009149f7a22a89a2ba8563a964bce0f18bf179425c259e309aaf9aee1dd96e",
+    "../../support/native_tc_adapter_hflypi.py": "904a3909da3c5f9aff51f1663f3e5c86daa780f8774c3ddc3ba0ad10a6206762",
+    "../../support/native_tc_relay_hflypi.py": "df49732e70bd9f3677b686810569e11920bd210e117c14bf768b024c0f759254",
+    "../../support/native_hflypi_sitecustomize.py": "ff59b7aa21d36b553d6662ea9006fbefb51b0437d4f568fb344ea584a80e51a4",
+    "../../support/native_tc_profile_checks_hflypi.py": "fff18974e7c820e853855775dae31510dc45f825edccd8e44011efd162dee2ff",
+    "../../support/native_unit_slice_hflypi.py": "7c6cef2fbf068a9aa42e352b3ffadcebd7eaa4f16a163e8e442e8aa286dc55ab",
+    "../../support/native_unit_slice_hflypi_checks.py": "fa38c166b8a5b12cb52184080cbe9b56f0899c97a5e8460d073888a6d11e6952"
+  },
+  "provenance": {
+    "initial_review_guard_sha256": "aec36d6ac1f8b6ae9e15f17550efa3969229cf8f06488c41aff62e7a03409411",
+    "before_pg_runtime_change": "Guard docstring only: list operator-service among admitted experiment families; no executable change.",
+    "installed_default_guard_sha256": "07d3e2dc19cbb0f9e542a6d0835ea17b5efcc5713391c152a833e6efefd61150",
+    "pg_warning": "One retained testcontainers.postgres deprecation warning in stderr; not a failing test.",
+    "no_production_or_provider_execution": true
+  }
+}

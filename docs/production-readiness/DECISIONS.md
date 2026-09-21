@@ -1,5 +1,20 @@
 # Readiness decisions
 
+## D-096 — Imported PG fixtures need owned configuration, not skipped assertions
+
+Run the entire operator-service module unchanged on one approved temporary PG
+container. Bind only an initially absent OPERATOR_VOICE_TEST_DSN after identity
+validation, unbind the exact value on teardown, retain 32 total/8 concurrent
+connections and require at least 21 actual fixture connections. This profile
+does not use Flask migration children; do not waive that gate for other profiles.
+Keep provider doubles and all original assertions. Actual 28/28 resolves the
+prior 21-skip configuration gap; no product fix was needed on this evidence.
+
+Count fixture-dependent nodes separately from whole-module targets. A fresh
+collection/fixture join yields shared-conftest PG104/19 modules, not PG94;
+39 remain, not 28. Do not exclude historical rollback cases without matching
+current frozen evidence. Keep the total 5,481-node objective unchanged.
+
 ## D-095 — Size a named test profile and trace imported fixtures
 
 A57case real-PG batch needs at least171fixture connections; old32lifetime cap

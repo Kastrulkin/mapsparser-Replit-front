@@ -102,6 +102,46 @@ PROFILES = {
         },
         "prefix": "native-unit-governed-operations", "timeout": 180,
     },
+    "governed-workflows-pure-v1": {
+        "modules": {
+            "tests/test_admin_prospecting_audit_payload.py": 52,
+            "tests/test_partner_audit_rollout.py": 39,
+            "tests/test_creator_promotion_service.py": 34,
+            "tests/test_content_generation_v2.py": 26,
+            "tests/test_telegram_dashboard_copy.py": 25,
+            "tests/test_organika_regressions.py": 25,
+            "tests/test_operator_mobile_actions.py": 23,
+            "tests/test_public_audit_editor.py": 22,
+            "tests/test_sales_rooms.py": 20,
+            "tests/test_operator_preserved_values.py": 20,
+            "tests/test_outreach_vk_adapter.py": 19,
+            "tests/test_outreach_email_reply_receipt.py": 19,
+            "tests/test_outreach_email_adapter.py": 19,
+            "tests/test_industry_patterns.py": 19,
+            "tests/test_outreach_batch_preparation.py": 18,
+            "tests/test_operator_core.py": 18,
+            "tests/test_content_rules.py": 18,
+            "tests/test_discovered_telegram_sources.py": 17,
+            "tests/test_operator_tool_loop.py": 16,
+            "tests/test_operator_today_api.py": 16,
+            "tests/test_growth_overview.py": 16,
+            "tests/test_finance_crm.py": 16,
+            "tests/test_card_automation.py": 16,
+            "tests/test_guided_tour_api.py": 15,
+            "tests/test_lead_journey_api.py": 15,
+            "tests/test_map_url_normalizer.py": 15,
+            "tests/test_parsed_payload_validation.py": 15,
+            "tests/test_worker_failure_reason_safety.py": 13,
+            "tests/test_contact_intelligence_ssrf.py": 13,
+            "tests/test_beauty_service_optimization.py": 13,
+            "tests/test_content_plan_direction.py": 12,
+            "tests/test_today_work_copy.py": 12,
+            "tests/test_telegram_operator_write_access.py": 12,
+            "tests/test_riderra_systematic_outreach.py": 12,
+            "tests/test_telegram_response_router.py": 10,
+        },
+        "prefix": "native-unit-governed-workflows", "timeout": 180,
+    },
 }
 MIN_START = 5 * 1024**3
 METADATA_ONLY_DATABASE_URL = "postgresql+psycopg2://metadata_only@127.0.0.1:1/localos_metadata_only"
@@ -111,7 +151,7 @@ def profile_environment(profile_name: str, environment: dict[str, str]) -> dict[
     if "DATABASE_URL" in environment:
         raise RuntimeError("pure-unit environment must not inherit a database URL")
     result = dict(environment)
-    if profile_name in {"agent-social-pure-v1", "governed-operations-pure-v2"}:
+    if profile_name in {"agent-social-pure-v1", "governed-operations-pure-v2", "governed-workflows-pure-v1"}:
         # Flask's migration metadata extension needs a URI, not a connection.
         # Port 1 remains denied by the unchanged psycopg/socket guard.
         result["DATABASE_URL"] = METADATA_ONLY_DATABASE_URL
