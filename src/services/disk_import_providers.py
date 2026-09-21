@@ -180,4 +180,6 @@ class YandexReader:
 
 
 def reader(cursor,source):
+    from services.yandex_public_disk import PublicReader, IDENTITY
+    if source['provider']=='yandex' and source.get('credential_identity')==IDENTITY:return PublicReader(cursor,source)
     return GoogleReader(cursor,source) if source['provider']=='google' else YandexReader(cursor,source)

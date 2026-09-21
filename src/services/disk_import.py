@@ -61,6 +61,12 @@ def prepare(c,business,user,payload):
         # Folder metadata is not exposed before the ownership proof.
         name='Папка Google Диска';url='https://drive.google.com/drive/folders/'+root
         challenge='LocalOS-'+secrets.token_hex(16);challenge_hash=hashlib.sha256(challenge.encode()).hexdigest()
+    elif payload.get('folder_url'):
+        from services.yandex_public_disk import PublicReader, folder_url, IDENTITY
+        url=folder_url(payload['folder_url']);root='/';identity=IDENTITY;state='ready'
+        metadata=PublicReader(c,{'root_url':url}).metadata()
+        if metadata.get('type')!='dir':raise ValueError('Ссылка должна вести на папку с материалами.')
+        name=metadata.get('name') or 'Материалы с Яндекс Диска'
     else:
         c.execute("SELECT version FROM business_disk_connections WHERE business_id=%s AND status='connected'",(business,))
         connection=_row(c,c.fetchone())
@@ -183,7 +189,7 @@ def process_scan(c,source,data):
             (source['id'],file['id'],file['revision'],file['name'],file['kind'],json.dumps(file),source['scan_id']))
         row=_row(c,c.fetchone())
         if file['kind']=='unsupported':
-            c.execute("UPDATE disk_import_files SET status='skipped',error_code='unsupported_format' WHERE source_id=%s AND external_id=%s",(source['id'],file['id']));continue
+            c.execute("UPDATE disk_import_files SET status='skipped',error_code=%s WHERE source_id=%s AND external_id=%s",(file.get('skip_reason','unsupported_format'),source['id'],file['id']));continue
         if row.get('video_id') and row.get('imported_revision')==file['revision']:
             c.execute('UPDATE external_video_assets SET name=%s,original_url=%s WHERE id=%s AND business_id=%s',(file['name'],file['url'],row['video_id'],source['business_id']))
         if row.get('imported_revision')!=file['revision']:

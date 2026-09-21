@@ -292,7 +292,7 @@ def cancel_operator_async_job(
     return _public_job(_row(cursor, cursor.fetchone()))
 
 
-def claim_next_operator_async_job(cursor: Any, *, background: bool = False) -> dict[str, Any] | None:
+def claim_next_operator_async_job(cursor: Any, *, background: bool = False, background_only: bool = False) -> dict[str, Any] | None:
     lease_token = str(uuid.uuid4())
     cursor.execute(
         """
@@ -300,17 +300,18 @@ def claim_next_operator_async_job(cursor: Any, *, background: bool = False) -> d
         FROM operator_async_jobs
         WHERE status = 'queued'
           AND (%s OR kind NOT IN ('disk_import_scan','disk_import_file'))
+          AND (NOT %s OR kind IN ('disk_import_scan','disk_import_file'))
           AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())
         ORDER BY CASE WHEN kind IN ('disk_import_scan','disk_import_file') THEN
           COALESCE((SELECT MAX(previous.updated_at) FROM operator_async_jobs previous
             WHERE previous.business_id=operator_async_jobs.business_id
             AND previous.kind IN ('disk_import_scan','disk_import_file')
             AND previous.status IN ('running','completed','failed')), created_at)
-          ELSE created_at END, created_at
+          ELSE created_at END, CASE WHEN kind='disk_import_scan' THEN 0 ELSE 1 END, created_at
         FOR UPDATE SKIP LOCKED
         LIMIT 1
         """,
-        (background,),
+        (background, background_only),
     )
     row = _row(cursor, cursor.fetchone())
     if not row:
@@ -455,7 +456,7 @@ class _OperatorJobHeartbeat:
                 database.close()
 
 
-def process_next_operator_async_job(*, background: bool = False) -> dict[str, Any] | None:
+def process_next_operator_async_job(*, background: bool = False, background_only: bool = False) -> dict[str, Any] | None:
     """Claim and execute one LocalOS-owned durable job.
 
     Domain queues remain authoritative for parsing and agent runs. This worker only
@@ -469,7 +470,7 @@ def process_next_operator_async_job(*, background: bool = False) -> dict[str, An
         from services.operator_audio import cleanup_audio
         cleanup_audio(claim_db.conn.cursor())
         recover_stale_operator_async_jobs(claim_db.conn.cursor())
-        claimed = claim_next_operator_async_job(claim_db.conn.cursor(), background=background)
+        claimed = claim_next_operator_async_job(claim_db.conn.cursor(), background=background, background_only=background_only)
         claim_db.conn.commit()
     except Exception:
         claim_db.conn.rollback()
@@ -571,6 +572,11 @@ def process_next_operator_async_job(*, background: bool = False) -> dict[str, An
                 error=str(exc),
                 lease_token=lease_token,
             )
+            if failed_update and kind in {"disk_import_scan","disk_import_file"} and claimed.get('attempt_count',1) < claimed.get('max_attempts',5):
+                delay=min(300,5*(2**claimed.get('attempt_count',1)))
+                fail_db.conn.cursor().execute("""UPDATE operator_async_jobs SET status='queued',next_attempt_at=NOW()+make_interval(secs => %s),completed_at=NULL
+                    WHERE id=%s AND status='failed' AND EXISTS(SELECT 1 FROM disk_import_sources
+                    WHERE id=%s AND state='active' AND version=%s)""",(delay,job_id,payload.get('source_id'),payload.get('version')))
             if failed_update and kind in {"voice_receive", "voice_execute"} and int(claimed.get('attempt_count') or 0) < int(claimed.get('max_attempts') or 3) and not isinstance(exc, PermissionError):
                 fail_db.conn.cursor().execute("UPDATE operator_async_jobs SET status='queued',next_attempt_at=NOW()+INTERVAL '15 seconds',completed_at=NULL WHERE id=%s AND status='failed'",(job_id,))
             elif failed_update and kind == 'voice_execute':

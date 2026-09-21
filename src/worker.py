@@ -7907,6 +7907,9 @@ def _process_sync_2gis_task(queue_dict):
 
 
 if __name__ == "__main__":
+    if _worker_role_enabled("operator"):
+        from services.disk_import_worker import start
+        start()
     print("Worker запущен. Проверка очереди каждые 5 минут...")
     while True:
         try:

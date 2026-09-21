@@ -178,12 +178,13 @@ def _s3_client() -> Any:
     secret_key = os.environ.get("MEDIA_S3_SECRET_ACCESS_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY")
     if not access_key or not secret_key:
         raise RuntimeError("MEDIA_S3_ACCESS_KEY_ID and MEDIA_S3_SECRET_ACCESS_KEY are required")
-    proxy_url = _outbound_proxy_url()
+    proxy_setting = str(os.environ.get("MEDIA_S3_HTTP_PROXY") or "").strip()
+    proxy_url = proxy_setting if proxy_setting and proxy_setting != "direct" else _outbound_proxy_url()
     client_config = Config(
         connect_timeout=12,
         read_timeout=30,
         retries={"max_attempts": 3, "mode": "standard"},
-        proxies={"http": proxy_url, "https": proxy_url} if proxy_url else None,
+        proxies={} if proxy_setting == "direct" else {"http": proxy_url, "https": proxy_url} if proxy_url else None,
     )
     return boto3.client(
         "s3",
