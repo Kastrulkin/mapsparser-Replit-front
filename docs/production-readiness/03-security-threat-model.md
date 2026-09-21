@@ -4,6 +4,14 @@ Status: incomplete security assessment, not a production approval. Baseline `302
 
 ## Assets and adversaries
 
+21 September local-ref checkpoint at7cf0cd24:89refs/3117reachable commits and
+938extra tree blobs. Redacted scans report711+42matches, both exit1.20priority
+locations corroborate2occurrences of one service-role JWT,1opaque Wordstat token
+and17anon-role occurrences; signature/validity/revocation/RLS unproven.733other
+matches remain unreviewed;3117selected/3095scanner count not yet reconciled.
+Archive/binary/LFS/reflog/remote/dirty/runtime/image/log exclusions remain. This
+improves evidence, not AC6. See task evidence/git-all-refs-notes-20260921.md.
+
 21 September supply-chain checkpoint at `334c9d4b`: a strict full committed-source
 scan produced 101 matches, all classified non-secret after source predicates
 and independent review. The 131-commit branch delta has seven synthetic/prose

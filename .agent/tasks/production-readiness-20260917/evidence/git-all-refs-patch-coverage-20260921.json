@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "git-all-refs-patch-coverage",
+  "captured_at": "2026-09-20T23:56:36.434970+00:00",
+  "command": [
+    "node",
+    "-e",
+    "const fs=require(\"fs\"),cp=require(\"child_process\"),crypto=require(\"crypto\"),assert=require(\"assert\");const m=JSON.parse(fs.readFileSync(\".agent/tasks/production-readiness-20260917/evidence/git-all-refs-manifest-20260921.json\"));const common=[\"--full-history\",\"--no-ext-diff\",\"--no-textconv\",\"-m\",\"--root\",...m.commitTips];const raw=cp.execFileSync(\"git\",[\"log\",\"--format=commit %H\",\"--raw\",\"--no-abbrev\",\"--no-renames\",...common],{encoding:\"utf8\",maxBuffer:64e6});const commits=new Map();let current;for(const line of raw.split(\"\\n\")){if(/^commit [a-f0-9]{40}$/.test(line)){current=line.slice(7);if(!commits.has(current))commits.set(current,0);}else if(line.startsWith(\":\")){assert(current);commits.set(current,commits.get(current)+1);}}const empty=[...commits].filter(x=>x[1]===0).map(x=>x[0]);console.log(JSON.stringify({frozenGraphCount:m.reachableCommitCount,gitLogCommitCount:commits.size,commitsWithRawDiff:[...commits].filter(x=>x[1]>0).length,emptyDiffCommits:empty,gitRawMetadataSha256:crypto.createHash(\"sha256\").update(raw).digest(\"hex\")},null,2));"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 3129.157,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\n  \"frozenGraphCount\": 3117,\n  \"gitLogCommitCount\": 3117,\n  \"commitsWithRawDiff\": 3112,\n  \"emptyDiffCommits\": [\n    \"d23a4d0daee5968ecae501279f54bbd7804e3ed3\",\n    \"f355c0b189858d37f667a5441dc3c5c12681e88d\",\n    \"1eb4a7863350e3b5a9ab95a4e4663e0fac385e3e\",\n    \"f4bebc267153a8bc9f947ca8436dcc4c9ce311f2\",\n    \"495d0f6830318be87056d2146d8919bef2d8c11c\"\n  ],\n  \"gitRawMetadataSha256\": \"fd40f34fa96edb946d40d09c7ffbd282ad28991083f5aff5efc4b92dc3182897\"\n}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

@@ -1,0 +1,327 @@
+{
+  "parent": "7cf0cd24a8eec07be722084e467c8292b4f765ca",
+  "scanner_report_sha256": "7fbbbdb37d231b6b5a32d56d66d6ec24f4a5f0f64f95d4a6113f448f8acc2732",
+  "rows": [
+    {
+      "id": 685,
+      "file": "src/wordstat_token.json",
+      "commit": "06ee25d93651e64627b5013d557d895d7c332647",
+      "line": 2,
+      "sourceSha256": "fb48f679abb15a5377dfed1bc7429d4be41ebaa7f9b9e2a29e048d5b3d6c694b",
+      "classification": "HISTORICAL_WORDSTAT_OPAQUE_ACCESS_TOKEN_MATERIAL",
+      "storageFieldVerified": true,
+      "validity": "NOT_TESTED"
+    },
+    {
+      "id": 687,
+      "file": "disable_rls_temporarily.py",
+      "commit": "7ef3182e581322d8fd8b12c373a6725b51d2260c",
+      "line": 65,
+      "sourceSha256": "0154b3c8c488755129a5f80db5acb22e367321d2d04345c121c8f930a2cfa28c",
+      "tokensAtLocation": [
+        {
+          "group": 1,
+          "role": "anon",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL"
+    },
+    {
+      "id": 688,
+      "file": "fix_rls_policies.py",
+      "commit": "7ef3182e581322d8fd8b12c373a6725b51d2260c",
+      "line": 105,
+      "sourceSha256": "7ae278b54901f41e2191743a85d972ba8fc80b00173fab26c7a1d6592e0ddf84",
+      "tokensAtLocation": [
+        {
+          "group": 1,
+          "role": "anon",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL"
+    },
+    {
+      "id": 695,
+      "file": "seo-worker.service",
+      "commit": "9df18ce19d321f3e1a95c1a3faf751316b365eae",
+      "line": 11,
+      "sourceSha256": "b384ba9a3b58e8da78c930697cc96fd19bcc1afa251307445f4d6a62857b3f01",
+      "tokensAtLocation": [
+        {
+          "group": 2,
+          "role": "service_role",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PRIVILEGED_JWT_MATERIAL"
+    },
+    {
+      "id": 696,
+      "file": "frontend/.env",
+      "commit": "ac37b50c85e8d088e52d567e8178bc41c387ff14",
+      "line": 2,
+      "sourceSha256": "bf789afff01ad685aa33cef864e3aac9e498d846e7ef3ccfe7631bb72d3f8a24",
+      "tokensAtLocation": [
+        {
+          "group": 1,
+          "role": "anon",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL"
+    },
+    {
+      "id": 697,
+      "file": ".env",
+      "commit": "ac37b50c85e8d088e52d567e8178bc41c387ff14",
+      "line": 2,
+      "sourceSha256": "4f4141eb4c5ba849bcf175a66546bfbc3441c7fce052f2e0c640693dd89b54b2",
+      "tokensAtLocation": [
+        {
+          "group": 2,
+          "role": "service_role",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PRIVILEGED_JWT_MATERIAL"
+    },
+    {
+      "id": 698,
+      "file": "frontend/src/lib/supabase.ts",
+      "commit": "19ee765b209ae8b10eef470df070ec5fac9cd5d0",
+      "line": 4,
+      "sourceSha256": "5913bb44c73ed04b3289d531b996faeb15d7cbffa1cf72c5c7883678b243e8ec",
+      "tokensAtLocation": [
+        {
+          "group": 1,
+          "role": "anon",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL"
+    },
+    {
+      "id": 699,
+      "file": ".env",
+      "commit": "b33ac7b1cf358ff24efeb684dfb98cc25f102bda",
+      "line": 2,
+      "sourceSha256": "781537ecf4393cc027bc6525d37d83a1de896842dfbadba787c2503cabd8f1fd",
+      "tokensAtLocation": [
+        {
+          "group": 1,
+          "role": "anon",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL"
+    },
+    {
+      "id": 700,
+      "file": "frontend/dist/assets/index-DRTSitmE.js",
+      "commit": "c8f19627e64950cdaab38dabbc0faac4e7dd9b5b",
+      "line": 190,
+      "sourceSha256": "ce19a037f28288111f8d64cf910a866ea106948a3a295ae69d357639f3c55b5f",
+      "tokensAtLocation": [
+        {
+          "group": 1,
+          "role": "anon",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL"
+    },
+    {
+      "id": 701,
+      "file": "frontend/dist/assets/index-DRTSitmE.js",
+      "commit": "c8f19627e64950cdaab38dabbc0faac4e7dd9b5b",
+      "line": 190,
+      "sourceSha256": "ce19a037f28288111f8d64cf910a866ea106948a3a295ae69d357639f3c55b5f",
+      "tokensAtLocation": [
+        {
+          "group": 1,
+          "role": "anon",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL"
+    },
+    {
+      "id": 702,
+      "file": "frontend/dist/assets/index-DRTSitmE.js",
+      "commit": "c8f19627e64950cdaab38dabbc0faac4e7dd9b5b",
+      "line": 190,
+      "sourceSha256": "ce19a037f28288111f8d64cf910a866ea106948a3a295ae69d357639f3c55b5f",
+      "tokensAtLocation": [
+        {
+          "group": 1,
+          "role": "anon",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL"
+    },
+    {
+      "id": 703,
+      "file": "attached_assets/save_to_supabase_1753115058296.py",
+      "commit": "0c1202a12785700c715fbee6c3af107471e3a59f",
+      "line": 5,
+      "sourceSha256": "16d60ba1e0a8f64cf75fd2a98a99c888b0d72a7661856503cd3c429f637db9dd",
+      "tokensAtLocation": [
+        {
+          "group": 1,
+          "role": "anon",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL"
+    },
+    {
+      "id": 704,
+      "file": "attached_assets/save_to_supabase_1753105507945.py",
+      "commit": "5b049f6674fdf4b7805d0c5e3bb9fcbdf8f4f32e",
+      "line": 5,
+      "sourceSha256": "16d60ba1e0a8f64cf75fd2a98a99c888b0d72a7661856503cd3c429f637db9dd",
+      "tokensAtLocation": [
+        {
+          "group": 1,
+          "role": "anon",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL"
+    },
+    {
+      "id": 705,
+      "file": "attached_assets/save_to_supabase_1753094382304.py",
+      "commit": "87350e1612c7018ea92e1a3869c4706a54ebe5be",
+      "line": 5,
+      "sourceSha256": "16d60ba1e0a8f64cf75fd2a98a99c888b0d72a7661856503cd3c429f637db9dd",
+      "tokensAtLocation": [
+        {
+          "group": 1,
+          "role": "anon",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL"
+    },
+    {
+      "id": 706,
+      "file": "attached_assets/save_to_supabase_1753091550217.py",
+      "commit": "da859477bfc443ff69a7bb92d0cfadc7c06cb9a7",
+      "line": 5,
+      "sourceSha256": "16d60ba1e0a8f64cf75fd2a98a99c888b0d72a7661856503cd3c429f637db9dd",
+      "tokensAtLocation": [
+        {
+          "group": 1,
+          "role": "anon",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL"
+    },
+    {
+      "id": 707,
+      "file": "attached_assets/save_to_supabase_1753009807316.py",
+      "commit": "43a433eb7474f6bfd91e3d6fa3a50537f6a181f6",
+      "line": 5,
+      "sourceSha256": "16d60ba1e0a8f64cf75fd2a98a99c888b0d72a7661856503cd3c429f637db9dd",
+      "tokensAtLocation": [
+        {
+          "group": 1,
+          "role": "anon",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL"
+    },
+    {
+      "id": 708,
+      "file": "src/save_to_supabase.py",
+      "commit": "c5a654ebbcb5ab8daf94100cda96e5fabfab14b6",
+      "line": 5,
+      "sourceSha256": "ebc0c77097fd4e53d40a942e92458cf0ba39f99cd0246c6e8a2099d073f9744f",
+      "tokensAtLocation": [
+        {
+          "group": 1,
+          "role": "anon",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL"
+    },
+    {
+      "id": 709,
+      "file": "frontend/dist/assets/index-CPe-jIVh.js",
+      "commit": "fb9f23063bc74c5ea98a14c0598ac2c6826c7d52",
+      "line": 190,
+      "sourceSha256": "d2e156eba5be8d5402b831755c2d9ba0f88698248e5a9822f18df2544c5e304c",
+      "tokensAtLocation": [
+        {
+          "group": 1,
+          "role": "anon",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL"
+    },
+    {
+      "id": 710,
+      "file": "frontend/dist/assets/index-CPe-jIVh.js",
+      "commit": "fb9f23063bc74c5ea98a14c0598ac2c6826c7d52",
+      "line": 190,
+      "sourceSha256": "d2e156eba5be8d5402b831755c2d9ba0f88698248e5a9822f18df2544c5e304c",
+      "tokensAtLocation": [
+        {
+          "group": 1,
+          "role": "anon",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL"
+    },
+    {
+      "id": 711,
+      "file": "frontend/dist/assets/index-CPe-jIVh.js",
+      "commit": "fb9f23063bc74c5ea98a14c0598ac2c6826c7d52",
+      "line": 190,
+      "sourceSha256": "d2e156eba5be8d5402b831755c2d9ba0f88698248e5a9822f18df2544c5e304c",
+      "tokensAtLocation": [
+        {
+          "group": 1,
+          "role": "anon",
+          "supabaseIssuer": true,
+          "signedShape": true
+        }
+      ],
+      "classification": "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL"
+    }
+  ],
+  "counts": {
+    "HISTORICAL_WORDSTAT_OPAQUE_ACCESS_TOKEN_MATERIAL": 1,
+    "HISTORICAL_PUBLIC_ANON_JWT_MATERIAL": 17,
+    "HISTORICAL_PRIVILEGED_JWT_MATERIAL": 2
+  },
+  "distinctJwtStringsInInspectedLocations": 2,
+  "limits": "Offline shape/decoded role/storage-context only. No signature verification, validity/exploitation/revocation or provider requests. Minified same-line candidates retain all JWTs at that location; not an assertion of distinct matches. Other findings remain unreviewed."
+}

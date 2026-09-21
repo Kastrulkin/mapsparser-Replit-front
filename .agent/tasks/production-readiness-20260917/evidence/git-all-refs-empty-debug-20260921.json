@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "label": "git-all-refs-empty-debug",
+  "captured_at": "2026-09-20T23:58:24.741027+00:00",
+  "command": [
+    "/usr/local/bin/gitleaks",
+    "git",
+    "--log-opts=--no-ext-diff --no-textconv --full-history -m --root --max-count=1 d23a4d0daee5968ecae501279f54bbd7804e3ed3",
+    "--config",
+    "/private/tmp/localos-git-history-verified-20260921.qZcoBF/scanner-defaults.toml",
+    "--ignore-gitleaks-allow",
+    "--gitleaks-ignore-path=/dev/null",
+    "--redact=100",
+    "--no-banner",
+    "--no-color",
+    "--log-level=debug",
+    "."
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 903.183,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "\u001b[90m2:58AM\u001b[0m DBG using stdlib regex engine\n\u001b[90m2:58AM\u001b[0m DBG using gitleaks config /private/tmp/localos-git-history-verified-20260921.qZcoBF/scanner-defaults.toml from `--config`\n\u001b[90m2:58AM\u001b[0m DBG no minVersion specified in config... consider adding minVersion to ensure compatibility. \u001b[36mconfig path=\u001b[0m/private/tmp/localos-git-history-verified-20260921.qZcoBF/scanner-defaults.toml\n\u001b[90m2:58AM\u001b[0m DBG extending config with default config\n2:58AM DBG found .gitleaksignore file path=/dev/null\n2:58AM DBG executing: /usr/bin/git -C . log -p -U0 --no-ext-diff --no-textconv --full-history -m --root --max-count=1 d23a4d0daee5968ecae501279f54bbd7804e3ed3\n2:58AM ERR [git] git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n2:58AM DBG SCM platform parsed from host host=github.com platform=github\n2:58AM ERR error=\"stderr is not empty\"\n2:58AM INF 0 commits scanned.\n2:58AM DBG Note: this number might be smaller than expected due to commits with no additions\n2:58AM INF scanned ~0 bytes (0) in 140ms\n2:58AM INF no leaks found\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "git-all-refs-input-validation",
+  "captured_at": "2026-09-20T23:54:17.482342+00:00",
+  "command": [
+    "node",
+    "-e",
+    "const fs=require(\"fs\"),crypto=require(\"crypto\"),assert=require(\"assert\");\nconst base=\".agent/tasks/production-readiness-20260917/evidence\",priv=\"/private/tmp/localos-git-history-verified-20260921.qZcoBF\";\nconst p=base+\"/git-all-refs-manifest-20260921.json\",raw=fs.readFileSync(p),m=JSON.parse(raw);\nconst sha=b=>crypto.createHash(\"sha256\").update(b).digest(\"hex\");\nassert.strictEqual(m.head,\"7cf0cd24a8eec07be722084e467c8292b4f765ca\");\nassert.strictEqual(fs.statSync(priv).mode&0o077,0);\nassert.strictEqual(sha(fs.readFileSync(m.configPath)),m.configSha256);\nassert.strictEqual(sha(fs.readFileSync(m.scanner.path)),m.scanner.sha256);\nlet bytes=0;\nfor(const b of m.additionalBlobs){const p=m.snapshotDir+\"/\"+b.oid,s=fs.lstatSync(p);assert(s.isFile()&&!s.isSymbolicLink()&&(s.mode&0o077)===0);const content=fs.readFileSync(p);assert.strictEqual(content.length,b.bytes);assert.strictEqual(sha(content),b.sha256);assert.strictEqual(crypto.createHash(\"sha1\").update(Buffer.from(\"blob \"+content.length+\"\\0\")).update(content).digest(\"hex\"),b.oid);bytes+=content.length;}\nconst source=\".agent/tasks/production-readiness-20260917/support/git_refs_inventory_20260921.cjs\";\nconsole.log(JSON.stringify({parent:m.head,manifestSha256:sha(raw),sourceScript:source,sourceScriptSha256:sha(fs.readFileSync(source)),scannerBinaryAndConfigHashesMatch:true,privateBlobCount:m.additionalBlobs.length,privateBlobBytes:bytes,allBlobHashesAndPrivatePermissionsMatch:true},null,2));"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 3858.994,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\n  \"parent\": \"7cf0cd24a8eec07be722084e467c8292b4f765ca\",\n  \"manifestSha256\": \"0d5d8651f334e12e2d95da89238c98b5568c147f29c39b1331c99a2e374149ac\",\n  \"sourceScript\": \".agent/tasks/production-readiness-20260917/support/git_refs_inventory_20260921.cjs\",\n  \"sourceScriptSha256\": \"da8ce2a7bc72a3be625034807f2dc9b5f652713efe4b7a3ec70ce37b7f64df92\",\n  \"scannerBinaryAndConfigHashesMatch\": true,\n  \"privateBlobCount\": 938,\n  \"privateBlobBytes\": 123138155,\n  \"allBlobHashesAndPrivatePermissionsMatch\": true\n}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

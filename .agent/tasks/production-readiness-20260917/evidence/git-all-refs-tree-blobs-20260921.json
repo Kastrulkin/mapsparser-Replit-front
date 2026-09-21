@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "label": "git-all-refs-tree-blobs",
+  "captured_at": "2026-09-20T23:55:54.027813+00:00",
+  "command": [
+    "/usr/local/bin/gitleaks",
+    "dir",
+    "--config",
+    "/private/tmp/localos-git-history-verified-20260921.qZcoBF/scanner-defaults.toml",
+    "--ignore-gitleaks-allow",
+    "--gitleaks-ignore-path=/dev/null",
+    "--redact=100",
+    "--no-banner",
+    "--no-color",
+    "--max-archive-depth=0",
+    "--max-decode-depth=5",
+    "--timeout=480",
+    "--report-format=json",
+    "--report-path=/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-blobs-redacted.json",
+    "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 15844.436,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "2:55AM INF scanned ~110918318 bytes (110.92 MB) in 15.7s\n2:55AM WRN leaks found: 42\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

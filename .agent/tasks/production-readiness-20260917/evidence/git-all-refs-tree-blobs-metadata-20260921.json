@@ -1,0 +1,1852 @@
+{
+  "label": "tree-blobs",
+  "scanner_exit_code": 1,
+  "scanner_duration_ms": 15844.436,
+  "report_sha256": "94a408af752b8fc462819c280f2d958361c267d0665908de1de8bd6a3da64f20",
+  "total": 42,
+  "all_secret_fields_redacted": true,
+  "by_rule": {
+    "generic-api-key": 42
+  },
+  "findings": [
+    {
+      "id": 1,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "start_line": 7426,
+      "end_line": 7426,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "start_line": 7473,
+      "end_line": 7473,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "start_line": 7520,
+      "end_line": 7520,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "start_line": 7567,
+      "end_line": 7567,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "start_line": 7614,
+      "end_line": 7614,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "start_line": 7661,
+      "end_line": 7661,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "start_line": 7708,
+      "end_line": 7708,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "start_line": 7755,
+      "end_line": 7755,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "start_line": 7802,
+      "end_line": 7802,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "start_line": 7849,
+      "end_line": 7849,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "264e9a389db1d327e97d8220cf9917a60bc4f526",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/682b573896f2d080870bc107684152e72b2ed835",
+      "start_line": 31,
+      "end_line": 31,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "682b573896f2d080870bc107684152e72b2ed835",
+      "locations": [
+        {
+          "tree": "460830b536074f16f3974d2b3ddb8f54b09d3ba2",
+          "mode": "100644",
+          "file": "docs/production-readiness/05-ux-review.md"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/5537462d0618afd6edbf678b7d82590db221bd44",
+      "start_line": 1027,
+      "end_line": 1027,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "5537462d0618afd6edbf678b7d82590db221bd44",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": ".agent/tasks/localos-plan-20260906/raw/action-ddl-full-tests-final.txt"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": ".agent/tasks/localos-plan-20260906/raw/action-ddl-full-tests-final.txt"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": ".agent/tasks/localos-plan-20260906/raw/action-ddl-full-tests-final.txt"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": ".agent/tasks/localos-plan-20260906/raw/action-ddl-full-tests-final.txt"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": ".agent/tasks/localos-plan-20260906/raw/action-ddl-full-tests-final.txt"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": ".agent/tasks/localos-plan-20260906/raw/action-ddl-full-tests-final.txt"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": ".agent/tasks/localos-plan-20260906/raw/action-ddl-full-tests-final.txt"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/72e028269636080587415ec6b0fb4e52d4130c1f",
+      "start_line": 1,
+      "end_line": 1,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "72e028269636080587415ec6b0fb4e52d4130c1f",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": ".agent/tasks/operator-finance-daily-20260912/release/manifest.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": ".agent/tasks/operator-finance-daily-20260912/release/manifest.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": ".agent/tasks/operator-finance-daily-20260912/release/manifest.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": ".agent/tasks/operator-finance-daily-20260912/release/manifest.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": ".agent/tasks/operator-finance-daily-20260912/release/manifest.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": ".agent/tasks/operator-finance-daily-20260912/release/manifest.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": ".agent/tasks/operator-finance-daily-20260912/release/manifest.json"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/738bf1da9e62b8c511bbdb7e9451831a1b7938e1",
+      "start_line": 38,
+      "end_line": 38,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "738bf1da9e62b8c511bbdb7e9451831a1b7938e1",
+      "locations": [
+        {
+          "tree": "2632efa57452d9de3739ba6f93f4ea563c3457d7",
+          "mode": "100644",
+          "file": ".tmp_artifacts/thailand_agents/import_and_queue_riderra.py"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/68f785a2854296a5b34ce996a12201409d4a412c",
+      "start_line": 868,
+      "end_line": 868,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "68f785a2854296a5b34ce996a12201409d4a412c",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": ".agent/tasks/localos-plan-20260906/raw/action-ddl-full-tests.txt"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": ".agent/tasks/localos-plan-20260906/raw/action-ddl-full-tests.txt"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": ".agent/tasks/localos-plan-20260906/raw/action-ddl-full-tests.txt"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": ".agent/tasks/localos-plan-20260906/raw/action-ddl-full-tests.txt"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": ".agent/tasks/localos-plan-20260906/raw/action-ddl-full-tests.txt"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": ".agent/tasks/localos-plan-20260906/raw/action-ddl-full-tests.txt"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": ".agent/tasks/localos-plan-20260906/raw/action-ddl-full-tests.txt"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/8899264a0b99bbd089319793a1c4b1d317b48896",
+      "start_line": 5,
+      "end_line": 5,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "8899264a0b99bbd089319793a1c4b1d317b48896",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/8899264a0b99bbd089319793a1c4b1d317b48896",
+      "start_line": 6,
+      "end_line": 6,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "8899264a0b99bbd089319793a1c4b1d317b48896",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/8899264a0b99bbd089319793a1c4b1d317b48896",
+      "start_line": 7,
+      "end_line": 7,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "8899264a0b99bbd089319793a1c4b1d317b48896",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/8899264a0b99bbd089319793a1c4b1d317b48896",
+      "start_line": 8,
+      "end_line": 8,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "8899264a0b99bbd089319793a1c4b1d317b48896",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-api-recheck-20260907/live-source-proof.json"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 79,
+      "end_line": 79,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 80,
+      "end_line": 80,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 81,
+      "end_line": 81,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 83,
+      "end_line": 83,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 175,
+      "end_line": 175,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 176,
+      "end_line": 176,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 177,
+      "end_line": 177,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 179,
+      "end_line": 179,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 260,
+      "end_line": 260,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 261,
+      "end_line": 261,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 262,
+      "end_line": 262,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 264,
+      "end_line": 264,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 336,
+      "end_line": 336,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 337,
+      "end_line": 337,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 338,
+      "end_line": 338,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 340,
+      "end_line": 340,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 389,
+      "end_line": 389,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 37,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 390,
+      "end_line": 390,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 38,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 391,
+      "end_line": 391,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "start_line": 393,
+      "end_line": 393,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "93c85c0420765bec848e9cdc0ec1d52e9f353ef0",
+      "locations": [
+        {
+          "tree": "071d522190446bdf4e1feb17281faf1624c42868",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "2bf5e010988a9bbcb6f933d76cfbd91d054cbd12",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "b5e968e2b36575542dd72bb26f587da7141ceaa2",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f06f2e09b4be5eefbed76aedbe96bf1c213c7a99",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        },
+        {
+          "tree": "f12859758960d8434f561ac8dbd9af227c2d6168",
+          "mode": "100644",
+          "file": "outputs/localos-release-20260906/production-preflight-files.json"
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/2511f85064670f718f58d38470f09f8c0d3e7300",
+      "start_line": 312,
+      "end_line": 312,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "2511f85064670f718f58d38470f09f8c0d3e7300",
+      "locations": [
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/organika-demo-check-20260916/BASELINE.jsonl"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/organika-demo-check-20260916/BASELINE.jsonl"
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/2511f85064670f718f58d38470f09f8c0d3e7300",
+      "start_line": 321,
+      "end_line": 321,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "2511f85064670f718f58d38470f09f8c0d3e7300",
+      "locations": [
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/organika-demo-check-20260916/BASELINE.jsonl"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/organika-demo-check-20260916/BASELINE.jsonl"
+        }
+      ]
+    },
+    {
+      "id": 42,
+      "rule": "generic-api-key",
+      "file": "/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/2511f85064670f718f58d38470f09f8c0d3e7300",
+      "start_line": 350,
+      "end_line": 350,
+      "commit": null,
+      "classification": "UNREVIEWED",
+      "blob": "2511f85064670f718f58d38470f09f8c0d3e7300",
+      "locations": [
+        {
+          "tree": "82c30c73cb9a6b5656c2800b5b726fa6d2eb827f",
+          "mode": "100644",
+          "file": "outputs/organika-demo-check-20260916/BASELINE.jsonl"
+        },
+        {
+          "tree": "e43449125e6f37fbcee1a9e862f57c11c4bf7b09",
+          "mode": "100644",
+          "file": "outputs/organika-demo-check-20260916/BASELINE.jsonl"
+        }
+      ]
+    }
+  ]
+}

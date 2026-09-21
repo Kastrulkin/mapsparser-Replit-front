@@ -1,5 +1,14 @@
 # Readiness decisions
 
+## D-069 — Separate frozen-ref scanning from security clearance
+
+Use immutable commit IDs plus mapped tree-only blobs; no fetch, historical code
+execution or raw matches in tracked evidence. Disable replacement refs and Git
+text/filter commands; private raw files, full redaction, scanner exit1 retained.
+Selected and processed commit counts are distinct: reconcile or keep coverage
+incomplete. Decoded roles never prove signature/validity/revocation or safe RLS.
+Preserve unreviewed rows instead of declaring generic matches false positives.
+
 ## D-068 — Treat copied Git onboarding commands as a security boundary
 
 Do not recommend plaintext token persistence or credential-bearing command URLs.

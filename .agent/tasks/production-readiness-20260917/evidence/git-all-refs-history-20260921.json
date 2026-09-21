@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "label": "git-all-refs-history",
+  "captured_at": "2026-09-20T23:55:37.828096+00:00",
+  "command": [
+    "/usr/local/bin/gitleaks",
+    "git",
+    "--log-opts=--full-history --no-ext-diff --no-textconv -m --root 05eaeaec6f1e933bd3d9d91b189383dbf56556ce 06c240d04ef90648c2772d058df6aa85a86b5e79 06fcf691c7c24c1c72e1ea87160ed8341213cccf 0b3566735be56b9b20d7f1ee879e0ccf68a3a43b 26e56b6646d514e6a0525d055b3eb8db1e32ae72 30262a5bf7b468e0a6f5a0e3d8262dbef119e075 43cc4da028f5a1eb5f2228c28faf0157abaed14e 4b3ad5775a7d092198ca93e7e6ac5db28d88e82a 5fff24561c8c7ec16516a2fa2d3dd68978e8fb6a 6518a1162a23898a677c6e972de88c6a23e12c28 65e717f23cf98689f8a7ee310fa008503c58e446 65f307096b7d00b0f02adec27eca7c8207d0cada 6e74cb2685dd224236556cc7070e70a8a29b65fd 6ee7882f8f5188bbc36544bad93b5ba43debe17d 7cf0cd24a8eec07be722084e467c8292b4f765ca 80b062d42aa45014186662d8913a21d1a17e6046 83d1f42923a01e877520b5c14710394356e06c23 8d68fbef8a21acc5364af83784d56f113e6edab0 8fbcc2872ea0574560ee6bfbaa44de37611fa0de 95f81d97d0034d396d61114f8840c99d5a76e81d 99abe0911fca37b98a471865a51bb1059fc41877 9c39ceffb1e032d24e06725e62eb0c99d5b990d3 a0fc9d88ceb0d74b9ccbc48c63219193c216f536 a37bcfe2f820f5e6004b97e78d7ffd3db2cf5d28 a9215b3c324a9281520678c6a8d5ea1e38aa3e49 b71f454bfe2f503cd96e7015ba5dfe8735096cc6 b7cc7c3163b3b14fb922b7aca59d82620e036951 c247b483652159c7e4dde276c8332bbdd301440f cb50e91b1d080ff809f9aa8c7354e9e1b352da4c cbb870c5a494b6d3f2403975728393215f9c132e e40a3e3c1fd7a199a319cc39b6061df10674498e e766081f5ccc90c535abbf6249d325b801e7c564 eca96b5c0f15a17ef5b58b9b8e9f12c57a6c28ee f2817ff894c862d27676fd320c6bd2dbfc081325 fdea6358ac9e246ae5585f42cd21aae034713d5d",
+    "--config",
+    "/private/tmp/localos-git-history-verified-20260921.qZcoBF/scanner-defaults.toml",
+    "--ignore-gitleaks-allow",
+    "--gitleaks-ignore-path=/dev/null",
+    "--redact=100",
+    "--no-banner",
+    "--no-color",
+    "--max-archive-depth=0",
+    "--max-decode-depth=5",
+    "--timeout=480",
+    "--report-format=json",
+    "--report-path=/private/tmp/localos-git-history-verified-20260921.qZcoBF/history-redacted.json",
+    "."
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 399800.426,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "2:55AM INF 3095 commits scanned.\n2:55AM INF scanned ~368025749 bytes (368.03 MB) in 6m39s\n2:55AM WRN leaks found: 711\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

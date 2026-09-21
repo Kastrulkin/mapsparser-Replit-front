@@ -1,5 +1,14 @@
 # Production-readiness change log
 
+## Frozen local-ref secret evidence — 21 September, parent7cf0cd24
+
+No application changes. Offline inventory support/evidence covers frozen89refs/
+3117reachable commits plus938extra blobs. Redacted scans yield711history+42tree
+candidates;20priority locations examined offline corroborate service-role/Wordstat
+material and distinguish anon claims.733matches and scanner-count discrepancy
+remain open. Revised prep removes filter risk; interrupted capture retained.
+No values, provider tests, history rewrite or release/acceptance promotion.
+
 ## Secure Git onboarding — 21 September, parent81e67435
 
 Only README's commit/push section and a stdlib documentation regression test

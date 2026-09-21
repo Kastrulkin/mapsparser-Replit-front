@@ -1,5 +1,21 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, frozen local Git history
+
+- [x] Previous turn was progress: local commit7cf0cd24; original objective reread.
+- [x] Freeze89refs/35tips/3117reachable commits and938extra tree blobs.
+- [x] Complete redacted scans: history711matches/399800.426ms; tree42/15844.436ms;
+  both exit1, not clean. Raw reports/blobs private; tracked metadata only.
+- [x] Inspect20priority locations:2service-role,1Wordstat,17anon-role material;
+  no signature/validity/revocation/RLS claim. Independent partial-evidence review.
+- [ ] Adjudicate733remaining matches and reconcile3117selected vs3095scanner
+  commits; raw/numstat checks do not yet explain the difference exactly.
+
+Parent7cf0cd24. Initial inventory stopped for filter safeguard; revised raw-object
+hashing passes. No application changes/runtime tests. Native aggregate/restore
+permission, historical revocation, image floor and prior unsafe-reset INCONCLUSIVE
+effects remain. Original AC statuses, historical verdict and wholeFAIL unchanged.
+
 ## Latest checkpoint — 21 September, safe Git onboarding
 
 - [x] Reread original objective through EOF; previous turn classified progress.

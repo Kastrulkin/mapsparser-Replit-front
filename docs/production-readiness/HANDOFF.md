@@ -1,5 +1,37 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, frozen local-ref secret evidence
+
+Parent7cf0cd24a8eec07be722084e467c8292b4f765ca on
+codex/production-readiness-20260917. Original objective reread; prior turn progress.
+No application changes; nine foreign paths excluded. Exact files use prefix
+`evidence/git-all-refs-*-20260921` in the existing task bundle.
+
+89refs/35tips/3117commits;13tree refs/11roots contribute938extra blobs123138155bytes.
+Verified private inputs/reports: `/private/tmp/localos-git-history-verified-20260921.qZcoBF`.
+Initial stopped preparation `/private/tmp/localos-git-history-20260921.TuLwd8`
+is retained (exit-15/98253.167ms), not valid inventory proof. Corrected inventory
+56325.694ms exits0; raw hashing avoids filters/replacements. Input hashes pass.
+
+History exits1:711matches/368025749bytes/399800.426ms, scanner reports3095commits.
+Tree exits1:42matches/110918318bytes/15844.436ms. No timeout/truncation. Metadata
+omits Match/Secret/author/message. Priority sidecar:2locations of one service-role
+JWT,1opaque Wordstat token,17anon-role locations; no signature/validity/RLS/revocation
+proof.733matches remainUNREVIEWED. Independent review accepts partial evidence only.
+Precommit5010.376ms passes26owned files/1874762byte staged diff,10captures and
+manifest/script hashes;9foreign excluded. Final27-file package includes that capture
+and is checked again before local commit, without promoting the history scan.
+
+Next: reuse metadata/private redacted reports to classify remaining rows without
+printing values; prioritize tree finding14 (temporary integration script) and
+historical debug captures. Resolve3117vs3095: raw/numstat checks still nonmatching;
+empty-commit diagnostic only explains a possibility. Do not rescan just to recreate
+evidence. No fetch/key test/rotation/history rewrite/deletion/provider/production.
+
+Native aggregate/restore prep remains denied pending renewed permission; Mac latest
+6364192KiB(~6.07GiB) is below10GiB image floor. Original wholeFAIL/historical verdict
+and prior unsafe-reset INCONCLUSIVE effects persist.
+
 ## Latest checkpoint — 21 September, Git onboarding instructions
 
 Parent81e67435 oncodex/production-readiness-20260917. Original objective fully

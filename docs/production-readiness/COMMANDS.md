@@ -1,5 +1,32 @@
 # Verified commands and evidence
 
+## Frozen local refs secret audit — 21 September, parent7cf0cd24
+
+Exact commands: task evidence/git-all-refs-*-20260921.json. Named tmux;env-i,
+GIT_NO_REPLACE_OBJECTS=1,GIT_CONFIG_NOSYSTEM=1,GIT_CONFIG_GLOBAL=/dev/null,
+GIT_TERMINAL_PROMPT=0. Gitleaks8.30.1 builtin-default rules; explicit ignore files
+and inline suppressions bypassed;redact100%,archive0/decode5. Frozen history IDs
+with --full-history --no-ext-diff --no-textconv -m --root;tree blobs separate.
+
+| Suffix | Actual result | Duration ms |
+| --- | --- | ---: |
+| inventory |Deliberately stopped for filter safeguard;exit-15 |98253.167|
+| inventory-verified |89refs/35tips/3117commits;938extra blobs123138155bytes;exit0 |56325.694|
+| input-validation |938blob hashes/permissions and scanner/config hashes match;exit0 |3858.994|
+| history |3095reported commits/368025749bytes/711matches;exit1 |399800.426|
+| tree-blobs |110918318scanned bytes/42matches;exit1 |15844.436|
+| metadata-projection |753redacted candidates mapped to frozen inputs;exit0 |461.507|
+| patch-coverage |3117metadata commits/3112nonempty;not count reconciliation |3129.157|
+| addition-coverage |3085/3087text-addition counts;still not3095 |13632.288|
+| empty-debug |0for known empty commit;Darwin stderr causes ERR log;exit0 |903.183|
+| priority-verification |20locations:2service-role/1Wordstat/17anon;offline only;exit0 |1457.284|
+| precommit |26owned files/1874762byte staged scan clean;10captures reconciled;manifest/script hashes/statuses/verdict match;9foreign excluded |5010.376|
+
+No timeout/truncation. Count reconciliation and733adjudications remain open;
+neither exit1 is relabeledPASS. Notes document archive/binary/LFS/reflog/remote/
+dirty exclusions. No application checks, fetch/provider/DB/Docker actions.
+Original AC/wholeFAIL unchanged; independent partial-evidence review retained.
+
 ## Git onboarding documentation — 21 September, parent81e67435
 
 Exact short commands: evidence/readme-git-safety-*-20260921.json. Cleared env,

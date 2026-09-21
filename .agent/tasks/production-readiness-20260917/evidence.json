@@ -382,6 +382,31 @@
       "result": "FIX_PROVEN documentation-only:5fail/1pass becomes6passes, same command. Isolated scoped Ruff,2bash blocks parsed not executed, unchanged README outside Git section and2input hashes pass. Independent source/evidence review BOUNDED ACCEPTED. Precommit capture passes in3690.533ms:15owned staged files,46118byte strict redacted Gitleaks clean,2hashes and original statuses/historical verdict preserved,9foreign files excluded. Latest committed UI finding reconciled into backlog02.",
       "limits": "No Git credential lookup/config changes, remote publishing or proof of actual compromise/revocation. Test parses only stated copyable command forms, not arbitrary shell/Markdown/prose. Prior809frontend proof unchanged; no full backend/native/browser/image rerun. Original statuses/historical verdict/nine foreign paths/unsafe-reset INCONCLUSIVE effects preserved. Aggregate/restore prep needs renewed permission; image floor unmet. Next safe all-refs history scan improves only bounded evidence, not AC6 or overallFAIL."
     },
+    "subsequent_local_ref_secret_scan": {
+      "parent_commit": "7cf0cd24a8eec07be722084e467c8292b4f765ca",
+      "scope": "Frozen local ref-reachable Git patch history plus separately mapped tree-only blobs; no application change",
+      "proof": [
+        "evidence/git-all-refs-inventory-20260921.json",
+        "evidence/git-all-refs-inventory-verified-20260921.json",
+        "evidence/git-all-refs-manifest-20260921.json",
+        "evidence/git-all-refs-input-validation-20260921.json",
+        "evidence/git-all-refs-history-20260921.json",
+        "evidence/git-all-refs-tree-blobs-20260921.json",
+        "evidence/git-all-refs-metadata-projection-20260921.json",
+        "evidence/git-all-refs-history-metadata-20260921.json",
+        "evidence/git-all-refs-tree-blobs-metadata-20260921.json",
+        "evidence/git-all-refs-patch-coverage-20260921.json",
+        "evidence/git-all-refs-addition-coverage-20260921.json",
+        "evidence/git-all-refs-empty-debug-20260921.json",
+        "evidence/git-all-refs-priority-verification-20260921.json",
+        "evidence/git-all-refs-priority-triage-20260921.json",
+        "evidence/git-all-refs-precommit-20260921.json",
+        "evidence/git-all-refs-notes-20260921.md",
+        "evidence/git-all-refs-review-20260921.md"
+      ],
+      "result": "89refs/35tips/3117reachable commits and938additional blobs frozen; input hashes/permissions verified. Initial inventory deliberately stopped exit-15 before scanner, retained; corrected raw-object preparation exits0. History scan711matches/399800.426ms and tree scan42matches/15844.436ms both exit1, complete/no timeout/truncation. Metadata strips all values and maps candidates to frozen inputs.20priority locations examined offline:2occurrences of one service-role JWT,1Wordstat opaque token,17anon-role JWT occurrences. Independent review accepts partial redacted evidence only. Precommit5010.376ms passes:26owned files/1874762byte staged diff clean,10captures reconciled, manifest/script hashes and original statuses/verdict unchanged;9foreign paths excluded.",
+      "limits": "733remaining matches unreviewed;3117selected vs3095reported scanner count unresolved after raw/numstat/empty-commit diagnostics. No complete all-object security clearance. Decoded role/storage shape is not signature, validity, revocation or RLS proof. Remote-only/reflog/unreachable/dirty/ignored/LFS/archive/semantic-binary/runtime/image/log limits remain. No key test/rotation/history rewrite/deletion/provider/DB/Docker/push/deploy. Original statuses/historical verdict/nine foreign paths and prior unsafe-reset INCONCLUSIVE effects preserved; aggregate/restore still needs renewed permission and image floor remains unmet."
+    },
     "foreign_worktree_paths_excluded": 9,
     "historical_verdict_file": "verdict.json",
     "historical_verdict_reviewed_commit": "2f224f051e3b3487a2c0d529d40b547c414ccb52"
@@ -706,9 +731,15 @@
         "evidence/current-frontend-license-metadata-verified-20260921.json",
         "evidence/current-frontend-license-registry-20260921.json",
         "evidence/current-frontend-license-inventory-20260921.json",
-        "evidence/current-source-supplychain-review-20260921.md"
+        "evidence/current-source-supplychain-review-20260921.md",
+        "evidence/git-all-refs-manifest-20260921.json",
+        "evidence/git-all-refs-history-20260921.json",
+        "evidence/git-all-refs-tree-blobs-20260921.json",
+        "evidence/git-all-refs-priority-triage-20260921.json",
+        "evidence/git-all-refs-review-20260921.md"
       ],
       "gaps": [
+        "New7cf0cd24 frozen local-ref scans complete with711history+42tree candidates, both exit1.20priority locations corroborate2service-role/1Wordstat/17anon-role material only;733matches unreviewed.3117selected vs3095scanner commits remains unreconciled; raw/numstat/empty-commit diagnostics do not prove full coverage. No signature/validity/revocation/RLS proof, no remote/reflog/unreachable/LFS/archive/semantic-binary/runtime/image/log clearance. This is bounded additional evidence, not AC6PASS.",
         "Strict full committed-source scan at334c9d4b has101 classified non-secret matches; the131-commit branch delta has7 classified synthetic/prose matches. Neither replaces all-ref history, runtime/image/log inspection or historical revocation. Current frontend528-entry lock audit returns0advisories;528 license declarations have explicit provenance. Private macOS133-distribution strict PyPI scan returns0advisories/0skips with exact audited/installed parity. Declaration inventory is not legal compliance or installed/release artifact integrity. Current image/layer/log/OS/embedded-native/AMD64/bot scans remain open. Historical privileged credential revocation and PyMuPDF license basis await owner confirmation. No live credential test, key rotation or history rewrite is authorized. Targeted AI/role/SSRF controls remain bounded evidence, not universal tool isolation proof."
       ],
       "historical_checkpoint": {

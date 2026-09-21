@@ -1,5 +1,12 @@
 # Residual risks — working register
 
+21 September, parent7cf0cd24: frozen local-ref scans completed with711history+
+42tree candidates, not clean.20priority locations corroborate known service-role/
+Wordstat material and distinguish anon claims; revocation unknown.733matches and
+3117selected/3095scanner reconciliation stay open. No automatic false-positive
+clearance, key testing, history cleanup or release approval. Existing operational,
+permission/image/unsafe-reset risks and wholeFAIL persist. Exact scope: all-refs notes.
+
 21 September, parent `7fd95caa`: the locally reproduced incomplete draft-review
 confirmation mismatch is corrected, with 26 targeted checks and quality/build
 proof. Current prop completeness is not backend identity/freshness or deployed
