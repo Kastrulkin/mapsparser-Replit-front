@@ -2,6 +2,27 @@
   "task_id": "production-readiness-20260917",
   "overall_status": "FAIL",
   "checkpoint": {
+    "subsequent_apify_private_ipc": {
+      "parent_commit": "d8631fec6f054f3a25bc820ed456e71e608974f0",
+      "findings": [
+        "SEC-APIFY-IPC-01",
+        "REL-APIFY-IPC-01"
+      ],
+      "scope": "Only two worker IPC functions and queue/tempfile imports: parent-owned anonymous file inherited through existing fork, small readiness marker, bounded queue read and process/queue/file cleanup. Card/cost data, provider normalization, billing, queue retry and other worker AST unchanged.",
+      "proof": [
+        "evidence/apify-ipc-notes-20260921.md",
+        "evidence/apify-ipc-manifest-20260921.json",
+        "evidence/apify-ipc-verified-baseline-20260921.json",
+        "evidence/apify-ipc-verified-green-20260921.json",
+        "evidence/apify-ipc-broad-20260921.json",
+        "evidence/apify-ipc-adjacent-final-20260921.json",
+        "evidence/apify-ipc-quality-20260921.json"
+      ],
+      "result": "Final immutable-parent 4 causal assertion failures/0 errors; current all11 pass0.553s. Broader93tests+4subtests11.77s/12633.373ms; adjacent11artifact+1exactchildAST pass; fullRuff3testfiles and workerF821/F822/F823, unchanged-other-worker-AST and diff checks pass. Independent scoped review ACCEPT;21source hashes and10captures bound.",
+      "provenance": "Initial3fail/1pass versus4pass refer to initial tests; strengthened final timeout-resource assertion yields4parent failures. Seven additional hardening cases are final-only protocol tests. Two hash-guard abort captures stop beforetests and remain, not product failures. Source/test bytes stable before/after broad and quality checks.",
+      "browser_observation": "User reported IAB login; root read existing /dashboard/agents as SuperAdmin. Mixed ES/RU UI labels observed without establishing locale intent. No click, save, run, approval, publication or send; deployed revision unknown.",
+      "limits": "Anonymous file is not secure erase or an OS/provider sandbox; historic artifacts untouched; no guaranteed remote actor cancel or death of an unkillable child. No fullworker/nativeDB/provider integration. Other stored error messages remain source-only candidates. Original AC/verdict/wholeFAIL unchanged. Latestlocal4157644KiB below10GiBimagefloor; nativeprepdenial remains. No production mutation/DB/schema/Docker/cleanup/push/deploy; foreign work preserved."
+    },
     "subsequent_selected_agent_request_scope": {
       "parent_commit": "b9cb7dea2b3fcf651a976e64a6e986b306bf9ca9",
       "finding": "UX-AGENT-REQUEST-SCOPE-01",

@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "scope": "Local Apify child/parent IPC privacy and large-result reliability; not production acceptance",
+  "parent_commit": "d8631fec6f054f3a25bc820ed456e71e608974f0",
+  "findings": [
+    "SEC-APIFY-IPC-01",
+    "REL-APIFY-IPC-01"
+  ],
+  "source_hashes": [
+    {
+      "path": "tests/test_parser_interception.py",
+      "sha256": "90a017fe56b4dc86d51a53c93fa13e4274bc27b47e2689fc4b6516141d3b2e00"
+    },
+    {
+      "path": "tests/test_parser_interception_review_responses.py",
+      "sha256": "a4eae46da7f305d11f64008b775aa99d454467fad62a87f8ad88dfab6bf31cdc"
+    },
+    {
+      "path": "tests/test_parser_orchestrator.py",
+      "sha256": "2ccb591c57a7ec6590a2fdab1137cae22a94ceefc230eb19d30a35dbb1067e36"
+    },
+    {
+      "path": "tests/test_parser_debug_bundle_safety.py",
+      "sha256": "b0f691e584b322d3a3865223d367e9749dc909bf5d46f16bdfdeffbfad985748"
+    },
+    {
+      "path": "tests/test_parser_diagnostic_logs.py",
+      "sha256": "489bb061a99567111540bd9bbf91853a2f21bcce93f444ae53c8b8bedcfff56e"
+    },
+    {
+      "path": "tests/test_worker_parser_diagnostic_logs.py",
+      "sha256": "4a2221cbea7d7190beaab53bc8b104d4adb6c641492d8a579f5325d77d66513b"
+    },
+    {
+      "path": "tests/test_worker_parser_artifact_safety.py",
+      "sha256": "b8c87149889fc94ad41aaff6a0d33fdf025668f5b0fb39598702115ca1bd3cc1"
+    },
+    {
+      "path": "tests/test_legacy_parser_leaf_diagnostics.py",
+      "sha256": "86d6651a6e9c4deeeb38a3307fb63a0f40a8c46194a6aba5a422ad88e1dd5a70"
+    },
+    {
+      "path": "tests/test_apify_diagnostic_privacy.py",
+      "sha256": "a4b85f2494c6f225c9488124938efc7deb109c6f16851dfe71c6ce54d20f7024"
+    },
+    {
+      "path": "tests/test_prospecting_service_apify_business_parse.py",
+      "sha256": "4a191e0021e2b0990bfdd3a760f854092bd03f3c45acf8e5268758df5869c56f"
+    },
+    {
+      "path": "tests/test_prospecting_service_apify_proxy.py",
+      "sha256": "37b66610a063035056f8110397da82c3074359234cf72349761e99eb1e47bfe9"
+    },
+    {
+      "path": "tests/test_prospecting_service_normalize.py",
+      "sha256": "6873eb5ab3fc56c5b5133a5a46af05a6809ddb26005a8948f5f3296a8521ef0b"
+    },
+    {
+      "path": "tests/test_worker_apify_ipc_safety.py",
+      "sha256": "c490c7f3f982978d890b024d00bc2634fc4004140debaeefcc35783bced84be2"
+    },
+    {
+      "path": "src/worker.py",
+      "sha256": "08387e39b6d024e11f22de6715fc70121281c6efbb7f28ce801bdb713acb3241"
+    },
+    {
+      "path": "src/parser_interception.py",
+      "sha256": "a9737321cb60869d632f0d155bc0905b2e72c5caf6950507b8bb137a0ee04a0a"
+    },
+    {
+      "path": "src/browser_session.py",
+      "sha256": "2750f4062e259c4d4b3a193fe6d9c263eedf92e495a7de5c62c34bb691e9af63"
+    },
+    {
+      "path": "src/core/parser_debug_artifacts.py",
+      "sha256": "a364d4d27e842c21a1bc9f8fdfd61bf7021eea4301ee541eab14f0194864f5be"
+    },
+    {
+      "path": "src/yandex_maps_scraper.py",
+      "sha256": "1b5312a8fb74b0a079eb2cbec69a659b1f19abd93d78075f82a8a18c678d7d50"
+    },
+    {
+      "path": "src/services/prospecting_service.py",
+      "sha256": "6061f9e9b05c49228d7046f70680781f2edd0d4bf40bb5886e5d75f81d72170e"
+    },
+    {
+      "path": "src/legacy_routes/parsing_networks.py",
+      "sha256": "b92ef5889886ac8723997d7f134b29e3230a0ccabc50dd664969baf8fbb3a76b"
+    },
+    {
+      "path": "tests/test_worker_services_quality.py",
+      "sha256": "6afcbb3031d54e77068acc20a879be9fdfc56b5468c5775fbeb67ee870965bea"
+    }
+  ],
+  "captures": [
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/apify-ipc-red-20260921.json",
+      "sha256": "73db54e118160403b520c0b479ebb756a114c2f109b8b066d1c7cd72f2400f09",
+      "exit_code": 1,
+      "duration_ms": 3651.784,
+      "captured_at": "2026-09-21T05:06:46.985206+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/apify-ipc-green-20260921.json",
+      "sha256": "eaaaa7b4e07365a926c58bf560300d6b33f1a0aedd6f0b0feba2e50c2b7daf86",
+      "exit_code": 0,
+      "duration_ms": 315.875,
+      "captured_at": "2026-09-21T05:07:37.981182+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/apify-ipc-adjacent-20260921.json",
+      "sha256": "0dab3c67664a31b4f848b0e3f20175741f3a3bc50307f63d53e096507f5e5ac6",
+      "exit_code": 0,
+      "duration_ms": 722.133,
+      "captured_at": "2026-09-21T05:11:40.686501+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/apify-ipc-final-baseline-20260921.json",
+      "sha256": "5bb7786a40fca5e84854681266ae5f57443824a0b3a781e6caddc29a0288e149",
+      "exit_code": 1,
+      "duration_ms": 48.097,
+      "captured_at": "2026-09-21T05:15:14.157209+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/apify-ipc-final-green-20260921.json",
+      "sha256": "d7294d93cbc2915352db8a453dab6317f760866383fcab4b1ee213eb7d01a3c3",
+      "exit_code": 1,
+      "duration_ms": 42.598,
+      "captured_at": "2026-09-21T05:15:14.267653+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/apify-ipc-verified-baseline-20260921.json",
+      "sha256": "ef4ff9f7511d6c6eee633b4ab8e5eb045d48794bac5b452f32aa9516088cbff7",
+      "exit_code": 1,
+      "duration_ms": 3373.384,
+      "captured_at": "2026-09-21T05:15:59.647705+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/apify-ipc-verified-green-20260921.json",
+      "sha256": "f04501b6554ed97c7c44213fe922c6adff1552534d795c813d89b31513e16893",
+      "exit_code": 0,
+      "duration_ms": 614.213,
+      "captured_at": "2026-09-21T05:16:00.316730+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/apify-ipc-broad-20260921.json",
+      "sha256": "5ba6d67450a8eac0b64822e608f7a71590d1dcef7a39f68a4a9fa5e878d3c30a",
+      "exit_code": 0,
+      "duration_ms": 12633.373,
+      "captured_at": "2026-09-21T05:21:34.920285+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/apify-ipc-adjacent-final-20260921.json",
+      "sha256": "2623a316e4b6115cf4a4d041fb8ff5d3ed0370bff6354f9cf9e969b9a41e8e6c",
+      "exit_code": 0,
+      "duration_ms": 785.329,
+      "captured_at": "2026-09-21T05:21:47.958329+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/apify-ipc-quality-20260921.json",
+      "sha256": "1df4465424c28c2e12a422cb8ae4d1975bd9a2b5a94cc0860a25f6621b2839db",
+      "exit_code": 0,
+      "duration_ms": 411.773,
+      "captured_at": "2026-09-21T05:22:59.743377+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    }
+  ],
+  "proof": {
+    "authoritative_baseline": "Final frozen original four causal cases: 4 assertion failures, 0 errors on immutable parent",
+    "authoritative_green": "All 11 final IPC cases pass, including one real local fork with synthetic ~680KB payload",
+    "broad": "93 tests and 4 subtests pass in 11.77s; 12633.373ms capture; no full worker import or DB/.env/network",
+    "adjacent": "11 artifact methods and AST-isolated exact existing child test pass on final worker",
+    "quality": "Three test files full Ruff; worker F821/F822/F823; git diff --check; entire worker AST outside two IPC functions and two new imports unchanged",
+    "review": "Independent bounded reviewer accepted final worker08387e39 and testc490c7f3; cleanup compatibility correction tested"
+  },
+  "retained_attempts": {
+    "initial": "apify-ipc-red 3 failures/1 pass and apify-ipc-green 4 pass refer to earlier four-case bytes; not final test revision",
+    "intermediate_adjacent": "apify-ipc-adjacent ran against intermediate no-raise cleanup worker; superseded by adjacent-final",
+    "hash_guard_aborts": [
+      "apify-ipc-final-baseline",
+      "apify-ipc-final-green"
+    ],
+    "guard_reason": "Test revision changed while evidence was prepared; hash guard stopped before tests; not a product failure; captures retained"
+  },
+  "limits": [
+    "POSIX fork already required; no Windows or spawn compatibility claim",
+    "Anonymous file and parent cleanup do not provide secure erasure, remote actor cancellation or guaranteed OS-level process death",
+    "Seven additional hardening cases are not all parent-comparable because fourth argument is new internal API",
+    "Historic raw debug artifacts untouched; other persisted error strings remain candidates",
+    "No actual Apify provider/DB/full backend integration; fake process cleanup and one synthetic fork only",
+    "Authenticated IAB /dashboard/agents visible as SuperAdmin; unknown deployed revision, no UI mutations; not evidence this local patch is deployed",
+    "Original acceptance criteria/verdict and overall FAIL unchanged; no push/deploy/cleanup/DB/schema/provider effects"
+  ]
+}

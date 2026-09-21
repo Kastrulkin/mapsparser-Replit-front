@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, timezone
 import signal
 import sys
 import multiprocessing
+import queue
+import tempfile
 import asyncio
 import random
 import threading
@@ -1234,33 +1236,31 @@ def _parse_card_via_apify_subprocess_entry(
     result_queue: Any,
     url: str,
     kwargs: Dict[str, Any],
+    result_file: Any = None,
 ) -> None:
-    result_file_path = str(kwargs.pop("result_file_path", "") or "").strip()
     try:
         result = _parse_card_via_apify(url, **kwargs)
-        if result_file_path:
-            os.makedirs(os.path.dirname(result_file_path), exist_ok=True)
-            with open(result_file_path, "w", encoding="utf-8") as fh:
-                json.dump(result, fh, ensure_ascii=False, indent=2, default=str)
-            result_queue.put({"result_file_path": result_file_path})
-            return
-        result_queue.put(result)
     except Exception as exc:
-        error_payload = {
+        result = {
             "error": "apify_parser_subprocess_exception",
             "message": redact_sensitive_text(exc, limit=1200),
             "url": url,
         }
-        if result_file_path:
-            try:
-                os.makedirs(os.path.dirname(result_file_path), exist_ok=True)
-                with open(result_file_path, "w", encoding="utf-8") as fh:
-                    json.dump(error_payload, fh, ensure_ascii=False, indent=2, default=str)
-                result_queue.put({"result_file_path": result_file_path})
-                return
-            except Exception:
-                pass
-        result_queue.put(error_payload)
+    if result_file is None:
+        result_queue.put(result)
+        return
+    try:
+        result_file.seek(0)
+        result_file.truncate()
+        json.dump(result, result_file, ensure_ascii=False, indent=2, default=str)
+        result_file.flush()
+        result_queue.put({"transport_ready": True})
+    except Exception:
+        result_queue.put({
+            "error": "apify_parser_subprocess_exception",
+            "message": "Apify result transport could not be written",
+            "url": url,
+        })
 
 
 def _parse_card_via_apify_with_timeout(
@@ -1271,92 +1271,135 @@ def _parse_card_via_apify_with_timeout(
     debug_context: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    ctx = multiprocessing.get_context("fork")
-    result_queue = ctx.Queue(maxsize=1)
-    subprocess_kwargs = dict(kwargs)
-    subprocess_kwargs["timeout_sec"] = timeout_sec
-    if debug_bundle_dir:
-        subprocess_kwargs["debug_bundle_dir"] = debug_bundle_dir
-        subprocess_kwargs["result_file_path"] = os.path.join(debug_bundle_dir, "apify_result.json")
-    if debug_context:
-        subprocess_kwargs["debug_context"] = dict(debug_context)
-    proc = ctx.Process(
-        target=_parse_card_via_apify_subprocess_entry,
-        args=(result_queue, url, subprocess_kwargs),
-        daemon=True,
-    )
-    proc.start()
-    proc.join(timeout_sec)
-
-    if proc.is_alive():
-        proc.terminate()
-        proc.join(timeout=5)
+    # The existing fork context inherits this private, unnamed file handle.
+    # Only a small readiness marker crosses the queue, so join cannot wait on
+    # a feeder blocked by a large provider response. Debug bundles stay separate.
+    result_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
+    result_queue = None
+    proc = None
+    proc_started = False
+    try:
+        ctx = multiprocessing.get_context("fork")
+        result_queue = ctx.Queue(maxsize=1)
+        subprocess_kwargs = dict(kwargs)
+        subprocess_kwargs["timeout_sec"] = timeout_sec
         if debug_bundle_dir:
-            try:
-                os.makedirs(debug_bundle_dir, exist_ok=True)
-                timeout_payload = {
-                    "diagnostics_version": 2,
-                    "error": "apify_parser_subprocess_timeout",
-                    "message": f"Apify business parse timeout after {timeout_sec}s",
-                    "url": debug_url_summary(url),
-                    "timeout_sec": timeout_sec,
-                    "debug_context": debug_value_shape(debug_context or {}),
-                    "kwargs": debug_value_shape(kwargs),
-                }
-                with open(os.path.join(debug_bundle_dir, "timeout.json"), "w", encoding="utf-8") as fh:
-                    json.dump(timeout_payload, fh, ensure_ascii=False, indent=2, default=str)
-            except Exception:
-                print("⚠️ Failed to write timeout.json: diagnostic_write_failed", flush=True)
-        return {
-            "error": "apify_parser_subprocess_timeout",
-            "message": f"Apify business parse timeout after {timeout_sec}s",
-            "url": url,
-        }
+            subprocess_kwargs["debug_bundle_dir"] = debug_bundle_dir
+        if debug_context:
+            subprocess_kwargs["debug_context"] = dict(debug_context)
+        proc = ctx.Process(
+            target=_parse_card_via_apify_subprocess_entry,
+            args=(result_queue, url, subprocess_kwargs, result_file),
+            daemon=True,
+        )
+        proc.start()
+        proc_started = True
+        proc.join(timeout_sec)
 
-    if result_queue.empty():
-        if debug_bundle_dir:
-            try:
-                os.makedirs(debug_bundle_dir, exist_ok=True)
-                no_result_payload = {
-                    "diagnostics_version": 2,
-                    "error": "apify_parser_subprocess_no_result",
-                    "message": "Apify business parse subprocess finished without payload",
-                    "url": debug_url_summary(url),
-                    "timeout_sec": timeout_sec,
-                    "debug_context": debug_value_shape(debug_context or {}),
-                    "kwargs": debug_value_shape(kwargs),
-                }
-                with open(os.path.join(debug_bundle_dir, "subprocess_no_result.json"), "w", encoding="utf-8") as fh:
-                    json.dump(no_result_payload, fh, ensure_ascii=False, indent=2, default=str)
-            except Exception:
-                print("⚠️ Failed to write subprocess_no_result.json: diagnostic_write_failed", flush=True)
-        return {
-            "error": "apify_parser_subprocess_no_result",
-            "message": "Apify business parse subprocess finished without payload",
-            "url": url,
-        }
-
-    result = result_queue.get()
-    if isinstance(result, dict) and str(result.get("result_file_path") or "").strip():
-        result_file_path = str(result.get("result_file_path") or "").strip()
-        try:
-            with open(result_file_path, "r", encoding="utf-8") as fh:
-                loaded_result = json.load(fh)
-            if isinstance(loaded_result, dict):
-                return loaded_result
-        except Exception as read_result_exc:
+        if proc.is_alive():
+            if debug_bundle_dir:
+                try:
+                    os.makedirs(debug_bundle_dir, exist_ok=True)
+                    timeout_payload = {
+                        "diagnostics_version": 2,
+                        "error": "apify_parser_subprocess_timeout",
+                        "message": f"Apify business parse timeout after {timeout_sec}s",
+                        "url": debug_url_summary(url),
+                        "timeout_sec": timeout_sec,
+                        "debug_context": debug_value_shape(debug_context or {}),
+                        "kwargs": debug_value_shape(kwargs),
+                    }
+                    with open(os.path.join(debug_bundle_dir, "timeout.json"), "w", encoding="utf-8") as fh:
+                        json.dump(timeout_payload, fh, ensure_ascii=False, indent=2, default=str)
+                except Exception:
+                    print("⚠️ Failed to write timeout.json: diagnostic_write_failed", flush=True)
             return {
-                "error": "apify_parser_subprocess_result_read_failed",
-                "message": str(read_result_exc),
+                "error": "apify_parser_subprocess_timeout",
+                "message": f"Apify business parse timeout after {timeout_sec}s",
                 "url": url,
             }
-    if isinstance(result, dict):
-        return result
-    return {
-        "error": "apify_parser_subprocess_invalid_result",
-        "message": "Apify business parse returned invalid payload",
-        "url": url,
-    }
+
+        try:
+            result = result_queue.get(timeout=1)
+        except queue.Empty:
+            if debug_bundle_dir:
+                try:
+                    os.makedirs(debug_bundle_dir, exist_ok=True)
+                    no_result_payload = {
+                        "diagnostics_version": 2,
+                        "error": "apify_parser_subprocess_no_result",
+                        "message": "Apify business parse subprocess finished without payload",
+                        "url": debug_url_summary(url),
+                        "timeout_sec": timeout_sec,
+                        "debug_context": debug_value_shape(debug_context or {}),
+                        "kwargs": debug_value_shape(kwargs),
+                    }
+                    with open(os.path.join(debug_bundle_dir, "subprocess_no_result.json"), "w", encoding="utf-8") as fh:
+                        json.dump(no_result_payload, fh, ensure_ascii=False, indent=2, default=str)
+                except Exception:
+                    print("⚠️ Failed to write subprocess_no_result.json: diagnostic_write_failed", flush=True)
+            return {
+                "error": "apify_parser_subprocess_no_result",
+                "message": "Apify business parse subprocess finished without payload",
+                "url": url,
+            }
+
+        if isinstance(result, dict) and "transport_ready" in result:
+            if result["transport_ready"] is not True:
+                return {
+                    "error": "apify_parser_subprocess_invalid_result",
+                    "message": "Apify business parse returned invalid payload",
+                    "url": url,
+                }
+            try:
+                result_file.seek(0)
+                loaded_result = json.load(result_file)
+            except Exception:
+                return {
+                    "error": "apify_parser_subprocess_result_read_failed",
+                    "message": "Apify result transport could not be read",
+                    "url": url,
+                }
+            if isinstance(loaded_result, dict):
+                return loaded_result
+            return {
+                "error": "apify_parser_subprocess_invalid_result",
+                "message": "Apify business parse returned invalid payload",
+                "url": url,
+            }
+        if isinstance(result, dict) and "result_file_path" in result:
+            return {
+                "error": "apify_parser_subprocess_result_read_failed",
+                "message": "Unexpected Apify result transport",
+                "url": url,
+            }
+        if isinstance(result, dict):
+            return result
+        return {
+            "error": "apify_parser_subprocess_invalid_result",
+            "message": "Apify business parse returned invalid payload",
+            "url": url,
+        }
+    finally:
+        try:
+            if proc is not None:
+                if proc_started and proc.is_alive():
+                    proc.terminate()
+                    proc.join(timeout=5)
+                    if proc.is_alive():
+                        proc.kill()
+                        proc.join(timeout=5)
+                    if proc.is_alive():
+                        print("⚠️ Apify subprocess cleanup incomplete: process_still_alive", flush=True)
+                if not proc_started or not proc.is_alive():
+                    proc.close()
+        finally:
+            try:
+                if result_queue is not None:
+                    result_queue.close()
+                    result_queue.join_thread()
+            finally:
+                result_file.close()
 
 
 def _parse_yandex_card_with_playwright_fallback(

@@ -1,5 +1,28 @@
 # Verified commands and evidence
 
+## Apify IPC transport — 21 September, parentd8631fec
+
+Task `evidence/apify-ipc-*-20260921.json` captures contain exact isolated
+commands, hashes and bounded output. The broad run explicitly guards `.env`,
+network, subprocess and DB access and does not import top-level worker; the
+owned synthetic fork is deliberate. Quality invokes only local lint/Git checks.
+
+| Capture basename | Actual result | Duration ms |
+| --- | --- | ---: |
+| red | Initial test:3fail/1pass; raw named IPC and Queue timeout |3651.784|
+| verified-baseline | Final test bytes on immutable parent:4fail/0errors |3373.384|
+| verified-green | Final11pass: four parent-comparable cases + seven hardening cases |614.213|
+| broad |93pass +4subtests; source hashes before/after match |12633.373|
+| adjacent-final |11artifact checks + exact existing child test pass |785.329|
+| quality |Worker IPC AST/import boundary, Ruff/diff pass |411.773|
+
+Two retained `final-baseline`/`final-green` captures aborted before tests because
+their harness hash drifted; they are neither product failures nor replacement
+proof. The authoritative pair is verified-baseline/verified-green. Broad
+coverage is local isolated acceptance, not a top-level worker, native DB,
+provider, production, remote actor or secure-erasure test. Final precommit
+evidence remains separate.
+
 ## Selected-agent requests — 21 September, parentb9cb7dea
 
 Task `evidence/agent-requests-*-20260921.json` captures retain exact commands,

@@ -1,5 +1,42 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, Apify IPC transport
+
+Parent `d8631fec6f054f3a25bc820ed456e71e608974f0`. Runtime scope is worker
+Apify subprocess transport only. SEC-APIFY-IPC-01 removes durable raw
+`apify_result.json`; REL-APIFY-IPC-01 drains a real synthetic ~680KB result
+without the prior Queue/join timeout when debug is disabled. The selected
+transport is an anonymous POSIX temporary file with a small Queue readiness
+marker, not a raw Queue payload or a private named debug file.
+
+Authoritative same-test proof is `apify-ipc-verified-baseline-20260921.json`:
+four failures/zero errors on immutable parent, versus those same four cases
+plus seven final-only hardening cases passing in
+`apify-ipc-verified-green-20260921.json`. Final worker SHA-256
+`08387e39b6d024e11f22de6715fc70121281c6efbb7f28ce801bdb713acb3241`; final
+test SHA-256 `c490c7f3f982978d890b024d00bc2634fc4004140debaeefcc35783bced84be2`.
+`apify-ipc-broad-20260921.json` records93passes +4subtests in11.77s/captured
+12633.373ms, with source hashes equal before/after, no full worker import,
+`.env`, network, subprocess, DB or provider. One owned synthetic fork is
+allowed. `apify-ipc-adjacent-final-20260921.json` adds the exact existing child
+test to eleven artifact checks.
+
+Keep all seven earlier IPC captures. Two final-baseline/final-green guard-aborts
+were harness hash drift before tests, not product results; initial red was
+three failures/one pass, and the strengthened final baseline is the four-fail
+record above. Parent owns FD0600 and bounded terminate/kill cleanup. This
+change does not guarantee an unkillable OS child is gone, remote actor
+cancellation, secure erase or old-artifact cleanup. It changes no billing,
+retry, card or provider-cost data. Final quality/precommit is still distinct.
+
+Next source-only candidate: `_validate_parsing_result` composes untrusted error
+code/message into a reason later persisted to `parsequeue.error_message`; no
+reproduction or fix is included. Browser login was a read-only observation of
+an unknown deployed revision and locale intent, not a new bug or authority.
+Whole FAIL, AC1–9/11 FAIL, AC10 PASS, denied native aggregate/restore prep and
+the below10GiB image gate remain. No production/DB/provider/Docker/cleanup/push/
+deploy action; preserve concurrent foreign paths.
+
 ## Latest checkpoint — 21 September, selected-agent request scope
 
 Parent `b9cb7dea2b3fcf651a976e64a6e986b306bf9ca9`; read Git for the resulting

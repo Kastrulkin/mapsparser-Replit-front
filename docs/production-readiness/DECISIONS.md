@@ -1,5 +1,27 @@
 # Readiness decisions
 
+## D-078 — Keep functional Apify result transport private and nonblocking
+
+`apify_result.json` was functional child transport, not expendable diagnostics:
+redacting it would risk result, billing and validation behavior. A raw Queue
+payload can instead deadlock a large child result when the parent joins before
+draining it. Use an anonymous POSIX temporary file for the private result and a
+small Queue readiness marker; reject legacy path spoofing and retain controlled
+timeout/empty-transport errors. Preserve parser result, retry, card and
+provider-cost contracts.
+
+Compared three options: retain raw Queue delivery (no named persistence but the
+reproduced join deadlock); use a private0700 named temporary directory (larger
+path/retention/cleanup contract); inherit an anonymous TemporaryFile through
+the existing POSIX fork (selected, no durable path and small queue marker).
+No new dependency, schema or process-start architecture is introduced.
+
+This reduces named durable raw IPC retention and fixes the demonstrated local
+Queue/join deadlock. It does not promise that terminate/kill always ends an OS
+child, cancel a remote actor, securely erase filesystem blocks, or remove old
+artifacts. FD0600 and bounded cleanup belong to the parent implementation;
+quality/precommit and original release gates remain separate.
+
 ## D-077 — Bind selected reads to identity and request order
 
 An approval button must consume details belonging to the employee currently

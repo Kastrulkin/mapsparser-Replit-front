@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "label": "apify-ipc-green",
+  "captured_at": "2026-09-21T05:07:37.981182+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "-c",
+    "import hashlib,json,pathlib,runpy,sys\nworker=pathlib.Path(\"src/worker.py\")\ntest=pathlib.Path(\"tests/test_worker_apify_ipc_safety.py\")\nassert hashlib.sha256(test.read_bytes()).hexdigest()==\"06138920b6b089d27dbe2bbbcb9fc4db9792986ec4dd843944964ac9876a5ed1\"\ndef forbid_external(event,args):\n    if event in {\"socket.connect\",\"subprocess.Popen\",\"os.system\",\"os.posix_spawn\",\"os.spawn\",\"sqlite3.connect\"}:\n        raise RuntimeError(\"External I/O forbidden in isolated IPC checks\")\nsys.addaudithook(forbid_external)\nprint(json.dumps({\"source_hashes\":[{\"path\":str(p),\"sha256\":hashlib.sha256(p.read_bytes()).hexdigest()} for p in (worker,test)],\"worker_runtime_imported\":False,\"real_fork\":\"one synthetic large payload only\",\"network_database_provider\":\"forbidden\"}),flush=True)\nsys.argv=[str(test),\"-v\"]\nrunpy.run_path(str(test),run_name=\"__main__\")\n"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 315.875,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"source_hashes\": [{\"path\": \"src/worker.py\", \"sha256\": \"f19d85f13416e3a2bb67c1734c29f1e47d59fe05d6dedf873849df16a741706f\"}, {\"path\": \"tests/test_worker_apify_ipc_safety.py\", \"sha256\": \"06138920b6b089d27dbe2bbbcb9fc4db9792986ec4dd843944964ac9876a5ed1\"}], \"worker_runtime_imported\": false, \"real_fork\": \"one synthetic large payload only\", \"network_database_provider\": \"forbidden\"}\n",
+  "stderr": "test_child_failure_keeps_error_code_without_durable_raw_ipc (__main__.WorkerApifyIpcSafetyTests.test_child_failure_keeps_error_code_without_durable_raw_ipc) ... ok\ntest_large_result_without_debug_bundle_does_not_timeout_before_queue_drain (__main__.WorkerApifyIpcSafetyTests.test_large_result_without_debug_bundle_does_not_timeout_before_queue_drain) ... ok\ntest_success_keeps_functional_payload_without_durable_debug_ipc (__main__.WorkerApifyIpcSafetyTests.test_success_keeps_functional_payload_without_durable_debug_ipc) ... ok\ntest_timeout_and_empty_queue_keep_error_semantics (__main__.WorkerApifyIpcSafetyTests.test_timeout_and_empty_queue_keep_error_semantics) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 0.217s\n\nOK\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

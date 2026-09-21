@@ -1,5 +1,17 @@
 # Production-readiness change log
 
+## Apify IPC transport and large-result reliability — 21 September, parentd8631fec
+
+SEC-APIFY-IPC-01 replaces named durable raw `apify_result.json` with anonymous
+temporary functional transport and a Queue readiness marker. REL-APIFY-IPC-01
+moves large results out of the Queue so the parent can join the child without
+a blocked feeder, preserving a real synthetic ~680KB result where the parent
+previously timed out. Timeout/empty/
+child-failure error semantics, result, billing, retry, card and provider-cost
+data remain unchanged. Parent-owned FD0600 and bounded terminate/kill cleanup
+are intentionally limited; no old-artifact cleanup, secure-erasure, remote
+actor cancellation, production or provider claim follows.
+
 ## Selected-agent request integrity — 21 September, parentb9cb7dea
 
 UX-AGENT-REQUEST-SCOPE-01: selected detail/review requests now require current

@@ -1,5 +1,18 @@
 # Residual risks — working register
 
+Latest21September, parentd8631fec: SEC-APIFY-IPC-01 and REL-APIFY-IPC-01 are
+locally FIX_PROVEN for named raw IPC avoidance and the synthetic ~680KB
+Queue/join timeout. Final immutable-parent4fail/current11pass plus guarded
+broad93pass +4subtests support only this transport boundary. Anonymous temporary
+files do not guarantee OS-child death, remote actor cancellation, secure erase,
+or removal of old artifacts. Existing raw artifacts remain outside scope.
+
+The next concrete source-only candidate is `_validate_parsing_result` reason
+text persisted into `parsequeue.error_message`, then shown to scoped Operator
+and superadmin readers. It is not reproduced or fixed. Whole readiness remains
+FAIL: AC1–9/11 FAIL and AC10 PASS. Native aggregate/restore remains denied and
+disk is below the10GiB image floor; no browser login overrides those constraints.
+
 Latest21September, parentb9cb7dea: UX-AGENT-REQUEST-SCOPE-01 is locally
 FIX_PROVEN for selected detail/review request identity/order and the ten-case
 contract. Final824frontend tests/139files and bounded independent review pass.

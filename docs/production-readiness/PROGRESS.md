@@ -1,5 +1,30 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, Apify IPC transport and retention
+
+- [x] SEC-APIFY-IPC-01: raw permanent `apify_result.json` retained the complete
+  functional child result in a named debug directory. Local transport now uses
+  an anonymous temporary file plus a small Queue readiness marker; no raw
+  result file is retained in the debug bundle.
+- [x] REL-APIFY-IPC-01: a real synthetic ~680KB result could deadlock on Queue
+  join and return a timeout when debug was disabled. Parent four failures/zero
+  harness errors become final eleven passes; functional result, billing, retry
+  and card data contracts are unchanged.
+- [x] Frozen worker `08387e39…b3241` and IPC test `c490c7f3…84be2` are bound in
+  final captures. Broad guarded run:93passes +4subtests in11.77s (captured
+  12633.373ms), no top-level worker import, `.env`, network, subprocess, DB or
+  provider; one owned synthetic fork is intentional.
+- [ ] Original AC1–9/11 FAIL, AC10 PASS and whole FAIL remain unchanged.
+
+The selected design avoids raw Queue payload deadlock and durable named-result
+retention by using an anonymous POSIX temporary transport plus a readiness
+marker. It does not guarantee OS-level child death, remote actor cancellation,
+secure erase, or cleanup of old artifacts. Native aggregate/restore preparation
+remains denied pending renewed authority; disk remains below the10GiB image
+floor. No production/DB/provider/Docker/cleanup/push/deploy action occurred.
+The next source-only privacy candidate is untrusted validation `reason` text
+persisted into `parsequeue.error_message`; it is not reproduced or fixed here.
+
 ## Latest checkpoint — 21 September, selected-agent read/approval integrity
 
 - [x] UX-AGENT-REQUEST-SCOPE-01: a late response for A could overwrite B's details and route the real UI approval handler to A. Locally fixed identity/order guards for selected details/reviews and cache admission.

@@ -1,5 +1,23 @@
 # Audit backlog — evidence, not a readiness claim
 
+## 21 September Apify IPC transport
+
+- **SEC-APIFY-IPC-01**, P1 before production, high confidence: raw functional
+  provider result was written permanently as named `apify_result.json` in a
+  debug directory. **REL-APIFY-IPC-01**, P1 before production, high confidence:
+  a synthetic ~680KB result deadlocked Queue/join and timed out without debug.
+  Local FIX_PROVEN by final immutable-parent4fail/0errors to current11pass,
+  source-hash-bound broad93pass +4subtests and adjacent transport/artifact
+  checks. Minimal anonymous-file + readiness-marker transport preserves result,
+  billing, retry, card and cost data. No OS-death, remote cancellation, secure
+  erase, historical cleanup, DB/provider or production proof.
+- **SEC-PARSEQUEUE-REASON-01**, P1 candidate before production: source review
+  finds `_validate_parsing_result` joining untrusted error/message into `reason`,
+  then normal terminal failure persists it to `parsequeue.error_message`, read
+  by scoped Operator and superadmin queue views. Not reproduced or fixed; do
+  not promote beyond CANDIDATE. A pure AST-isolated marker test can preserve
+  retry classification while proving storage-facing reason omission.
+
 ## 21 September selected-agent request integrity, parentb9cb7dea
 
 - **UX-AGENT-REQUEST-SCOPE-01**, P1 before demo/production, high confidence:

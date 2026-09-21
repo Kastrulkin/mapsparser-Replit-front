@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "label": "apify-ipc-verified-green",
+  "captured_at": "2026-09-21T05:16:00.316730+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "-c",
+    "import hashlib,io,json,pathlib,runpy,subprocess,sys\ntest=pathlib.Path(\"tests/test_worker_apify_ipc_safety.py\")\nworker=pathlib.Path(\"src/worker.py\")\nassert hashlib.sha256(test.read_bytes()).hexdigest()==\"c490c7f3f982978d890b024d00bc2634fc4004140debaeefcc35783bced84be2\"\ndef forbid_external(event,args):\n    if event in {\"socket.connect\",\"subprocess.Popen\",\"os.system\",\"os.posix_spawn\",\"os.spawn\",\"sqlite3.connect\"}:\n        raise RuntimeError(\"External I/O forbidden in isolated IPC checks\")\n    if event==\"open\" and isinstance(args[0],str) and pathlib.Path(args[0]).name.startswith(\".env\"):\n        raise RuntimeError(\"Environment file reads forbidden\")\nassert hashlib.sha256(worker.read_bytes()).hexdigest()==\"08387e39b6d024e11f22de6715fc70121281c6efbb7f28ce801bdb713acb3241\"\nsys.addaudithook(forbid_external)\nprint(json.dumps({\"source_hashes\":[{\"path\":str(p),\"sha256\":hashlib.sha256(p.read_bytes()).hexdigest()} for p in (worker,test)],\"worker_runtime_imported\":False,\"real_fork\":\"one synthetic680KB result only\",\"external_io_and_env_files\":\"forbidden\"}),flush=True)\nsys.argv=[str(test),\"-v\"]\nrunpy.run_path(str(test),run_name=\"__main__\")\n"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 614.213,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"source_hashes\": [{\"path\": \"src/worker.py\", \"sha256\": \"08387e39b6d024e11f22de6715fc70121281c6efbb7f28ce801bdb713acb3241\"}, {\"path\": \"tests/test_worker_apify_ipc_safety.py\", \"sha256\": \"c490c7f3f982978d890b024d00bc2634fc4004140debaeefcc35783bced84be2\"}], \"worker_runtime_imported\": false, \"real_fork\": \"one synthetic680KB result only\", \"external_io_and_env_files\": \"forbidden\"}\n\u26a0\ufe0f Apify subprocess cleanup incomplete: process_still_alive\n",
+  "stderr": "test_child_failure_keeps_error_code_without_durable_raw_ipc (__main__.WorkerApifyIpcSafetyTests.test_child_failure_keeps_error_code_without_durable_raw_ipc) ... ok\ntest_child_queue_carries_only_a_small_readiness_marker (__main__.WorkerApifyIpcSafetyTests.test_child_queue_carries_only_a_small_readiness_marker) ... ok\ntest_empty_or_malformed_transport_returns_controlled_error_and_cleans_up (__main__.WorkerApifyIpcSafetyTests.test_empty_or_malformed_transport_returns_controlled_error_and_cleans_up) ... ok\ntest_large_result_without_debug_bundle_does_not_timeout_before_queue_drain (__main__.WorkerApifyIpcSafetyTests.test_large_result_without_debug_bundle_does_not_timeout_before_queue_drain) ... ok\ntest_legacy_path_spoof_is_rejected_without_opening_the_path (__main__.WorkerApifyIpcSafetyTests.test_legacy_path_spoof_is_rejected_without_opening_the_path) ... ok\ntest_ready_marker_with_empty_private_transport_returns_read_failure_and_cleans_up (__main__.WorkerApifyIpcSafetyTests.test_ready_marker_with_empty_private_transport_returns_read_failure_and_cleans_up) ... ok\ntest_start_failure_closes_transport_queue_and_process (__main__.WorkerApifyIpcSafetyTests.test_start_failure_closes_transport_queue_and_process) ... ok\ntest_success_keeps_functional_payload_without_durable_debug_ipc (__main__.WorkerApifyIpcSafetyTests.test_success_keeps_functional_payload_without_durable_debug_ipc) ... ok\ntest_timeout_and_empty_queue_keep_error_semantics (__main__.WorkerApifyIpcSafetyTests.test_timeout_and_empty_queue_keep_error_semantics) ... ok\ntest_timeout_escalates_to_kill_when_child_ignores_terminate (__main__.WorkerApifyIpcSafetyTests.test_timeout_escalates_to_kill_when_child_ignores_terminate) ... ok\ntest_unkillable_child_keeps_timeout_result_and_closes_parent_resources (__main__.WorkerApifyIpcSafetyTests.test_unkillable_child_keeps_timeout_result_and_closes_parent_resources) ... ok\n\n----------------------------------------------------------------------\nRan 11 tests in 0.553s\n\nOK\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

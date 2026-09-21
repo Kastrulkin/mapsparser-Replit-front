@@ -1,6 +1,7 @@
 import sys
 import types
 import json
+import tempfile
 
 import worker
 
@@ -926,7 +927,7 @@ def test_parse_card_via_apify_falls_back_to_raw_address_and_categories(monkeypat
     assert card_data.get("business_status") == "permanent-closed"
 
 
-def test_parse_card_via_apify_subprocess_entry_writes_result_to_file(monkeypatch, tmp_path):
+def test_parse_card_via_apify_subprocess_entry_writes_to_owned_anonymous_file(monkeypatch):
     class FakeQueue:
         def __init__(self):
             self.items = []
@@ -940,20 +941,25 @@ def test_parse_card_via_apify_subprocess_entry_writes_result_to_file(monkeypatch
         lambda url, **kwargs: {"title": "Test", "url": url, "payload": {"x": 1}},
     )
 
-    result_file_path = tmp_path / "apify_result.json"
     fake_queue = FakeQueue()
-    worker._parse_card_via_apify_subprocess_entry(
-        fake_queue,
-        "https://yandex.ru/maps/org/test/55526380200/",
-        {
-            "parsed_source": "yandex_maps",
-            "source_hint": "apify_yandex",
-            "result_file_path": str(result_file_path),
-        },
-    )
-
-    assert fake_queue.items == [{"result_file_path": str(result_file_path)}]
-    assert json.loads(result_file_path.read_text(encoding="utf-8")).get("title") == "Test"
+    result_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
+    try:
+        worker._parse_card_via_apify_subprocess_entry(
+            fake_queue,
+            "https://yandex.ru/maps/org/test/55526380200/",
+            {"parsed_source": "yandex_maps", "source_hint": "apify_yandex"},
+            result_file,
+        )
+        assert fake_queue.items == [{"transport_ready": True}]
+        assert not result_file.closed
+        result_file.seek(0)
+        assert json.load(result_file) == {
+            "title": "Test",
+            "url": "https://yandex.ru/maps/org/test/55526380200/",
+            "payload": {"x": 1},
+        }
+    finally:
+        result_file.close()
 
 
 def test_validate_parsing_result_marks_closed_apify_yandex_business_as_failure():

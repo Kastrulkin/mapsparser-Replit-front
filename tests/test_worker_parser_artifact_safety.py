@@ -9,8 +9,10 @@ import io
 import json
 import os
 from pathlib import Path
+import queue
 import runpy
 import sys
+import tempfile
 import types
 import unittest
 
@@ -72,6 +74,8 @@ def _namespace(*, fail_open=False):
         "open": open_memory,
         "os": types.SimpleNamespace(path=os.path, makedirs=lambda *_a, **_k: None),
         "json": json,
+        "queue": queue,
+        "tempfile": tempfile,
         "debug_value_shape": helpers["debug_value_shape"],
         "debug_url_summary": helpers["debug_url_summary"],
         "bundle_dir": "/synthetic-bundle",
@@ -208,11 +212,22 @@ class WorkerParserArtifactSafetyTests(unittest.TestCase):
         namespace, artifacts = _namespace(fail_open=fail_open)
         calls = []
         result = {"title": MARKER, "_apify_debug": {"run_id": MARKER, "usage_total_usd": 0.25}}
+        process_state = {"alive": alive}
+
+        def terminate():
+            calls.append("terminate")
+            process_state["alive"] = False
+
+        def get_result(**_kwargs):
+            if empty:
+                raise queue.Empty
+            return result
+
         process = types.SimpleNamespace(start=lambda: calls.append("start"),
-            join=lambda *_a, **_k: calls.append("join"), is_alive=lambda: alive,
-            terminate=lambda: calls.append("terminate"))
-        queue = types.SimpleNamespace(empty=lambda: empty, get=lambda: result)
-        context = types.SimpleNamespace(Queue=lambda **_k: queue, Process=lambda **_k: process)
+            join=lambda *_a, **_k: calls.append("join"), is_alive=lambda: process_state["alive"],
+            terminate=terminate, close=lambda: None)
+        result_queue = types.SimpleNamespace(get=get_result, close=lambda: None, join_thread=lambda: None)
+        context = types.SimpleNamespace(Queue=lambda **_k: result_queue, Process=lambda **_k: process)
         namespace.update(multiprocessing=types.SimpleNamespace(get_context=lambda _method: context),
                          _parse_card_via_apify_subprocess_entry=lambda *_a: None)
         function = next(node for node in _worker_tree().body if isinstance(node, ast.FunctionDef)
@@ -262,15 +277,15 @@ class WorkerParserArtifactSafetyTests(unittest.TestCase):
         result = {"title": MARKER, "raw_payload_json": {MARKER: MARKER},
                   "_apify_debug": {"run_id": MARKER, "usage_total_usd": 0.25}}
         messages = []
-        queue = types.SimpleNamespace(put=messages.append, empty=lambda: not messages,
-                                      get=lambda: messages.pop(0))
+        result_queue = types.SimpleNamespace(put=messages.append,
+            get=lambda **_kwargs: messages.pop(0), close=lambda: None, join_thread=lambda: None)
 
         def create_process(*, target, args, daemon):
             self.assertTrue(daemon)
             return types.SimpleNamespace(start=lambda: target(*args),
-                join=lambda *_a, **_k: None, is_alive=lambda: False)
+                join=lambda *_a, **_k: None, is_alive=lambda: False, close=lambda: None)
 
-        context = types.SimpleNamespace(Queue=lambda **_k: queue, Process=create_process)
+        context = types.SimpleNamespace(Queue=lambda **_k: result_queue, Process=create_process)
         namespace.update(multiprocessing=types.SimpleNamespace(get_context=lambda _method: context),
                          _parse_card_via_apify=lambda *_a, **_k: result)
         names = {"_parse_card_via_apify_subprocess_entry", "_parse_card_via_apify_with_timeout"}
@@ -284,5 +299,4 @@ class WorkerParserArtifactSafetyTests(unittest.TestCase):
         returned = namespace["_parse_card_via_apify_with_timeout"](
             MARKER, debug_bundle_dir="/synthetic-bundle")
         self.assertEqual(returned, result)
-        self.assertEqual(set(artifacts), {"apify_result.json"})
-        self.assertEqual(json.loads(artifacts["apify_result.json"].getvalue()), result)
+        self.assertEqual(artifacts, {})

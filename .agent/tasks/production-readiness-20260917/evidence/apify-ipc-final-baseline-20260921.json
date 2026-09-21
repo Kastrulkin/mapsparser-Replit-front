@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "label": "apify-ipc-final-baseline",
+  "captured_at": "2026-09-21T05:15:14.157209+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "-c",
+    "import hashlib,io,json,pathlib,runpy,subprocess,sys\ntest=pathlib.Path(\"tests/test_worker_apify_ipc_safety.py\")\nworker=pathlib.Path(\"src/worker.py\")\nassert hashlib.sha256(test.read_bytes()).hexdigest()==\"8ead56f2c0537e05b06244b2244e5f52362bf1156465c9851a0f6abcb92bafa8\"\ndef forbid_external(event,args):\n    if event in {\"socket.connect\",\"subprocess.Popen\",\"os.system\",\"os.posix_spawn\",\"os.spawn\",\"sqlite3.connect\"}:\n        raise RuntimeError(\"External I/O forbidden in isolated IPC checks\")\n    if event==\"open\" and isinstance(args[0],str) and pathlib.Path(args[0]).name.startswith(\".env\"):\n        raise RuntimeError(\"Environment file reads forbidden\")\nparent=\"d8631fec6f054f3a25bc820ed456e71e608974f0\"\nsource=subprocess.check_output([\"/usr/bin/git\",\"--no-replace-objects\",\"show\",parent+\":src/worker.py\"]).decode()\nassert hashlib.sha256(source.encode()).hexdigest()==\"4e1a5483e48b475e5e734f84be0782628d3bfb0ca84213fab9097a5dc61041c1\"\nsys.addaudithook(forbid_external)\nprint(json.dumps({\"parent_commit\":parent,\"baseline_worker_sha256\":hashlib.sha256(source.encode()).hexdigest(),\"test_sha256\":hashlib.sha256(test.read_bytes()).hexdigest(),\"selected_cases\":[\"test_success_keeps_functional_payload_without_durable_debug_ipc\",\"test_child_failure_keeps_error_code_without_durable_raw_ipc\",\"test_timeout_and_empty_queue_keep_error_semantics\",\"test_large_result_without_debug_bundle_does_not_timeout_before_queue_drain\"],\"worker_runtime_imported\":False}),flush=True)\nsys.stdin=io.StringIO(source)\nsys.argv=[str(test),\"--source-stdin\",\"-v\"]+[\"WorkerApifyIpcSafetyTests.\"+name for name in [\"test_success_keeps_functional_payload_without_durable_debug_ipc\",\"test_child_failure_keeps_error_code_without_durable_raw_ipc\",\"test_timeout_and_empty_queue_keep_error_semantics\",\"test_large_result_without_debug_bundle_does_not_timeout_before_queue_drain\"]]\nrunpy.run_path(str(test),run_name=\"__main__\")\n"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 48.097,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "Traceback (most recent call last):\n  File \"<string>\", line 4, in <module>\nAssertionError\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}
