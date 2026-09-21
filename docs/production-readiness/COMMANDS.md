@@ -1,5 +1,15 @@
 # Verified commands and evidence
 
+## Current-source six-case confirmation — 22 September
+
+Named tmux audit-current-six-confirm-v1 captured exact clean-env/sandbox pytest
+argv in task current-six-20260922/confirmation-v1.json. Snapshotbase936be8f9
+plus only parser/author test overlays; parser4 -> explicitchildguard1 -> author1.
+6pass0.49s, wrapper831.954ms, no truncation/skip/timeout; independent source and
+node/order review PASS. Five OS negative/positive probes and1060filemanifest
+verify. Source manifest is checked from /private/tmp/localos-current-six-HY29/source.
+Do not label the independently advanced repo HEAD or broader dirty tree tested.
+
 ## Image credential stream — 22 September
 
 Named tmux audit-image-credentials-v1/v2 executed support/image_credentials_hflypi.py

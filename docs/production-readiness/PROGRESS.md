@@ -1,5 +1,22 @@
 # Production-readiness progress
 
+## Latest checkpoint — 22 September, existing corrections verified
+
+- [x] Explicit HEAD936be8f9+two-test-overlays snapshot passes six ordered cases:
+  parser4, child guard1, author1. Confirmation831.954ms/pytest0.49s records exact
+  argv/node IDs; independent1060-file source and outcome review PASS.
+- [x] All13foreign paths preserved/uncommitted. This does not count as a full
+  current-source aggregate or add six passes to older frozen totals.
+- [x] Image evidence committed da3a357d. Exact134272-byte diffdbbdd4c8 reviewed;
+  staged6matches bind only synthetic controls, all219actual image candidates
+  remain untriaged. Strict triage683.289ms, normal commit hook306.854ms.
+- [ ] Next: map/triage219image candidates, prioritizing private-key labels;
+  broader current-source backend/integration, frontend ratchet/flake/browser,
+  performance/CI/demo and final whole-diff review still remain.
+
+Original whole objective remains ACTIVE/FAIL. No production or existing DB
+changes, deploy/push, repeated cleanup, provider effects or credential rotation.
+
 ## Latest checkpoint — 22 September, all-layer credential scan complete
 
 - [x] V2 scanned all 20 layers plus config of pinned audit image9d6edac8 in

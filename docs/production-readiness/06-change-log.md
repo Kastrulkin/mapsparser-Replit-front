@@ -1,5 +1,12 @@
 # Production-readiness change log
 
+## Existing test correction verification — 22 September, parentda3a357d
+
+Six exact ordered cases pass over identified HEAD+two-overlay snapshot; this
+package adds evidence only. Scoped parser-hook cleanup and author fixture branch
+are exercised without network/DB/provider access.13foreign paths remain intact;
+no whole-current-source or production readiness claim.
+
 ## All-layer credential evidence — 22 September, parentcb4271d7
 
 Audit-only streaming scanner and synthetic controls cover every historical

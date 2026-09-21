@@ -1,0 +1,39 @@
+import errno
+import json
+from pathlib import Path
+import socket
+import subprocess
+import sys
+
+
+writable = Path("/private/tmp/localos-current-six-HY29/writable")
+canary = Path("/private/tmp/localos-current-six-HY29/unowned-canary")
+checks = {}
+
+
+def denied(name, operation):
+    try:
+        operation()
+    except OSError:
+        error = sys.exc_info()[1]
+        checks[name] = error.errno in {errno.EPERM, errno.EACCES}
+    else:
+        checks[name] = False
+
+
+denied("tcp_denied", lambda: socket.create_connection(("127.0.0.1", 35418), timeout=1))
+denied("unix_denied", lambda: socket.socket(socket.AF_UNIX).connect("/Users/alexdemyanov/.docker/run/docker.sock"))
+denied("unowned_write_denied", lambda: canary.write_text("unexpected"))
+(writable / "owned-write").write_text("ok")
+checks["owned_write"] = (writable / "owned-write").read_text() == "ok"
+child = subprocess.run(
+    [
+        sys.executable,
+        "-c",
+        "import socket; socket.socket().connect((chr(49)+chr(50)+chr(55)+chr(46)+chr(48)+chr(46)+chr(48)+chr(46)+chr(49),35418))",
+    ],
+    capture_output=True,
+)
+checks["child_tcp_denied"] = child.returncode != 0 and b"Operation not permitted" in child.stderr
+print(json.dumps(checks, sort_keys=True))
+raise SystemExit(0 if all(checks.values()) else 1)

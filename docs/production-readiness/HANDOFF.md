@@ -1,5 +1,36 @@
 # Readiness handoff
 
+## Latest checkpoint — 22 September, current corrections checkpoint
+
+Parent da3a357d107c6dafa5092853f0508ddb0a83939c on codex/production-readiness-20260917.
+Local commits this phase:936be8f9 full frozen failure baseline;cb4271d7 runner
+startup guard;da3a357d all-layer credential evidence. All reviewed/scoped,
+no push/deploy. Worktree still contains the same13foreign paths, tracked diff
+SHA40afa0141e5fe1b9fe9d18ee651ba61e19a27367158d71984f5a90a4d2a4c6d1.
+This checkpoint adds only current-six evidence/docs, not those foreign changes.
+
+Accepted snapshot is HEAD936be8f9 src/tests/pytest.ini plus exactly two test
+overlays;1060filemanifest50220a07 verifies after run. Confirmation raw records
+all6selected nodes passing0.49s, wrapper831.954ms, OS network/write denial.
+Independent source/scope/outcome review PASS. Earlier raw harness failures were
+not retained; earlier6pass summary did not bind identities and is not reused.
+See task current-six-results-20260922.md and current-six-20260922 artifacts.
+
+Nearest security action: metadata-map219candidate hashes from exact pinnedimage
+9d6edac8, then evidence-backed triage (17private-key labels first). V2 is complete,
+not clean; do not rerun full913s scan just to map paths. No values/provider checks.
+Nearest backend action: explicit broader current-source snapshot, not endlessly
+more old frozen slices. Verify reviewed overlay corrections and remaining actual
+capability classes; full5481frozen still4338pass51fail1092skip, not DoD PASS.
+
+Read-only continuation:
+```sh
+git status --short
+jq '{status,finding_count,duration_seconds}' .agent/tasks/production-readiness-20260917/evidence/image-credentials-hflypi-20260922/image-credentials-v2.json
+```
+Keep all current containers/volumes; cleanup is complete and must not be repeated.
+About14GiB free; whole readiness remains OPEN/FAIL, no goal-status change.
+
 ## Latest checkpoint — 22 September, terminal credential scan
 
 Parent cb4271d7 on codex/production-readiness-20260917. Both image attempts are

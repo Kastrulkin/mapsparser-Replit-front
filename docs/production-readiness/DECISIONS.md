@@ -1,5 +1,12 @@
 # Readiness decisions
 
+## D-108 — Verify foreign corrections without silently accepting the whole tree
+
+Use a named base commit plus two exact test overlays for the first current-source
+check. Persist argv/node IDs and verify the snapshot before/after. A scoped pass
+does not authorize staging all foreign work or extending older frozen coverage
+arithmetic. Keep the whole readiness objective and remaining integration gates.
+
 ## D-107 — Preserve redacted findings and runtime provenance honestly
 
 All-layer credential scan completion is not a clean result: retain all219
