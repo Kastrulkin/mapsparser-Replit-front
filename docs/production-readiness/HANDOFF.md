@@ -1,5 +1,41 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, worker console and history batch
+
+Branch `codex/production-readiness-20260917`; baseline30262a5b;
+parent `fdbabac4d830cb82d3ec2ffcb0f884b6250c141a`. Read `git log -1` for
+the resulting package commit. Runtime change is only six console sinks in
+`src/worker.py`; retry branches, parser return data and persisted proxy error
+reasons are preserved. Surrounding normalization/debug-file/legacy sinks remain.
+
+Authoritative causal RED: `evidence/worker-parser-logs-final-baseline-20260921.json`
+binds the immutable parent worker and final test bytes,5fail/0errors. Only two
+AST-extracted branches execute against synthetic stubs, not top-level worker.
+Authoritative current proof: `evidence/worker-parser-logs-final-20260921.json`,
+34pass/0.76s/1075.4ms with10source hashes. Quality capture6827.410ms reconciles
+13hashes, scoped Ruff, non-diagnostic AST parity and110historical bindings.
+Use exact guarded commands from these captures, not unguarded backend pytest.
+Earlier agent3/4-case captures were overwritten; do not claim their bytes exist.
+Root final baseline/current captures and the provenance note replace that gap.
+
+History successor proofs: agent44=35clear/9unknown; output40=24clear/16unknown;
+misc26=11clear/15unknown. Historical total:74nonsecret/592access-material
+locations not cleared/45UNKNOWN. Tree remains31nonsecret/10access components/
+1UNKNOWN. Queue46 is not the total security-risk count. Original scanner exit1,
+frozen metadata, historical verdict and acceptance statuses remain unchanged.
+
+Next safe work: legacy scraper console reproduction and remaining worker
+diagnostic-file/normalization sinks, then unresolved history semantics.
+Fresh disk6278596KiB (~5.99GiB), below10GiB Docker floor. Native aggregate/restore
+prep remains denied pending renewed permission; unsafe-reset effects remain
+INCONCLUSIVE. No production, DB, provider, Docker, cleanup, push or deploy.
+Nine unrelated paths remain excluded; overall FAIL, AC1–9/11 FAIL, AC10 PASS.
+
+Precommit19574.914ms verified32owned files/237271diff bytes,12captures,13source
+hashes,110historical bindings, strict staged scan, original verdict/statuses and
+nine foreign hashes. Final33-file package adds this capture and is checked again;
+the initial32-file count is not relabeled as the final package.
+
 ## Latest checkpoint — 21 September, parser console correction
 
 Parent074ee5a01841d7e52adaa7fe5395a60217c24add; branch

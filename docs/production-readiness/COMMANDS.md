@@ -1,5 +1,41 @@
 # Verified commands and evidence
 
+## Worker console and frozen history — 21 September, parentfdbabac4
+
+Exact commands are in the named task `evidence/*-20260921.json` captures.
+History verifiers read immutable Git blobs as data with isolated no-replace
+Git; the regression baseline executes only two known parent AST branches with
+synthetic stubs. No top-level worker, native DB, provider, Docker or live action.
+
+| Capture basename | Actual result | Duration ms |
+| --- | --- | ---: |
+| git-history-agent44-proof | Initial35digest/9UNKNOWN proof, before stronger missing-path distinction |2720.990|
+| git-history-agent44-proof-verified | 44bindings;35exact historical file digests,9UNKNOWN |3280.118|
+| git-history-output40-proof | exit1, sanitized Git child error; not a pass |91.360|
+| git-history-output40-proof-verified |40bindings;24exact file digests,16UNKNOWN |2563.530|
+| git-history-misc26-proof |26bindings;11nonsecret,15UNKNOWN before helper simplification |957.438|
+| git-history-misc26-proof-verified |Same11positives:8explicit placeholders/3same-scope record UUIDs;15UNKNOWN |872.604|
+| worker-parser-logs-red |Current retained expanded pair:5privacy failures/0errors |238.070|
+| worker-parser-logs-green |Current retained expanded pair:5pass/0.184s |232.021|
+| worker-parser-logs-final-baseline |Root final test bytes on immutable parent AST:5privacy failures/0errors |300.591|
+| worker-parser-logs-final |Root current5plus29adjacent:34pass/0.76s,10source hashes |1075.389|
+| history-worker-quality |13hashes, scoped Ruff/diff, normalized AST parity,110history replays and count reconciliation pass |6827.410|
+| history-worker-disk-preflight |6278596KiB (~5.99GiB) available, below10GiB build floor |3.074|
+| history-worker-precommit |32owned files/237271diff bytes,12captures/13hashes/110history replays; strict staged scan clean, nine foreign hashes and original statuses preserved |19574.914|
+
+No capture timeout/truncation. Failed RED stderr contains only synthetic
+markers. Intermediate agent3/4-case captures were overwritten during expansion;
+their original bytes are unavailable and were not reconstructed. The root final
+baseline/current pair binds identical final test bytes and is authoritative.
+An initial summary-only Node command had a syntax error; corrected inspection
+read the unchanged capture. Neither is an application test result.
+
+AST normalization removes print expressions, the two diagnostic-only temporary
+assignments and the now-unused retry exception binding; remaining AST equals
+parent. This does not certify actual worker/DB/browser integration. History
+reconciliation retains45UNKNOWN history rows plus tree11 and592previously
+classified access-material locations without clearance. See batch/worker notes.
+
 ## Parser console confidentiality — 21 September, parent074ee5a0
 
 Exact commands are retained in `evidence/parser-diagnostic-*-20260921.json`.

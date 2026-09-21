@@ -1,5 +1,22 @@
 # Production-readiness change log
 
+## Worker console and history evidence — 21 September, parentfdbabac4
+
+SEC-WORKER-PARSER-LOG-01 replaces six raw parser/retry/subprocess console
+messages with fixed events. It removes two diagnostic-only temporaries and one
+unused exception binding; normalized remaining AST equals parent. Parser return
+data, retries and persisted proxy error reasons are unchanged. Five final
+synthetic cases fail on immutable parent AST and pass on current source; all34
+new/adjacent pure cases pass. Scoped Ruff,13source hashes and independent final
+review pass. Root hash-bound RED replaces overwritten interim agent evidence;
+the loss is disclosed, not reconstructed. No top-level worker/DB/live test.
+
+Offline history verifiers add110 exact bindings and70nonsecret classifications,
+leaving46history/tree UNKNOWN rows. Missing artifacts and unproved fixture/pack
+semantics remain unknown; no access-material validity or revocation clearance.
+The initial output40 Git failure is retained with its verified successor.
+Exact timings/commands are in COMMANDS and task captures. No release action.
+
 ## Parser console diagnostics — 21 September, parent074ee5a0
 
 SEC-PARSER-LOG-01 replaces raw URL, business fields, review/post details,

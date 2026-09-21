@@ -1,5 +1,19 @@
 # Residual risks — working register
 
+Latest21September, parentfdbabac4: remaining unknown queue is45history+tree11=46.
+Seventy additional exact nonsecret proofs do not clear592historical provider/
+access-material locations or10tree access components. Validity, privilege,
+expiry/revocation and exact22commit counter membership remain unresolved.
+
+SEC-WORKER-PARSER-LOG-01 locally fixes six console sinks, with immutable-parent
+RED5/current34passes and independent review. Raw persisted proxy error reasons,
+normalization logs, worker debug writers, legacy scraper diagnostics and old
+files/logs remain open; no global confidentiality or deployed-fix claim. The
+supported legacy parser source candidate is the next reproduction target.
+Fresh disk6278596KiB (~5.99GiB) is below10GiB build floor. Native aggregate/restore
+prep still needs renewed authority after denial. No DB/provider/production,
+Docker/cleanup/push/deploy action occurred; original whole-project FAIL remains.
+
 21 September, parent074ee5a0: the previously open raw console interpolation
 within `parser_interception.py` is now locally corrected (SEC-PARSER-LOG-01).
 Final29 pure checks and source review do not certify BrowserSession, worker,
@@ -8,7 +22,7 @@ historical logs/files, full browser flow or production. Diagnostic details are
 intentionally reduced; static events and counters retain phase visibility.
 No native aggregate/restore, image, hosted CI or complete demo gate is promoted.
 
-The latest history queue is115history+tree11=116unclassified/UNKNOWN. Only four
+At that checkpoint the history queue was115history+tree11=116unclassified/UNKNOWN. Only four
 static content identifiers were cleared in this package. Rows684/686 remain
 unknown credential/default material; no live validation, rotation or expiry/
 revocation proof. Their current blobs differ, which does not prove the matched

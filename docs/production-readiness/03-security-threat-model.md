@@ -4,6 +4,19 @@ Status: incomplete security assessment, not a production approval. Baseline `302
 
 ## Assets and adversaries
 
+21 September, parentfdbabac4: SEC-WORKER-PARSER-LOG-01 corrects six direct/retry/
+subprocess console sinks. Immutable-parent AST RED5 and final34pure passes,
+source-hash reconciliation and independent review prove this limited boundary.
+Queue/proxy error persistence, worker normalization/debug files, legacy parser
+diagnostics and deployed/retained logs remain separate unresolved boundaries.
+
+The additional110 frozen-history bindings prove70nonsecret values (59file
+digests,8explicit placeholders,3record UUID identifiers), retaining40UNKNOWN.
+Reconciled history totals are74nonsecret/592access-material locations not
+cleared/45UNKNOWN; tree retains31nonsecret/10access components/1UNKNOWN.
+The latest unknown queue is46, not the risk count. Original scan exit1,
+credential-lifecycle gates and overall FAIL remain unchanged.
+
 21 September, parent074ee5a0: SEC-PARSER-LOG-01 is reproduced by six synthetic
 diagnostic cases, corrected locally and checked by29 pure cases plus source
 review. URL components, provider fields/keys and exception details no longer

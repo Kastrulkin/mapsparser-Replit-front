@@ -1,5 +1,34 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, worker console and frozen-history proofs
+
+- [x] Previous login-only turn was no progress on whole readiness; original
+  objective reread and branch/HEADfdbabac4/nine foreign paths revalidated.
+- [x] 110 frozen historical bindings replayed:70 additional nonsecret proofs
+  (59 exact file digests,8 explicit placeholders,3 record UUID identifiers),
+  40 UNKNOWN retained. Remaining queue:45 history + tree11 =46 UNKNOWN.
+- [x] SEC-WORKER-PARSER-LOG-01: six diagnostic sinks no longer interpolate
+  provider messages/tracebacks. Same final five tests fail on parent AST and
+  pass on current source; root final34 pure tests pass in0.76s.
+- [x] Thirteen source hashes, scoped Ruff, normalized non-diagnostic AST parity
+  and independent frozen source/evidence review pass. Interim agent captures
+  were overwritten during test expansion; new root hash-bound RED supersedes
+  them without reconstructing missing evidence.
+- [x] Precommit19574.914ms:32owned files,237271-byte staged diff,12captures,
+  13source hashes and110history replays; strict staged scan clean, nine foreign
+  hashes and original verdict/AC statuses preserved. Final package adds this
+  capture and repeats verification before commit.
+- [ ] All-project release gates remain FAIL. Surrounding worker diagnostics,
+  legacy scraper and retained files/logs require further work. Historical
+  privileged/provider access material has not been cleared or revoked.
+
+Next: reproduce and correct the reachable legacy scraper diagnostics and the
+remaining worker debug-file/normalization boundaries; continue the46 unknown
+rows without guessing. Fresh local disk6278596KiB (~5.99GiB) is below10GiB
+Docker floor. Native aggregate/restore prep remains denied pending renewed
+authority; do not retry through another route. No production/DB/provider,
+Docker, cleanup, push or deployment action occurred. Full goal is not complete.
+
 ## Latest checkpoint — 21 September, parser console confidentiality
 
 - [x] Previous login-only turn added no new goal completion evidence; current

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "label": "git-history-output40-proof-20260921",
+  "captured_at": "2026-09-21T02:10:25.553078+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    ".agent/tasks/production-readiness-20260917/support/git_history_output40_20260921.py"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 91.36,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "{\"status\": \"failed\", \"error_type\": \"CalledProcessError\"}\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

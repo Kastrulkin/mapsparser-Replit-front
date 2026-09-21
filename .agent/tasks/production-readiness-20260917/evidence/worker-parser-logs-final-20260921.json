@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "label": "worker-parser-logs-final-20260921",
+  "captured_at": "2026-09-21T02:24:15.301061+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1",
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-B",
+    "-c",
+    "import sys, pathlib, hashlib, json\ndef forbid_external(event, args):\n    if event in {\"socket.connect\", \"subprocess.Popen\", \"os.system\", \"os.posix_spawn\", \"sqlite3.connect\"}:\n        raise RuntimeError(\"External I/O forbidden in parser unit run\")\nsys.addaudithook(forbid_external)\nsys.path.insert(0, str(pathlib.Path(\"src\").resolve()))\nimport pytest\nfiles = [\"tests/test_parser_interception.py\", \"tests/test_parser_interception_review_responses.py\", \"tests/test_parser_orchestrator.py\", \"tests/test_parser_debug_bundle_safety.py\", \"tests/test_parser_diagnostic_logs.py\", \"tests/test_worker_parser_diagnostic_logs.py\"]\nsources = files + [\"src/worker.py\", \"src/parser_interception.py\", \"src/browser_session.py\", \"src/core/parser_debug_artifacts.py\"]\nprint(json.dumps({\"source_sha256\": {p: hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in sources}, \"external_io_guard\": True, \"conftest_loaded\": False}))\nraise SystemExit(pytest.main([\"--noconftest\", \"-o\", \"addopts=\", \"-p\", \"no:cacheprovider\", \"-q\"] + files))"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 1075.389,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"source_sha256\": {\"tests/test_parser_interception.py\": \"90a017fe56b4dc86d51a53c93fa13e4274bc27b47e2689fc4b6516141d3b2e00\", \"tests/test_parser_interception_review_responses.py\": \"a4eae46da7f305d11f64008b775aa99d454467fad62a87f8ad88dfab6bf31cdc\", \"tests/test_parser_orchestrator.py\": \"2ccb591c57a7ec6590a2fdab1137cae22a94ceefc230eb19d30a35dbb1067e36\", \"tests/test_parser_debug_bundle_safety.py\": \"b0f691e584b322d3a3865223d367e9749dc909bf5d46f16bdfdeffbfad985748\", \"tests/test_parser_diagnostic_logs.py\": \"489bb061a99567111540bd9bbf91853a2f21bcce93f444ae53c8b8bedcfff56e\", \"tests/test_worker_parser_diagnostic_logs.py\": \"4a2221cbea7d7190beaab53bc8b104d4adb6c641492d8a579f5325d77d66513b\", \"src/worker.py\": \"21e02cc78241de155460f6a53279e569cf02dffc4e63439d5b17ced9f096f910\", \"src/parser_interception.py\": \"a9737321cb60869d632f0d155bc0905b2e72c5caf6950507b8bb137a0ee04a0a\", \"src/browser_session.py\": \"2750f4062e259c4d4b3a193fe6d9c263eedf92e495a7de5c62c34bb691e9af63\", \"src/core/parser_debug_artifacts.py\": \"a364d4d27e842c21a1bc9f8fdfd61bf7021eea4301ee541eab14f0194864f5be\"}, \"external_io_guard\": true, \"conftest_loaded\": false}\n..................................                                       [100%]\n34 passed in 0.76s\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

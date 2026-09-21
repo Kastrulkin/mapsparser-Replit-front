@@ -1,5 +1,22 @@
 # Readiness decisions
 
+## D-073 — Bind positive classification and regression evidence to exact bytes
+
+Missing historical artifacts are UNKNOWN, not safe digests. A successful empty
+literal/full-tree Git listing establishes absence; other Git errors fail the
+proof. Do not emit unbounded historical JSON keys as reference paths. Clear
+only exact file-digest equality, explicit placeholders or bound record identity
+semantics; retain unsupported fixture/pack/credential examples as UNKNOWN.
+
+Replace worker console interpolation with fixed events, retaining parser data
+and retry/persistence contracts. This limited privacy patch does not sanitize
+all worker diagnostic files, queue reasons or legacy dependencies. Compare the
+non-diagnostic AST, force retry success/failure with synthetic inputs, and bind
+source hashes to final captures. Never promote an intermediate green after the
+source changes. When interim evidence was overwritten, disclose the loss and
+produce a fresh parent-AST/current-source pair without reverting shared files;
+do not reconstruct purported original capture bytes.
+
 ## D-072 — Replace raw log values at each parser diagnostic sink
 
 Historical secret triage must bind argument positions, not only callee names:

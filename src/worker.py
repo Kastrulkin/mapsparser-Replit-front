@@ -5849,7 +5849,7 @@ def _execute_map_card_task(
             _mark_proxy_result(proxy_id, success=False, reason=msg[:240])
             if active_proxy and parsed_source == "yandex_maps":
                 print(
-                    f"⚠️ Ошибка при парсинге через прокси ({proxy_id}): {msg[:160]} | retry without proxy",
+                    f"⚠️ Ошибка при парсинге через прокси ({proxy_id}): parser_exception | retry without proxy",
                     flush=True,
                 )
                 try:
@@ -5874,7 +5874,7 @@ def _execute_map_card_task(
                     recovered_without_proxy = True
                 except Exception as retry_exc:
                     retry_msg = str(retry_exc)
-                    print(f"❌ Retry without proxy failed: {retry_msg[:180]}", flush=True)
+                    print("❌ Retry without proxy failed: parser_exception", flush=True)
                     if _is_playwright_sync_in_async_error(retry_msg):
                         e = retry_exc
                         msg = retry_msg
@@ -5927,11 +5927,10 @@ def _execute_map_card_task(
             if card_error == "parser_subprocess_exception":
                 sub_msg = str(card_data.get("message") or "").strip()
                 if sub_msg:
-                    print(f"⚠️ parser_subprocess_exception: {sub_msg[:240]}", flush=True)
+                    print("⚠️ parser_subprocess_exception: message_redacted", flush=True)
                 sub_tb = str(card_data.get("traceback") or "").strip()
                 if sub_tb:
-                    tb_head = sub_tb.splitlines()[:5]
-                    print("⚠️ traceback head: " + " | ".join(tb_head), flush=True)
+                    print("⚠️ parser_subprocess_exception: traceback_redacted", flush=True)
                 if active_proxy and parsed_source == "yandex_maps":
                     print(
                         f"⚠️ parser_subprocess_exception через proxy ({proxy_id}) -> retry without proxy",
@@ -5960,10 +5959,9 @@ def _execute_map_card_task(
                             card_error = ""
                             print("✅ Retry without proxy succeeded after parser_subprocess_exception", flush=True)
                         else:
-                            retry_err = str((retry_card_data or {}).get("error") or "unknown")
-                            print(f"❌ Retry without proxy returned error: {retry_err[:140]}", flush=True)
-                    except Exception as retry_exc:
-                        print(f"❌ Retry without proxy failed: {str(retry_exc)[:180]}", flush=True)
+                            print("❌ Retry without proxy returned error: error_redacted", flush=True)
+                    except Exception:
+                        print("❌ Retry without proxy failed: parser_exception", flush=True)
             if hybrid_yandex_parser and used_apify_parser:
                 _mark_proxy_result(proxy_id, success=False, reason=native_failure_reason[:120])
             elif not card_error:
