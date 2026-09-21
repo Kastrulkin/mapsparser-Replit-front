@@ -1,5 +1,15 @@
 # Verified commands and evidence
 
+## Renewed cache cleanup — 21 September
+
+Named tmux cache-npx-cleanup-execute-20260921 and
+cache-puccinialin-cleanup-20260921: exact commands in task
+cache-npx-cleanup-20260921.json and cache-puccinialin-cleanup-20260921.json.
+Both exit0;1037.483ms/482.687ms. Postcheck: npx0KiB, Puccinialin57768KiB,
+toolchain absent, settings retained. The latter raw stderr warns of cache-local
+default Rust removal; future use needs reinstall. No global Docker prune.
+Size/provenance/restore command: task `cache-followup-20260921.md`.
+
 ## Legacy exception privacy — 21 September
 
 Named tmux runs `legacy-parser-rootproof-hflypi`, `legacy-parser-green-hflypi`

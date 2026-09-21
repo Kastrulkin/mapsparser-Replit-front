@@ -1,5 +1,23 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, cleanup follow-up
+
+Current source checkpoint f137edb5 follows audit05c9c83e. Both normal hooks,
+strict secret scans and independent staged reviews pass; binary diff hashes
+match6362a1fe...ab154 and600fbcd4...7c30e.13foreign paths remain unchanged.
+User's renewed cleanup removed628184KiB from exact inactive npx children and
+cache-local x86 Rust toolchain, preserving bootstrap/config; reinstall needed
+if that old buildtool is used again. Free sample5758540KiB (~5.49GiB).
+See task `cache-followup-20260921.md`; do not replay completed removals.
+
+Pending optional cleanup choice: completed task-owned Sep17–18 stopped test
+containers+old images, with all volumes retained (~4.9GB Docker estimate).
+No Docker cleanup performed; existing29-resource baseline still intact. An
+approval response must be matched to an exact refreshed allowlist before use.
+Live app caches and current frozen/native lane retained. Goal active, no
+production/provider/push/deploy. Continue safe native checks above5GiB start,
+2GiB live; no full build below10GiB. Historical full readiness FAIL remains.
+
 ## Latest checkpoint — 21 September, local legacy exception privacy
 
 Branch codex/production-readiness-20260917; audit checkpoint05c9c83e is committed

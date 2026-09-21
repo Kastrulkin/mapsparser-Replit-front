@@ -1,5 +1,14 @@
 # Readiness decisions
 
+## D-092 — Distinguish cache reclamation from test-stand disposal
+
+Inactive ephemeral package downloads and an app-scoped cached buildtool can
+be removed with exact paths and a reinstall caveat. Live browser/app caches
+are retained while open. Shared BuildKit size is not guaranteed reclaimable
+host space. Old task-owned stopped containers are not merely cache: request
+a separate retention choice before disposing of their images/containers, keep
+volumes and current runtime excluded, and reconcile resource baselines openly.
+
 ## D-091 — Stable legacy errors without changing retry policy
 
 Replace the tested raw exception/URL diagnostic interpolation with finite codes;

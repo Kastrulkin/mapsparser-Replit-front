@@ -1,5 +1,21 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, renewed cleanup and local commits
+
+- [x] Audit controller active. Two reviewed local checkpoints committed:
+  05c9c83e (364 backend + frontend repeats), f137edb5 (bounded privacy fix).
+- [x] Removed only inactive npx downloads and cache-local x86 Rust toolchain:
+  628184KiB (~0.60GiB), reinstallable. Free sample~5.49GiB. Retained active
+  app caches, Codex runtime/history, project data and all Docker resources.
+- [ ] Separate approval pending for completed Sep17–18 synthetic Docker
+  containers+images, retaining every volume; potential~4.9GB inside Docker.
+  No such removal executed. Full-build10GiB floor still not satisfied.
+
+Evidence/limits: task `cache-followup-20260921.md` and two raw captures.
+No push/deploy/production/DB change. Next: remaining safe native backend/PG
+checks after fresh capacity preflight, and exact old-resource cleanup only if
+approved. Whole-goal FAIL and frontend/security/browser/performance/CI remain.
+
 ## Latest checkpoint — 21 September, bounded legacy exception privacy fix
 
 - [x] SEC-LEGACY-EXCEPTION-01: same four regression cases fail against immutable
