@@ -2,6 +2,7 @@ from legacy_routes import shared as _shared
 from core.frontend_asset_compatibility import resolve_current_lazy_chunk
 from core.auth_helpers import verify_business_access
 from core.html_head import replace_or_insert_tag as _replace_or_insert_tag
+from core.public_page_html import load_public_page, load_public_shell, replace_public_page_body
 from core.readiness import database_ready
 
 globals().update(_shared.runtime_namespace)
@@ -226,7 +227,7 @@ def _escape_head_value(value: Any) -> str:
 
 def _route_article_schema(route_path: str, route_seo: Dict[str, Any]) -> List[Dict[str, Any]]:
     article_title = route_seo.get("articleTitle") or route_seo.get("title") or "LocalOS"
-    return [
+    schema = [
         {
             "@context": "https://schema.org",
             "@type": "Article",
@@ -243,6 +244,7 @@ def _route_article_schema(route_path: str, route_seo: Dict[str, Any]) -> List[Di
                 "@type": "Organization",
                 "name": "LocalOS",
             },
+            **({"image": route_seo["image"]} if route_seo.get("image") else {}),
         },
         {
             "@context": "https://schema.org",
@@ -269,6 +271,20 @@ def _route_article_schema(route_path: str, route_seo: Dict[str, Any]) -> List[Di
             ],
         },
     ]
+    video = route_seo.get("video")
+    if isinstance(video, dict) and video.get("youtubeId") and video.get("title"):
+        youtube_id = video["youtubeId"]
+        schema.append({
+            "@context": "https://schema.org",
+            "@type": "VideoObject",
+            "name": video["title"],
+            "description": route_seo.get("description") or "",
+            "uploadDate": route_seo.get("publishedAt") or route_seo.get("updatedAt") or "",
+            "embedUrl": f"https://www.youtube-nocookie.com/embed/{youtube_id}",
+            "contentUrl": f"https://www.youtube.com/watch?v={youtube_id}",
+            "thumbnailUrl": f"https://i.ytimg.com/vi/{youtube_id}/hqdefault.jpg",
+        })
+    return schema
 
 def _schema_for_route(route_path: str, route_seo: Dict[str, Any]) -> Any:
     explicit_schema = route_seo.get("schema")
@@ -315,10 +331,25 @@ def _render_spa_index(path: str = ""):
     routes = seo_data.get("routes") if isinstance(seo_data.get("routes"), dict) else {}
     default_seo = seo_data.get("default") if isinstance(seo_data.get("default"), dict) else {}
     route_seo = routes.get(route_path) if isinstance(routes.get(route_path), dict) else default_seo
+    public_page = load_public_page(FRONTEND_DIST_DIR, route_path)
+    if public_page is not None:
+        index_html = load_public_shell(FRONTEND_DIST_DIR, index_html)
+        route_seo = {**route_seo, "title": public_page["title"], "description": public_page["description"]}
+        if public_page.get("kind") == "article":
+            route_seo = {
+                **route_seo,
+                "ogType": "article",
+                "articleTitle": public_page["heading"],
+                "publishedAt": public_page.get("publishedAt") or "",
+                "updatedAt": public_page.get("updatedAt") or "",
+                "image": public_page.get("image") or "",
+                "video": public_page.get("video"),
+            }
+        index_html = replace_public_page_body(index_html, public_page)
     title = route_seo.get("title") or default_seo.get("title") or "LocalOS.pro - Локальное продвижение локального бизнеса"
     description = route_seo.get("description") or default_seo.get("description") or ""
     og_type = route_seo.get("ogType") or default_seo.get("ogType") or "website"
-    image = seo_data.get("image") or DEFAULT_OG_IMAGE
+    image = route_seo.get("image") or seo_data.get("image") or DEFAULT_OG_IMAGE
     canonical_url = f"{SITE_URL}{route_path if route_path != '/' else '/'}"
 
     index_html = re.sub(
@@ -1393,6 +1424,10 @@ def spa_fallback(path):
     if os.path.isfile(full_path):
         # Если файл существует в dist, отдаем его напрямую
         return send_from_directory(FRONTEND_DIST_DIR, path)
+
+    if load_public_page(FRONTEND_DIST_DIR, _normalize_content_route(path)) is not None:
+        # Reserved public pages must not be interpreted as database-backed offer slugs.
+        return _render_spa_index(path)
 
     if _is_public_offer_slug(path):
         response = send_from_directory(os.path.join(PUBLIC_FRONTEND_DIST_DIR, 'public-audit'), 'index.html')

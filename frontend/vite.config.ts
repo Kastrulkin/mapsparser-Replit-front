@@ -1,9 +1,19 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { readFileSync } from "node:fs";
+import { buildPublicPageFallbacks } from "./src/content/publicPageFallbacks";
+
+const publicPageFallbacks = (): Plugin => ({
+  name: "public-page-fallbacks",
+  generateBundle() {
+    this.emitFile({ type: "asset", fileName: "public-page-fallbacks.json", source: JSON.stringify(buildPublicPageFallbacks()) });
+    this.emitFile({ type: "asset", fileName: "localos-logo.png", source: readFileSync(path.resolve(__dirname, "src/assets/images/logo.png")) });
+  },
+});
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), publicPageFallbacks()],
   server: {
     host: '0.0.0.0',
     port: 3000,
