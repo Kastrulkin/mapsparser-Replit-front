@@ -1,5 +1,14 @@
 # Readiness decisions
 
+## D-111 — Delimiter observations do not clear an image
+
+An exact AST delimiter constant or NUL-bounded ELF marker can explain a detector
+hit without constituting a private key body. Keep that finding-level observation
+separate from whole-file/image clearance. Absence of a recognized PEM envelope
+alone proves neither safety nor revocation; retain unsupported/encoded candidates
+as unknown. Never deserialize image bytecode or use live provider validation for
+this offline triage. Preserve the original raw unknown labels and provenance.
+
 ## D-110 — Use the whole current offline run as a diagnostic, not false acceptance
 
 Retain all setup failures, skips and denied capabilities in the strict full result.

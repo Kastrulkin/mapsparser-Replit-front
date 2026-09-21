@@ -1,5 +1,12 @@
 # Production-readiness change log
 
+## Private-key structural observations — 22 September, parentd20dc1ad
+
+Evidence-only6member/17hit read-only stream,37.381s. Three delimiter observations
+are independently accepted only at detector-hit scope; no file/image clearance
+or ledger suppression. Exact helper/control/runtime metadata retained; no product
+changes, provider requests, key validation or production mutations.
+
 ## Current offline aggregate — 22 September, parent99a407bf
 
 Evidence-only package runs the explicit current-source snapshot across5487

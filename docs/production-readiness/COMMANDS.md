@@ -1,5 +1,15 @@
 # Verified commands and evidence
 
+## Image PEM structural stream — 22 September
+
+Named tmux audit-image-pem-v2 runs nativevenv Python -B
+/private/tmp/localos-image-pem-predicates-rcmSFg/image_private_key_predicates_v2.py
+--attempt v2. Exactv2b8b6e1f8/v1fe282988/private57a1ba58/map3b2f050a pins and
+wholearchive35d4 match;17hits/6members,37.381s, structural-only terminal result.
+Root controls256.495ms exit0 plus independent pure rerun/Ruff/compilation.
+Three specific delimiter observations do not close image triage. Exact sources,
+control/result metadata and manifest in task image-pem-observations-20260922.
+
 ## Current full offline v9 — 22 September
 
 Named tmux audit-current-full-v9 executed nativevenv Python -B

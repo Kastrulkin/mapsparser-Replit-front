@@ -1,0 +1,10 @@
+One independently pre-reviewed read-only pinned image export; no extraction or container execution.
+Executed v2 helper SHA b8b6e1f876d595bb8dc01c98f8224a083444d0a837a0064740f7f7d09f7509fa.
+Imported v1 only for streaming/identity functions: fe28298868e62ce1dc555a8a40ecbc90b1103a43e6eda24ccc34c082aea8d48c.
+V2 never invokes the v1 marshal deserializer, member predicate or v1 main function.
+Imported private-layer helper 57a1ba58876f35797708071ba88b2387a0e15888ac0f7034868cbb017da3a8f7 remains in support/image_private_layers_hflypi.py.
+Private mapper source 3b2f050ac7e336db62626f7c4a34a5ac27213453f0192b6871a9da8d2e7d713c remains private; redacted derivative committed in99a407bf.
+Named tmux audit-image-pem-v2 ran Python -B image_private_key_predicates_v2.py --attempt v2.
+Status completed_structural_observations in37.381s; all17candidate IDs/6members accounted.
+All before/after dependency hashes match; archive35d4 exactly matches original pinned image capture.
+Raw result deliberately retains structural_observation_only_unknown_not_cleared; independent review does not grant whole-file/image clearance.

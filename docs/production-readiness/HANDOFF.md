@@ -1,5 +1,27 @@
 # Readiness handoff
 
+## Latest checkpoint — 22 September, private-key observations retained
+
+Parentd20dc1ad, samebranch. Latest committed fulloffline package:14files,
+stageddiff e69874b3/6,914,226bytes,strict0findings15.505s,commit331.961ms.
+No push/deploy; all13foreignpaths still preserved. Leaf guard fix is a separate
+owned test-file change: code and exact causal RED/GREEN independently reviewed;
+39-case adjacent v2 is38pass/1fail with no leaked hook; restore-helper fake
+non-loopback-port case requires separate diagnosis.
+
+PEMv2 terminal37.381s: raw metadata and exactv1/v2 source snapshots are now in
+task image-pem-observations-20260922; rootcontrols256.495msPASS. All17candidate
+IDs/6members bind to archive35d4/filehashes. Threehits have narrow delimiter
+observations (candidate-ef9de94e,37cab0d2,fe4d14db), not file/image clearance;
+other14private-key hits unknown. Open206ledger is deliberately not reduced.
+Independent preexecution/runtime review PASS at this limited diagnostic scope.
+Do not rerun this export or deserialize image bytecode; no keys/bodies were saved.
+
+Next: package reviewed leafhook correction and diagnose the remaining adjacent
+restore-helper case; preserve failed attempts. Fulloffline remains4347pass/48fail/1092skip;
+broader nativeintegration/frontend/performance/security/CI/demo/review remain.
+Whole objective ACTIVE/FAIL, about13GiB free, cleanup COMPLETE.
+
 ## Latest checkpoint — 22 September, full current offline NONPASS
 
 Parent99a407bf on codex/production-readiness-20260917. Mapper package committed

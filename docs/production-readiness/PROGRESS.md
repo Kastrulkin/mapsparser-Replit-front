@@ -1,5 +1,22 @@
 # Production-readiness progress
 
+## Latest checkpoint — 22 September, bounded private-key observations
+
+- [x] Exact6member/17candidate structural stream completes37.381s, matching
+  originalarchive35d4 and all before/after hashes. No extraction/values retained.
+- [x] Independent review explains3specific hits as delimiter/string-table markers
+  only;14private-key-labelled hits remain unknown. No whole-file/image clearance.
+  All206non-transferred candidates remain in open triage,3with structural notes.
+- [x] Root pure controls256.495ms PASS; source/controls and raw metadata archived.
+- [x] Current full offline evidence committedd20dc1ad; strict6,914,226-byte diff
+  e69874b3 scanned clean15.505s; normal commit331.961ms.
+- [x] Scoped leaf-test guard code and same-harness RED/GREEN independently reviewed.
+- [x] Exact39-case adjacent v2:38pass/1fail, leaked hook absent. Remaining failure
+  is the fake restore-helper non-loopback-port case; separate diagnosis pending.
+
+No production/existing DB/provider writes, push/deploy or repeated cleanup.
+Whole goal ACTIVE/FAIL; foreign13paths remain separate.
+
 ## Latest checkpoint — 22 September, current offline aggregate complete
 
 - [x] Explicit e44bd538+two-test-overlays whole offline run:5487unique nodes,

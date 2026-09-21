@@ -1,0 +1,56 @@
+"""Pure controls for v2 structural-only private-key predicates."""
+
+import base64
+from pathlib import Path
+import runpy
+
+
+MODULE = runpy.run_path(str(Path(__file__).with_name("image_private_key_predicates_v2.py")))
+INSPECT = MODULE["inspect_member"]
+
+
+def begin():
+    return b"-" * 5 + b"BEGIN " + b"PRIVATE KEY" + b"-" * 5
+
+
+def end():
+    return b"-" * 5 + b"END " + b"PRIVATE KEY" + b"-" * 5
+
+
+def main():
+    delimiter = begin()
+    source = b"value = " + repr(delimiter.decode()).encode() + b"\n"
+    literal = INSPECT(source, [1])
+    assert literal["candidate_line_marker"] == {1: True}
+    assert literal["complete_private_pem_block_count"] == 0
+    assert literal["python_exact_delimiter_literal"] is True
+    assert literal["python_bounded_regex_template_literal"] is False
+
+    template = b"pattern = " + repr(b"(?:" + delimiter + b")").encode() + b"\n"
+    regular = INSPECT(template, [1])
+    assert regular["candidate_line_marker"] == {1: True}
+    assert regular["complete_private_pem_block_count"] == 0
+    assert regular["python_exact_delimiter_literal"] is False
+    assert regular["python_bounded_regex_template_literal"] is True
+
+    actual = begin() + b"\n" + base64.b64encode(b"synthetic-key-only-for-control") + b"\n" + end() + b"\n"
+    observed = INSPECT(actual, [1])
+    assert observed["candidate_line_marker"] == {1: True}
+    assert observed["complete_private_pem_block_count"] == 1
+    assert observed["python_exact_delimiter_literal"] is False
+    assert observed["python_bounded_regex_template_literal"] is False
+
+    elf = b"\x7fELF\0" + begin() + b"\n\0"
+    binary = INSPECT(elf, [1])
+    assert binary["is_elf"] is True
+    assert binary["elf_candidate_markers_bounded_by_nul_delimiters"] == {1: True}
+
+    not_delimited = b"\x7fELF\0" + begin() + b"\nbody"
+    unknown = INSPECT(not_delimited, [1])
+    assert unknown["elf_candidate_markers_bounded_by_nul_delimiters"] == {1: False}
+    assert delimiter.decode() not in str(literal)
+    print("v2 controls: exact source delimiter, regex template, actual PEM unknown, ELF delimiter and non-delimited unknown PASS")
+
+
+if __name__ == "__main__":
+    main()
