@@ -1,5 +1,48 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, fixture inventory accepted
+
+Parent `47ac36cf`, the independently reviewed 82-file shared-PG17 commit.
+Committed binary diff matches `a6d4f317...ab4a53`; normal duplicate hook PASS,
+strict secret scan 403,996 bytes/722.409 ms PASS. Index was empty afterwards.
+
+Collector v4 metadata-only PASS: 5,481 records/10,515 fixture definitions,
+2,322 frozen definitions, 11.987 s child+postcheck. Frozen5,720 and all source
+file inventory unchanged; default guard07d3...1150 retained; owned v4 temporary
+directory removed. No test bodies/DB/network calls. Independent runtime PASS.
+Two exact media-upload parametrizations differ only in ZIP DOS timestamps;
+source-pinned offset-aware mapping retains both raw IDs and all other bytes.
+No generic stripping of parameter IDs or assertion relaxation is permitted.
+
+Preserve rejected v1 (absent metadata URI), v2 (atime false rejection), v3
+(timestamp IDs). Exact v2/v3 sources and records are archived; exact v1 source
+bytes were not saved. Do not fabricate them or replay any existing attempt.
+Current helper hashes57492061.../29704392...; controls208.917 ms PASS. Raw
+metadata SHAe49b7a637...1dedb52; lossless gzip archive and manifest are in task
+native-fixture-inventory-hflypi-20260921/. Raw secret scan PASS.
+
+Admission planning: shared PG104; direct voice-DSN686 (673 voice fixture +13
+rules fixture); e2e10 (one Vite-backed, nine harness/error); configured-service
+probes7; residual unclassified4,674. Sum5,481. Operator-service whole28 contains
+21 of686, not another28. Accepted runtime remains2,811; metadata adds zero.
+
+Next concrete work: review/implement one exact full382 `test_operator_voice_pg.py`
+profile using existing owned PG bootstrap and temporary OPERATOR_VOICE_TEST_DSN;
+Read-only preflight:372 parameterized +10 single nodes; 382 fixture connections
+plus7 worker/concurrent/API connections give a static floor389. Proposed512
+lifetime/unchanged8 concurrent/300 s runner, no Flask child. Fixtures use unique
+voice_<32hex> schemas; add a read-only zero-leftover schema check before owned
+container removal, not an unsupported exact DDL count claim. Provider/audio
+methods are mocked. This is preflight, not an implemented or executed profile.
+No inherited DSN,
+no all686 broad profile without review, no test/fixture edits for green. Then
+finish full admission manifest and broad default-guard aggregate. Other direct
+fixture module counts and exact limits are in the metadata report.
+
+Approximately14 GiB free; 5/2/10 GiB floors. Preserve current stand, all volumes,
+foreign13 (tracked diff40afa014...4d2a4c6d1), historical whole FAIL and original
+release/secret/browser/performance/CI/demo/final gates. No production/push/deploy.
+
 ## Latest checkpoint — 21 September, shared PostgreSQL inventory closed
 
 Branch `codex/production-readiness-20260917`, parent `94759560`. All 13 new

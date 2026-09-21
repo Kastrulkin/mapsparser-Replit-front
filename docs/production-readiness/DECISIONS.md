@@ -1,5 +1,19 @@
 # Readiness decisions
 
+## D-101 — Collect fixture dependencies without executing or rewriting tests
+
+Use pytest's actual resolved fixture definitions with pinned source hashes.
+Collect-only permits a passwordless, nonconnectable metadata URI, never an
+inherited DSN or socket/libpq permission. Validate regular-file stability without
+atime, retaining other metadata and content hashes. Keep rejected attempts.
+
+Historical auto-generated DOCX/XLSX IDs embed ZIP timestamps; reconcile only
+the two exact source-bound variants with parsed timestamp offsets and equality
+of every other byte. Keep raw IDs/mapping and count no additional test passes.
+The complete metadata is evidence for admission planning, not a safety or test
+success certificate. Explicit direct-DSN/browser/provider/unknown buckets avoid
+silently dropping integration tests from the final 5,481-node accounting.
+
 ## D-100 — Close exact shared-PG nodes without broadening fixture authority
 
 Use one literal profile/process/container for each module-scoped fixture.

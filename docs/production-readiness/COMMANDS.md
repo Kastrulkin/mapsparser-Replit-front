@@ -1,5 +1,21 @@
 # Verified commands and evidence
 
+## Complete collect-only fixture inventory — 21 September
+
+Named tmux audit-native-fixture-inventory-v1/v2/v3/v4 ran successive immutable
+attempts. Only the final command is accepted; it has already run, not a retry:
+
+```sh
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_fixture_inventory_hflypi.py --attempt v4
+```
+
+v4: 5,481 records/10,515 fixture definitions/two timestamp mappings,11.987 s;
+source/guard/owned cleanup pass. Rejected v1/v2/v3:5.416/11.653/12.186 s.
+No test bodies ran. Exact old v2/v3 helper sources retained; v1 only hashes.
+Controls/Ruff/diff v3/v4:172.699/208.917 ms, exit0. Metadata raw secret scan:
+7,704,473 bytes, capture12,025.549 ms, no findings. All ran in named tmux.
+Evidence/limits: native-fixture-inventory-results-20260921.md and archive manifest.
+
 ## Remaining shared PostgreSQL scenarios — 21 September
 
 Named tmux sessions audit-native-author-daily-gate-pg-v1 and

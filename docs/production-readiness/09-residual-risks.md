@@ -2,8 +2,14 @@
 
 ## Current operational state — 21 September, after checkpoint 94759560
 
+Update after47ac36cf: full5,481 fixture metadata is now available, not a full
+runtime pass. Direct-DSN686, e2e10, configured-service7 and remaining admission
+scope need explicit accounting alongside sharedPG104. Current accepted runtime
+remains2,811. Two historical ZIP parameter IDs are reconciled only by exact
+timestamp-field mapping; raw identities remain. Approximately14 GiB free.
+
 The historical disk and denied-stand notes below are superseded: approved
-cleanup is complete, the latest host sample has about 15 GiB free, and owned
+cleanup is complete, an earlier host sample had about 15 GiB free, and owned
 synthetic PostgreSQL runs are authorized and working. All existing volumes
 and the retained 23 containers remain preserved. Recheck capacity before each
 run; no authority for production, provider effects, push or deployment follows.

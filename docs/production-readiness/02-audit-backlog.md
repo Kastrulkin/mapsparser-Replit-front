@@ -1,5 +1,16 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Complete fixture metadata — 21 September
+
+TEST-FIXTURE-METADATA-01 is locally FIX_PROVEN for the audit collector's atime
+false rejection and bounded historical timestamp-ID reconciliation. No product
+defect/fix claim. Original failures and precise source-provenance limits remain
+in task native-fixture-inventory-results-20260921.md. Controls and full5,481
+record v4 runtime pass with guard/source/owned-cleanup proof and independent
+review. The two office auto-parameter names themselves remain time-dependent;
+neither application tests nor assertions were rewritten. Metadata counts are
+not passed-test counts; runtime acceptance stays2,811/5,481, whole audit OPEN.
+
 ## Shared PostgreSQL remainder verified — 21 September
 
 All 17 previously pending nodes pass unchanged across 13 owned PG lifecycles,

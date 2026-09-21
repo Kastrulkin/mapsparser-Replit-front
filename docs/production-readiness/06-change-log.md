@@ -1,5 +1,15 @@
 # Production-readiness change log
 
+## Full fixture inventory — 21 September, parent 47ac36cf
+
+Added two audit-only collect/control helpers. Fixed absent metadata-only URI,
+atime false rejection and exact two-ID ZIP timestamp compatibility without
+changing application/tests/assertions or granting network/DB access. Retained
+all rejected attempts and available old sources. v4 validates5,481 records,
+10,515 definitions; default guard/source/owned cleanup and independent runtime
+review pass. Lossless compressed metadata plus raw failures/controls recorded.
+No additional passed tests, production changes or repeated Docker cleanup.
+
 ## Shared PG17 — 21 September, parent 94759560
 
 Added 13 literal audit-only profiles in five support files; retained global

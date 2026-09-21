@@ -1,5 +1,23 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, complete fixture metadata
+
+- [x] PG17 package committed locally as `47ac36cf`; normal hook and strict
+  staged secret scan pass; committed diff equals independently reviewed hash.
+- [x] Collect-only inventory accepted for all 5,481 frozen tests: 10,515 fixture
+  definitions; exactly two source-bound ZIP timestamp ID mappings. No test
+  bodies ran, so accepted runtime total remains 2,811/5,481.
+- [x] Fixed audit-only metadata configuration/atime/unstable-ID gates; retained
+  rejected v1/v2/v3 and exact v2/v3 sources. v4 controls/Ruff/runtime review PASS.
+- [x] Guard/source preserved; owned v4 temp removed. Raw 7.70 MB metadata secret
+  scan has no findings. Evidence: task native-fixture-inventory-results-20260921.md.
+- [ ] Next: one coherent 382-node Operator voice PG profile after bounded
+  connection-budget/provider-double review; no all-686 execution claim.
+- [ ] Full/current-source aggregate and other broad audit gates remain open.
+
+Parent `47ac36cf`; collector/evidence/docs only. Approximately 14 GiB free.
+Production, existing databases and foreign 13 paths remain untouched.
+
 ## Latest checkpoint — 21 September, remaining shared PostgreSQL scenarios
 
 - [x] All 17 remaining shared-fixture PG nodes pass in 13 isolated processes
