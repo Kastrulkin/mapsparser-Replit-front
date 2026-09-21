@@ -1,5 +1,40 @@
 # Verified commands and evidence
 
+## Tree triage and Docker context — 21 September, parent08c383e1
+
+Exact commands in task evidence/git-tree-*-20260921.json. Offline stdlib AST/JSON/
+hash/Git-object checks; no historical execution, app imports, DB, Docker or provider
+calls. Tests use direct unittest.FunctionTestCase/runpy, not pytest conftest.
+
+| Suffix | Actual result | Duration ms |
+| --- | --- | ---: |
+| priority-ast / import-key-trace | Value-free historical AST |36.760 /33.930|
+| value-shapes | Only1/42 coordinate mappings; partial |1272.218|
+| import-key-binding | Exact historical literal-to-match binding |180.632|
+| context-binding / json-context | exit0 but stdout truncated; excluded |57.845 /108.875|
+| context-binding-compact / json-context-compact |42exact mappings/contexts; complete |55.445 /97.020|
+| access-contract |10URI-component bindings; historical fifth-parameter proof |101.200|
+| digest-context |25declared file-digest contexts |69.591|
+| digest-proof | Only8/25match at selected roots |4084.476|
+| digest-history-proof |25/25match216historical blobs,8paths |376.314|
+| nondigest-proof | exit1: wrong rg executable path, not product failure |35.850|
+| nondigest-proof-verified |5exact fixture/idempotency bindings |136.712|
+| docker-context-red |1fail/2pass static checks, exit1 |103.137|
+| docker-context-green |3pass, exit0 |44.845|
+| docker-context-adjacent |14static checks/6files,10input hashes, exit0 |62.345|
+| docker-context-quality |Ruff pass; current297147byte artifact parity, Gitignore and rule predicates |220.146|
+| precommit |exit1: two staged report-prose matches; retained failed check |5094.350|
+| staged-diagnosis |scanner exit1; two matches located, exact332884byte diff hash |1618.611|
+| staged-prose-proof |initial guessed phrases did not bind; diagnostic only |124.198|
+| staged-prose-verified |two exact authored-prose predicates pass; no suppression |105.5|
+| precommit-verified |39 owned files/355707 bytes; strict scan clean;22 captures,10 input hashes,9 blob IDs verified; original statuses/foreign paths preserved |4735.097|
+
+No timeouts. Only the two named original context captures are truncated. Tree11
+remainsUNKNOWN;692findings unresolved. Static Docker correction is not fresh-image
+or existing-layer proof. Original statuses/verdict remain unchanged. Independent
+reviews: git-tree-triage-review, git-tree-nondigest-six-review and
+git-tree-docker-context-review; count semantics in git-all-refs-count-reconciliation.
+
 ## Frozen local refs secret audit — 21 September, parent7cf0cd24
 
 Exact commands: task evidence/git-all-refs-*-20260921.json. Named tmux;env-i,

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "label": "git-tree-docker-context-quality",
+  "captured_at": "2026-09-21T00:32:18.800820+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "-c",
+    "import pathlib,json,subprocess,hashlib\nenv={\"PATH\":\"/usr/bin:/bin\",\"GIT_NO_REPLACE_OBJECTS\":\"1\",\"GIT_CONFIG_NOSYSTEM\":\"1\",\"GIT_CONFIG_GLOBAL\":\"/dev/null\",\"GIT_TERMINAL_PROMPT\":\"0\"}\nroot=pathlib.Path(\".\"); path=\"tmp-google-docs-trusted-read/localos-letters-correction-20260909/document-result.json\"\nlive=(root/path).read_bytes()\nhistorical=pathlib.Path(\"/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/264e9a389db1d327e97d8220cf9917a60bc4f526\").read_bytes()\ndef git(args):\n c=subprocess.run([\"/usr/bin/git\",*args],env=env,capture_output=True,check=False)\n return c.returncode,c.stdout\n_,base=git([\"show\",\"HEAD:.dockerignore\"])\npatterns=[x.strip() for x in base.decode().splitlines() if x.strip() and not x.lstrip().startswith(\"#\")]\nrc,ignored=git([\"check-ignore\",\"--no-index\",\"--\",path])\n_,tracked=git([\"ls-files\",\"--\",path])\nr=subprocess.run([\"/usr/bin/arch\",\"-arm64\",\"/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python\",\"-I\",\"-m\",\"ruff\",\"check\",\"--no-cache\",\"--isolated\",\"tests/test_docker_build_context_contract.py\"],env=env,capture_output=True,check=False)\nprint(json.dumps({\"provider_artifact_exists\":True,\"bytes\":len(live),\"identical_to_classified_tree_blob\":live==historical,\"git_ignored\":rc==0,\"tracked_in_index\":bool(tracked),\"baseline_ignore_rule_present\":\"tmp-google-docs-*\" in patterns,\"current_ignore_rule_present\":\"tmp-google-docs-*\" in (root/\".dockerignore\").read_text().splitlines(),\"broad_copy_in_current_dockerfile\":\"COPY . .\" in (root/\"Dockerfile\").read_text().splitlines(),\"ruff_exit\":r.returncode,\"ruff_stdout\":r.stdout.decode(),\"ruff_stderr\":r.stderr.decode(),\"source_hashes\":{p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in [\".dockerignore\",\"tests/test_docker_build_context_contract.py\"]},\"no_docker_or_provider_execution\":True},indent=2))\nraise SystemExit(r.returncode)"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 220.146,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\n  \"provider_artifact_exists\": true,\n  \"bytes\": 297147,\n  \"identical_to_classified_tree_blob\": true,\n  \"git_ignored\": true,\n  \"tracked_in_index\": false,\n  \"baseline_ignore_rule_present\": false,\n  \"current_ignore_rule_present\": true,\n  \"broad_copy_in_current_dockerfile\": true,\n  \"ruff_exit\": 0,\n  \"ruff_stdout\": \"All checks passed!\\n\",\n  \"ruff_stderr\": \"\",\n  \"source_hashes\": {\n    \".dockerignore\": \"73e984302b9fc2c039b7bdc609fb5db16c90736c1d479a8129dc3cac008c78fc\",\n    \"tests/test_docker_build_context_contract.py\": \"8cae08957a220746382294ff09dc6e037b04ffd0676bfb341d27394024c2a81d\"\n  },\n  \"no_docker_or_provider_execution\": true\n}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "label": "git-tree-staged-prose-proof",
+  "captured_at": "2026-09-21T00:47:14.703039+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "-c",
+    "import json,pathlib,re,subprocess,hashlib\nreport=json.loads(pathlib.Path(\"/private/tmp/localos-tree-staged-scan-20260921.JWYzSU/redacted.json\").read_text())\ndiff=subprocess.run([\"/usr/bin/git\",\"diff\",\"--cached\",\"--binary\"],capture_output=True,check=True).stdout\nassert hashlib.sha256(diff).hexdigest()==\"977964e2c5db8185f984781ffc96ceb1b40dbedf7e778e3e75c0d09fbb8ff6f6\"\nlines=diff.decode().splitlines()\nknown=[\n\"Original scan, base metadata, statuses and historical verdict preserved. No URI/key validity, expiry, revocation or access-scope proof. Exact22 membership remains unproven despite established graph-vs-fragment counter semantics. Roots-only digest check was8/25; complete frozen path history proves25/25. Initial mapping/context stdout truncation and nonexistent-rg failure are retained, not passes. No Docker context/image/layer verification, application imports, DB, provider request, deletion, history rewrite, production, push or deploy. Nine foreign paths and unsafe-reset INCONCLUSIVE effects persist. Aggregate/restore authority pending; available6.06GiB below10GiB image floor. OverallFAIL unchanged.\",\n\"31non-secret source digests/fixtures/identifiers,10Google Docs image-access URI\"\n]\nout=[]\nfor i,f in enumerate(report,1):\n assert f[\"Secret\"]==\"REDACTED\"\n line=lines[f[\"StartLine\"]-1]; parts=f[\"Match\"].split(\"REDACTED\")\n vals=set(m.group(1) for m in re.finditer(re.escape(parts[0])+r\"(.+?)\"+re.escape(parts[1]),line)); assert len(vals)==1\n v=next(iter(vals))\n out.append({\"id\":i,\"matched_length\":len(v),\"candidate_is_substring_of_fixed_authored_prose\":[j+1 for j,s in enumerate(known) if v in s],\"whole_known_paragraph_in_diff_line\":[j+1 for j,s in enumerate(known) if s in line],\"wordlike\":bool(re.fullmatch(r\"[A-Za-z0-9_/.-]+\",v)),\"whitespace\":bool(re.search(r\"\\s\",v))})\nprint(json.dumps({\"rows\":out,\"values_withheld\":True},indent=2))"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 124.198,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\n  \"rows\": [\n    {\n      \"id\": 1,\n      \"matched_length\": 13,\n      \"candidate_is_substring_of_fixed_authored_prose\": [],\n      \"whole_known_paragraph_in_diff_line\": [],\n      \"wordlike\": true,\n      \"whitespace\": false\n    },\n    {\n      \"id\": 2,\n      \"matched_length\": 17,\n      \"candidate_is_substring_of_fixed_authored_prose\": [],\n      \"whole_known_paragraph_in_diff_line\": [],\n      \"wordlike\": true,\n      \"whitespace\": false\n    }\n  ],\n  \"values_withheld\": true\n}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

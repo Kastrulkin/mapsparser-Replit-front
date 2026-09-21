@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "label": "git-tree-docker-context-adjacent",
+  "captured_at": "2026-09-21T00:31:38.209144+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "-c",
+    "import runpy,unittest,sys,json,hashlib,pathlib\nfiles=[\"tests/test_docker_build_context_contract.py\",\"tests/test_docker_base_pins.py\",\"tests/test_docker_packaging_tools.py\",\"tests/test_docker_frontend_artifacts.py\",\"tests/test_docker_browser_permissions.py\",\"tests/test_release_constraints.py\"]\nsuite=unittest.TestSuite()\nfor path in files:\n scope=runpy.run_path(path)\n for name,value in sorted(scope.items()):\n  if name.startswith(\"test_\") and callable(value): suite.addTest(unittest.FunctionTestCase(value))\nresult=unittest.TextTestRunner(verbosity=2).run(suite)\nprint(json.dumps({\"source_sha256\":{p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in [\".dockerignore\",\"Dockerfile\",\"requirements.release.constraints.txt\",\"requirements.txt\",*files]}}))\nsys.exit(not result.wasSuccessful())"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 62.345,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"source_sha256\": {\".dockerignore\": \"73e984302b9fc2c039b7bdc609fb5db16c90736c1d479a8129dc3cac008c78fc\", \"Dockerfile\": \"14767929043264110297671eb4e54cf45b2e6bfd38740593a87e37b15525ae15\", \"requirements.release.constraints.txt\": \"1f9835cdc2cf40c714601275409d7f16ecd6c0ca6cedd963f3edebaa0176097c\", \"requirements.txt\": \"cbc339f2b4d782ff9cfe043dd02f0adb4a07531c5a16ebdcfbb4f150020eda73\", \"tests/test_docker_build_context_contract.py\": \"8cae08957a220746382294ff09dc6e037b04ffd0676bfb341d27394024c2a81d\", \"tests/test_docker_base_pins.py\": \"99424fe47e2ce1a421e2833b3841ffd054b7b0fdd4f56d85c4a1060eb048a87a\", \"tests/test_docker_packaging_tools.py\": \"6300166f48cdd0cff9eca4503c6acdd5b48a1b2286c5966d33ed1eed9bd43dad\", \"tests/test_docker_frontend_artifacts.py\": \"af91f62d6c70b2452d6ba987dd6d0e07368ab1fe4b04956ad9aa37b60b55c700\", \"tests/test_docker_browser_permissions.py\": \"14a70348e7dfefd03b5e9308000d631b483399fb8ae9ab5b2fec8778b0d0d0ff\", \"tests/test_release_constraints.py\": \"b053a1941d774ded10b1bf3fef43d7b0667290c3d02275e9e7e11acd019b65c2\"}}\n",
+  "stderr": "unittest.case.FunctionTestCase (test_google_docs_response_artifacts_are_excluded_from_build_context) ... ok\nunittest.case.FunctionTestCase (test_production_release_backups_are_excluded_from_build_context) ... ok\nunittest.case.FunctionTestCase (test_runtime_sources_and_migration_scripts_remain_build_inputs) ... ok\nunittest.case.FunctionTestCase (test_app_build_stages_use_verified_multi_platform_base_indexes) ... ok\nunittest.case.FunctionTestCase (test_base_pin_provenance_does_not_overstate_reproducibility) ... ok\nunittest.case.FunctionTestCase (test_app_pins_pip_before_resolving_application_dependencies) ... ok\nunittest.case.FunctionTestCase (test_telegram_image_inherits_the_patched_app_image_without_downgrade) ... ok\nunittest.case.FunctionTestCase (test_frontend_builder_satisfies_the_locked_node_compatibility_floor) ... ok\nunittest.case.FunctionTestCase (test_public_build_cannot_be_inherited_from_host_artifacts) ... ok\nunittest.case.FunctionTestCase (test_runtime_image_builds_and_copies_both_frontends) ... ok\nunittest.case.FunctionTestCase (test_browser_install_does_not_copy_binaries_into_a_second_chown_layer) ... ok\nunittest.case.FunctionTestCase (test_app_dockerfile_copies_and_consumes_constraints_without_disabling_dependencies) ... ok\nunittest.case.FunctionTestCase (test_every_app_intent_root_is_constrained_exactly) ... ok\nunittest.case.FunctionTestCase (test_release_constraints_match_audited_app_inventory_contract) ... ok\n\n----------------------------------------------------------------------\nRan 14 tests in 0.003s\n\nOK\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

@@ -1,0 +1,345 @@
+{
+  "parent": "08c383e14de9b555c7ea4591319ccf4c88905cf7",
+  "frozen_scan_parent": "7cf0cd24a8eec07be722084e467c8292b4f765ca",
+  "scanner_report_sha256": "94a408af752b8fc462819c280f2d958361c267d0665908de1de8bd6a3da64f20",
+  "immutable_base_metadata": "git-all-refs-tree-blobs-metadata-20260921.json",
+  "rows": [
+    {
+      "id": 1,
+      "classification": "HISTORICAL_DOC_IMAGE_ACCESS_URI_COMPONENT",
+      "group": 1,
+      "proof": [
+        "git-tree-access-contract-20260921.json"
+      ],
+      "validity": "NOT_TESTED"
+    },
+    {
+      "id": 2,
+      "classification": "HISTORICAL_DOC_IMAGE_ACCESS_URI_COMPONENT",
+      "group": 1,
+      "proof": [
+        "git-tree-access-contract-20260921.json"
+      ],
+      "validity": "NOT_TESTED"
+    },
+    {
+      "id": 3,
+      "classification": "HISTORICAL_DOC_IMAGE_ACCESS_URI_COMPONENT",
+      "group": 1,
+      "proof": [
+        "git-tree-access-contract-20260921.json"
+      ],
+      "validity": "NOT_TESTED"
+    },
+    {
+      "id": 4,
+      "classification": "HISTORICAL_DOC_IMAGE_ACCESS_URI_COMPONENT",
+      "group": 1,
+      "proof": [
+        "git-tree-access-contract-20260921.json"
+      ],
+      "validity": "NOT_TESTED"
+    },
+    {
+      "id": 5,
+      "classification": "HISTORICAL_DOC_IMAGE_ACCESS_URI_COMPONENT",
+      "group": 1,
+      "proof": [
+        "git-tree-access-contract-20260921.json"
+      ],
+      "validity": "NOT_TESTED"
+    },
+    {
+      "id": 6,
+      "classification": "HISTORICAL_DOC_IMAGE_ACCESS_URI_COMPONENT",
+      "group": 1,
+      "proof": [
+        "git-tree-access-contract-20260921.json"
+      ],
+      "validity": "NOT_TESTED"
+    },
+    {
+      "id": 7,
+      "classification": "HISTORICAL_DOC_IMAGE_ACCESS_URI_COMPONENT",
+      "group": 1,
+      "proof": [
+        "git-tree-access-contract-20260921.json"
+      ],
+      "validity": "NOT_TESTED"
+    },
+    {
+      "id": 8,
+      "classification": "HISTORICAL_DOC_IMAGE_ACCESS_URI_COMPONENT",
+      "group": 1,
+      "proof": [
+        "git-tree-access-contract-20260921.json"
+      ],
+      "validity": "NOT_TESTED"
+    },
+    {
+      "id": 9,
+      "classification": "HISTORICAL_DOC_IMAGE_ACCESS_URI_COMPONENT",
+      "group": 1,
+      "proof": [
+        "git-tree-access-contract-20260921.json"
+      ],
+      "validity": "NOT_TESTED"
+    },
+    {
+      "id": 10,
+      "classification": "HISTORICAL_DOC_IMAGE_ACCESS_URI_COMPONENT",
+      "group": 1,
+      "proof": [
+        "git-tree-access-contract-20260921.json"
+      ],
+      "validity": "NOT_TESTED"
+    },
+    {
+      "id": 11,
+      "classification": "UNKNOWN",
+      "proof": [
+        "git-tree-nondigest-six-review-20260921.md"
+      ]
+    },
+    {
+      "id": 12,
+      "classification": "NON_SECRET_TEST_FIXTURE",
+      "proof": [
+        "git-tree-nondigest-proof-verified-20260921.json"
+      ]
+    },
+    {
+      "id": 13,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 14,
+      "classification": "NON_SECRET_IMPORT_IDEMPOTENCY_IDENTIFIER",
+      "proof": [
+        "git-tree-import-key-binding-20260921.json",
+        "git-tree-import-key-trace-20260921.json",
+        "git-tree-access-contract-20260921.json"
+      ]
+    },
+    {
+      "id": 15,
+      "classification": "NON_SECRET_TEST_FIXTURE",
+      "proof": [
+        "git-tree-nondigest-proof-verified-20260921.json"
+      ]
+    },
+    {
+      "id": 16,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 17,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 18,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 19,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 20,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 21,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 22,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 23,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 24,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 25,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 26,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 27,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 28,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 29,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 30,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 31,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 32,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 33,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 34,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 35,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 36,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 37,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 38,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 39,
+      "classification": "NON_SECRET_VERIFIED_SOURCE_SHA256",
+      "proof": [
+        "git-tree-digest-history-proof-20260921.json"
+      ]
+    },
+    {
+      "id": 40,
+      "classification": "NON_SECRET_IDEMPOTENCY_FIXTURE",
+      "proof": [
+        "git-tree-nondigest-proof-verified-20260921.json"
+      ]
+    },
+    {
+      "id": 41,
+      "classification": "NON_SECRET_IDEMPOTENCY_FIXTURE",
+      "proof": [
+        "git-tree-nondigest-proof-verified-20260921.json"
+      ]
+    },
+    {
+      "id": 42,
+      "classification": "NON_SECRET_IDEMPOTENCY_FIXTURE",
+      "proof": [
+        "git-tree-nondigest-proof-verified-20260921.json"
+      ]
+    }
+  ],
+  "summary": {
+    "tree_findings": 42,
+    "historical_resource_access_uri_components": 10,
+    "distinct_resource_query_values": 1,
+    "distinct_resource_uris": 8,
+    "nonsecret_source_digests": 25,
+    "nonsecret_import_identifiers": 1,
+    "nonsecret_test_fixtures": 2,
+    "nonsecret_idempotency_fixtures": 3,
+    "tree_unknown": 1,
+    "tree_unreviewed": 0,
+    "history_unreviewed": 691,
+    "total_unresolved": 692
+  },
+  "limits": [
+    "Sidecar does not modify original scan or base metadata.",
+    "No URI/key testing, validity, expiry, revocation or access-scope proof.",
+    "Frozen local refs only; no new full history scan.",
+    "The 3117 reachable versus3095 reported scanner count compares different metrics; exact22commit membership remains unproven.",
+    "No image-layer, production, database or whole-goal security clearance."
+  ]
+}

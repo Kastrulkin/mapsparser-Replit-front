@@ -1,5 +1,37 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, tree triage and Docker context
+
+Parent08c383e14de9b555c7ea4591319ccf4c88905cf7; branch unchanged. Frozen scan
+parent stays7cf0cd24. Previous login-only turn was no progress; this package
+adds new evidence and a two-file packaging correction, not another login audit.
+
+Tree42:25source-digest equality proofs,1historical import identifier,2callback
+test fixtures,3reservation idempotency fields,10Docs image-access components
+(one repeated query value),1UNKNOWN. Sidecar git-tree-triage-20260921.json;
+original scan/base metadata/verdict unchanged.692unresolved=691history+tree11.
+Count review explains graph-vs-fragment metrics, not exact22membership.
+
+SEC-BUILD-CONTEXT-02 changes only.dockerignore and its static contract test.
+Current ignored/untracked297147byte provider response equals the historical
+blob; broadCOPY previously admitted it. RED1fail/2pass ->3pass; adjacent14pass;
+scoped Ruff passes. Independent review accepts config/static evidence only.
+No actual Docker/image/layer proof, deletion, provider URL/key request or release.
+Initial truncated mapping/context and missing-rg diagnostics are retained;
+use explicitly named compact/verified successors. See git-tree-triage-notes.
+
+Verified precommit passed in 4,735.097 ms: 39 owned files/355,707 staged bytes,
+22 captures, 10 input hashes, nine private blob IDs; strict scan clean. Initial
+two staged matches were proven authored prose and wording clarified, without
+rule suppression. Final 40-file package adds the capture and is checked again.
+
+Next: value-free history triage (691rows), prioritizing provider/debug responses;
+resolve tree11 conservatively. Do not repeat42mapping, rescan all refs or reopen
+Today only because login is available. Native aggregate/restore preparation
+remains denied pending renewed permission. Mac6352832KiB(~6.06GiB)<10GiB image
+floor. Nine foreign paths, unsafe-reset INCONCLUSIVE effects, original AC1–9/11
+FAIL, AC10PASS and overallFAIL remain. No DB/production/Docker/push/deploy/cleanup.
+
 ## Latest checkpoint — 21 September, frozen local-ref secret evidence
 
 Parent7cf0cd24a8eec07be722084e467c8292b4f765ca on

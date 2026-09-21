@@ -33,6 +33,8 @@ deploy-backups
 .agent_untracked_backup_*
 .agent
 outputs
+# Google Docs responses can include private content and image access URLs.
+tmp-google-docs-*
 
 # IDE и служебные каталоги
 .cursor

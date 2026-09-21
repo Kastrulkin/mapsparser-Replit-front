@@ -1,5 +1,15 @@
 # Residual risks — working register
 
+21 September, parent08c383e1: tree sidecar leaves692unresolved=691history+1tree;
+ten additional historical Google Docs resource-access URI components are not
+classified safe by default expiry.31tree rows are verified non-secret. New
+SEC-BUILD-CONTEXT-02 fixes a source-config gap admitting ignored provider-response
+artifacts into Docker context;14static checks do not establish fresh/existing
+image-layer absence. No provider URL/key was tested or revoked and no artifact
+was deleted. Graph/scanner counter semantics are known; exact22membership is not.
+Native aggregate/restore authority,10GiB image floor (~6.06GiB available), owner
+credential decisions, prior unsafe-reset INCONCLUSIVE effects and wholeFAIL persist.
+
 21 September, parent7cf0cd24: frozen local-ref scans completed with711history+
 42tree candidates, not clean.20priority locations corroborate known service-role/
 Wordstat material and distinguish anon claims; revocation unknown.733matches and

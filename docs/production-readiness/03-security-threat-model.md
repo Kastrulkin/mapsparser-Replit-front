@@ -4,6 +4,17 @@ Status: incomplete security assessment, not a production approval. Baseline `302
 
 ## Assets and adversaries
 
+21 September tree follow-up at 08c383e1: 42 rows adjudicated conservatively as
+31 non-secret source digests, fixtures and identifiers; 10 Google Docs image-access
+URI components (one repeated query value); one UNKNOWN. Another 691 history rows
+remain unreviewed: 692 total unresolved. No resource URL was requested; expiry,
+revocation and access scope remain untested. The current ignored provider-response
+file matches the historical blob and was not excluded from Docker's broad COPY.
+SEC-BUILD-CONTEXT-02 adds only that family exclusion with 14 static checks;
+current and previous image layers remain unverified. Graph count 3117 and scanner
+count 3095 are different metrics; exact 22-member difference remains open.
+See git-tree-triage-notes for source predicates, retained failures and limits.
+
 21 September local-ref checkpoint at7cf0cd24:89refs/3117reachable commits and
 938extra tree blobs. Redacted scans report711+42matches, both exit1.20priority
 locations corroborate2occurrences of one service-role JWT,1opaque Wordstat token

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "label": "git-tree-staged-prose-verified",
+  "captured_at": "2026-09-21T00:49:10.987945+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "-c",
+    "import json,pathlib,re,subprocess,hashlib\nreport=json.loads(pathlib.Path(\"/private/tmp/localos-tree-staged-scan-20260921.JWYzSU/redacted.json\").read_text())\ndiff=subprocess.run([\"/usr/bin/git\",\"diff\",\"--cached\",\"--binary\"],capture_output=True,check=True).stdout\nassert hashlib.sha256(diff).hexdigest()==\"977964e2c5db8185f984781ffc96ceb1b40dbedf7e778e3e75c0d09fbb8ff6f6\"\nexpected=[\"\".join([\"retains\",\"10\",\"Docs\"]),\"/\".join([\"expiry\",\"revocation\"])]\ncontexts=[\"Tree sidecar proves31non-secret values,\",\"No URI/key request,\"]\nrows=[]\nfor i,f in enumerate(report):\n assert f[\"Secret\"]==\"REDACTED\"\n line=diff.decode().splitlines()[f[\"StartLine\"]-1]; p=f[\"Match\"].split(\"REDACTED\")\n vals=set(m.group(1) for m in re.finditer(re.escape(p[0])+r\"(.+?)\"+re.escape(p[1]),line))\n assert vals=={expected[i]} and contexts[i] in line\n rows.append({\"id\":i+1,\"classification\":\"NON_SECRET_AUTHORED_PROSE\",\"exact_fixed_phrase_verified\":True,\"context_verified\":True,\"diff_line\":f[\"StartLine\"]})\nprint(json.dumps({\"rows\":rows,\"staged_diff_sha256\":hashlib.sha256(diff).hexdigest(),\"values_withheld\":True},indent=2))"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 105.462,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\n  \"rows\": [\n    {\n      \"id\": 1,\n      \"classification\": \"NON_SECRET_AUTHORED_PROSE\",\n      \"exact_fixed_phrase_verified\": true,\n      \"context_verified\": true,\n      \"diff_line\": 52\n    },\n    {\n      \"id\": 2,\n      \"classification\": \"NON_SECRET_AUTHORED_PROSE\",\n      \"exact_fixed_phrase_verified\": true,\n      \"context_verified\": true,\n      \"diff_line\": 1300\n    }\n  ],\n  \"staged_diff_sha256\": \"977964e2c5db8185f984781ffc96ceb1b40dbedf7e778e3e75c0d09fbb8ff6f6\",\n  \"values_withheld\": true\n}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

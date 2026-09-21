@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "git-tree-staged-diagnosis",
+  "captured_at": "2026-09-21T00:45:54.363397+00:00",
+  "command": [
+    "/usr/local/opt/node@22/bin/node",
+    "-e",
+    "const fs=require(\"fs\"),cp=require(\"child_process\"),crypto=require(\"crypto\"),assert=require(\"assert\");\nconst dir=fs.mkdtempSync(\"/private/tmp/localos-tree-staged-scan-20260921.\"),report=dir+\"/redacted.json\";\nfs.chmodSync(dir,0o700);\nconst diff=cp.execFileSync(\"/usr/bin/git\",[\"diff\",\"--cached\",\"--binary\"],{maxBuffer:8e6});\nconst run=cp.spawnSync(\"/usr/local/bin/gitleaks\",[\"stdin\",\"--config\",\"/private/tmp/localos-git-history-verified-20260921.qZcoBF/scanner-defaults.toml\",\"--ignore-gitleaks-allow\",\"--gitleaks-ignore-path=/dev/null\",\"--redact=100\",\"--no-banner\",\"--no-color\",\"--report-format=json\",\"--report-path\",report],{input:diff,encoding:\"utf8\",timeout:30000,maxBuffer:1e6});\nassert([0,1].includes(run.status));fs.chmodSync(report,0o600);\nconst findings=JSON.parse(fs.readFileSync(report,\"utf8\")),lines=diff.toString(\"utf8\").split(\"\\n\");\nconst rows=findings.map((f,i)=>{assert.strictEqual(f.Secret,\"REDACTED\");let p=\"unknown\";for(let n=0;n<f.StartLine&&n<lines.length;n++){if(lines[n].startsWith(\"+++ b/\"))p=lines[n].slice(6);}return{id:i+1,rule:f.RuleID,startLine:f.StartLine,endLine:f.EndLine,path:p,matchLength:f.Match.length,redactionMarkers:f.Match.split(\"REDACTED\").length-1};});\nconsole.log(JSON.stringify({dir,scannerExit:run.status,diffSha256:crypto.createHash(\"sha256\").update(diff).digest(\"hex\"),bytes:diff.length,rows},null,2));"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 1618.611,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\n  \"dir\": \"/private/tmp/localos-tree-staged-scan-20260921.JWYzSU\",\n  \"scannerExit\": 1,\n  \"diffSha256\": \"977964e2c5db8185f984781ffc96ceb1b40dbedf7e778e3e75c0d09fbb8ff6f6\",\n  \"bytes\": 332884,\n  \"rows\": [\n    {\n      \"id\": 1,\n      \"rule\": \"generic-api-key\",\n      \"startLine\": 52,\n      \"endLine\": 52,\n      \"path\": \".agent/tasks/production-readiness-20260917/evidence.json\",\n      \"matchLength\": 36,\n      \"redactionMarkers\": 1\n    },\n    {\n      \"id\": 2,\n      \"rule\": \"generic-api-key\",\n      \"startLine\": 1300,\n      \"endLine\": 1300,\n      \"path\": \"docs/production-readiness/03-security-threat-model.md\",\n      \"matchLength\": 22,\n      \"redactionMarkers\": 1\n    }\n  ]\n}\n",
+  "stderr": "git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

@@ -18,6 +18,12 @@ def test_production_release_backups_are_excluded_from_build_context() -> None:
     assert required.issubset(_patterns()), required - _patterns()
 
 
+def test_google_docs_response_artifacts_are_excluded_from_build_context() -> None:
+    # Provider responses may contain private text and bearer-capable image URLs.
+    # Git ignore rules do not protect Dockerfile's broad COPY . . instruction.
+    assert "tmp-google-docs-*" in _patterns()
+
+
 def test_runtime_sources_and_migration_scripts_remain_build_inputs() -> None:
     required_inputs = {"src", "scripts", "alembic_migrations", "requirements.txt", "requirements.release.constraints.txt", "entrypoint.sh"}
     assert required_inputs.isdisjoint(_patterns())

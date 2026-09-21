@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "label": "git-tree-priority-ast",
+  "captured_at": "2026-09-21T00:12:54.462150+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "-c",
+    "import ast,json,pathlib\np=pathlib.Path(\"/private/tmp/localos-git-history-verified-20260921.qZcoBF/tree-only-blobs/738bf1da9e62b8c511bbdb7e9451831a1b7938e1\")\ntry:\n tree=ast.parse(p.read_text(encoding=\"utf-8\"))\nexcept SyntaxError:\n raise SystemExit(\"AST parse failed; contents withheld\") from None\nclass Redact(ast.NodeTransformer):\n def visit_Constant(self,node):\n  node.value=\"<\"+type(node.value).__name__+\">\"\n  return node\n def visit_Name(self,node):\n  if len(node.id)>48: node.id=\"<long_identifier>\"\n  return node\nnodes=[node for node in ast.walk(tree) if isinstance(node,ast.stmt) and getattr(node,\"lineno\",0)==38]\nprint(json.dumps({\"blob\":\"738bf1da9e62b8c511bbdb7e9451831a1b7938e1\",\"line\":38,\"constant_values_redacted\":True,\"statements\":[ast.dump(Redact().visit(node),include_attributes=False) for node in nodes]},indent=2))"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 36.76,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\n  \"blob\": \"738bf1da9e62b8c511bbdb7e9451831a1b7938e1\",\n  \"line\": 38,\n  \"constant_values_redacted\": true,\n  \"statements\": [\n    \"Assign(targets=[Name(id='IMPORT_KEY', ctx=Store())], value=Constant(value='<str>'))\"\n  ]\n}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

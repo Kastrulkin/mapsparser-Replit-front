@@ -407,6 +407,34 @@
       "result": "89refs/35tips/3117reachable commits and938additional blobs frozen; input hashes/permissions verified. Initial inventory deliberately stopped exit-15 before scanner, retained; corrected raw-object preparation exits0. History scan711matches/399800.426ms and tree scan42matches/15844.436ms both exit1, complete/no timeout/truncation. Metadata strips all values and maps candidates to frozen inputs.20priority locations examined offline:2occurrences of one service-role JWT,1Wordstat opaque token,17anon-role JWT occurrences. Independent review accepts partial redacted evidence only. Precommit5010.376ms passes:26owned files/1874762byte staged diff clean,10captures reconciled, manifest/script hashes and original statuses/verdict unchanged;9foreign paths excluded.",
       "limits": "733remaining matches unreviewed;3117selected vs3095reported scanner count unresolved after raw/numstat/empty-commit diagnostics. No complete all-object security clearance. Decoded role/storage shape is not signature, validity, revocation or RLS proof. Remote-only/reflog/unreachable/dirty/ignored/LFS/archive/semantic-binary/runtime/image/log limits remain. No key test/rotation/history rewrite/deletion/provider/DB/Docker/push/deploy. Original statuses/historical verdict/nine foreign paths and prior unsafe-reset INCONCLUSIVE effects preserved; aggregate/restore still needs renewed permission and image floor remains unmet."
     },
+    "subsequent_tree_secret_triage": {
+      "parent_commit": "08c383e14de9b555c7ea4591319ccf4c88905cf7",
+      "frozen_scan_parent": "7cf0cd24a8eec07be722084e467c8292b4f765ca",
+      "findings": ["SEC-HISTORY-01", "SEC-BUILD-CONTEXT-02"],
+      "scope": "Value-free adjudication of 42 tree-only matches and narrow Docker provider-artifact exclusion; no application change",
+      "proof": [
+        "evidence/git-tree-triage-20260921.json",
+        "evidence/git-tree-context-binding-compact-20260921.json",
+        "evidence/git-tree-json-context-compact-20260921.json",
+        "evidence/git-tree-import-key-binding-20260921.json",
+        "evidence/git-tree-import-key-trace-20260921.json",
+        "evidence/git-tree-access-contract-20260921.json",
+        "evidence/git-tree-digest-history-proof-20260921.json",
+        "evidence/git-tree-nondigest-proof-verified-20260921.json",
+        "evidence/git-tree-docker-context-red-20260921.json",
+        "evidence/git-tree-docker-context-green-20260921.json",
+        "evidence/git-tree-docker-context-adjacent-20260921.json",
+        "evidence/git-tree-docker-context-quality-20260921.json",
+        "evidence/git-tree-precommit-verified-20260921.json",
+        "evidence/git-tree-triage-notes-20260921.md",
+        "evidence/git-tree-triage-review-20260921.md",
+        "evidence/git-tree-nondigest-six-review-20260921.md",
+        "evidence/git-tree-docker-context-review-20260921.md",
+        "evidence/git-all-refs-count-reconciliation-20260921.md"
+      ],
+      "result": "42 exact tree bindings: 25 verified historical source digests, one historical import idempotency identifier, two test fixtures, three reservation idempotency fields, ten historical Google Docs image-access URI components (one repeated query value), one UNKNOWN. 692 unresolved findings = 691 unreviewed history plus tree11. SEC-BUILD-CONTEXT-02 adds tmp-google-docs-* to .dockerignore: current ignored/untracked 297147-byte provider response matches the historical blob and broad COPY previously lacked the exclusion. Direct static RED1fail/2pass -> GREEN3pass; six-file adjacent14pass; scoped Ruff and input hashes pass. Independent configuration review accepts the narrow fix only.",
+      "limits": "Original scan, base metadata, statuses and historical verdict preserved. No URI/key validity, expiry, revocation or access-scope proof. Exact22 membership remains unproven despite established graph-vs-fragment counter semantics. Roots-only digest check was8/25; complete frozen path history proves25/25. Initial mapping/context stdout truncation and nonexistent-rg failure are retained, not passes. No Docker context/image/layer verification, application imports, DB, provider request, deletion, history rewrite, production, push or deploy. Nine foreign paths and unsafe-reset INCONCLUSIVE effects persist. Aggregate/restore authority pending; available6.06GiB below10GiB image floor. OverallFAIL unchanged."
+    },
     "foreign_worktree_paths_excluded": 9,
     "historical_verdict_file": "verdict.json",
     "historical_verdict_reviewed_commit": "2f224f051e3b3487a2c0d529d40b547c414ccb52"
@@ -736,10 +764,14 @@
         "evidence/git-all-refs-history-20260921.json",
         "evidence/git-all-refs-tree-blobs-20260921.json",
         "evidence/git-all-refs-priority-triage-20260921.json",
-        "evidence/git-all-refs-review-20260921.md"
+        "evidence/git-all-refs-review-20260921.md",
+        "evidence/git-tree-triage-20260921.json",
+        "evidence/git-tree-triage-notes-20260921.md",
+        "evidence/git-tree-triage-review-20260921.md",
+        "evidence/git-tree-docker-context-review-20260921.md"
       ],
       "gaps": [
-        "New7cf0cd24 frozen local-ref scans complete with711history+42tree candidates, both exit1.20priority locations corroborate2service-role/1Wordstat/17anon-role material only;733matches unreviewed.3117selected vs3095scanner commits remains unreconciled; raw/numstat/empty-commit diagnostics do not prove full coverage. No signature/validity/revocation/RLS proof, no remote/reflog/unreachable/LFS/archive/semantic-binary/runtime/image/log clearance. This is bounded additional evidence, not AC6PASS.",
+        "Frozen 7cf0cd24 scans retain 711 history and 42 tree candidates with exit 1. Twenty priority history locations corroborate two service-role, one Wordstat and 17 anon-role occurrences. Tree sidecar classifies 31 values as non-secret, retains 10 Docs image-access URI components and one UNKNOWN; 692 unresolved = 691 history plus tree row 11. Graph count 3117 and scanner count 3095 are different metrics; exact 22-member difference remains unproven. SEC-BUILD-CONTEXT-02 corrects provider-artifact exclusion with static proof only. No signature, validity, expiry, revocation, RLS, image, layer, runtime, log or all-object security clearance. AC6 remains FAIL.",
         "Strict full committed-source scan at334c9d4b has101 classified non-secret matches; the131-commit branch delta has7 classified synthetic/prose matches. Neither replaces all-ref history, runtime/image/log inspection or historical revocation. Current frontend528-entry lock audit returns0advisories;528 license declarations have explicit provenance. Private macOS133-distribution strict PyPI scan returns0advisories/0skips with exact audited/installed parity. Declaration inventory is not legal compliance or installed/release artifact integrity. Current image/layer/log/OS/embedded-native/AMD64/bot scans remain open. Historical privileged credential revocation and PyMuPDF license basis await owner confirmation. No live credential test, key rotation or history rewrite is authorized. Targeted AI/role/SSRF controls remain bounded evidence, not universal tool isolation proof."
       ],
       "historical_checkpoint": {

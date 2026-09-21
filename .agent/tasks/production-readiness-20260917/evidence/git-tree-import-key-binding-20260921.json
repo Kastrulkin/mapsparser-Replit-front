@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "label": "git-tree-import-key-binding",
+  "captured_at": "2026-09-21T00:20:36.772629+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "-c",
+    "import ast,json,pathlib,re,hashlib\nbase=pathlib.Path(\"/private/tmp/localos-git-history-verified-20260921.qZcoBF\")\nblob=\"738bf1da9e62b8c511bbdb7e9451831a1b7938e1\"\nraw=(base/\"tree-only-blobs\"/blob).read_bytes()\ntry:\n tree=ast.parse(raw.decode(\"utf-8\"))\nexcept SyntaxError:\n raise SystemExit(\"AST parse failed; content withheld\") from None\nimports=[{\"module\":n.module,\"names\":[x.name for x in n.names]} for n in ast.walk(tree) if isinstance(n,ast.ImportFrom) and any(x.name==\"import_report\" for x in n.names)]\nassign=[n for n in ast.walk(tree) if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id==\"IMPORT_KEY\" for t in n.targets)]\nassert len(assign)==1 and isinstance(assign[0].value,ast.Constant) and isinstance(assign[0].value.value,str)\nv=assign[0].value.value\nreport=json.loads((base/\"tree-blobs-redacted.json\").read_text())\nf=[x for x in report if pathlib.Path(x[\"File\"]).name==blob and x[\"StartLine\"]==38]\nassert len(f)==1 and f[0][\"Secret\"]==\"REDACTED\"\nf=f[0]\nline=raw.decode(\"utf-8\").splitlines()[37]\nredacted=line.replace(v,\"REDACTED\")\nprint(json.dumps({\"blob\":blob,\"source_sha256\":hashlib.sha256(raw).hexdigest(),\"assignment_line\":assign[0].lineno,\"import_report_origin\":imports,\"literal_shape\":{\"length\":len(v),\"human_identifier\":bool(re.fullmatch(r\"[a-z][a-z0-9_-]+\",v)),\"has_batch_date\":bool(re.search(r\"20[0-9]{6}\",v)),\"starts_riderra\":v.startswith(\"riderra\"),\"has_auth_prefix\":bool(re.match(r\"(?i)(eyJ|ghp_|sk-|bearer)\",v))},\"binding\":{\"line_occurrences\":line.count(v),\"match_redaction_in_redacted_line\":f[\"Match\"] in redacted,\"match_trim_redaction_in_redacted_line\":f[\"Match\"].strip() in redacted,\"match_newlines\":f[\"Match\"].count(\"\\n\"),\"match_length\":len(f[\"Match\"]),\"source_line_length\":len(line),\"start_column\":f[\"StartColumn\"],\"end_column\":f[\"EndColumn\"]},\"values_withheld\":True},indent=2))"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 180.632,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\n  \"blob\": \"738bf1da9e62b8c511bbdb7e9451831a1b7938e1\",\n  \"source_sha256\": \"0116e5735a9ada5f6b0410ae1090ebe7a5056740092d5144d76d7760b9a0b158\",\n  \"assignment_line\": 38,\n  \"import_report_origin\": [\n    {\n      \"module\": \"services.prospecting_research_service\",\n      \"names\": [\n        \"import_report\",\n        \"parse_report\",\n        \"preview_report\"\n      ]\n    }\n  ],\n  \"literal_shape\": {\n    \"length\": 46,\n    \"human_identifier\": true,\n    \"has_batch_date\": false,\n    \"starts_riderra\": true,\n    \"has_auth_prefix\": false\n  },\n  \"binding\": {\n    \"line_occurrences\": 1,\n    \"match_redaction_in_redacted_line\": true,\n    \"match_trim_redaction_in_redacted_line\": true,\n    \"match_newlines\": 0,\n    \"match_length\": 23,\n    \"source_line_length\": 61,\n    \"start_column\": 2,\n    \"end_column\": 62\n  },\n  \"values_withheld\": true\n}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

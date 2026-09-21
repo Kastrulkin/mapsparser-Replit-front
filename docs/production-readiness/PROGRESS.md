@@ -1,5 +1,26 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, tree triage and Docker context
+
+- [x] Previous login-only turn was no progress; original objective reread and
+  current HEAD08c383e1/foreign paths/disk revalidated before useful local work.
+- [x] All42tree rows mapped:31non-secret (25verified source digests,6fixtures/
+  identifiers),10historical Docs access-URI components,1UNKNOWN.692findings
+  remain unresolved including691history rows; no blanket secret clearance.
+- [x] SEC-BUILD-CONTEXT-02: exclude the existing ignored Google Docs response
+  family from Docker context. RED1fail/2pass becomes3pass;14adjacent static
+  checks and scoped Ruff pass. Independent configuration review accepted.
+- [x] Verified precommit: 39 owned files, 355,707 staged bytes, strict secret scan
+  clean; 22 captures and 10 input hashes reconciled. Initial prose matches remain
+  documented as reviewed false positives, not suppressed scanner findings.
+- [ ] Fresh image/context/layer verification remains open; no Docker executed.
+- [ ] Next: reuse reports for691history rows and tree11; prioritize provider
+  debug captures. Exact22commit counter difference and owner revocation remain.
+
+Only.dockerignore and one static test change outside evidence/docs. Nine foreign
+paths preserved; Mac~6.06GiB below10GiB floor. Native aggregate/restore authority,
+unsafe-reset INCONCLUSIVE effects and original wholeFAIL remain unchanged.
+
 ## Latest checkpoint — 21 September, frozen local Git history
 
 - [x] Previous turn was progress: local commit7cf0cd24; original objective reread.

@@ -1,5 +1,18 @@
 # Production-readiness change log
 
+## Tree secret triage and Docker artifact fence — 21 September, parent08c383e1
+
+SEC-BUILD-CONTEXT-02 adds tmp-google-docs-* to.dockerignore and one static
+regression assertion: ignored provider responses could enter broadCOPY context.
+RED1fail/2pass ->3pass;14adjacent static checks and Ruff pass; independent review
+accepts only configuration proof. No file deletion or Docker/image verification.
+
+Value-free42row sidecar identifies31non-secrets,10historical resource-access URI
+components and1UNKNOWN;692history/tree matches remain unresolved. Exact source
+hashes and historical AST avoid broad key-name allowlists. Failed/truncated
+diagnostics retained; counter semantics clarified without claiming exact22
+membership. No application/provider/DB/production change or readiness promotion.
+
 ## Frozen local-ref secret evidence — 21 September, parent7cf0cd24
 
 No application changes. Offline inventory support/evidence covers frozen89refs/

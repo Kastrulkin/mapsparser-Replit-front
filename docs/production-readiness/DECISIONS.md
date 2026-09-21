@@ -1,5 +1,19 @@
 # Readiness decisions
 
+## D-070 — Classify resource URLs by their contract; fence packaging separately
+
+An image contentUri can carry access even when it is not an API key. Preserve
+that distinction; documented default expiry is not proof of actual expiry or
+revocation. Verify suspected digests against historical source bytes and import
+identifiers against the corresponding historical callee. Leave uncertain rows
+UNKNOWN. Do not change raw scan outcomes or use counts to imply security clearance.
+
+Git ignore and Docker context are separate boundaries. Exclude the confirmed
+provider-response artifact family from Docker without deleting user files.
+Static contract tests establish the configuration correction only; image/layer
+absence requires a later permitted build/inspection. Keep failed/truncated
+diagnostics and exact successful successors distinct.
+
 ## D-069 — Separate frozen-ref scanning from security clearance
 
 Use immutable commit IDs plus mapped tree-only blobs; no fetch, historical code
