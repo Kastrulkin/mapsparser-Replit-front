@@ -1,5 +1,29 @@
 # Verified commands and evidence
 
+## Authorized isolated lane hfLYPi — 21 September
+
+Principal check commands/stdout/stderr and capture hashes are archived under task evidence
+`isolated-hflypi-20260921/`. Named tmux sessions ran image, restore, migration,
+dependency preparation and web lifecycle checks. Replaying creation scripts
+against existing targets is forbidden; use the retained captures/readonly mode.
+
+| Capture | Result |
+| --- | --- |
+| `evidence/canonical-image-build.json` + `.log` | ARM64 canonical browser-enabled build exit0,405.959s |
+| `evidence/image-runtime-smoke.json` | dependency/nonroot-Chromium/private-assets3/3 |
+| `evidence/migration-checks.json` | same-head upgrade,2schema checks,new native migrated base; exit0 |
+| `evidence/synthetic-restore-hflypi.json` | completed restore read-only logical/schema/sequence comparison PASS |
+| `evidence/web-runtime.json` | canonical Gunicorn4HTTP200; SIGTERM exit0,2.661s; prior bare Python137 retained |
+| `native/evidence/metadata-parity.json` |133distributions,101exactconstraints,no mismatch |
+| `native/evidence/frontend-npm-ci.json` | failed before installation; duplicate `/dev/null` npm config |
+
+Support files ending `hflypi.py` and `isolated_image_build_20260921.py` preserve
+the preparation/verification logic. Frontend prep v3 was revised but remains
+unexecuted below its6GiB start floor. No full aggregate command/result exists
+for this source yet. No production or existing-DB mutation, image/volume
+deletion, push or deployment is included. See result notes for cache records,
+backup identity, retained resources and platform/ingress/guard limitations.
+
 ## Fresh frontend and request-observation checks — 21 September
 
 Exact commands and outputs are in existing task `evidence/` JSON captures:

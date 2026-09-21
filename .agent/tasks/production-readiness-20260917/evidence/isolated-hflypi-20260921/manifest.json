@@ -1,0 +1,221 @@
+{
+  "source_revision": "99849935de26e2932613f2a73cf515dff49104a1",
+  "private_root": "/private/tmp/localos-readiness-20260921.hfLYPi",
+  "captures": [
+    {
+      "path": "compose.audit.yaml",
+      "bytes": 3222,
+      "sha256": "43b2e139549984b43f2718b5fb86d9eb7d064a529a55fb28d59e3b46ff05a55b"
+    },
+    {
+      "path": "evidence/canonical-image-build.json",
+      "bytes": 7761,
+      "sha256": "bcb87c07a501f2e850e8aabc7ea3e7ebf4c55e3e2d437515672faabf7812c9c8"
+    },
+    {
+      "path": "evidence/canonical-image-build.log",
+      "bytes": 156840,
+      "sha256": "223520c9d55023c446bcc9a592e1aff29f824ea17540d72c4197b336206881ba"
+    },
+    {
+      "path": "evidence/image-supervisor.log",
+      "bytes": 1407,
+      "sha256": "bc5e683c65967c2556c1e78bfa26da24cc52fa814b061a52936acbd90728afdf"
+    },
+    {
+      "path": "evidence/image-runtime-smoke.json",
+      "bytes": 7120,
+      "sha256": "a0356c7ea3514c3f0c88c37441ec71b8385262f64ddebeb1b908c0d5ecbc3adf"
+    },
+    {
+      "path": "evidence/image-runtime-supervisor.log",
+      "bytes": 50,
+      "sha256": "0451ac3bc54ad3c75d7da14e33dbdb7f9951203a2c881b8da3068c0cd7a0f72e"
+    },
+    {
+      "path": "evidence/postgres-start.log",
+      "bytes": 651,
+      "sha256": "cf30bbba65bc0d71284ba2c8bdca440594f3db78293f22f10d2b83f10338df99"
+    },
+    {
+      "path": "evidence/migrate-source.log",
+      "bytes": 263,
+      "sha256": "6847938ff5bb64e398455be18fbb8949229173b1a57877b163d1f626e7c800f3"
+    },
+    {
+      "path": "evidence/migration-checks.json",
+      "bytes": 3302,
+      "sha256": "7187e5d4778b50a710d8ac3f4955fee1b8822117bd9781128e72f21b170e20ab"
+    },
+    {
+      "path": "evidence/migration-checks-supervisor.log",
+      "bytes": 127,
+      "sha256": "523520baa9cb8c7f5f4ab4043a71782152895ccdaa116403f230ca01befce9fb"
+    },
+    {
+      "path": "evidence/synthetic-restore-supervisor.log",
+      "bytes": 2019,
+      "sha256": "eb621e9d2d4fa205a9743082337d7b4c18384c5db9251595d354694c6fa2479e"
+    },
+    {
+      "path": "evidence/synthetic-restore-supervisor-v2.log",
+      "bytes": 101,
+      "sha256": "ad3b075c8690687b6eb14ff8debb8d64bb2460bed03832390ecde4e38e18f3fb"
+    },
+    {
+      "path": "evidence/synthetic-restore-compare.log",
+      "bytes": 125,
+      "sha256": "d3d158236b7f4fc83da6e688fc2b89fb8a1c1dd5eee423cac7583638069b3d02"
+    },
+    {
+      "path": "evidence/synthetic-restore-hflypi.json",
+      "bytes": 2867,
+      "sha256": "b6cce211ff1f1ff7a7323efdd9b023294e47af8a838e1ed008b292f8783a6092"
+    },
+    {
+      "path": "evidence/app-runtime-http.json",
+      "bytes": 1410,
+      "sha256": "81f0a9d72584e395a4a4f1c64c0f3750171c439d6f2f424b7e2d7afeeac8dc57"
+    },
+    {
+      "path": "evidence/app-start.log",
+      "bytes": 636,
+      "sha256": "3fdde30ae925e6716bd72897235962fe94a0fc84246947ed23c6e99f01f74c4a"
+    },
+    {
+      "path": "evidence/web-start.log",
+      "bytes": 636,
+      "sha256": "a1111027e28ae4ca632e3544b5eeab9ea5897304e939f89300fd6a08eeb506af"
+    },
+    {
+      "path": "evidence/web-runtime.json",
+      "bytes": 7594,
+      "sha256": "b90cb6dfc984c8d3fa3d934aa5da0e99fdb24c121558e6300fa0d90a751cf81e"
+    },
+    {
+      "path": "evidence/web-runtime-supervisor.log",
+      "bytes": 272,
+      "sha256": "7bed245aaa39adce452a7156b35afcc9b97d6b0164f643463d944ea1a9fd96b6"
+    },
+    {
+      "path": "evidence/old-build-context-cache-prune.log",
+      "bytes": 10,
+      "sha256": "56b5a5b39938f72af43817fb7c96dbdc435dd7065d28db564dcb357f06febf2c"
+    },
+    {
+      "path": "evidence/old-build-copy-cache-prune.log",
+      "bytes": 126,
+      "sha256": "ed67a186f216af624b418183e0b67757af72b0f3dbe133195cb4a78e7764f552"
+    },
+    {
+      "path": "evidence/old-build-copy-parents-cache-prune.log",
+      "bytes": 529,
+      "sha256": "05413ac36bf327751c1f118ae5cc36d92d35548d3aaa3f85964eca3fa3e497ff"
+    },
+    {
+      "path": "evidence/old-build-dependency-cache-prune.log",
+      "bytes": 1477,
+      "sha256": "956fe4beeab476bfbe0e4b2069c98db40f3d158cdf81b7c1ba44a94645862f80"
+    },
+    {
+      "path": "evidence/completed-frontend-cache-prune.log",
+      "bytes": 387,
+      "sha256": "56bfcd6194fb7cb368460d4e1dc082bc17619d1d197a3d9130e0702a2f8e523a"
+    },
+    {
+      "path": "native/evidence/bootstrap.json",
+      "bytes": 3641,
+      "sha256": "ff7f43797d29b0a27927c42f148a750a59faf9b3f064422d94aebcc4f9bb10b1"
+    },
+    {
+      "path": "native/evidence/build-googlemaps.json",
+      "bytes": 1720,
+      "sha256": "bbb0e97c5e3f834fac63016c52547a62ad4bc130a06ca0ae15cba9895b7f854e"
+    },
+    {
+      "path": "native/evidence/build-pyaes.json",
+      "bytes": 1672,
+      "sha256": "2ca05c03c7a3cd7b601da330e44126708c8c30a5a65e7d169879d39b0807ed2f"
+    },
+    {
+      "path": "native/evidence/download-googlemaps.json",
+      "bytes": 248,
+      "sha256": "6ffb87e28eea9c3e47f3c871b2c24ed6b27505b7c4bb66d4ce2acdddc2975458"
+    },
+    {
+      "path": "native/evidence/download-pyaes.json",
+      "bytes": 226,
+      "sha256": "0387a3328c21a206d5f79994a7d9f9a07cc77a4317a75ba1d90ae20e3479d849"
+    },
+    {
+      "path": "native/evidence/frontend-browser-failure-1789996025863347000.json",
+      "bytes": 62,
+      "sha256": "b9f745aab240d916126b4979c500fc4e1d3427545c7cd80af73ea10b09d43545"
+    },
+    {
+      "path": "native/evidence/frontend-browser-failure.json",
+      "bytes": 78,
+      "sha256": "07a5ac9ff19197fb8c5c4d5de2a209a686c61d4ad31c2106ec77702775f0b9d8"
+    },
+    {
+      "path": "native/evidence/frontend-browser-preflight.json",
+      "bytes": 460,
+      "sha256": "28750505dada3612f4446006a7ff1a0359463fe9836c1b4a4b36268e1cd6a805"
+    },
+    {
+      "path": "native/evidence/frontend-browser-supervisor-v2.log",
+      "bytes": 1036,
+      "sha256": "0623e3a1cc9d1d3e8ed91fb229df69f8af9b1dcfd84c392257b6e43d62ec7f03"
+    },
+    {
+      "path": "native/evidence/frontend-node-version.json",
+      "bytes": 583,
+      "sha256": "186a1411d9269a679bc98a255c3a43e2f62183efe6d48bc5f1319008948c1ee0"
+    },
+    {
+      "path": "native/evidence/frontend-npm-ci.json",
+      "bytes": 746,
+      "sha256": "66ecfc3da2b7e3a7dbbc9e058d04cf039a301d50e5b8667bb119d2c492dad2d9"
+    },
+    {
+      "path": "native/evidence/googlemaps-build-prerequisite.json",
+      "bytes": 2130,
+      "sha256": "88b112d55e6be14b2ff5681ba9c44c32f4ed9fb85773f8fee31dc0fd678255ae"
+    },
+    {
+      "path": "native/evidence/install-current-manifests.json",
+      "bytes": 47762,
+      "sha256": "3240ec7c672156506abab0e78d9b7bcab4090faf1e7f5eb1603531b396707862"
+    },
+    {
+      "path": "native/evidence/metadata-parity.json",
+      "bytes": 231,
+      "sha256": "ec54306a3750ef57bdba8f12c6ba2d5b4bb1bdd1d5c4773dee7b4c7af2bfc405"
+    },
+    {
+      "path": "native/evidence/pip-check.json",
+      "bytes": 775,
+      "sha256": "4bebc2149ed7bd91a12716901038ede02ee2880baeefbd3b73816d0772937149"
+    },
+    {
+      "path": "native/evidence/resolved-distributions.json",
+      "bytes": 9404,
+      "sha256": "9c4d5673714c252ca3af19c5ae442790e804aa6c26d6944ffc400bae0380f03d"
+    },
+    {
+      "path": "native/evidence/source-and-capacity.json",
+      "bytes": 838,
+      "sha256": "e5f92f515622577b908bd92f8ba90466eab0e4503b6f72cfc07e196df9b752c7"
+    },
+    {
+      "path": "native/evidence/venv.json",
+      "bytes": 612,
+      "sha256": "79fbc91f823a2acd78ca7d6d77cfbf9d1f1ca81626dc4339d579c8ae3a1f5db0"
+    }
+  ],
+  "synthetic_backup_retained_outside_git": {
+    "path": "/private/tmp/localos-readiness-20260921.hfLYPi/synthetic-restore-hflypi-source.sql.gz",
+    "bytes": 75875,
+    "sha256": "1eeee953d28d5769bc40458a6a6efbb103dd27830e06258b46b59d7f8570daf1"
+  }
+}

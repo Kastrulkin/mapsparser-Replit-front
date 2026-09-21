@@ -1,0 +1,42 @@
+{
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+    "-m",
+    "pip",
+    "--isolated",
+    "--disable-pip-version-check",
+    "--no-input",
+    "--no-cache-dir",
+    "--keyring-provider",
+    "disabled",
+    "wheel",
+    "--no-index",
+    "--no-deps",
+    "--no-build-isolation",
+    "--wheel-dir",
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/reviewed-wheels",
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/tmp/pyaes-1.6.1.tar.gz"
+  ],
+  "duration_ms": 647.666,
+  "environment_keys": [
+    "NETRC",
+    "NO_COLOR",
+    "PATH",
+    "PIP_CONFIG_FILE",
+    "PIP_DISABLE_PIP_VERSION_CHECK",
+    "PYTHONDONTWRITEBYTECODE",
+    "PYTHONNOUSERSITE",
+    "PYTHON_DOTENV_DISABLED",
+    "TMPDIR",
+    "XDG_CACHE_HOME"
+  ],
+  "exit_code": 0,
+  "free_bytes_after": 9257865216,
+  "label": "build-pyaes",
+  "stderr": "",
+  "stderr_truncated": false,
+  "stdout": "Processing ./tmp/pyaes-1.6.1.tar.gz\n  Preparing metadata (pyproject.toml): started\n  Preparing metadata (pyproject.toml): finished with status 'done'\nBuilding wheels for collected packages: pyaes\n  Building wheel for pyaes (pyproject.toml): started\n  Building wheel for pyaes (pyproject.toml): finished with status 'done'\n  Created wheel for pyaes: filename=pyaes-1.6.1-py3-none-any.whl size=26422 sha256=f4b080795eac8bfd06cd663a27361dbecf31b052b8d61a5355e70d5c877202b2\n  Stored in directory: /private/tmp/localos-readiness-20260921.hfLYPi/native/tmp/pip-ephem-wheel-cache-9t5o_rkq/wheels/ee/21/8b/019f53b1d4d3b9bdc2eaa4d892bd470491cf520deff395baf5\nSuccessfully built pyaes\n",
+  "stdout_truncated": false
+}

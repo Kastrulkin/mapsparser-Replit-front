@@ -1,5 +1,41 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, isolated recovery completed
+
+The user approved a NEW local synthetic lane; the historical unanswered
+permission request below is no longer current for this lane. Production,
+pre-existing local DBs/volumes/containers and provider actions remain excluded.
+Frozen source is `99849935`, not the dirty working tree. Do not rebuild or
+repeat CREATE DATABASE/restore: completed resources and evidence are retained.
+
+Private runtime `/private/tmp/localos-readiness-20260921.hfLYPi`; Compose
+`compose.audit.yaml`; Docker project `localos-readiness-hflypi`; owner label
+`localos.audit.owner=production-readiness-20260917-hfLYPi`. PG16 is healthy,
+loopback35418. The image `localos-audit-20260921:99849935-hflypi` passes ARM64
+build/nonroot/Chromium/assets/dependencies. Gunicorn HTTP and graceful exit pass;
+bare Python command exit137 remains a distinct limitation. Web containers are
+stopped; no existing resources were removed. Synthetic DBs and backup retained.
+
+Task evidence: `isolated-hflypi-results-20260921.md` and the 42-capture directory
+`isolated-hflypi-20260921/manifest.json`. Actual restore's complete logical rows,
+schema and sequence checks pass; original dump-order comparator failure and
+PATH/npm preparation errors remain in raw captures. Independent reviewer
+accepted image/migrations/restore, not whole-project or later Gunicorn proof.
+
+Fresh native venv exists with 133 distributions/all101pins matched. Frontend
+node_modules/private Chromium do not yet exist. Support prep v3 was revised for duplicate
+npm `/dev/null` config paths; not executed. Native guard/probe support is marked
+DRAFT/UNEXECUTED: static review rejected stripped-child environment propagation.
+It was not installed in the frozen archive. Need one reviewed child propagation
+policy, then negative/positive/child probes before fresh collection or pytest.
+Last disk ~4.58 GiB, below6GiB prep and5GiB aggregate floors. Recheck capacity
+before continuation, preserve all earlier evidence and never relax the floors
+to obtain a green run. Old native counts cannot certify this source.
+
+No production change, push/deploy, application-code change or goal-controller
+resume. Keep the13 foreign paths and original spec/verdict/problems. Whole-goal
+FAIL and remaining security/performance/real-API/CI gates remain explicit.
+
 ## Latest checkpoint — 21 September, fresh tests packaged; isolated runtime pending
 
 Local commits: `8137f570` (frontend test-harness timing and evidence) and

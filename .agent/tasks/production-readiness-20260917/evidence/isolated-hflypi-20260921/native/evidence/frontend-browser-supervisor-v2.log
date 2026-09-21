@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/.agent/tasks/production-readiness-20260917/support/native_frontend_browser_hflypi.py", line 162, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/.agent/tasks/production-readiness-20260917/support/native_frontend_browser_hflypi.py", line 131, in main
+    capture("frontend-npm-ci", [str(NPM), "ci", "--legacy-peer-deps", "--no-audit", "--no-fund"], node_env, SOURCE_FRONTEND)
+  File "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/.agent/tasks/production-readiness-20260917/support/native_frontend_browser_hflypi.py", line 76, in capture
+    raise RuntimeError(f"{label} failed with exit code {process.returncode}: {stopped_reason}")
+RuntimeError: frontend-npm-ci failed with exit code 1: None

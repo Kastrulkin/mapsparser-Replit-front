@@ -1,0 +1,5 @@
+time="2026-09-21T16:07:43+03:00" level=warning msg="Found orphan containers ([localos-readiness-hflypi-migrate-native localos-readiness-hflypi-check-restored localos-readiness-hflypi-check-source localos-readiness-hflypi-migrate-repeat localos-readiness-hflypi-migrate-source]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container localos-readiness-hflypi-web-1 Creating 
+ Container localos-readiness-hflypi-web-1 Created 
+ Container localos-readiness-hflypi-web-1 Starting 
+ Container localos-readiness-hflypi-web-1 Started 

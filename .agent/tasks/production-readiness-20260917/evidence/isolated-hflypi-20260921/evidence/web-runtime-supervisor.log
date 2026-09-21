@@ -1,0 +1,1 @@
+{"passed": true, "state": {"Status": "exited", "Running": false, "Paused": false, "Restarting": false, "OOMKilled": false, "Dead": false, "Pid": 0, "ExitCode": 0, "Error": "", "StartedAt": "2026-09-21T13:07:43.572724924Z", "FinishedAt": "2026-09-21T13:13:40.726711715Z"}}

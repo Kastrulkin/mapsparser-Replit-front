@@ -1,0 +1,1 @@
+Synthetic restore verification failed: data dumps differ after removing only pg_dump restrict tokens

@@ -1,5 +1,21 @@
 # Readiness decisions
 
+## D-085 — Execute the approved synthetic lane without broadening its authority
+
+Use the user's explicit new approval for uniquely owned test containers,
+volumes, migrations and synthetic backup/restore. Keep production and existing
+local data/resources outside scope. Freeze a Git archive, blank providers,
+isolate application containers, identify exact cleanup targets and preserve
+failed attempts. Do not equate a successful ARM64 image with AMD64 parity or
+native/browser aggregate acceptance.
+
+Compare restored complete logical row multisets and sequence state rather than
+raw pg_dump TABLE DATA section order; retain the original ordering failure and
+negative comparator controls. Test the actual Compose Gunicorn command for
+runtime lifecycle, while retaining the bare Python command's exit137 limit.
+Reclaim only identified regenerable build cache; capacity floors still apply
+after earlier cleanup. Native guard/static preparation is not execution proof.
+
 ## D-084 — Separate test timing, observed failures and native acceptance
 
 Resolve frontend cold-import and entry-animation timing in the test harness,

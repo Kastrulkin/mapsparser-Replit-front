@@ -1,5 +1,31 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, authorized isolated image and recovery
+
+- [x] User explicitly approved the new synthetic-only Docker/volume/migration/
+  backup-restore lane. This supersedes the unanswered-approval status below.
+- [x] Frozen `99849935` ARM64 Chromium-enabled image builds in 405.959 s;
+  dependency, nonroot/browser and both frontend asset checks pass.
+- [x] Fresh PG16 migration to `20260907_001`, repeated upgrade and source/
+  restored schema checks pass. Actual restore matches complete logical rows,
+  schema objects and sequence state; independent review accepts that scope.
+- [x] Canonical Compose Gunicorn command serves four HTTP 200 routes and exits
+  cleanly on SIGTERM in 2.661 s. Bare Python image command exit137 is recorded
+  separately, not represented as a production Gunicorn failure.
+- [x] Fresh native Python environment: 133 distributions, all 101 constraints
+  match, `pip check` passes. 42 raw captures archived with hashes.
+- [ ] Full current native/backend/browser aggregate is not run. Native frontend
+  prep had a config-path failure; corrected v3 remains unrun below disk floor.
+- [ ] Native guard/probe is DRAFT/UNEXECUTED: static review rejected incomplete
+  guard propagation into stripped child environments. No fresh collection ran.
+
+See task `evidence/isolated-hflypi-results-20260921.md`. Last checkpoint free
+space ~4.58 GiB; respect 6-GiB frontend prep / 5-GiB aggregate start floors.
+Reported cache cleanup ~5.69GB (4.66GB archived logs +1.028GB preparation notes); no
+pre-existing images, containers or volumes deleted. New synthetic resources
+are retained. Production/existing DBs, foreign changes and historical verdict
+remain unchanged. Whole-goal FAIL remains; no push/deploy or goal resume.
+
 ## Latest checkpoint — 21 September, fresh frontend and browser-test verification
 
 - [x] Local commit `8137f570`: stabilize two unit-test harnesses without changing

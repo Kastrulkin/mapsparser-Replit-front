@@ -1,0 +1,30 @@
+{
+  "command": [
+    "/usr/local/opt/node@22/bin/npm",
+    "ci",
+    "--legacy-peer-deps",
+    "--no-audit",
+    "--no-fund"
+  ],
+  "duration_ms": 1021.447,
+  "environment_keys": [
+    "NO_COLOR",
+    "NPM_CONFIG_AUDIT",
+    "NPM_CONFIG_CACHE",
+    "NPM_CONFIG_FUND",
+    "NPM_CONFIG_GLOBALCONFIG",
+    "NPM_CONFIG_UPDATE_NOTIFIER",
+    "NPM_CONFIG_USERCONFIG",
+    "PATH",
+    "PYTHON_DOTENV_DISABLED",
+    "TMPDIR"
+  ],
+  "exit_code": 1,
+  "free_bytes_after": 6543491072,
+  "label": "frontend-npm-ci",
+  "stderr": "Exit prior to config file resolving\ncause\ndouble-loading config \"/dev/null\" as \"global\", previously loaded as \"user\"\n",
+  "stderr_truncated": false,
+  "stdout": "",
+  "stdout_truncated": false,
+  "stopped_reason": null
+}

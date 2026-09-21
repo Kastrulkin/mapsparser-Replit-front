@@ -1,0 +1,36 @@
+{
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+    "-m",
+    "pip",
+    "--isolated",
+    "--disable-pip-version-check",
+    "--no-input",
+    "--no-cache-dir",
+    "--keyring-provider",
+    "disabled",
+    "check"
+  ],
+  "duration_ms": 422.695,
+  "environment_keys": [
+    "NETRC",
+    "NO_COLOR",
+    "PATH",
+    "PIP_CONFIG_FILE",
+    "PIP_DISABLE_PIP_VERSION_CHECK",
+    "PYTHONDONTWRITEBYTECODE",
+    "PYTHONNOUSERSITE",
+    "PYTHON_DOTENV_DISABLED",
+    "TMPDIR",
+    "XDG_CACHE_HOME"
+  ],
+  "exit_code": 0,
+  "free_bytes_after": 7378767872,
+  "label": "pip-check",
+  "stderr": "",
+  "stderr_truncated": false,
+  "stdout": "No broken requirements found.\n",
+  "stdout_truncated": false
+}
