@@ -1,5 +1,39 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, Apify trace and legacy leaf logs
+
+Parent `c587b20f5f28187c1fed04323e6f6b118982282c`; same readiness branch.
+Read `git log -1` for the resulting package. Runtime scope:
+`prospecting_service.py` diagnostic writer/error print;
+`parsing_networks.py` two-line v2 status-reader branch;
+`yandex_maps_scraper.py`39leaf print substitutions/unused catch bindings.
+
+Use task captures `apify-diagnostic-{red,green,quality,adjacent}-20260921.json`,
+`legacy-leaf-causal-baseline-20260921.json`, and
+`parser-privacy-{final,quality}-20260921.json`. Exact safe commands are embedded.
+Apify6fail/8pass becomes14pass (34with existing service cases); immutable legacy
+parent3privacy failures become3passes. Final86passes +4subtests in10.61s,
+20source hashes, exact39-sink mapping and scoped AST/Ruff checks. Both bounded
+reviews accept. No actual scraper/browser/provider/DB integration claim.
+
+Precommit1770.928ms checked23owned files/114504staged bytes,7captures/20hashes,
+strict staged secret scan, nine foreign hashes and original AC/verdict equality.
+The final24-file package adds that capture; verify it again before committing.
+
+Initial leaf test omitted one changed phone-error print; corrected before
+authoritative root captures. No default skipped mapping test, no evidence
+overwrite or source reversal. Route-fragment Ruff remains286pre-existing
+injected-global findings/exit1 on both parent/current; no full lint claim.
+
+Next safe work: remaining worker/error persistence/raw functional IPC boundaries.
+No-trace/corrupt-trace mismatch and genuine v1 status behavior remain legacy;
+v2 traces expose only stage/timestamp history and the latest bounded payload
+shape. Timeline is uncapped; no old artifact cleanup. Historical46UNKNOWN and
+credential lifecycle gates unchanged. Disk6264568KiB below10GiB; native full
+aggregate/restore authority remains pending after denial. Nine foreign paths
+untouched; no production/DB/provider/Docker/cleanup/push/deploy. Whole FAIL and
+original AC statuses/historical verdict remain unchanged.
+
 ## Latest checkpoint — 21 September, diagnostic artifacts and legacy orchestration
 
 Parent `5ef5ba7e811d31d8599857929f2b79219c5954d4`; same readiness branch.

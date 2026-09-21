@@ -2,6 +2,15 @@
   "task_id": "production-readiness-20260917",
   "overall_status": "FAIL",
   "checkpoint": {
+    "subsequent_apify_trace_and_legacy_leaf_diagnostics": {
+      "parent_commit": "c587b20f5f28187c1fed04323e6f6b118982282c",
+      "findings": ["SEC-APIFY-TRACE-01", "SEC-LEGACY-LEAF-LOG-02"],
+      "scope": "Apify v2 trace projection and actor failure console plus compatible v2 status reader;39legacy leaf console sinks. Provider execution/result/billing and parser data/control contracts retained.",
+      "proof": ["evidence/apify-diagnostic-red-20260921.json", "evidence/apify-diagnostic-green-20260921.json", "evidence/apify-diagnostic-quality-20260921.json", "evidence/apify-diagnostic-adjacent-20260921.json", "evidence/legacy-leaf-causal-baseline-20260921.json", "evidence/parser-privacy-final-20260921.json", "evidence/parser-privacy-quality-20260921.json", "evidence/apify-diagnostic-notes-20260921.md", "evidence/legacy-leaf-notes-20260921.md"],
+      "result": "Apify causal6fail/8pass becomes14pass,34with existing service tests. Immutable legacy parent3privacy failures/0errors. Final86passes and4subtests10.61s/10996.407ms,20source hashes; exact39changed sink mapping, legacy non-diagnostic AST and5Apify function ASTs. Independent bounded reviews approve.",
+      "provenance": "Initial unsaved leaf harness omitted phone exception sink38/39; review corrected stable anchors/all39 and fake-page result check before final root captures. No skipped mapping test or evidence overwrite/source reversal. Legacy route fragment has identical286injected-global Ruff findings/exit1 parent/current, not whole-file lint PASS.",
+      "limits": "Actual service tests use provider stubs; legacy/status AST tests do not run real browser/DB/runtime routes. Raw functional IPC/results/errors, no-trace/corrupt/v1 status fallback, other logs, old artifacts, uncapped trace timeline and deployed code remain open. History46UNKNOWN/592classified access-material locations unchanged; disk6264568KiB below10GiB. Native aggregate/restore prep remains denied pending renewed authority; no production/DB/provider/Docker/cleanup/push/deploy action. Original AC/verdict and whole FAIL unchanged."
+    },
     "subsequent_worker_artifacts_and_legacy_orchestration": {
       "parent_commit": "5ef5ba7e811d31d8599857929f2b79219c5954d4",
       "findings": ["SEC-WORKER-ARTIFACT-02", "SEC-LEGACY-ORCHESTRATION-LOG-01"],

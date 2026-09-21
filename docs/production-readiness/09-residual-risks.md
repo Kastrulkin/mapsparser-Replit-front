@@ -1,5 +1,19 @@
 # Residual risks — working register
 
+Latest21September, parentc587b20f:39legacy leaf value-bearing console sinks and
+the Apify trace writer/actor-error print are now locally corrected with86pure
+passes and bounded review. V2 status-reader compatibility is included. This
+supersedes the particular service/leaf items left open by the previous package.
+
+Remaining P1/privacy boundaries: other worker logs and persisted queue/proxy
+errors; functional raw IPC storage/access/retention; raw invalid-input/returned
+errors; legacy or absent/corrupt-trace status fallback; untouched old artifacts
+and deployed code. V2 preserves stage timeline but only latest payload shape;
+the timeline remains uncapped. Fixed selectors and numeric parser metadata stay
+observable intentionally. No secret-lifecycle clearance:46history/treeUNKNOWN
+and592classified access-material locations unchanged. Disk6264568KiB below10GiB;
+native aggregate/restore permission pending after denial. Whole readiness FAIL.
+
 Latest21September, parent5ef5ba7e: five worker diagnostic file writers and
 related error/normalization prints, plus four legacy orchestration prints,
 are locally corrected with49pure passes and bounded independent review.

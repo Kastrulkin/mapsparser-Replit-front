@@ -1,5 +1,16 @@
 # LocalOS threat model — current audit evidence
 
+## Latest service/leaf update — 21 September, parentc587b20f
+
+SEC-APIFY-TRACE-01 closes fresh raw trace payloads, replay of historic raw events
+on append, and the actor-error print; v2 identity failures keep a safe localized
+status. SEC-LEGACY-LEAF-LOG-02 closes39leaf raw value/exception console sinks.
+Causal parent failures, final86pure passes and bounded independent reviews
+support local fixes only. Raw functional IPC/results/errors, legacy/no-trace
+reader fallback, other logs, historic untouched artifacts and deployed code
+remain separate boundaries. Uncapped trace timeline retains operational risk.
+No historical access-material clearance or release promotion.
+
 ## Latest diagnostic-boundary update — 21 September, parent5ef5ba7e
 
 SEC-WORKER-ARTIFACT-02 locally corrects five diagnostic file writers plus related

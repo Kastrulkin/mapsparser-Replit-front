@@ -1,5 +1,20 @@
 # Production-readiness change log
 
+## Apify trace and legacy leaf diagnostics — 21 September, parentc587b20f
+
+SEC-APIFY-TRACE-01 adds v2 trace projection with fixed stage names/timestamps,
+latest bounded payload shape and no historic raw-event reserialization.
+The real legacy status consumer recognizes v2 and supplies an actionable Russian
+mismatch message; true v1/no-trace behavior stays compatible. Actor error console
+is fixed; original exception and all provider result/billing values are retained.
+
+SEC-LEGACY-LEAF-LOG-02 replaces39value-bearing leaf prints, removes unused
+catch bindings and retains results/control flow. Initial38-sink test coverage
+was corrected during review; final3methods cover all39 and representative
+success/error results. Final86passes +4subtests,20hashes, independent bounded
+reviews and AST/scoped lint checks support both fixes. The route fragment's
+286injected-global lint findings are unchanged, not claimed green. No release.
+
 ## Worker artifacts and legacy orchestration — 21 September, parent5ef5ba7e
 
 SEC-WORKER-ARTIFACT-02 changes five diagnostic files to value-free shape/static

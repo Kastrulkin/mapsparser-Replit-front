@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "label": "apify-diagnostic-quality",
+  "captured_at": "2026-09-21T03:07:56.446308+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "-c",
+    "import ast,collections,hashlib,json,pathlib,subprocess\nparent=\"c587b20f5f28187c1fed04323e6f6b118982282c\"\npaths=[\"src/services/prospecting_service.py\",\"src/legacy_routes/parsing_networks.py\"]\nold={p:subprocess.check_output([\"git\",\"show\",parent+\":\"+p]) for p in paths}\nnew={p:pathlib.Path(p).read_bytes() for p in paths}\nbase=pathlib.Path(\".agent/tasks/production-readiness-20260917/evidence\")\nred=json.loads((base/\"apify-diagnostic-red-20260921.json\").read_text())\ngreen=json.loads((base/\"apify-diagnostic-green-20260921.json\").read_text())\nredmeta=json.loads(red[\"stdout\"].splitlines()[0])\ngreenmeta=json.loads(green[\"stdout\"].splitlines()[0])\nassert red[\"exit_code\"]==1 and \"6 failed, 8 passed\" in red[\"stdout\"]\nassert green[\"exit_code\"]==0 and \"14 passed\" in green[\"stdout\"]\nfor capture in [red,green]:\n    assert not any(capture[k] for k in (\"timed_out\",\"stdout_truncated\",\"stderr_truncated\"))\nfor p in paths: assert redmeta[\"source_sha256\"][p]==hashlib.sha256(old[p]).hexdigest()\nfor p,h in greenmeta[\"source_sha256\"].items(): assert hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()==h\nfor p in [\"tests/test_apify_diagnostic_privacy.py\",\"src/core/parser_debug_artifacts.py\"]:\n    assert redmeta[\"source_sha256\"][p]==greenmeta[\"source_sha256\"][p]\ndef function(tree,name):\n    return next(n for n in ast.walk(tree) if isinstance(n,ast.FunctionDef) and n.name==name)\nnames=[\"run_business_by_map_url\",\"run_search\",\"_start_run_with_input\",\"fetch_dataset_items\",\"_normalize_result\"]\nfor name in names:\n    assert ast.dump(function(ast.parse(old[paths[0]]),name))==ast.dump(function(ast.parse(new[paths[0]]),name)),name\nfor p in paths: compile(new[p],p,\"exec\")\nruff=\"/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/ruff\"\ndef fragment_report(source):\n    result=subprocess.run([\"/usr/bin/arch\",\"-arm64\",ruff,\"check\",\"--select\",\"F821,F822,F823\",\"--output-format\",\"json\",\"--stdin-filename\",paths[1],\"-\"],input=source,capture_output=True)\n    assert result.returncode==1\n    items=json.loads(result.stdout)\n    return result.returncode,collections.Counter((item[\"code\"],item[\"message\"]) for item in items),len(items)\nbefore=fragment_report(old[paths[1]])\nafter=fragment_report(new[paths[1]])\nassert before==after,(before,after)\nsubprocess.run([\"/usr/bin/arch\",\"-arm64\",ruff,\"check\",\"tests/test_apify_diagnostic_privacy.py\"],check=True)\nsubprocess.run([\"/usr/bin/arch\",\"-arm64\",ruff,\"check\",\"--select\",\"F821,F822,F823\",paths[0]],check=True)\nsubprocess.run([\"git\",\"diff\",\"--check\"],check=True)\nprint(json.dumps({\"parent\":parent,\"source_sha256\":greenmeta[\"source_sha256\"],\"red_matches_parent\":True,\"protected_function_AST_parity\":names,\"fragment_Ruff_parent_exit\":before[0],\"fragment_Ruff_current_exit\":after[0],\"fragment_Ruff_findings_each\":after[2],\"fragment_Ruff_diagnostic_multiset_equal\":True,\"fragment_has_injected_runtime_globals\":True,\"whole_fragment_lint_pass\":False}))\n"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 337.446,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "All checks passed!\nAll checks passed!\n{\"parent\": \"c587b20f5f28187c1fed04323e6f6b118982282c\", \"source_sha256\": {\"src/services/prospecting_service.py\": \"6061f9e9b05c49228d7046f70680781f2edd0d4bf40bb5886e5d75f81d72170e\", \"src/legacy_routes/parsing_networks.py\": \"b92ef5889886ac8723997d7f134b29e3230a0ccabc50dd664969baf8fbb3a76b\", \"src/core/parser_debug_artifacts.py\": \"a364d4d27e842c21a1bc9f8fdfd61bf7021eea4301ee541eab14f0194864f5be\", \"tests/test_apify_diagnostic_privacy.py\": \"a4b85f2494c6f225c9488124938efc7deb109c6f16851dfe71c6ce54d20f7024\"}, \"red_matches_parent\": true, \"protected_function_AST_parity\": [\"run_business_by_map_url\", \"run_search\", \"_start_run_with_input\", \"fetch_dataset_items\", \"_normalize_result\"], \"fragment_Ruff_parent_exit\": 1, \"fragment_Ruff_current_exit\": 1, \"fragment_Ruff_findings_each\": 286, \"fragment_Ruff_diagnostic_multiset_equal\": true, \"fragment_has_injected_runtime_globals\": true, \"whole_fragment_lint_pass\": false}\n",
+  "stderr": "git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\ngit: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\ngit: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

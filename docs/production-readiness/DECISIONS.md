@@ -1,5 +1,23 @@
 # Readiness decisions
 
+## D-075 — Preserve diagnostic consumers without retaining provider content
+
+Trace hardening must inspect readers as well as writers. The Apify stage trace
+feeds one legacy status-message helper; version2 must preserve stage identity
+and actionable localization without falling back to raw technical errors.
+Keep old-version behavior compatible and identify the remaining absent/corrupt
+trace path separately. Do not change provider execution or billing data.
+
+On append, reproject previous entries to fixed event and validated timestamp
+metadata so raw history is not reserialized. Only the newest event retains a
+bounded payload shape; the timeline is intentionally not capped by this patch.
+This trades forensic detail for privacy, not a general retention policy.
+No existing artifact cleanup, deployment or production action is implied.
+
+Test inventories must cover the actual changed sinks and use semantic anchors,
+not source line numbers. Preserve representative parser return values as well
+as proving marker omission; disclose any gaps caught during review.
+
 ## D-074 — Separate diagnostic storage from functional parser transport
 
 A file in a debug directory is not necessarily expendable diagnostics.

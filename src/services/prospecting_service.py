@@ -19,11 +19,17 @@ from typing import List, Dict, Any, Optional
 import datetime
 
 from core.map_url_normalizer import normalize_map_url
+from core.parser_debug_artifacts import debug_value_shape
 from core.sensitive_text import redact_sensitive_text
 
 APIFY_SEARCH_TIMEOUT_SEC = int(os.environ.get("APIFY_SEARCH_TIMEOUT_SEC", "180"))
 APIFY_SEARCH_MAX_CHARGE_USD = Decimal(os.environ.get("APIFY_SEARCH_MAX_CHARGE_USD", "1.0"))
 SUPPORTED_APIFY_SOURCES = {"apify_yandex", "apify_2gis", "apify_google", "apify_apple"}
+_APIFY_DEBUG_EVENTS = frozenset({
+    "input_prepared", "run_started", "run_start_http_400", "run_start_failed",
+    "run_timeout", "run_polled", "run_failed", "dataset_fetch_started",
+    "run_succeeded", "identity_filtered",
+})
 
 class ProspectingService:
     def __init__(
@@ -129,13 +135,28 @@ class ProspectingService:
                 with open(trace_path, "r", encoding="utf-8") as fh:
                     loaded = json.load(fh)
                 if isinstance(loaded, list):
-                    events = loaded
+                    # Retain the stage timeline, never reserialize historic raw
+                    # payloads. Only the latest event carries a payload shape.
+                    for previous in loaded:
+                        if not isinstance(previous, dict):
+                            continue
+                        previous_event = previous.get("event")
+                        timestamp = previous.get("ts")
+                        events.append({
+                            "diagnostics_version": 2,
+                            "event": previous_event if isinstance(previous_event, str)
+                            and previous_event in _APIFY_DEBUG_EVENTS else "other",
+                            "ts": timestamp if isinstance(timestamp, str) and re.fullmatch(
+                                r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z", timestamp
+                            ) else None,
+                        })
             item = {
+                "diagnostics_version": 2,
                 "ts": datetime.datetime.utcnow().isoformat() + "Z",
-                "event": str(event or "").strip(),
+                "event": event if isinstance(event, str) and event in _APIFY_DEBUG_EVENTS else "other",
             }
             if isinstance(payload, dict) and payload:
-                item["payload"] = payload
+                item["payload"] = debug_value_shape(payload)
             events.append(item)
             with open(trace_path, "w", encoding="utf-8") as fh:
                 json.dump(events, fh, ensure_ascii=False, indent=2, default=str)
@@ -1590,8 +1611,8 @@ class ProspectingService:
 
         try:
             run = self.run_search(query, location, limit=limit, timeout_sec=APIFY_SEARCH_TIMEOUT_SEC)
-        except Exception as e:
-            print(f"Error running Apify actor: {redact_sensitive_text(e, limit=1000)}")
+        except Exception:
+            print("Error running Apify actor: actor_run_failed")
             raise
 
         if not run:

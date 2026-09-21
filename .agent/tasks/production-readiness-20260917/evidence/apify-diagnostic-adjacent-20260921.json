@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "label": "apify-diagnostic-adjacent",
+  "captured_at": "2026-09-21T03:09:33.751302+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1",
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-B",
+    "-c",
+    "import sys,pathlib,hashlib,json\ndef guard(event,args):\n    if event in {\"socket.connect\",\"subprocess.Popen\",\"os.system\",\"os.posix_spawn\",\"os.spawn\",\"sqlite3.connect\"}: raise AssertionError(event)\nsys.addaudithook(guard)\nsys.path[:0]=[str(pathlib.Path(\".\").resolve()),str(pathlib.Path(\"src\").resolve())]\nimport pytest\npaths=[\"src/services/prospecting_service.py\",\"src/legacy_routes/parsing_networks.py\",\"src/core/parser_debug_artifacts.py\",\"tests/test_apify_diagnostic_privacy.py\",\"tests/test_prospecting_service_apify_business_parse.py\",\"tests/test_prospecting_service_apify_proxy.py\",\"tests/test_prospecting_service_normalize.py\"]\nprint(json.dumps({\"source_sha256\":{p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths},\"external_io_guard\":True,\"conftest_loaded\":False}))\nraise SystemExit(pytest.main([\"--noconftest\",\"-o\",\"addopts=\",\"-p\",\"no:cacheprovider\",\"-q\",\"tests/test_apify_diagnostic_privacy.py\",\"tests/test_prospecting_service_apify_business_parse.py\",\"tests/test_prospecting_service_apify_proxy.py\",\"tests/test_prospecting_service_normalize.py\"]))"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 9008.529,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"source_sha256\": {\"src/services/prospecting_service.py\": \"6061f9e9b05c49228d7046f70680781f2edd0d4bf40bb5886e5d75f81d72170e\", \"src/legacy_routes/parsing_networks.py\": \"b92ef5889886ac8723997d7f134b29e3230a0ccabc50dd664969baf8fbb3a76b\", \"src/core/parser_debug_artifacts.py\": \"a364d4d27e842c21a1bc9f8fdfd61bf7021eea4301ee541eab14f0194864f5be\", \"tests/test_apify_diagnostic_privacy.py\": \"a4b85f2494c6f225c9488124938efc7deb109c6f16851dfe71c6ce54d20f7024\", \"tests/test_prospecting_service_apify_business_parse.py\": \"4a191e0021e2b0990bfdd3a760f854092bd03f3c45acf8e5268758df5869c56f\", \"tests/test_prospecting_service_apify_proxy.py\": \"37b66610a063035056f8110397da82c3074359234cf72349761e99eb1e47bfe9\", \"tests/test_prospecting_service_normalize.py\": \"6873eb5ab3fc56c5b5133a5a46af05a6809ddb26005a8948f5f3296a8521ef0b\"}, \"external_io_guard\": true, \"conftest_loaded\": false}\n..................................                                       [100%]\n34 passed in 8.65s\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

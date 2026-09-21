@@ -1,5 +1,32 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, Apify trace and legacy leaf diagnostics
+
+- [x] Previous c587b20f package is confirmed progress; original objective reread,
+  current branch/index and nine unrelated dirty paths revalidated.
+- [x] SEC-APIFY-TRACE-01: v2 value-free trace prevents new raw persistence and
+  historic raw-event reserialization; fixed actor-error log, compatible v2
+  localized status reader. Provider result/cost data remain unchanged.
+- [x] SEC-LEGACY-LEAF-LOG-02:39remaining value-bearing leaf prints corrected.
+  Review caught an initial38-sink test omission; final semantic anchors cover39
+  plus overview fake-page data retention and review fallback. No test skips.
+- [x] Final86passes +4subtests in10.61s;20source hashes, exact39-sink mapping,
+  legacy non-diagnostic AST and five Apify function ASTs checked. Both independent
+  bounded reviews accept. New-test/scoped source Ruff passes.
+- [x] Precommit1770.928ms:23owned files/114504diff bytes,7captures/20hashes;
+  strict staged scan clean, nine foreign hashes and original AC/verdict preserved.
+  The final24-file package adds this capture and receives a fresh check.
+- [ ] Legacy route fragment still reports the same286 injected-global F821
+  diagnostics on parent/current; not a whole-file lint pass.
+- [ ] All-project release gates remain FAIL (AC1–9/11 FAIL, AC10 PASS).
+
+Next: other worker/error persistence and functional IPC privacy boundaries,
+remaining history classification/lifecycle and the original full release gates.
+History46UNKNOWN/592classified access-material locations are unchanged. Disk
+6264568KiB (~5.97GiB) is below10GiB Docker floor; native aggregate/restore prep
+remains denied pending renewed permission. No workaround, production/DB/provider,
+Docker, cleanup, push or deployment action. Foreign changes remain preserved.
+
 ## Latest checkpoint — 21 September, worker artifacts and legacy orchestration
 
 - [x] Parent5ef5ba7e revalidated; previous package is confirmed progress.

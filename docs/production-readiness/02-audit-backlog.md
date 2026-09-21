@@ -1,5 +1,24 @@
 # Audit backlog — evidence, not a readiness claim
 
+## 21 September service/leaf follow-up, parentc587b20f
+
+- **SEC-APIFY-TRACE-01**, P1 before production: raw URLs/inputs/provider errors/
+  candidate details entered trace and were reserialized on every append;
+  actor exception print used incomplete pattern redaction. High confidence,
+  conditional debug/error execution and log-access likelihood; high privacy
+  impact. Small v2 projection/static-log fix plus compatible status reader;
+  low functional risk, medium forensic-detail tradeoff. Causal6fail/8pass to
+  14pass,34adjacent, protected result/billing ASTs and bounded review prove fix.
+- **SEC-LEGACY-LEAF-LOG-02**, P1 before production:39reachable field/review/
+  contact/exception prints exposed arbitrary values. High confidence,
+  execution/log-access-dependent likelihood and high potential privacy impact.
+  Small fixed-event substitutions, low runtime risk; reduced diagnostics.
+  Acceptance: exact39sink mapping, same final parent3privacy failures/current
+  3passes, preserved fake-page result/default fallback, independent review.
+
+Both are local bounded FIX_PROVEN within final86passes/20hashes; not production
+or full logging/retention/lifecycle certification. Original release gates stay.
+
 ## 21 September bounded diagnostic follow-up, parent5ef5ba7e
 
 - **SEC-WORKER-ARTIFACT-02**, P1 before production, high confidence: raw provider/

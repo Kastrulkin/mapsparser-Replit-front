@@ -1,5 +1,34 @@
 # Verified commands and evidence
 
+## Service/leaf diagnostics — 21 September, parentc587b20f
+
+All captures are in task `evidence/`, with exact commands and source hashes.
+Apify tests use the actual service class with provider stubs; legacy tests use
+isolated AST/full fake-page helpers. External I/O is forbidden before collection,
+conftest/plugin autoload disabled. No live browser/provider/DB or native prep.
+
+| Capture basename | Actual result | Duration ms |
+| --- | --- | ---: |
+| apify-diagnostic-red |6causal failures/8pass,0harness errors |1159.708|
+| apify-diagnostic-green |Same14cases pass,0.52s |852.551|
+| apify-diagnostic-quality |4hashes,parent binding,5functional ASTs, scoped lint; route-fragment parent/current286F821/exit1 unchanged |337.446|
+| apify-diagnostic-adjacent |34pass,8.65s;7hashes, named tmux completed |9008.529|
+| legacy-leaf-causal-baseline |Final3methods on immutable parent:3privacy failures/0errors |399.426|
+| parser-privacy-final |86pass +4subtests,10.61s;20hashes,named tmux completed |10996.407|
+| parser-privacy-quality |20hashes,39one-to-one changed sink mappings, legacy non-diagnostic AST, scoped Ruff/diff;disk6264568KiB |269.823|
+| parser-privacy-precommit |23owned files/114504diff bytes,7captures/20hashes,strict staged scan clean; nine foreign hashes and original AC/verdict preserved |1770.928|
+
+No timeout/truncation. Final/adjacent captures have no stderr; Git-backed
+baseline/quality captures retain Darwin temp warnings. Initial unsaved leaf
+harness covered38of39 sinks; review corrected it before root acceptance. An
+early read of the still-running adjacent capture found no file; after the same
+session completed its actual capture passed. No restart/capture overwrite.
+Naive fragment lint is not green; equal inherited diagnostic counts are not
+whole-file lint acceptance.
+
+The final package adds the precommit capture (24 files) and repeats verification;
+the 23-file precommit result is not relabeled as a final-package result.
+
 ## Artifact/legacy diagnostics — 21 September, parent5ef5ba7e
 
 Exact guarded commands, stdout/stderr, source hashes and wall times are retained

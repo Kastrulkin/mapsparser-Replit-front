@@ -937,6 +937,8 @@ def get_parse_status(business_id):
                     continue
                 if str(item.get("event") or "").strip() != "identity_filtered":
                     continue
+                if item.get("diagnostics_version") == 2:
+                    return "Ссылка ведёт на другую карточку. Проверьте ссылку и повторите сбор данных."
                 payload = item.get("payload")
                 if not isinstance(payload, dict):
                     continue

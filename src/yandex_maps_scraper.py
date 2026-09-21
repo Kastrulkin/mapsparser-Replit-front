@@ -127,8 +127,8 @@ def parse_reviews_from_main_page(page):
                 reviews["reviews_count"] = int(''.join(filter(str.isdigit, count_text)))
             except:
                 reviews["reviews_count"] = 0
-    except Exception as e:
-        print(f"Ошибка при парсинге рейтинга с главной: {e}")
+    except Exception:
+        print("Ошибка при парсинге рейтинга с главной: parse_failed")
 
     return reviews
 
@@ -328,14 +328,14 @@ def parse_overview_data(page):
                 content = og_title.get_attribute("content")
                 if content:
                     data['title'] = content.replace(' — Яндекс Карты', '').strip()
-                    print(f"✅ Найдено название из meta tag: {data['title']}")
+                    print("✅ Название извлечено из meta tag")
 
         # 3. Fallback: Page title
         if not data['title']:
             data['title'] = page.title().replace(' — Яндекс Карты', '').strip()
-            print(f"✅ Найдено название из page title: {data['title']}")
-    except Exception as e:
-        print(f"Ошибка получения названия: {e}")
+            print("✅ Название извлечено из page title")
+    except Exception:
+        print("Ошибка получения названия: parse_failed")
         data['title'] = ''
 
     # Проверка на галочку верификации (синяя галочка)
@@ -358,8 +358,8 @@ def parse_overview_data(page):
         data['is_verified'] = is_verified
         if is_verified:
             print("✅ Бизнес подтвержден (Синяя галочка)")
-    except Exception as e:
-        print(f"Ошибка проверки верификации: {e}")
+    except Exception:
+        print("Ошибка проверки верификации: parse_failed")
         data['is_verified'] = False
 
     # Полный адрес
@@ -387,7 +387,7 @@ def parse_overview_data(page):
                 # Simple validation: should contain some letters and be reasonably long but not too long
                 if addr_text and len(addr_text) > 5 and len(addr_text) < 200:
                     data['address'] = addr_text
-                    print(f"✅ Найден адрес: {addr_text} (селектор: {selector})")
+                    print(f"✅ Адрес извлечен (селектор: {selector})")
                     break
         
         # Fallback: Meta description
@@ -401,13 +401,13 @@ def parse_overview_data(page):
                      parts = content.split('.')
                      if len(parts) > 1:
                          data['address'] = parts[1].strip() # Often the second part
-                         print(f"⚠️ Адрес взят из мета-описания (может быть неточным): {data['address']}")
+                         print("⚠️ Адрес извлечен из мета-описания (может быть неточным)")
 
         if not data['address']:
              print("❌ Адрес не найден ни по одному селектору. Используем заглушку.")
              data['address'] = "Адрес не указан (автоматически)"
-    except Exception as e:
-        print(f"Ошибка при парсинге адреса: {e}")
+    except Exception:
+        print("Ошибка при парсинге адреса: parse_failed")
         data['address'] = "Ошибка парсинга адреса"
 
     # Клик по кнопке "Показать телефон" перед парсингом - улучшенная версия
@@ -458,14 +458,14 @@ def parse_overview_data(page):
                         break
                 if phone_clicked:
                     break
-            except Exception as e:
-                # print(f"Ошибка при поиске/клике по селектору {selector}: {e}")
+            except Exception:
+                # Selector-level failures do not affect the fallback.
                 continue
 
         if not phone_clicked:
             print("Кнопка 'Показать телефон' не найдена ни по одному селектору")
-    except Exception as e:
-        print(f"Ошибка при попытке кликнуть по кнопке телефона: {e}")
+    except Exception:
+        print("Ошибка при попытке кликнуть по кнопке телефона: action_failed")
         pass
 
     # Телефон - улучшенный парсинг
@@ -480,7 +480,7 @@ def parse_overview_data(page):
                 phone = href.replace('tel:', '').strip()
                 if len(phone) > 7:
                     data['phone'] = phone
-                    print(f"✅ Найден телефон (href): {data['phone']}")
+                    print("✅ Телефон извлечен из href")
                     break
         
         # 2. Если не найдено, поиск по селекторам
@@ -501,7 +501,7 @@ def parse_overview_data(page):
                     match = re.search(r'(\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}', text)
                     if match:
                         data['phone'] = match.group(0)
-                        print(f"✅ Найден телефон (текст): {data['phone']}")
+                        print("✅ Телефон извлечен из текста")
                         break
                 if data['phone']:
                     break
@@ -514,10 +514,10 @@ def parse_overview_data(page):
                  match = re.search(r'(\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}', text)
                  if match:
                      data['phone'] = match.group(0)
-                     print(f"✅ Найден телефон (хедер): {data['phone']}")
+                     print("✅ Телефон извлечен из хедера")
 
-    except Exception as e:
-        print(f"Ошибка при парсинге телефона: {e}")
+    except Exception:
+        print("Ошибка при парсинге телефона: parse_failed")
         data['phone'] = ''
 
     # Ближайшее метро
@@ -599,7 +599,7 @@ def parse_overview_data(page):
                 categories = [c.inner_text().strip() for c in cats if c.inner_text().strip()]
                 if categories:
                     rubric = categories
-                    print(f"Найдены основные категории бизнеса: {categories}")
+                    print("Основные категории бизнеса извлечены")
                     break
         data['rubric'] = rubric
 
@@ -633,7 +633,7 @@ def parse_overview_data(page):
                     match = re.search(r'([0-5][.,]\d)', text)
                     if match:
                         data['rating'] = match.group(1).replace(',', '.')
-                        print(f"✅ Найден рейтинг: {data['rating']} (селектор: {selector})")
+                        print(f"✅ Рейтинг извлечен (селектор: {selector})")
                         break
                 except:
                     continue
@@ -646,7 +646,7 @@ def parse_overview_data(page):
                  match = re.search(r'\b([0-5][.,]\d)\b', header_text)
                  if match:
                      data['rating'] = match.group(1).replace(',', '.')
-                     print(f"✅ Найден рейтинг в заголовке: {data['rating']}")
+                     print("✅ Рейтинг извлечен из заголовка")
 
     except Exception:
         data['rating'] = ''
@@ -710,7 +710,7 @@ def parse_overview_data(page):
                     match = re.search(r'(Ежедневно|Пн|Вт|Ср|Чт|Пт|Сб|Вс)[^0-9]*\d{1,2}:\d{2}', all_text)
                     if match:
                          data['hours_short'] = match.group(0).split('\n')[0]
-                         print(f"Найдены часы работы (regex): {data['hours_short']}")
+                         print("Часы работы извлечены через regex")
             except:
                 pass
 
@@ -721,13 +721,13 @@ def parse_overview_data(page):
                         text = elem.inner_text().strip()
                         if text and ('Открыто до' in text or 'Закрыто до' in text or 'Круглосуточно' in text) and len(text) < 50:
                             data['hours_short'] = text
-                            print(f"Найдены часы работы в общем поиске: {data['hours_short']}")
+                            print("Часы работы извлечены в общем поиске")
                             break
                     except:
                         continue
                     
-    except Exception as e:
-        print(f"Ошибка при парсинге краткого времени работы: {e}")
+    except Exception:
+        print("Ошибка при парсинге краткого времени работы: parse_failed")
         data['hours_short'] = ''
 
     # Клик по кнопке "График" для полного расписания
@@ -740,8 +740,8 @@ def parse_overview_data(page):
             page.wait_for_timeout(1500)
         else:
             print("Кнопка 'График' не найдена или не видна")
-    except Exception as e:
-        print(f"Ошибка при попытке кликнуть по кнопке 'График': {e}")
+    except Exception:
+        print("Ошибка при попытке кликнуть по кнопке 'График': action_failed")
 
     # После клика ищем полное расписание (улучшенный парсинг)
     try:
@@ -771,7 +771,7 @@ def parse_overview_data(page):
                 interval_el = row.query_selector("div.business-working-intervals-view__interval, td:last-child, div[class*='time']")
                 day = day_el.inner_text().strip() if day_el else ''
                 interval = interval_el.inner_text().strip() if interval_el else ''
-                print(f"  День: '{day}', часы: '{interval}'")
+                print("Строка расписания извлечена")
                 if day and interval:
                     hours_full.append(f"{day}: {interval}")
         else:
@@ -788,17 +788,17 @@ def parse_overview_data(page):
                 if len(set([h.split(': ')[1] for h in hours_full])) == 1:
                     interval = hours_full[0].split(': ')[1]
                     data['hours'] = f"Пн-Вс: {interval}"
-                    print(f"Все дни одинаковые, краткая форма: {data['hours']}")
+                    print("Часы работы нормализованы в краткую форму")
                 else:
                     data['hours'] = '; '.join(hours_full)
-                    print(f"Часы работы по дням: {data['hours']}")
+                    print("Часы работы извлечены по дням")
             except:
                 data['hours'] = '; '.join(hours_full)
         else:
             data['hours'] = ''
             
-    except Exception as e:
-        print(f"Ошибка при парсинге полного расписания: {e}")
+    except Exception:
+        print("Ошибка при парсинге полного расписания: parse_failed")
         data['hours'] = data.get('hours_short', '')
         data['hours_full'] = []
 
@@ -820,10 +820,10 @@ def parse_overview_data(page):
                 for link in messenger_links:
                     href = link.get_attribute('href')
                     if href and href not in social_links:
-                        print(f"Ссылка из блока мессенджеров: {href}")
+                        print("Ссылка из блока мессенджеров извлечена")
                         social_links.append(href)
-        except Exception as e:
-            print(f"Ошибка при парсинге блока мессенджеров: {e}")
+        except Exception:
+            print("Ошибка при парсинге блока мессенджеров: parse_failed")
 
         data['social_links'] = social_links
     except Exception:
@@ -939,8 +939,8 @@ def parse_overview_data(page):
                         })
                         print(f"Найдено {len(items)} услуг через related-product-view")
                         data['products'] = products
-            except Exception as e:
-                print(f"Ошибка при альтернативном парсинге услуг: {e}")
+            except Exception:
+                print("Ошибка при альтернативном парсинге услуг: parse_failed")
     except Exception:
         data['products'] = []
         data['product_categories'] = []
@@ -997,8 +997,8 @@ def parse_reviews(page):
                             reviews_data['reviews_count'] = number_str
                             print(f"Найдено количество отзывов: {reviews_data['reviews_count']}")
                             break
-        except Exception as e:
-            print(f"Ошибка при подсчете отзывов: {e}")
+        except Exception:
+            print("Ошибка при подсчете отзывов: parse_failed")
             pass
 
         # Скролл для загрузки отзывов - ВОЗВРАЩАЕМ ОРИГИНАЛЬНЫЕ ПАРАМЕТРЫ
@@ -1153,7 +1153,7 @@ def parse_reviews(page):
                     if not date:
                          # Только если текст длинный, чтобы не спамить пустышками
                          if len(text) > 10:
-                             print(f"ℹ️ Дата не найдена для отзыва: {text[:30]}...")
+                             print("ℹ️ Дата для отзыва не найдена")
 
                     # Рейтинг (звёзды) - улучшенный парсинг
                     rating = 0
@@ -1237,8 +1237,8 @@ def parse_reviews(page):
                                 reply_clicked = True
                                 print(f"Клик по кнопке ответа: {selector}")
                                 break
-                            except Exception as e:
-                                print(f"Ошибка при клике по кнопке ответа {selector}: {e}")
+                            except Exception:
+                                print(f"Ошибка при клике по кнопке ответа {selector}: action_failed")
                                 continue
                         
                         # Ищем текст ответа
@@ -1261,16 +1261,16 @@ def parse_reviews(page):
                                 continue
                             
                             reply = reply_text
-                            print(f"✅ Найден ответ организации (HTML парсинг): {reply[:50]}...")
+                            print("✅ Ответ организации извлечен (HTML парсинг)")
                             break
                                     
-                    except Exception as e:
-                        print(f"⚠️ Ошибка при парсинге ответа организации: {e}")
+                    except Exception:
+                        print("⚠️ Ошибка при парсинге ответа организации: parse_failed")
                         pass
                     
                     # Логируем, если ответ не найден
                     if not reply:
-                        print(f"ℹ️ Ответ организации не найден для отзыва: {text[:50]}...")
+                        print("ℹ️ Ответ организации для отзыва не найден")
 
                     reviews_data['items'].append({
                         "author": author,
@@ -1329,8 +1329,8 @@ def parse_news(page):
 
         print(f"Спарсено новостей: {len(news)}")
         return news
-    except Exception as e:
-        print(f"Ошибка при парсинге новостей: {e}")
+    except Exception:
+        print("Ошибка при парсинге новостей: parse_failed")
         return []
 
 def get_photos_count(page):
@@ -1490,8 +1490,8 @@ def parse_features(page):
 
         print(f"Найдено особенностей: bool={len(features_bool)}, valued={len(features_valued)}, prices={len(features_prices)}, categories={len(categories_full)}")
         return features_full
-    except Exception as e:
-        print(f"Ошибка при парсинге особенностей: {e}")
+    except Exception:
+        print("Ошибка при парсинге особенностей: parse_failed")
         return {
             "bool": [],
             "valued": [],
@@ -1533,8 +1533,8 @@ def parse_products(page):
                 for i in range(3):
                     page.mouse.wheel(0, 1000)
                     time.sleep(1)
-            except Exception as e:
-                print(f"Ошибка при клике/скролле услуг: {e}")
+            except Exception:
+                print("Ошибка при клике/скролле услуг: action_failed")
         else:
             print("Вкладка 'Цены/Товары' не найдена")
 
@@ -1627,8 +1627,8 @@ def parse_products(page):
                                 "category": cat_name,
                                 "items": items_in_cat
                             })
-                    except Exception as e:
-                        print(f"Ошибка парсинга категории: {e}")
+                    except Exception:
+                        print("Ошибка парсинга категории: parse_failed")
                         continue
                 break 
         
@@ -1729,8 +1729,8 @@ def parse_products(page):
         print(f"Спарсено категорий услуг: {len(products)}")
         return products
 
-    except Exception as e:
-        print(f"Ошибка при парсинге услуг: {e}")
+    except Exception:
+        print("Ошибка при парсинге услуг: parse_failed")
         return []
 
 def parse_competitors(page):
@@ -1787,8 +1787,8 @@ def parse_competitors(page):
         if competitors:
             print(f"[parse_competitors] Found {len(competitors)} competitors via HTML")
         return competitors[:10]
-    except Exception as e:
-        print(f"[parse_competitors] Error: {e}")
+    except Exception:
+        print("[parse_competitors] Error: parse_failed")
         return []
 
 # This code parses Yandex Maps public pages to extract information like title, address, phone, etc.
