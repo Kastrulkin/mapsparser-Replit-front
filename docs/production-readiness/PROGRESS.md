@@ -1,5 +1,24 @@
 # Production-readiness progress
 
+## Latest checkpoint — 22 September, restore admission corrected locally
+
+- [x] RESTORE-PORTS-TEMP-01: eliminate temp-file-backed validation; every captured
+  binding still checked against same loopback rule before query/create/stream.
+- [x] Same unsafe scenario and deterministic read-failure fixture RED->GREEN;
+  full fake-helper suite13pass. Root combined exact39regressions allpass16.44s,
+  117passing stages, no skip/xfail/leakedhook. No actual Docker/DB effects.
+- [x] Leaf isolation fix committeda1944b9b; strict69138-byte diff clean756.334ms,
+  commit297.286ms. Whole offline5487result remains prior NONPASS, not recalculated.
+- [x] Independent final restore source/outcome/package review PASS; scoped local
+  release package retains all original failing evidence.
+- [ ] Current-source capability-dependent integration (PG/listeners/browser),
+  frontend ratchet/dist, broad security/image,
+  performance, CI/demo and independent whole-diff gates.
+
+Files:scripts/postgres-restore-latest.sh and its safety test; evidence
+restore-ports-temp-results-20260922.md. Whole goal ACTIVE/FAIL, foreign13preserved.
+No production, push/deploy, providers or repeatedcleanup. About13GiB host free.
+
 ## Latest checkpoint — 22 September, leaf test isolation fixed
 
 - [x] TEST-LEAF-GUARD-01: per-test reversible guard replaces permanent audit hook;

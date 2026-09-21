@@ -1,5 +1,33 @@
 # Readiness handoff
 
+## Latest checkpoint — 22 September, restore gate repaired and tested
+
+Parenta1944b9b, codex/production-readiness-20260917. Recent local commits:
+99a407bf image mapping;d20dc1ad currentfull offline failures;8f3330d0 boundedPEM
+observations;a1944b9b leaf scoped guard. All reviewed, no push/deploy.
+Leaffix strictdiff691409ee/69138bytes clean756.334ms; commit297.286ms.
+
+This checkpoint packages restore patch helper e0ff17d5 +test9033247b after final
+independent source/outcome/artifact review PASS. Uses
+I/O-free Bash binding iteration, no admissionpolicy broadening. Synthetic exact
+readfailure baseline allowsfakecreate/stream ->patchrejects; realOS tempdenial
+mixedports alsoRED/GREEN.13fakehelpertests pass2623.398ms. Root adjacentv3
+39/39pass17101.33ms,117stages/no skips/xfail/leakedhook. Allsources frozen.
+Archive restore-ports-temp-20260922 contains rawfailures/greens/baseline/helper
+wrappers/policies/manifest. Do not redo these fake regressions without cause.
+
+Next: remaining capability-specific tests against
+current trackedsource+explicitoverlays on owned syntheticintegrationprofile.
+Do not repeat broad offline-only run just to rediscover expectedpermissiondenials.
+Full5487diagnostic remains4347pass/48fail/1092skip; later scopedpasses aren't
+arithmetically merged. Remaining dist/ratchet,206image candidates/history and
+dependency closure, performance/CI/demo/finalwhole-diff stillopen. No readyclaim.
+
+Foreign13paths remain preserved; trackedforeign SHA40afa014. No production or
+existingDB/provider mutations. Cleanup COMPLETE; about13GiB free; keepcontainers/
+volumes. Goal ACTIVE/FAIL. Read-only continuation: git status --short; inspect
+task restore-ports-temp-results-20260922.md and current-full-offline-results-20260922.md.
+
 ## Latest checkpoint — 22 September, leaf-hook proof accepted
 
 Leaf-test patch SHA152c0163 is independently reviewed; original3same-suite

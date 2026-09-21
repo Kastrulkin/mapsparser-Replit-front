@@ -1,5 +1,16 @@
 # Verified commands and evidence
 
+## Restore binding admission — 22 September
+
+Same negativewrapper64760c5c/fakeDocker read-failure baseline returns0+create/
+stream (semanticRED1); patchedhelper e0ff17d5 returns1/no markers (GREEN0).
+Actualtempdenial mixedbinding case alsoRED/GREEN. Newtesthash9033247b; full13
+fakehelpertests2.34s/2623.398ms captured pass. Root bash-n/Ruff/diffcheck pass.
+Named tmux audit-leaf-restore-adjacent-v3, exact same39selector familyasv2:
+39pass16.44s/17101.33ms,117passstages,noskip/noleak,exit0. Cleanenv/metadataonly
+DSN/sandbox/fakecommands unchanged. Captures and exactharness/policies retained
+in restore-ports-temp-20260922; no real database restore was executed.
+
 ## Leaf test guard proof — 22 September
 
 Identical same_suite_probe.py334d7d6e on frozen-original vs patchedroot under

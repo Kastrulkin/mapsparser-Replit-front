@@ -1,0 +1,50 @@
+"""Compare the same synthetic restore admission fixture across helper revisions."""
+from __future__ import annotations
+
+import importlib.util
+import json
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+
+if len(sys.argv) != 2:
+    raise SystemExit("expected helper path")
+
+workspace = Path("/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре")
+test_path = workspace / "tests" / "test_postgres_restore_helper_safety.py"
+spec = importlib.util.spec_from_file_location("restore_test_fixture", test_path)
+if spec is None or spec.loader is None:
+    raise RuntimeError("fixture_load_failed")
+fixture = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(fixture)
+fixture.HELPER = Path(sys.argv[1])
+
+writable = Path("/private/tmp/localos-leaf-guard-20260922/writable")
+with tempfile.TemporaryDirectory(dir=writable) as directory:
+    tmp_path = Path(directory)
+    archive = fixture._archive(tmp_path)
+    environment, marker = fixture._environment(tmp_path)
+    read_override = tmp_path / "disable-read.sh"
+    read_override.write_text("read() { return 2; }\n")
+    environment["BASH_ENV"] = str(read_override)
+    environment["FAKE_PORTS"] = "127.0.0.1:15417\n0.0.0.0:15418"
+    original_stdin = os.dup(0)
+    devnull = os.open("/dev/null", os.O_RDONLY)
+    try:
+        os.dup2(devnull, 0)
+        result = fixture._run(fixture._arguments(archive), environment)
+    finally:
+        os.dup2(original_stdin, 0)
+        os.close(original_stdin)
+        os.close(devnull)
+    command = marker.read_text() if marker.exists() else ""
+
+summary = {
+    "return_code": result.returncode,
+    "created_target": "CREATE DATABASE" in command,
+    "streamed_target": "-d localos_restore_test" in command,
+}
+print(json.dumps(summary, sort_keys=True))
+raise SystemExit(0 if summary == {"return_code": 1, "created_target": False, "streamed_target": False} else 1)

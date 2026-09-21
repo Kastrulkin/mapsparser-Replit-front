@@ -1,5 +1,14 @@
 # Readiness decisions
 
+## D-113 — Validate restore bindings without an I/O failure seam
+
+Security admission over a small already-captured string should not rely on a
+shell temporary file/read loop whose setup failure can silently skip validation.
+Use pure parameter expansion with the unchanged per-line rule, reject before any
+target mutation, and retain both observed OS failure and deterministic injected
+read-failure RED/GREEN. Only fake Docker/DB commands are authorized by these tests;
+passing them neither authorizes real restore nor closes full recovery readiness.
+
 ## D-112 — Scope diagnostic test guards and retain newly exposed failures
 
 Use unittest cleanup registered before patch setup, not permanent process-wide

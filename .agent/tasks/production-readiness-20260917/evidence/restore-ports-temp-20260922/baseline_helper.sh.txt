@@ -60,16 +60,9 @@ identity="$(docker --context "$docker_context" inspect "$container" --format '{{
 [[ "$identity" == "true $compose_project postgres" ]] || fail "container identity is not the requested owned postgres service"
 ports="$(docker --context "$docker_context" inspect "$container" --format '{{range (index .NetworkSettings.Ports "5432/tcp")}}{{.HostIp}}:{{.HostPort}}{{"\n"}}{{end}}')"
 [[ -n "$ports" ]] || fail "owned postgres service must publish PostgreSQL to loopback"
-remaining_bindings="$ports"
-while [[ -n "$remaining_bindings" ]]; do
-  binding="${remaining_bindings%%$'\n'*}"
-  if [[ "$remaining_bindings" == *$'\n'* ]]; then
-    remaining_bindings="${remaining_bindings#*$'\n'}"
-  else
-    remaining_bindings=""
-  fi
+while IFS= read -r binding; do
   [[ "$binding" =~ ^127\.0\.0\.1:[0-9]+$ ]] || fail "owned postgres service must publish only to loopback"
-done
+done <<< "$ports"
 
 target_exists="$(docker --context "$docker_context" exec "$container" psql -U "$pg_user" -d postgres -Atqc "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = '$target_db')")"
 [[ "$target_exists" == "f" ]] || fail "fresh disposable target must not already exist"

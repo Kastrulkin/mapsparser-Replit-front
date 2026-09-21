@@ -1,5 +1,12 @@
 # Production-readiness change log
 
+## Restore binding admission — 22 September, parenta1944b9b
+
+RESTORE-PORTS-TEMP-01: I/O-free per-binding check prevents here-string setup failure
+from bypassing loopback admission. Allidentity/confirmation/archive gates remain.
+Exactreal-OS and injectedreadfailures RED/GREEN,13fakehelperpass,root39adjacentpass.
+No real Docker, DB, provider, deployment or cleanup action.
+
 ## Scoped leaf diagnostic guard — 22 September
 
 TEST-LEAF-GUARD-01: replace permanent audit-hook contamination with reversible

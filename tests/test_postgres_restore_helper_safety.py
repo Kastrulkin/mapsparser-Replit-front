@@ -119,3 +119,34 @@ def test_confirmed_local_empty_target_uses_valid_docker_exec_flags(tmp_path):
     assert "exec -i fake-postgres psql" in command
     assert "-d localos_restore_test" in command
     assert "-T" not in command
+
+
+def test_confirmed_loopback_target_does_not_depend_on_shell_temporary_files(tmp_path):
+    archive = _archive(tmp_path)
+    environment, marker = _environment(tmp_path)
+    unusable_tmp = tmp_path / "unusable-tmp"
+    for key in ("TMPDIR", "TMP", "TEMP"):
+        environment[key] = str(unusable_tmp)
+
+    result = _run(_arguments(archive), environment)
+
+    assert result.returncode == 0, result.stderr or result.stdout
+    command = marker.read_text()
+    assert "CREATE DATABASE" in command
+    assert "-d localos_restore_test" in command
+
+
+def test_unsafe_port_binding_is_rejected_when_read_is_unavailable(tmp_path):
+    archive = _archive(tmp_path)
+    environment, marker = _environment(tmp_path)
+    read_override = tmp_path / "disable-read.sh"
+    read_override.write_text("read() { return 2; }\n")
+    environment["BASH_ENV"] = str(read_override)
+    environment["FAKE_PORTS"] = "127.0.0.1:15417\n0.0.0.0:15418"
+
+    result = _run(_arguments(archive), environment)
+
+    assert result.returncode != 0
+    command = marker.read_text() if marker.exists() else ""
+    assert "CREATE DATABASE" not in command
+    assert "-d localos_restore_test" not in command

@@ -11,16 +11,17 @@ expanded6pass and independent code review PASS. Exact33affected+6 aggregate is
 38pass/1fail, not green: the remaining restore issue below is separate. Evidence
 task leaf-test-guard-results-20260922.md. All13foreign paths remain untouched.
 
-**RESTORE-PORTS-TEMP-01 — P1 conditional, before using restore helper, open repair.**
+**RESTORE-PORTS-TEMP-01 — P1 conditional, locally FIX_PROVEN and reviewed.**
 On shell temporary-file creation denial, `done <<< "$ports"` can skip loopback
 validation while script execution continues to CREATE DATABASE/restore. Exact
 mixedbinding fake-Docker test reproduces failure under OS denial; no real DB,
 provider or production effect. High causal confidence, environment-dependent
 likelihood; impact is bypass of a local restore admission boundary, not proven
 exposure. Proposed small fix: I/O-free per-binding validation, unchanged identity/
-confirmation/archive gates. Acceptance: same unsafe case rejects before marker,
-synthetic read-failure regression, valid loopback still works, full fake-helper
-suite and independent review. No production rollout or real restore authorized.
+confirmation/archive gates. Same unsafe case rejects before marker; deterministic
+read-failure RED/GREEN, valid loopback retained, full13fakehelpertests and root39
+adjacent tests pass. Independent final source/outcome/package review PASS; no full
+native recovery or production rollout/real restore authorized.
 
 ## Runner startup error masking — 22 September
 
