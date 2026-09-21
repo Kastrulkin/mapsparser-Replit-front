@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "label": "legacy-parser-exception-privacy-final-red-source-identity",
+  "source_revision": "ea1a50362ddf56e9267dded0a361e55dcfded23d",
+  "source_blobs": {
+    "src/parser_config.py": "9690c310e479db53c22a7e46c470f1d0b7044557",
+    "src/yandex_maps_scraper.py": "50f451c3cb2f0e7906298cf410411ef2627677a7"
+  },
+  "test_path": "tests/test_legacy_parser_exception_privacy.py",
+  "test_sha256": "0b9238f27be7a7719d0a1122e51ebc52f3ec563de92fc65a8b0d046d60242dd3",
+  "source_override_environment": "LEGACY_PARSER_PRIVACY_SOURCE_ROOT",
+  "comparison_rule": "Run RED against exactly the listed immutable parent Git blobs and GREEN against the corrected working-tree source while retaining exactly this test SHA-256."
+}

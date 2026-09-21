@@ -22,8 +22,8 @@ def get_parser():
             from parser_interception import parse_yandex_card
             print("✅ Используется Network Interception парсер (быстрый)")
             return parse_yandex_card
-        except ImportError as e:
-            print(f"⚠️ Не удалось импортировать interception парсер: {e}")
+        except ImportError:
+            print("⚠️ Не удалось импортировать interception парсер: interception_import_failed")
             print("🔄 Переключаемся на legacy парсер...")
             from yandex_maps_scraper import parse_yandex_card
             return parse_yandex_card

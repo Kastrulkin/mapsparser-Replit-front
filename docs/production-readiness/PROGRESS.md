@@ -1,5 +1,27 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, bounded legacy exception privacy fix
+
+- [x] SEC-LEGACY-EXCEPTION-01: same four regression cases fail against immutable
+  parent ea1a5036 and pass against corrected local parser sources. Synthetic
+  markers no longer cross the tested fallback notice / invalid URL / inner
+  timeout / inner error diagnostic boundaries. Seven adjacent checks pass.
+- [x] Parser selection/payload, ValueError/no-browser admission and browser
+  close controls pass; retry/fallback callers independently source-reviewed.
+  Scoped Ruff/diff checks pass. No live browser/provider/HTTP/DB proof claimed.
+- [x] Prior 364 backend / frontend-repeat checkpoint committed as05c9c83e;
+  independent staged review, strict secret scan and commit hook passed.
+- [ ] Parent SEC-PARSER-LEGACY-LOG-01 remains PARTIAL. Caller active-exception
+  context for invalid URL, context entry/cleanup, other logs, historical data
+  and deployed runtime are outside this four-case proof.
+
+Source fix: src/parser_config.py, src/yandex_maps_scraper.py; new regression:
+tests/test_legacy_parser_exception_privacy.py. Full provenance and limits are
+in task evidence `legacy-parser-exception-privacy-results-20260921.md`.
+No production/push/deploy. Frozen99849935 remains unchanged:573/5481 backend
+nodes passed in slices, not an aggregate. Frontend default-full flake and
+security/browser/performance/CI/final readiness gates remain open. Goal active.
+
 ## Latest checkpoint — 21 September, 364 policy/content tests and flake repeats
 
 - [x] Four frozen backend modules pass364/364 with exact174/69/67/54 counts:

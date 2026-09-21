@@ -1,5 +1,16 @@
 # Readiness decisions
 
+## D-091 — Stable legacy errors without changing retry policy
+
+Replace the tested raw exception/URL diagnostic interpolation with finite codes;
+suppress chained raw context in inner timeout/general wrappers. Preserve parser
+selection, payload, ValueError type and browser-close ordering. Confirm that
+worker fallback still sees its dedicated sync-in-async error outside this try,
+and that legacy retries use structured codes rather than these display strings.
+Source review is not real provider/worker execution. Four causal regressions
+plus seven adjacent checks prove this boundary only; retain the broad parent
+finding and explicit lifecycle/caller-context/historical-data exclusions.
+
 ## D-090 — Enforce per-module evidence and keep flaky-test conclusions bounded
 
 A total pass count cannot prove the expected module mix. The named364-node

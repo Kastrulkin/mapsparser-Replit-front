@@ -139,7 +139,7 @@ def parse_yandex_card(url: str) -> dict:
     print("Начинаем legacy-парсинг Яндекс.Карт")
 
     if not url or not url.startswith(('http://', 'https://')):
-        raise ValueError(f"Некорректная ссылка: {url}")
+        raise ValueError("Некорректная ссылка: invalid_url")
 
     print("Используем парсинг через Playwright...")
 
@@ -304,12 +304,12 @@ def parse_yandex_card(url: str) -> dict:
             print("Legacy-парсинг завершен")
             return data
 
-        except PlaywrightTimeoutError as e:
+        except PlaywrightTimeoutError:
             browser.close()
-            raise Exception(f"Тайм-аут при загрузке страницы: {e}")
-        except Exception as e:
+            raise Exception("Тайм-аут при загрузке страницы: legacy_timeout") from None
+        except Exception:
             browser.close()
-            raise Exception(f"Ошибка при парсинге: {e}")
+            raise Exception("Ошибка при парсинге: legacy_parse_failed") from None
 
 def parse_overview_data(page):
     """Парсит основные данные с вкладки Обзор"""

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "legacy-parser-frozen-adjacent-v2",
+  "captured_at": "2026-09-21T16:52:41.602698+00:00",
+  "command": [
+    "/bin/sh",
+    "-c",
+    "/usr/bin/arch -arm64 '/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python' -I -B /private/tmp/localos-readiness-20260921.hfLYPi/source/tests/test_legacy_parser_diagnostic_logs.py --source-stdin < src/yandex_maps_scraper.py && /usr/bin/arch -arm64 '/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python' -I -B tests/test_legacy_parser_leaf_diagnostics.py"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 487.047,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "....\n----------------------------------------------------------------------\nRan 4 tests in 0.036s\n\nOK\n...\n----------------------------------------------------------------------\nRan 3 tests in 0.303s\n\nOK\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

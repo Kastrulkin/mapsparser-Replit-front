@@ -1,5 +1,29 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, local legacy exception privacy
+
+Branch codex/production-readiness-20260917; audit checkpoint05c9c83e is committed
+and exactly matches independently reviewed staged SHA6362a1fe...ab154. Separate
+security package changes only two parser source files and adds one regression
+test plus evidence/docs. Four immutable-parent RED become four current GREEN;
+seven adjacent checks and scoped Ruff pass. Preserve the earlier failed adjacent
+harness invocation: patched stdin selected historical assertions, not a product
+regression; corrected invocation changes neither tests nor assertions.
+
+Finding SEC-LEGACY-EXCEPTION-01 is locally FIX_PROVEN for those four surfaces,
+not global logging closure. Independent compatibility review is source-only.
+Parent SEC-PARSER-LEGACY-LOG-01 remains PARTIAL; invalid-URL caller exception
+context, browser lifecycle, other log sinks and deployed/history state excluded.
+See task evidence `legacy-parser-exception-privacy-results-20260921.md` and its
+eight-capture/source/test hash manifest. Frozen hfLYPi source99849935 unchanged;
+do not count its573/5481 tests as tests of this changed working-tree source.
+
+User renewed safe-cache-cleanup request; fresh read-only inventory reports
+~4.9GiB free. Do not start native aggregate below5GiB or Docker build below10GiB.
+Current audit environment and13foreign paths must remain. Next: safe exact
+cache candidates, then remaining backend/PG aggregate and frontend interaction
+checks. No production, provider writes, push or deploy; whole-goal FAIL remains.
+
 ## Latest checkpoint — 21 September, 573 frozen backend nodes verified
 
 Parent ea1a5036. New exact four-module pure profile `policy-content-v1` passed

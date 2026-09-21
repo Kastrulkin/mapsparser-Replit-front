@@ -1,5 +1,23 @@
 # Verified commands and evidence
 
+## Legacy exception privacy — 21 September
+
+Named tmux runs `legacy-parser-rootproof-hflypi`, `legacy-parser-green-hflypi`
+and `legacy-parser-adjacent-hflypi-v2` used the isolated ARM64 interpreter,
+clean environment, disabled pytest plugin autoload and no cacheprovider.
+Exact commands, timings and outputs are in the eight versioned task captures
+`legacy-parser-exception-privacy-*-20260921.json` and their hash manifest.
+
+Final same test bytes: immutable ea1a5036 source4failed, corrected source4passed
+(pytest0.07s/0.06s). Adjacent corrected invocation4+3passed; earlier harness
+failure retained. Static full Ruff of parser_config/new regression, scoped
+E9/F63/F7/F82 of legacy scraper and diff check pass. Not full legacy lint.
+No app import, real browser, DB, Docker, network or production in these checks.
+
+Prior audit checkpoint05c9c83e: independent staged binary review matches
+6362a1fe6d848a40019516434d9577d473a6db13785489d62462024640cab154;
+strict default gitleaks stdin scan found no leaks in171432bytes; commit hook PASS.
+
 ## Policy/content364 and frontend default repeats — 21 September
 
 Named tmux `audit-native-unit-policy-content-hflypi-v1`:

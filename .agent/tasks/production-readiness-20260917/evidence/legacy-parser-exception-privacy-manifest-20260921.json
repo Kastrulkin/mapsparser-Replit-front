@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "finding_id": "SEC-LEGACY-EXCEPTION-01",
+  "parent_finding_id": "SEC-PARSER-LEGACY-LOG-01",
+  "scope": "local synthetic privacy checkpoint for parser-config import fallback and legacy parser exception text",
+  "status": "FIX_PROVEN_LOCAL_ONLY",
+  "source_revision_for_final_red": "ea1a50362ddf56e9267dded0a361e55dcfded23d",
+  "captures_sha256": {
+    "legacy-parser-exception-privacy-red-20260921.json": "4d08f0e3eccd534ef36de25528a4b861043f1e3056348b02d33964d98c843192",
+    "legacy-parser-exception-privacy-final-red-20260921.json": "5f98a90c21ca0fb4464311558edc6c01d497beabcb0f2de74add86f74bd994ce",
+    "legacy-parser-exception-privacy-final-red-manifest-20260921.json": "927436180990cb8684bd39cf97e07f28e440d3778e0e0205cf57511a047848c6",
+    "legacy-parser-exception-privacy-green-20260921.json": "6bfa9943dcbb4703de7259b0a5080870b0a8a488706b939a27cbd9fff8a36ff9",
+    "legacy-parser-exception-privacy-adjacent-20260921.json": "f1d9b8f44db40ce6f0f6cb643f76e24751cd8699648b445bcbde637aed13d58b",
+    "legacy-parser-exception-privacy-adjacent-v2-20260921.json": "aaf19c18faef152bedae42beca3e029b1c7114a035965116571a7c9fcebcad24",
+    "legacy-parser-exception-privacy-static-20260921.json": "b1224834196df37642058d541b54bf2bc9ea074062e170514c96e664678b704b",
+    "legacy-parser-exception-privacy-parent-root-20260921.json": "7676357f58a45cefd2f063301dcff7dbd345bc3115b3b2460e914cc16b833450"
+  },
+  "current_sha256": {
+    "src/parser_config.py": "b653a0540e587e64e785afb58588ec9afec0a0ce982dadea73c4f6412b5101af",
+    "src/yandex_maps_scraper.py": "3a069c6724f31990792d74ff217e19ded6a39e24a0512139e4ea21fe9ef423c5",
+    "tests/test_legacy_parser_exception_privacy.py": "0b9238f27be7a7719d0a1122e51ebc52f3ec563de92fc65a8b0d046d60242dd3"
+  },
+  "comparison": {
+    "final_red": "4 failed against immutable parent source with the final four-case test",
+    "green": "4 passed against current source with the same test bytes",
+    "adjacent": "7 passed in the corrected adjacent harness",
+    "static": "scoped Ruff and git diff --check passed"
+  },
+  "limits": [
+    "No deployment, production execution, browser, provider, database, Docker, or historical-log proof.",
+    "The active exception context before the legacy parser inner try is outside this four-case proof.",
+    "The broad parent SEC-PARSER-LEGACY-LOG-01 remains PARTIAL."
+  ]
+}

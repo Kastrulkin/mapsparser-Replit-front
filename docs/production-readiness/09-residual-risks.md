@@ -1,5 +1,16 @@
 # Residual risks — working register
 
+Latest21September, SEC-LEGACY-EXCEPTION-01 is locally FIX_PROVEN only for the
+parser-config import fallback and legacy invalid-URL/inner timeout/general
+exception text. Final immutable-parent4fail/current4pass, seven adjacent checks
+and caller-compatibility review retain current fallback/retry semantics. A
+potential fifth case is caller-level invalid-URL handling around an unrelated
+exception; it is not the separately excluded context-manager entry/browser
+lifecycle before the parser inner try. Other legacy value/log sinks,
+browser/provider runtime, direct-route execution, existing logs/artifacts and
+deployed source remain open.
+SEC-PARSER-LEGACY-LOG-01 is PARTIAL, not closed; whole readiness remains FAIL.
+
 Latest21September, parent386a1686: three local P2 safety-gate gaps are corrected,
 but syntactic approval checking is not variable-provenance proof, the README
 guard covers only documented push forms, and isolated health routes do not

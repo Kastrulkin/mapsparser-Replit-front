@@ -1,5 +1,17 @@
 # Production-readiness change log
 
+## Legacy parser exception privacy — 21 September
+
+SEC-LEGACY-EXCEPTION-01 changes only outward diagnostic text in parser-config
+ImportError fallback and legacy parser invalid-URL, timeout and general error
+branches. Stable codes replace synthetic/provider exception interpolation;
+timeout/general branches suppress chained raw tracebacks. Parser selection,
+payload/return behavior, invalid-URL type/no-browser admission and browser-close
+ordering are preserved. Final immutable-parent4fail/current4pass, seven adjacent
+checks and scoped static checks support this local boundary. The parent
+SEC-PARSER-LEGACY-LOG-01 remains PARTIAL; no browser/provider/production run,
+deployment, historical-log cleanup or full legacy logging claim follows.
+
 ## Safety guards — 21 September, parent386a1686
 
 Approval audit now rejects unverified expression/expanded-keyword overrides;
