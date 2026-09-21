@@ -1,5 +1,22 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, approved Docker cleanup complete
+
+- [x] User-approved exact6old synthetic containers+6images removed. Retained
+  baseline is now23containers/4images/20volumes/23networks; current hfLYPi,
+  LocalOS/Riderra and every volume preserved. Supersedes pending choice below.
+- [x] Exact21old unshared BuildKit records removed across two versioned runs.
+  v1 correctly failed completeness after only3leaf removals; child-first v2
+  removed remaining18, no additions or unrelated resource delta. Controls pass.
+- [x] Host sample~17.70GiB free; full-build10GiB floor currently satisfied.
+  Free-space fluctuations are recorded separately, not all credited to cleanup.
+- [ ] Full goal remains FAIL/open. No production/provider/push/deploy action.
+
+Evidence: task `old-audit-docker-results-20260921.md` and hash manifest. Never
+replay these one-shot removals. Native agent/social test package is separately
+pending documentation/commit; next real-PG slice is capabilities phase1,57exact
+mapped nodes, under the existing owned-container/guard boundary.
+
 ## Latest checkpoint — 21 September, renewed cleanup and local commits
 
 - [x] Audit controller active. Two reviewed local checkpoints committed:

@@ -1,5 +1,17 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Approved cleanup reliability — 21 September
+
+**OPS-CACHE-DEPENDENCIES-01 — P2, local audit executor FIX_PROVEN.** BuildKit
+per-ID prune can return0yet retain parent records. Actual v1removed3of21and
+correctly failed exact-inventory acceptance. Complete graph planning and a
+literal18-IDresume allowlist now remove children before parents; graph controls
+and v2exact18/0extra delta pass. Not a product/runtime defect. User-authorized
+6container/6image disposal retained every volume and current resources.
+Full effect/cause/risk/acceptance and hashes: task evidence
+`old-audit-docker-results-20260921.md` / manifest. Host free~17.70GiB is a sample,
+not a claim that this amount was reclaimed. Whole-goal readiness unchanged.
+
 ## Legacy parser exception privacy checkpoint — 21 September
 
 **SEC-LEGACY-EXCEPTION-01 — P1, locally FIX_PROVEN (bounded child of

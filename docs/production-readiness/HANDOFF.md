@@ -1,5 +1,24 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, approved Docker cleanup
+
+Branch codex/production-readiness-20260917, parent4328a91a. User answered yes
+to exact old Sep17–18 test-container/image disposal. Actual6containers+6images
+removed; current retained baseline23containers/4images/20volumes/23networks,
+not29. Every volume/current hfLYPi/LocalOS/Riderra retained. Exact21old cache
+records removed: v1partial3and correctly failed gate, v2child-first remaining18
+with exact no-addition delta and unchanged resource IDs. Raw failure retained.
+Independent pre-exec reviews and graph controls pass. See task
+`old-audit-docker-results-20260921.md` / manifest. Do not rerun cleanup.
+
+Latest capacity sample~17.70GiB, above10GiBbuild floor; still check capacity
+before execution.13foreign paths retained. Native agent/social support/evidence
+is a separate uncommitted package; do not broadly stage source/test changes.
+Next: package that result, then reviewed capabilities-phase1 real-PG57 profile
+with literal mapped nodes and existing owned-relay parent binding. No profile
+execution is claimed yet. Whole-goal FAIL, frontend flake, remaining backend,
+security/browser/performance/CI gates remain. No production/provider/push/deploy.
+
 ## Latest checkpoint — 21 September, cleanup follow-up
 
 Current source checkpoint f137edb5 follows audit05c9c83e. Both normal hooks,

@@ -1,5 +1,15 @@
 # Production-readiness change log
 
+## Approved local Docker cleanup — 21 September, parent4328a91a
+
+Removed exactly6completed old synthetic containers,6images and21unshared old
+BuildKit records; every volume and current test/application resource retained.
+Audit-only helper now plans cache dependency order and rejects expanded/missing
+or cyclic targets. Failed partial v1is preserved; controls and exact v2postcheck
+prove remaining18removed with no unrelated delta. No application source, DB,
+production, provider, push or deployment change. Detailed manifest and recovery
+limits are in task evidence `old-audit-docker-results-20260921.md`.
+
 ## Legacy parser exception privacy — 21 September
 
 SEC-LEGACY-EXCEPTION-01 changes only outward diagnostic text in parser-config

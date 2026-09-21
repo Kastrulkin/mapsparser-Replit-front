@@ -1,5 +1,16 @@
 # Readiness decisions
 
+## D-093 — Confirm exact deletion, not successful prune exit
+
+Approved old-container/image disposal changes the retained resource baseline;
+record the exact six-item delta and never claim historical29containers remain.
+Keep all volumes, current resources and historical evidence. BuildKit parents
+may survive successful per-ID prune while children exist. Plan all dependencies
+before mutation, reject retained external children/cycles, delete leaves first,
+bind resume to literal approved IDs, and require exact post-inventory deltas.
+Keep partial failure evidence; no global prune or expansion of the allowlist.
+Separate rounded Docker cache sizes and contemporaneous host free-space samples.
+
 ## D-092 — Distinguish cache reclamation from test-stand disposal
 
 Inactive ephemeral package downloads and an app-scoped cached buildtool can

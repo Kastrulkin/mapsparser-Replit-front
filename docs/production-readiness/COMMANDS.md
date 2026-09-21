@@ -1,5 +1,23 @@
 # Verified commands and evidence
 
+## Approved old Docker cleanup — 21 September
+
+Named tmux `old-audit-docker-cleanup-20260921` ran fixed-ID
+`old_audit_docker_cleanup_20260921.py --execute`; exact6containers+6images
+removed,20volumes/23networks and remaining23container states/mounts retained.
+`old-audit-buildkit-cleanup-20260921` preserved failed completeness:3of21removed.
+Corrected `old-audit-buildkit-cleanup-v2-20260921` ran:
+
+```sh
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/old_audit_buildkit_resume_20260921.py --execute
+```
+
+Recorded18per-IDprunes, exact18removed/0added, unchanged resource IDs. Docker
+command durations total6.098s, not whole-wrapper timing. Graph controls exit0
+43.4ms; scoped Ruff/diff checks pass. Raw exact commands/outputs/hashes in task
+`old-audit-docker-manifest-20260921.json`. Commands are historical one-shot
+evidence, not instructions to rerun already deleted IDs. No global prune.
+
 ## Renewed cache cleanup — 21 September
 
 Named tmux cache-npx-cleanup-execute-20260921 and
