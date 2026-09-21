@@ -1,5 +1,24 @@
 # Production-readiness progress
 
+## Latest checkpoint — 22 September, image candidates mapped
+
+- [x] Pinned image mapping completes in 37.123s: all219 candidates,20layers,
+  identical archive35d4 to the original scan. No extraction/container execution.
+- [x] Exact whole-file source binding safely transfers13 prior classifications:
+  7fixtures,3prose/example IDs,2idempotency examples,1bearer placeholder.
+  Complete source-join capture exits0 in724.824ms; independent review PASS.
+- [ ] Remaining206 image candidates are untriaged, including all17private-key
+  labels and both config candidates. No clean-image or confirmed-key claim.
+- [ ] New explicit HEADe44bd538+two-test-overlay full-backend snapshot is being
+  prepared. Initial5487-node collection succeeded, later stricter wrappers exposed
+  capture/plugin harness failures before test bodies. No full-current pass yet.
+
+Evidence: task `image-candidate-map-results-20260922.md` and its scoped artifact
+directory. Foreign13paths preserved. Cleanup already complete; about14GiB free.
+No production/existing DB/provider writes, deploy/push or repeated cleanup.
+Original objective ACTIVE/FAIL; next: private-key predicates and strict full-current
+offline aggregate, then remaining integration/performance/CI/demo/review gates.
+
 ## Latest checkpoint — 22 September, existing corrections verified
 
 - [x] Explicit HEAD936be8f9+two-test-overlays snapshot passes six ordered cases:

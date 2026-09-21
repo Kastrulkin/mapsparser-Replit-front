@@ -1,5 +1,39 @@
 # Readiness handoff
 
+## Latest checkpoint — 22 September, mapped image evidence
+
+Parent e44bd538ecf6ce19012df310a36f818915205077, branch
+codex/production-readiness-20260917. Same13foreign paths remain unstaged,
+tracked diff SHA40afa0141e5fe1b9fe9d18ee651ba61e19a27367158d71984f5a90a4d2a4c6d1.
+New owned files: two image_candidate_map_hflypi support helpers plus scoped
+image-candidate-map-20260922 evidence/report and these progress documents.
+
+Mapping terminal PASS37.123s; private result3b2f050a binds219candidates/20layers
+and exact archive35d4. Do not repeat this export. Repo derivative omits normalized
+member names. Source joinv2 transfers13 only through exact whole-file equality;
+206remain unresolved. Independent runtime/source-transfer review PASS. First
+join envelope truncated, preserved privately; complete v2 capture724.824ms.
+
+Current full-backend wrapper work is isolated to
+/private/tmp/localos-current-full-aB5f. Source is HEADe44bd538 plus only parser
+and author test overlays, not the dirty tree. Initial collection5487nodes passed;
+later strict wrapper controls found terminal-plugin/capture-capacity harness
+problems, no full test bodies yet. Require repaired controls/collection and
+independent pre-execution acceptance before one whole run. Keep failed attempts.
+
+Nearest actions: finish the current wrapper/aggregate and exact private-key
+predicates (17 labels across6members, still unclassified). Broader integration,
+frontend ratchet/real-browser, performance, CI/demo and whole-diff gates remain.
+Whole audit ACTIVE/FAIL. Cleanup is already complete; do not prune again.
+All current containers/volumes/existing DBs preserved; about14GiB host free.
+
+Read-only continuation:
+```sh
+git status --short
+jq '{status,candidates:(.mapped_candidates|length),duration_seconds}' .agent/tasks/production-readiness-20260917/evidence/image-candidate-map-20260922/mapping-redacted.json
+jq '.stdout | fromjson | {transferred_count,untriaged_count}' .agent/tasks/production-readiness-20260917/evidence/image-candidate-map-20260922/source-join-v2.json
+```
+
 ## Latest checkpoint — 22 September, current corrections checkpoint
 
 Parent da3a357d107c6dafa5092853f0508ddb0a83939c on codex/production-readiness-20260917.

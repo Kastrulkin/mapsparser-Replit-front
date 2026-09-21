@@ -1,5 +1,13 @@
 # Production-readiness change log
 
+## Image candidate mapping — 22 September, parente44bd538
+
+Audit-only streaming mapper binds all219 candidates to historical members/config;
+redacted evidence preserves identities and file hashes without normalized paths.
+Exact byte-bound transfer carries13 prior source classifications;206unknowns
+remain. Independent runtime/accounting review passes. No runtime/product changes,
+container execution, provider key checks, deploy or further cleanup.
+
 ## Existing test correction verification — 22 September, parentda3a357d
 
 Six exact ordered cases pass over identified HEAD+two-overlay snapshot; this

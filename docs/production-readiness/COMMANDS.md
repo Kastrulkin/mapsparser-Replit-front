@@ -1,5 +1,19 @@
 # Verified commands and evidence
 
+## Image mapping and source-triage binding — 22 September
+
+Named tmux audit-image-map-v1 ran support/image_candidate_map_hflypi.py --attempt
+v1:37.123s,219mapped,20layers,archive35d4 equal to credential v2. Original private
+capture3b2f050a is not the redacted repo derivative. Mapper3f55167f and imported
+private-layer57a1ba58 match before/after. Controls-v2 terminal exit0 retained.
+
+Named tmux audit-image-source-join-v2 ran the archived source_join_executed.py.txt
+equivalent from /private/tmp/localos-image-triage-gtfjWr with the private mapper
+result. Capture flags: --timeout60 --max-output50000; exit0,724.824ms, no truncation.
+Exact argv/source/hashes are in image-candidate-map-20260922. Prior default6000
+capture truncated and is not used. Result13transferred/206untriaged, not imagePASS.
+Do not replay Docker mapping or reuse exclusive output attempt names.
+
 ## Current-source six-case confirmation — 22 September
 
 Named tmux audit-current-six-confirm-v1 captured exact clean-env/sandbox pytest

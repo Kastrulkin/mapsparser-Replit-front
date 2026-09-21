@@ -1,5 +1,15 @@
 # Readiness decisions
 
+## D-109 — Reuse secret triage only with exact byte identity
+
+Map each redacted image candidate to its exact historical member before assigning
+meaning. Whole-file equality to the previously triaged source plus exact line/rule
+permits bounded transfer; a familiar path, package name or scanner label does not.
+Keep unresolved candidates explicit. Private mapper filenames stay outside Git;
+the public derivative removes normalized paths while preserving IDs/digests.
+Config-level mapping is not field-level triage. Do not rerun the full credential
+scan just to recover file coordinates, test credentials live or suppress rules.
+
 ## D-108 — Verify foreign corrections without silently accepting the whole tree
 
 Use a named base commit plus two exact test overlays for the first current-source
