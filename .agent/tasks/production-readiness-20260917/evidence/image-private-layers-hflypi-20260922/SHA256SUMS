@@ -1,0 +1,7 @@
+1123c55f646abd7b944b07aecb33a8aab96cefb32f65194279b46a72c075e5ba  image-archive-layout-v1.json
+1e2392759623d3fc37b3291acf2e33e853bed34335b6d699b6ed9f6d969ab8b7  image-archive-descriptors-v1.json
+e4bea76d71ec85a86bef1e7ebd629b83262fd21273d8bc62151dc6957405109b  image-private-layer-controls-v1.json
+1aef5b01aa8c1b203d68a3e455b76d6c1e75da389a9ac1a0fb007b4a4a12f02c  image-private-layer-controls-v2.json
+2db711da38b39ead9b36a10d2eb1f1f39c5b824fe028c6f3631c8ce81b27f7ad  image-private-layers-v1.json
+57a1ba58876f35797708071ba88b2387a0e15888ac0f7034868cbb017da3a8f7  ../../support/image_private_layers_hflypi.py
+0c9ebf91a862e52e80c09720151f09f9ffd8c50fe56588659246bf3a9426dbd8  ../../support/image_private_layers_hflypi_checks.py

@@ -1,5 +1,18 @@
 # LocalOS threat model — current audit evidence
 
+## Pinned-image private-artifact update — 22 September
+
+The20 historical OCI layers of local audit image9d6edac8...60853 were read and
+content-address verified against fresh inspect identities, without extraction
+or execution. No enumerated /app private artifact path family or exact known
+297,147-byte Google Docs response digest was found among61,500 regular entries.
+Lower-layer files remain checked even after later whiteouts. Independent
+pre-exec/runtime/package review PASS; raw evidence and scope are in task
+image-private-layers-results-20260922.md. General secrets in configuration/file
+contents, other private variants, actual broad context and older images remain
+unverified. SEC-BUILD-CONTEXT-02 is not closed; no credential validity, expiry
+or revocation is inferred from this result. Historical dated notes follow.
+
 ## Latest service/leaf update — 21 September, parentc587b20f
 
 SEC-APIFY-TRACE-01 closes fresh raw trace payloads, replay of historic raw events

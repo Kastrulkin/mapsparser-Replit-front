@@ -1,5 +1,15 @@
 # Production-readiness change log
 
+## Image private-artifact evidence — 22 September, parent84eb9d22
+
+Added two audit-only streaming OCI inspection/control helpers; no application
+or Dockerfile change. All20 layers of pinned audit image scanned in15.528 s:
+61,500 regular entries, zero enumerated-path/known-file-digest findings. Full
+descriptor/blob/ordered diff-ID chain and independent runtime/package review
+pass. Five raw captures/current helper hashes retained; no extraction or image
+execution. General credential, broad-context and historical-image gates remain
+OPEN; no readiness score promotion or repeated cleanup.
+
 ## Editorial Operator and admission inventory — 22 September, parent36116cab
 
 Added one literal four-module profile in five audit support files. All63

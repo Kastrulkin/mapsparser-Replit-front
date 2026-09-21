@@ -1,5 +1,26 @@
 # Production-readiness progress
 
+## Latest checkpoint — 22 September, all-layer private-artifact inspection
+
+- [x] Editorial63/admission package committed locally as `84eb9d22`; reviewed
+  diff4c17a916...770996 matches, hook211.581 ms PASS, strict scan116,739 bytes
+  has no findings (649.472 ms). Foreign13 paths remain outside the commit.
+- [x] Read all20 layers of pinned audit image9d6edac8...60853:61,500 regular
+  entries/2,866,391,223 file bytes;15.528 s. Zero enumerated private-path-family
+  or known exact private-response digest findings. No extraction or execution.
+- [x] OCI descriptors/blob digests/ordered diffIDs match fresh image inspect;
+  independent pre-exec/runtime/package review PASS. Final synthetic controls,
+  focused Ruff and diff check158.561 ms PASS, including deleted lower layers.
+- [ ] This is not a general secret scan. SEC-BUILD-CONTEXT-02 broader context,
+  older-image and credential coverage remains OPEN. Next: bounded redacted
+  credential scanning of image configuration and historical file contents.
+- [ ] Backend accepted3,256/5,481 unchanged; remaining native admission/full
+  current-source aggregate, frontend flake, browser, performance, CI/demo/final
+  gates remain open. No score or original whole-goal FAIL is promoted.
+
+Parent `84eb9d22`; two audit-only helpers, five captures and report/docs. About
+13 GiB free; no broad cleanup, production/provider writes, push or deployment.
+
 ## Latest checkpoint — 22 September, editorial Operator and fixture inventory
 
 - [x] Previous382 package committed as `36116cab`; exact reviewed diff and

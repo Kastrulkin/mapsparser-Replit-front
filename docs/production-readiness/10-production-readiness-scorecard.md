@@ -1,5 +1,11 @@
 # Production-readiness scorecard — working, not final
 
+22September image evidence, parent84eb9d22:20 historical layers of one pinned
+local image pass a bounded private-path/known-file-digest inspection, with
+independent identity/runtime/package checks. It is explicitly not generic
+secret scanning or all-image/context clearance. No score or original acceptance
+gate is promoted; broad security/native/browser/performance/final gates remain.
+
 22September editorial checkpoint, parent36116cab:63/63 unchanged frozen tests
 pass (62 real-PG); independent runtime/live/package checks PASS. Accepted slices
 3,256/5,481, not same-run/current-source proof. The newly enumerated266 further

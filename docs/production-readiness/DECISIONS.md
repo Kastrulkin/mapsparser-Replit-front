@@ -1,5 +1,20 @@
 # Readiness decisions
 
+## D-104 — Inspect historical layers without equating artifact absence to secrecy
+
+Observe the actual OCI archive format, stream every compressed layer without
+extracting/running it, validate blob/descriptor/config/inspect identity chains,
+and retain lower-layer findings even if later whiteouts remove the path. Bound
+bytes, members and time; retain only counts/digests/path hashes, not document
+contents. Synthetic negative controls exercise private files, renamed known
+content, links, deleted lower layers and malformed identity/order/size/paths.
+
+The first scanner deliberately answers only whether enumerated /app artifact
+families or one complete known private response occur in the pinned image.
+Its20-layer zero result is not general credential coverage, actual build-context
+proof, old-image clearance or a production-ready claim. Preserve the broader
+SEC-BUILD-CONTEXT-02 gate and do not substitute this narrower pass for it.
+
 ## D-103 — Preserve complete scenarios and classify fixtures by implementation
 
 Run four coherent editorial modules together, including their one fixtureless

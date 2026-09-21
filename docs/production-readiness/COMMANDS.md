@@ -1,5 +1,26 @@
 # Verified commands and evidence
 
+## Pinned image private layers — 22 September
+
+Read-only export layout/descriptor probes ran in named tmux sessions
+`audit-image-archive-layout-v1` and `audit-image-archive-descriptors-v1`.
+Both used the literal Docker.app CLI/context desktop-linux and `image save
+--platform linux/arm64 sha256:9d6edac8b6948e239c0bab54564f92f829e5b9dfc93f3ca0626060ffb4e60853`,
+piped respectively into `tar -tf -` and `tar -xOf - index.json manifest.json
+oci-layout`, with pipefail. Exit0,13.478/11.525 s; no file extraction to disk.
+
+Named tmux `audit-image-private-layers-v1` then executed once:
+
+```sh
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/image_private_layers_hflypi.py --attempt v1
+```
+
+15.528 s,20 layers/61,500 regular entries, zero findings in the narrow scope.
+No extraction/runtime/container mutation; general secrets NOT scanned. Pure
+controls/Ruff/diff via named tmux v1/v2:194.197/158.561 ms PASS. Only finalv2
+corresponds to current frozen helper bytes. Five captures/seven hashes in the
+task image-private-layer archive; existing attempts must not be replayed.
+
 ## Editorial Operator63 — 22 September
 
 Named tmux `audit-native-operator-editorial-pg-v1` ran once and is terminal:

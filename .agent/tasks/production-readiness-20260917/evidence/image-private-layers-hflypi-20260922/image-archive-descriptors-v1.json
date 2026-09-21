@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "label": "image-archive-descriptors-v1",
+  "captured_at": "2026-09-21T21:04:30.072369+00:00",
+  "command": [
+    "/bin/zsh",
+    "-f",
+    "-c",
+    "set -o pipefail; /Applications/Docker.app/Contents/Resources/bin/docker --context desktop-linux image save --platform linux/arm64 sha256:9d6edac8b6948e239c0bab54564f92f829e5b9dfc93f3ca0626060ffb4e60853 | /usr/bin/tar -xOf - index.json manifest.json oci-layout"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 11525.247,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"schemaVersion\":2,\"mediaType\":\"application/vnd.oci.image.index.v1+json\",\"manifests\":[{\"mediaType\":\"application/vnd.oci.image.manifest.v1+json\",\"digest\":\"sha256:c80a1ef8f423255551c3f82df33e1395b1860d4ed81bc8fedf6707860f652112\",\"size\":4119,\"platform\":{\"architecture\":\"arm64\",\"os\":\"linux\"}}]}[{\"Config\":\"blobs/sha256/17783fa386c0ea5318bc40c4ef3b17840808304797def58acf766c15d6a697f2\",\"RepoTags\":null,\"Layers\":[\"blobs/sha256/db86109db3a878cad2671ab822c9b43afbab6a5e1a67658d760dc0b15e7b75d5\",\"blobs/sha256/7fea2228218a869ae6619766dc4aae2d5e251700ebac01541d63cafea4bc7fc7\",\"blobs/sha256/742d423df6ec83a05afd11c678f055935985f615115c46681d670810438c3732\",\"blobs/sha256/9873f9cf3f97d8317bea39be5130389ca496910902e4c4327c227d606b57511d\",\"blobs/sha256/e9a0ce4a7647a995c03c9a68d766a6949bb521e17310996f4b25e5e114f80a00\",\"blobs/sha256/5a9a4b9b36ec6d9009c7170987af7177907a762d42389fccaa1d7fba27f4ec06\",\"blobs/sha256/a6ef9685e014c4828c04900321eeed87a89ea19485f9bbd2c200d3d665085c38\",\"blobs/sha256/f83a83b7056c76170aaabe9632c0948ab2c2f15074fb860c6310c5fd7a4981ee\",\"blobs/sha256/44dea8689dbaa30ba599871382e1f868102162b4e4cadf138257c6837fc88bfa\",\"blobs/sha256/b535adcf70cfed2b846909eeb1d24c3d6a422602e3060d5d7c250b2862618efb\",\"blobs/sha256/4bc04a9e20218e82389f75d34d5829e998f641fd4cc8a64a9eb4d5c3304ab90c\",\"blobs/sha256/ed3249d9859c31dd73415eba1a75542334490afe7005d22465da9778fceeba89\",\"blobs/sha256/376bde824849410015622445ea043e1048358b2e22b92720c531088e95d3a4f8\",\"blobs/sha256/3dc1f57d9223998042bf5b81bd2814568ce98bc246a65191d0074a7640e2f62d\",\"blobs/sha256/216a022624dd4632f0ecc9fd526b9f53527749f81225c426833a24a5f73c6d95\",\"blobs/sha256/a2a5225f9805b7fbef938259d82b0e1d3e15edb74b4b4853463eeaa5efe9fa7d\",\"blobs/sha256/a147fee1135be1d9aac88a1a8dc7a69dc5c19b5eb9aff79d36e24d37e3c36bfc\",\"blobs/sha256/7e779a42e65497c25e3372f7d916a3d5fcc0f9c01e5bbd31ae323f2237d64b29\",\"blobs/sha256/4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1\",\"blobs/sha256/642892fa964e9c6716d629140be000eef8851c191f0b1032f7aa36566b29e0de\"]}]{\"imageLayoutVersion\":\"1.0.0\"}",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

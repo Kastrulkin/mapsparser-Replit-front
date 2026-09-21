@@ -1,5 +1,16 @@
 # Residual risks — working register
 
+## Current update — pinned image private-artifact scope
+
+All20 layers of audit image9d6edac8...60853 now have verified zero findings for
+the enumerated private artifact families beneath /app and one exact known
+Google Docs response digest. Independent runtime/package review PASS. This
+does not establish general absence of secrets, copied fragments/other private
+variants, actual broad build-context safety or cleanliness of older images.
+SEC-BUILD-CONTEXT-02 remains OPEN; general configuration/layer credential scan
+is the next concrete security gate. No provider URL/key was tested, rotated or
+published. Backend accepted3,256/5,481 unchanged; whole readiness remains FAIL.
+
 ## Current update — editorial63 and remaining fixture topology
 
 Editorial/rewrite/revision/followup scenarios now pass63/63 without skips;

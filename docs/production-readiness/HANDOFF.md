@@ -1,5 +1,46 @@
 # Readiness handoff
 
+## Latest checkpoint — 22 September, private image-layer evidence
+
+Branch `codex/production-readiness-20260917`, parent `84eb9d22`, the committed
+editorial63/fixture-admission package. Its21-file diff4c17a916...770996 matches
+independent review; normal hook211.581 ms PASS and strict116,739-byte scan has
+no findings649.472 ms. Backend accepted3,256/5,481,2,225 unclosed; no aggregate.
+
+Pinned local Linux/arm64 image9d6edac8...60853 (frozen application99849935) was
+streamed, not extracted or run. Actual OCI archive1,074,089,472 bytes expands
+to2,919,512,576 layer bytes;20 layers contain61,500 regular entries totaling
+2,866,391,223 bytes,3,574 links and79 whiteouts. Scan15.528 s; zero findings for
+enumerated private artifact path families beneath /app and one exact known
+297,147-byte Google Docs response digest at any path. Deleted earlier-layer
+files are included. These are entry totals, not unique final-rootfs files.
+
+Blob digests, descriptor sizes/order, config rootfs and fresh before/after image
+inspect identities agree. Independent pre-exec/runtime/package review PASS.
+Final helpers57a1ba58...a8f7 /0c9ebf91...dbd8; controls v2/Ruff158.561 ms PASS.
+v1 controls194.197 ms are retained history; exact initial helper bytes before
+added controls were not archived, so v1 is not current frozen helper proof.
+All three actual export/scan attempts are terminal; do not replay existing
+layout-v1/descriptors-v1/private-layers-v1 paths. Five captures/seven hashes:
+task `image-private-layers-hflypi-20260922/`, results report alongside it.
+
+Next image gate: inspect installed Gitleaks stdin/config limits and prepare a
+bounded, fully redacted scan of configuration plus every historical layer's
+file content, without external upload or multi-GB extraction. The current
+helper intentionally does NOT do general credential detection. Other private
+variants, actual broad build context and old images remain unverified;
+SEC-BUILD-CONTEXT-02 remains OPEN, not narrowed to declare it finished.
+Read-only continuation entry point:
+
+```sh
+sed -n '1,340p' .agent/tasks/production-readiness-20260917/support/image_private_layers_hflypi.py
+```
+
+Parallel next backend gate is the exact fixture/body admission work described
+below (55 fixture definitions,266 further PG nodes,3 local HTTP). Keep13 foreign
+paths and historical wholeFAIL untouched. About13 GiB free; current stand/all
+volumes retained, no repeat cleanup, production/provider effects, push or deploy.
+
 ## Latest checkpoint — 22 September, editorial63 and exact fixture blockers
 
 Branch `codex/production-readiness-20260917`, parent `36116cab`. Previous
