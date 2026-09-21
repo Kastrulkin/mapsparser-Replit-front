@@ -1,5 +1,34 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, 209 fresh backend nodes passed
+
+Supersedes the next-client-info status below. Actual unchanged client-info
+module:8/8/no skip/error (pytest12.05s, total16.475s),22 clean relay connections,
+new tmpfs container removed,29existing resources unchanged. v1's1pass/7setup
+errors are retained and causally explained: Flask import in the test parent
+needed DATABASE_URL, not merely the child's migration environment. The
+reviewed support-only client profile binds the exact freshly verified relay
+DSN, requires absent parent configuration, and removes its exact value during
+cleanup. No product/fixture/assertion/migration change. Independent review PASS.
+
+Separate pure card-growth copy-contract module:200/200/no skips/errors,
+pytest0.12s/capture0.568s/total2.795s. It has no DB/network/container needs and
+ran with default guard/clean environment, noTCmode/DSN/providers. New launcher
+reuses existing process/result helpers and postverifies source even on failure.
+Both slices preserve5720frozen source blobs; installed default guard07d3...
+is restored/unchanged. Source99849935 remains frozen, support guard has named
+card-growth/client-info opt-ins only. No active test run remains.
+
+Task evidence: `native-client-info-hflypi-20260921/` (15captures+manifest) and
+`native-client-info-results-hflypi-20260921.md`. Total209distinct passed of5481,
+not a full aggregate;5272unexecuted (85mappedPG-group +5187other). Do not count
+the historical v1 static success twice. Next: additional pure-unit/PG batches,
+then aggregate and remaining frontend/security/browser/performance/CI gates.
+Keep5GiB start/2GiB live floors andARM64tmux; latest free~5.91GiB. Cache cleanup
+already reclaimed~1.50GiB; do not repeat it or completed setup/build/restore.
+13foreign dirty paths preserved, no production/provider/push/deploy. Active
+goal and historical whole-goal FAIL unchanged. Parent audit commit f9cbbae5.
+
 ## Latest checkpoint — 21 September, real Testcontainers migration slice passed
 
 Supersedes the adapter-pending status below. Unchanged card-growth migration

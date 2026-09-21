@@ -1,5 +1,21 @@
 # Readiness decisions
 
+## D-089 — Separate test-environment failures from endpoint defects
+
+The client-info fixture configures DATABASE_URL only for its Alembic child;
+the parent still imports Flask-SQLAlchemy and needs a valid URI. A seven-error
+setup failure therefore does not prove seven endpoint defects. Retain the raw
+RED and correct the isolated execution environment, not application code or
+assertions: only the client-info profile may bind an initially absent parent
+DATABASE_URL to its freshly validated owned relay/test DB and remove that
+exact value at cleanup. Other profiles and safety boundaries stay unchanged.
+
+Prefer broad useful pure-unit batches when they need no new transport. Reuse
+the reviewed process/result helpers, keep literal module/count gates and
+finally source verification, and leave TC/DB/provider configuration absent.
+Count distinct successful nodes across slices, not failed rerun totals; a
+209node cumulative pass is not5481passed or a whole-suite/order-isolation proof.
+
 ## D-088 — Prove the real migration child through scoped owned transport
 
 The internal-only Docker network does not publish a usable host port on this

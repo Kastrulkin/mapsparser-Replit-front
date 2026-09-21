@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one guarded internal-only Testcontainers migration node after review."""
+"""Run an allowlisted, single-container integration slice after review."""
 
 from __future__ import annotations
 
@@ -25,7 +25,14 @@ SOURCE = BASE / "source"
 NATIVE = BASE / "native"
 EVIDENCE = NATIVE / "evidence"
 VENV = NATIVE / "venv/bin/python"
-NODE = "tests/test_card_growth_migration_pg.py::test_card_growth_schema_is_available_after_migrations"
+PROFILES = {
+    "card-growth-v1": {
+        "target": "tests/test_card_growth_migration_pg.py::test_card_growth_schema_is_available_after_migrations",
+        "count": 1,
+        "prefix": "native-tc-one",
+    },
+    "client-info-v1": {"target": "tests/test_client_info_gate.py", "count": 8, "prefix": "native-tc-client-info"},
+}
 OLD_GUARD_SHA256 = "07d3e2dc19cbb0f9e542a6d0835ea17b5efcc5713391c152a833e6efefd61150"
 MIN_START = 5 * 1024**3
 MIN_LIVE = 2 * 1024**3
@@ -201,14 +208,15 @@ def require_probe(payload: dict[str, object], mode: str, guard_hash: str) -> Non
             raise RuntimeError("child proof does not establish guarded distinct process")
 
 
-def plugin_source() -> str:
+def plugin_source(target: str) -> str:
     return """
 import json
 import pytest
-state = {'collected': None, 'passed': 0, 'failed': 0, 'skipped': 0, 'xfailed': 0, 'setup_failed': 0, 'call_failed': 0, 'child_calls': []}
+state = {'collected': None, 'nodeids': [], 'passed': 0, 'failed': 0, 'skipped': 0, 'xfailed': 0, 'setup_failed': 0, 'call_failed': 0, 'child_calls': []}
 class Results:
     def pytest_collection_finish(self, session):
         state['collected'] = len(session.items)
+        state['nodeids'] = [item.nodeid for item in session.items]
     def pytest_runtest_logreport(self, report):
         if report.when == 'call':
             if report.passed: state['passed'] += 1
@@ -224,10 +232,10 @@ result = pytest.main([%r, '-q', '-p', 'no:cacheprovider'], plugins=[Results()])
 state['pytest_return'] = int(result)
 print('HFLYPI_TC_ONE_RESULT=' + json.dumps(state, sort_keys=True))
 raise SystemExit(result)
-""" % NODE
+""" % target
 
 
-def parse_test(payload: dict[str, object]) -> dict[str, object]:
+def parse_test(payload: dict[str, object], profile: dict[str, object]) -> dict[str, object]:
     stdout = payload.get("stdout")
     if not isinstance(stdout, str):
         raise RuntimeError("test stdout missing")
@@ -237,9 +245,15 @@ def parse_test(payload: dict[str, object]) -> dict[str, object]:
     parsed = json.loads(rows[0].split("=", 1)[1])
     if not isinstance(parsed, dict):
         raise RuntimeError("test callback payload invalid")
-    expected = {"collected": 1, "passed": 1, "failed": 0, "skipped": 0, "xfailed": 0, "setup_failed": 0, "call_failed": 0, "pytest_exitstatus": 0, "pytest_return": 0}
+    expected = {"collected": profile["count"], "passed": profile["count"], "failed": 0, "skipped": 0, "xfailed": 0, "setup_failed": 0, "call_failed": 0, "pytest_exitstatus": 0, "pytest_return": 0}
     if any(parsed.get(key) != value for key, value in expected.items()) or payload.get("exit_code") != 0 or payload.get("timed_out") is True:
-        raise RuntimeError("unchanged native node did not pass exactly once without skip")
+        raise RuntimeError("unchanged native slice did not pass every expected node without skip")
+    nodeids = parsed.get("nodeids")
+    target = profile["target"]
+    if not isinstance(nodeids, list) or len(nodeids) != profile["count"] or len(set(nodeids)) != len(nodeids):
+        raise RuntimeError("native slice did not report unique expected nodes")
+    if not all(isinstance(node, str) and (node == target or node.startswith(target + "::")) for node in nodeids):
+        raise RuntimeError("native slice collected a node outside its literal target")
     return parsed
 
 
@@ -313,7 +327,7 @@ def remove_owned_capability(events: Path) -> dict[str, object]:
     return {"removed": True, "path": path.name}
 
 
-def audit_journals(events: Path, relay_artifact: Path) -> dict[str, object]:
+def audit_journals(events: Path, relay_artifact: Path, profile: str) -> dict[str, object]:
     if not events.is_file() or events.is_symlink() or not relay_artifact.is_file() or relay_artifact.is_symlink():
         raise RuntimeError("Testcontainers event or relay journal is missing")
     event_rows = [json.loads(row) for row in events.read_text().splitlines() if row]
@@ -348,6 +362,13 @@ def audit_journals(events: Path, relay_artifact: Path) -> dict[str, object]:
         raise RuntimeError("capability denial evidence is incomplete")
     if cleanup[0].get("errors") != []:
         raise RuntimeError("Testcontainers adapter reported cleanup errors")
+    bindings = [row for row in event_rows if row.get("event") == "parent_database_bound"]
+    unbindings = [row for row in event_rows if row.get("event") == "parent_database_unbound"]
+    if profile == "client-info-v1":
+        if len(bindings) != 1 or len(unbindings) != 1 or bindings[0].get("pid") != parent_pid or bindings[0].get("port") != port or bindings[0].get("database") != "test" or unbindings[0].get("pid") != parent_pid:
+            raise RuntimeError("parent Flask database configuration lifecycle is incomplete")
+    elif bindings or unbindings:
+        raise RuntimeError("unexpected parent Flask database configuration")
     final = relay_rows[-1] if relay_rows else {}
     connections = final.get("connections") if isinstance(final, dict) else None
     executions = final.get("exec_results") if isinstance(final, dict) else None
@@ -398,20 +419,23 @@ def capabilities_snapshot() -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--attempt", required=True, type=attempt)
+    parser.add_argument("--profile", choices=tuple(PROFILES), default="card-growth-v1")
     values = parser.parse_args()
     name = values.attempt
+    profile = PROFILES[values.profile]
+    prefix = profile["prefix"]
     launcher = runpy.run_path(str(SUPPORT / "native_guard_checks_hflypi.py"))
-    destination = EVIDENCE / f"native-tc-one-{name}.json"
-    journal = EVIDENCE / f"native-tc-one-{name}-events.jsonl"
-    relay_artifact = EVIDENCE / f"native-tc-one-{name}-relay.json"
-    probe_artifacts = {mode: EVIDENCE / f"native-tc-one-{name}-{mode}.json" for mode in ("negative", "child")}
-    backup = NATIVE / f"sitecustomize-before-native-tc-one-{name}.py"
+    destination = EVIDENCE / f"{prefix}-{name}.json"
+    journal = EVIDENCE / f"{prefix}-{name}-events.jsonl"
+    relay_artifact = EVIDENCE / f"{prefix}-{name}-relay.json"
+    probe_artifacts = {mode: EVIDENCE / f"{prefix}-{name}-{mode}.json" for mode in ("negative", "child")}
+    backup = NATIVE / f"sitecustomize-before-{prefix}-{name}.py"
     source_guard = SUPPORT / "native_hflypi_sitecustomize.py"
     source_adapter = SUPPORT / "native_tc_adapter_hflypi.py"
     source_relay = SUPPORT / "native_tc_relay_hflypi.py"
     targets = {source_adapter: SOURCE / "src/native_tc_adapter_hflypi.py", source_relay: SOURCE / "src/native_tc_relay_hflypi.py"}
     started = time.monotonic()
-    output: dict[str, object] = {"attempt": name, "node": NODE, "phase": "preflight"}
+    output: dict[str, object] = {"attempt": name, "profile": values.profile, "node": profile["target"], "expected_count": profile["count"], "phase": "preflight"}
     installed: list[Path] = []
     guard_installed = False
     relay_module = None
@@ -447,7 +471,7 @@ def main() -> int:
         environment = launcher["environment"](guard_hash)
         environment.pop("LOCALOS_HFLYPI_PROBE_DSN", None)
         environment.update({
-            "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1", "LOCALOS_HFLYPI_TC_MODE": "card-growth-v1",
+            "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1", "LOCALOS_HFLYPI_TC_MODE": values.profile,
             "LOCALOS_HFLYPI_TC_ADAPTER_SHA256": hashes["native_tc_adapter_hflypi"],
             "LOCALOS_HFLYPI_TC_RELAY_SHA256": hashes["native_tc_relay_hflypi"],
             "LOCALOS_HFLYPI_TC_JOURNAL": str(journal),
@@ -465,10 +489,10 @@ def main() -> int:
         if shutil.disk_usage(BASE).free < MIN_LIVE:
             raise RuntimeError("disk floor reached before native node")
         output["phase"] = "test"
-        capture = result(["/usr/bin/arch", "-arm64", str(VENV), "-B", "-c", plugin_source()], environment, MAX_RUNTIME, started + MAX_RUNTIME)
+        capture = result(["/usr/bin/arch", "-arm64", str(VENV), "-B", "-c", plugin_source(profile["target"])], environment, MAX_RUNTIME, started + MAX_RUNTIME)
         output["test"] = capture
-        output["test_callbacks"] = parse_test(capture)
-        output["journals"] = audit_journals(journal, relay_artifact)
+        output["test_callbacks"] = parse_test(capture, profile)
+        output["journals"] = audit_journals(journal, relay_artifact, values.profile)
         if str(SOURCE / "src") not in sys.path:
             sys.path.insert(0, str(SOURCE / "src"))
         relay_module = importlib.import_module("native_tc_relay_hflypi")

@@ -1,4 +1,4 @@
-"""One unchanged Testcontainers/Flask migration test, internal-only PostgreSQL.
+"""One allowlisted test module/lifecycle, internal-only PostgreSQL.
 
 Support code only: installs transport/lifecycle hooks, never changes product
 code, migration logic, fixtures or assertions. Not a general Testcontainers
@@ -26,6 +26,7 @@ NETWORK = "localos-readiness-hflypi-tc-internal"
 NETWORK_ID = "6fc9dbcb68ce40e46030cec829ed4613840327eda4109cd09de4ada422a4a0b4"
 OWNER = "production-readiness-20260917-hfLYPi"
 EVIDENCE = Path("/private/tmp/localos-readiness-20260921.hfLYPi/native/evidence")
+PROFILE_PREFIXES = {"card-growth-v1": "native-tc-one", "client-info-v1": "native-tc-client-info"}
 _active = None
 _relay = None
 _started = False
@@ -33,6 +34,7 @@ _events = []
 _original_stop = None
 _session = ""
 _journal = None
+_database_url = None
 
 
 def deny(reason: str) -> None:
@@ -62,6 +64,30 @@ def validate_dsn(parsed: dict[str, str]) -> None:
     record("dsn_admitted", port=int(port), database="test", container_id=result.get("container_id"))
 
 
+def bind_parent_database(port: int) -> None:
+    """Supply required Flask import config only for this owned test lifecycle."""
+    global _database_url
+    if os.environ.get(PREFIX + "MODE") != "client-info-v1":
+        return
+    if os.environ.get(PREFIX + "OWNER_PID") != str(os.getpid()) or "DATABASE_URL" in os.environ or _database_url is not None:
+        deny("refusing to replace parent database configuration")
+    validate_dsn({"host": "127.0.0.1", "port": str(port), "dbname": "test", "user": "test", "password": "test"})
+    _database_url = f"postgresql://test:test@127.0.0.1:{port}/test"
+    os.environ["DATABASE_URL"] = _database_url
+    record("parent_database_bound", port=port, database="test")
+
+
+def unbind_parent_database() -> None:
+    global _database_url
+    if _database_url is None:
+        return
+    if os.environ.get("DATABASE_URL") != _database_url:
+        deny("parent database configuration changed during test")
+    del os.environ["DATABASE_URL"]
+    _database_url = None
+    record("parent_database_unbound")
+
+
 def check_network(client) -> None:
     network = client.networks.get(NETWORK_ID)
     network.reload()
@@ -88,7 +114,11 @@ def install() -> None:
         deny("invalid adapter owner pid")
     raw_journal = os.environ.get(PREFIX + "JOURNAL", "")
     _journal = Path(raw_journal)
-    if _journal.parent != EVIDENCE or not re.fullmatch(r"native-tc-one-v[1-9][0-9]*-events.jsonl", _journal.name) or _journal.is_symlink():
+    profile = os.environ.get(PREFIX + "MODE", "")
+    journal_prefix = PROFILE_PREFIXES.get(profile)
+    if journal_prefix is None:
+        deny("unsupported Testcontainers profile")
+    if _journal.parent != EVIDENCE or not re.fullmatch(re.escape(journal_prefix) + r"-v[1-9][0-9]*-events.jsonl", _journal.name) or _journal.is_symlink():
         deny("journal path is outside this experiment")
     _session = os.environ.get("LOCALOS_HFLYPI_TESTCONTAINERS_SESSION_ID", str(SESSION_ID))
     if owner == str(os.getpid()):
@@ -110,6 +140,8 @@ def install() -> None:
             deny("unexpected Testcontainers configuration")
         if instance.username != "test" or instance.password != "test" or instance.dbname != "test" or instance.env != {"POSTGRES_USER": "test", "POSTGRES_PASSWORD": "test", "POSTGRES_DB": "test"}:
             deny("unexpected synthetic PostgreSQL credentials or environment")
+        if profile == "client-info-v1" and "DATABASE_URL" in os.environ:
+            deny("parent database configuration must be absent before owned start")
         client = instance.get_docker_client().client
         check_network(client)
         # Testcontainers otherwise pulls if the image disappears between its
@@ -144,6 +176,7 @@ def install() -> None:
         if not checks or not all(item.get("denied") is True for item in checks):
             deny("negative capability checks did not all fail closed")
         record("capability_denials", checks=checks)
+        bind_parent_database(port)
         return result
 
     def stop(instance, force=True, delete_volume=True):
@@ -154,6 +187,10 @@ def install() -> None:
             instance.get_docker_client().client.close()
             return
         failures = []
+        try:
+            unbind_parent_database()
+        except BaseException:
+            failures.append(type(sys.exception()).__name__)
         if _relay is not None:
             try:
                 _relay.close()

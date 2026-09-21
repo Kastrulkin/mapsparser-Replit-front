@@ -1,5 +1,33 @@
 # Verified commands and evidence
 
+## Client-info integration and pure-unit batch — 21 September
+
+Named tmux `audit-native-tc-client-info-hflypi-v1`, then `...-v2`:
+
+```sh
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_tc_one_hflypi.py --attempt v2 --profile client-info-v1
+```
+
+v1 preserved:1staticpass/7setup errors, missing parent DATABASE_URL. After the
+reviewed profile-scoped synthetic relay binding, v2 passes8/8/no skip/error,
+pytest12.05s/capture13.113s/wrapper16.475s.22relay execs0/graceful/stderr0,
+10guard negatives, actual child propagation,8capability negatives, one parent
+DB bind/unbind, exact container removal,29Docker identities/states equal,
+empty internal network/capabilities,5720source blobs and default guard restored.
+
+Named tmux `audit-native-unit-card-growth-hflypi-v1`:
+
+```sh
+/usr/bin/arch -arm64 /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_unit_slice_hflypi.py --attempt v1
+```
+
+Actual200/200/no skip/error, pytest0.12s/capture0.568s/wrapper2.795s, exit0,
+stderr empty,5720source blobs/default guard unchanged. NoTCmode/DSN/provider
+credentials. Pure profile/child/unit parser helpers,Ruff6files,diff check pass
+(272.6ms capture). Fifteen raw/static captures+manifest archived at task
+`evidence/native-client-info-hflypi-20260921/`; do not overwrite/replay them.
+Fresh cumulative209/5481 is not a full-suite result. No production or deploy.
+
 ## Native Testcontainers one-node slice — 21 September
 
 Executed only after independent static review, in named tmux

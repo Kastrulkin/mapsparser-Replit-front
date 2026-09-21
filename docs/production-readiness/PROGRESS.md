@@ -1,5 +1,27 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, client-info and 200 pure-unit cases
+
+- [x] Unchanged `/api/client-info` module passes8/8 with real PostgreSQL,
+  migrations and22 clean relay connections. Pytest12.05s, wrapper16.475s.
+- [x] Preserved v1's seven setup errors: parent Flask configuration lacked
+  DATABASE_URL although the migration child had it. A reviewed client-only
+  owned-relay environment binding closes this harness gap; product tests and
+  assertions remain unchanged. Independent runtime review PASS for the slice.
+- [x] Exact new container removed;29existing Docker identities/states,
+  original guard and5720frozen source blobs preserved. No existing DB writes.
+- [x] Pure card-growth copy-contract module passes200/200 sequentially under
+  default guard, without DB/TC/provider configuration (pytest0.12s).
+- [x] Fifteen raw/static captures plus manifest archived in task
+  `evidence/native-client-info-hflypi-20260921/`, including failedv1.
+- [ ] Fresh backend total209distinct passed/5481collected across three slices;
+  remaining5272nodes unexecuted, including85of94mappedPG-group nodes.
+
+Next: broader pure-unit/PG batches and aggregate; remaining frontend flakes,
+security/performance/browser/CI/whole-goal gates unchanged. Goal active, no
+push/deploy/production. Historical whole-goal FAIL remains. Do not replay
+completed setup, cleanup or slices. Parent checkpoint f9cbbae5.
+
 ## Latest checkpoint — 21 September, first fresh PostgreSQL integration node
 
 - [x] Actual unchanged card-growth migration test:1passed/no skips/errors,
