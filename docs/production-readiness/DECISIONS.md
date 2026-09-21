@@ -1,5 +1,16 @@
 # Readiness decisions
 
+## D-105 — Whole collection with inherited capability denial and honest outcomes
+
+Add OS network/write constraints around the Python guard, verify native-child/
+symlink/user-read denial first, and run every frozen node. Missing PG/browser
+capability remains explicit skip/failure, not silently excluded or granted via
+production credentials. No exit0-with-skips PASS; require every call to pass.
+Store bounded exception class/errno/frame coordinates, never messages/locals
+or captured output. The full run exposes ordering failures hidden by slices.
+Next verify the current worktree and existing corrections before inferring its
+behavior from the older frozen source. No shrinking of original readiness DoD.
+
 ## D-104 — Inspect historical layers without equating artifact absence to secrecy
 
 Observe the actual OCI archive format, stream every compressed layer without

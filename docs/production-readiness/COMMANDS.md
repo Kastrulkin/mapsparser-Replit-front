@@ -1,5 +1,20 @@
 # Verified commands and evidence
 
+## OS-sandbox full backend — 22 September
+
+Named tmux audit-sandbox-controls-v1..v4: first two rejected; v3 PASS9/v4 PASS10.
+Pure outcome controls/RuffF821,F822,F823/diff pass. Named sessions
+audit-sandbox-full-v1 and audit-sandbox-full-v2 each ran once:
+
+```sh
+/usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /usr/bin/arch -arm64 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -I -B .agent/tasks/production-readiness-20260917/support/native_sandbox_aggregate_hflypi.py --attempt v2
+```
+
+v1 used --attempt v1 and archived helper3dcf55; v2 usedd262b900 safe diagnostic
+hook. Both5481collected,4338pass51failure1092skip;70.846/69.378s. Both FAIL.
+Source/guard/canary checks PASS. Raw output discarded after safe callbacks.
+Existing attempts are immutable and must not be replayed.
+
 ## Pinned image private layers — 22 September
 
 Read-only export layout/descriptor probes ran in named tmux sessions

@@ -1,5 +1,36 @@
 # Readiness handoff
 
+## Latest checkpoint — 22 September, full backend diagnostic baseline
+
+Parent c1dd64ee on codex/production-readiness-20260917. Full frozen5481 v1/v2
+are terminal FAIL:4338pass47callfail4setupfail1092skip;14subtestpass, no
+collection errors. Durations70.846/69.378s. All classes collected, no exclusion.
+Zero-network OS policy supplements Python guard; no existing DB/Docker access.
+Ten controls PASS; source5720/guard07d3/canary preserved. v1 exact helper3dcf55
+snapshot retained; v2 d262b900 adds only exception class/errno and source/venv
+frame coordinates. Raw pytest stdout/stderr NOT retained, only lengths/digests.
+See task evidence/native-sandbox-results-20260922.md and archive.
+
+Next backend action is current-source verification, not more frozen unit slices:
+33 failures end in frozen test_legacy_parser_diagnostic_logs.py:111 permanent
+sys.addaudithook. Foreign local version already contains scoped ExitStack
+patches; author_daily_gate also has relevant fixture corrections. Preserve all
+13 foreign paths and verify them in a new explicit snapshot, not blindly commit.
+Ten permission errors,3 runner initialization AttributeErrors and5 other asserts
+remain separate categories. Two frontend limits truly exceeded:2260>2087 and
+2237>2233. Do not raise limits to make tests green. No new coverage-union sum.
+
+Read-only continuation:
+```sh
+jq '[.callback.reports[]|select(.outcome=="failed")|{nodeid,failure}]' /private/tmp/localos-readiness-20260921.hfLYPi/native/evidence/native-sandbox-full-v2.json
+```
+
+Image credentials v1 separately failed123.521s/BrokenPipeError; timeout suspected
+but unproven because stderr discarded. No clean-image claim; see next image
+checkpoint before retry. Broader current backend/security/frontend/browser/
+performance/CI/demo/final review remain open. Current stand/all volumes retained;
+do not repeat completed cleanup or old attempt paths. About14GiB free.
+
 ## Latest checkpoint — 22 September, private image-layer evidence
 
 Branch `codex/production-readiness-20260917`, parent `84eb9d22`, the committed

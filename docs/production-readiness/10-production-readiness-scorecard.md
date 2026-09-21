@@ -1,5 +1,10 @@
 # Production-readiness scorecard — working, not final
 
+22September full backend evidence, parentc1dd64ee: two5481-node frozen attempts
+both FAIL (4338pass51failure1092skip). Sandbox/source integrity PASS does not
+promote application readiness. Scores unchanged; current-source/integration,
+image credentials, performance, browser/CI/demo/final gates remain open.
+
 22September image evidence, parent84eb9d22:20 historical layers of one pinned
 local image pass a bounded private-path/known-file-digest inspection, with
 independent identity/runtime/package checks. It is explicitly not generic

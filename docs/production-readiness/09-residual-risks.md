@@ -1,5 +1,16 @@
 # Residual risks — working register
 
+## Current update — full backend failures are now observed
+
+Two exact5481 attempts reproduce4338pass51failure1092skip under zero-network
+OS policy. Thirty-three failures share a leaked global audit hook in the frozen
+test; scoped correction already exists locally but is not verified/committed here.
+Ten permission errors are runtime-policy limits,3runner initialization errors
+and5other assertions still need distinct treatment. Skips are not proof of
+integration correctness. General image credential attemptv1 failed123.521s;
+the broad image/security gate remains open. Current-source aggregate, frontend
+ratchet/flake/browser, performance, CI/demo and final review still block the DoD.
+
 ## Current update — pinned image private-artifact scope
 
 All20 layers of audit image9d6edac8...60853 now have verified zero findings for

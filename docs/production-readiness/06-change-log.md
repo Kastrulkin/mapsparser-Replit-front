@@ -1,5 +1,13 @@
 # Production-readiness change log
 
+## Whole frozen backend baseline — 22 September, parentc1dd64ee
+
+Added audit-only inherited OS sandbox with10real negative controls and strict
+no-skip/no-xfail aggregate gate. Two whole5481 attempts consistently reproduce
+4338pass51failure1092skip. Safe failure coordinates identify33failures caused
+by a global test hook; local foreign correction already exists, not yet accepted.
+No application correctness or full readiness claim; see sandbox evidence report.
+
 ## Image private-artifact evidence — 22 September, parent84eb9d22
 
 Added two audit-only streaming OCI inspection/control helpers; no application

@@ -1,5 +1,27 @@
 # Production-readiness progress
 
+## Latest checkpoint — 22 September, two whole backend attempts
+
+- [x] Full frozen5,481-node v1/v2 executed with no class exclusions. Each has
+  4,338 passes,47 call failures,4 setup failures,1,092 skips,14 passing subtests,
+  zero collection errors. Wrappers70.846/69.378s. Both overall FAIL.
+- [x] Ten inherited OS sandbox controls pass; network including DB/Docker denied,
+  writes confined to owned temp. Source5,720/default guard/canary unchanged.
+  Failed controls v1/v2 retained; raw test output discarded, only hashes/counts.
+- [x] Safe v2 frames locate33 failures in a permanent test audit hook. Existing
+  foreign worktree changes already contain its scoped replacement and updated
+  author fixtures; preserve and verify them, never blindly overwrite/stage.
+- [ ] Next: explicit current-source snapshot and verification of these existing
+  corrections; remaining PG/browser admission, actual current aggregate.
+  Ratchet also genuinely fails: AgentBlueprints2260>2087,employee2237>2233.
+- [ ] General image credential scan v1 failed123.521s/BrokenPipeError, no clean
+  result. Bounded diagnostic retry pending. Security/performance/browser/
+  frontend flake/CI/demo/final gates stay open; original whole-goal FAIL retained.
+
+Parent c1dd64ee, frozen app99849935. This turn is PROGRESS after cleanup-only
+reconciliation. About14GiB free; foreign13 unchanged, no production, existing DB,
+provider, push/deploy or repeated cleanup. See native-sandbox-results-20260922.md.
+
 ## Latest checkpoint — 22 September, all-layer private-artifact inspection
 
 - [x] Editorial63/admission package committed locally as `84eb9d22`; reviewed
