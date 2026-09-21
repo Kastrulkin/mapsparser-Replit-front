@@ -2,6 +2,24 @@
   "task_id": "production-readiness-20260917",
   "overall_status": "FAIL",
   "checkpoint": {
+    "subsequent_safe_parser_failure_reasons": {
+      "parent_commit": "6ac6dc915969fdd96c183be26ba527561b2f7560",
+      "finding": "SEC-PARSEQUEUE-REASON-01",
+      "scope": "Local validator reason and retry diagnostics confidentiality; unchanged normal terminal SQL branch, raw in-memory provider data and non-error validation",
+      "proof": [
+        "evidence/parse-reason-notes-20260921.md",
+        "evidence/parse-reason-manifest-20260921.json",
+        "evidence/parse-reason-verified-baseline-20260921.json",
+        "evidence/parse-reason-verified-green-20260921.json",
+        "evidence/parse-reason-broad-20260921.json",
+        "evidence/parse-reason-quality-20260921.json",
+        "evidence/parse-reason-adjacent-final-20260921.json"
+      ],
+      "result": "Final same13cases: immutableparent worker+taxonomy8fail/5pass/0errors becomes13pass1.807s. Broad128tests+4subtests13.86s/14304.852ms,16files29hashesstable; final10existingtestsAST pass306.656ms. ScopedRuff/diff/AST guards pass728.036ms; independentboundedreview ACCEPT.",
+      "behavior": "Finite canonical local error identifiers and existing taxonomy enums replace raw validator reason and retry diagnostics. Original card_data and legacy220-character alias input remain in memory for unchanged retry policies/caps/slow lane. Controlled quality/captcha/closed reasons, SQLstatus/id, fallback and billing remain.",
+      "provenance": "Initial2case validator captures and intermediate adjacent retained. Final13 cases use real pure redactor, actual validator-to-retry calls and exact terminal AST with fakeDB. Baselinehash-checks immutableworker andtaxonomy, no working-file reversal. Otherhelper/source hashes bound; no native/fullworker proof.",
+      "limits": "Other directproxy/CAPTCHA/DLQ/handler/warning sinks and storedrows remain; underscoreERR_TIMED_OUT displayclassification unchanged. OriginalAC/verdict/wholeFAIL unchanged. Localdisk4114304KiB<10GiB imagefloor, nativeprepdenial persists. No production/DB/schema/provider/Docker/cleanup/push/deploy; foreignpaths preserved."
+    },
     "subsequent_apify_private_ipc": {
       "parent_commit": "d8631fec6f054f3a25bc820ed456e71e608974f0",
       "findings": [

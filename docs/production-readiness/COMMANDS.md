@@ -1,5 +1,28 @@
 # Verified commands and evidence
 
+## Parse-queue reason projection — 21 September, parent `6ac6dc`
+
+Task `evidence/parse-reason-*-20260921.json` contains exact isolated commands,
+hashes and bounded output. Isolated test commands guard DB, network, env-file
+and full-worker access; the quality capture runs local Git/Ruff checks. No
+production or provider call is performed.
+
+| Capture suffix | Actual result | Duration ms |
+| --- | --- | ---: |
+| initial-red | Two validator marker assertions fail on original raw reason |156.564|
+| initial-green | Same two assertions pass on early worker `eefab…0665` |392.058|
+| adjacent | Ten existing functions pass on intermediate worker `52d0…ae67` |361.925|
+| verified-baseline | Final 13 tests on immutable parent: 8 assertion failures / 5 pass / 0 errors |2175.900|
+| verified-green | Same final 13 tests pass on current bytes |1886.423|
+| broad |128 passes + 4 subtests; 16 files / 29 hashes stable |14304.852|
+| quality |Ruff/AST/diff boundary checks pass |728.036|
+| adjacent-final |Ten existing validator/retry functions pass on final worker |306.656|
+
+The authoritative comparison is verified-baseline/verified-green. Initial green
+and intermediate adjacent records are retained provenance, not replacement
+proof; no harness failure was captured. Broad is local isolated acceptance,
+not top-level worker, native DB, provider, image or production acceptance.
+
 ## Apify IPC transport — 21 September, parentd8631fec
 
 Task `evidence/apify-ipc-*-20260921.json` captures contain exact isolated

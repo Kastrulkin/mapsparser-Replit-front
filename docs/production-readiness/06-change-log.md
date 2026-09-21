@@ -1,5 +1,16 @@
 # Production-readiness change log
 
+## Parse-queue failure reason projection — 21 September, parent `6ac6dc`
+
+SEC-PARSEQUEUE-REASON-01 replaces normal validator storage/log reason text
+derived from arbitrary parser error/message input with a finite local taxonomy
+projection. Raw card data remains in memory for the pre-existing retry alias
+and classification path; terminal SQL behavior, quality/captcha/closed paths,
+retry caps, billing and parser data are unchanged. Final parent 13-case proof is
+8 fail / 5 pass to current 13 pass, with 128 passes + 4 subtests broad local isolation and
+ten final adjacent validator/retry checks. Separate worker writers, old rows,
+native/runtime and deployment evidence remain open.
+
 ## Apify IPC transport and large-result reliability — 21 September, parentd8631fec
 
 SEC-APIFY-IPC-01 replaces named durable raw `apify_result.json` with anonymous

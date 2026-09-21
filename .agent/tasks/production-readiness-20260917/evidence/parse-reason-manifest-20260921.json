@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "finding": "SEC-PARSEQUEUE-REASON-01",
+  "parent_commit": "6ac6dc915969fdd96c183be26ba527561b2f7560",
+  "scope": "Local validator reason and retry diagnostics confidentiality; unchanged normal terminal SQL branch, raw in-memory provider data and non-error validation",
+  "source_hashes": [
+    {
+      "path": "tests/test_parser_interception.py",
+      "sha256": "90a017fe56b4dc86d51a53c93fa13e4274bc27b47e2689fc4b6516141d3b2e00"
+    },
+    {
+      "path": "tests/test_parser_interception_review_responses.py",
+      "sha256": "a4eae46da7f305d11f64008b775aa99d454467fad62a87f8ad88dfab6bf31cdc"
+    },
+    {
+      "path": "tests/test_parser_orchestrator.py",
+      "sha256": "2ccb591c57a7ec6590a2fdab1137cae22a94ceefc230eb19d30a35dbb1067e36"
+    },
+    {
+      "path": "tests/test_parser_debug_bundle_safety.py",
+      "sha256": "b0f691e584b322d3a3865223d367e9749dc909bf5d46f16bdfdeffbfad985748"
+    },
+    {
+      "path": "tests/test_parser_diagnostic_logs.py",
+      "sha256": "489bb061a99567111540bd9bbf91853a2f21bcce93f444ae53c8b8bedcfff56e"
+    },
+    {
+      "path": "tests/test_worker_parser_diagnostic_logs.py",
+      "sha256": "4a2221cbea7d7190beaab53bc8b104d4adb6c641492d8a579f5325d77d66513b"
+    },
+    {
+      "path": "tests/test_worker_parser_artifact_safety.py",
+      "sha256": "b8c87149889fc94ad41aaff6a0d33fdf025668f5b0fb39598702115ca1bd3cc1"
+    },
+    {
+      "path": "tests/test_legacy_parser_leaf_diagnostics.py",
+      "sha256": "86d6651a6e9c4deeeb38a3307fb63a0f40a8c46194a6aba5a422ad88e1dd5a70"
+    },
+    {
+      "path": "tests/test_apify_diagnostic_privacy.py",
+      "sha256": "a4b85f2494c6f225c9488124938efc7deb109c6f16851dfe71c6ce54d20f7024"
+    },
+    {
+      "path": "tests/test_prospecting_service_apify_business_parse.py",
+      "sha256": "4a191e0021e2b0990bfdd3a760f854092bd03f3c45acf8e5268758df5869c56f"
+    },
+    {
+      "path": "tests/test_prospecting_service_apify_proxy.py",
+      "sha256": "37b66610a063035056f8110397da82c3074359234cf72349761e99eb1e47bfe9"
+    },
+    {
+      "path": "tests/test_prospecting_service_normalize.py",
+      "sha256": "6873eb5ab3fc56c5b5133a5a46af05a6809ddb26005a8948f5f3296a8521ef0b"
+    },
+    {
+      "path": "tests/test_worker_apify_ipc_safety.py",
+      "sha256": "c490c7f3f982978d890b024d00bc2634fc4004140debaeefcc35783bced84be2"
+    },
+    {
+      "path": "src/worker.py",
+      "sha256": "c1830f976d8831912559e4ce9caa77cd34a35aa131ca00104de34d04380277d9"
+    },
+    {
+      "path": "src/parser_interception.py",
+      "sha256": "a9737321cb60869d632f0d155bc0905b2e72c5caf6950507b8bb137a0ee04a0a"
+    },
+    {
+      "path": "src/browser_session.py",
+      "sha256": "2750f4062e259c4d4b3a193fe6d9c263eedf92e495a7de5c62c34bb691e9af63"
+    },
+    {
+      "path": "src/core/parser_debug_artifacts.py",
+      "sha256": "a364d4d27e842c21a1bc9f8fdfd61bf7021eea4301ee541eab14f0194864f5be"
+    },
+    {
+      "path": "src/yandex_maps_scraper.py",
+      "sha256": "1b5312a8fb74b0a079eb2cbec69a659b1f19abd93d78075f82a8a18c678d7d50"
+    },
+    {
+      "path": "src/services/prospecting_service.py",
+      "sha256": "6061f9e9b05c49228d7046f70680781f2edd0d4bf40bb5886e5d75f81d72170e"
+    },
+    {
+      "path": "src/legacy_routes/parsing_networks.py",
+      "sha256": "b92ef5889886ac8723997d7f134b29e3230a0ccabc50dd664969baf8fbb3a76b"
+    },
+    {
+      "path": "tests/test_worker_services_quality.py",
+      "sha256": "6afcbb3031d54e77068acc20a879be9fdfc56b5468c5775fbeb67ee870965bea"
+    },
+    {
+      "path": "tests/test_worker_failure_reason_safety.py",
+      "sha256": "2867396ee4055b29456a38930e7945d8ae0378a87061747e2b00a312e54befb6"
+    },
+    {
+      "path": "tests/test_parsing_failure_taxonomy.py",
+      "sha256": "26af0eae891c3d94a2d399885b1eebaffe34e23df6a5f71545cddceba932abb9"
+    },
+    {
+      "path": "tests/test_parsed_payload_validation.py",
+      "sha256": "42c100fb5b09058ae3202b009ba2d8770f1d2eab7d12baa949acc1af9a3c4dc6"
+    },
+    {
+      "path": "src/parsing_failure_taxonomy.py",
+      "sha256": "30d07b3b3c2119fd6fc46c27b69b9be1a78c1c96e2262db4b547dff931e63dcc"
+    },
+    {
+      "path": "src/parsed_payload_validation.py",
+      "sha256": "ae1e85ee5d7dc52a6fda1aafbe10eaedf84c42617fc312f2557eb3a073462d1d"
+    },
+    {
+      "path": "src/core/sensitive_text.py",
+      "sha256": "7d6a460ed8848806c69a33abca3c47b86a88c13f298d3d07497529e76ebbd778"
+    },
+    {
+      "path": "src/services/operator_refresh_result.py",
+      "sha256": "d64775129e0a917eb592ebc92db5d3e78a588e231b5b817cee7d87b2753d60a4"
+    },
+    {
+      "path": "src/services/operator_news_generation.py",
+      "sha256": "c47aa37f4189098039af7eaffee8ae762bcf0acaff13a147a65217c3209c91e7"
+    }
+  ],
+  "captures": [
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/parse-reason-initial-red-20260921.json",
+      "sha256": "42dcada898e1f4c57e144b18d605dd24309421214e3556b33e918b5e5869aec2",
+      "exit_code": 1,
+      "duration_ms": 156.564,
+      "captured_at": "2026-09-21T05:36:27.213100+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/parse-reason-initial-green-20260921.json",
+      "sha256": "19a33da57233b117ab5b9e4415d99f3397055e58f13a50a136616515220e5a0c",
+      "exit_code": 0,
+      "duration_ms": 392.058,
+      "captured_at": "2026-09-21T05:38:39.326809+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/parse-reason-adjacent-20260921.json",
+      "sha256": "4131b94819ffbe03f02682684ab0235da6ab615cbeaf5c922e877284bf7c951d",
+      "exit_code": 0,
+      "duration_ms": 361.925,
+      "captured_at": "2026-09-21T05:41:14.892287+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/parse-reason-verified-baseline-20260921.json",
+      "sha256": "542598756675771247457af27682946a7fc04cdf521df7c2335d1afe2b43e23d",
+      "exit_code": 1,
+      "duration_ms": 2175.9,
+      "captured_at": "2026-09-21T05:47:23.389375+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/parse-reason-verified-green-20260921.json",
+      "sha256": "7984b646ed6865ed8a09035b58cd33f3a7dc5c7fb8ed5ce4b2a27e561378b443",
+      "exit_code": 0,
+      "duration_ms": 1886.423,
+      "captured_at": "2026-09-21T05:47:25.456022+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/parse-reason-broad-20260921.json",
+      "sha256": "cc5a94435c49eb1adf7812dc89e956b5d16ed4a2bea54ee488a81a504c7d62c5",
+      "exit_code": 0,
+      "duration_ms": 14304.852,
+      "captured_at": "2026-09-21T05:48:31.952846+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/parse-reason-quality-20260921.json",
+      "sha256": "3c83579097fc7e3dd6f19e2f8acc0014d0cf69039f9aebe1652fd40983ff2798",
+      "exit_code": 0,
+      "duration_ms": 728.036,
+      "captured_at": "2026-09-21T05:50:09.342444+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/parse-reason-adjacent-final-20260921.json",
+      "sha256": "9dcc3d80b7d85a3662921c1006206826dee202e62a85d5f28e86d222aa7a73b2",
+      "exit_code": 0,
+      "duration_ms": 306.656,
+      "captured_at": "2026-09-21T05:50:09.839606+00:00",
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false
+    }
+  ],
+  "proof": {
+    "baseline": "Same13 final cases replay immutable parent worker AND taxonomy without modifying working files:8 assertion failures,5pass,0errors,1.754s",
+    "green": "13pass in1.807s, including actual AST terminal branch SQL/stdout and retry alias chain with real pure redactor and fake DB",
+    "broad": "128tests+4subtests in13.86s/14304.852ms;16files,29hashesstable before/after; no full worker import or DB/.env/network",
+    "adjacent": "10 exact existing worker-services test functions pass on final source in306.656ms; AST-isolated, not wholemodule/runtime",
+    "quality": "Full Ruff new test/taxonomy; workerF821/F822/F823; diff; worker AST outside two functions/import unchanged; non-error validation and original taxonomy unchanged; retry decision/cap AST unchanged except local raw alias input",
+    "review": "Independent final source/test/causal-evidence review ACCEPT for c1830f97 worker,30d07b3b taxonomy,2867396e test"
+  },
+  "provenance": {
+    "initial": "Two-validator reproduction2fail→2pass; initialgreen intermediateeefworker, adjacent intermediate52dworker retained",
+    "frozen": "Final13 tests use current actual helper modules; baseline replaces worker text and taxonomy execution with hash-verified immutable parent. Other pure dependencies are unchanged. No .env, actual network, DB or full worker/service import",
+    "static_harness_corrections": "Before final test execution, fixed terminal wrapper variable, removed unused import, used real redactor and actual validator-to-retry chain. Downstream control uses established navigation timeout classification; underscore ERR_TIMED_OUT remains a separate existing classification gap"
+  },
+  "limits": [
+    "No full native backend, real DB/provider, Docker, deployment, live UI or load proof",
+    "Original input dicts stay intact; raw aliases remain private policy inputs, not a new provider sandbox",
+    "Unknown diagnostic error identifiers now map to parser_error; full exception detail intentionally omitted",
+    "Direct proxy/preflight, CAPTCHA, DLQ/other queue writers, old rows and deployed code remain separate",
+    "Existing taxonomy treats underscore ERR_TIMED_OUT as unknown despite separate retry recognition; not corrected by this change",
+    "Original AC1–9/11 FAIL and AC10 PASS; overall FAIL unchanged",
+    "No production/DB/schema/provider, cleanup, push or deploy; foreign work preserved; native prep denial and below10GiB image gate unchanged"
+  ]
+}

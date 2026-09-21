@@ -1,5 +1,15 @@
 # Residual risks — working register
 
+Latest 21 September, parent 6ac6dc: SEC-PARSEQUEUE-REASON-01 is locally corrected
+only at the validator normal-terminal/retry reason boundary. Final 13-case
+immutable comparison is 8 assertion failures / 5 passes to 13 passes; final broad
+128 passes + 4 subtests and independent review do not establish all worker-error,
+queue-retention, database, image or deployed confidentiality. Raw retry input
+is intentionally in-memory only for legacy classification; proxy/direct-DLQ/
+CAPTCHA/handler/warning writers, historical rows/artifacts and cleanup remain
+open. Disk 4114304 KiB is below 10 GiB and native aggregate/restore preparation
+remains denied. Whole readiness FAIL and AC1–9/11 FAIL/AC10 PASS are unchanged.
+
 Latest21September, parentd8631fec: SEC-APIFY-IPC-01 and REL-APIFY-IPC-01 are
 locally FIX_PROVEN for named raw IPC avoidance and the synthetic ~680KB
 Queue/join timeout. Final immutable-parent4fail/current11pass plus guarded

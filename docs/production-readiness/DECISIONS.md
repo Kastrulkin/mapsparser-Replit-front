@@ -1,5 +1,21 @@
 # Readiness decisions
 
+## D-079 — Project parser failure reasons at the persistence boundary
+
+An error result may contain provider-controlled code/message text. Its raw
+content is needed transiently for legacy retry classification, but it need not
+be stored or logged as the terminal validator reason. Project error-result
+reasons through the local finite taxonomy and use the same finite projection in
+normal terminal/retry diagnostics; retain the raw value in memory only for the
+existing retry alias/legacy classification path. Preserve controlled reason
+codes, retry caps, billing and parser-result behavior.
+
+Three options were compared: regex redaction (misses arbitrary PII); terminal
+projection only (leaves retry/native-fallback diagnostic leakage); and finite
+validator plus retry projection (selected). This is not a universal worker
+sanitizer. Proxy/direct-DLQ/CAPTCHA/handler/warning writers and existing rows
+remain separately scoped, as do deployed and historical artifacts.
+
 ## D-078 — Keep functional Apify result transport private and nonblocking
 
 `apify_result.json` was functional child transport, not expendable diagnostics:

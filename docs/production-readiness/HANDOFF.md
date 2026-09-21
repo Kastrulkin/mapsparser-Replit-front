@@ -1,5 +1,41 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, parse-queue reason projection
+
+Parent `6ac6dc915969fdd96c183be26ba527561b2f7560`. Scope is only the
+validator's error-result reason plus its normal terminal/retry diagnostic
+boundary. SEC-PARSEQUEUE-REASON-01 previously joined arbitrary `error` and
+`message` strings into a persisted reason. Current worker
+`c1830f976d8831912559e4ce9caa77cd34a35aa131ca00104de34d04380277d9` projects
+that condition through the local finite failure taxonomy. Within this diagnostic
+path, raw error/message remains available in memory for legacy retry
+classification; the functional card payload is unchanged.
+
+Final test `2867396ee4055b29456a38930e7945d8ae0378a87061747e2b00a312e54befb6`
+has immutable-parent 8 assertion failures / 5 passes / 0 errors (1.754 s;
+captured 2175.900 ms) versus current 13 passes (1.807 s; captured 1886.423 ms).
+The final adjacent capture passes ten existing validator/retry functions in
+306.656 ms. Broad local isolation passes 128 tests + 4 subtests in 13.86 s /
+captured 14304.852 ms: 16 test files, 29 hashes stable before/after, no full
+worker import, DB, env file, network or provider; the earlier IPC synthetic
+fork remains allowed.
+Quality 728.036 ms checks scoped Ruff, worker F821/F822/F823/diff, unchanged
+worker AST outside the two scoped functions plus taxonomy import, unchanged
+non-error validator behavior, and unchanged retry caps/decisions except the
+in-memory raw-alias input. Independent bounded review ACCEPTS this scope.
+
+Keep all eight captures. `initial-green` uses worker `eefab…0665` and the first
+adjacent capture uses intermediate worker `52d0…ae67`; both are historical,
+not final-byte evidence. This does not sanitize proxy/direct-DLQ/CAPTCHA/
+handler/warning writers, old queue rows or historical artifacts. Do not claim
+all security or backend work complete. Whole FAIL, AC1–9/11 FAIL, AC10 PASS,
+denied native preparation and the below 10 GiB image gate remain. No production,
+DB/provider/Docker/cleanup/push/deploy action occurred.
+
+Next: source-trace, then isolate and reproduce one remaining direct worker
+diagnostic sink before choosing another bounded fix. Do not assume all remaining
+sinks are exploitable.
+
 ## Latest checkpoint — 21 September, Apify IPC transport
 
 Parent `d8631fec6f054f3a25bc820ed456e71e608974f0`. Runtime scope is worker

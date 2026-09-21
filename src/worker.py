@@ -43,7 +43,11 @@ from parsed_payload_validation import (
     FIELDS_CRITICAL,
     SOURCE_YANDEX_BUSINESS,
 )
-from parsing_failure_taxonomy import with_reason_code_prefix
+from parsing_failure_taxonomy import (
+    classify_failure_reason,
+    safe_parser_error_code,
+    with_reason_code_prefix,
+)
 from core.action_orchestrator import ActionOrchestrator
 from core.parsing_runtime_config import get_use_apify_map_parsing, resolve_map_source_for_queue
 from core.map_url_normalizer import is_google_map_url
@@ -4229,11 +4233,13 @@ def _validate_parsing_result(card_data: dict, source: str = SOURCE_YANDEX_BUSINE
         return False, "captcha_detected", None
     if card_data.get("error"):
         error_name = str(card_data.get("error") or "").strip()
-        detail = str(card_data.get("message") or "").strip()
-        if detail:
-            detail = detail.replace("\n", " ")[:220]
-            return False, f"error: {error_name} detail={detail}", None
-        return False, f"error: {error_name}", None
+        policy_detail = str(card_data.get("message") or "").strip().replace("\n", " ")[:220]
+        reason_code = classify_failure_reason(
+            STATUS_ERROR, f"{error_name} {policy_detail}",
+        )
+        # Raw provider data remains available to retry classification, but the
+        # returned reason is also persisted and shown outside this process.
+        return False, f"error: {safe_parser_error_code(error_name)}; reason_code={reason_code};", None
 
     validation = validate_parsed_payload(card_data, source=source or SOURCE_YANDEX_BUSINESS)
     hard_missing = validation.get("hard_missing") or []
@@ -4573,6 +4579,12 @@ def _queue_transient_parse_retry(queue_dict: dict, reason: str, card_data: Optio
     )
     is_apify_timeout = parser_error == "apify_parser_subprocess_timeout"
     reason_text = str(reason or "").lower()
+    if parser_error:
+        # Keep the legacy decision input only in memory. The validator now
+        # returns a safe display reason, but provider text aliases still drive
+        # the same retry rules (including the original 220-character detail).
+        policy_detail = str(card_data.get("message") or "").strip().replace("\n", " ")[:220]
+        reason_text = f"{reason_text} error: {parser_error} detail={policy_detail}".lower()
     if "business_closed:" in reason_text:
         return False
     is_apify_empty_dataset = (
@@ -4624,15 +4636,18 @@ def _queue_transient_parse_retry(queue_dict: dict, reason: str, card_data: Optio
 
     retry_delay = _transient_retry_delay_for_task(queue_dict, attempt_no)
     retry_after = datetime.now() + retry_delay
-    detail = redact_sensitive_text(reason, limit=220)
+    diagnostic_error = safe_parser_error_code(parser_error)
+    diagnostic_reason = classify_failure_reason(
+        STATUS_ERROR, f"{parser_error} {parser_message} {reason}",
+    )
     timeout_profile = ""
     if is_apify_timeout:
         timeout_profile = "slow_lane" if attempt_no >= max(int(os.getenv("APIFY_TIMEOUT_SLOW_LANE_AFTER_ATTEMPT", "1") or 1), 1) else "default"
     comment = (
         f"transient_retry_attempt={attempt_no}; "
-        f"transient_error={parser_error or 'unknown'}; "
+        f"transient_error={diagnostic_error}; "
         f"timeout_profile={timeout_profile or 'default'}; "
-        f"detail={detail}"
+        f"detail=reason_code={diagnostic_reason};"
     )
 
     conn = None
@@ -4659,13 +4674,13 @@ def _queue_transient_parse_retry(queue_dict: dict, reason: str, card_data: Optio
         conn.commit()
         print(
             f"🔁 Transient parse retry scheduled: queue_id={queue_dict.get('id')} "
-            f"error={parser_error} attempt={attempt_no}/{max_attempts} "
+            f"error={diagnostic_error} attempt={attempt_no}/{max_attempts} "
             f"retry_after={retry_after.isoformat()}",
             flush=True,
         )
         return True
-    except Exception as ex:
-        print(f"⚠️ Не удалось поставить transient retry для {queue_dict.get('id')}: {ex}", flush=True)
+    except Exception:
+        print(f"⚠️ Не удалось поставить transient retry для {queue_dict.get('id')}: retry_write_failed", flush=True)
         return False
     finally:
         try:

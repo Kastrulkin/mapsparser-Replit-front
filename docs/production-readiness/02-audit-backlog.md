@@ -11,12 +11,14 @@
   checks. Minimal anonymous-file + readiness-marker transport preserves result,
   billing, retry, card and cost data. No OS-death, remote cancellation, secure
   erase, historical cleanup, DB/provider or production proof.
-- **SEC-PARSEQUEUE-REASON-01**, P1 candidate before production: source review
-  finds `_validate_parsing_result` joining untrusted error/message into `reason`,
-  then normal terminal failure persists it to `parsequeue.error_message`, read
-  by scoped Operator and superadmin queue views. Not reproduced or fixed; do
-  not promote beyond CANDIDATE. A pure AST-isolated marker test can preserve
-  retry classification while proving storage-facing reason omission.
+- **SEC-PARSEQUEUE-REASON-01**, P1 before production, locally FIX_PROVEN:
+  `_validate_parsing_result` joined untrusted error/message into a normal
+  terminal `parsequeue.error_message` reason. Final immutable-parent 13-case
+  proof is 8 assertion failures / 5 passes to current 13 passes; finite local
+  taxonomy projection retains raw input only for in-memory retry classification.
+  Final local broad 128 passes + 4 subtests and bounded review support this exact scope.
+  Not proxy/direct-DLQ/CAPTCHA/handler/warning writers, old rows/history,
+  native DB/provider/image/deployment or whole-security certification.
 
 ## 21 September selected-agent request integrity, parentb9cb7dea
 

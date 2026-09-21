@@ -15,6 +15,30 @@ REASON_CLOSED_BUSINESS = "closed_business"
 REASON_UNKNOWN = "unknown"
 
 
+def safe_parser_error_code(value: Any) -> str:
+    """Keep only local parser codes; provider text is not a diagnostic code."""
+    code = str(value or "").strip()
+    if code in {
+        "captcha_detected", "captcha_session_lost", "org_api_not_loaded",
+        "yandex_rate_limited", "yandex_forbidden", "invalid_org_url",
+        "empty_url", "unsupported_2gis_url", "2gis_parse_failed",
+        "2gis_catalog_missing_firm_id", "2gis_catalog_missing_api_key",
+        "2gis_catalog_api_failed", "2gis_http_fallback_failed",
+        "parser_returned_none", "parser_returned_list", "parser_returned_tuple",
+        "parser_returned_str", "parser_returned_int", "parser_returned_float",
+        "parser_returned_bool", "parser_returned_bytes", "parser_returned_set",
+        "parser_subprocess_exception", "parser_subprocess_timeout",
+        "parser_subprocess_no_result", "parser_subprocess_invalid_result",
+        "apify_parser_subprocess_exception", "apify_parser_subprocess_timeout",
+        "apify_parser_subprocess_no_result", "apify_parser_subprocess_invalid_result",
+        "apify_parser_subprocess_result_read_failed", "apify_empty_dataset",
+        "native_parser_exception", "apify_fallback_exception",
+        "proxy_preflight_failed", "services_upsert_zero",
+    }:
+        return code
+    return "parser_error"
+
+
 def classify_failure_reason(status: Any, error_message: Any) -> str:
     status_lc = str(status or "").strip().lower()
     text = str(error_message or "").strip().lower()

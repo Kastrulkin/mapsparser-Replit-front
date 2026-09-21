@@ -1,5 +1,34 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, parse-queue failure reasons
+
+- [x] SEC-PARSEQUEUE-REASON-01: validator error code/message text could enter
+  the terminal `parsequeue.error_message` reason. Local finite projection now
+  emits a controlled reason code. Within this diagnostic path, raw
+  error/message remains available in memory for legacy retry classification;
+  the functional card payload is unchanged.
+- [x] Final immutable-parent proof: eight assertions fail and five pass on
+  parent `6ac6dc…f7560`; the same final thirteen pass on current worker
+  `c1830f…277d9`, taxonomy `30d07b…63dcc` and test `286739…befb6`.
+- [x] Final local guards: 128 passes + 4 subtests in 13.86 s (captured
+  14304.852 ms), final ten existing adjacent functions pass in 306.656 ms, and
+  quality 728.036 ms checks scoped Ruff, worker diagnostics/diff and protected
+  AST boundaries.
+- [ ] Original AC1–9/11 FAIL, AC10 PASS and whole FAIL remain unchanged.
+
+The package is a bounded local validator/normal-terminal/retry projection, not
+all queue/error/log sanitization. Proxy/direct-DLQ/CAPTCHA/handler/warning
+writers, old rows and history cleanup remain separate. Native aggregate/restore
+preparation remains denied; disk 4114304 KiB (~3.92 GiB) is below the 10 GiB image
+floor. No DB, provider, production, Docker, cleanup, push or deployment action
+occurred. Manifest evidence binds 29 hashes and eight captures; the initial green
+and intermediate adjacent captures use earlier worker bytes and are retained as
+qualified history, not final proof.
+
+Next: source-trace, then isolate and reproduce one remaining direct worker
+diagnostic sink before choosing another bounded fix; do not assume all sinks
+are exploitable.
+
 ## Latest checkpoint — 21 September, Apify IPC transport and retention
 
 - [x] SEC-APIFY-IPC-01: raw permanent `apify_result.json` retained the complete
