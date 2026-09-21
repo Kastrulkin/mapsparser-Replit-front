@@ -1,5 +1,19 @@
 # Production-readiness change log
 
+## Worker artifacts and legacy orchestration — 21 September, parent5ef5ba7e
+
+SEC-WORKER-ARTIFACT-02 changes five diagnostic files to value-free shape/static
+metadata, related failure logs and normalization prints. The raw functional
+`apify_result.json` transport and in-memory billing/validation data are intact.
+SEC-LEGACY-ORCHESTRATION-LOG-01 changes four browser-launch/entry/overview/
+completion console sinks only. Leaf logs and invalid-input errors remain.
+
+Causal parent/current proofs,49final pure passes (+4subtests),13bound source
+hashes, scoped Ruff and protected/non-diagnostic AST checks support these local
+fixes. Both independent bounded reviews approve; no real browser/DB/provider
+integration or production test is implied. Two initial worker harness errors
+are disclosed in retained captures. Whole readiness gates unchanged.
+
 ## Worker console and history evidence — 21 September, parentfdbabac4
 
 SEC-WORKER-PARSER-LOG-01 replaces six raw parser/retry/subprocess console

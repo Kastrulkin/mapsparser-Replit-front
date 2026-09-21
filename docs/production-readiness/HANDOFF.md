@@ -1,5 +1,35 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, diagnostic artifacts and legacy orchestration
+
+Parent `5ef5ba7e811d31d8599857929f2b79219c5954d4`; same readiness branch.
+Read `git log -1` for the package commit. Runtime changes are only worker's
+five diagnostics-only file writers/related logs and four legacy orchestration
+prints. `apify_result.json` stays raw functional IPC; in-memory Apify billing,
+validation and parser data stay unchanged. No full-worker privacy claim.
+
+Authoritative evidence in task `evidence/`:
+`worker-artifacts-causal-baseline-20260921.json` (11methods:9fail/2pass,
+11failure entries/0errors), `worker-artifacts-green-20260921.json` (11pass),
+`legacy-orchestration-causal-baseline-20260921.json` (4fail/0errors), and
+`diagnostic-artifacts-final-20260921.json` (49pass +4subtests,1.51s).
+Final capture binds13source hashes. Quality captures prove exact parent-worker
+baseline, protected IPC/cost function AST parity, and non-diagnostic legacy AST
+parity. Both reviewers approve this scope. See notes for preserved early harness
+errors and corrected review provenance wording; no captures overwritten.
+
+Next safe scope: service-level Apify debug persistence, functional IPC access/
+retention, legacy leaf/invalid-input diagnostics and remaining worker logs.
+The four legacy tests are not a full browser scrape. History46UNKNOWN and all
+access-material lifecycle gates remain unchanged. Fresh6282956KiB disk is below
+10GiB Docker floor; native preparation permissions remain denied/pending.
+No production/DB/provider/Docker/cleanup/push/deploy. Nine foreign paths preserved.
+Original AC1–9/11 FAIL, AC10 PASS and whole FAIL remain unchanged.
+
+Precommit1806.878ms checked23owned files/133666staged bytes,8captures/13hashes,
+strict staged secret scan, nine foreign hashes and original AC/verdict equality.
+The final24-file package adds that capture; verify it again before committing.
+
 ## Latest checkpoint — 21 September, worker console and history batch
 
 Branch `codex/production-readiness-20260917`; baseline30262a5b;

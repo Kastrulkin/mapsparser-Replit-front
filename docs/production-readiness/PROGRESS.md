@@ -1,5 +1,29 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, worker artifacts and legacy orchestration
+
+- [x] Parent5ef5ba7e revalidated; previous package is confirmed progress.
+- [x] SEC-WORKER-ARTIFACT-02: five diagnostics-only artifacts, their error logs
+  and normalization prints use value-free metadata/events. Raw functional
+  Apify IPC and in-memory cost/validation payloads remain intact.
+- [x] SEC-LEGACY-ORCHESTRATION-LOG-01: four reachable browser-launch/parser
+  orchestration console sinks corrected; leaf extractors are separate.
+- [x] Final49 pure tests (+4 subtests) pass in1.51s;13source hashes, scoped
+  Ruff, protected worker AST and legacy non-diagnostic AST checks pass.
+  Both bounded independent reviews approve. Earlier harness failures retained.
+- [x] Precommit1806.878ms:23owned files/133666diff bytes,8captures/13hashes;
+  strict staged scan clean, original AC/verdict and nine foreign hashes preserved.
+  The final24-file package adds this capture and receives a fresh check.
+- [ ] Whole goal and AC1–9/11 remain FAIL; AC10 remains PASS.
+
+Next: trace service-level Apify diagnostic writers, raw IPC retention/access,
+legacy leaf diagnostics and remaining worker logs. History queue remains46
+UNKNOWN;592classified access-material locations are not cleared. Disk6282956KiB
+(~5.99GiB) remains below10GiB Docker floor. Native aggregate/restore prep is still
+denied pending renewed authority; do not retry via another route. No production,
+DB/provider, Docker, cleanup, push or deployment action. Nine foreign paths
+remain outside this package.
+
 ## Latest checkpoint — 21 September, worker console and frozen-history proofs
 
 - [x] Previous login-only turn was no progress on whole readiness; original

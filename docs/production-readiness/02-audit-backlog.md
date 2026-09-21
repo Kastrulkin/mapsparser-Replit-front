@@ -1,5 +1,21 @@
 # Audit backlog — evidence, not a readiness claim
 
+## 21 September bounded diagnostic follow-up, parent5ef5ba7e
+
+- **SEC-WORKER-ARTIFACT-02**, P1 before production, high confidence: raw provider/
+  private fields reached five diagnostic files and normalization/error logs.
+  Local FIX_PROVEN via11causal methods (9fail/2positive controls before fix),
+  preserved IPC/cost/validation contracts, final49combined pure passes and
+  independent review. Small patch, low runtime blast radius; medium reduction
+  in forensic detail. Other service writers/functional raw IPC remain separate.
+- **SEC-LEGACY-ORCHESTRATION-LOG-01**, P1 before production, high confidence:
+  four supported fallback browser/parser orchestration logs echoed URL,
+  exception or business data. Local FIX_PROVEN via4parent failures, fixed events,
+  unchanged launch order/raise/return and independent review. Small/low-risk;
+  leaf extractor logs and invalid-input exception text remain open.
+
+These additions do not close broad logging, image, lifecycle or release gates.
+
 Updated 2026-09-21 Moscow. All file evidence refers to the baseline or current local patch, never an assertion about a freshly tested production exploit. `CANDIDATE` requires reproduction; `CONFIG_GAP` describes directly observed configuration/coverage, not demonstrated runtime damage. Effort S/M/L is relative; likelihood/impact/fix blast radius are low/medium/high. Dated historical results below are not final same-revision certification; current checkpoint is in PROGRESS.md.
 
 ## Stage-1 coverage ledger — 18 September continuation

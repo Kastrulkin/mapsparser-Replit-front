@@ -45,6 +45,7 @@ from parsing_failure_taxonomy import with_reason_code_prefix
 from core.action_orchestrator import ActionOrchestrator
 from core.parsing_runtime_config import get_use_apify_map_parsing, resolve_map_source_for_queue
 from core.map_url_normalizer import is_google_map_url
+from core.parser_debug_artifacts import debug_url_summary, debug_value_shape
 from core.review_response_utils import extract_review_response_text
 from core.sensitive_text import redact_sensitive_text
 from yookassa_integration import run_due_renewals
@@ -1294,17 +1295,18 @@ def _parse_card_via_apify_with_timeout(
             try:
                 os.makedirs(debug_bundle_dir, exist_ok=True)
                 timeout_payload = {
+                    "diagnostics_version": 2,
                     "error": "apify_parser_subprocess_timeout",
                     "message": f"Apify business parse timeout after {timeout_sec}s",
-                    "url": url,
+                    "url": debug_url_summary(url),
                     "timeout_sec": timeout_sec,
-                    "debug_context": debug_context or {},
-                    "kwargs": kwargs,
+                    "debug_context": debug_value_shape(debug_context or {}),
+                    "kwargs": debug_value_shape(kwargs),
                 }
                 with open(os.path.join(debug_bundle_dir, "timeout.json"), "w", encoding="utf-8") as fh:
                     json.dump(timeout_payload, fh, ensure_ascii=False, indent=2, default=str)
-            except Exception as timeout_bundle_exc:
-                print(f"⚠️ Failed to write timeout.json: {timeout_bundle_exc}", flush=True)
+            except Exception:
+                print("⚠️ Failed to write timeout.json: diagnostic_write_failed", flush=True)
         return {
             "error": "apify_parser_subprocess_timeout",
             "message": f"Apify business parse timeout after {timeout_sec}s",
@@ -1316,17 +1318,18 @@ def _parse_card_via_apify_with_timeout(
             try:
                 os.makedirs(debug_bundle_dir, exist_ok=True)
                 no_result_payload = {
+                    "diagnostics_version": 2,
                     "error": "apify_parser_subprocess_no_result",
                     "message": "Apify business parse subprocess finished without payload",
-                    "url": url,
+                    "url": debug_url_summary(url),
                     "timeout_sec": timeout_sec,
-                    "debug_context": debug_context or {},
-                    "kwargs": kwargs,
+                    "debug_context": debug_value_shape(debug_context or {}),
+                    "kwargs": debug_value_shape(kwargs),
                 }
                 with open(os.path.join(debug_bundle_dir, "subprocess_no_result.json"), "w", encoding="utf-8") as fh:
                     json.dump(no_result_payload, fh, ensure_ascii=False, indent=2, default=str)
-            except Exception as no_result_bundle_exc:
-                print(f"⚠️ Failed to write subprocess_no_result.json: {no_result_bundle_exc}", flush=True)
+            except Exception:
+                print("⚠️ Failed to write subprocess_no_result.json: diagnostic_write_failed", flush=True)
         return {
             "error": "apify_parser_subprocess_no_result",
             "message": "Apify business parse subprocess finished without payload",
@@ -5827,9 +5830,9 @@ def _execute_map_card_task(
                 card_data = _promote_nested_card_payload(card_data)
                 added_keys = sorted(list(set(card_data.keys()) - before_keys))
                 if added_keys:
-                    print(f"[WORKER_NORMALIZE] promoted keys: {', '.join(added_keys[:10])}", flush=True)
+                    print(f"[WORKER_NORMALIZE] promoted key count: {len(added_keys)}", flush=True)
                 if card_data.get("title_or_name"):
-                    print(f"[WORKER_NORMALIZE] title_or_name='{str(card_data.get('title_or_name'))[:60]}'", flush=True)
+                    print("[WORKER_NORMALIZE] title_or_name present", flush=True)
                 else:
                     print("[CRITICAL] Нет источников для title_or_name", flush=True)
                     identity = _load_business_identity_for_fallback(business_id)
@@ -5839,8 +5842,7 @@ def _execute_map_card_task(
                         business_address=identity.get("address") or "",
                     ):
                         print(
-                            f"[WORKER_NORMALIZE] title_or_name fallback from business record: "
-                            f"'{str(card_data.get('title_or_name'))[:60]}'",
+                            "[WORKER_NORMALIZE] title_or_name fallback from business record applied",
                             flush=True,
                         )
         except Exception as e:
@@ -5893,10 +5895,9 @@ def _execute_map_card_task(
                         exc_path = os.path.join(bundle_dir, "exception.txt")
                         with open(exc_path, "w", encoding="utf-8") as f:
                             f.write("Playwright Sync-in-async crash\n\n")
-                            f.write(repr(e) + "\n\n")
-                            f.write(traceback.format_exc())
-                except Exception as we:
-                    print(f"⚠️ Не удалось сохранить exception.txt: {we}")
+                            f.write("Exception and traceback omitted to protect session and private data.\n")
+                except Exception:
+                    print("⚠️ Не удалось сохранить exception.txt: diagnostic_write_failed")
 
                 err_msg = f"playwright_sync_in_async_loop exc={type(e).__name__}"
                 if bundle_path:
@@ -5904,8 +5905,8 @@ def _execute_map_card_task(
 
                 try:
                     _handle_worker_error(queue_dict["id"], err_msg)
-                except Exception as db_ex:
-                    print(f"❌ Не удалось обновить parsequeue для playwright-sync ошибки: {db_ex}")
+                except Exception:
+                    print("❌ Не удалось обновить parsequeue для playwright-sync ошибки: status_update_failed")
                 return
             elif "apify returned empty dataset" in msg.lower() or "empty dataset for business card parsing" in msg.lower():
                 print(
@@ -5993,9 +5994,11 @@ def _execute_map_card_task(
             try:
                 apify_debug_path = os.path.join(bundle_dir, "apify_debug.json")
                 with open(apify_debug_path, "w", encoding="utf-8") as f:
-                    json.dump(apify_debug_payload, f, ensure_ascii=False, indent=2, default=str)
-            except Exception as apify_debug_exc:
-                print(f"⚠️ Failed to write apify_debug.json: {apify_debug_exc}")
+                    # The original payload is still needed for cost settlement below.
+                    json.dump({"diagnostics_version": 2, "payload_shape": debug_value_shape(apify_debug_payload)},
+                              f, ensure_ascii=False, indent=2)
+            except Exception:
+                print("⚠️ Failed to write apify_debug.json: diagnostic_write_failed")
 
         # пишем validation.json в bundle (если он есть)
         if bundle_dir and validation_result:
@@ -6005,18 +6008,19 @@ def _execute_map_card_task(
                 parser_warnings = list(card_data.get("warnings") or []) if isinstance(card_data, dict) else []
                 all_warnings = list(dict.fromkeys(val_warnings + parser_warnings))
                 payload = {
+                    "diagnostics_version": 2,
                     "is_successful": bool(is_successful),
-                    "reason": str(reason),
-                    "quality_score": validation_result.get("quality_score"),
-                    "hard_missing": validation_result.get("hard_missing") or [],
-                    "missing_fields": validation_result.get("missing_fields") or [],
-                    "found_fields": validation_result.get("found_fields") or [],
-                    "warnings": all_warnings,
+                    "reason": debug_value_shape(reason),
+                    "quality_score": debug_value_shape(validation_result.get("quality_score")),
+                    "hard_missing": debug_value_shape(validation_result.get("hard_missing") or []),
+                    "missing_fields": debug_value_shape(validation_result.get("missing_fields") or []),
+                    "found_fields": debug_value_shape(validation_result.get("found_fields") or []),
+                    "warnings": debug_value_shape(all_warnings),
                 }
                 with open(v_path, "w", encoding="utf-8") as f:
                     json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
-            except Exception as ve:
-                print(f"⚠️ Failed to write validation.json: {ve}")
+            except Exception:
+                print("⚠️ Failed to write validation.json: diagnostic_write_failed")
 
         # Лог покрытия полей (coverage), если валидация отработала
         if validation_result:

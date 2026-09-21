@@ -71,8 +71,8 @@ def _launch_browser(p):
             browser = browser_type.launch(**options)
             print(f"Используем {name}")
             return browser, name
-        except Exception as e:
-            print(f"{name} недоступен: {e}")
+        except Exception:
+            print(f"{name} недоступен: launch_failed")
             continue
     
     raise Exception("Не удалось запустить ни один браузер")
@@ -136,7 +136,7 @@ def parse_yandex_card(url: str) -> dict:
     """
     Парсит публичную страницу Яндекс.Карт и возвращает данные в виде словаря.
     """
-    print(f"Начинаем парсинг: {url}")
+    print("Начинаем legacy-парсинг Яндекс.Карт")
 
     if not url or not url.startswith(('http://', 'https://')):
         raise ValueError(f"Некорректная ссылка: {url}")
@@ -269,8 +269,8 @@ def parse_yandex_card(url: str) -> dict:
                         
                     print("Клик по вкладке 'Обзор'")
                     page.wait_for_timeout(2000)
-            except Exception as e:
-                print(f"Вкладка 'Обзор' не найдена или ошибка клика: {e}")
+            except Exception:
+                print("Вкладка 'Обзор' недоступна; продолжаем с fallback")
 
             # Скроллим для подгрузки контента
             page.mouse.wheel(0, 1000)
@@ -301,7 +301,7 @@ def parse_yandex_card(url: str) -> dict:
             data['overview']['reviews_count'] = data.get('reviews_count', '')
 
             browser.close()
-            print(f"Парсинг завершен ({browser_name}). Найдено: название='{data['title']}', адрес='{data['address']}'")
+            print("Legacy-парсинг завершен")
             return data
 
         except PlaywrightTimeoutError as e:

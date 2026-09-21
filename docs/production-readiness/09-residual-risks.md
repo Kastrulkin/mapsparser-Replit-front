@@ -1,5 +1,18 @@
 # Residual risks — working register
 
+Latest21September, parent5ef5ba7e: five worker diagnostic file writers and
+related error/normalization prints, plus four legacy orchestration prints,
+are locally corrected with49pure passes and bounded independent review.
+This supersedes the specific open sinks in the older checkpoint below.
+
+Still open: service-level Apify debug files; raw functional IPC storage/access/
+retention (cannot simply redact the actual result); legacy leaf logs and raw
+invalid-input errors; other worker coverage/errors and persisted proxy reasons;
+old artifacts, deployed image and historical credential lifecycle. History
+queue46UNKNOWN/592classified access-material locations unchanged. Disk6282956KiB
+below10GiB; native aggregate/restore authority pending after denial. No data,
+production, Docker, cleanup, push or deployment action; all-project FAIL remains.
+
 Latest21September, parentfdbabac4: remaining unknown queue is45history+tree11=46.
 Seventy additional exact nonsecret proofs do not clear592historical provider/
 access-material locations or10tree access components. Validity, privilege,

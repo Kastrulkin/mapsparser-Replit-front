@@ -1,5 +1,15 @@
 # LocalOS threat model — current audit evidence
 
+## Latest diagnostic-boundary update — 21 September, parent5ef5ba7e
+
+SEC-WORKER-ARTIFACT-02 locally corrects five diagnostic file writers plus related
+error/normalization logs; SEC-LEGACY-ORCHESTRATION-LOG-01 corrects four legacy
+orchestration prints. Final49pure passes, causal parent failures and independent
+reviews support only these boundaries. Functional raw IPC, other service-level
+debug files, legacy leaf logs/raw invalid-input errors, persisted proxy/queue
+reasons, old artifacts and deployed code remain separate open boundaries.
+No historical credential clearance, release promotion or production change.
+
 Status: incomplete security assessment, not a production approval. Baseline `30262a5b`; local fixes and evidence are recorded in [the change log](06-change-log.md) and [backlog](02-audit-backlog.md). The deployed runtime is a separate artifact described in [the maintenance record](../RUNTIME_RELEASE_20260917.md). A locally fixed boundary is not presumed fixed in production.
 
 ## Assets and adversaries

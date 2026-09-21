@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "label": "worker-artifacts-green",
+  "captured_at": "2026-09-21T02:47:21.727712+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-B",
+    "-c",
+    "import hashlib,json,runpy,sys,unittest\nfrom pathlib import Path\ndef guard(event,args):\n    if event in {\"socket.connect\",\"subprocess.Popen\",\"os.system\",\"os.posix_spawn\",\"os.spawn\",\"sqlite3.connect\"}: raise AssertionError(event)\nsys.addaudithook(guard)\npaths=[\"src/worker.py\",\"src/core/parser_debug_artifacts.py\",\"tests/test_worker_parser_artifact_safety.py\"]\nprint(json.dumps({\"source_sha256\":{p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}}))\nns=runpy.run_path(paths[-1])\nsuite=unittest.defaultTestLoader.loadTestsFromTestCase(ns[\"WorkerParserArtifactSafetyTests\"])\nresult=unittest.TextTestRunner(verbosity=2).run(suite)\nsys.exit(not result.wasSuccessful())"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 624.547,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"source_sha256\": {\"src/worker.py\": \"4e1a5483e48b475e5e734f84be0782628d3bfb0ca84213fab9097a5dc61041c1\", \"src/core/parser_debug_artifacts.py\": \"a364d4d27e842c21a1bc9f8fdfd61bf7021eea4301ee541eab14f0194864f5be\", \"tests/test_worker_parser_artifact_safety.py\": \"73f6665495ddc75a26538dd8d3a1f0e1ff1893ac1ac022b3053bbc2b51620cf0\"}}\n",
+  "stderr": "test_apify_and_validation_artifacts_omit_values_without_mutating_results (<run_path>.WorkerParserArtifactSafetyTests.test_apify_and_validation_artifacts_omit_values_without_mutating_results) ... ok\ntest_artifact_write_failures_omit_exception_text (<run_path>.WorkerParserArtifactSafetyTests.test_artifact_write_failures_omit_exception_text) ... ok\ntest_functional_ipc_file_round_trip_keeps_card_and_billing_payload (<run_path>.WorkerParserArtifactSafetyTests.test_functional_ipc_file_round_trip_keeps_card_and_billing_payload) ... ok\ntest_identity_fallback_keeps_title_without_logging_it (<run_path>.WorkerParserArtifactSafetyTests.test_identity_fallback_keeps_title_without_logging_it) ... ok\ntest_no_result_diagnostic_omits_values_but_keeps_error_result (<run_path>.WorkerParserArtifactSafetyTests.test_no_result_diagnostic_omits_values_but_keeps_error_result) ... ok\ntest_promoted_keys_and_title_are_not_logged (<run_path>.WorkerParserArtifactSafetyTests.test_promoted_keys_and_title_are_not_logged) ... ok\ntest_successful_queue_result_preserves_provider_data (<run_path>.WorkerParserArtifactSafetyTests.test_successful_queue_result_preserves_provider_data) ... ok\ntest_sync_in_async_crash_artifact_omits_exception_and_traceback (<run_path>.WorkerParserArtifactSafetyTests.test_sync_in_async_crash_artifact_omits_exception_and_traceback) ... ok\ntest_sync_in_async_write_and_status_failures_omit_exception_text (<run_path>.WorkerParserArtifactSafetyTests.test_sync_in_async_write_and_status_failures_omit_exception_text) ... ok\ntest_timeout_and_no_result_write_failures_omit_exception_text (<run_path>.WorkerParserArtifactSafetyTests.test_timeout_and_no_result_write_failures_omit_exception_text) ... ok\ntest_timeout_diagnostic_omits_values_but_keeps_error_result (<run_path>.WorkerParserArtifactSafetyTests.test_timeout_diagnostic_omits_values_but_keeps_error_result) ... ok\n\n----------------------------------------------------------------------\nRan 11 tests in 0.551s\n\nOK\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

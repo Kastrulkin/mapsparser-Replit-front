@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "label": "worker-artifacts-quality",
+  "captured_at": "2026-09-21T02:50:34.677169+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "-c",
+    "import ast,hashlib,json,pathlib,subprocess\nparent=\"5ef5ba7e811d31d8599857929f2b79219c5954d4\"\nbase=pathlib.Path(\".agent/tasks/production-readiness-20260917/evidence\")\nold=subprocess.check_output([\"git\",\"show\",parent+\":src/worker.py\"])\nbaseline=json.loads((base/\"worker-artifacts-causal-baseline-20260921.json\").read_text())\ngreen=json.loads((base/\"worker-artifacts-green-20260921.json\").read_text())\nfor capture in (baseline,green):\n    assert not any(capture[k] for k in (\"timed_out\",\"stdout_truncated\",\"stderr_truncated\"))\nmeta=json.loads(baseline[\"stdout\"])\nassert meta[\"source_sha256\"][\"src/worker.py\"]==hashlib.sha256(old).hexdigest()\nassert baseline[\"exit_code\"]==1 and \"FAILED (failures=11)\" in baseline[\"stderr\"] and \"ERROR:\" not in baseline[\"stderr\"]\nassert green[\"exit_code\"]==0 and \"Ran 11 tests\" in green[\"stderr\"]\ncurrent_meta=json.loads(green[\"stdout\"])\nfor path,digest in current_meta[\"source_sha256\"].items():\n    assert hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()==digest,path\nfor path in [\"src/core/parser_debug_artifacts.py\",\"tests/test_worker_parser_artifact_safety.py\"]:\n    assert meta[\"source_sha256\"][path]==current_meta[\"source_sha256\"][path]\nbefore=ast.parse(old)\nafter=ast.parse(pathlib.Path(\"src/worker.py\").read_text())\nprotected=[\"_parse_card_via_apify\",\"_parse_card_via_apify_subprocess_entry\",\"_extract_apify_actual_cost_usd\",\"_settle_operator_apify_cost_if_present\"]\nfor name in protected:\n    def body(tree):\n        return ast.dump(next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name==name))\n    assert body(before)==body(after),name\nruff=\"/private/tmp/localos-backend-deps-v2-20260920.xYc0jK/venv/bin/ruff\"\nsubprocess.run([\"/usr/bin/arch\",\"-arm64\",ruff,\"check\",\"tests/test_worker_parser_artifact_safety.py\"],check=True)\nsubprocess.run([\"/usr/bin/arch\",\"-arm64\",ruff,\"check\",\"--select\",\"F821,F822,F823\",\"src/worker.py\"],check=True)\nsubprocess.run([\"git\",\"diff\",\"--check\"],check=True)\nsubprocess.run([\"df\",\"-k\",\".\"],check=True)\nprint(json.dumps({\"parent\":parent,\"parent_worker_sha256\":hashlib.sha256(old).hexdigest(),\"protected_function_AST_parity\":protected,\"source_sha256\":current_meta[\"source_sha256\"],\"baseline_source_is_exact_parent\":True,\"baseline_final_test_bytes_match\":True}))\n"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 308.567,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "All checks passed!\nAll checks passed!\nFilesystem   1024-blocks      Used Available Capacity iused    ifree %iused  Mounted on\n/dev/disk3s5   239362496 202328856   6282956    97% 2048972 62829560    3%   /System/Volumes/Data\n{\"parent\": \"5ef5ba7e811d31d8599857929f2b79219c5954d4\", \"parent_worker_sha256\": \"21e02cc78241de155460f6a53279e569cf02dffc4e63439d5b17ced9f096f910\", \"protected_function_AST_parity\": [\"_parse_card_via_apify\", \"_parse_card_via_apify_subprocess_entry\", \"_extract_apify_actual_cost_usd\", \"_settle_operator_apify_cost_if_present\"], \"source_sha256\": {\"src/worker.py\": \"4e1a5483e48b475e5e734f84be0782628d3bfb0ca84213fab9097a5dc61041c1\", \"src/core/parser_debug_artifacts.py\": \"a364d4d27e842c21a1bc9f8fdfd61bf7021eea4301ee541eab14f0194864f5be\", \"tests/test_worker_parser_artifact_safety.py\": \"73f6665495ddc75a26538dd8d3a1f0e1ff1893ac1ac022b3053bbc2b51620cf0\"}, \"baseline_source_is_exact_parent\": true, \"baseline_final_test_bytes_match\": true}\n",
+  "stderr": "git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\ngit: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

@@ -1,5 +1,30 @@
 # Verified commands and evidence
 
+## Artifact/legacy diagnostics — 21 September, parent5ef5ba7e
+
+Exact guarded commands, stdout/stderr, source hashes and wall times are retained
+in task `evidence/*-20260921.json`. No actual worker/scraper top-level imports,
+browser, DB/provider or subprocess runtime is used by these synthetic tests.
+
+| Capture basename | Actual result | Duration ms |
+| --- | --- | ---: |
+| worker-artifacts-red | First10test harness;2selector assertion failures plus privacy failures; not authoritative |644.053|
+| worker-artifacts-baseline |11tests;9failure entries/2local-variable harness errors; retained |636.707|
+| worker-artifacts-causal-baseline |11methods:9fail/2pass,11failure entries incl subtests/0errors; exact parent worker |619.876|
+| worker-artifacts-green |Same final test bytes;11pass |624.547|
+| worker-artifacts-quality |Parent/current hashes,4protected functional ASTs, Ruff/diff; disk6282956KiB |308.567|
+| legacy-orchestration-causal-baseline |Final4tests on immutable parent scraper:4fail/0errors |122.006|
+| diagnostic-artifacts-final |49pass +4subtests,1.51s;13hashes; precollection external guard, no conftest/plugin autoload |1806.857|
+| diagnostic-artifacts-quality |13hashes, legacy non-diagnostic AST parity, scoped Ruff/diff |266.784|
+| diagnostic-artifacts-precommit |23owned files/133666diff bytes,8captures/13hashes, strict staged scan clean; nine foreign hashes and original AC/verdict preserved |1806.878|
+
+No timeout/truncation. Baseline/quality Git temp-directory warnings are retained;
+they are not application failures. Worker initial harness captures are not
+causal acceptance evidence. No capture overwrite or source reversal occurred.
+
+The final package adds the precommit capture (24files) and repeats verification;
+the 23-file precommit result is not relabeled as a final-package result.
+
 ## Worker console and frozen history — 21 September, parentfdbabac4
 
 Exact commands are in the named task `evidence/*-20260921.json` captures.

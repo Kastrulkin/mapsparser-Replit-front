@@ -2,6 +2,15 @@
   "task_id": "production-readiness-20260917",
   "overall_status": "FAIL",
   "checkpoint": {
+    "subsequent_worker_artifacts_and_legacy_orchestration": {
+      "parent_commit": "5ef5ba7e811d31d8599857929f2b79219c5954d4",
+      "findings": ["SEC-WORKER-ARTIFACT-02", "SEC-LEGACY-ORCHESTRATION-LOG-01"],
+      "scope": "Five worker diagnostics-only file writers and related error/normalization logs; four legacy browser/parser orchestration console sinks. Raw functional Apify IPC and in-memory parser/validation/cost payloads preserved.",
+      "proof": ["evidence/worker-artifacts-causal-baseline-20260921.json", "evidence/worker-artifacts-green-20260921.json", "evidence/worker-artifacts-quality-20260921.json", "evidence/legacy-orchestration-causal-baseline-20260921.json", "evidence/diagnostic-artifacts-final-20260921.json", "evidence/diagnostic-artifacts-quality-20260921.json", "evidence/worker-artifacts-notes-20260921.md", "evidence/legacy-orchestration-notes-20260921.md"],
+      "result": "Causal worker baseline11methods:9fail/2pass,11failure entries/0errors; same final tests11pass. Immutable legacy parent4fail/0errors. Final49pure passes and4subtests1.51s/1806.857ms,13source hashes, scoped Ruff, protected worker and non-diagnostic legacy AST checks. Both independent bounded reviews approve.",
+      "provenance": "Two initial worker harness attempts retained (ambiguous selectors; local-variable scaffold errors), not causal acceptance. Baseline worker bytes equal explicit parent; no source reversal/capture overwrite. Reviewer reversal characterization explicitly withdrawn after hash reconciliation.",
+      "limits": "No full-worker/browser/DB/provider integration. Service-level diagnostic writers, raw IPC storage/access/retention, legacy leaf/invalid-input logs, other worker diagnostics, old files and deployed code remain open. History46UNKNOWN/592classified access-material locations unchanged. Disk6282956KiB below10GiB; native aggregate/restore prep remains denied pending renewed authority. No production/DB/provider/Docker/cleanup/push/deploy; original statuses and whole FAIL unchanged."
+    },
     "subsequent_worker_console_and_history_batch": {
       "parent_commit": "fdbabac4d830cb82d3ec2ffcb0f884b6250c141a",
       "finding": "SEC-WORKER-PARSER-LOG-01",

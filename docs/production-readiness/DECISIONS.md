@@ -1,5 +1,19 @@
 # Readiness decisions
 
+## D-074 — Separate diagnostic storage from functional parser transport
+
+A file in a debug directory is not necessarily expendable diagnostics.
+`apify_result.json` carries the actual subprocess result and cost metadata;
+preserve its protocol/data while separately auditing storage access/retention.
+Shape only diagnostics-only copies, never the in-memory payload used for
+billing or validation. Version the changed diagnostic JSON format, use the
+existing bounded shape helper, and keep writer failures value-free too.
+
+Preserve immutable causal evidence while correcting harness selectors/scaffolds.
+Bind the baseline to parent bytes and final test bytes; do not hide initial
+harness errors or call fixed-event tests a real browser/integration proof.
+Four legacy orchestration sinks do not certify its numerous leaf extractors.
+
 ## D-073 — Bind positive classification and regression evidence to exact bytes
 
 Missing historical artifacts are UNKNOWN, not safe digests. A successful empty
