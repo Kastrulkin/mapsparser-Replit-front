@@ -2,6 +2,15 @@
   "task_id": "production-readiness-20260917",
   "overall_status": "FAIL",
   "checkpoint": {
+    "subsequent_safety_guards_and_test_review": {
+      "parent_commit": "386a16867782430f68177a926425a44d0722de24",
+      "status": "LOCAL_GUARDS_FIX_PROVEN_NOT_WHOLE_ACCEPTANCE",
+      "proof": ["evidence/safety-guards-notes-20260921.md", "evidence/safety-guards-manifest-20260921.json", "evidence/cumulative-test-review-20260921.md"],
+      "result": "Final21: immutable parent11 assertion failures including4subtest failures/0errors; same current21pass. Broad55pass; full Ruff5files/unaffected AST/hash guards pass. Intermediate remote-path regression captured then corrected after independent review.",
+      "scope": "One read-only AST auditor and four test files; no app/runtime/native DB behavior change. Approval call shape, health probe call count, protected Git refspecs and valid compatibility controls. Invalid credential-helper syntax candidate withdrawn.",
+      "cumulative_review": "All112 changed test-tree paths in frozen30262a5..8be8e45 now semantically reviewed at changed-hunk/assertion/fixture level, including helper/docs paths.84 newly completed paths +27infra +1media. No reviewer executed native tests.522evidence/docs not fully reconciled.",
+      "limits": "New P2 test candidates: browser failing-request observation, CAPTCHA retry timestamp, fake approval ordering. No real PG/provider/TLS/full-app/current aggregate/image/restore/demo proof. WholeFAIL/AC1-9,11FAIL/AC10PASS unchanged.13foreign/3historical hashes preserved;disk3036432KiB below10GiB floor; native preparation denial not retried. No production/DB/schema/provider/Docker/cleanup/push/deploy."
+    },
     "subsequent_vk_upload_destination": {
       "parent_commit": "8be8e45a5a2930607311becebf05a3d456d100b0",
       "finding": "SEC-VK-UPLOAD-DESTINATION-01",

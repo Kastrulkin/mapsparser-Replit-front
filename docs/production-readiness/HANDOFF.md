@@ -1,5 +1,38 @@
 # Readiness handoff
 
+## Latest checkpoint — 21 September, safety guards
+
+VK package is committed locally as386a16867782430f68177a926425a44d0722de24
+(parent8be8e45a);25owned paths, strict final368329-byte diff scan and normal
+hook passed; post-commit hashes matched and only13foreign paths remained.
+The previous VK checkpoint below is historical pre/post-packaging detail.
+
+Current guard package parent386a1686 owns one auditor and four tests:
+`scripts/audit_approval_boundaries.py`, `tests/test_approval_boundaries_audit.py`,
+`tests/test_readme_git_workflow.py`, `tests/test_readiness_endpoint.py` (only
+one health-test body), `tests/test_readiness_guard_isolation.py`, plus proof/docs.
+Use `git log -1 --oneline` and `git status --short` for actual commit/index state.
+
+Final21checks pass after11 immutable-parent assertion failures including4
+subtest failures; broad55pass, quality385.841ms and final independent source
+ACCEPT.7captures/31source hashes in safety-guards manifest. Initial20green
+missed remote-path compatibility; review-red21 recorded2 failures, then fixed.
+No assertion weakened. Invalid credential.helper=store candidate withdrawn.
+The isolated Flask fixture has only actual health/ready AST; no app/nativeDB.
+
+All112 frozen changed test-tree paths have now received independent semantic
+changed-hunk/fixture/assertion review. See cumulative-test-review for84 newly
+completed rows plus prior27infra/1media. These are read-only reviews, not native
+test executions. Older83-path/partial-post-service gaps below are superseded.
+
+Next: finish guard evidence/strict staged scan/local commit, then reproduce
+remaining browser-error request-observation, CAPTCHA retry-time and fake
+approval-order test gaps. Do not repeat completed112-path review. Most522
+historical evidence/docs still lack full reconciliation; original release gates
+remain. Native aggregate/restore denial and10GiB image floor are unchanged;
+latest df3,036,432KiB at21September is not sufficient for an image build.
+No production/DB/schema/provider/Docker/cleanup/push/deploy, no old-row cleanup.
+
 ## Latest checkpoint — 21 September, VK private upload destinations
 
 Package parent is `8be8e45a`; check `git log -1 --oneline` and

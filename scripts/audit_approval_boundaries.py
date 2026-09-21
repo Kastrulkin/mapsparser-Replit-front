@@ -98,8 +98,19 @@ def audit_blueprint_boundaries(findings):
         if not isinstance(node, ast.Call) or call_name(node) != "self.orchestrator.execute":
             continue
         for keyword in node.keywords:
-            if keyword.arg == "allow_execute_when_approved" and isinstance(keyword.value, ast.Constant) and keyword.value.value is True:
+            if keyword.arg is None:
+                findings.append(f"{runner_path}:{node.lineno}: unverified approval override via expanded keywords")
+                continue
+            if keyword.arg != "allow_execute_when_approved":
+                continue
+            value = keyword.value
+            if isinstance(value, ast.Constant) and value.value is True:
                 findings.append(f"{runner_path}:{node.lineno}: unconditional approval override")
+            elif not (
+                isinstance(value, ast.Name) and value.id == "approval_verified"
+                or isinstance(value, ast.Constant) and value.value is False
+            ):
+                findings.append(f"{runner_path}:{node.lineno}: unverified approval override expression")
 
     require_markers(
         "src/services/agent_blueprint_runner.py",

@@ -1,6 +1,10 @@
 # Cumulative source review — 21 September 2026
 
 Status: PARTIAL REVIEW / overall FAIL. This frozen review is not runtime proof.
+The later `cumulative-test-review-20260921.md` supersedes this file's remaining
+83-test-path/partial-social-test gap: all112 frozen test-tree paths are reviewed.
+Its credential-helper syntax candidate is also withdrawn there. Historical
+source findings and most evidence/docs reconciliation remain separately scoped.
 Frozen range: `30262a5bf7b468e0a6f5a0e3d8262dbef119e075` to
 `8be8e45a5a2930607311becebf05a3d456d100b0`.
 

@@ -194,12 +194,20 @@ def test_database_ready_requires_database_url(monkeypatch):
 
 
 def test_ready_response_is_generic_and_health_remains_db_free(monkeypatch):
-    monkeypatch.setattr(core_public, "database_ready", lambda: False)
+    probe_calls = []
+
+    def unavailable_database():
+        probe_calls.append(True)
+        return False
+
+    monkeypatch.setattr(core_public, "database_ready", unavailable_database)
     monkeypatch.setattr(core_public, "should_track_discovery_path", lambda path: False)
 
     client = main.app.test_client()
     assert client.get("/health").get_json() == {"status": "ok", "message": "SEO анализатор работает"}
+    assert probe_calls == []
     response = client.get("/ready")
+    assert probe_calls == [True]
     assert response.status_code == 503
     assert response.get_json() == {"status": "not_ready"}
     assert "database" not in response.get_data().decode("utf-8").lower()

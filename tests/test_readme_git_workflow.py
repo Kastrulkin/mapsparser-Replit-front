@@ -43,7 +43,38 @@ class ReadmeGitWorkflowTests(unittest.TestCase):
     def test_push_examples_do_not_target_a_hardcoded_main_branch(self):
         for command in self.commands:
             if command[:2] == ["git", "push"]:
-                self.assertFalse(set(command[2:]) & {"main", "master"}, "Publish only the separately approved branch")
+                # The documented push form has a repository followed by refspecs.
+                # Do not interpret a remote URL/SCP path as a branch destination.
+                positionals = [argument for argument in command[2:] if not argument.startswith("-")]
+                targets = {
+                    argument.removeprefix("+").rsplit(":", 1)[-1].removeprefix("refs/heads/")
+                    for argument in positionals[1:]
+                }
+                self.assertFalse(targets & {"main", "master"}, "Publish only the separately approved branch")
+
+
+class ReadmeGitWorkflowMutationTests(unittest.TestCase):
+    def test_push_guard_does_not_treat_remote_path_as_branch(self):
+        for remote in ("git@example.invalid:main", "ssh://git@example.invalid/path:main"):
+            with self.subTest(remote=remote):
+                check = ReadmeGitWorkflowTests()
+                check.commands = [["git", "push", "--set-upstream", remote, "HEAD"]]
+                check.test_push_examples_do_not_target_a_hardcoded_main_branch()
+
+    def test_push_guard_rejects_protected_destination_refspecs(self):
+        for refspec in ("HEAD:main", "+HEAD:refs/heads/main", "feature:master", ":refs/heads/master"):
+            with self.subTest(refspec=refspec):
+                check = ReadmeGitWorkflowTests()
+                check.commands = [["git", "push", "origin", refspec]]
+                with self.assertRaises(AssertionError):
+                    check.test_push_examples_do_not_target_a_hardcoded_main_branch()
+
+    def test_push_guard_accepts_explicit_feature_destinations(self):
+        for refspec in ("HEAD:codex/reviewed-fix", "HEAD:refs/heads/codex/reviewed-fix"):
+            with self.subTest(refspec=refspec):
+                check = ReadmeGitWorkflowTests()
+                check.commands = [["git", "push", "origin", refspec]]
+                check.test_push_examples_do_not_target_a_hardcoded_main_branch()
 
 
 if __name__ == "__main__":

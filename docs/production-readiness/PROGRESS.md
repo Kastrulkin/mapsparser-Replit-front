@@ -1,5 +1,25 @@
 # Production-readiness progress
 
+## Latest checkpoint — 21 September, safety guards and completed test-path review
+
+- [x] Independent changed-hunk/assertion review now covers all112 test-tree
+  paths in the frozen original range; helpers/docs count as paths, not tests.
+  See task `evidence/cumulative-test-review-20260921.md`.
+- [x] Three P2 test/auditor gaps locally corrected; no application runtime
+  change. Final21 checks: parent11 assertion failures (including4 subtests)
+  becomes all21pass. Broader55pass; scoped full Ruff and unaffected AST pass.
+- [x] Independent reviewer found and verified correction of an intermediate
+  remote-path false positive. Invalid Git credential syntax candidate withdrawn.
+- [ ] Final evidence/strict-secret scan/local commit must be reconciled with
+  Git. Package parent386a1686; proof `safety-guards-notes-20260921.md`/manifest.
+- [ ] Remaining P2: browser failing-request observation, CAPTCHA retry timing,
+  fake approval ordering. Native/current full aggregate, image, performance,
+  restore/demo and most historical evidence reconciliation remain incomplete.
+
+Whole FAIL / AC1–9,11 FAIL / AC10 PASS unchanged. Measured disk3,036,432KiB
+(~2.90GiB), below10GiB floor. Denied native preparation not retried; no cleanup,
+production/DB/provider effects, Docker, push or deploy.13foreign paths preserved.
+
 ## Latest checkpoint — 21 September, VK private upload destinations
 
 - [x] Pre-existing response-derived upload URL reached unrestricted transport;
@@ -26,7 +46,10 @@ Real proxy/TLS/provider and full app/facade/DB integration remain untested.
 No production/DB/Docker/provider writes/cleanup/push/deploy. Exact state and
 capture names are in HANDOFF; original whole FAIL and AC statuses remain.
 
-## Latest checkpoint — 21 September, cumulative review at 8be8e45a
+## Historical checkpoint — 21 September, initial cumulative review at 8be8e45a
+
+This pre-supplemental snapshot is superseded by the completed112-test-path
+review above; its remaining83+3 test paths are no longer current work.
 
 - [x] Frozen original baseline-to-head inventory: 793 paths with Git blob IDs;
   13 foreign file hashes and protected historical documents unchanged.

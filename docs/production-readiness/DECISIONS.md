@@ -1,5 +1,18 @@
 # Readiness decisions
 
+## D-082 — Test the safety gates with valid negative and positive mutations
+
+Strengthen only the existing CI/test boundaries: explicit verified-or-denied
+approval call shape, zero health probe calls, and protected Git destinations.
+Compare absent protection with an actual minimal mutation and retain legitimate
+controls. The first README correction treated a remote as a refspec; independent
+review added controls and corrected positional handling before acceptance.
+
+These guards do not replace authorization/taint analysis, real PG/browser/provider
+proof or a complete shell parser. Rejecting invalid credential-helper syntax
+would not close a real gap, so that candidate was withdrawn. No runtime or DB
+policy changes are needed for this package.
+
 ## D-081 — Pin provider-issued upload destinations without truncating VK JSON
 
 Treat the returned upload URL as untrusted. Use a dedicated bounded HTTPS POST

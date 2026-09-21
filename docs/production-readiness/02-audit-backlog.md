@@ -1,5 +1,20 @@
 # Audit backlog — evidence, not a readiness claim
 
+## 21 September safety-gate corrections and cumulative assertion review
+
+TEST-APPROVAL-AUDIT-01, TEST-HEALTH-DB-GUARD-01 and the refspec portion of
+TEST-README-GIT-GUARD-01 are P2, locally FIX_PROVEN. These are reproduced weak
+test/auditor guards, not current runtime bypasses. Cause/effect, acceptance,
+risk and exact21/55-case proof are in task `safety-guards-notes-20260921.md`.
+The invalid credential-helper syntax portion is NO_BUG_PROVEN/withdrawn.
+
+Independent changed-test review is complete for112 frozen paths. New source-
+supported P2 test gaps: TEST-BROWSER-FAILURE-OBSERVED-01 (injected failing request
+not proven observed), TEST-CAPTCHA-RETRY-TIME-01 (retry timestamp not asserted),
+TEST-APPROVAL-FAKE-ORDER-01 (insertion order differs from SQL date/id ordering).
+Exact scope/effect/verification plans are in cumulative-test-review. No new
+P0/P1 runtime defect proven by the84 newly reviewed paths; no native run claim.
+
 ## 21 September VK upload destination
 
 **SEC-VK-UPLOAD-DESTINATION-01 — P1, security, locally FIX_PROVEN.**
@@ -17,12 +32,15 @@ unmeasured production likelihood; small effort/scope, medium proxy compatibility
 risk. Required before production. Public malicious host policy and real
 provider/proxy execution remain open; P1-BE-01 is not universally closed.
 
-Supplemental static review found three P2 test-quality gaps, not current
+Historical pre-safety-guard snapshot (superseded by the corrections above):
+supplemental static review found three P2 test-quality gaps, not current
 production failures: TEST-APPROVAL-AUDIT-01 (nonliteral unconditional approval
 expression evades audit), TEST-HEALTH-DB-GUARD-01 (health test does not assert
 zero readiness calls), TEST-README-GIT-GUARD-01 (refspec/config-equals variants
 evade token predicates). Exact evidence, risk and acceptance are in cumulative
-review notes. Status: source-supported candidates, reproduction/fix pending.
+review notes. At that snapshot they were source-supported candidates with
+reproduction/fix pending. They are now locally fixed for the verified inputs;
+the invalid config-equals candidate is withdrawn, not an open finding.
 
 ## 21 September proxy diagnostics
 

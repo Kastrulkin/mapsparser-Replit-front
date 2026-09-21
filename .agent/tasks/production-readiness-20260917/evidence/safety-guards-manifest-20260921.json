@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "kind": "bounded_local_safety_guard_proof",
+  "parent_commit": "386a16867782430f68177a926425a44d0722de24",
+  "overall_status": "FAIL",
+  "source_hashes": [
+    {
+      "path": "scripts/audit_approval_boundaries.py",
+      "sha256": "461888cf030b4f17d98f2872488ba0c0a983e3f3527f231939f82971cbad1b84"
+    },
+    {
+      "path": "tests/test_approval_boundaries_audit.py",
+      "sha256": "3f6df96974b26a989b82bdc14914caff73baf70423d2463ce3ee6a1e9abc7418"
+    },
+    {
+      "path": "tests/test_readme_git_workflow.py",
+      "sha256": "d1b6f1f02b82543c560384a22ca177b368d85ef40e6182cf135c8ac913f299a7"
+    },
+    {
+      "path": "tests/test_readiness_endpoint.py",
+      "sha256": "7c249547ea4fda4fae57b189d2c098c04643b496b3906f6439d58ad2ef6e3853"
+    },
+    {
+      "path": "tests/test_readiness_guard_isolation.py",
+      "sha256": "d47a77ff7badda4dd24e2b602aa37656230bf13b69eb1f1bf3ecf83c50dc5c80"
+    },
+    {
+      "path": "src/legacy_routes/core_public.py",
+      "sha256": "a137b998a0f9a9d690823c7440b14ab2f54743587a68868f5fab78f5028b4df2"
+    },
+    {
+      "path": "README.md",
+      "sha256": "23552f6e2100e061f29eb798231e402576596ac6e088cd9fe1b7ccc58b34218d"
+    },
+    {
+      "path": "src/api/agent_blueprints_api.py",
+      "sha256": "e2fed3a0c9deead738b708f775ab9863f9dd6e7836ab068db73fe2aa624e2e5b"
+    },
+    {
+      "path": "src/services/agent_blueprint_runner.py",
+      "sha256": "36c4005147d45d387b2dd375b027fb612d8c6b2ea92ea4713e6b11a80224c131"
+    },
+    {
+      "path": "src/services/agent_blueprint_orchestrator.py",
+      "sha256": "be40423c28c9095beaeaac2ba2adaf555fb7862f3ac1dcfef21c47aaee061244"
+    },
+    {
+      "path": "src/services/outreach_send_capability.py",
+      "sha256": "d8a4fd25d380636202afbe6f9c96a64144e0f6e4145ec44aaf3d092a54f15231"
+    },
+    {
+      "path": "src/services/agent_capability_handlers.py",
+      "sha256": "d9a448be3009d9bb601a7128f07bc010b696f539cf02d330a9a59d76bc060f81"
+    },
+    {
+      "path": "src/api/operator_api.py",
+      "sha256": "3105b0b30870c3a4f7c2acb49e8650aaab2103aa23ad936652d8c47845171a7f"
+    },
+    {
+      "path": "src/services/operator_paid_action_adapter.py",
+      "sha256": "a4cfa9cd89291c48f8a81b6874fa880e90676478a53db4f719a0bc3935db8dad"
+    },
+    {
+      "path": "src/services/operator_paid_executor.py",
+      "sha256": "b16c42f7d488661d51ca880cbee704c1318b296d3c6c387df57ecaaa82a7b77f"
+    },
+    {
+      "path": "src/services/operator_fresh_reviews.py",
+      "sha256": "5590c90fc48f57cbc6bb96c58f8cf5f94453ac56066c7c8de477616ce50701d6"
+    },
+    {
+      "path": "src/services/operator_map_refresh.py",
+      "sha256": "76cf7ce19fb609b61310fd47e37f6077169f432862ac275afd6edd78562f08e6"
+    },
+    {
+      "path": "src/services/operator_manual_publish.py",
+      "sha256": "a6b0e4801df1e73629d83aa26f455a2b682641b12934a6ae9c3a67d40e0915a9"
+    },
+    {
+      "path": "src/services/operator_manual_review.py",
+      "sha256": "ec61dffbf8b8719c3e4490c8c463323e466aef997593305801438c904af48004"
+    },
+    {
+      "path": "src/services/operator_review_reply_bulk.py",
+      "sha256": "9c709d25babd9546ac883412808b5d6c22d176c82abed1bb05ba84b8d03beb68"
+    },
+    {
+      "path": "src/services/operator_services_optimization.py",
+      "sha256": "1fa0611ac213bf72344ea12a33a1dca6fa80953e3a6ee1170fc34adbd4262a2b"
+    },
+    {
+      "path": "src/services/operator_social_post_generation.py",
+      "sha256": "b1ea950ffa5f934799238e8c40fd6d75aff4c1a090096e5b9c039222322767ee"
+    },
+    {
+      "path": "src/services/operator_news_generation.py",
+      "sha256": "c47aa37f4189098039af7eaffee8ae762bcf0acaff13a147a65217c3209c91e7"
+    },
+    {
+      "path": "src/worker.py",
+      "sha256": "c88fee3044cbb07b1ae8b474d570f6466de4ae57146e0a5c259cb0842d327141"
+    },
+    {
+      "path": "docker-compose.yml",
+      "sha256": "6abf737fbc6e7b3ec5dffa03981061bad1f77cd84dfc51211dc6cefc9b9d14c8"
+    },
+    {
+      "path": "src/core/readiness.py",
+      "sha256": "285f618d3934ca4abed58f36304c8b4b26ab459124bb06d2bb15b2a3583b8467"
+    },
+    {
+      "path": "tests/test_vk_media_upload_destination.py",
+      "sha256": "69d886ad928397c09a8f42e2f857b9010843bff271cea9a24406292b5073611e"
+    },
+    {
+      "path": "src/core/outbound_network.py",
+      "sha256": "37419106dc9853f9c8730dc8ebaf35976aa1ad7685fef060a68119b68af67210"
+    },
+    {
+      "path": "src/services/social_posts/media_delivery.py",
+      "sha256": "f5f41e4baf056ee2c712e4be2becb20dc4cee0fb038099b974658a7c9700de44"
+    },
+    {
+      "path": "src/services/social_posts/recommendations_handoff.py",
+      "sha256": "cda8a11bcf7c8513651d6c66cc61c32da8c16104f183d87f5227a66e11aa0375"
+    },
+    {
+      "path": "scripts/smoke_agent_blueprint_outreach_api.py",
+      "sha256": "a404bec6cce873a92b39c2eeed4bd2cc5d9d28e719097b4e4aaa1bbc1488998d"
+    }
+  ],
+  "captures": [
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/safety-guards-broad55-20260921.json",
+      "sha256": "63cdc34f8517b090b1377e4514fd68e43122216488cf1b9ebb8c52eee6a180a5",
+      "exit_code": 0,
+      "duration_ms": 2408.267,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "classification": "ISOLATED_55_PASS"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/safety-guards-final21-baseline-20260921.json",
+      "sha256": "4f5954e2a6185a4d610419eeb674325e51ae2b86dc62c4ba487902c85a1ada34",
+      "exit_code": 1,
+      "duration_ms": 1617.667,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "classification": "PARENT_21_TESTS_11_ASSERTION_FAILURES_INCLUDING_4_SUBTESTS"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/safety-guards-final21-green-20260921.json",
+      "sha256": "e2f1682e71a908443cc3395a8bc49cff81f84b91c0f863c106e84d225f22e59f",
+      "exit_code": 0,
+      "duration_ms": 2112.823,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "classification": "CURRENT_21_PASS"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/safety-guards-initial-green-20260921.json",
+      "sha256": "b4785cef4bdfa94b9465da334b6549f5a6ca9cb0687c0c7c4be7774882cbe63f",
+      "exit_code": 0,
+      "duration_ms": 1718.136,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "classification": "INTERMEDIATE_HISTORY"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/safety-guards-initial-red-20260921.json",
+      "sha256": "111c75494537778a5a99b07e0a58160dd2f22c367e37fcd2cd22475666a3b640",
+      "exit_code": 1,
+      "duration_ms": 1774.562,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "classification": "INTERMEDIATE_HISTORY"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/safety-guards-quality-20260921.json",
+      "sha256": "59006311f47d21ea9909f24579791f155a3f911d9dc3ebce51b8a853550b3b83",
+      "exit_code": 0,
+      "duration_ms": 385.841,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "classification": "QUALITY_PASS"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/safety-guards-review-red-20260921.json",
+      "sha256": "9b62d83bcf010f865c1d3c133332d7e1624a6785f0d4d8c5f6463f402ba151ff",
+      "exit_code": 1,
+      "duration_ms": 1705.03,
+      "timed_out": false,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "classification": "INTERMEDIATE_REGRESSION_2_SUBTEST_FAILURES"
+    }
+  ],
+  "notes": [
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/safety-guards-notes-20260921.md",
+      "sha256": "02ded20af6c379e0b24ca8b4c454ed5b4c66a61f5ea33f1eb3ec27b1fa5b651d"
+    },
+    {
+      "path": ".agent/tasks/production-readiness-20260917/evidence/cumulative-test-review-20260921.md",
+      "sha256": "d01f23671a09e8d5ffbaa7af5eb7532b00cce8c49deedafd16eb9b30bd125388"
+    }
+  ]
+}

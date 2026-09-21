@@ -1,5 +1,14 @@
 # Production-readiness change log
 
+## Safety guards — 21 September, parent386a1686
+
+Approval audit now rejects unverified expression/expanded-keyword overrides;
+literalFalse/verified local name/safe omission preserve valid contracts.
+Health test asserts zero readiness calls then exactly one for /ready.
+README guard checks explicit destination refspecs without confusing repository
+paths. Added mutation/positive controls; reviewer-caught remote regression fixed.
+21targeted/55broader isolated checks pass; no application runtime/nativeDB change.
+
 ## VK private upload destinations — 21 September, parent `8be8e45a`
 
 SEC-VK-UPLOAD-DESTINATION-01 corrects the provider-response-derived multipart

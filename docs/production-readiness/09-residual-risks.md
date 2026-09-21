@@ -1,5 +1,17 @@
 # Residual risks — working register
 
+Latest21September, parent386a1686: three local P2 safety-gate gaps are corrected,
+but syntactic approval checking is not variable-provenance proof, the README
+guard covers only documented push forms, and isolated health routes do not
+establish full-app/deployed liveness.55local checks are not native aggregate.
+
+All112 frozen changed-test paths are now reviewed statically. Remaining actual
+test-evidence work: observe injected browser error requests, assert CAPTCHA
+retry timing and align fake approval ordering. Mock DB/network boundaries and
+unexecuted native tests remain explicit. The invalid Git credential syntax
+candidate is withdrawn. Disk3,036,432KiB remains below10GiB; original release,
+secret-lifecycle, native permission and whole FAIL gates remain unchanged.
+
 Latest21September, parent `8be8e45a`: VK private/rebinding upload targets are
 locally corrected (25targeted/24adjacent checks). The remaining part of
 P1-BE-01 is provider trust: a malicious public HTTPS host can still receive

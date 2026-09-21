@@ -1,5 +1,17 @@
 # Verified commands and evidence
 
+## Safety guards — 21 September, parent386a1686
+
+Exact guarded commands/results: task `evidence/safety-guards-*-20260921.json`.
+Final21 baseline:11 assertions fail including4subtests,0errors,1617.667ms;
+same21current pass2112.823ms. Broad55pass2408.267ms; quality385.841ms.
+Initial20red/green and review-red21 are retained intermediate evidence.
+Final tests deny sockets/app/PG/Docker/env files/child processes; baseline reads
+only immutable local Git blobs before guard. No project app or native tests run.
+Ruff covers all5 changed auditor/test files; native-test AST remains unchanged.
+Use Git/capture results for actual commit state; no push/deploy command is part
+of the validation lane.
+
 ## VK upload destinations — 21 September, parent `8be8e45a`
 
 Exact guarded commands/output: task `evidence/vk-upload-*-20260921.json`.
