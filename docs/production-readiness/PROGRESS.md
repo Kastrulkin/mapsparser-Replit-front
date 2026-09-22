@@ -1,5 +1,22 @@
 # Production-readiness progress
 
+## Latest checkpoint — 22 September, browser error paths pass
+
+- [x] Current `ef6d3e1e` frontend/test archive: both unchanged Python/Playwright
+  regressions pass, 2/2 and six stages, 25.59 s pytest / 26.863 s capture.
+- [x] Desktop tour retains local progress after mocked 502; mobile Operator
+  displays the intended error instead of raw JSON diagnostics. External network
+  denied by OS and checked before pytest; APIs are mocked, not live integrations.
+- [x] Preserve first policy-syntax preflight failure, successful raw capture and
+  exact runners in task `evidence/browser-errors-20260922`; source bytes unchanged.
+- [ ] Callback recovery native profile is being prepared separately: whole module
+  has 14 nodes (13 PostgreSQL fixtures plus one pure worker control), not 13 nodes.
+  Early historical PG evidence exists; this is current profile reconciliation,
+  not a claim that callback recovery has never been tested.
+- [ ] Full objective remains ACTIVE/FAIL: historical aggregate nonpass, broader
+  security/dependencies/native integration/performance/CI/demo/final review open.
+  No repeat cleanup, existing DB/production/provider mutation, push or deployment.
+
 ## Latest checkpoint — 22 September, isolated capability tests pass
 
 - [x] Exact13 Linux profile: 11 previously capability-denied cases plus two dist

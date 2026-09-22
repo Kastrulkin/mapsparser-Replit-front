@@ -1,5 +1,28 @@
 # Readiness handoff
 
+## Latest checkpoint — 22 September, two current browser regressions
+
+Parent ef6d3e1e, same codex/production-readiness-20260917 branch. Root owns only
+browser evidence and this documentation package. Current snapshot in
+`/private/tmp/localos-browser-errors.gtS5JG`: exact two original Python browser
+tests pass, all six stages, 26.863 s capture, no timeout/skip/xfail, source byte
+manifest unchanged. No application/test edits. v1 failed sandbox-policy parsing
+before pytest; preserved with runner. v2 uses valid localhost filter and proves
+external network is denied. APIs remain synthetic; no backend/live coverage claim.
+
+Parallel callback-profile work owns native_tc_one_hflypi.py,
+native_tc_adapter_hflypi.py and native_hflypi_sitecustomize.py under task support.
+These provisional changes are NOT part of the browser commit and must not run
+until independent pre-execution review passes. Need dedicated fresh migrated
+readiness_full_test_* database, exact logical35418→ownedrelay binding, pinned
+guard-first and zero-schema/database cleanup. Actual whole module count is14,
+including13PG-fixture cases; historical native tests exist. Do not repeat older
+test packages or claim nonexistent new functional fixes.
+
+Foreign13paths preserved. Disk about12GiB; cleanup COMPLETE. No production,
+existing DB/container, provider, push/deploy effects. Full goal remains open.
+
+
 ## Latest checkpoint — 22 September, capability lane completed
 
 Current code commit5b7f63a9 on codex/production-readiness-20260917 (parentb12cfcb2).

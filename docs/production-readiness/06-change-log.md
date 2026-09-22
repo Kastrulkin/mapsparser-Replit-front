@@ -1,5 +1,14 @@
 # Production-readiness change log
 
+## Browser error-path evidence — 22 September, parent ef6d3e1e
+
+Both original Python/Playwright regressions now pass against current frontend:
+desktop tour progress after HTTP502 and mobile Operator malformed-response error.
+No product/test change. Trusted loopback-only profile, all APIs mocked, external
+network denial verified;2/2 and six stages in26.863s. Preserve initial sandbox
+syntax failure and exact successful runner. Full E2E/backend gates remain open.
+
+
 ## Capability diagnostic — 22 September, parent5b7f63a9
 
 Evidence-only exact13 Linux run closes the limited listener/process/dist fixture

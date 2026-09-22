@@ -1,5 +1,20 @@
 # Verified commands and evidence
 
+## Browser error-path regressions — 22 September
+
+Named tmux `audit-browser-errors-v2` runs native ARM64 Python using
+`/private/tmp/localos-browser-errors.gtS5JG/run.py`. Exact executed runner and
+clear environment keys/sandbox argv are in task `evidence/browser-errors-20260922`.
+Source is Git archive ef6d3e1e frontend + tests/e2e + tests/conftest.py + pytest.ini
+and tests/__init__.py; frontend dependencies are an APFS clone, not fresh npm ci.
+
+Tests: `tests/e2e/test_guided_tour_transient_gateway_error.py` and
+`tests/e2e/test_telegram_mini_app_operator_error.py`, `-q -p no:cacheprovider`.
+Result:2/2, six passing stages, exit0, pytest25.59s/capture26.863s, no timeout,
+skip/xfail or source-byte drift. OS external-denial probe passed. First attempt
+exit65 is retained: invalid sandbox address syntax, no pytest execution.
+
+
 ## Linux capability profile — 22 September
 
 Named tmux exact13v4 runs the pinned local image with networknone/read-only/

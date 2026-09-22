@@ -1,5 +1,14 @@
 # Readiness decisions
 
+## D-116 — Browser error paths use loopback-only trusted test profile
+
+Keep real Chromium/Vite and unchanged mocked-API regressions while allowing only
+loopback network at OS level. Confirm external denial before tests. Preserve
+policy/setup failures as harness evidence, not product defects. Current-source
+browser proof is scoped to the two exercised flows; reused dependencies and
+mocked APIs do not prove clean installation, backend integration or production.
+
+
 ## D-115 — Capability tests need explicit runtime and executable-mode identity
 
 Use a network-none Linux test container when the required behavior includes local
