@@ -1,5 +1,23 @@
 # Verified commands and evidence
 
+## Google OAuth current-access native PostgreSQL — 22 September
+
+Named tmux `native_google_oauth_hflypi_v3` ran native ARM64 Python with
+`native_tc_one_hflypi.py --profile google-oauth-current-access-pg-v1 --attempt v3`
+against only
+`tests/test_google_oauth_current_access_pg.py`. It uses a fresh migrated
+`readiness_full_test_*` DB, schema-local `callback_recovery_<uuid>` tables,
+guarded logical DSN rewrite to an owned no-port relay, and fake provider/encryption.
+Exact argv, source bindings, guard/relay hashes and three raw attempts are retained
+in task `evidence/google-oauth-native-20260922/` (15-file SHA256 manifest),
+copied from `/private/tmp/localos-readiness-20260921.hfLYPi/native/evidence/`.
+
+V3: 24/24, pytest16.44s, child23.511s, wrapper26.959s; no skip/xfail/failure;
+175 graceful relay connections within512 cap. The journal records schema0 and
+generated-DB0 before owned-container removal; unrelated23 containers and frozen
+5720 blobs are unchanged. Preserve v1 pre-test alias failure5.127s and v2
+collection/import failure12.276s. Do not replay this completed profile.
+
 ## Callback native PostgreSQL — 22 September
 
 Named tmux `native_callback_hflypi_v2`, native ARM64 Python executes task support

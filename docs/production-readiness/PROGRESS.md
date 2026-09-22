@@ -1,5 +1,27 @@
 # Production-readiness progress
 
+## Latest checkpoint — 22 September, Google OAuth stale-access native fence passes
+
+- [x] **GOOGLE-OAUTH-STALE-ACCESS-02:** actual Flask Google Business and Google
+  Sheets callbacks pass 24/24 on a fresh, migrated, disposable PostgreSQL DB.
+  The proof covers revocation before and during fake provider exchange; owner and
+  admin insert/update; `FOR SHARE` fencing; and deferred-commit rollback.
+- [x] Provider/encryption are fake only. Authorization, real transactions, locks,
+  persistence and rollback are exercised against schema-local clones of migrated
+  tables. No live Google request, production DB write, deployment or push occurred.
+- [x] V3: pytest16.44s / child23.511s / wrapper26.959s, 175/512 relay
+  connections, no fail/skip/xfail. Fresh schema and generated DB were verified
+  absent after cleanup; owned container removed; 23 retained container IDs/states
+  and 5,720 frozen blobs stayed unchanged.
+- [x] Preserve v1 pre-test journal-alias failure (5.127s) and v2 collection-import
+  failure (12.276s). They are harness prerequisites, not product findings or passes.
+- [ ] The distinct secondary Google Business related-account refresh concurrency
+  candidate is **NOT_REPRODUCED**: its reviewed test is neither run nor committed.
+  Whole readiness remains ACTIVE/FAIL: security/image/history, broader integration,
+  performance, CI/demo and final whole-diff gates remain open.
+
+Evidence: task `evidence/google-oauth-native-results-20260922.md`.
+
 ## Latest checkpoint — 22 September, native callback family passes
 
 - [x] Native callback recovery profile:14/14, no fail/skip/xfail; pytest10.06s,

@@ -1,5 +1,16 @@
 # Production-readiness change log
 
+## Google OAuth stale-access native proof — 22 September, parent debd6006
+
+Add one isolated PostgreSQL test module and bounded native harness support; no
+product behavior, assertion, provider, deployment or production-data change.
+The actual Flask Google Business and Sheets callbacks pass24/24: revocation before
+and during fake exchange blocks persistence/rebind, authorized owner/admin flows
+persist, `FOR SHARE` fences rows, and a deferred commit trigger proves rollback.
+V3 cleanup verifies generated schema/DB zero and removes only its owned container.
+Retain v1/v2 harness non-passes. The separate secondary related-refresh candidate
+is reviewed but NOT_REPRODUCED, unrun and uncommitted.
+
 ## Callback native profile — 22 September, parent fb55739a
 
 Add one bounded test-support profile; no product/assertion change. Fresh migrated

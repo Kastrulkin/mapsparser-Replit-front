@@ -125,6 +125,13 @@ PROFILES = {
         "prefix": "native-tc-callback-recovery-pg",
         "bootstrap_postgres": True,
     },
+    "google-oauth-current-access-pg-v1": {
+        "target": "tests/test_google_oauth_current_access_pg.py",
+        "count": 24,
+        "prefix": "native-tc-google-oauth-current-access-pg",
+        "bootstrap_postgres": True,
+        "transport_profile": "callback-recovery-pg-v1",
+    },
     "work-review-rollback-v1": {
         "targets": [
             "tests/test_work_review_migration_rollback.py::test_empty_work_review_schema_downgrades_without_cascade",
@@ -248,7 +255,26 @@ CALLBACK_RECOVERY_PROFILE_RULES = {
         "schema_pattern": r"callback_recovery_[0-9a-f]{32}",
         "cleanup_event": "callback_recovery_schema_cleanup_checked",
     },
+    "google-oauth-current-access-pg-v1": {
+        # Each of 24 nodes needs at least schema setup, two seed connections,
+        # the actual callback connection and one independent outcome check.
+        "minimum_connections": 120,
+        "budget": 512,
+        "schema_pattern": r"callback_recovery_[0-9a-f]{32}",
+        "cleanup_event": "callback_recovery_schema_cleanup_checked",
+    },
 }
+PROFILE_OVERLAYS = {
+    "google-oauth-current-access-pg-v1": {
+        "tests/test_google_oauth_current_access_pg.py": "84957e16d6c644e8ad04928452841f5d4547c2efeb682959a64a7aa052e0c193",
+    },
+}
+OAUTH_REQUIRED_SNAPSHOT_PATHS = (
+    "src/api/google_business_api.py",
+    "src/database_manager.py",
+    "src/pg_db_utils.py",
+    "tests/test_action_orchestrator_callback_recovery_pg.py",
+)
 OLD_GUARD_SHA256 = "07d3e2dc19cbb0f9e542a6d0835ea17b5efcc5713391c152a833e6efefd61150"
 MIN_START = 5 * 1024**3
 MIN_LIVE = 2 * 1024**3
@@ -817,6 +843,9 @@ def main() -> int:
     values = parser.parse_args()
     name = values.attempt
     profile = PROFILES[values.profile]
+    if profile["count"] < 1:
+        raise RuntimeError("profile test matrix has not been reviewed")
+    transport_profile = profile.get("transport_profile", values.profile)
     prefix = profile["prefix"]
     launcher = runpy.run_path(str(SUPPORT / "native_guard_checks_hflypi.py"))
     destination = EVIDENCE / f"{prefix}-{name}.json"
@@ -828,6 +857,9 @@ def main() -> int:
     source_adapter = SUPPORT / "native_tc_adapter_hflypi.py"
     source_relay = SUPPORT / "native_tc_relay_hflypi.py"
     targets = {source_adapter: SOURCE / "src/native_tc_adapter_hflypi.py", source_relay: SOURCE / "src/native_tc_relay_hflypi.py"}
+    repository = SUPPORT.parents[3]
+    for relative_path in PROFILE_OVERLAYS.get(values.profile, ()):
+        targets[repository / relative_path] = SOURCE / relative_path
     started = time.monotonic()
     selected_targets = profile.get("targets", [profile.get("target")])
     if not isinstance(selected_targets, list) or not selected_targets or not all(isinstance(target, str) for target in selected_targets):
@@ -849,6 +881,19 @@ def main() -> int:
         output["frozen_blobs_before"] = launcher["verify_frozen_source"]()
         if output["frozen_blobs_before"] != 5720:
             raise RuntimeError("unexpected frozen blob count")
+        if values.profile == "google-oauth-current-access-pg-v1":
+            source_bindings = {}
+            for relative_path in OAUTH_REQUIRED_SNAPSHOT_PATHS:
+                current = repository / relative_path
+                frozen = SOURCE / relative_path
+                if current.is_symlink() or frozen.is_symlink() or digest(current) != digest(frozen):
+                    raise RuntimeError("OAuth callback source no longer matches the frozen execution snapshot")
+                source_bindings[relative_path] = digest(current)
+            output["current_source_bindings"] = source_bindings
+        for relative_path, reviewed_hash in PROFILE_OVERLAYS.get(values.profile, {}).items():
+            overlay = repository / relative_path
+            if overlay.is_symlink() or digest(overlay) != reviewed_hash:
+                raise RuntimeError("test overlay no longer matches its reviewed hash")
         containers_before = docker_snapshot()
         capabilities_before = capabilities_snapshot()
         output["unrelated_containers_before"] = containers_before
@@ -859,16 +904,24 @@ def main() -> int:
         guard_hash = replace_guard(source_guard, SOURCE / "src/sitecustomize.py", backup)
         guard_installed = True
         hashes = {"guard": guard_hash, "support_guard": digest(source_guard), "launcher": digest(Path(__file__))}
+        output["hashes"] = hashes
         for source, target in targets.items():
             hashes[target.stem] = copy_exclusive(source, target)
             installed.append(target)
-        output["hashes"] = hashes
+            relative_path = str(target.relative_to(SOURCE))
+            reviewed_hash = PROFILE_OVERLAYS.get(values.profile, {}).get(relative_path)
+            if reviewed_hash is not None and hashes[target.stem] != reviewed_hash:
+                raise RuntimeError("copied test overlay differs from its reviewed hash")
+        output["source_overlays"] = {
+            relative_path: hashes[Path(relative_path).stem]
+            for relative_path in PROFILE_OVERLAYS.get(values.profile, ())
+        }
         descriptor = os.open(journal, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         os.close(descriptor)
         environment = launcher["environment"](guard_hash)
         environment.pop("LOCALOS_HFLYPI_PROBE_DSN", None)
         environment.update({
-            "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1", "LOCALOS_HFLYPI_TC_MODE": values.profile,
+            "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1", "LOCALOS_HFLYPI_TC_MODE": transport_profile,
             "LOCALOS_HFLYPI_TC_ADAPTER_SHA256": hashes["native_tc_adapter_hflypi"],
             "LOCALOS_HFLYPI_TC_RELAY_SHA256": hashes["native_tc_relay_hflypi"],
             "LOCALOS_HFLYPI_TC_GUARD_SHA256": guard_hash,
@@ -887,7 +940,7 @@ def main() -> int:
         if shutil.disk_usage(BASE).free < MIN_LIVE:
             raise RuntimeError("disk floor reached before native node")
         output["phase"] = "test"
-        capture = result(["/usr/bin/arch", "-arm64", str(VENV), "-B", "-c", plugin_source(selected_targets, profile.get("bootstrap_postgres", False), values.profile == "callback-recovery-pg-v1")], environment, MAX_RUNTIME, started + MAX_RUNTIME)
+        capture = result(["/usr/bin/arch", "-arm64", str(VENV), "-B", "-c", plugin_source(selected_targets, profile.get("bootstrap_postgres", False), transport_profile == "callback-recovery-pg-v1")], environment, MAX_RUNTIME, started + MAX_RUNTIME)
         output["test"] = capture
         output["test_callbacks"] = parse_test(capture, profile)
         output["journals"] = audit_journals(journal, relay_artifact, values.profile)

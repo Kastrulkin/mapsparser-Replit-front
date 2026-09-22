@@ -1,5 +1,36 @@
 # Readiness handoff
 
+## Latest checkpoint — 22 September, Google OAuth native access fence complete
+
+Branch `codex/production-readiness-20260917`, parent `debd6006`. This package owns
+the primary OAuth test, two support helpers, evidence and six readiness documents.
+All 13 foreign paths remain outside the package; tracked foreign diff still
+`40afa0141e5fe1b9fe9d18ee651ba61e19a27367158d71984f5a90a4d2a4c6d1`.
+
+The native PostgreSQL proof for **GOOGLE-OAUTH-STALE-ACCESS-02** is complete:
+`tests/test_google_oauth_current_access_pg.py` passes 24/24 for the actual Flask
+Google Business and Sheets callbacks. It proves pre-exchange and mid-exchange
+owner/admin/inactive revocation, authorized owner/admin insert/update, real
+`FOR SHARE` row fencing and deferred persistence rollback. Provider/encryption
+remain fake; no Google provider request or production database is involved.
+
+V3 wrapper26.959s, child23.511s, pytest16.44s; 175/512 relay connections, no
+fail/skip/xfail. The generated DB and schema were verified absent before the
+owned no-port container was removed. Existing23 container IDs/states and frozen
+5720 blobs did not change. Retain v1 (pre-test journal alias) and v2 (collection
+import) non-passes as harness history, not product findings.
+
+Do not rerun this completed profile. Nearest bounded candidate is
+`tests/test_google_oauth_related_refresh_pg.py` (SHA `ee2cf09…`): it targets a
+separate secondary Google Business related-account refresh race. It is reviewed
+but **NOT_REPRODUCED**, not run and not committed. Whole readiness remains
+ACTIVE/FAIL; do not infer provider, image, deployment or full-audit coverage.
+Next read-only command: `sed -n '1,220p' tests/test_google_oauth_related_refresh_pg.py`.
+Prepare a separately pinned one-node profile before executing that candidate.
+Source/provenance and the 15-file evidence manifest are linked from task
+`evidence/google-oauth-native-results-20260922.md`. Cleanup remains complete;
+about 11 GiB free. No repeated prune, production operation, push or deployment.
+
 ## Latest checkpoint — 22 September, callback native profile complete
 
 Parent fb55739a (browser error-path evidence), codex/production-readiness-20260917.

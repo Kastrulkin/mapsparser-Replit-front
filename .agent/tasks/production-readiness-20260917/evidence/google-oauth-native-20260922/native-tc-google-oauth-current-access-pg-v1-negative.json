@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+    "-B",
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/native_hflypi_probe_v1.py",
+    "negative"
+  ],
+  "duration_seconds": 0.724,
+  "exit_code": 78,
+  "stderr": "{\"exception_type\": \"PermissionError\", \"frames\": [{\"file\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/sitecustomize.py\", \"function\": \"<module>\", \"line\": 496}, {\"file\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/sitecustomize.py\", \"function\": \"_initialize\", \"line\": 470}, {\"file\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/sitecustomize.py\", \"function\": \"_patch_testcontainers\", \"line\": 432}, {\"file\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/native_tc_adapter_hflypi.py\", \"function\": \"install\", \"line\": 343}, {\"file\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/native_tc_adapter_hflypi.py\", \"function\": \"deny\", \"line\": 115}], \"nonce\": \"hfLYPi\", \"schema\": \"hflypi-guard-init-v2\"}\n",
+  "stdout": "",
+  "stopped_reason": null,
+  "timed_out": false
+}

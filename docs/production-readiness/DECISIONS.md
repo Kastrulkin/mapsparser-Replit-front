@@ -1,5 +1,16 @@
 # Readiness decisions
 
+## D-118 — OAuth signed state must be re-authorized at persistence time
+
+Treat signed OAuth state as identity context, not a durable permission grant.
+Run provider exchange without access-row locks, then recheck current owner/admin/
+active access under `FOR SHARE` in the real persistence transaction. A committed
+revocation must prevent credential and Sheets auth-ref writes; late persistence
+failure must roll them back and release locks. Prove this using a fresh migrated
+DB, fake provider/encryption only, a guarded owned relay and schema/DB cleanup.
+This closes the native proof gap only; it does not certify live Google providers,
+deployment, all related-account refresh paths or whole readiness.
+
 ## D-117 — Preserve fixed test admission without touching its host database
 
 The callback fixture's logical loopback35418/pinned guard contract remains

@@ -1,0 +1,295 @@
+{
+  "attempt": "v1",
+  "capabilities_before": [],
+  "capability_cleanup": {
+    "reason": "no-single-owned-relay",
+    "removed": false
+  },
+  "current_source_bindings": {
+    "src/api/google_business_api.py": "c69d1e816a2a2be9614b01361f984f9f13ee134935046074fae29e151955ec0f",
+    "src/database_manager.py": "44eea9318d8a940e1cda9e85e22828f064c1cc883a776ce5f08d3ce2ec006775",
+    "src/pg_db_utils.py": "23ad7160f47588baa5bb278c1b6b522b849dc84e9adb2eb8acecf48df4fc28f7",
+    "tests/test_action_orchestrator_callback_recovery_pg.py": "de36b69ae6d42a772fd7b641b3dc0b3f8ab1aca8c4d120b342489665e76ecc9b"
+  },
+  "duration_seconds": 5.127,
+  "error": "RuntimeError: negative probe did not succeed",
+  "expected_count": 24,
+  "free_bytes_after": 11325394944,
+  "frozen_blobs_after": 5720,
+  "frozen_blobs_before": 5720,
+  "hashes": {
+    "guard": "a704e06f572da3d3ff99419ac771b3ef7450f8604411568a982b019172952f1f",
+    "launcher": "04c60c2df876f59068778cf305410efd524195163a81c82198023890fc5ab779",
+    "native_tc_adapter_hflypi": "f9dd6ccd82b41926d9118967e7106edf47f6646d3f51287fdef5475cb145be4f",
+    "native_tc_relay_hflypi": "59151d2501d4ab459764a725e91cbe2c3d5e061e76e898ea2db0ad6b3b19c4e1",
+    "probe": "f25959cf72b135115b130747db7fd60a1eabf2594f9507f1ca310267551487fd",
+    "support_guard": "a704e06f572da3d3ff99419ac771b3ef7450f8604411568a982b019172952f1f",
+    "test_google_oauth_current_access_pg": "e6f374b0b93fadea928a1ee7ea4f6e2e4ca49b926ec47a4fbf9d3ead6ba207e3"
+  },
+  "negative_probe": {
+    "command": [
+      "/usr/bin/arch",
+      "-arm64",
+      "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+      "-B",
+      "/private/tmp/localos-readiness-20260921.hfLYPi/native/native_hflypi_probe_v1.py",
+      "negative"
+    ],
+    "duration_seconds": 0.724,
+    "exit_code": 78,
+    "stderr": "{\"exception_type\": \"PermissionError\", \"frames\": [{\"file\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/sitecustomize.py\", \"function\": \"<module>\", \"line\": 496}, {\"file\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/sitecustomize.py\", \"function\": \"_initialize\", \"line\": 470}, {\"file\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/sitecustomize.py\", \"function\": \"_patch_testcontainers\", \"line\": 432}, {\"file\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/native_tc_adapter_hflypi.py\", \"function\": \"install\", \"line\": 343}, {\"file\": \"/private/tmp/localos-readiness-20260921.hfLYPi/source/src/native_tc_adapter_hflypi.py\", \"function\": \"deny\", \"line\": 115}], \"nonce\": \"hfLYPi\", \"schema\": \"hflypi-guard-init-v2\"}\n",
+    "stdout": "",
+    "stopped_reason": null,
+    "timed_out": false
+  },
+  "network_after_cleanup": {
+    "empty": true,
+    "network_id": "6fc9dbcb68ce40e46030cec829ed4613840327eda4109cd09de4ada422a4a0b4"
+  },
+  "nodes": [
+    "tests/test_google_oauth_current_access_pg.py"
+  ],
+  "owned_cleanup": {
+    "attempted": false,
+    "reason": "invalid-owned-event"
+  },
+  "phase": "failed",
+  "profile": "google-oauth-current-access-pg-v1",
+  "source_overlays": {
+    "tests/test_google_oauth_current_access_pg.py": "e6f374b0b93fadea928a1ee7ea4f6e2e4ca49b926ec47a4fbf9d3ead6ba207e3"
+  },
+  "unrelated_containers_after": [
+    {
+      "id": "0ac27cea6b3dfbdfdcf934459642bea24e91080691814c3f3ace5c27bdf60375",
+      "name": "localos-readiness-hflypi-web-1",
+      "running": false
+    },
+    {
+      "id": "0fa9e9bbe0f7eb51ac03321b39f2361ea380da8618df5f056143929a8d91f467",
+      "name": "localos-readiness-hflypi-smoke-dependencies",
+      "running": false
+    },
+    {
+      "id": "30155e246757b8aae638c39c3ecfa9ab8909de19bb93c9ecaca26a81be12ca19",
+      "name": "localos-readiness-hflypi-check-source",
+      "running": false
+    },
+    {
+      "id": "423858f43fb80952016d98749da9dab11841403b8a76450ce7d6f46f3b2ca318",
+      "name": "localos-readiness-hflypi-tc-postgres-1",
+      "running": false
+    },
+    {
+      "id": "43fbd7306d20e6aec5ce43c14f7a61b3235a438a1b20bf2186a55d693fbacff5",
+      "name": "localos-readiness-resume-20260918-pg",
+      "running": false
+    },
+    {
+      "id": "44bbd4f5fbc74cebde383dcb4f9a8893512b338aa0662b9e7f346b6c1cdb02ff",
+      "name": "localos-readiness-hflypi-migrate-source",
+      "running": false
+    },
+    {
+      "id": "4740a61e9e765da896ad6f4526cfb1731866662d258181c58c47c32c65c499d0",
+      "name": "localos-readiness-hflypi-smoke-private-assets",
+      "running": false
+    },
+    {
+      "id": "5dd879dc4bb7c64796a3af4e07108edddb1f76d7106699126b1461eca5b53e74",
+      "name": "seo-redis-1",
+      "running": true
+    },
+    {
+      "id": "76e7108a4543f60d7d9aa34a6cfeefdbc027d35b608299539d644644e217176b",
+      "name": "elated_bohr",
+      "running": false
+    },
+    {
+      "id": "78711cc66e0b8fc3ee852c0029f74b5c0b828fdbac387a734338faa914fa99c2",
+      "name": "localos-readiness-20260917-postgres-1",
+      "running": false
+    },
+    {
+      "id": "7a43535423085aa12cfdb819fafaee744f3100862cf1f3065d3434b482f571a6",
+      "name": "localos-readiness-compiled-20260918-redis-1",
+      "running": false
+    },
+    {
+      "id": "7b77a4ba49aabb39ae4e3c87cfcb7acde7b9ead4d9ed000e2da881c2284d06f3",
+      "name": "localos-readiness-hflypi-check-restored",
+      "running": false
+    },
+    {
+      "id": "81af5fdf5a89bb3b9384d30116549ed834e4bd4d26a2ccab322669c17d6971dc",
+      "name": "localos-readiness-hflypi-smoke-nonroot-browser",
+      "running": false
+    },
+    {
+      "id": "83c6450f7e10aeb894197a04c167ec4baa0a222870fde64ae781c7f8a60a30e8",
+      "name": "riderra-main-postgres-1",
+      "running": true
+    },
+    {
+      "id": "9e2ef27cd293a1c4e7223e4b9cfecc3301be7f863a2402c8cd9f8255ce71aaeb",
+      "name": "localos-readiness-hflypi-migrate-repeat",
+      "running": false
+    },
+    {
+      "id": "9e3032a967e2364ee319b4253476ce238aa11e20d13d632a9327f0ed90538956",
+      "name": "localos-restore-proof-20260918-postgres-1",
+      "running": false
+    },
+    {
+      "id": "a099d92bbf720eaa20a9899ef9dc02cde6f8e2f012c00883191e517b53c74226",
+      "name": "localos-readiness-hflypi-postgres-1",
+      "running": true
+    },
+    {
+      "id": "c4d4921b0c077594b4bf86cf9c0588dc8790505f4c1a9ff2991ab8163b21834d",
+      "name": "localos-readiness-hflypi-migrate-native",
+      "running": false
+    },
+    {
+      "id": "c8a753b1e7d1fc49e3f539a23a4e36568ba82e0920e2377721f033c27467bd2d",
+      "name": "localos-readiness-compiled-20260918-postgres-1",
+      "running": false
+    },
+    {
+      "id": "cbe74d81ca987e2ec7cc4f619c5f88cef4671bf7eaed3addaac4bc031784bb27",
+      "name": "localos-readiness-hflypi-app-1",
+      "running": false
+    },
+    {
+      "id": "e550abaad78e5ba43cda042379df7004060188909807f0f750f503309ec76e14",
+      "name": "localos-backend-full-5cc-a2f974eb33e8",
+      "running": false
+    },
+    {
+      "id": "f288e1a93b754e2b456a6e9bfe557ac2497fea1240f206333126d9dbdfb03fb0",
+      "name": "seo-postgres-1",
+      "running": true
+    },
+    {
+      "id": "f85d3d9de490e52cb91c1d48976adc186e14c319e982a9db374665782cb6859e",
+      "name": "localos-readiness-20260917-redis-1",
+      "running": false
+    }
+  ],
+  "unrelated_containers_before": [
+    {
+      "id": "0ac27cea6b3dfbdfdcf934459642bea24e91080691814c3f3ace5c27bdf60375",
+      "name": "localos-readiness-hflypi-web-1",
+      "running": false
+    },
+    {
+      "id": "0fa9e9bbe0f7eb51ac03321b39f2361ea380da8618df5f056143929a8d91f467",
+      "name": "localos-readiness-hflypi-smoke-dependencies",
+      "running": false
+    },
+    {
+      "id": "30155e246757b8aae638c39c3ecfa9ab8909de19bb93c9ecaca26a81be12ca19",
+      "name": "localos-readiness-hflypi-check-source",
+      "running": false
+    },
+    {
+      "id": "423858f43fb80952016d98749da9dab11841403b8a76450ce7d6f46f3b2ca318",
+      "name": "localos-readiness-hflypi-tc-postgres-1",
+      "running": false
+    },
+    {
+      "id": "43fbd7306d20e6aec5ce43c14f7a61b3235a438a1b20bf2186a55d693fbacff5",
+      "name": "localos-readiness-resume-20260918-pg",
+      "running": false
+    },
+    {
+      "id": "44bbd4f5fbc74cebde383dcb4f9a8893512b338aa0662b9e7f346b6c1cdb02ff",
+      "name": "localos-readiness-hflypi-migrate-source",
+      "running": false
+    },
+    {
+      "id": "4740a61e9e765da896ad6f4526cfb1731866662d258181c58c47c32c65c499d0",
+      "name": "localos-readiness-hflypi-smoke-private-assets",
+      "running": false
+    },
+    {
+      "id": "5dd879dc4bb7c64796a3af4e07108edddb1f76d7106699126b1461eca5b53e74",
+      "name": "seo-redis-1",
+      "running": true
+    },
+    {
+      "id": "76e7108a4543f60d7d9aa34a6cfeefdbc027d35b608299539d644644e217176b",
+      "name": "elated_bohr",
+      "running": false
+    },
+    {
+      "id": "78711cc66e0b8fc3ee852c0029f74b5c0b828fdbac387a734338faa914fa99c2",
+      "name": "localos-readiness-20260917-postgres-1",
+      "running": false
+    },
+    {
+      "id": "7a43535423085aa12cfdb819fafaee744f3100862cf1f3065d3434b482f571a6",
+      "name": "localos-readiness-compiled-20260918-redis-1",
+      "running": false
+    },
+    {
+      "id": "7b77a4ba49aabb39ae4e3c87cfcb7acde7b9ead4d9ed000e2da881c2284d06f3",
+      "name": "localos-readiness-hflypi-check-restored",
+      "running": false
+    },
+    {
+      "id": "81af5fdf5a89bb3b9384d30116549ed834e4bd4d26a2ccab322669c17d6971dc",
+      "name": "localos-readiness-hflypi-smoke-nonroot-browser",
+      "running": false
+    },
+    {
+      "id": "83c6450f7e10aeb894197a04c167ec4baa0a222870fde64ae781c7f8a60a30e8",
+      "name": "riderra-main-postgres-1",
+      "running": true
+    },
+    {
+      "id": "9e2ef27cd293a1c4e7223e4b9cfecc3301be7f863a2402c8cd9f8255ce71aaeb",
+      "name": "localos-readiness-hflypi-migrate-repeat",
+      "running": false
+    },
+    {
+      "id": "9e3032a967e2364ee319b4253476ce238aa11e20d13d632a9327f0ed90538956",
+      "name": "localos-restore-proof-20260918-postgres-1",
+      "running": false
+    },
+    {
+      "id": "a099d92bbf720eaa20a9899ef9dc02cde6f8e2f012c00883191e517b53c74226",
+      "name": "localos-readiness-hflypi-postgres-1",
+      "running": true
+    },
+    {
+      "id": "c4d4921b0c077594b4bf86cf9c0588dc8790505f4c1a9ff2991ab8163b21834d",
+      "name": "localos-readiness-hflypi-migrate-native",
+      "running": false
+    },
+    {
+      "id": "c8a753b1e7d1fc49e3f539a23a4e36568ba82e0920e2377721f033c27467bd2d",
+      "name": "localos-readiness-compiled-20260918-postgres-1",
+      "running": false
+    },
+    {
+      "id": "cbe74d81ca987e2ec7cc4f619c5f88cef4671bf7eaed3addaac4bc031784bb27",
+      "name": "localos-readiness-hflypi-app-1",
+      "running": false
+    },
+    {
+      "id": "e550abaad78e5ba43cda042379df7004060188909807f0f750f503309ec76e14",
+      "name": "localos-backend-full-5cc-a2f974eb33e8",
+      "running": false
+    },
+    {
+      "id": "f288e1a93b754e2b456a6e9bfe557ac2497fea1240f206333126d9dbdfb03fb0",
+      "name": "seo-postgres-1",
+      "running": true
+    },
+    {
+      "id": "f85d3d9de490e52cb91c1d48976adc186e14c319e982a9db374665782cb6859e",
+      "name": "localos-readiness-20260917-redis-1",
+      "running": false
+    }
+  ]
+}

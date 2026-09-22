@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "label": "callback-package-commit",
+  "captured_at": "2026-09-22T00:31:45.430390+00:00",
+  "command": [
+    "git",
+    "commit",
+    "-m",
+    "test(audit): verify callback recovery on isolated PostgreSQL"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 150.55,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "[codex/production-readiness-20260917 debd6006] test(audit): verify callback recovery on isolated PostgreSQL\n 29 files changed, 1725 insertions(+), 19 deletions(-)\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-20260922/SHA256SUMS\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-20260922/native-tc-callback-recovery-pg-v1-child.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-20260922/native-tc-callback-recovery-pg-v1-events.jsonl\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-20260922/native-tc-callback-recovery-pg-v1-negative.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-20260922/native-tc-callback-recovery-pg-v1-relay.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-20260922/native-tc-callback-recovery-pg-v1.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-20260922/native-tc-callback-recovery-pg-v2-child.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-20260922/native-tc-callback-recovery-pg-v2-events.jsonl\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-20260922/native-tc-callback-recovery-pg-v2-negative.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-20260922/native-tc-callback-recovery-pg-v2-relay.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-20260922/native-tc-callback-recovery-pg-v2.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-20260922/previous-browser-commit.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-20260922/previous-browser-staged-scan.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-20260922/root-dsn-controls-v1.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-20260922/root-dsn-controls-v2.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-20260922/root-dsn-controls-v3.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-20260922/root-dsn-controls.py.txt\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/callback-native-results-20260922.md\n create mode 100644 .agent/tasks/production-readiness-20260917/support/native_callback_purecontrols_hflypi.py\n",
+  "stderr": "[dup-check] scanning tracked files...\n[dup-check] scanning untracked workspace files...\n[dup-check] OK\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

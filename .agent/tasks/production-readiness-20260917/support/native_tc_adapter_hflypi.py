@@ -52,6 +52,9 @@ PROFILE_PREFIXES = {
     "service-compression-race-pg-v1": "native-tc-service-compression-race-pg",
     "callback-recovery-pg-v1": "native-tc-callback-recovery-pg",
 }
+PROFILE_JOURNAL_ALIASES = {
+    "callback-recovery-pg-v1": ("native-tc-google-oauth-current-access-pg",),
+}
 PARENT_DATABASE_PROFILES = frozenset({"client-info-v1", "capabilities-phase1-v1"})
 OPERATOR_VOICE_TEST_DSN_PROFILES = frozenset({"operator-service-creation-v1", "operator-voice-pg-v1", "operator-editorial-pg-v1"})
 CALLBACK_RECOVERY_DSN_PROFILES = frozenset({"callback-recovery-pg-v1"})
@@ -339,7 +342,8 @@ def install() -> None:
     journal_prefix = PROFILE_PREFIXES.get(profile)
     if journal_prefix is None:
         deny("unsupported Testcontainers profile")
-    if _journal.parent != EVIDENCE or not re.fullmatch(re.escape(journal_prefix) + r"-v[1-9][0-9]*-events.jsonl", _journal.name) or _journal.is_symlink():
+    journal_prefixes = (journal_prefix, *PROFILE_JOURNAL_ALIASES.get(profile, ()))
+    if _journal.parent != EVIDENCE or not any(re.fullmatch(re.escape(prefix) + r"-v[1-9][0-9]*-events.jsonl", _journal.name) for prefix in journal_prefixes) or _journal.is_symlink():
         deny("journal path is outside this experiment")
     _session = os.environ.get("LOCALOS_HFLYPI_TESTCONTAINERS_SESSION_ID", str(SESSION_ID))
     if owner == str(os.getpid()):

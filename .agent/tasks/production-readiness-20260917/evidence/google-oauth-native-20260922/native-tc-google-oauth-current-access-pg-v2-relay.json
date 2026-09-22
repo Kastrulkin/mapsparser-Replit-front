@@ -1,0 +1,1 @@
+{"active": 0, "connection_budget": 512, "connections": 1, "container_id": "a51ae289931c0f5b2ffbe43028e53a2ddc6db05eaf0512029e0569dcd648e2b0", "exec_results": [{"exit_mode": "graceful", "returncode": 0, "stderr_bytes": 0, "stderr_tail": ""}], "expires_at": 1790081602.4187899, "failures": [], "rejections": 0, "session_id": "d4bb2583-5c81-4a8c-9ae0-ddf2c2b5dd3c"}
