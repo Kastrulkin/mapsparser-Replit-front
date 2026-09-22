@@ -1,5 +1,44 @@
 # Readiness handoff
 
+## Current continuation — 22 September, full backend completed with failures
+
+Current local HEAD `d0ef4ce84c89e33a967429e570fb6e08821911a7`; performance package
+committed, scanexit0/0findings, commit161.168ms. Exact d0ef archive6340files
+byte/mode-verified, no restricted OAuth or foreign overlays. Runtime
+`/private/tmp/localos-current-full-v10.BYwJr6`, wrapper93c37b843e9ddbadc87f0bab9d7fc9c82685c4a8d9dfe8022e907f9f612d79d4.
+All freeze/control/full tmux operations are terminal; do not restart them.
+Full outer69.402136s/exit1, child66.853s,4347pass/53fail/1116skip,14subtestpass;
+0collectionerrors,5516nodes, two dynamicZIP node-ID changes. Process cleanup47
+observed/0remaining/0errors; source frozen unchanged. Raw copied to task
+`evidence/current-backend-d0ef4ce8-20260922/`. Independent diagnostic review PASS,
+application aggregate FAIL. Do not overwrite captured failures.
+
+35failures end in permanent sys.addaudithook from diagnostic_logs, not the
+already-fixed leaf sibling. Two existing dirty changes (diagnostic_logs and
+author_daily_gate) plausibly address36failures. User question asks approval to
+adopt only these after validation; no answer yet at this checkpoint. Preserve
+them and all other foreign files; no staging until choice resolved. Review of
+diagnostic dirty patch requires connect_ex and available os.spawn* coverage,
+plus denial and cleanup regressions, before calling it equivalent/safe.
+
+Owned uncommitted code: one explicit ids tuple in
+`tests/test_media_upload_signature_security.py`, preserving bodies/payloads.
+Completed bounded runner `/private/tmp/localos-current-full-v10.BYwJr6/verify_media_ids.py`
+uses the same reviewed OS-denial invoke, copied before/after modules and fixed
+ZIP years. Actual outer1.580546s/exit0; exactly2 old IDs drift, patched13stable,
+13tests/39stages pass, OS8controls/cleanup pass. Independent source/runtime review
+PASS; no full aggregate claim. Durable media-ids captures in the same evidence
+directory. Do not rerun completed exclusive evidence names.
+Next validate dirty fixture copies without modifying/adopting originals while
+the user decision is pending; classify remaining capabilities/browser/
+dist separately and run a newly frozen aggregate; do not relax existing gates.
+Restricted OAuth and native finance picker still unrun; no route-around.
+
+Uncommitted evidence/docs also include exact dashboard-query source bridge:
+SQL shapes/counts carry forward; old latency/RSS are not new observations.
+Full goal remains ACTIVE/FAIL; image/owner security decisions, bounded current
+load/resources/frontend performance, CI/demo/final review remain incomplete.
+
 ## Current continuation — 22 September, performance packaged; aggregate next
 
 Branch `codex/production-readiness-20260917`, original baseline `30262a5b`,

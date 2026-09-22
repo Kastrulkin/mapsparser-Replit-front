@@ -96,6 +96,7 @@ def _office_archive(prefix):
         ("csv", "text/csv", "name,value\nтест,1".encode("utf-8")),
         ("txt", "text/plain", "обычный текст".encode("utf-8")),
     ],
+    ids=("jpg", "png", "webp", "pdf", "doc", "xls", "docx", "xlsx", "csv", "txt"),
 )
 def test_upload_signature_accepts_supported_content(extension, mime_type, content):
     assert upload_content_matches_type(extension=extension, mime_type=mime_type, content=content) is True

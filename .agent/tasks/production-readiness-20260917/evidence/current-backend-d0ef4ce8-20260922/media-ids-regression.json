@@ -1,0 +1,606 @@
+{
+  "controls": {
+    "capture": {
+      "argv": [
+        "/usr/bin/sandbox-exec",
+        "-f",
+        "/private/tmp/localos-current-full-v10.BYwJr6/policy-v10.sb",
+        "/usr/bin/arch",
+        "-arm64",
+        "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+        "-B",
+        "-I",
+        "-c",
+        "import json,socket,subprocess,sys\nfrom pathlib import Path\nd={}\ndef check(k,f):\n try:f();d[k]=None\n except OSError:d[k]=sys.exception().errno\ncheck('users',lambda:Path('/Users/alexdemyanov/.ssh').read_bytes())\ncheck('source_write',lambda:Path('/private/tmp/localos-current-full-v10.BYwJr6/source/.v10-forbidden').write_text('forbidden'))\ns=socket.socket();d['tcp']=s.connect_ex(('127.0.0.1',1));s.close()\ns=socket.socket(socket.AF_UNIX);check('docker',lambda:s.connect('/Users/alexdemyanov/.docker/run/docker.sock'));s.close()\nn=subprocess.run(['/usr/bin/nc','-v','-z','-w','1','127.0.0.1','1'],capture_output=True)\nd['native_tcp']=n.returncode!=0 and b'Operation not permitted' in n.stderr\nowned=Path('/private/tmp/localos-current-full-v10.BYwJr6/writable/v10-owned-probe')\nowned.write_text('owned probe');d['owned_write']=owned.read_text()=='owned probe'\nlink=Path('/private/tmp/localos-current-full-v10.BYwJr6/writable/v10-escape-probe')\ntarget='/private/tmp/localos-current-full-v10.BYwJr6/source/.v10-forbidden'\nif not link.is_symlink():link.symlink_to(target)\nd['symlink_target']=str(link.readlink())==target\ncheck('symlink_write',lambda:link.write_text('forbidden'))\nprint(json.dumps(d));raise SystemExit(0 if all(d[k] in (1,13) for k in ('users','source_write','tcp','docker','symlink_write')) and d['native_tcp'] and d['owned_write'] and d['symlink_target'] else 1)\n"
+      ],
+      "duration_seconds": 0.227,
+      "exit_code": 0,
+      "process_cleanup": {
+        "errors": [],
+        "observed": [
+          {
+            "created": 1790088083.628684,
+            "pid": 12576
+          }
+        ],
+        "remaining": [],
+        "signalled": [],
+        "status": "clean"
+      },
+      "stopped_reason": null,
+      "streams": {
+        "stderr": {
+          "captured_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "total_bytes": 0,
+          "truncated": false
+        },
+        "stdout": {
+          "captured_bytes": 140,
+          "sha256": "eb5bc95d715a02639587234b78215b610ce97a139f5a693fc8344b668973b05d",
+          "total_bytes": 140,
+          "truncated": false
+        }
+      }
+    },
+    "checks": {
+      "docker": 1,
+      "native_tcp": true,
+      "owned_write": true,
+      "source_write": 1,
+      "symlink_target": true,
+      "symlink_write": 1,
+      "tcp": 1,
+      "users": 1
+    }
+  },
+  "files": {
+    "/private/tmp/localos-current-full-v10.BYwJr6/writable/media-ids/test_after.py": "f33a3106522ffd2df4db5276957b3d26acb870a763904100038b8652e184bfa9",
+    "/private/tmp/localos-current-full-v10.BYwJr6/writable/media-ids/test_before.py": "8db6d00ff4846327b2501b807fbcdc2727d652afb5b2adbc558a4fe6e06ea4cb"
+  },
+  "red_changed_node_indices": [
+    8,
+    9
+  ],
+  "runner_sha256": "93c37b843e9ddbadc87f0bab9d7fc9c82685c4a8d9dfe8022e907f9f612d79d4",
+  "runs": [
+    {
+      "capture": {
+        "argv": [
+          "/usr/bin/sandbox-exec",
+          "-f",
+          "/private/tmp/localos-current-full-v10.BYwJr6/policy-v10.sb",
+          "/usr/bin/arch",
+          "-arm64",
+          "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+          "-B",
+          "-I",
+          "-c",
+          "import json,sys,time,zipfile,pytest\nsys.path.insert(0,'/private/tmp/localos-current-full-v10.BYwJr6/source/src')\nzipfile.time.localtime=lambda *_:time.struct_time((2020,1,1,0,0,0,2,1,-1))\ns={'nodes':[],'reports':[],'errors':[]}\nclass H:\n def pytest_collection_finish(self,session):s['nodes']=[item.nodeid for item in session.items]\n def pytest_collectreport(self,report):\n  if report.failed:s['errors'].append(report.nodeid)\n def pytest_runtest_logreport(self,report):s['reports'].append([report.nodeid,report.when,report.outcome])\nr=pytest.main(['/private/tmp/localos-current-full-v10.BYwJr6/writable/media-ids/test_before.py', '-c', '/private/tmp/localos-current-full-v10.BYwJr6/source/pytest.ini', '-q', '-p', 'no:cacheprovider', '--tb=no', '--show-capture=no', '--collect-only'],plugins=[H()]);s['return_code']=r\nprint('MEDIA_IDS_RESULT='+json.dumps(s,sort_keys=True));raise SystemExit(r)\n"
+        ],
+        "duration_seconds": 0.429,
+        "exit_code": 0,
+        "process_cleanup": {
+          "errors": [],
+          "observed": [
+            {
+              "created": 1790088083.855443,
+              "pid": 12578
+            }
+          ],
+          "remaining": [],
+          "signalled": [],
+          "status": "clean"
+        },
+        "stopped_reason": null,
+        "streams": {
+          "stderr": {
+            "captured_bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "total_bytes": 0,
+            "truncated": false
+          },
+          "stdout": {
+            "captured_bytes": 5818,
+            "sha256": "2c1b800d7fc7f1e1f9b20d56024e645fe2ab402b69f9040f116da039ca47010d",
+            "total_bytes": 5818,
+            "truncated": false
+          }
+        }
+      },
+      "collect_only": true,
+      "data": {
+        "errors": [],
+        "nodes": [
+          "::test_photo_upload_rejects_fake_jpeg_before_storage",
+          "::test_photo_upload_accepts_matching_jpeg_signature",
+          "::test_upload_signature_accepts_supported_content[jpg-image/jpeg-\\xff\\xd8\\xff\\xe0jpeg]",
+          "::test_upload_signature_accepts_supported_content[png-image/png-\\x89PNG\\r\\n\\x1a\\npng]",
+          "::test_upload_signature_accepts_supported_content[webp-image/webp-RIFF\\x04\\x00\\x00\\x00WEBPdata]",
+          "::test_upload_signature_accepts_supported_content[pdf-application/pdf-%PDF-1.7\\nbody]",
+          "::test_upload_signature_accepts_supported_content[doc-application/msword-\\xd0\\xcf\\x11\\xe0\\xa1\\xb1\\x1a\\xe1doc]",
+          "::test_upload_signature_accepts_supported_content[xls-application/vnd.ms-excel-\\xd0\\xcf\\x11\\xe0\\xa1\\xb1\\x1a\\xe1xls]",
+          "::test_upload_signature_accepts_supported_content[docx-application/vnd.openxmlformats-officedocument.wordprocessingml.document-PK\\x03\\x04\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00!P\\x04\\xd6\\xdaN\\t\\x00\\x00\\x00\\t\\x00\\x00\\x00\\x13\\x00\\x00\\x00[Content_Types].xml<Types />PK\\x03\\x04\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00!P5\\x0b~\\xb0\\x0c\\x00\\x00\\x00\\x0c\\x00\\x00\\x00\\x11\\x00\\x00\\x00word/document.xml<document />PK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00!P\\x04\\xd6\\xdaN\\t\\x00\\x00\\x00\\t\\x00\\x00\\x00\\x13\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\x00\\x00\\x00\\x00[Content_Types].xmlPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00!P5\\x0b~\\xb0\\x0c\\x00\\x00\\x00\\x0c\\x00\\x00\\x00\\x11\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01:\\x00\\x00\\x00word/document.xmlPK\\x05\\x06\\x00\\x00\\x00\\x00\\x02\\x00\\x02\\x00\\x80\\x00\\x00\\x00u\\x00\\x00\\x00\\x00\\x00]",
+          "::test_upload_signature_accepts_supported_content[xlsx-application/vnd.openxmlformats-officedocument.spreadsheetml.sheet-PK\\x03\\x04\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00!P\\x04\\xd6\\xdaN\\t\\x00\\x00\\x00\\t\\x00\\x00\\x00\\x13\\x00\\x00\\x00[Content_Types].xml<Types />PK\\x03\\x04\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00!P5\\x0b~\\xb0\\x0c\\x00\\x00\\x00\\x0c\\x00\\x00\\x00\\x0f\\x00\\x00\\x00xl/document.xml<document />PK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00!P\\x04\\xd6\\xdaN\\t\\x00\\x00\\x00\\t\\x00\\x00\\x00\\x13\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\x00\\x00\\x00\\x00[Content_Types].xmlPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00!P5\\x0b~\\xb0\\x0c\\x00\\x00\\x00\\x0c\\x00\\x00\\x00\\x0f\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01:\\x00\\x00\\x00xl/document.xmlPK\\x05\\x06\\x00\\x00\\x00\\x00\\x02\\x00\\x02\\x00~\\x00\\x00\\x00s\\x00\\x00\\x00\\x00\\x00]",
+          "::test_upload_signature_accepts_supported_content[csv-text/csv-name,value\\n\\xd1\\x82\\xd0\\xb5\\xd1\\x81\\xd1\\x82,1]",
+          "::test_upload_signature_accepts_supported_content[txt-text/plain-\\xd0\\xbe\\xd0\\xb1\\xd1\\x8b\\xd1\\x87\\xd0\\xbd\\xd1\\x8b\\xd0\\xb9 \\xd1\\x82\\xd0\\xb5\\xd0\\xba\\xd1\\x81\\xd1\\x82]",
+          "::test_upload_signature_rejects_mime_mismatch"
+        ],
+        "reports": [],
+        "return_code": 0
+      },
+      "file": "/private/tmp/localos-current-full-v10.BYwJr6/writable/media-ids/test_before.py",
+      "year": 2020
+    },
+    {
+      "capture": {
+        "argv": [
+          "/usr/bin/sandbox-exec",
+          "-f",
+          "/private/tmp/localos-current-full-v10.BYwJr6/policy-v10.sb",
+          "/usr/bin/arch",
+          "-arm64",
+          "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+          "-B",
+          "-I",
+          "-c",
+          "import json,sys,time,zipfile,pytest\nsys.path.insert(0,'/private/tmp/localos-current-full-v10.BYwJr6/source/src')\nzipfile.time.localtime=lambda *_:time.struct_time((2026,1,1,0,0,0,2,1,-1))\ns={'nodes':[],'reports':[],'errors':[]}\nclass H:\n def pytest_collection_finish(self,session):s['nodes']=[item.nodeid for item in session.items]\n def pytest_collectreport(self,report):\n  if report.failed:s['errors'].append(report.nodeid)\n def pytest_runtest_logreport(self,report):s['reports'].append([report.nodeid,report.when,report.outcome])\nr=pytest.main(['/private/tmp/localos-current-full-v10.BYwJr6/writable/media-ids/test_before.py', '-c', '/private/tmp/localos-current-full-v10.BYwJr6/source/pytest.ini', '-q', '-p', 'no:cacheprovider', '--tb=no', '--show-capture=no', '--collect-only'],plugins=[H()]);s['return_code']=r\nprint('MEDIA_IDS_RESULT='+json.dumps(s,sort_keys=True));raise SystemExit(r)\n"
+        ],
+        "duration_seconds": 0.219,
+        "exit_code": 0,
+        "process_cleanup": {
+          "errors": [],
+          "observed": [
+            {
+              "created": 1790088084.28497,
+              "pid": 12579
+            }
+          ],
+          "remaining": [],
+          "signalled": [],
+          "status": "clean"
+        },
+        "stopped_reason": null,
+        "streams": {
+          "stderr": {
+            "captured_bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "total_bytes": 0,
+            "truncated": false
+          },
+          "stdout": {
+            "captured_bytes": 5826,
+            "sha256": "485356bac38e7e861d2d7263bcfdca80949e4c1383386a427c7eac75b0f5de7c",
+            "total_bytes": 5826,
+            "truncated": false
+          }
+        }
+      },
+      "collect_only": true,
+      "data": {
+        "errors": [],
+        "nodes": [
+          "::test_photo_upload_rejects_fake_jpeg_before_storage",
+          "::test_photo_upload_accepts_matching_jpeg_signature",
+          "::test_upload_signature_accepts_supported_content[jpg-image/jpeg-\\xff\\xd8\\xff\\xe0jpeg]",
+          "::test_upload_signature_accepts_supported_content[png-image/png-\\x89PNG\\r\\n\\x1a\\npng]",
+          "::test_upload_signature_accepts_supported_content[webp-image/webp-RIFF\\x04\\x00\\x00\\x00WEBPdata]",
+          "::test_upload_signature_accepts_supported_content[pdf-application/pdf-%PDF-1.7\\nbody]",
+          "::test_upload_signature_accepts_supported_content[doc-application/msword-\\xd0\\xcf\\x11\\xe0\\xa1\\xb1\\x1a\\xe1doc]",
+          "::test_upload_signature_accepts_supported_content[xls-application/vnd.ms-excel-\\xd0\\xcf\\x11\\xe0\\xa1\\xb1\\x1a\\xe1xls]",
+          "::test_upload_signature_accepts_supported_content[docx-application/vnd.openxmlformats-officedocument.wordprocessingml.document-PK\\x03\\x04\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00!\\\\x04\\xd6\\xdaN\\t\\x00\\x00\\x00\\t\\x00\\x00\\x00\\x13\\x00\\x00\\x00[Content_Types].xml<Types />PK\\x03\\x04\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00!\\5\\x0b~\\xb0\\x0c\\x00\\x00\\x00\\x0c\\x00\\x00\\x00\\x11\\x00\\x00\\x00word/document.xml<document />PK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00!\\\\x04\\xd6\\xdaN\\t\\x00\\x00\\x00\\t\\x00\\x00\\x00\\x13\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\x00\\x00\\x00\\x00[Content_Types].xmlPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00!\\5\\x0b~\\xb0\\x0c\\x00\\x00\\x00\\x0c\\x00\\x00\\x00\\x11\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01:\\x00\\x00\\x00word/document.xmlPK\\x05\\x06\\x00\\x00\\x00\\x00\\x02\\x00\\x02\\x00\\x80\\x00\\x00\\x00u\\x00\\x00\\x00\\x00\\x00]",
+          "::test_upload_signature_accepts_supported_content[xlsx-application/vnd.openxmlformats-officedocument.spreadsheetml.sheet-PK\\x03\\x04\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00!\\\\x04\\xd6\\xdaN\\t\\x00\\x00\\x00\\t\\x00\\x00\\x00\\x13\\x00\\x00\\x00[Content_Types].xml<Types />PK\\x03\\x04\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00!\\5\\x0b~\\xb0\\x0c\\x00\\x00\\x00\\x0c\\x00\\x00\\x00\\x0f\\x00\\x00\\x00xl/document.xml<document />PK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00!\\\\x04\\xd6\\xdaN\\t\\x00\\x00\\x00\\t\\x00\\x00\\x00\\x13\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\x00\\x00\\x00\\x00[Content_Types].xmlPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00!\\5\\x0b~\\xb0\\x0c\\x00\\x00\\x00\\x0c\\x00\\x00\\x00\\x0f\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01:\\x00\\x00\\x00xl/document.xmlPK\\x05\\x06\\x00\\x00\\x00\\x00\\x02\\x00\\x02\\x00~\\x00\\x00\\x00s\\x00\\x00\\x00\\x00\\x00]",
+          "::test_upload_signature_accepts_supported_content[csv-text/csv-name,value\\n\\xd1\\x82\\xd0\\xb5\\xd1\\x81\\xd1\\x82,1]",
+          "::test_upload_signature_accepts_supported_content[txt-text/plain-\\xd0\\xbe\\xd0\\xb1\\xd1\\x8b\\xd1\\x87\\xd0\\xbd\\xd1\\x8b\\xd0\\xb9 \\xd1\\x82\\xd0\\xb5\\xd0\\xba\\xd1\\x81\\xd1\\x82]",
+          "::test_upload_signature_rejects_mime_mismatch"
+        ],
+        "reports": [],
+        "return_code": 0
+      },
+      "file": "/private/tmp/localos-current-full-v10.BYwJr6/writable/media-ids/test_before.py",
+      "year": 2026
+    },
+    {
+      "capture": {
+        "argv": [
+          "/usr/bin/sandbox-exec",
+          "-f",
+          "/private/tmp/localos-current-full-v10.BYwJr6/policy-v10.sb",
+          "/usr/bin/arch",
+          "-arm64",
+          "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+          "-B",
+          "-I",
+          "-c",
+          "import json,sys,time,zipfile,pytest\nsys.path.insert(0,'/private/tmp/localos-current-full-v10.BYwJr6/source/src')\nzipfile.time.localtime=lambda *_:time.struct_time((2020,1,1,0,0,0,2,1,-1))\ns={'nodes':[],'reports':[],'errors':[]}\nclass H:\n def pytest_collection_finish(self,session):s['nodes']=[item.nodeid for item in session.items]\n def pytest_collectreport(self,report):\n  if report.failed:s['errors'].append(report.nodeid)\n def pytest_runtest_logreport(self,report):s['reports'].append([report.nodeid,report.when,report.outcome])\nr=pytest.main(['/private/tmp/localos-current-full-v10.BYwJr6/writable/media-ids/test_after.py', '-c', '/private/tmp/localos-current-full-v10.BYwJr6/source/pytest.ini', '-q', '-p', 'no:cacheprovider', '--tb=no', '--show-capture=no', '--collect-only'],plugins=[H()]);s['return_code']=r\nprint('MEDIA_IDS_RESULT='+json.dumps(s,sort_keys=True));raise SystemExit(r)\n"
+        ],
+        "duration_seconds": 0.211,
+        "exit_code": 0,
+        "process_cleanup": {
+          "errors": [],
+          "observed": [
+            {
+              "created": 1790088084.504113,
+              "pid": 12580
+            }
+          ],
+          "remaining": [],
+          "signalled": [],
+          "status": "clean"
+        },
+        "stopped_reason": null,
+        "streams": {
+          "stderr": {
+            "captured_bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "total_bytes": 0,
+            "truncated": false
+          },
+          "stdout": {
+            "captured_bytes": 1552,
+            "sha256": "828aefbce1607c7424e0e3decae99e1e4f1ca6af299a2245ba442e813ec76493",
+            "total_bytes": 1552,
+            "truncated": false
+          }
+        }
+      },
+      "collect_only": true,
+      "data": {
+        "errors": [],
+        "nodes": [
+          "::test_photo_upload_rejects_fake_jpeg_before_storage",
+          "::test_photo_upload_accepts_matching_jpeg_signature",
+          "::test_upload_signature_accepts_supported_content[jpg]",
+          "::test_upload_signature_accepts_supported_content[png]",
+          "::test_upload_signature_accepts_supported_content[webp]",
+          "::test_upload_signature_accepts_supported_content[pdf]",
+          "::test_upload_signature_accepts_supported_content[doc]",
+          "::test_upload_signature_accepts_supported_content[xls]",
+          "::test_upload_signature_accepts_supported_content[docx]",
+          "::test_upload_signature_accepts_supported_content[xlsx]",
+          "::test_upload_signature_accepts_supported_content[csv]",
+          "::test_upload_signature_accepts_supported_content[txt]",
+          "::test_upload_signature_rejects_mime_mismatch"
+        ],
+        "reports": [],
+        "return_code": 0
+      },
+      "file": "/private/tmp/localos-current-full-v10.BYwJr6/writable/media-ids/test_after.py",
+      "year": 2020
+    },
+    {
+      "capture": {
+        "argv": [
+          "/usr/bin/sandbox-exec",
+          "-f",
+          "/private/tmp/localos-current-full-v10.BYwJr6/policy-v10.sb",
+          "/usr/bin/arch",
+          "-arm64",
+          "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+          "-B",
+          "-I",
+          "-c",
+          "import json,sys,time,zipfile,pytest\nsys.path.insert(0,'/private/tmp/localos-current-full-v10.BYwJr6/source/src')\nzipfile.time.localtime=lambda *_:time.struct_time((2026,1,1,0,0,0,2,1,-1))\ns={'nodes':[],'reports':[],'errors':[]}\nclass H:\n def pytest_collection_finish(self,session):s['nodes']=[item.nodeid for item in session.items]\n def pytest_collectreport(self,report):\n  if report.failed:s['errors'].append(report.nodeid)\n def pytest_runtest_logreport(self,report):s['reports'].append([report.nodeid,report.when,report.outcome])\nr=pytest.main(['/private/tmp/localos-current-full-v10.BYwJr6/writable/media-ids/test_after.py', '-c', '/private/tmp/localos-current-full-v10.BYwJr6/source/pytest.ini', '-q', '-p', 'no:cacheprovider', '--tb=no', '--show-capture=no', '--collect-only'],plugins=[H()]);s['return_code']=r\nprint('MEDIA_IDS_RESULT='+json.dumps(s,sort_keys=True));raise SystemExit(r)\n"
+        ],
+        "duration_seconds": 0.217,
+        "exit_code": 0,
+        "process_cleanup": {
+          "errors": [],
+          "observed": [
+            {
+              "created": 1790088084.715647,
+              "pid": 12581
+            }
+          ],
+          "remaining": [],
+          "signalled": [],
+          "status": "clean"
+        },
+        "stopped_reason": null,
+        "streams": {
+          "stderr": {
+            "captured_bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "total_bytes": 0,
+            "truncated": false
+          },
+          "stdout": {
+            "captured_bytes": 1552,
+            "sha256": "828aefbce1607c7424e0e3decae99e1e4f1ca6af299a2245ba442e813ec76493",
+            "total_bytes": 1552,
+            "truncated": false
+          }
+        }
+      },
+      "collect_only": true,
+      "data": {
+        "errors": [],
+        "nodes": [
+          "::test_photo_upload_rejects_fake_jpeg_before_storage",
+          "::test_photo_upload_accepts_matching_jpeg_signature",
+          "::test_upload_signature_accepts_supported_content[jpg]",
+          "::test_upload_signature_accepts_supported_content[png]",
+          "::test_upload_signature_accepts_supported_content[webp]",
+          "::test_upload_signature_accepts_supported_content[pdf]",
+          "::test_upload_signature_accepts_supported_content[doc]",
+          "::test_upload_signature_accepts_supported_content[xls]",
+          "::test_upload_signature_accepts_supported_content[docx]",
+          "::test_upload_signature_accepts_supported_content[xlsx]",
+          "::test_upload_signature_accepts_supported_content[csv]",
+          "::test_upload_signature_accepts_supported_content[txt]",
+          "::test_upload_signature_rejects_mime_mismatch"
+        ],
+        "reports": [],
+        "return_code": 0
+      },
+      "file": "/private/tmp/localos-current-full-v10.BYwJr6/writable/media-ids/test_after.py",
+      "year": 2026
+    },
+    {
+      "capture": {
+        "argv": [
+          "/usr/bin/sandbox-exec",
+          "-f",
+          "/private/tmp/localos-current-full-v10.BYwJr6/policy-v10.sb",
+          "/usr/bin/arch",
+          "-arm64",
+          "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+          "-B",
+          "-I",
+          "-c",
+          "import json,sys,time,zipfile,pytest\nsys.path.insert(0,'/private/tmp/localos-current-full-v10.BYwJr6/source/src')\nzipfile.time.localtime=lambda *_:time.struct_time((2026,1,1,0,0,0,2,1,-1))\ns={'nodes':[],'reports':[],'errors':[]}\nclass H:\n def pytest_collection_finish(self,session):s['nodes']=[item.nodeid for item in session.items]\n def pytest_collectreport(self,report):\n  if report.failed:s['errors'].append(report.nodeid)\n def pytest_runtest_logreport(self,report):s['reports'].append([report.nodeid,report.when,report.outcome])\nr=pytest.main(['/private/tmp/localos-current-full-v10.BYwJr6/writable/media-ids/test_after.py', '-c', '/private/tmp/localos-current-full-v10.BYwJr6/source/pytest.ini', '-q', '-p', 'no:cacheprovider', '--tb=no', '--show-capture=no'],plugins=[H()]);s['return_code']=r\nprint('MEDIA_IDS_RESULT='+json.dumps(s,sort_keys=True));raise SystemExit(r)\n"
+        ],
+        "duration_seconds": 0.217,
+        "exit_code": 0,
+        "process_cleanup": {
+          "errors": [],
+          "observed": [
+            {
+              "created": 1790088084.932762,
+              "pid": 12582
+            }
+          ],
+          "remaining": [],
+          "signalled": [],
+          "status": "clean"
+        },
+        "stopped_reason": null,
+        "streams": {
+          "stderr": {
+            "captured_bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "total_bytes": 0,
+            "truncated": false
+          },
+          "stdout": {
+            "captured_bytes": 3990,
+            "sha256": "10493b4da01be816166c758a6efb561f02576f3496760208a79109ad464356ec",
+            "total_bytes": 3990,
+            "truncated": false
+          }
+        }
+      },
+      "collect_only": false,
+      "data": {
+        "errors": [],
+        "nodes": [
+          "::test_photo_upload_rejects_fake_jpeg_before_storage",
+          "::test_photo_upload_accepts_matching_jpeg_signature",
+          "::test_upload_signature_accepts_supported_content[jpg]",
+          "::test_upload_signature_accepts_supported_content[png]",
+          "::test_upload_signature_accepts_supported_content[webp]",
+          "::test_upload_signature_accepts_supported_content[pdf]",
+          "::test_upload_signature_accepts_supported_content[doc]",
+          "::test_upload_signature_accepts_supported_content[xls]",
+          "::test_upload_signature_accepts_supported_content[docx]",
+          "::test_upload_signature_accepts_supported_content[xlsx]",
+          "::test_upload_signature_accepts_supported_content[csv]",
+          "::test_upload_signature_accepts_supported_content[txt]",
+          "::test_upload_signature_rejects_mime_mismatch"
+        ],
+        "reports": [
+          [
+            "::test_photo_upload_rejects_fake_jpeg_before_storage",
+            "setup",
+            "passed"
+          ],
+          [
+            "::test_photo_upload_rejects_fake_jpeg_before_storage",
+            "call",
+            "passed"
+          ],
+          [
+            "::test_photo_upload_rejects_fake_jpeg_before_storage",
+            "teardown",
+            "passed"
+          ],
+          [
+            "::test_photo_upload_accepts_matching_jpeg_signature",
+            "setup",
+            "passed"
+          ],
+          [
+            "::test_photo_upload_accepts_matching_jpeg_signature",
+            "call",
+            "passed"
+          ],
+          [
+            "::test_photo_upload_accepts_matching_jpeg_signature",
+            "teardown",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[jpg]",
+            "setup",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[jpg]",
+            "call",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[jpg]",
+            "teardown",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[png]",
+            "setup",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[png]",
+            "call",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[png]",
+            "teardown",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[webp]",
+            "setup",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[webp]",
+            "call",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[webp]",
+            "teardown",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[pdf]",
+            "setup",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[pdf]",
+            "call",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[pdf]",
+            "teardown",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[doc]",
+            "setup",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[doc]",
+            "call",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[doc]",
+            "teardown",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[xls]",
+            "setup",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[xls]",
+            "call",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[xls]",
+            "teardown",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[docx]",
+            "setup",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[docx]",
+            "call",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[docx]",
+            "teardown",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[xlsx]",
+            "setup",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[xlsx]",
+            "call",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[xlsx]",
+            "teardown",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[csv]",
+            "setup",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[csv]",
+            "call",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[csv]",
+            "teardown",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[txt]",
+            "setup",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[txt]",
+            "call",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_accepts_supported_content[txt]",
+            "teardown",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_rejects_mime_mismatch",
+            "setup",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_rejects_mime_mismatch",
+            "call",
+            "passed"
+          ],
+          [
+            "::test_upload_signature_rejects_mime_mismatch",
+            "teardown",
+            "passed"
+          ]
+        ],
+        "return_code": 0
+      },
+      "file": "/private/tmp/localos-current-full-v10.BYwJr6/writable/media-ids/test_after.py",
+      "year": 2026
+    }
+  ],
+  "source_ref": "d0ef4ce84c89e33a967429e570fb6e08821911a7",
+  "status": "passed"
+}

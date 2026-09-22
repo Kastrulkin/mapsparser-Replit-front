@@ -441,7 +441,12 @@ for subsequent runs without rewriting this captured artifact.
 The supplemental paired comparison and current-content refresh are complete
 at their stated revisions. Sustained localhost HTTP and bounded frontend
 observations remain historical, not current-source full-performance coverage.
-Representative contention, large-data/queue behavior, current frontend timing
-and the remaining AC7 resource/performance coverage must still be reconciled.
+The [22 September exact-route source bridge](../../.agent/tasks/production-readiness-20260917/evidence/dashboard-query-source-bridge-20260922.md)
+retains the query-count/representative-plan conclusions for the unchanged
+auth/business dashboard reads from20431224 throughd0ef4ce8. This is not a new
+plan-duration, latency, CPU or RSS measurement. Current bounded local load/resource
+observations and current frontend timing still need a refresh. Wider queue/
+contention/large-data behavior remains an explicit scope limitation, not a demand
+for production-capacity testing or speculative optimization.
 Production capacity remains unmeasured. Do not add speculative indexes, caches
 or structural rewrites before measurements identify a reachable bottleneck.

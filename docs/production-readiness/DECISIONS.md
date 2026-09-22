@@ -1,5 +1,19 @@
 # Readiness decisions
 
+## D-121 — Keep clean aggregate failures and explicit source overlap
+
+Do not inject unrelated dirty fixes into a clean snapshot and label it HEAD.
+The exact d0ef offline run exposes a second global audit-hook fixture and an
+incomplete author mock whose local corrections are already dirty. Seek scoped
+adoption of those two changes, preserve all other work, and prove guard denial
+and teardown before accepting them. Separately fix timestamp-derived pytest IDs
+with explicit semantic names, preserving ZIP bytes and assertions rather than
+normalizing raw node drift. Offline skips/capability denials remain nonpasses.
+The actual two-clock red/green confirms exactly two old IDs drift and all13
+patched IDs/tests pass. Preserve the original failed full run; do not revise its
+counts or treat this separate module proof as an aggregate pass. Pending dirty
+fixture adoption does not prohibit read-only validation of isolated copies.
+
 ## D-120 — Accept paired evidence without inferring capacity or a speedup
 
 The 110-run `272794a4`→`dc1a6b76` comparison closes only the changed-content

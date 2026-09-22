@@ -1,0 +1,73 @@
+{
+  "archive_sha256": "51ecb35c56c9654a47dc8f5bbab0f84795de54a75aa7a01b606f011ef1ca2c8f",
+  "controls": {
+    "capture": {
+      "argv": [
+        "/usr/bin/sandbox-exec",
+        "-f",
+        "/private/tmp/localos-current-full-v10.BYwJr6/policy-v10.sb",
+        "/usr/bin/arch",
+        "-arm64",
+        "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+        "-B",
+        "-I",
+        "-c",
+        "import json,socket,subprocess,sys\nfrom pathlib import Path\nd={}\ndef check(k,f):\n try:f();d[k]=None\n except OSError:d[k]=sys.exception().errno\ncheck('users',lambda:Path('/Users/alexdemyanov/.ssh').read_bytes())\ncheck('source_write',lambda:Path('/private/tmp/localos-current-full-v10.BYwJr6/source/.v10-forbidden').write_text('forbidden'))\ns=socket.socket();d['tcp']=s.connect_ex(('127.0.0.1',1));s.close()\ns=socket.socket(socket.AF_UNIX);check('docker',lambda:s.connect('/Users/alexdemyanov/.docker/run/docker.sock'));s.close()\nn=subprocess.run(['/usr/bin/nc','-v','-z','-w','1','127.0.0.1','1'],capture_output=True)\nd['native_tcp']=n.returncode!=0 and b'Operation not permitted' in n.stderr\nowned=Path('/private/tmp/localos-current-full-v10.BYwJr6/writable/v10-owned-probe')\nowned.write_text('owned probe');d['owned_write']=owned.read_text()=='owned probe'\nlink=Path('/private/tmp/localos-current-full-v10.BYwJr6/writable/v10-escape-probe')\ntarget='/private/tmp/localos-current-full-v10.BYwJr6/source/.v10-forbidden'\nif not link.is_symlink():link.symlink_to(target)\nd['symlink_target']=str(link.readlink())==target\ncheck('symlink_write',lambda:link.write_text('forbidden'))\nprint(json.dumps(d));raise SystemExit(0 if all(d[k] in (1,13) for k in ('users','source_write','tcp','docker','symlink_write')) and d['native_tcp'] and d['owned_write'] and d['symlink_target'] else 1)\n"
+      ],
+      "duration_seconds": 0.221,
+      "exit_code": 0,
+      "process_cleanup": {
+        "errors": [],
+        "observed": [
+          {
+            "created": 1790087223.136998,
+            "pid": 10553
+          }
+        ],
+        "remaining": [],
+        "signalled": [],
+        "status": "clean"
+      },
+      "stopped_reason": null,
+      "streams": {
+        "stderr": {
+          "captured_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "total_bytes": 0,
+          "truncated": false
+        },
+        "stdout": {
+          "captured_bytes": 140,
+          "sha256": "eb5bc95d715a02639587234b78215b610ce97a139f5a693fc8344b668973b05d",
+          "total_bytes": 140,
+          "truncated": false
+        }
+      }
+    },
+    "checks": {
+      "docker": 1,
+      "native_tcp": true,
+      "owned_write": true,
+      "source_write": 1,
+      "symlink_target": true,
+      "symlink_write": 1,
+      "tcp": 1,
+      "users": 1
+    }
+  },
+  "duration_seconds": 2.27,
+  "free_bytes_after": 11140341760,
+  "input_hashes": {
+    "freeze": "7cbebbd5d5fdef7c7a36bf57b07b44354af3a910473fa4120e0098912057173a",
+    "nodes": "8c980881eb774706ed2142de7fd8ff8c86664dd119183ab4bc5e41f5d37d4906",
+    "policy": "e41663b03dfe1a0be7b27bb6fcb96abf27d302633464e7a8fd77d86e54d39201"
+  },
+  "mode": "control",
+  "nonpass_reasons": [],
+  "phase": "finished",
+  "pure_controls": 9,
+  "source_manifest_unchanged": true,
+  "source_ref": "d0ef4ce84c89e33a967429e570fb6e08821911a7",
+  "status": "passed",
+  "wrapper_sha256": "93c37b843e9ddbadc87f0bab9d7fc9c82685c4a8d9dfe8022e907f9f612d79d4"
+}

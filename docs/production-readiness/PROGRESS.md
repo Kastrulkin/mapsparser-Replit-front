@@ -1,5 +1,31 @@
 # Production-readiness progress
 
+## Current checkpoint — 22 September, exact d0ef backend diagnostic nonpass
+
+- [x] Performance evidence committed locally `d0ef4ce8`; staged secret scan
+  exit0,0findings,2.265s. No push/deploy. Existing foreign changes preserved.
+- [x] Fresh exact-current archive independently verified6340/6340 bytes/modes.
+  Freeze collects5516unique nodes,0errors; control and source bindings pass.
+- [x] Actual full offline run completes69.402s, child66.853s, no timeout:
+  4347passed,53failed,1116skipped,14passing subtests. Two timestamp-derived ZIP
+  IDs drift; source remains unchanged and owned process registry ends empty.
+- [ ] Fix/test global guard leakage in diagnostic_logs (35 failures) and
+  incomplete author fixture. Existing local changes overlap both; user adoption
+  approval requested, no modification/staging of these files yet. Guard review
+  identifies missing connect_ex/os.spawn* coverage in the current dirty patch.
+- [x] One-line explicit parameter IDs in media-upload test proven by separate
+  offline red/green: exactly2 old ZIP IDs drift across fixed years, patched13
+  IDs identical and13tests/39stages pass. Outer1.581s/exit0, OS8controls and
+  process cleanup pass; independent runtime review accepts this scoped fix.
+- [ ] Remaining14offline capability denials,2Vite fixtures and1dist assertion
+  need exact coverage reconciliation; skips remain nonpasses, not successes.
+
+Durable raw: task `evidence/current-backend-d0ef4ce8-20260922/`. No current full
+backend PASS or overall readiness claim. The dashboard query source bridge
+closes only query-shape/count relevance; current load/resources/frontend remain.
+Existing dirty fixture candidates are being verified on temporary copies only;
+no adoption/staging or changes to their original files without the pending choice.
+
 ## Current checkpoint — 22 September, paired performance accepted
 
 - [x] Baseline `272794a4` versus `dc1a6b76`, same harness in clean archives:

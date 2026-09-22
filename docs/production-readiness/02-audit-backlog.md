@@ -1,5 +1,19 @@
 # Audit backlog — evidence, not a readiness claim
 
+## ZIP-derived test identities — 22 September
+
+**TEST-MEDIA-IDS-01 — P2, testing/reproducibility, locally FIX_PROVEN.**
+Two upload-signature parameter IDs include ZIP bytes containing the current
+timestamp. A collection/execution boundary at different timestamps changes
+node identity, breaking trustworthy frozen-suite accounting. High confidence;
+deterministic when ZIP timestamps differ, test-only impact, no demonstrated
+production upload failure. One explicit semantic `ids` tuple preserves all
+payloads and assertions. Low-risk/reversible one-line change. Red collections
+at2020/2026 differ exactly2/13; green collections match13/13 and the actual
+module passes13tests/39stages. Ruff/diff and independent source/runtime review
+pass. Evidence: task `evidence/current-backend-d0ef4ce8-20260922/` media-ids
+captures. Full5516-node aggregate remains NONPASS; this does not close it.
+
 ## Current content measurement gap — 22 September, closed for fixture
 
 The prior source-equivalence assessment's missing paired timing is now measured

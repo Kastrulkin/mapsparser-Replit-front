@@ -1,5 +1,34 @@
 # Verified commands and evidence
 
+## Stable media test IDs — 22 September (completed)
+
+Named tmux `audit-media-ids-v1` invokes ARM64 Python3.11.7 `-B -I`
+`/private/tmp/localos-current-full-v10.BYwJr6/verify_media_ids.py` through
+the bug-reproducer capture helper. Timeout360s; actual1.580546s/exit0, no
+truncation or stderr. Four separate collections at fixed2020/2026 ZIP years:
+old IDs differ2/13, patched IDs match13/13. Fifth child executes all13tests,
+39stages pass. Eight OS isolation probes and owned process cleanup pass.
+`ruff check --no-cache tests/test_media_upload_signature_security.py` and
+`git diff --check` pass. This is a module proof, not the full backend aggregate.
+Exact commands, wrapper and JSON are in task evidence
+`current-backend-d0ef4ce8-20260922/`; exclusive output names are completed.
+
+## Exact-current offline backend — 22 September, d0ef4ce8
+
+Native ARM64 Python invoked
+`/private/tmp/localos-current-full-v10.BYwJr6/run_current_full_v10.py`
+under `-B -I`, sequential modes freeze/control/full, named tmux
+`audit-current-full-v10-{freeze,control,full}`. Outer captures are in task
+`evidence/current-backend-d0ef4ce8-20260922/`; frozen runner/policy/helper included.
+No runnable command is implied for completed exclusive evidence names.
+
+Freeze12.557442s/exit0 collects5516nodes without errors; control2.327018s/exit0.
+Full69.402136s/exit1 (child66.853s):4347pass,53fail,1116skip,14subtestpass.
+Two ZIP timestamp-derived collection IDs differ. All5516teardowns pass; no
+timeout/truncation. Source6340files/modes unchanged,47observed processes allgone.
+No raw arbitrary exception text retained; failure types/sourceframes and all
+stage outcomes remain. This is diagnostic nonpass, not native/whole-backend green.
+
 ## Paired current performance — 22 September (completed; do not replay)
 
 Named tmux `audit-content-perf-full-v1` ran:
