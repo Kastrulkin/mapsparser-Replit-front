@@ -1,5 +1,21 @@
 # Verified commands and evidence
 
+## Callback native PostgreSQL — 22 September
+
+Named tmux `native_callback_hflypi_v2`, native ARM64 Python executes task support
+`native_tc_one_hflypi.py --profile callback-recovery-pg-v1 --attempt v2`.
+Do not reuse attemptv2: evidence files are exclusive and this profile is complete.
+Literal whole module14; guard-first, fresh generatedDB, FLASK_APP=src.main:app,
+canonical Alembic upgrade, mocked transport/notifications. Runtime/source hashes
+and exact command are retained in task `evidence/callback-native-20260922`.
+
+Result14/14;pytest10.06s, child17.836s, wrapper21.043s.102relayconnections/512cap,
+no failures/rejections; schema0/DB0 aftercleanup, ownedcontainergone,23retained
+containerIDs/statesunchanged,5720frozenblobsunchanged/defaultguardrestored.
+v1 failed before migration with0tests and is preserved. Root finalpurecontrols
+10/10,119.718ms; supportstatic checks and independent pre/post reviews pass.
+
+
 ## Browser error-path regressions — 22 September
 
 Named tmux `audit-browser-errors-v2` runs native ARM64 Python using

@@ -57,6 +57,7 @@ PROFILE_CONNECTION_BUDGETS = {
     "worker-resume-pg-v1": 32,
     "finance-import-transaction-pg-v1": 32,
     "service-compression-race-pg-v1": 512,
+    "callback-recovery-pg-v1": 512,
 }
 SESSION_PATTERN = re.compile(r"[A-Za-z0-9_-]{8,128}")
 CAPABILITY_KEYS = {

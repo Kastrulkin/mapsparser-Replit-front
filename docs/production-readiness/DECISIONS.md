@@ -1,5 +1,16 @@
 # Readiness decisions
 
+## D-117 — Preserve fixed test admission without touching its host database
+
+The callback fixture's logical loopback35418/pinned guard contract remains
+unchanged. A profile-specific guard rewrites the fully validated DSN to one
+capability-bound relay into a fresh generated DB on an internal no-port container.
+Do not reapply caller connection keywords after rewriting; retain exact original
+behavior for legacy profiles. Prove migration, zero remaining schemas and DB,
+then remove only the owned container. Pre-create aborts verify DB absence without
+assuming creation. Raw setup failures are not application findings or test passes.
+
+
 ## D-116 — Browser error paths use loopback-only trusted test profile
 
 Keep real Chromium/Vite and unchanged mocked-API regressions while allowing only

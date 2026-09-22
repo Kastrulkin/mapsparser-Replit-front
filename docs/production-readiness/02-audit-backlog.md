@@ -481,6 +481,14 @@ aggregate12.04s; independent reviewPASS and0residual native schemas.
 No schema/API/provider action changed. Cursor resets on process restart and
 independent workers do not share progress; durable/global fairness is unproven.
 
+22 September native profile reconciliation: all14 current callback-module nodes
+(13PG-fixture cases plus one pure control) pass on a fresh migrated generated DB,
+10.06s pytest/21.043s wrapper. Relevant frozen test/core/worker/migration bytes
+match current. Schema/DBzero, owned container removal and23retainedcontainers
+verified; independent PASS. See task `evidence/callback-native-results-20260922.md`.
+This revalidation does not broaden OPS-CALLBACK-01/02 to live delivery/global
+fairness or turn the previous full offline aggregate into a passing result.
+
 `UX-LOCALE-05` (P3 before partner demo, locally focused FIX_PROVEN) — managed
 browser and `frontend/src/components/ReviewReplyAssistant.tsx:473,726` exposed
 `Quick Generator`, raw `draft`, and hardcoded Copy feedback. The component now

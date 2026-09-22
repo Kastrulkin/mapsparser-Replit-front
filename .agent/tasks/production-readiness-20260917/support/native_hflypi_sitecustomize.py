@@ -52,6 +52,7 @@ TC_ENVIRONMENTS = (
     "LOCALOS_HFLYPI_TC_MODE", "LOCALOS_HFLYPI_TC_ADAPTER_SHA256",
     "LOCALOS_HFLYPI_TC_RELAY_SHA256", "LOCALOS_HFLYPI_TC_OWNER_PID",
     "LOCALOS_HFLYPI_TC_CAPABILITY", "LOCALOS_HFLYPI_TC_JOURNAL",
+    "LOCALOS_HFLYPI_TC_GUARD_SHA256",
 )
 
 
@@ -193,7 +194,12 @@ def _host(value: object) -> str:
 
 
 def _port_allowed(port: object) -> bool:
-    return isinstance(port, int) and port in ({NATIVE_PORT} | _testcontainer_ports | _owned_listener_ports)
+    if not isinstance(port, int):
+        return False
+    # Callback recovery deliberately exposes :35418 only as a logical fixture
+    # value. It must never become a direct socket destination in this profile.
+    native_port = set() if os.environ.get("LOCALOS_HFLYPI_TC_MODE") == "callback-recovery-pg-v1" else {NATIVE_PORT}
+    return port in (native_port | _testcontainer_ports | _owned_listener_ports)
 
 
 def _allow_inet(address: object) -> None:
@@ -249,24 +255,38 @@ def _audit(event: str, arguments: tuple[object, ...]) -> None:
         _deny("DNS and hostname resolution are forbidden")
 
 
-def _validate_dsn(dsn: object, kwargs: dict[str, object]) -> None:
+def _validate_dsn(dsn: object, kwargs: dict[str, object]) -> object:
     import psycopg2
 
     if any(os.environ.get(key) for key in ("PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE", "PGOPTIONS")):
         _deny("inherited libpq host, service or options override")
-    parsed = psycopg2.extensions.parse_dsn(psycopg2.extensions.make_dsn(dsn, **kwargs))
+    canonical_dsn = psycopg2.extensions.make_dsn(dsn, **kwargs)
+    parsed = psycopg2.extensions.parse_dsn(canonical_dsn)
     host, port, database = str(parsed.get("host") or ""), str(parsed.get("port") or ""), str(parsed.get("dbname") or "")
     if parsed.get("hostaddr") or parsed.get("service") or parsed.get("options") or host not in NATIVE_HOSTS or not port.isdigit():
         _deny("PostgreSQL DSN is not explicit literal loopback")
     number = int(port)
     if _tc_adapter is not None:
+        callback_profile = os.environ.get("LOCALOS_HFLYPI_TC_MODE") == "callback-recovery-pg-v1"
+        if callback_profile and dsn is not None and kwargs:
+            _deny("callback recovery logical DSN may not carry connection overrides")
         try:
-            _tc_adapter.validate_dsn(parsed)
+            rewritten = _tc_adapter.validate_dsn(parsed)
         except PermissionError:
             _deny("Testcontainers relay capability or DSN is not authorized")
-        return
+        if not callback_profile:
+            return dsn
+        # The adapter returns a complete physical relay DSN for callback mode.
+        # Never merge caller keywords back after a logical rewrite.
+        effective_dsn = canonical_dsn if rewritten is None else rewritten
+        effective = psycopg2.extensions.parse_dsn(effective_dsn)
+        effective_port = str(effective.get("port") or "")
+        if not effective_port.isdigit():
+            _deny("authorized Testcontainers DSN has no relay port")
+        _testcontainer_ports.add(int(effective_port))
+        return effective_dsn
     if number in _testcontainer_ports or _verified_testcontainer_port(number):
-        return
+        return dsn
     if number != NATIVE_PORT:
         _deny("PostgreSQL port is not owned by this aggregate")
     allowed = (
@@ -278,6 +298,7 @@ def _validate_dsn(dsn: object, kwargs: dict[str, object]) -> None:
     )
     if not allowed:
         _deny("PostgreSQL database is outside hfLYPi owned namespace")
+    return dsn
 
 
 def _verified_testcontainer_port(port: int) -> bool:
@@ -344,8 +365,12 @@ def _patch_psycopg2() -> None:
         return
 
     def guarded_connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
-        _validate_dsn(dsn, kwargs)
-        return original(dsn, connection_factory=connection_factory, cursor_factory=cursor_factory, **kwargs)
+        effective_dsn = _validate_dsn(dsn, kwargs)
+        if os.environ.get("LOCALOS_HFLYPI_TC_MODE") == "callback-recovery-pg-v1":
+            # Callback URLs are normalized to one validated DSN. In particular,
+            # no keyword port can override the logical-to-relay replacement.
+            return original(effective_dsn, connection_factory=connection_factory, cursor_factory=cursor_factory)
+        return original(effective_dsn, connection_factory=connection_factory, cursor_factory=cursor_factory, **kwargs)
 
     setattr(guarded_connect, "_hflypi_guarded", True)
     psycopg2.connect = guarded_connect
@@ -392,7 +417,7 @@ def _patch_testcontainers() -> None:
     _testcontainers_network()
     mode = os.environ.get("LOCALOS_HFLYPI_TC_MODE", "")
     if mode:
-        if mode not in {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1", "operator-voice-pg-v1", "operator-editorial-pg-v1", "work-review-rollback-v1", "creator-portal-rollback-v1", "creator-offer-rollback-v1", "author-daily-gate-pg-v1", "knowledge-schema-pg-v1", "outreach-pain-library-pg-v1", "riderra-template-pg-v1", "sales-room-proposal-race-pg-v1", "sales-room-deadlock-pg-v1", "telegram-shared-audience-pg-v1", "web-tracking-pg-v1", "worker-captcha-pg-v1", "worker-expired-pg-v1", "worker-resume-pg-v1", "finance-import-transaction-pg-v1", "service-compression-race-pg-v1"}:
+        if mode not in {"card-growth-v1", "client-info-v1", "capabilities-phase1-v1", "operator-service-creation-v1", "operator-voice-pg-v1", "operator-editorial-pg-v1", "callback-recovery-pg-v1", "work-review-rollback-v1", "creator-portal-rollback-v1", "creator-offer-rollback-v1", "author-daily-gate-pg-v1", "knowledge-schema-pg-v1", "outreach-pain-library-pg-v1", "riderra-template-pg-v1", "sales-room-proposal-race-pg-v1", "sales-room-deadlock-pg-v1", "telegram-shared-audience-pg-v1", "web-tracking-pg-v1", "worker-captcha-pg-v1", "worker-expired-pg-v1", "worker-resume-pg-v1", "finance-import-transaction-pg-v1", "service-compression-race-pg-v1"}:
             _deny("unsupported Testcontainers adapter mode")
         for module, key in (
             ("native_tc_adapter_hflypi", "LOCALOS_HFLYPI_TC_ADAPTER_SHA256"),

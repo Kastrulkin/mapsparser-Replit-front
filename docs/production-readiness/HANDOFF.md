@@ -1,5 +1,33 @@
 # Readiness handoff
 
+## Latest checkpoint — 22 September, callback native profile complete
+
+Parent fb55739a (browser error-path evidence), codex/production-readiness-20260917.
+Callback profile now actually passes14/14, not just a plan: overall21.043s,
+pytest10.06s;102relayconnections, fresh generatedDB migrated then schemas/DBzero
+and ownedcontainerremoved. Independent review PASS. Evidence in task
+`evidence/callback-native-20260922`; report includes exact5supportfile hashes.
+v1zero-node pre-migration harnessFAIL retained; don't repeat completedprofiles.
+
+Support-only changes: native_tc_one_hflypi.py, native_tc_adapter_hflypi.py,
+native_hflypi_sitecustomize.py, native_tc_relay_hflypi.py and new
+native_callback_purecontrols_hflypi.py. Root finalpure controls10/10 onexactguard/
+adapter119.718ms. Frozen998 archive5720blobs restored, callback-relevant source
+hashes identical tocurrent; no product/test overlays. Existing23DockerIDs/states
+unchanged. All13foreignpaths preserved; trackedforeigndiff40afa014 unchanged.
+
+Nearest new task: GOOGLE-OAUTH-STALE-ACCESS-02 native concurrent actor/ownership
+revocation during fake provider exchange. First read
+`tests/test_google_oauth_current_access.py` and its actual handlers; identify the
+smallest synthetic PG fixture and reach the real lock/write boundary without
+provider requests, existingDB writes or foreignsrc/main.py edits. Don't reuse a
+pure fake result as native concurrency proof. Read-only continuation:
+`git status --short` and `sed -n '1,240p' tests/test_google_oauth_current_access.py`.
+
+Whole objective remains ACTIVE/FAIL. Cleanup COMPLETE, about12GiB free, no new
+image pull/build, production/provider/push/deploy. Broader residual gates remain.
+
+
 ## Latest checkpoint — 22 September, two current browser regressions
 
 Parent ef6d3e1e, same codex/production-readiness-20260917 branch. Root owns only

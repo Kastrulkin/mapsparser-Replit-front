@@ -1,5 +1,24 @@
 # Production-readiness progress
 
+## Latest checkpoint — 22 September, native callback family passes
+
+- [x] Native callback recovery profile:14/14, no fail/skip/xfail; pytest10.06s,
+  subprocess17.836s, complete wrapper21.043s. Independent terminal review PASS.
+- [x] Fresh generated DB migrated; required callback tables present; all callback
+  schemas then DB verified absent; owned internal no-port container removed.
+  102/512 relay connections, zero failures; existing23 containers unchanged.
+- [x] Preserve v1 pre-migration harness failure (zero tests). Fix test support only:
+  canonical guarded DSN, no connection overrides, legacy behavior retained,
+  scoped lifecycle cleanup. Root final10pure controls pass119.718ms.
+- [x] Frozen99849935 archive5720blobs unchanged; relevant callback test/core/worker/
+  conftest/Alembic sources match current. No claim for whole dirty-tree execution.
+- [ ] Next: native synthetic concurrent-revocation proof for
+  GOOGLE-OAUTH-STALE-ACCESS-02; existing mocked tests are not lock/transaction proof.
+  Keep provider exchange fake and preserve foreign src/main.py changes.
+- [ ] Whole goal remains ACTIVE/FAIL; full aggregate/security/history/dependencies,
+  performance/CI/demo/final whole-diff review unresolved. No production/push/deploy.
+
+
 ## Latest checkpoint — 22 September, browser error paths pass
 
 - [x] Current `ef6d3e1e` frontend/test archive: both unchanged Python/Playwright

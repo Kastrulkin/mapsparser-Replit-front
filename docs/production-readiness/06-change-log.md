@@ -1,5 +1,15 @@
 # Production-readiness change log
 
+## Callback native profile — 22 September, parent fb55739a
+
+Add one bounded test-support profile; no product/assertion change. Fresh migrated
+PostgreSQL verifies all14callback recovery tests, including tenant isolation,
+late-result fencing and fair worker scanning. Guard logical DSN rewriting and
+owned cleanup; preserve legacy profiles. Independent review passes, generatedDB/
+schemas/container removed, existing23containers retained. First pre-migration
+harness failure retained. Whole backend/release readiness is still unproven.
+
+
 ## Browser error-path evidence — 22 September, parent ef6d3e1e
 
 Both original Python/Playwright regressions now pass against current frontend:

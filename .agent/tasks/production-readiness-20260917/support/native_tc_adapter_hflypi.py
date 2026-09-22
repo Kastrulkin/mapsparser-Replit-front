@@ -15,6 +15,7 @@ import re
 import sys
 import time
 from types import SimpleNamespace
+import uuid
 
 import native_tc_relay_hflypi
 
@@ -49,9 +50,11 @@ PROFILE_PREFIXES = {
     "worker-resume-pg-v1": "native-tc-worker-resume-pg",
     "finance-import-transaction-pg-v1": "native-tc-finance-import-transaction-pg",
     "service-compression-race-pg-v1": "native-tc-service-compression-race-pg",
+    "callback-recovery-pg-v1": "native-tc-callback-recovery-pg",
 }
 PARENT_DATABASE_PROFILES = frozenset({"client-info-v1", "capabilities-phase1-v1"})
 OPERATOR_VOICE_TEST_DSN_PROFILES = frozenset({"operator-service-creation-v1", "operator-voice-pg-v1", "operator-editorial-pg-v1"})
+CALLBACK_RECOVERY_DSN_PROFILES = frozenset({"callback-recovery-pg-v1"})
 OWNED_DATABASE_PATTERNS = {
     "work-review-rollback-v1": re.compile(r"work_review_rollback_[0-9a-f]{32}"),
     "creator-portal-rollback-v1": re.compile(r"creator_portal_rollback_[0-9a-f]{32}"),
@@ -76,10 +79,12 @@ OWNED_CLEANUP_EVENTS = {
 OWNED_SCHEMA_CLEANUP_SQL_PATTERNS = {
     "operator-voice-pg-v1": r"^voice_[0-9a-f]{32}$",
     "operator-editorial-pg-v1": r"^voice_[0-9a-f]{32}$",
+    "callback-recovery-pg-v1": r"^callback_recovery_[0-9a-f]{32}$",
 }
 OWNED_SCHEMA_CLEANUP_EVENTS = {
     "operator-voice-pg-v1": "operator_voice_schema_cleanup_checked",
     "operator-editorial-pg-v1": "operator_voice_schema_cleanup_checked",
+    "callback-recovery-pg-v1": "callback_recovery_schema_cleanup_checked",
 }
 INHERITED_DATABASE_URL_REFUSAL_PROFILES = frozenset({
     "author-daily-gate-pg-v1", "knowledge-schema-pg-v1", "outreach-pain-library-pg-v1",
@@ -89,8 +94,10 @@ INHERITED_DATABASE_URL_REFUSAL_PROFILES = frozenset({
     "service-compression-race-pg-v1",
     "operator-voice-pg-v1",
     "operator-editorial-pg-v1",
+    "callback-recovery-pg-v1",
 })
 _active = None
+_callback_recovery_test_dsn = None
 _relay = None
 _started = False
 _events = []
@@ -99,6 +106,9 @@ _session = ""
 _journal = None
 _database_url = None
 _operator_voice_test_dsn = None
+_callback_recovery_database = None
+_callback_recovery_relay_port = None
+_callback_recovery_database_created = False
 
 
 def deny(reason: str) -> None:
@@ -115,9 +125,53 @@ def record(event: str, **fields) -> None:
             os.close(descriptor)
 
 
-def validate_dsn(parsed: dict[str, str]) -> None:
+def _callback_recovery_binding() -> tuple[str, int]:
+    database = os.environ.get(PREFIX + "CALLBACK_RECOVERY_DATABASE", "")
+    port = os.environ.get(PREFIX + "CALLBACK_RECOVERY_RELAY_PORT", "")
+    if re.fullmatch(r"readiness_full_test_[a-z0-9]{32}", database) is None or not port.isdigit():
+        deny("callback recovery binding is invalid")
+    return database, int(port)
+
+
+def _callback_recovery_physical_dsn(database: str, port: int) -> str:
+    return f"postgresql://test:test@127.0.0.1:{port}/{database}"
+
+
+def validate_dsn(parsed: dict[str, str]) -> str | None:
     database = parsed.get("dbname")
     profile = os.environ.get(PREFIX + "MODE", "")
+    if profile in CALLBACK_RECOVERY_DSN_PROFILES:
+        expected_database, relay_port = _callback_recovery_binding()
+        if set(parsed) - {"host", "port", "dbname", "user", "password"}:
+            deny("callback recovery DSN carries unsupported options")
+        logical = (
+            parsed.get("host") == "127.0.0.1"
+            and parsed.get("port") == "35418"
+            and database == expected_database
+            and parsed.get("user") == "test"
+            and parsed.get("password") == "test"
+        )
+        physical = (
+            parsed.get("host") == "127.0.0.1"
+            and parsed.get("port") == str(relay_port)
+            and database == expected_database
+            and parsed.get("user") == "test"
+            and parsed.get("password") == "test"
+        )
+        if not logical and not physical:
+            deny("callback recovery DSN is outside its generated test database")
+        path = os.environ.get(PREFIX + "CAPABILITY", "")
+        result = native_tc_relay_hflypi.validate_capability(Path(path), relay_port)
+        if result.get("session_id") != os.environ.get("LOCALOS_HFLYPI_TESTCONTAINERS_SESSION_ID"):
+            deny("capability session differs from parent Testcontainers session")
+        physical_dsn = _callback_recovery_physical_dsn(expected_database, relay_port)
+        if physical:
+            if os.environ.get(PREFIX + "OWNER_PID") == str(os.getpid()) or os.environ.get(PREFIX + "CALLBACK_RECOVERY_MIGRATION_DSN") != physical_dsn:
+                deny("physical callback recovery DSN is reserved for the guarded migration child")
+            record("dsn_admitted", port=relay_port, database=database, container_id=result.get("container_id"), purpose="callback_migration")
+            return physical_dsn
+        record("dsn_admitted", port=relay_port, database=database, container_id=result.get("container_id"), purpose="callback_logical_rewrite")
+        return physical_dsn
     allowed_database = database == "test"
     owned_pattern = OWNED_DATABASE_PATTERNS.get(profile)
     if owned_pattern is not None:
@@ -132,6 +186,7 @@ def validate_dsn(parsed: dict[str, str]) -> None:
     if result.get("session_id") != os.environ.get("LOCALOS_HFLYPI_TESTCONTAINERS_SESSION_ID"):
         deny("capability session differs from parent Testcontainers session")
     record("dsn_admitted", port=int(port), database=database, container_id=result.get("container_id"))
+    return None
 
 
 def bind_parent_database(port: int) -> None:
@@ -180,6 +235,78 @@ def unbind_operator_voice_test_dsn() -> None:
     del os.environ["OPERATOR_VOICE_TEST_DSN"]
     _operator_voice_test_dsn = None
     record("operator_voice_test_dsn_unbound")
+
+
+def bind_callback_recovery_test_dsn(port: int) -> None:
+    global _callback_recovery_test_dsn, _callback_recovery_database, _callback_recovery_relay_port
+    if os.environ.get(PREFIX + "MODE") not in CALLBACK_RECOVERY_DSN_PROFILES:
+        return
+    if os.environ.get(PREFIX + "OWNER_PID") != str(os.getpid()) or "LOCALOS_CALLBACK_RECOVERY_TEST_DATABASE_URL" in os.environ or _callback_recovery_test_dsn is not None:
+        deny("refusing to replace callback recovery test DSN")
+    database = "readiness_full_test_" + uuid.uuid4().hex
+    if _callback_recovery_database is not None or _callback_recovery_relay_port is not None:
+        deny("callback recovery database was already bound")
+    _callback_recovery_database = database
+    _callback_recovery_relay_port = port
+    os.environ[PREFIX + "CALLBACK_RECOVERY_DATABASE"] = database
+    os.environ[PREFIX + "CALLBACK_RECOVERY_RELAY_PORT"] = str(port)
+    result = native_tc_relay_hflypi.validate_capability(Path(os.environ.get(PREFIX + "CAPABILITY", "")), port)
+    if result.get("session_id") != os.environ.get("LOCALOS_HFLYPI_TESTCONTAINERS_SESSION_ID"):
+        deny("callback recovery capability session differs from parent")
+    record("dsn_admitted", port=port, database=database, container_id=result.get("container_id"), purpose="callback_binding")
+    # The fixture validates this literal logical address. The guarded psycopg2
+    # boundary rewrites it only after capability validation to the private relay.
+    _callback_recovery_test_dsn = f"postgresql://test:test@127.0.0.1:35418/{database}"
+    os.environ["LOCALOS_CALLBACK_RECOVERY_TEST_DATABASE_URL"] = _callback_recovery_test_dsn
+    os.environ["LOCALOS_CALLBACK_RECOVERY_GUARD_SHA256"] = os.environ[PREFIX + "GUARD_SHA256"]
+    record("callback_recovery_test_dsn_bound", logical_port=35418, relay_port=port, database=database)
+
+
+def prepare_callback_recovery_database() -> str:
+    """Create only this lifecycle's named database before its guarded migration."""
+    global _callback_recovery_database_created
+    if os.environ.get(PREFIX + "MODE") not in CALLBACK_RECOVERY_DSN_PROFILES or _active is None or _active._container is None:
+        deny("callback recovery database preparation is outside the owned lifecycle")
+    database, port = _callback_recovery_binding()
+    if _callback_recovery_database != database or _callback_recovery_relay_port != port or _callback_recovery_database_created:
+        deny("callback recovery database preparation identity differs")
+    result = _active._container.exec_run(["psql", "-v", "ON_ERROR_STOP=1", "-U", "test", "-d", "postgres", "-c", f"CREATE DATABASE {database}"])
+    output = result.output.decode().strip() if isinstance(result.output, bytes) else str(result.output).strip()
+    if result.exit_code != 0 or "CREATE DATABASE" not in output:
+        deny("owned callback recovery database creation failed")
+    _callback_recovery_database_created = True
+    physical_dsn = _callback_recovery_physical_dsn(database, port)
+    record("callback_recovery_database_created", database=database, relay_port=port)
+    return physical_dsn
+
+
+def verify_callback_recovery_migration() -> None:
+    if not _callback_recovery_database_created or _active is None or _active._container is None:
+        deny("callback recovery migration verification is outside the owned lifecycle")
+    database, _ = _callback_recovery_binding()
+    result = _active._container.exec_run(["psql", "-v", "ON_ERROR_STOP=1", "-U", "test", "-d", database, "-At", "-c", "SELECT to_regclass('public.businesses'), to_regclass('public.action_callback_outbox'), to_regclass('public.action_callback_attempts')"])
+    output = result.output.decode().strip() if isinstance(result.output, bytes) else str(result.output).strip()
+    if result.exit_code != 0 or output != "businesses|action_callback_outbox|action_callback_attempts":
+        deny("callback recovery migration did not create required public tables")
+    record("callback_recovery_database_migrated", database=database)
+
+
+def unbind_callback_recovery_test_dsn() -> None:
+    global _callback_recovery_test_dsn, _callback_recovery_database, _callback_recovery_relay_port, _callback_recovery_database_created
+    if _callback_recovery_test_dsn is None:
+        return
+    if os.environ.get("LOCALOS_CALLBACK_RECOVERY_TEST_DATABASE_URL") != _callback_recovery_test_dsn:
+        deny("callback recovery test DSN changed during test")
+    del os.environ["LOCALOS_CALLBACK_RECOVERY_TEST_DATABASE_URL"]
+    del os.environ["LOCALOS_CALLBACK_RECOVERY_GUARD_SHA256"]
+    os.environ.pop(PREFIX + "CALLBACK_RECOVERY_DATABASE", None)
+    os.environ.pop(PREFIX + "CALLBACK_RECOVERY_RELAY_PORT", None)
+    os.environ.pop(PREFIX + "CALLBACK_RECOVERY_MIGRATION_DSN", None)
+    _callback_recovery_test_dsn = None
+    _callback_recovery_database = None
+    _callback_recovery_relay_port = None
+    _callback_recovery_database_created = False
+    record("callback_recovery_test_dsn_unbound")
 
 
 def check_network(client) -> None:
@@ -240,6 +367,15 @@ def install() -> None:
             deny("inherited database configuration must be absent before owned start")
         if profile in OPERATOR_VOICE_TEST_DSN_PROFILES and "OPERATOR_VOICE_TEST_DSN" in os.environ:
             deny("operator voice test DSN must be absent before owned start")
+        if profile in CALLBACK_RECOVERY_DSN_PROFILES and (
+            "LOCALOS_CALLBACK_RECOVERY_TEST_DATABASE_URL" in os.environ
+            or "LOCALOS_CALLBACK_RECOVERY_GUARD_SHA256" in os.environ
+            or "DATABASE_URL" in os.environ
+            or PREFIX + "CALLBACK_RECOVERY_DATABASE" in os.environ
+            or PREFIX + "CALLBACK_RECOVERY_RELAY_PORT" in os.environ
+            or PREFIX + "CALLBACK_RECOVERY_MIGRATION_DSN" in os.environ
+        ):
+            deny("callback recovery configuration must be absent before owned start")
         client = instance.get_docker_client().client
         check_network(client)
         # Testcontainers otherwise pulls if the image disappears between its
@@ -276,6 +412,7 @@ def install() -> None:
         record("capability_denials", checks=checks)
         bind_parent_database(port)
         bind_operator_voice_test_dsn(port)
+        bind_callback_recovery_test_dsn(port)
         return result
 
     def stop(instance, force=True, delete_volume=True):
@@ -320,13 +457,20 @@ def install() -> None:
         schema_cleanup_event = OWNED_SCHEMA_CLEANUP_EVENTS.get(profile)
         if schema_cleanup_pattern is not None and schema_cleanup_event is not None and instance._container is not None:
             try:
+                if profile in CALLBACK_RECOVERY_DSN_PROFILES and not _callback_recovery_database_created:
+                    record(schema_cleanup_event, remaining=0, database=_callback_recovery_binding()[0], created=False)
+                    schema_database = None
+                else:
+                    schema_database = _callback_recovery_binding()[0] if profile in CALLBACK_RECOVERY_DSN_PROFILES else "test"
+                if schema_database is None:
+                    raise StopIteration
                 result = instance._container.exec_run(
                     [
                         "psql",
                         "-U",
                         "test",
                         "-d",
-                        "test",
+                        schema_database,
                         "-At",
                         "-c",
                         f"SELECT COUNT(*) FROM pg_namespace WHERE nspname ~ '{schema_cleanup_pattern}'",
@@ -334,10 +478,37 @@ def install() -> None:
                 )
                 output = result.output.decode().strip() if isinstance(result.output, bytes) else str(result.output).strip()
                 if result.exit_code != 0 or output != "0":
-                    deny("owned operator voice schema remains before container cleanup")
+                    deny("owned disposable schema remains before container cleanup")
                 record(schema_cleanup_event, remaining=0)
+            except StopIteration:
+                pass
             except BaseException:
                 failures.append(type(sys.exception()).__name__)
+        if profile in CALLBACK_RECOVERY_DSN_PROFILES and instance._container is not None:
+            try:
+                database, _ = _callback_recovery_binding()
+                if not _callback_recovery_database_created:
+                    remaining = instance._container.exec_run(["psql", "-v", "ON_ERROR_STOP=1", "-U", "test", "-d", "postgres", "-At", "-c", f"SELECT COUNT(*) FROM pg_database WHERE datname = '{database}'"])
+                    output = remaining.output.decode().strip() if isinstance(remaining.output, bytes) else str(remaining.output).strip()
+                    if remaining.exit_code != 0 or output != "0":
+                        deny("uncreated callback recovery database unexpectedly exists")
+                    record("callback_recovery_database_cleanup_checked", database=database, remaining=0, created=False)
+                    raise StopIteration
+                terminate = instance._container.exec_run(["psql", "-v", "ON_ERROR_STOP=1", "-U", "test", "-d", "postgres", "-c", f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{database}' AND pid <> pg_backend_pid()"])
+                drop = instance._container.exec_run(["psql", "-v", "ON_ERROR_STOP=1", "-U", "test", "-d", "postgres", "-c", f"DROP DATABASE {database}"])
+                remaining = instance._container.exec_run(["psql", "-v", "ON_ERROR_STOP=1", "-U", "test", "-d", "postgres", "-At", "-c", f"SELECT COUNT(*) FROM pg_database WHERE datname = '{database}'"])
+                output = remaining.output.decode().strip() if isinstance(remaining.output, bytes) else str(remaining.output).strip()
+                if terminate.exit_code != 0 or drop.exit_code != 0 or remaining.exit_code != 0 or output != "0":
+                    deny("owned callback recovery database remains before container cleanup")
+                record("callback_recovery_database_cleanup_checked", database=database, remaining=0)
+            except StopIteration:
+                pass
+            except BaseException:
+                failures.append(type(sys.exception()).__name__)
+        try:
+            unbind_callback_recovery_test_dsn()
+        except BaseException:
+            failures.append(type(sys.exception()).__name__)
         if _relay is not None:
             try:
                 _relay.close()

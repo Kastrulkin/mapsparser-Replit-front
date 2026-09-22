@@ -119,6 +119,12 @@ PROFILES = {
         "prefix": "native-tc-operator-editorial-pg",
         "bootstrap_postgres": True,
     },
+    "callback-recovery-pg-v1": {
+        "target": "tests/test_action_orchestrator_callback_recovery_pg.py",
+        "count": 14,
+        "prefix": "native-tc-callback-recovery-pg",
+        "bootstrap_postgres": True,
+    },
     "work-review-rollback-v1": {
         "targets": [
             "tests/test_work_review_migration_rollback.py::test_empty_work_review_schema_downgrades_without_cascade",
@@ -233,6 +239,14 @@ OPERATOR_VOICE_PROFILE_RULES = {
         "budget": 128,
         "schema_pattern": r"voice_[0-9a-f]{32}",
         "cleanup_event": "operator_voice_schema_cleanup_checked",
+    },
+}
+CALLBACK_RECOVERY_PROFILE_RULES = {
+    "callback-recovery-pg-v1": {
+        "minimum_connections": 14,
+        "budget": 512,
+        "schema_pattern": r"callback_recovery_[0-9a-f]{32}",
+        "cleanup_event": "callback_recovery_schema_cleanup_checked",
     },
 }
 OLD_GUARD_SHA256 = "07d3e2dc19cbb0f9e542a6d0835ea17b5efcc5713391c152a833e6efefd61150"
@@ -410,13 +424,17 @@ def require_probe(payload: dict[str, object], mode: str, guard_hash: str) -> Non
             raise RuntimeError("child proof does not establish guarded distinct process")
 
 
-def plugin_source(target: str | list[str], bootstrap_postgres: bool = False) -> str:
+def plugin_source(target: str | list[str], bootstrap_postgres: bool = False, callback_recovery: bool = False) -> str:
     targets = [target] if isinstance(target, str) else target
-    if not targets or not all(isinstance(item, str) for item in targets) or not isinstance(bootstrap_postgres, bool):
+    if not targets or not all(isinstance(item, str) for item in targets) or not isinstance(bootstrap_postgres, bool) or not isinstance(callback_recovery, bool):
         raise ValueError("literal pytest targets are required")
     return """
 import json
+import os
 import pytest
+import socket
+import subprocess
+import sys
 from _pytest.subtests import SubtestReport
 state = {'collected': None, 'nodeids': [], 'passed': 0, 'failed': 0, 'skipped': 0, 'xfailed': 0, 'setup_failed': 0, 'call_failed': 0, 'child_calls': [], 'subtests_passed': 0, 'subtests_failed': 0, 'subtests_skipped': 0, 'subtests_xfailed': 0}
 class Results:
@@ -444,8 +462,80 @@ container = None
 try:
     if %r:
         from testcontainers.postgres import PostgresContainer
+        if %r:
+            inherited = {
+                'DATABASE_URL': 'postgresql://test:test@127.0.0.1:35418/not_owned',
+                'LOCALOS_HFLYPI_TC_CALLBACK_RECOVERY_DATABASE': 'readiness_full_test_' + '0' * 32,
+                'LOCALOS_HFLYPI_TC_CALLBACK_RECOVERY_RELAY_PORT': '35418',
+                'LOCALOS_HFLYPI_TC_CALLBACK_RECOVERY_MIGRATION_DSN': 'postgresql://test:test@127.0.0.1:35418/readiness_full_test_' + '0' * 32,
+            }
+            for key, value in inherited.items():
+                os.environ[key] = value
+                try:
+                    PostgresContainer('pgvector/pgvector:0.8.0-pg16-trixie').start()
+                except PermissionError:
+                    pass
+                else:
+                    raise RuntimeError('callback inherited configuration was accepted: ' + key)
+                finally:
+                    del os.environ[key]
+            import native_tc_adapter_hflypi
+            native_tc_adapter_hflypi.record('callback_recovery_inherited_configuration_denials', keys=sorted(inherited))
         container = PostgresContainer('pgvector/pgvector:0.8.0-pg16-trixie')
         container.start()
+    if %r:
+        logical_dsn = os.environ['LOCALOS_CALLBACK_RECOVERY_TEST_DATABASE_URL']
+        direct = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            direct.connect(('127.0.0.1', 35418))
+        except PermissionError:
+            pass
+        else:
+            raise RuntimeError('callback logical port was directly connectable')
+        finally:
+            direct.close()
+        import psycopg2
+        original_connect = psycopg2._connect
+        def terminal_libpq(*args, **kwargs):
+            raise RuntimeError('callback logical keyword override reached libpq')
+        psycopg2._connect = terminal_libpq
+        try:
+            try:
+                psycopg2.connect(logical_dsn, port=35418)
+            except PermissionError:
+                pass
+            else:
+                raise RuntimeError('callback logical keyword override was accepted')
+            captured = []
+            def capture_libpq(dsn, *args, **kwargs):
+                captured.append((dsn, kwargs))
+                raise RuntimeError('callback keyword-only capture complete')
+            psycopg2._connect = capture_libpq
+            try:
+                psycopg2.connect(host='127.0.0.1', port=35418, dbname=logical_dsn.rsplit('/', 1)[1], user='test', password='test')
+            except RuntimeError:
+                error = sys.exception()
+                if str(error) != 'callback keyword-only capture complete':
+                    raise
+            else:
+                raise RuntimeError('callback keyword-only logical DSN did not reach intercepted libpq')
+            captured_dsn = psycopg2.extensions.parse_dsn(str(captured[0][0])) if len(captured) == 1 else {}
+            transport_overrides = {'host', 'port', 'dbname', 'database', 'user', 'password'}
+            relay_port = os.environ['LOCALOS_HFLYPI_TC_CALLBACK_RECOVERY_RELAY_PORT']
+            if len(captured) != 1 or captured_dsn.get('host') != '127.0.0.1' or captured_dsn.get('port') != relay_port or captured_dsn.get('dbname') != logical_dsn.rsplit('/', 1)[1] or captured_dsn.get('user') != 'test' or captured_dsn.get('password') != 'test' or transport_overrides.intersection(captured[0][1]):
+                raise RuntimeError('callback keyword-only logical DSN was not normalized to the private relay')
+        finally:
+            psycopg2._connect = original_connect
+        native_tc_adapter_hflypi.record('callback_recovery_negative_controls', direct_35418_denied=True, keyword_override_denied=True, keyword_only_rewritten=True)
+        migration_dsn = native_tc_adapter_hflypi.prepare_callback_recovery_database()
+        migration_env = dict(os.environ)
+        migration_env['DATABASE_URL'] = migration_dsn
+        migration_env['FLASK_APP'] = 'src.main:app'
+        migration_env['LOCALOS_HFLYPI_TC_CALLBACK_RECOVERY_MIGRATION_DSN'] = migration_dsn
+        migration = subprocess.run([sys.executable, '-m', 'flask', 'db', 'upgrade'], cwd=os.environ['LOCALOS_HFLYPI_SOURCE_ROOT'], env=migration_env, text=True, capture_output=True, timeout=90)
+        if migration.returncode != 0:
+            raise RuntimeError('callback recovery migration failed: ' + (migration.stderr or migration.stdout)[-1000:])
+        native_tc_adapter_hflypi.verify_callback_recovery_migration()
     result = pytest.main(%r + ['-q', '-p', 'no:cacheprovider'], plugins=[Results()])
 finally:
     if container is not None:
@@ -453,7 +543,7 @@ finally:
 state['pytest_return'] = int(result)
 print('HFLYPI_TC_ONE_RESULT=' + json.dumps(state, sort_keys=True))
 raise SystemExit(result)
-""" % (bootstrap_postgres, targets)
+""" % (bootstrap_postgres, callback_recovery, callback_recovery, targets)
 
 
 def parse_test(payload: dict[str, object], profile: dict[str, object]) -> dict[str, object]:
@@ -489,8 +579,9 @@ def relay_evidence(profile: str, final: object) -> tuple[int, list[object]]:
     rollback_rule = ROLLBACK_PROFILE_RULES.get(profile)
     shared_rule = SHARED_FIXTURE_PROFILE_RULES.get(profile)
     voice_rule = OPERATOR_VOICE_PROFILE_RULES.get(profile)
-    expected_budget = 1024 if profile == "capabilities-phase1-v1" else 512 if rollback_rule is not None else voice_rule["budget"] if voice_rule is not None else shared_rule["budget"] if shared_rule is not None else 32
-    minimum_connections = 171 if profile == "capabilities-phase1-v1" else rollback_rule["minimum_connections"] if rollback_rule is not None else voice_rule["minimum_connections"] if voice_rule is not None else shared_rule["minimum_connections"] if shared_rule is not None else 21 if profile == "operator-service-creation-v1" else 2
+    callback_rule = CALLBACK_RECOVERY_PROFILE_RULES.get(profile)
+    expected_budget = 1024 if profile == "capabilities-phase1-v1" else 512 if rollback_rule is not None else voice_rule["budget"] if voice_rule is not None else callback_rule["budget"] if callback_rule is not None else shared_rule["budget"] if shared_rule is not None else 32
+    minimum_connections = 171 if profile == "capabilities-phase1-v1" else rollback_rule["minimum_connections"] if rollback_rule is not None else voice_rule["minimum_connections"] if voice_rule is not None else callback_rule["minimum_connections"] if callback_rule is not None else shared_rule["minimum_connections"] if shared_rule is not None else 21 if profile == "operator-service-creation-v1" else 2
     if not isinstance(final, dict):
         raise RuntimeError("relay final evidence is invalid")
     connections = final.get("connections")
@@ -598,6 +689,7 @@ def audit_journals(events: Path, relay_artifact: Path, profile: str) -> dict[str
         raise RuntimeError("parent process did not admit its relay DSN")
     shared_rule = SHARED_FIXTURE_PROFILE_RULES.get(profile)
     voice_rule = OPERATOR_VOICE_PROFILE_RULES.get(profile)
+    callback_rule = CALLBACK_RECOVERY_PROFILE_RULES.get(profile)
     child_minimum = shared_rule["child_admissions"] if shared_rule is not None else 0 if profile in {"operator-service-creation-v1", "operator-voice-pg-v1", "operator-editorial-pg-v1"} else 1
     child_admitted = [row for row in admitted if row.get("pid") != parent_pid and row.get("container_id") == container_id and row.get("port") == port]
     if len(child_admitted) < child_minimum:
@@ -632,6 +724,25 @@ def audit_journals(events: Path, relay_artifact: Path, profile: str) -> dict[str
             raise RuntimeError("operator voice disposable schema cleanup evidence is incomplete")
     elif any(row.get("event") in {rule["cleanup_event"] for rule in OPERATOR_VOICE_PROFILE_RULES.values()} for row in event_rows):
         raise RuntimeError("unexpected operator voice disposable schema cleanup evidence")
+    callback_bindings = [row for row in event_rows if row.get("event") == "callback_recovery_test_dsn_bound"]
+    callback_unbindings = [row for row in event_rows if row.get("event") == "callback_recovery_test_dsn_unbound"]
+    if callback_rule is not None:
+        if len(callback_bindings) != 1 or len(callback_unbindings) != 1:
+            raise RuntimeError("callback recovery logical DSN lifecycle is incomplete")
+        binding = callback_bindings[0]
+        database = binding.get("database")
+        if binding.get("pid") != parent_pid or binding.get("logical_port") != 35418 or binding.get("relay_port") != port or not isinstance(database, str) or re.fullmatch(r"readiness_full_test_[a-z0-9]{32}", database) is None:
+            raise RuntimeError("callback recovery logical DSN identity is invalid")
+        migrated = [row for row in event_rows if row.get("event") == "callback_recovery_database_migrated" and row.get("database") == database]
+        inherited_denials = [row for row in event_rows if row.get("event") == "callback_recovery_inherited_configuration_denials" and row.get("keys") == ["DATABASE_URL", "LOCALOS_HFLYPI_TC_CALLBACK_RECOVERY_DATABASE", "LOCALOS_HFLYPI_TC_CALLBACK_RECOVERY_MIGRATION_DSN", "LOCALOS_HFLYPI_TC_CALLBACK_RECOVERY_RELAY_PORT"]]
+        controls = [row for row in event_rows if row.get("event") == "callback_recovery_negative_controls" and row.get("direct_35418_denied") is True and row.get("keyword_override_denied") is True and row.get("keyword_only_rewritten") is True]
+        schema_cleanup = [row for row in event_rows if row.get("event") == callback_rule["cleanup_event"] and row.get("remaining") == 0]
+        database_cleanup = [row for row in event_rows if row.get("event") == "callback_recovery_database_cleanup_checked" and row.get("database") == database and row.get("remaining") == 0]
+        rewrites = [row for row in admitted if row.get("purpose") == "callback_logical_rewrite" and row.get("database") == database]
+        if len(migrated) != 1 or len(inherited_denials) != 1 or len(controls) != 1 or len(schema_cleanup) != 1 or len(database_cleanup) != 1 or len(rewrites) < callback_rule["minimum_connections"]:
+            raise RuntimeError("callback recovery migration, rewrite or cleanup evidence is incomplete")
+    elif callback_bindings or callback_unbindings:
+        raise RuntimeError("unexpected callback recovery logical DSN lifecycle")
     if rollback_rule is not None:
         databases = [row.get("database") for row in admitted]
         pattern = rollback_rule["database_pattern"]
@@ -659,7 +770,7 @@ def audit_journals(events: Path, relay_artifact: Path, profile: str) -> dict[str
     connections, executions = relay_evidence(profile, final)
     if not all(isinstance(row, dict) and row.get("returncode") == 0 and row.get("exit_mode") == "graceful" and row.get("stderr_bytes") == 0 for row in executions):
         raise RuntimeError("relay Docker exec evidence is incomplete")
-    return {"event_rows": len(event_rows), "relay_rows": len(relay_rows), "connections": connections, "flask_child_dsn_admitted": bool(child_admitted), "operator_voice_dsn_admitted": profile in {"operator-service-creation-v1", "operator-voice-pg-v1", "operator-editorial-pg-v1"}, "operator_voice_schema_cleanup_checked": voice_rule is not None, "rollback_disposable_database_checked": rollback_rule is not None, "named_disposable_database_checked": shared_rule is not None and "database_pattern" in shared_rule, "work_review_disposable_database_checked": profile == "work-review-rollback-v1"}
+    return {"event_rows": len(event_rows), "relay_rows": len(relay_rows), "connections": connections, "flask_child_dsn_admitted": bool(child_admitted), "operator_voice_dsn_admitted": profile in {"operator-service-creation-v1", "operator-voice-pg-v1", "operator-editorial-pg-v1"}, "operator_voice_schema_cleanup_checked": voice_rule is not None, "callback_recovery_logical_dsn_rewrite_checked": callback_rule is not None, "callback_recovery_schema_and_database_cleanup_checked": callback_rule is not None, "rollback_disposable_database_checked": rollback_rule is not None, "named_disposable_database_checked": shared_rule is not None and "database_pattern" in shared_rule, "work_review_disposable_database_checked": profile == "work-review-rollback-v1"}
 
 
 def require_empty_network(relay_module: object) -> dict[str, object]:
@@ -760,6 +871,7 @@ def main() -> int:
             "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1", "LOCALOS_HFLYPI_TC_MODE": values.profile,
             "LOCALOS_HFLYPI_TC_ADAPTER_SHA256": hashes["native_tc_adapter_hflypi"],
             "LOCALOS_HFLYPI_TC_RELAY_SHA256": hashes["native_tc_relay_hflypi"],
+            "LOCALOS_HFLYPI_TC_GUARD_SHA256": guard_hash,
             "LOCALOS_HFLYPI_TC_JOURNAL": str(journal),
         })
         probe = NATIVE / "native_hflypi_probe_v1.py"
@@ -775,7 +887,7 @@ def main() -> int:
         if shutil.disk_usage(BASE).free < MIN_LIVE:
             raise RuntimeError("disk floor reached before native node")
         output["phase"] = "test"
-        capture = result(["/usr/bin/arch", "-arm64", str(VENV), "-B", "-c", plugin_source(selected_targets, profile.get("bootstrap_postgres", False))], environment, MAX_RUNTIME, started + MAX_RUNTIME)
+        capture = result(["/usr/bin/arch", "-arm64", str(VENV), "-B", "-c", plugin_source(selected_targets, profile.get("bootstrap_postgres", False), values.profile == "callback-recovery-pg-v1")], environment, MAX_RUNTIME, started + MAX_RUNTIME)
         output["test"] = capture
         output["test_callbacks"] = parse_test(capture, profile)
         output["journals"] = audit_journals(journal, relay_artifact, values.profile)
