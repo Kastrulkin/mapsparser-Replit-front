@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "label": "backend-package-commit",
+  "captured_at": "2026-09-22T14:47:40.931739+00:00",
+  "command": [
+    "git",
+    "commit",
+    "-m",
+    "test: stabilize upload IDs and retain backend audit failures"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 208.452,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "[codex/production-readiness-20260917 45393b30] test: stabilize upload IDs and retain backend audit failures\n 26 files changed, 167720 insertions(+), 2 deletions(-)\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/README.md\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/SHA256SUMS\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/control-command.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/control-v10.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/freeze-command.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/freeze-run-v10.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/freeze-v10.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/full-command.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/full-v10.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/media-ids-command.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/media-ids-regression.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/nodes-v10.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/owned_processes.py\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/policy-v10.sb\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/previous-performance-package-commit.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/previous-performance-package-scan.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/run_current_full_v10.py\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/current-backend-d0ef4ce8-20260922/verify_media_ids.py\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/dashboard-query-source-bridge-20260922.md\n",
+  "stderr": "[dup-check] scanning tracked files...\n[dup-check] scanning untracked workspace files...\n[dup-check] OK\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

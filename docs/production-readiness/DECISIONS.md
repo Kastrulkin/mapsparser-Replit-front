@@ -1,5 +1,21 @@
 # Readiness decisions
 
+## D-122 — Preserve the failing environment and isolate test-owned files
+
+Tests must not unlink the runtime's fixed global heartbeat; give each test its
+own path instead of widening the audit sandbox. Keep original assertions and
+prove the exact denied path becomes9passing tests. Mechanical lint cleanup is
+accepted only with matching AST (excluding the unused import) and a final rerun.
+
+Frontend verifier's missing-asset test must reject for the intended reason, not
+any infrastructure error. Preserve its standalone deploy contract; do not extract
+a sibling Python helper that the existing uploader would omit. Keep the same
+read-only cwd for red and green: copied writable trees hid the original heredoc
+failure. Record that unsuccessful proof attempt, do not reinterpret it as green.
+
+Read-only proof of pre-existing dirty fixtures is allowed while adoption awaits
+user choice; passing the leak sentinel does not excuse missing guard parity.
+
 ## D-121 — Keep clean aggregate failures and explicit source overlap
 
 Do not inject unrelated dirty fixes into a clean snapshot and label it HEAD.

@@ -1,5 +1,29 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Test and build-check isolation — 22 September
+
+**TEST-POLLING-HEARTBEAT-01 — P2, testing, locally FIX_PROVEN.** Four tests use
+the runtime's fixed heartbeat path; constructor unlink fails in the audit sandbox
+and risks disturbing another process in an unrestricted test run. Root cause:
+missing per-test path fixture, not a Telegram transport defect. High confidence,
+deterministic under denied-write policy; low-risk/test-only fix gives every test
+an isolated temporary path. Red4 exact PermissionErrors at polling.py:27 become
+green9tests/27stages. Existing15 Ruff issues also fixed mechanically with matching
+AST and final v3 rerun. Ruff, isolation and independent source/runtime reviews
+pass. Acceptance is module isolation, not full backend readiness.
+
+**BUILD-DIST-TEMP-01 — P2, build/deployment verification, locally FIX_PROVEN.**
+The standalone verifier's inline-Python heredoc requires a shell temporary file;
+with protected cwd, valid dist fails before validation. Negative test accepting
+any nonzero exit hides that prerequisite error. High confidence in tested Bash/
+sandbox environment; impact is false release-check failure, not missing assets
+in production. A2×2 matrix isolates cwd dependency; same-cwd red/green proves
+old failure ->patched2tests/6stages PASS. Keep standalone script, replace heredoc
+with `python3 -c` of identical code, require intended missing-file reason in test.
+Low reversible risk; no dependency/CLI/deploy-policy change. Shell syntax, Ruff
+and source review pass; no production rollout claim. Evidence for both findings:
+task `evidence/test-fixture-followup-20260922/`. Full aggregate still NONPASS.
+
 ## ZIP-derived test identities — 22 September
 
 **TEST-MEDIA-IDS-01 — P2, testing/reproducibility, locally FIX_PROVEN.**

@@ -1,5 +1,26 @@
 # Residual risks — working register
 
+## 22 September — current aggregate is still not green
+
+Exact d0ef full offline run:5516nodes,4347pass,53fail,1116skip,14passing subtests.
+Later24-node adjacent regression proves only media IDs, polling heartbeat test
+isolation and standalone dist-check robustness; it does not update those full
+counts. The skipped integration and denied local-listener/browser prerequisites
+still require appropriate current-source evidence. No production/provider or
+full-stack result can be inferred from offline tests.
+
+Existing dirty author fixture and global diagnostic-hook correction have scoped
+causal proof, but are not adopted while user choice is pending. Diagnostic guard
+coverage must include connect_ex/os.spawn* and teardown before acceptance. This
+is P2/test reliability risk: a contaminated run can misclassify unrelated code
+as broken. Interim safeguard is isolated exact module proofs with retained raw
+nonpasses. The next full run needs a reviewed, unambiguous source snapshot.
+
+Image/security triage and owner credential/license decisions, current bounded
+load/resources/frontend performance, CI/demo and final whole-diff review remain
+open. The restricted secondary OAuth candidate stays unrun; no verified product
+defect is claimed for it. Older status paragraphs are date-bound history.
+
 ## 22 September — current content timing gap closed, broader risks remain
 
 Paired272794a4→dc1a6b76 synthetic timings now have110validruns and independent

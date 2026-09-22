@@ -1,5 +1,31 @@
 # Production-readiness progress
 
+## Current checkpoint — 22 September, fixture causes reproduced
+
+- [x] Local commit `45393b30` saves stable media IDs and exact failed aggregate;
+  strict staged scan0findings, no push/deploy or foreign-file adoption.
+- [x] Existing dirty author fixture copy passes the exact assertion that fails
+  at clean line540. Dirty diagnostic copy stops the global audit-hook leak;
+  both4-test classes pass, but only clean leaves the post-class subprocess denied.
+  Guard coverage gaps and pending user adoption remain; originals untouched.
+- [x] Polling heartbeat isolation: exact4 red PermissionErrors ->9green tests,
+  27passing stages on final module; relevant Ruff15old issues ->0 after mechanical
+  cleanup with matching normalized AST. Source/runtime independent review PASS.
+- [x] Frontend verifier: heredoc temp dependency reproduced only from protected
+  cwd. First copied-tree red/green rejected because old script also passed there;
+  2×2 matrix establishes cwd as the relevant variable. Faithful same-cwd v2
+  completes3.919071s/exit0: old complete case fails, patched2tests/6stages pass.
+  Standalone upload behavior and Python logic preserved; negative reason stronger.
+- [x] Combined adjacent run completes3.417772s/exit0: dist2 +polling9 +media13
+  in one process,24nodes/72stages pass, no collection errors/skip/xfail; exact
+  sources and process cleanup unchanged. This is not the full backend aggregate.
+- [ ] Fresh aggregate/integration, remaining capability/browser prerequisites,
+  security/image/owner decisions, current load/frontend performance, CI/demo and
+  whole-diff review remain. Historical5516-node aggregate stays NONPASS.
+
+Evidence: task `evidence/test-fixture-followup-20260922/`. No production/provider
+operations. Restricted OAuth and native finance-picker scenarios remain unrun.
+
 ## Current checkpoint — 22 September, exact d0ef backend diagnostic nonpass
 
 - [x] Performance evidence committed locally `d0ef4ce8`; staged secret scan

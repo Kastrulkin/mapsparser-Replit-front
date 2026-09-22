@@ -58,6 +58,8 @@ def test_integrity_check_rejects_missing_dynamic_import(tmp_path: Path) -> None:
         f"stdout:\n{result.stdout}\n"
         f"stderr:\n{result.stderr}"
     )
+    assert "Referenced dynamic asset not found:" in result.stderr
+    assert "DashboardLayout-fixture.js" in result.stderr
 
 
 def test_integrity_check_accepts_complete_dynamic_import(tmp_path: Path) -> None:

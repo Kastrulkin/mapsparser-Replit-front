@@ -1,0 +1,117 @@
+{
+  "capture": {
+    "argv": [
+      "/usr/bin/sandbox-exec",
+      "-f",
+      "/private/tmp/localos-current-full-v10.BYwJr6/policy-v10.sb",
+      "/usr/bin/arch",
+      "-arm64",
+      "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+      "-B",
+      "-I",
+      "-c",
+      "import importlib.util,json\nfrom pathlib import Path\nsource=Path('/private/tmp/localos-current-full-v10.BYwJr6/source'); root=Path('/private/tmp/localos-current-full-v10.BYwJr6/writable/dist-fixture-v1')\nspec=importlib.util.spec_from_file_location('dist_test',source/'tests/test_frontend_dist_integrity.py')\nmodule=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)\nrows=[]\nfor complete in (False,True):\n path=root/('complete' if complete else 'missing')\n module._write_dist_fixture(path,include_lazy_chunk=complete)\n result=module._run_integrity_check(path)\n rows.append({'complete':complete,'return_code':result.returncode,'stdout':result.stdout,'stderr':result.stderr})\nprint(json.dumps(rows))\n"
+    ],
+    "duration_seconds": 0.219,
+    "exit_code": 0,
+    "process_cleanup": {
+      "errors": [],
+      "observed": [
+        {
+          "created": 1790088519.46309,
+          "pid": 14871
+        }
+      ],
+      "remaining": [],
+      "signalled": [],
+      "status": "clean"
+    },
+    "stopped_reason": null,
+    "streams": {
+      "stderr": {
+        "captured_bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "total_bytes": 0,
+        "truncated": false
+      },
+      "stdout": {
+        "captured_bytes": 478,
+        "sha256": "25bcc03b25e57895d088b858a3dff5985f54440fd6f213d895dd0b151761dd14",
+        "total_bytes": 478,
+        "truncated": false
+      }
+    }
+  },
+  "controls": {
+    "capture": {
+      "argv": [
+        "/usr/bin/sandbox-exec",
+        "-f",
+        "/private/tmp/localos-current-full-v10.BYwJr6/policy-v10.sb",
+        "/usr/bin/arch",
+        "-arm64",
+        "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+        "-B",
+        "-I",
+        "-c",
+        "import json,socket,subprocess,sys\nfrom pathlib import Path\nd={}\ndef check(k,f):\n try:f();d[k]=None\n except OSError:d[k]=sys.exception().errno\ncheck('users',lambda:Path('/Users/alexdemyanov/.ssh').read_bytes())\ncheck('source_write',lambda:Path('/private/tmp/localos-current-full-v10.BYwJr6/source/.v10-forbidden').write_text('forbidden'))\ns=socket.socket();d['tcp']=s.connect_ex(('127.0.0.1',1));s.close()\ns=socket.socket(socket.AF_UNIX);check('docker',lambda:s.connect('/Users/alexdemyanov/.docker/run/docker.sock'));s.close()\nn=subprocess.run(['/usr/bin/nc','-v','-z','-w','1','127.0.0.1','1'],capture_output=True)\nd['native_tcp']=n.returncode!=0 and b'Operation not permitted' in n.stderr\nowned=Path('/private/tmp/localos-current-full-v10.BYwJr6/writable/v10-owned-probe')\nowned.write_text('owned probe');d['owned_write']=owned.read_text()=='owned probe'\nlink=Path('/private/tmp/localos-current-full-v10.BYwJr6/writable/v10-escape-probe')\ntarget='/private/tmp/localos-current-full-v10.BYwJr6/source/.v10-forbidden'\nif not link.is_symlink():link.symlink_to(target)\nd['symlink_target']=str(link.readlink())==target\ncheck('symlink_write',lambda:link.write_text('forbidden'))\nprint(json.dumps(d));raise SystemExit(0 if all(d[k] in (1,13) for k in ('users','source_write','tcp','docker','symlink_write')) and d['native_tcp'] and d['owned_write'] and d['symlink_target'] else 1)\n"
+      ],
+      "duration_seconds": 0.22,
+      "exit_code": 0,
+      "process_cleanup": {
+        "errors": [],
+        "observed": [
+          {
+            "created": 1790088519.244294,
+            "pid": 14865
+          }
+        ],
+        "remaining": [],
+        "signalled": [],
+        "status": "clean"
+      },
+      "stopped_reason": null,
+      "streams": {
+        "stderr": {
+          "captured_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "total_bytes": 0,
+          "truncated": false
+        },
+        "stdout": {
+          "captured_bytes": 140,
+          "sha256": "eb5bc95d715a02639587234b78215b610ce97a139f5a693fc8344b668973b05d",
+          "total_bytes": 140,
+          "truncated": false
+        }
+      }
+    },
+    "checks": {
+      "docker": 1,
+      "native_tcp": true,
+      "owned_write": true,
+      "source_write": 1,
+      "symlink_target": true,
+      "symlink_write": 1,
+      "tcp": 1,
+      "users": 1
+    }
+  },
+  "fixtures": [
+    {
+      "complete": false,
+      "return_code": 1,
+      "stderr": "/private/tmp/localos-current-full-v10.BYwJr6/source/scripts/verify_frontend_dist_integrity.sh: line 75: cannot create temp file for here document: Operation not permitted\n",
+      "stdout": ""
+    },
+    {
+      "complete": true,
+      "return_code": 1,
+      "stderr": "/private/tmp/localos-current-full-v10.BYwJr6/source/scripts/verify_frontend_dist_integrity.sh: line 75: cannot create temp file for here document: Operation not permitted\n",
+      "stdout": ""
+    }
+  ],
+  "source_ref": "d0ef4ce84c89e33a967429e570fb6e08821911a7",
+  "source_unchanged": true,
+  "status": "diagnostic_complete"
+}

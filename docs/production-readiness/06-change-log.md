@@ -1,5 +1,25 @@
 # Production-readiness change log
 
+## Backend fixture reliability — 22 September, parent45393b30
+
+Give Telegram-polling tests a per-test heartbeat path; retain behavior/assertions
+and clear15old Ruff issues via verified mechanical cleanup. Four exact denied
+global-path operations reproduce before the fix, final9tests/27stages pass.
+Make standalone frontend-dist verification independent of Bash heredoc temporary
+files: same Python body via `-c`, stronger expected-error assertion. A2×2 matrix
+isolates protected cwd; same-cwd red/green then passes2tests/6stages. Combined
+dist/polling/media regression passes24tests/72stages. No production/Docker/provider
+operation. Existing dirty author/diagnostic copies verified only, not adopted;
+diagnostic guard-parity and user choice remain open.
+
+## Stable test identity and current aggregate — commit45393b30
+
+Explicit media-signature parameter IDs eliminate timestamp-derived DOCX/XLSX
+collection drift; all13tests pass. Keep the actual failed d0ef aggregate evidence
+unaltered:5516nodes,4347pass/53fail/1116skip,14passing subtests. Preserve fresh
+dashboard query-shape/count source bridge without inheriting old numeric latency.
+No whole-suite PASS or readiness claim; strict staged secret scan0findings.
+
 ## Current performance proof — 22 September, parent dc1a6b76
 
 Add bounded native measurement support and raw evidence; no application change.

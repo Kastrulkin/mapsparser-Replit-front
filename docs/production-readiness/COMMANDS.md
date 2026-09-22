@@ -1,5 +1,33 @@
 # Verified commands and evidence
 
+## Test fixture follow-up — 22 September
+
+All runtime commands use ARM64 native Python3.11.7 `-B -I`, bug-reproducer
+capture helper, a named tmux session and unchanged pinned v10 OS-denied invoke.
+Exact argv and controls are in task `evidence/test-fixture-followup-20260922/`.
+
+- `verify_fixture_candidates.py`: outer3.951334s/exit0. Exact author red/green1
+  and diagnostic4/4plus post-class sentinel. Existing dirty originals unchanged.
+- `diagnose_dist_fixture.py`: outer2.034107s/exit0 **diagnostic only**; both
+  complete/missing fixtures exit1 on Bash heredoc EPERM.
+- `verify_dist_fix.py`: outer2.640451s/exit1, red-not-reproduced in writable
+  copy. Retained; no green result inferred. `diagnose_dist_matrix.py` then
+  establishes read-only cwd as the failure dimension in four exact cases.
+- `verify_polling_heartbeat_v2.py`: outer3.117515s/exit0, red4/green9 tests.
+- Final `verify_polling_heartbeat_v3.py`: outer3.008599s/exit0, same red4, green9
+  with27passed stages and final lint-clean module. OS8probes/source/hash/cleanup
+  pass. `ruff check --no-cache tests/test_telegram_polling.py
+  tests/test_frontend_dist_integrity.py`, `bash -n` verifier, `git diff --check`
+  pass. Prior15 Ruff findings were present on both pre-fix and first fixed copies.
+
+Same-cwd `verify_dist_fix_v2.py` completes3.919071s/exit0: old complete-case
+heredoc failure, patched2tests/6stages pass. Both sides use original read-only
+cwd while keeping their own script path. `verify_fixture_combined.py` then
+completes3.417772s/exit0:24nodes/72stages pass in one process for dist2/polling9/
+media13, no skip/xfail/collection errors, source/input hashes/cleanup pass.
+Completed evidence names are exclusive; do not replay them. These bounded
+results do not turn the earlier full5516-node backend diagnostic into a pass.
+
 ## Stable media test IDs — 22 September (completed)
 
 Named tmux `audit-media-ids-v1` invokes ARM64 Python3.11.7 `-B -I`

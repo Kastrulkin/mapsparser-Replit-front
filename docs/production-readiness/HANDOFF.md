@@ -1,5 +1,38 @@
 # Readiness handoff
 
+## Current continuation — 22 September, two bounded fixes and fixture diagnosis
+
+HEAD `45393b30`, same readiness branch. Media fix/failed aggregate committed;
+strict staged scan0findings on7,914,150bytes. No push/deploy. Foreign8 tracked
+diff still unchanged; author/diagnostic adoption question remains unanswered.
+
+Owned uncommitted code: `tests/test_telegram_polling.py` adds per-test heartbeat
+path and mechanical Ruff cleanup; final SHA5d11ef...a86a. V3 actual3.008599s/exit0,
+four original global-heartbeat denials then9patched tests/27stages pass, OS/source/
+hash/cleanup and independent reviews pass. Do not repeat completedv2/v3 commands.
+Temp namespace remains `/private/tmp/localos-current-full-v10.BYwJr6`.
+
+Two dirty test candidates were verified via exact copies only; author line540
+red becomes1/3green, diagnostic4/12passes on both sides but only clean leaks
+the global hook. Neither original was edited/staged. Diagnostic still needs
+connect_ex/os.spawn* guard parity and tests if user approves adoption.
+
+Other owned code: standalone `scripts/verify_frontend_dist_integrity.sh` replaces
+the inline-Python heredoc with `-c`; `tests/test_frontend_dist_integrity.py`
+requires a specific missing-asset reason. No deployment helper change: script
+remains uploadable alone. V1 red gate rejected (copied writable cwd old script
+passes); 2×2 matrix proves cwd, not script path, causes the original EPERM.
+Same-cwd v2 `verify_dist_fix_v2.py` finished3.919071s/exit0: exact old complete
+fixture fails on heredoc EPERM, patched2tests/6stages pass; source and copy hashes
+unchanged, child cleanup clean. All prior raw results retained. Combined24-node
+adjacent dist/polling/media check finished3.417772s/exit0,24nodes/72stages pass,
+using only exact reviewed copies and the same OS policy. No skip/xfail/collection
+errors. All current tmux checks are terminal, not the full5516-node aggregate.
+
+Next: package reviewed owned changes + evidence only,
+then reconcile remaining aggregate capabilities and pending dirty adoption.
+Full goal active/incomplete; restricted OAuth/finance picker untouched.
+
 ## Current continuation — 22 September, full backend completed with failures
 
 Current local HEAD `d0ef4ce84c89e33a967429e570fb6e08821911a7`; performance package
