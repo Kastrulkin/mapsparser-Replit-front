@@ -1,5 +1,35 @@
 # Performance — working measurements, not a capacity claim
 
+## Current paired refresh — 22 September, `272794a4` → `dc1a6b76`
+
+The changed-content timing gap identified below is now closed for the explicit
+synthetic fixture: five warmups and 50 serial runs per reference, ABBA, zero load.
+All 110 runs pass (1,650 requests and 330 invariants including warmups), with
+fresh databases verified absent and the owned native PostgreSQL stopped.
+Capture: exit 0, 607.027 seconds; independently recomputed distributions match.
+This is native PostgreSQL 15.15/x86_64 plus Python 3.11.7/arm64, not Docker or
+production capacity. No application code changed in this measurement package.
+
+| Journey | Baseline p50 / p95 / p99, ms | Current p50 / p95 / p99, ms |
+| --- | ---: | ---: |
+| Authentication and tenant | 148.793 / 159.650 / 174.649 | 148.202 / 155.400 / 159.481 |
+| Service menu | 312.364 / 329.894 / 353.838 | 312.254 / 333.498 / 341.271 |
+| Finance import | 253.617 / 282.243 / 316.935 | 254.293 / 280.425 / 316.454 |
+| Content | 478.622 / 525.094 / 541.526 | 482.938 / 519.408 / 533.073 |
+| Operator | 141.746 / 155.091 / 185.958 | 141.846 / 154.520 / 170.311 |
+
+Each journey is summed within each run before quantiles; warmups are excluded.
+p99 is exploratory at 50 observations. Content-plan p50 increases 6.255 ms
+(about 2.5%); total content p50 increases 4.316 ms, with lower p95/p99. Mixed
+changes do not establish a material regression, bottleneck, overall speedup or
+cause. Deterministic provider seams and an empty website exclude live AI,
+website fetching, publication, network/browser latency and large-data behavior.
+The report retains failed setup attempts separately from product findings.
+See [full method, raw evidence and independent review](../../.agent/tasks/production-readiness-20260917/evidence/content-performance-results-20260922.md).
+This closes the narrow current-content gap, not the full AC7 or readiness gate.
+
+### Historical assessment, superseded only for the measured fixture
+
 21 September current-revision assessment: the independent source trace from
 `272794a4` to `334c9d4b` is complete. Four non-content direct benchmark sequences
 are source-equivalent for the inspected fixture, not newly measured. The content
@@ -408,8 +438,10 @@ for subsequent runs without rewriting this captured artifact.
 
 ## Still required
 
-Complete the supplemental paired five-flow comparison after fixing the process
-controller and restoring local disk headroom. Sustained localhost HTTP and
-bounded frontend observations are now recorded above; production/large-data/
-queue capacity remains unmeasured. Do not add speculative indexes, caches or
-structural rewrites before measurements identify a reachable bottleneck.
+The supplemental paired comparison and current-content refresh are complete
+at their stated revisions. Sustained localhost HTTP and bounded frontend
+observations remain historical, not current-source full-performance coverage.
+Representative contention, large-data/queue behavior, current frontend timing
+and the remaining AC7 resource/performance coverage must still be reconciled.
+Production capacity remains unmeasured. Do not add speculative indexes, caches
+or structural rewrites before measurements identify a reachable bottleneck.

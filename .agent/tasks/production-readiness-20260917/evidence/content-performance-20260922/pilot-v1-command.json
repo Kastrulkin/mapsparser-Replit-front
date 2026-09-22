@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "label": "content-performance-pilot-v1",
+  "captured_at": "2026-09-22T13:36:06.029177+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+    "-B",
+    ".agent/tasks/production-readiness-20260917/support/content_performance_native_20260922.py",
+    "--smoke",
+    "--execute"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 4352.774,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "{\"cluster_identity\": {\"current_user\": \"readiness_perf_owner\", \"data_directory\": \"/private/tmp/localos-content-perf.pm7ku04l/data\", \"pid\": 94293, \"show_data_directory\": \"/private/tmp/localos-content-perf.pm7ku04l/data\", \"show_listen_addresses\": \"127.0.0.1\", \"show_port\": \"63426\"}, \"cluster_stop\": {\"data_directory\": \"/private/tmp/localos-content-perf.pm7ku04l/data\", \"expected_pid\": 94293, \"status\": \"stopped\"}, \"context\": {\"base_database\": \"readiness_perf_control\", \"host\": \"127.0.0.1\", \"port\": 63426, \"role\": \"readiness_perf_owner\"}, \"ended_at\": 1790084166.020802, \"error\": \"guard off-port socket denial probe failed\", \"error_type\": \"RuntimeError\", \"execute\": true, \"phase\": \"failed\", \"preflight\": {\"baseline\": \"272794a439a76204536480f158e79276ccd7b318\", \"current\": \"dc1a6b76821683effe2d949cfcd4a9f3c1e15cef\", \"driver_sha256\": \"5fd78e2770cfd4e0d325ec04748be3572027ce75ce7eeb6336fab3ca0ac403e1\", \"executables\": {\"driver\": \"/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/scripts/readiness_journey_measure.py\", \"initdb\": \"/usr/local/Cellar/postgresql@15/15.15_1/bin/initdb\", \"pg_ctl\": \"/usr/local/Cellar/postgresql@15/15.15_1/bin/pg_ctl\", \"postgres\": \"/usr/local/Cellar/postgresql@15/15.15_1/bin/postgres\", \"psql\": \"/usr/local/Cellar/postgresql@15/15.15_1/bin/psql\", \"python\": \"/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python\"}, \"guard_source_sha256\": \"9b1dedef6d1277d225a400edc42325689b5162c296343af7f941fcdabc6badfb\", \"limits\": {\"live_free_bytes\": 2147483648, \"start_free_bytes\": 5368709120, \"wall_seconds\": 1800}, \"profile\": {\"load_concurrency\": 2, \"load_samples\": 0, \"serial_samples\": 1, \"warmups\": 0}, \"psutil_version\": \"7.0.0\", \"source_manifests_before\": {\"baseline\": \"d49248a181cd28eeee368d789d23b7f595f0277855234f023e14510464a2395d\", \"current\": \"963482c52c073366528b6566aa967889b76819fed14acd594f7ec4bee98632a1\"}, \"workspace_state_before\": {\"dirty_diff_sha256\": \"7e3c6fdc65500ed8ef578952da15e99e4a88a4247f4635044e535f68cc519510\", \"status_sha256\": \"8b094704844b174146752d27b4c41ab0f71e8021c48756e3b265717626ca6862\"}}, \"preserved_result\": \"/private/tmp/localos-content-perf.pm7ku04l/wrapper-result.json\", \"protected_hashes_after\": {\"context\": \"f00c1aaba4bf2882417bb0e2dc6b743fc9d9bc31b6353f2f4e8161b780e34962\", \"guard\": \"9b1dedef6d1277d225a400edc42325689b5162c296343af7f941fcdabc6badfb\", \"repository_benchmark\": \"28308a23ce8ac3e04f4c60e0438076ce60b15e5fc506667acb4ef93eb65d8a26\", \"repository_driver\": \"5fd78e2770cfd4e0d325ec04748be3572027ce75ce7eeb6336fab3ca0ac403e1\"}, \"run_root\": \"/private/tmp/localos-content-perf.pm7ku04l\", \"smoke\": true, \"source_manifests_after\": {\"baseline\": \"d49248a181cd28eeee368d789d23b7f595f0277855234f023e14510464a2395d\", \"current\": \"963482c52c073366528b6566aa967889b76819fed14acd594f7ec4bee98632a1\"}, \"started_at\": 1790084161.738645, \"workspace_state_after\": {\"dirty_diff_sha256\": \"7e3c6fdc65500ed8ef578952da15e99e4a88a4247f4635044e535f68cc519510\", \"status_sha256\": \"8b094704844b174146752d27b4c41ab0f71e8021c48756e3b265717626ca6862\"}}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

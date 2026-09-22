@@ -1,0 +1,277 @@
+{
+  "raw_path": "/private/tmp/localos-content-perf.cuey0qa9/driver-output.json",
+  "raw_sha256": "ffd51f58179b21ff4265f71fa924a27df8c2a1104a48b64826cbf0fa5411f60e",
+  "refs": {
+    "baseline": "272794a439a76204536480f158e79276ccd7b318",
+    "current": "dc1a6b76821683effe2d949cfcd4a9f3c1e15cef"
+  },
+  "guard": {
+    "path": "/private/tmp/localos-content-perf.cuey0qa9/guard/sitecustomize.py",
+    "sha256": "9b1dedef6d1277d225a400edc42325689b5162c296343af7f941fcdabc6badfb"
+  },
+  "harness_sha256": "28308a23ce8ac3e04f4c60e0438076ce60b15e5fc506667acb4ef93eb65d8a26",
+  "driver": {
+    "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/scripts/readiness_journey_measure.py",
+    "sha256": "5fd78e2770cfd4e0d325ec04748be3572027ce75ce7eeb6336fab3ca0ac403e1",
+    "python": "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python"
+  },
+  "method": "stdlib statistics.quantiles(n=100, method='inclusive') over successful serial rows only",
+  "sides": {
+    "baseline": {
+      "warmup_count_excluded": 5,
+      "serial_count": 50,
+      "request_steps": {
+        "auth_tenant/business": {
+          "count": 50,
+          "p50_ms": 38.129791493702214,
+          "p95_ms": 43.77501249691704,
+          "p99_ms": 47.75686267064884
+        },
+        "auth_tenant/login": {
+          "count": 50,
+          "p50_ms": 72.91118750435999,
+          "p95_ms": 77.4767104529019,
+          "p99_ms": 94.98473375017056
+        },
+        "auth_tenant/me": {
+          "count": 50,
+          "p50_ms": 37.07941599714104,
+          "p95_ms": 39.78357880550902,
+          "p99_ms": 42.8905505820876
+        },
+        "content/draft": {
+          "count": 50,
+          "p50_ms": 116.49170800228603,
+          "p95_ms": 142.33359755162382,
+          "p99_ms": 167.03860833658837
+        },
+        "content/internal_news": {
+          "count": 50,
+          "p50_ms": 112.04614600137575,
+          "p95_ms": 125.4200855983072,
+          "p99_ms": 138.57802857877687
+        },
+        "content/plan": {
+          "count": 50,
+          "p50_ms": 245.9283959979075,
+          "p95_ms": 272.63196455314755,
+          "p99_ms": 300.8133499986434
+        },
+        "finance_import/apply": {
+          "count": 50,
+          "p50_ms": 139.45349949790398,
+          "p95_ms": 148.54000245177303,
+          "p99_ms": 170.18908383353846
+        },
+        "finance_import/preview": {
+          "count": 50,
+          "p50_ms": 113.94043750624405,
+          "p95_ms": 128.8991811001324,
+          "p99_ms": 163.24206733770552
+        },
+        "operator/confirm": {
+          "count": 50,
+          "p50_ms": 38.19845849648118,
+          "p95_ms": 45.595485601370456,
+          "p99_ms": 53.56747816535062
+        },
+        "operator/confirm_replay": {
+          "count": 50,
+          "p50_ms": 27.53958300309023,
+          "p95_ms": 32.47405814836384,
+          "p99_ms": 37.700123337854166
+        },
+        "operator/propose_refocus": {
+          "count": 50,
+          "p50_ms": 75.79120850277832,
+          "p95_ms": 82.7876874980575,
+          "p99_ms": 105.96045607569977
+        },
+        "service_compression/apply": {
+          "count": 50,
+          "p50_ms": 76.64545850275317,
+          "p95_ms": 84.76282485207776,
+          "p99_ms": 94.96284240565728
+        },
+        "service_compression/apply_replay": {
+          "count": 50,
+          "p50_ms": 72.68662500428036,
+          "p95_ms": 80.39441599685233,
+          "p99_ms": 88.69194216196775
+        },
+        "service_compression/draft": {
+          "count": 50,
+          "p50_ms": 86.33870849735104,
+          "p95_ms": 93.4942604493699,
+          "p99_ms": 105.96376691173646
+        },
+        "service_compression/review": {
+          "count": 50,
+          "p50_ms": 74.46191700000782,
+          "p95_ms": 80.53456249617739,
+          "p99_ms": 85.57261633744929
+        }
+      },
+      "journey_sums": {
+        "auth_tenant": {
+          "count": 50,
+          "p50_ms": 148.7929374925443,
+          "p95_ms": 159.64978314659675,
+          "p99_ms": 174.64860058316845
+        },
+        "content": {
+          "count": 50,
+          "p50_ms": 478.62208299920894,
+          "p95_ms": 525.0936709577218,
+          "p99_ms": 541.5259895149211
+        },
+        "finance_import": {
+          "count": 50,
+          "p50_ms": 253.6165419878671,
+          "p95_ms": 282.24287134289625,
+          "p99_ms": 316.93505960691255
+        },
+        "operator": {
+          "count": 50,
+          "p50_ms": 141.74614600051427,
+          "p95_ms": 155.09063780700671,
+          "p99_ms": 185.95810548460577
+        },
+        "service_compression": {
+          "count": 50,
+          "p50_ms": 312.3636680029449,
+          "p95_ms": 329.8935762984911,
+          "p99_ms": 353.8378462329274
+        }
+      }
+    },
+    "current": {
+      "warmup_count_excluded": 5,
+      "serial_count": 50,
+      "request_steps": {
+        "auth_tenant/business": {
+          "count": 50,
+          "p50_ms": 38.04062499693828,
+          "p95_ms": 39.61744390326203,
+          "p99_ms": 42.806877663970226
+        },
+        "auth_tenant/login": {
+          "count": 50,
+          "p50_ms": 72.893145501439,
+          "p95_ms": 78.53392135220929,
+          "p99_ms": 80.24646983190905
+        },
+        "auth_tenant/me": {
+          "count": 50,
+          "p50_ms": 37.03664599743206,
+          "p95_ms": 37.81059810135048,
+          "p99_ms": 38.79825575539144
+        },
+        "content/draft": {
+          "count": 50,
+          "p50_ms": 115.85035399912158,
+          "p95_ms": 139.00241425872082,
+          "p99_ms": 154.4925732522097
+        },
+        "content/internal_news": {
+          "count": 50,
+          "p50_ms": 112.92929149203701,
+          "p95_ms": 120.71058110013837,
+          "p99_ms": 138.65699665693683
+        },
+        "content/plan": {
+          "count": 50,
+          "p50_ms": 252.18316649988992,
+          "p95_ms": 273.88179794725147,
+          "p99_ms": 281.28795716693276
+        },
+        "finance_import/apply": {
+          "count": 50,
+          "p50_ms": 138.883646002796,
+          "p95_ms": 163.08255595213268,
+          "p99_ms": 189.3615321625839
+        },
+        "finance_import/preview": {
+          "count": 50,
+          "p50_ms": 114.57035399507731,
+          "p95_ms": 130.94696890111663,
+          "p99_ms": 137.29873833901365
+        },
+        "operator/confirm": {
+          "count": 50,
+          "p50_ms": 38.09574999468168,
+          "p95_ms": 40.490027203486534,
+          "p99_ms": 46.13466983224498
+        },
+        "operator/confirm_replay": {
+          "count": 50,
+          "p50_ms": 27.468833002785686,
+          "p95_ms": 33.48658139802865,
+          "p99_ms": 42.53548749911715
+        },
+        "operator/propose_refocus": {
+          "count": 50,
+          "p50_ms": 75.91768800193677,
+          "p95_ms": 83.03235814819345,
+          "p99_ms": 88.19226308420184
+        },
+        "service_compression/apply": {
+          "count": 50,
+          "p50_ms": 76.66408299701288,
+          "p95_ms": 83.80892500281334,
+          "p99_ms": 86.86038142477628
+        },
+        "service_compression/apply_replay": {
+          "count": 50,
+          "p50_ms": 72.56614549260121,
+          "p95_ms": 91.99550625125994,
+          "p99_ms": 100.45754607301205
+        },
+        "service_compression/draft": {
+          "count": 50,
+          "p50_ms": 85.10666650545318,
+          "p95_ms": 92.13803125385311,
+          "p99_ms": 94.55903773938189
+        },
+        "service_compression/review": {
+          "count": 50,
+          "p50_ms": 74.40347898955224,
+          "p95_ms": 80.01048939913744,
+          "p99_ms": 95.18307432808797
+        }
+      },
+      "journey_sums": {
+        "auth_tenant": {
+          "count": 50,
+          "p50_ms": 148.20235449587926,
+          "p95_ms": 155.3998999967007,
+          "p99_ms": 159.48103043221636
+        },
+        "content": {
+          "count": 50,
+          "p50_ms": 482.9382090101717,
+          "p95_ms": 519.4076272004168,
+          "p99_ms": 533.0726004281314
+        },
+        "finance_import": {
+          "count": 50,
+          "p50_ms": 254.2930210038321,
+          "p95_ms": 280.4246625077212,
+          "p99_ms": 316.454429012374
+        },
+        "operator": {
+          "count": 50,
+          "p50_ms": 141.84606300113956,
+          "p95_ms": 154.51998749704217,
+          "p99_ms": 170.31055750441737
+        },
+        "service_compression": {
+          "count": 50,
+          "p50_ms": 312.2540620024665,
+          "p95_ms": 333.49755570234265,
+          "p99_ms": 341.27051508112345
+        }
+      }
+    }
+  }
+}

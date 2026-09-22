@@ -1,5 +1,46 @@
 # Production-readiness progress
 
+## Current checkpoint — 22 September, paired performance accepted
+
+- [x] Baseline `272794a4` versus `dc1a6b76`, same harness in clean archives:
+  5 warmups and 50 serial runs/ref, ABBA, no load; 110/110 valid runs.
+  All 1,650 requests and 330 invariants pass, including warmups. Outer exit0,
+  607.027s; driver 601.051s; no timeout or truncated capture.
+- [x] Independent raw recomputation and runtime review pass. Each journey's
+  requests are summed before quantiles. Content p50/p95/p99:
+  478.622/525.094/541.526 → 482.938/519.408/533.073ms. Mixed small changes,
+  no material regression established and no overall speedup claim.
+- [x] Six negative runtime probes, guard11/wrapper7/process5 helper controls;
+  all110 generated DBs absent, only system DBs retained, owned PostgreSQL stopped,
+  process registry empty, source/guard and foreign dirty changes preserved.
+  Pilot syntax/ASCII setup failures retained; explicit UTF8 fixes fixture setup.
+- [x] Raw captures, support sources and result report saved in task evidence
+  `content-performance-20260922/` and `content-performance-results-20260922.md`.
+- [ ] Next: prepare/review a new exact-current backend aggregate snapshot;
+  old full run still failed (4347 pass,44 call failures,4 setup failures,1092 skips).
+  Later scoped successes are not a replacement for an aggregate rerun.
+- [ ] Original DoD remains open: security/image triage and owner decisions,
+  current integration/CI/demo/final whole-diff review, broader AC7 coverage.
+  Restricted secondary OAuth candidate stays untouched/unrun/uncommitted.
+
+This evidence-only package changes support scripts and reports, not application
+behavior or production. Numerical readiness scores and historical verdicts are
+unchanged. Older preparation statuses below are historical.
+
+## Current continuation — 22 September, performance runtime preparation
+
+- [x] Revalidated HEAD `dc1a6b76`, preserved dirty paths and approximately11GiB
+  local free disk. The previous v8 native PostgreSQL wrapper/cluster paths no
+  longer exist; historical timings are not current runtime evidence.
+- [x] Independent source review identifies the three content requests and
+  deterministic provider seams. The empty-site fixture excludes website fetches.
+- [ ] Prepare/review a fresh isolated native PostgreSQL15.15 lifecycle, then run
+  one pilot/ref before5warmups+50serial/ref ABBA with zero load. Require source
+  hashes, real cleanup absence checks and independent raw quantile recomputation.
+- [ ] Secondary OAuth related-refresh candidate is platform-restricted and
+  remains unexecuted/uncommitted; do not retry through a different route. The
+  completed primary24/24 proof is unchanged. Overall readiness remains incomplete.
+
 ## Latest checkpoint — 22 September, Google OAuth stale-access native fence passes
 
 - [x] **GOOGLE-OAUTH-STALE-ACCESS-02:** actual Flask Google Business and Google

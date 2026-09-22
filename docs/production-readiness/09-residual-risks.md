@@ -1,5 +1,15 @@
 # Residual risks — working register
 
+## 22 September — current content timing gap closed, broader risks remain
+
+Paired272794a4→dc1a6b76 synthetic timings now have110validruns and independent
+raw recomputation. The older "paired content measurement pending" entries below
+are superseded only for the empty-site/deterministic/no-load fixture. No material
+regression established; no provider/website/browser/capacity coverage implied.
+Current full backend aggregate, broader performance coverage, image candidates,
+owner credential/license decisions, CI/demo/final review remain open. Secondary
+OAuth-related refresh is platform-restricted and unrun, not a proven flaw.
+
 ## Current update — image scan candidates need triage
 
 Completed all20layers+config of pinned audit image;219redacted matches are

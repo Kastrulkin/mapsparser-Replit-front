@@ -1,5 +1,28 @@
 # Readiness decisions
 
+## D-120 — Accept paired evidence without inferring capacity or a speedup
+
+The 110-run `272794a4`→`dc1a6b76` comparison closes only the changed-content
+timing gap on an empty-site deterministic fixture. Independent review verifies
+runtime cleanup and recomputes each journey's run-sums before percentiles.
+Mixed small differences do not justify optimization patches or score promotion.
+Native PG15.15/x86_64 and Python/arm64, cold dispatch, no real AI/network/load
+are explicit limits. Keep setup failures and actual final controls, rather than
+misclassifying invalid sandbox syntax/ASCII cluster setup as product bugs.
+Next use a fresh pinned aggregate snapshot; never infer whole-suite green by
+adding separate scoped passes to an older failed aggregate.
+
+## D-119 — Refresh content timings on a new owned performance runtime
+
+Historical PostgreSQL paths are not proof of a live owned cluster. Create a fresh
+private native PostgreSQL15.15 lifecycle for the ordinary performance workload;
+do not repurpose the allowlisted Testcontainers integration runner. Require
+guard-first plus an independent OS network boundary, exact runtime identity,
+bounded execution, clean source archives and verified generated-database absence.
+Run a pilot before the full paired distribution. Empty website and fake provider
+fixtures are explicit scope limits, not evidence for network/provider latency.
+Do not repeat the separate platform-restricted OAuth candidate through this lane.
+
 ## D-118 — OAuth signed state must be re-authorized at persistence time
 
 Treat signed OAuth state as identity context, not a durable permission grant.

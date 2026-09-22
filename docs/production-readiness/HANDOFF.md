@@ -1,5 +1,65 @@
 # Readiness handoff
 
+## Current continuation — 22 September, performance packaged; aggregate next
+
+Branch `codex/production-readiness-20260917`, original baseline `30262a5b`,
+measured application HEAD `dc1a6b76`. Paired `272794a4`→`dc1a6b76` completed:
+5 warmups+50 serial/ref, ABBA, load0, 110 valid runs. Exit0/607.027s,
+driver601.051s, no failed requests/invariants. Two independent reviews pass
+(runtime ownership/cleanup and raw quantile recomputation). Content total
+p50/p95/p99 478.622/525.094/541.526→482.938/519.408/533.073ms; no general
+speedup or capacity conclusion. Exact limitations and unsuccessful pilots are
+in task `evidence/content-performance-results-20260922.md` and its raw directory.
+Do not rerun the completed measurement.
+
+Final runtime `/private/tmp/localos-content-perf.cuey0qa9` is terminal: all110
+generated databases absent, only system databases, owned PG95496 stopped and
+tracked process registry clean. No Docker/production/provider/push/deploy action.
+The stopped private runtime directories remain; no extra filesystem purge.
+Local free disk about11GiB. Eight tracked foreign paths still hash
+`40afa0141e5fe1b9fe9d18ee651ba61e19a27367158d71984f5a90a4d2a4c6d1`;
+five foreign untracked paths and the additional restricted OAuth test preserved.
+
+Next concrete lane: read `/private/tmp/localos-current-full-aB5f/run_current_full_v9.py`
+and prepare an independently reviewed NEW v10 namespace/clean current Git archive.
+Old v9 is hard-pinned to older sources/evidence and must not be replayed. Keep
+ordinary offline checks separate from gated PG/Docker/browser/live-provider
+coverage; no widening of runtime permissions to hide failures. Source and helper
+preflight must pass before collection/full execution. At this checkpoint no new
+aggregate has run. Existing security-filter and finance-file-chooser restrictions
+remain; no retry through another agent/profile. The restricted OAuth candidate
+is absent from clean tracked archives and must never be injected.
+
+Package support/reports locally after strict staged scan/review; no broad git add.
+Full readiness remains ACTIVE/FAIL, with current aggregate/integration, image
+triage, owner credential/license decisions, broader performance, CI/demo and
+final independent whole-diff review still open. Older next steps are historical.
+
+## Current continuation — 22 September, content-performance refresh
+
+Current code HEAD `dc1a6b76`, same readiness branch. The previous status-only
+turn did not execute a new test; this continuation revalidated Git/disk and the
+missing performance runtime. The old v8 native PostgreSQL directory and wrapper
+no longer exist. Do not run their historical commands against port35418.
+
+The next active lane is a paired content measurement at `272794a4` versus
+`dc1a6b76`: five warmups plus50 serial samples/ref, ABBA, no load, identical
+current benchmark harness injected into clean archives. First require a one-run
+pilot per ref on a **new private native PostgreSQL15.15 cluster**. The empty-site
+fixture excludes website fetches and real provider latency. All15 benchmark
+requests still execute; report the three content requests and their per-run sum.
+Runtime preparation is in task support `content_performance_*_20260922.py`;
+do not execute until independent lifecycle/guard review passes.
+
+The secondary OAuth related-refresh candidate is **platform-restricted** after
+a Codex cybersecurity-filter interruption. It remains unrun, uncommitted and
+NOT_REPRODUCED. The older next-step instructions below are superseded: do not
+prepare or launch it through another profile/agent. Primary OAuth24/24 remains
+valid. The restriction does not establish a product defect or block ordinary
+performance work. Full goal remains ACTIVE/FAIL. Existing13 foreign paths and
+the additional untracked candidate must remain untouched. No production,
+provider, Docker cleanup, push or deployment is in this continuation.
+
 ## Latest checkpoint — 22 September, Google OAuth native access fence complete
 
 Branch `codex/production-readiness-20260917`, parent `debd6006`. This package owns

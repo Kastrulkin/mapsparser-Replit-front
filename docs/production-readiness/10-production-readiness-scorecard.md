@@ -1,5 +1,12 @@
 # Production-readiness scorecard — working, not final
 
+22September current-content checkpoint: paired272794a4→dc1a6b76 runs110/110,
+independent cleanup and quantile review PASS. The narrow changed-content timing
+gap below is closed, not the full AC7 criterion. Local deterministic cold-request
+results do not certify provider/website/current browser/load or production
+capacity. Scores and original acceptance verdicts remain unchanged; current
+aggregate, broad security/integration/performance/CI/demo/final review stay open.
+
 22September: all-layer credential scan completed913.092s with219untriaged
 candidates; security gate remains OPEN, scores unchanged. Coverage integrity is
 not absence of credentials. Runner startup fix locally verified separately.

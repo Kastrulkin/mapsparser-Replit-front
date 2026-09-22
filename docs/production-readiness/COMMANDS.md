@@ -1,5 +1,50 @@
 # Verified commands and evidence
 
+## Paired current performance — 22 September (completed; do not replay)
+
+Named tmux `audit-content-perf-full-v1` ran:
+
+```text
+PYTHONPATH=/private/tmp/localos-content-perf-deps.7zNvCi/python
+/usr/bin/arch -arm64 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -B .agent/tasks/production-readiness-20260917/support/content_performance_native_20260922.py --execute
+```
+
+The first line denotes the outer process environment, not a project config change.
+psutil7.0.0 was installed from a pinned local wheel into this private target only.
+The wrapper clears child environment, uses guard-first exact-loopback PostgreSQL
+admission plus OS network/write restrictions, verifies UTF8 identity, and launches
+the existing driver with baseline272794a4/currentdc1a6b76/5warmups/50serial/0load.
+No existing runtime is reused. Inner exact argv is in `full-v1-driver-capture.json`.
+
+Outer exit0/607.027s, driver601.051s,110validruns,1,650 successful requests and
+330 successful invariants including warmups. Independent inclusive quantiles
+match;110 DBs absent, ownedPG stopped, process registry empty, protected hashes
+unchanged. Final wrapper7 controls pass123.720ms; guard11 and process5 separately
+pass. These23 helper controls are not application tests.
+Raw in task `evidence/content-performance-20260922/`; report and hashes in
+`evidence/content-performance-results-20260922.md`. Retain pilotv1 exit1/4.353s
+(sandbox syntax, no driver), pilotv2 exit1/14.338s (ASCII migrations, no requests),
+pilotv3 exit0/20.276s (15requests+3invariants/ref); full series only for quantiles.
+
+Read-only aggregate preparation uses old v9 as a source, not an executable
+continuation: `sed -n '1,240p' /private/tmp/localos-current-full-aB5f/run_current_full_v9.py`.
+New v10 setup/control/full commands are not yet verified at this checkpoint.
+
+## Content-performance preflight — 22 September
+
+Read-only checks verified `git status --short`, HEAD `dc1a6b76`, about11GiB free
+on `/System/Volumes/Data`, and installed `/usr/local/bin/postgres --version`
+(`PostgreSQL15.15`). `initdb`, `postgres`, `pg_ctl` resolve to the same Homebrew
+15.15_1 installation. This is binary availability, not a running-cluster proof.
+
+The historical v8 wrapper and `/private/tmp/localos-readiness-resume-pg.anwDNv`
+are absent. Do not replay their old command or assume port35418 is owned. A new
+task support lifecycle and guard are being reviewed; no current paired timing
+has yet run. Its required full driver arguments are explicit baseline272794a4,
+currentdc1a6b76, warmups5, serial-samples50, load-samples0. Run only after review
+and a successful isolated pilot. OAuth related-refresh execution is restricted
+and is not included in this performance procedure.
+
 ## Google OAuth current-access native PostgreSQL — 22 September
 
 Named tmux `native_google_oauth_hflypi_v3` ran native ARM64 Python with

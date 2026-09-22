@@ -1,0 +1,673 @@
+#!/usr/bin/env python3
+"""Private, bounded runtime wrapper for the readiness content performance run.
+
+This wrapper does not use Docker, an existing PostgreSQL service, or production
+configuration.  ``--execute`` creates one private PostgreSQL 15 cluster under a
+fresh ``/private/tmp/localos-content-perf.*`` root and retains that root as run
+evidence after stopping only the exact postmaster it started.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import signal
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+from typing import Any
+
+from content_performance_processes_20260922 import OwnedProcesses
+import uuid
+
+
+ROOT = Path(__file__).resolve().parents[4]
+SUPPORT = Path(__file__).resolve().parent
+PRIVATE_TMP = Path("/private/tmp")
+NATIVE_PYTHON = Path("/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python")
+POSTGRES_BIN = Path("/usr/local/Cellar/postgresql@15/15.15_1/bin")
+INITDB = POSTGRES_BIN / "initdb"
+POSTGRES = POSTGRES_BIN / "postgres"
+PG_CTL = POSTGRES_BIN / "pg_ctl"
+PSQL = POSTGRES_BIN / "psql"
+DRIVER = ROOT / "scripts/readiness_journey_measure.py"
+BENCHMARK = ROOT / "scripts/readiness_journey_benchmark.py"
+GUARD_SOURCE = SUPPORT / "content_performance_sitecustomize_20260922.py"
+
+BASELINE_REF = "272794a439a76204536480f158e79276ccd7b318"
+CURRENT_REF = "dc1a6b76"
+MIN_FREE_START = 5 * 1024**3
+MIN_FREE_LIVE = 2 * 1024**3
+MAX_WALL_SECONDS = 1800
+OWNER = "readiness_perf_owner"
+BASE_DATABASE = "readiness_perf_control"
+RUN_DATABASE_RE = re.compile(r"localos_readiness_measure_[0-9a-f]{32}")
+
+
+class ClusterInitializationError(RuntimeError):
+    def __init__(self, message: str, identity: dict[str, Any]):
+        super().__init__(message)
+        self.identity = identity
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def run(command: list[str], *, timeout: int, environment: dict[str, str] | None = None, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(command, check=False, capture_output=True, text=True, timeout=timeout, env=environment, cwd=cwd)
+
+
+def resolve_ref(ref: str) -> str:
+    completed = run(["/usr/bin/git", "rev-parse", "--verify", ref + "^{commit}"], timeout=20, cwd=ROOT)
+    if completed.returncode != 0:
+        raise RuntimeError((completed.stderr or completed.stdout).strip())
+    value = completed.stdout.strip()
+    if re.fullmatch(r"[0-9a-f]{40}", value) is None:
+        raise RuntimeError("git did not resolve a full commit identity")
+    return value
+
+
+def source_manifest(ref: str) -> str:
+    completed = run(["/usr/bin/git", "ls-tree", "-r", "--full-tree", ref], timeout=30, cwd=ROOT)
+    if completed.returncode != 0:
+        raise RuntimeError((completed.stderr or completed.stdout).strip())
+    return hashlib.sha256(completed.stdout.encode("utf-8")).hexdigest()
+
+
+def workspace_state() -> dict[str, str]:
+    result: dict[str, str] = {}
+    for name, command in (
+        ("status_sha256", ["/usr/bin/git", "status", "--porcelain=v1", "-z"]),
+        ("dirty_diff_sha256", ["/usr/bin/git", "diff", "--no-ext-diff", "--binary", "HEAD"]),
+    ):
+        completed = run(command, timeout=30, cwd=ROOT)
+        if completed.returncode != 0:
+            raise RuntimeError("could not bind workspace state")
+        result[name] = hashlib.sha256(completed.stdout.encode("utf-8")).hexdigest()
+    return result
+
+
+def executable_paths() -> dict[str, str]:
+    required = {"initdb": INITDB, "postgres": POSTGRES, "pg_ctl": PG_CTL, "psql": PSQL, "python": NATIVE_PYTHON, "driver": DRIVER}
+    missing = [name for name, path in required.items() if not path.is_file() or (name != "driver" and not os.access(path, os.X_OK))]
+    if missing:
+        raise RuntimeError("missing required executable or driver: " + ",".join(missing))
+    if not GUARD_SOURCE.is_file():
+        raise RuntimeError("performance guard source is not available")
+    return {name: str(path) for name, path in required.items()}
+
+
+def choose_loopback_port() -> int:
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind(("127.0.0.1", 0))
+        port = int(probe.getsockname()[1])
+    finally:
+        probe.close()
+    if port < 32768:
+        raise RuntimeError("allocated port is not in the approved high-port range")
+    return port
+
+
+def private_environment(run_root: Path) -> dict[str, str]:
+    home = run_root / "home"
+    home.mkdir(mode=0o700)
+    return {
+        "PATH": str(POSTGRES_BIN) + ":/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "HOME": str(home),
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PYTHON_DOTENV_DISABLED": "1",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "TMPDIR": str(run_root / "tmp"),
+    }
+
+
+def sandbox_policy(port: int, guard_directory: Path) -> str:
+    if not 32768 <= port <= 65535:
+        raise ValueError("invalid loopback measurement port")
+    if guard_directory.parent.name != "localos-content-perf." and not guard_directory.parent.name.startswith("localos-content-perf."):
+        raise ValueError("guard directory is outside an owned performance run")
+    return "\n".join(
+        (
+            "(version 1)",
+            "(allow default)",
+            "(deny network*)",
+            '(allow network-outbound (remote ip "localhost:' + str(port) + '"))',
+            "(deny file-write*)",
+            "(allow file-write* (subpath " + json.dumps(str(guard_directory.parent), ensure_ascii=False) + "))",
+            "(allow file-write* (literal \"/dev/null\"))",
+            "(deny file-write* (subpath " + json.dumps(str(guard_directory), ensure_ascii=False) + "))",
+        )
+    )
+
+
+def context_payload(port: int) -> dict[str, Any]:
+    return {"host": "127.0.0.1", "port": port, "role": OWNER, "base_database": BASE_DATABASE}
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def postgres_options(run_root: Path, port: int) -> list[str]:
+    socket_dir = run_root / "socket"
+    return [
+        "-p", str(port), "-h", "127.0.0.1", "-k", str(socket_dir),
+        "-c", "max_connections=24", "-c", "shared_buffers=64MB",
+        "-c", "work_mem=4MB", "-c", "maintenance_work_mem=32MB",
+        "-c", "statement_timeout=120000", "-c", "lock_timeout=5000",
+        "-c", "log_connections=off", "-c", "log_disconnections=off",
+    ]
+
+
+def dsn(port: int, database: str = BASE_DATABASE) -> str:
+    return "postgresql://" + OWNER + "@127.0.0.1:" + str(port) + "/" + database
+
+
+def psql_scalar(database_url: str, query: str, environment: dict[str, str]) -> str:
+    completed = run([str(PSQL), database_url, "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", query], timeout=30, environment=environment)
+    if completed.returncode != 0:
+        raise RuntimeError("private PostgreSQL query failed: " + (completed.stderr or completed.stdout)[-1000:])
+    return completed.stdout.strip()
+
+
+def postmaster_pid(data_directory: Path) -> int:
+    pid_file = data_directory / "postmaster.pid"
+    if not pid_file.is_file():
+        raise RuntimeError("private cluster did not create postmaster.pid")
+    line = pid_file.read_text(encoding="utf-8").splitlines()[0].strip()
+    if re.fullmatch(r"[1-9][0-9]*", line) is None:
+        raise RuntimeError("private cluster has invalid postmaster PID")
+    return int(line)
+
+
+def verify_postmaster(pid: int, data_directory: Path) -> None:
+    completed = run(["/bin/ps", "-p", str(pid), "-o", "pid=,command="], timeout=10)
+    if completed.returncode != 0 or str(pid) not in completed.stdout or str(data_directory) not in completed.stdout or str(POSTGRES) not in completed.stdout:
+        raise RuntimeError("spawned PostgreSQL PID/data directory identity mismatch")
+
+
+def initialize_cluster(run_root: Path, port: int, environment: dict[str, str]) -> tuple[dict[str, Any], subprocess.Popen[str]]:
+    data_directory = run_root / "data"
+    socket_dir = run_root / "socket"
+    socket_dir.mkdir(mode=0o700)
+    init_command = [str(INITDB), "-D", str(data_directory), "-U", OWNER, "--auth-host=trust", "--auth-local=trust", "--encoding=UTF8", "--locale=C", "--no-sync"]
+    completed = run(
+        init_command,
+        timeout=120,
+        environment=environment,
+    )
+    write_json(run_root / "initdb-capture.json", {
+        "command": init_command, "exit_code": completed.returncode,
+        "stdout": completed.stdout, "stderr": completed.stderr,
+    })
+    if completed.returncode != 0:
+        raise RuntimeError("initdb failed: " + (completed.stderr or completed.stdout)[-1000:])
+    options = postgres_options(run_root, port)
+    log_path = run_root / "postgres.log"
+    log_handle = log_path.open("x", encoding="utf-8")
+    process = subprocess.Popen([str(POSTGRES), "-D", str(data_directory), *options], stdout=log_handle, stderr=subprocess.STDOUT, text=True, env=environment, start_new_session=True)
+    log_handle.close()
+    pid = process.pid
+    identity: dict[str, Any] = {
+        "pid": pid,
+        "data_directory": str(data_directory),
+    }
+    try:
+        deadline = time.monotonic() + 45
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                raise RuntimeError("private postgres exited before readiness")
+            try:
+                if postmaster_pid(data_directory) == pid:
+                    verify_postmaster(pid, data_directory)
+                    break
+            except RuntimeError:
+                pass
+            time.sleep(0.2)
+        else:
+            raise RuntimeError("private postgres readiness deadline elapsed")
+        identity.update(
+            {
+                "current_user": psql_scalar(dsn(port, "postgres"), "SELECT current_user", environment),
+                "show_data_directory": psql_scalar(dsn(port, "postgres"), "SHOW data_directory", environment),
+                "show_listen_addresses": psql_scalar(dsn(port, "postgres"), "SHOW listen_addresses", environment),
+                "show_port": psql_scalar(dsn(port, "postgres"), "SHOW port", environment),
+                "server_encoding": psql_scalar(dsn(port, "postgres"), "SHOW server_encoding", environment),
+                "client_encoding": psql_scalar(dsn(port, "postgres"), "SHOW client_encoding", environment),
+            }
+        )
+        if identity["current_user"] != OWNER or Path(str(identity["show_data_directory"])).resolve() != data_directory.resolve() or identity["show_listen_addresses"] != "127.0.0.1" or identity["show_port"] != str(port):
+            raise RuntimeError("private PostgreSQL read-only identity verification failed")
+        if identity["server_encoding"] != "UTF8" or identity["client_encoding"] != "UTF8":
+            raise RuntimeError("private PostgreSQL must support the application's Unicode data")
+        identity["verified"] = True
+    except Exception:
+        error = ClusterInitializationError("private PostgreSQL identity verification failed", identity)
+        error.process = process
+        raise error
+    return identity, process
+
+
+def stop_exact_cluster(data_directory: Path, expected_pid: int, process: subprocess.Popen[str]) -> dict[str, Any]:
+    record: dict[str, Any] = {"data_directory": str(data_directory), "expected_pid": expected_pid}
+    if process.pid != expected_pid:
+        record["status"] = "refused_process_pid_mismatch"
+        return record
+    if process.poll() is not None:
+        record.update(status="already_exited", returncode=process.returncode)
+        return record
+    if (data_directory / "postmaster.pid").is_file():
+        observed = postmaster_pid(data_directory)
+        if observed != expected_pid:
+            record.update(status="refused_pid_mismatch", observed_pid=observed)
+            return record
+    # The retained Popen handle also owns failures before a PID file is written.
+    verify_postmaster(expected_pid, data_directory)
+    try:
+        process.send_signal(signal.SIGINT)
+        process.wait(timeout=45)
+        record["status"] = "stopped"
+    except subprocess.TimeoutExpired:
+        os.killpg(expected_pid, signal.SIGKILL)
+        process.wait(timeout=15)
+        record["status"] = "sigkill"
+    except ProcessLookupError:
+        record["status"] = "already_exited"
+    return record
+
+
+def driver_command(run_root: Path, port: int, smoke: bool, guard_directory: Path) -> list[str]:
+    warmups = "0" if smoke else "5"
+    serial = "1" if smoke else "50"
+    return [
+        "/usr/bin/sandbox-exec", "-p", sandbox_policy(port, guard_directory), str(NATIVE_PYTHON), "-B", str(DRIVER),
+        "--baseline", BASELINE_REF, "--current", CURRENT_REF,
+        "--database-url", dsn(port), "--warmups", warmups, "--serial-samples", serial,
+        "--load-samples", "0", "--load-concurrency", "2", "--output", str(run_root / "driver-output.json"), "--execute",
+    ]
+
+
+def protected_hashes(guard_target: Path, context_path: Path) -> dict[str, str]:
+    return {
+        "repository_driver": digest(DRIVER),
+        "repository_benchmark": digest(BENCHMARK),
+        "guard": digest(guard_target),
+        "context": digest(context_path),
+    }
+
+
+def guard_environment(environment: dict[str, str], guard_dir: Path, context_path: Path) -> dict[str, str]:
+    result = dict(environment)
+    result.update({"PYTHONPATH": str(guard_dir), "LOCALOS_CONTENT_PERFORMANCE_CONTEXT": str(context_path)})
+    return result
+
+
+def run_negative_probes(run_root: Path, port: int, environment: dict[str, str], guard_dir: Path, context_path: Path) -> dict[str, Any]:
+    policy = sandbox_policy(port, guard_dir)
+    standard_environment = guard_environment(environment, guard_dir, context_path)
+    records: dict[str, Any] = {}
+
+    def remember(name, completed, tail=500):
+        records[name] = {"exit_code": completed.returncode, "stderr_tail": completed.stderr[-tail:]}
+        write_json(run_root / "negative-probes.json", records)
+
+    def expect_exit_78(name: str, context: dict[str, Any], extra_environment: dict[str, str] | None = None) -> None:
+        probe_dir = run_root / "negative" / name
+        probe_dir.mkdir(parents=True, mode=0o700)
+        shutil.copyfile(GUARD_SOURCE, probe_dir / "sitecustomize.py")
+        write_json(probe_dir / "context.json", context)
+        probe_environment = guard_environment(environment, probe_dir, probe_dir / "context.json")
+        if extra_environment:
+            probe_environment.update(extra_environment)
+        completed = run([str(NATIVE_PYTHON), "-B", "-c", "raise SystemExit(0)"], timeout=20, environment=probe_environment)
+        remember(name, completed, 300)
+        if completed.returncode != 78:
+            raise RuntimeError("negative guard startup probe did not exit 78: " + name)
+
+    invalid = context_payload(port)
+    invalid["port"] = 1
+    expect_exit_78("wrong-context", invalid)
+    expect_exit_78("inherited-pg-env", context_payload(port), {"PGOPTIONS": "-c statement_timeout=0"})
+
+    guard_offport_source = """
+import errno, socket, sys
+def denied_by_guard(operation):
+    try:
+        operation()
+    except PermissionError:
+        return True
+    return False
+s = socket.socket()
+try:
+    if not denied_by_guard(lambda: s.connect(('127.0.0.1', 1))):
+        raise SystemExit(1)
+finally:
+    s.close()
+raise SystemExit(0)
+"""
+    guard_offport = run(["/usr/bin/sandbox-exec", "-p", policy, str(NATIVE_PYTHON), "-B", "-c", guard_offport_source], timeout=30, environment=standard_environment)
+    remember("guard_offport_socket_denied", guard_offport)
+    if guard_offport.returncode != 0:
+        raise RuntimeError("guard off-port socket denial probe failed")
+    os_offport = run(["/usr/bin/sandbox-exec", "-p", policy, str(NATIVE_PYTHON), "-S", "-B", "-c", "import errno,socket,sys; s=socket.socket(); code=s.connect_ex(('127.0.0.1',1)); s.close(); raise SystemExit(0 if code in {errno.EPERM,errno.EACCES} else 1)"], timeout=30, environment=environment)
+    remember("os_offport_socket_denied", os_offport)
+    native_offport = run(["/usr/bin/sandbox-exec", "-p", policy, str(PSQL), "-X", "-h", "127.0.0.1", "-p", "1", "-d", "postgres", "-c", "SELECT 1"], timeout=30, environment=environment)
+    remember("os_native_libpq_denied", native_offport)
+    if os_offport.returncode != 0 or native_offport.returncode == 0 or "Operation not permitted" not in native_offport.stderr:
+        raise RuntimeError("OS off-port socket/native libpq denial probe failed")
+
+    escape = run_root / "outside-link"
+    escape.symlink_to(ROOT, target_is_directory=True)
+    write_probe = """
+import errno, sys
+from pathlib import Path
+targets = [Path(%r), Path(%r), Path(%r)]
+for target in targets:
+    try:
+        handle = target.open('x', encoding='utf-8')
+        try:
+            handle.write('must-not-write')
+        finally:
+            handle.close()
+    except OSError:
+        if sys.exception().errno not in {errno.EPERM, errno.EACCES}:
+            raise SystemExit(3)
+    else:
+        raise SystemExit(4)
+raise SystemExit(0)
+""" % (
+        str(guard_dir / "write-probe"),
+        str(ROOT / (".content-performance-write-probe-" + uuid.uuid4().hex)),
+        str(escape / (".content-performance-write-probe-" + uuid.uuid4().hex)),
+    )
+    write_result = run(["/usr/bin/sandbox-exec", "-p", policy, str(NATIVE_PYTHON), "-B", "-c", write_probe], timeout=30, environment=standard_environment)
+    remember("guard_and_repository_write_denied", write_result)
+    if write_result.returncode != 0:
+        raise RuntimeError("guard/repository write denial probe failed")
+    return records
+
+
+def run_driver(run_root: Path, port: int, environment: dict[str, str], smoke: bool) -> dict[str, Any]:
+    guard_dir = run_root / "guard"
+    guard_dir.mkdir(mode=0o700)
+    guard_target = guard_dir / "sitecustomize.py"
+    shutil.copyfile(GUARD_SOURCE, guard_target)
+    context_path = guard_dir / "context.json"
+    write_json(context_path, context_payload(port))
+    child_environment = guard_environment(environment, guard_dir, context_path)
+    child_environment["LOCALOS_READINESS_JOURNEY_DATABASE_URL"] = dsn(port)
+    command = driver_command(run_root, port, smoke, guard_dir)
+    probes = run_negative_probes(run_root, port, environment, guard_dir, context_path)
+    bindings_before = protected_hashes(guard_target, context_path)
+    started = time.monotonic()
+    stdout_path = run_root / "driver-stdout.log"
+    stderr_path = run_root / "driver-stderr.log"
+    stdout_handle = stdout_path.open("x", encoding="utf-8")
+    stderr_handle = stderr_path.open("x", encoding="utf-8")
+    try:
+        process = subprocess.Popen(
+            command, cwd=ROOT, env=child_environment,
+            stdout=stdout_handle, stderr=stderr_handle,
+            text=True, start_new_session=True,
+        )
+    finally:
+        stdout_handle.close()
+        stderr_handle.close()
+    stop_reason = None
+    registry = None
+    termination = {"status": "not_observed"}
+    error_type = None
+    try:
+        registry = OwnedProcesses(process)
+        while True:
+            registry.observe()
+            if process.poll() is not None:
+                break
+            elapsed = time.monotonic() - started
+            if elapsed > MAX_WALL_SECONDS:
+                stop_reason = "wall_timeout"
+                break
+            if shutil.disk_usage(PRIVATE_TMP).free < MIN_FREE_LIVE:
+                stop_reason = "live_disk_below_2_gib"
+                break
+            if stdout_path.stat().st_size + stderr_path.stat().st_size > 20 * 1024**2:
+                stop_reason = "log_size_limit"
+                break
+            time.sleep(0.1)
+    except BaseException:
+        stop_reason = "driver_supervision_error"
+        error_type = type(sys.exception()).__name__
+    finally:
+        if registry is not None:
+            termination = registry.cleanup()
+        else:
+            termination = {"status": "identity_not_pinned"}
+            if process.poll() is None:
+                process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+            stop_reason = stop_reason or "driver_reap_timeout"
+        if termination.get("status") != "clean":
+            stop_reason = stop_reason or "process_cleanup_failed"
+        elif termination.get("signalled"):
+            stop_reason = stop_reason or "unexpected_surviving_descendants"
+    stdout = stdout_path.read_text(encoding="utf-8", errors="replace")
+    stderr = stderr_path.read_text(encoding="utf-8", errors="replace")
+    bindings_after = protected_hashes(guard_target, context_path)
+    capture = {
+        "command": command,
+        "exit_code": process.returncode,
+        "timed_out": stop_reason == "wall_timeout",
+        "stopped_reason": stop_reason,
+        "supervision_error_type": error_type,
+        "termination": termination,
+        "duration_seconds": round(time.monotonic() - started, 3),
+        "stdout_tail": stdout[-4000:],
+        "stderr_tail": stderr[-4000:],
+        "guard_sha256": digest(guard_target),
+        "context": context_payload(port),
+        "negative_probes": probes,
+        "protected_hashes_before": bindings_before,
+        "protected_hashes_after": bindings_after,
+        "protected_hashes_match": bindings_after == bindings_before,
+    }
+    write_json(run_root / "driver-capture.json", capture)
+    return capture
+
+
+def post_driver_database_check(run_root: Path, port: int, environment: dict[str, str], smoke: bool, expected_refs: dict[str, str]) -> dict[str, Any]:
+    output_path = run_root / "driver-output.json"
+    if not output_path.is_file():
+        raise RuntimeError("driver did not retain its output for database cleanup verification")
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    plan = payload.get("plan") or {}
+    if payload.get("executed") is not True or payload.get("valid") is not True or payload.get("invalid_reasons") not in ([], None):
+        raise RuntimeError("measurement driver did not report a valid executed result")
+    if (plan.get("refs") or {}) != expected_refs:
+        raise RuntimeError("measurement driver did not retain the exact requested refs")
+    if plan.get("harness_sha256") != digest(ROOT / "scripts/readiness_journey_benchmark.py"):
+        raise RuntimeError("measurement harness binding mismatch")
+    if (plan.get("driver") or {}).get("sha256") != digest(DRIVER):
+        raise RuntimeError("measurement driver binding mismatch")
+    expected_guard = {"path": str(run_root / "guard/sitecustomize.py"), "sha256": digest(run_root / "guard/sitecustomize.py")}
+    if plan.get("guard") != expected_guard:
+        raise RuntimeError("measurement guard binding mismatch")
+    expected_counts = {"warmup": 0 if smoke else 5, "serial": 1 if smoke else 50}
+    limits = plan.get("limits") or {}
+    if (
+        limits.get("warmups_per_ref") != expected_counts["warmup"]
+        or limits.get("serial_samples_per_ref") != expected_counts["serial"]
+        or limits.get("load_samples_per_ref") != 0
+        or set(payload.get("runs") or {}) != {"baseline", "current"}
+    ):
+        raise RuntimeError("measurement plan limits or reference buckets differ")
+    names: list[str] = []
+    for run_list in (payload.get("runs") or {}).values():
+        for item in run_list:
+            name = str(item.get("planned_database_name") or "")
+            if RUN_DATABASE_RE.fullmatch(name) is None:
+                raise RuntimeError("driver emitted an invalid owned database name")
+            names.append(name)
+    if not names or len(names) != len(set(names)):
+        raise RuntimeError("driver did not record a nonempty unique owned database set")
+    expected_per_ref = 1 if smoke else 55
+    expected_total = 2 if smoke else 110
+    if len(names) != expected_total or any(len(run_list) != expected_per_ref for run_list in (payload.get("runs") or {}).values()):
+        raise RuntimeError("measurement driver did not execute the literal sample matrix")
+    for label, run_list in payload["runs"].items():
+        for phase, count in expected_counts.items():
+            phase_runs = [item for item in run_list if item.get("phase") == phase]
+            if len(phase_runs) != count or sorted(item.get("sample_number") for item in phase_runs) != list(range(count)):
+                raise RuntimeError("measurement phase sample matrix differs")
+        for item in run_list:
+            if item.get("valid") is not True or item.get("invalid_reasons") not in ([], None) or item.get("ref") != expected_refs[label]:
+                raise RuntimeError("measurement driver retained an invalid sample")
+    observed = psql_scalar(dsn(port, "postgres"), "SELECT datname FROM pg_database ORDER BY datname", environment).splitlines()
+    expected_system_databases = ["postgres", "template0", "template1"]
+    if observed != expected_system_databases:
+        raise RuntimeError("fresh private cluster retains a non-system database after measurement")
+    return {"planned_database_names": sorted(names), "remaining_databases": observed, "all_planned_absent": True}
+
+
+def preflight(smoke: bool) -> dict[str, Any]:
+    executables = executable_paths()
+    try:
+        import psutil
+    except ImportError:
+        raise RuntimeError("psutil is required to terminate a timed-out measurement process tree")
+    if shutil.disk_usage(PRIVATE_TMP).free < MIN_FREE_START:
+        raise RuntimeError("requires at least 5 GiB free before creating a private cluster")
+    baseline = resolve_ref(BASELINE_REF)
+    current = resolve_ref(CURRENT_REF)
+    return {
+        "baseline": baseline,
+        "current": current,
+        "source_manifests_before": {"baseline": source_manifest(baseline), "current": source_manifest(current)},
+        "executables": executables,
+        "driver_sha256": digest(DRIVER),
+        "guard_source_sha256": digest(GUARD_SOURCE),
+        "psutil_version": str(psutil.__version__),
+        "workspace_state_before": workspace_state(),
+        "profile": {"warmups": 0 if smoke else 5, "serial_samples": 1 if smoke else 50, "load_samples": 0, "load_concurrency": 2},
+        "limits": {"start_free_bytes": MIN_FREE_START, "live_free_bytes": MIN_FREE_LIVE, "wall_seconds": MAX_WALL_SECONDS},
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--smoke", action="store_true")
+    args = parser.parse_args()
+    report: dict[str, Any] = {"phase": "preflight", "execute": bool(args.execute), "smoke": bool(args.smoke), "started_at": time.time()}
+    run_root = None
+    cluster_identity = None
+    postmaster_process = None
+    environment = None
+    try:
+        report["preflight"] = preflight(args.smoke)
+        if not args.execute:
+            report["phase"] = "planned_not_executed"
+        else:
+            run_root = Path(tempfile.mkdtemp(prefix="localos-content-perf.", dir=PRIVATE_TMP))
+            (run_root / "tmp").mkdir(mode=0o700)
+            environment = private_environment(run_root)
+            port = choose_loopback_port()
+            report["run_root"] = str(run_root)
+            report["context"] = context_payload(port)
+            cluster_identity, postmaster_process = initialize_cluster(run_root, port, environment)
+            report["cluster_identity"] = cluster_identity
+            if shutil.disk_usage(PRIVATE_TMP).free < MIN_FREE_LIVE:
+                raise RuntimeError("private cluster started but live free space is below 2 GiB")
+            report["phase"] = "running_driver"
+            report["driver"] = run_driver(run_root, port, environment, args.smoke)
+            if report["driver"].get("exit_code") == 0 and report["driver"].get("stopped_reason") is None and report["driver"].get("protected_hashes_match") is True:
+                expected_refs = {"baseline": report["preflight"]["baseline"], "current": report["preflight"]["current"]}
+                report["database_cleanup"] = post_driver_database_check(run_root, port, environment, args.smoke, expected_refs)
+                before = report["preflight"]["source_manifests_before"]
+                after = {"baseline": source_manifest(report["preflight"]["baseline"]), "current": source_manifest(report["preflight"]["current"])}
+                report["source_manifests_after"] = after
+                if after != before:
+                    raise RuntimeError("git source manifest drifted during measurement")
+                report["phase"] = "passed"
+            else:
+                report["phase"] = "driver_nonpass"
+    except ClusterInitializationError:
+        error = sys.exception()
+        cluster_identity = error.identity
+        postmaster_process = error.process
+        report["cluster_identity"] = cluster_identity
+        report["phase"] = "failed"
+        report["error_type"] = type(error).__name__
+        report["error"] = str(error)[-2000:]
+    except Exception:
+        report["phase"] = "failed"
+        report["error_type"] = type(sys.exception()).__name__
+        report["error"] = str(sys.exception())[-2000:]
+    finally:
+        if run_root and cluster_identity and postmaster_process and environment:
+            if cluster_identity.get("verified") is True:
+                try:
+                    names = psql_scalar(dsn(report["context"]["port"], "postgres"), "SELECT datname FROM pg_database ORDER BY datname", environment).splitlines()
+                    report["database_inventory_after"] = names
+                    report["only_system_databases_after"] = names == ["postgres", "template0", "template1"]
+                    if report["phase"] == "passed" and report["only_system_databases_after"] is not True:
+                        report["phase"] = "cleanup_failed"
+                except Exception:
+                    report["database_inventory_error"] = type(sys.exception()).__name__
+                    if report["phase"] == "passed":
+                        report["phase"] = "cleanup_failed"
+            if "driver" in report and "database_cleanup" not in report:
+                try:
+                    expected_refs = {"baseline": report["preflight"]["baseline"], "current": report["preflight"]["current"]}
+                    report["database_cleanup"] = post_driver_database_check(run_root, int(report["context"]["port"]), environment, args.smoke, expected_refs)
+                except Exception:
+                    report["database_cleanup"] = {"error_type": type(sys.exception()).__name__, "error": str(sys.exception())[-1000:]}
+            if "preflight" in report:
+                try:
+                    report["source_manifests_after"] = {
+                        "baseline": source_manifest(report["preflight"]["baseline"]),
+                        "current": source_manifest(report["preflight"]["current"]),
+                    }
+                except Exception:
+                    report["source_manifests_after_error"] = type(sys.exception()).__name__
+                try:
+                    report["workspace_state_after"] = workspace_state()
+                except Exception:
+                    report["workspace_state_after_error"] = type(sys.exception()).__name__
+            try:
+                report["cluster_stop"] = stop_exact_cluster(Path(cluster_identity["data_directory"]), int(cluster_identity["pid"]), postmaster_process)
+            except Exception:
+                report["cluster_stop"] = {"status": "stop_exception", "error_type": type(sys.exception()).__name__}
+            if report["cluster_stop"].get("status") != "stopped":
+                report["phase"] = "cleanup_failed"
+        if run_root:
+            guard_target = run_root / "guard" / "sitecustomize.py"
+            context_path = run_root / "guard" / "context.json"
+            if guard_target.is_file() and context_path.is_file():
+                try:
+                    report["protected_hashes_after"] = protected_hashes(guard_target, context_path)
+                except OSError:
+                    report["protected_hashes_after_error"] = type(sys.exception()).__name__
+        report["ended_at"] = time.time()
+        if run_root:
+            write_json(run_root / "wrapper-result.json", report)
+            report["preserved_result"] = str(run_root / "wrapper-result.json")
+        print(json.dumps(report, ensure_ascii=False, sort_keys=True))
+    return 0 if report["phase"] in {"planned_not_executed", "passed"} else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

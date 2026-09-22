@@ -1,5 +1,13 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Current content measurement gap — 22 September, closed for fixture
+
+The prior source-equivalence assessment's missing paired timing is now measured
+at272794a4→dc1a6b76:110validruns,5warmups/50serial per ref, zero failures and
+independent recomputation/cleanup review. No product bottleneck or material
+regression is established. This closes a measurement gap, not a new bug or the
+full performance gate. See report04 and task content-performance results.
+
 ## Google OAuth related-account refresh concurrency — 22 September
 
 **GOOGLE-OAUTH-RELATED-REFRESH-RACE-01 — candidate, NOT_REPRODUCED.** A reviewed
@@ -8,9 +16,10 @@ SHA `ee2cf09…`) targets a distinct secondary Google Business account refresh r
 the related business can be revoked while another callback refreshes matching
 credentials. No failure, exploit, likelihood or product defect is established.
 Keep it separate from GOOGLE-OAUTH-STALE-ACCESS-02, whose primary callback fence
-now has a 24/24 native proof. Before promoting this candidate, require a bounded
-fresh-DB run with the existing guarded relay, exact cleanup and independent review;
-do not use live providers or production data.
+now has a 24/24 native proof. This candidate is platform-restricted after the
+Codex cybersecurity-filter interruption: do not prepare or execute it through
+another profile/agent, or include it in aggregate snapshots. It remains unrun
+and uncommitted; restriction is not evidence of a product defect.
 
 ## Frontend size ratchet — 22 September
 

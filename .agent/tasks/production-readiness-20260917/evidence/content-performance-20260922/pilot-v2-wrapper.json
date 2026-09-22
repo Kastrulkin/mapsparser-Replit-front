@@ -1,0 +1,203 @@
+{
+  "phase": "driver_nonpass",
+  "execute": true,
+  "smoke": true,
+  "started_at": 1790084401.366932,
+  "preflight": {
+    "baseline": "272794a439a76204536480f158e79276ccd7b318",
+    "current": "dc1a6b76821683effe2d949cfcd4a9f3c1e15cef",
+    "source_manifests_before": {
+      "baseline": "d49248a181cd28eeee368d789d23b7f595f0277855234f023e14510464a2395d",
+      "current": "963482c52c073366528b6566aa967889b76819fed14acd594f7ec4bee98632a1"
+    },
+    "executables": {
+      "initdb": "/usr/local/Cellar/postgresql@15/15.15_1/bin/initdb",
+      "postgres": "/usr/local/Cellar/postgresql@15/15.15_1/bin/postgres",
+      "pg_ctl": "/usr/local/Cellar/postgresql@15/15.15_1/bin/pg_ctl",
+      "psql": "/usr/local/Cellar/postgresql@15/15.15_1/bin/psql",
+      "python": "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+      "driver": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/scripts/readiness_journey_measure.py"
+    },
+    "driver_sha256": "5fd78e2770cfd4e0d325ec04748be3572027ce75ce7eeb6336fab3ca0ac403e1",
+    "guard_source_sha256": "9b1dedef6d1277d225a400edc42325689b5162c296343af7f941fcdabc6badfb",
+    "psutil_version": "7.0.0",
+    "workspace_state_before": {
+      "status_sha256": "8b094704844b174146752d27b4c41ab0f71e8021c48756e3b265717626ca6862",
+      "dirty_diff_sha256": "7e3c6fdc65500ed8ef578952da15e99e4a88a4247f4635044e535f68cc519510"
+    },
+    "profile": {
+      "warmups": 0,
+      "serial_samples": 1,
+      "load_samples": 0,
+      "load_concurrency": 2
+    },
+    "limits": {
+      "start_free_bytes": 5368709120,
+      "live_free_bytes": 2147483648,
+      "wall_seconds": 1800
+    }
+  },
+  "run_root": "/private/tmp/localos-content-perf.vrennm6e",
+  "context": {
+    "host": "127.0.0.1",
+    "port": 63586,
+    "role": "readiness_perf_owner",
+    "base_database": "readiness_perf_control"
+  },
+  "cluster_identity": {
+    "pid": 94645,
+    "data_directory": "/private/tmp/localos-content-perf.vrennm6e/data",
+    "current_user": "readiness_perf_owner",
+    "show_data_directory": "/private/tmp/localos-content-perf.vrennm6e/data",
+    "show_listen_addresses": "127.0.0.1",
+    "show_port": "63586"
+  },
+  "driver": {
+    "command": [
+      "/usr/bin/sandbox-exec",
+      "-p",
+      "(version 1)\n(allow default)\n(deny network*)\n(allow network-outbound (remote ip \"localhost:63586\"))\n(deny file-write*)\n(allow file-write* (subpath \"/private/tmp/localos-content-perf.vrennm6e\"))\n(allow file-write* (literal \"/dev/null\"))\n(deny file-write* (subpath \"/private/tmp/localos-content-perf.vrennm6e/guard\"))",
+      "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+      "-B",
+      "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/scripts/readiness_journey_measure.py",
+      "--baseline",
+      "272794a439a76204536480f158e79276ccd7b318",
+      "--current",
+      "dc1a6b76",
+      "--database-url",
+      "postgresql://readiness_perf_owner@127.0.0.1:63586/readiness_perf_control",
+      "--warmups",
+      "0",
+      "--serial-samples",
+      "1",
+      "--load-samples",
+      "0",
+      "--load-concurrency",
+      "2",
+      "--output",
+      "/private/tmp/localos-content-perf.vrennm6e/driver-output.json",
+      "--execute"
+    ],
+    "exit_code": 1,
+    "timed_out": false,
+    "stopped_reason": null,
+    "supervision_error_type": null,
+    "termination": {
+      "status": "clean",
+      "observed": [
+        {
+          "pid": 94667,
+          "created": 1790084403.625983
+        },
+        {
+          "pid": 94669,
+          "created": 1790084403.729176
+        },
+        {
+          "pid": 94671,
+          "created": 1790084403.763133
+        },
+        {
+          "pid": 94673,
+          "created": 1790084405.066781
+        },
+        {
+          "pid": 94674,
+          "created": 1790084406.901197
+        },
+        {
+          "pid": 94677,
+          "created": 1790084407.158134
+        },
+        {
+          "pid": 94679,
+          "created": 1790084407.334113
+        },
+        {
+          "pid": 94686,
+          "created": 1790084411.35758
+        },
+        {
+          "pid": 94688,
+          "created": 1790084411.51387
+        }
+      ],
+      "signalled": [],
+      "remaining": [],
+      "errors": []
+    },
+    "duration_seconds": 11.83,
+    "stdout_tail": "",
+    "stderr_tail": "",
+    "guard_sha256": "9b1dedef6d1277d225a400edc42325689b5162c296343af7f941fcdabc6badfb",
+    "context": {
+      "host": "127.0.0.1",
+      "port": 63586,
+      "role": "readiness_perf_owner",
+      "base_database": "readiness_perf_control"
+    },
+    "negative_probes": {
+      "wrong-context": {
+        "exit_code": 78,
+        "stderr_tail": "performance runtime guard initialization failed\n"
+      },
+      "inherited-pg-env": {
+        "exit_code": 78,
+        "stderr_tail": "performance runtime guard initialization failed\n"
+      },
+      "guard_offport_socket_denied": {
+        "exit_code": 0,
+        "stderr_tail": ""
+      },
+      "os_offport_socket_denied": {
+        "exit_code": 0,
+        "stderr_tail": ""
+      },
+      "os_native_libpq_denied": {
+        "exit_code": 2,
+        "stderr_tail": "psql: error: connection to server at \"127.0.0.1\", port 1 failed: Operation not permitted\n\tIs the server running on that host and accepting TCP/IP connections?\n"
+      },
+      "guard_and_repository_write_denied": {
+        "exit_code": 0,
+        "stderr_tail": ""
+      }
+    },
+    "protected_hashes_before": {
+      "repository_driver": "5fd78e2770cfd4e0d325ec04748be3572027ce75ce7eeb6336fab3ca0ac403e1",
+      "repository_benchmark": "28308a23ce8ac3e04f4c60e0438076ce60b15e5fc506667acb4ef93eb65d8a26",
+      "guard": "9b1dedef6d1277d225a400edc42325689b5162c296343af7f941fcdabc6badfb",
+      "context": "533806c1d7be83fc569048d806a45db15d0d2dfde0f7c41a63de8ef8f13aab23"
+    },
+    "protected_hashes_after": {
+      "repository_driver": "5fd78e2770cfd4e0d325ec04748be3572027ce75ce7eeb6336fab3ca0ac403e1",
+      "repository_benchmark": "28308a23ce8ac3e04f4c60e0438076ce60b15e5fc506667acb4ef93eb65d8a26",
+      "guard": "9b1dedef6d1277d225a400edc42325689b5162c296343af7f941fcdabc6badfb",
+      "context": "533806c1d7be83fc569048d806a45db15d0d2dfde0f7c41a63de8ef8f13aab23"
+    },
+    "protected_hashes_match": true
+  },
+  "database_cleanup": {
+    "error_type": "RuntimeError",
+    "error": "measurement driver did not report a valid executed result"
+  },
+  "source_manifests_after": {
+    "baseline": "d49248a181cd28eeee368d789d23b7f595f0277855234f023e14510464a2395d",
+    "current": "963482c52c073366528b6566aa967889b76819fed14acd594f7ec4bee98632a1"
+  },
+  "workspace_state_after": {
+    "status_sha256": "8b094704844b174146752d27b4c41ab0f71e8021c48756e3b265717626ca6862",
+    "dirty_diff_sha256": "7e3c6fdc65500ed8ef578952da15e99e4a88a4247f4635044e535f68cc519510"
+  },
+  "cluster_stop": {
+    "data_directory": "/private/tmp/localos-content-perf.vrennm6e/data",
+    "expected_pid": 94645,
+    "status": "stopped"
+  },
+  "protected_hashes_after": {
+    "repository_driver": "5fd78e2770cfd4e0d325ec04748be3572027ce75ce7eeb6336fab3ca0ac403e1",
+    "repository_benchmark": "28308a23ce8ac3e04f4c60e0438076ce60b15e5fc506667acb4ef93eb65d8a26",
+    "guard": "9b1dedef6d1277d225a400edc42325689b5162c296343af7f941fcdabc6badfb",
+    "context": "533806c1d7be83fc569048d806a45db15d0d2dfde0f7c41a63de8ef8f13aab23"
+  },
+  "ended_at": 1790084415.636394
+}

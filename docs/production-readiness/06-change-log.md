@@ -1,5 +1,14 @@
 # Production-readiness change log
 
+## Current performance proof — 22 September, parent dc1a6b76
+
+Add bounded native measurement support and raw evidence; no application change.
+Fix two measured fixture failures (macOS policy syntax and initdb encoding),
+retain their failed captures, pass pilot then full5warmup/50serial/ref ABBA run.
+All110runs pass, generated DBs verified absent, ownedPG stopped; independent
+runtime and quantile reviews pass. Current content total p50 478.622→482.938ms,
+p95 525.094→519.408ms. No speedup/capacity or whole-readiness claim. See report04.
+
 ## Google OAuth stale-access native proof — 22 September, parent debd6006
 
 Add one isolated PostgreSQL test module and bounded native harness support; no

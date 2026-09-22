@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "label": "oauth-package-commit",
+  "captured_at": "2026-09-22T12:56:31.833642+00:00",
+  "command": [
+    "git",
+    "commit",
+    "-m",
+    "test(auth): verify OAuth access fencing on PostgreSQL"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 285.307,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "[codex/production-readiness-20260917 dc1a6b76] test(auth): verify OAuth access fencing on PostgreSQL\n 26 files changed, 2017 insertions(+), 5 deletions(-)\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/google-oauth-native-20260922/SHA256SUMS\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/google-oauth-native-20260922/native-tc-google-oauth-current-access-pg-v1-events.jsonl\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/google-oauth-native-20260922/native-tc-google-oauth-current-access-pg-v1-negative.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/google-oauth-native-20260922/native-tc-google-oauth-current-access-pg-v1.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/google-oauth-native-20260922/native-tc-google-oauth-current-access-pg-v2-child.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/google-oauth-native-20260922/native-tc-google-oauth-current-access-pg-v2-events.jsonl\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/google-oauth-native-20260922/native-tc-google-oauth-current-access-pg-v2-negative.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/google-oauth-native-20260922/native-tc-google-oauth-current-access-pg-v2-relay.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/google-oauth-native-20260922/native-tc-google-oauth-current-access-pg-v2.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/google-oauth-native-20260922/native-tc-google-oauth-current-access-pg-v3-child.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/google-oauth-native-20260922/native-tc-google-oauth-current-access-pg-v3-events.jsonl\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/google-oauth-native-20260922/native-tc-google-oauth-current-access-pg-v3-negative.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/google-oauth-native-20260922/native-tc-google-oauth-current-access-pg-v3-relay.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/google-oauth-native-20260922/native-tc-google-oauth-current-access-pg-v3.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/google-oauth-native-20260922/previous-callback-commit.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/google-oauth-native-20260922/previous-callback-staged-scan.json\n create mode 100644 .agent/tasks/production-readiness-20260917/evidence/google-oauth-native-results-20260922.md\n create mode 100644 tests/test_google_oauth_current_access_pg.py\n",
+  "stderr": "[dup-check] scanning tracked files...\n[dup-check] scanning untracked workspace files...\n[dup-check] OK\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}
