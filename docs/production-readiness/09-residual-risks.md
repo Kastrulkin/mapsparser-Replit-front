@@ -1,5 +1,17 @@
 # Residual risks — working register
 
+## 22 September — scoped PG51/Sheets16 passes are not full readiness
+
+Fresh Operator/finance role execution passes 51 nodes / 153 phases, including
+42 previously skipped PG setups, with exact generated DB/process cleanup and
+unchanged source. It does not certify the whole role matrix, session middleware,
+services/content migrated profile or the full backend aggregate. Earlier
+independent preflight and final runtime/package reviews pass. A separate Sheets
+run passes 16 nodes / 48 phases, also independently accepted, but deliberately
+uses committed HEAD for the dirty executor and raw psycopg2 connections. The
+production placeholder-adapter seam remains under investigation; do not treat
+these scoped passes as proof that the whole Sheets delivery path is correct.
+
 ## 22 September — current aggregate is still not green
 
 Exact d0ef full offline run:5516nodes,4347pass,53fail,1116skip,14passing subtests.

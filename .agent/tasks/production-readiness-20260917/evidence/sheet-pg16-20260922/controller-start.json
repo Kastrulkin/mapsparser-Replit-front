@@ -1,0 +1,76 @@
+{
+  "bridge": [
+    {
+      "path": "tests/test_agent_sheet_provider_queue_pg.py",
+      "sha256": "5db1a32324bb257592f33993147e19063c8929e825a53d5d446d0357e58a916a"
+    },
+    {
+      "path": "tests/test_agent_sheet_provider_recovery_pg.py",
+      "sha256": "21fc054f5911867b5802aa8a94c1aaefd37782f3459dfdec4ccc1d6fe2c79005"
+    },
+    {
+      "path": "tests/conftest.py",
+      "sha256": "893fef47376fdf4cd1bc1b8029b0f7bdaaf46a0385d3c7f91f94cecef669b1c0"
+    },
+    {
+      "path": "src/services/agent_blueprint_runner.py",
+      "sha256": "36c4005147d45d387b2dd375b027fb612d8c6b2ea92ea4713e6b11a80224c131"
+    },
+    {
+      "path": "src/services/agent_run_queue.py",
+      "sha256": "58886602c0fa1f92de9a37129322582e1f741e4586aa42e061a005b42a93b350"
+    },
+    {
+      "path": "src/services/agent_capability_handlers.py",
+      "sha256": "d9a448be3009d9bb601a7128f07bc010b696f539cf02d330a9a59d76bc060f81"
+    },
+    {
+      "path": "src/services/agent_domain_request_executors.py",
+      "sha256": "ccf74b0043a1f8356d5b474c5eabc8fa30e5131117e934c29f56f4cdc0f55575"
+    },
+    {
+      "path": "src/database_manager.py",
+      "sha256": "44eea9318d8a940e1cda9e85e22828f064c1cc883a776ce5f08d3ce2ec006775"
+    },
+    {
+      "excluded_working_tree_sha256": "fd190611c27d1663e38f125c3d5ac79699776b2da46e078cc82b98635bbb7763",
+      "path": "src/services/agent_sheet_provider_executor.py",
+      "sha256": "f310241af7d9febbf3eeae1974b4abce94ecd4b865be0a1a81e1bc1164c4b9ba",
+      "source_kind": "committed_HEAD_only"
+    }
+  ],
+  "controller_before_sha256": "a700e6c866f5b2556f3b178b4472f606267efb31a665c17dfab738ad4ecba266",
+  "database": "readiness_sheet_test_ac0756b5844146f3a4f4141627183288",
+  "deadline_seconds": 300,
+  "guard_before_sha256": "52a287a0ad7406a073d8cb3e5f64e3b35f121d782fa492b5a2fce97a0f8fd8c3",
+  "helpers": {
+    "owned_processes_sha256": "4f16b6c343223717dcf3b5bdbf86ff9159594b33fa92d744527891188c4c227b",
+    "performance_native_sha256": "0cafe7e3828d950db73b5fb88b6dc3177e329aee5eba10f98b10b59b9a43b6ba"
+  },
+  "nodes": [
+    "tests/test_agent_sheet_provider_queue_pg.py::test_only_one_worker_claims_bound_provider_request",
+    "tests/test_agent_sheet_provider_queue_pg.py::test_revoked_or_expired_claim_never_returns_to_send_queue",
+    "tests/test_agent_sheet_provider_queue_pg.py::test_missing_or_mutated_approval_snapshot_cannot_claim",
+    "tests/test_agent_sheet_provider_queue_pg.py::test_preview_or_explicit_no_effect_run_cannot_claim_provider_write[input_json0]",
+    "tests/test_agent_sheet_provider_queue_pg.py::test_preview_or_explicit_no_effect_run_cannot_claim_provider_write[input_json1]",
+    "tests/test_agent_sheet_provider_queue_pg.py::test_expired_provider_lease_requires_reconciliation",
+    "tests/test_agent_sheet_provider_queue_pg.py::test_provider_worker_commits_claim_before_fake_write_and_resumes_once",
+    "tests/test_agent_sheet_provider_queue_pg.py::test_old_executor_selector_cannot_claim_new_provider_pending_handoff",
+    "tests/test_agent_sheet_provider_queue_pg.py::test_mutated_bound_payload_is_held_without_provider_claim",
+    "tests/test_agent_sheet_provider_queue_pg.py::test_actual_runner_snapshot_handler_binder_and_provider_resume[sheets.append_row_request-payload0]",
+    "tests/test_agent_sheet_provider_queue_pg.py::test_actual_runner_snapshot_handler_binder_and_provider_resume[google_sheets.update_cells-payload1]",
+    "tests/test_agent_sheet_provider_recovery_pg.py::test_two_processors_make_one_write_with_no_open_transaction",
+    "tests/test_agent_sheet_provider_recovery_pg.py::test_expired_finisher_cannot_resume_run_even_before_recovery",
+    "tests/test_agent_sheet_provider_recovery_pg.py::test_provider_timeout_stays_unknown_without_automatic_repeat",
+    "tests/test_agent_sheet_provider_recovery_pg.py::test_local_commit_failure_after_provider_success_requires_reconciliation",
+    "tests/test_agent_sheet_provider_recovery_pg.py::test_resumed_run_preserves_sheet_step_and_finalizes_once"
+  ],
+  "nodes_before_sha256": "2b75e95710cdb6b32069390c830ac37be4e82e41ffa814dbddb8b9bf8a119d4f",
+  "port": 50721,
+  "run_root": "/private/tmp/localos-sheet-pg16.mknhb6m_",
+  "source_before": {
+    "count": 6340,
+    "sha256": "48af8ec2a135fbb7858a859bdf59c680eb8076b5ff9c1d6b3a12d42ea5892067"
+  },
+  "status": "started"
+}

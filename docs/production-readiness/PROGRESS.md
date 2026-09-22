@@ -1,5 +1,49 @@
 # Production-readiness progress
 
+## Current checkpoint — 22 September, Sheets recovery and independent acceptance
+
+- [x] Fresh Sheets queue/recovery proof: 16 nodes / 48 phases passed in
+  9.875424 s outer, no skip/fail/xfail/warnings; seven runtime controls, 19 pure
+  controls, helper Ruff, immutable source and exact DB/process cleanup pass.
+- [x] Independent reviews accepted both this PG16 run and the preceding PG51
+  run. The transient reviewer usage error cleared in a fresh account-state check;
+  no model/account switch, credit redemption or quota workaround was used.
+- [x] Executor is explicitly HEAD-only: its existing two SQL edits remain
+  excluded and untouched. Eight other direct inputs match current files.
+- [ ] Separate adapter-seam investigation: native psycopg2 fixtures do not cover
+  DBCursorWrapper's handling of PostgreSQL's `?` operator. Read-only trace suggests
+  a concrete defect; prepare causal red/green before calling it reproduced/fixed.
+- [ ] Final scoped staged scan/local evidence commit, remaining full-objective
+  gates and pending dirty-file decisions remain. No production/provider change.
+
+Evidence: task `evidence/sheet-pg16-results-20260922.md` and 12-artifact bundle.
+The runs are separate scoped passes, not a new combined/full aggregate.
+
+## Current checkpoint — 22 September, RBAC PostgreSQL execution
+
+- [x] Parent `3ce90e4a`; 51 exact Operator/chat/finance role tests passed all
+  153 lifecycle phases on a fresh owned native PostgreSQL cluster. This includes
+  42 previously setup-skipped PG tests plus nine pure tests. Outer 12.366546 s,
+  exit 0; no skips, xfails, collection errors or recorded warnings.
+- [x] Seven runtime isolation controls and 19 pure controls pass; helper Ruff
+  is clean. Generated schemas/DB are absent, owned PostgreSQL and child stopped,
+  no remaining processes; frozen source, controller/guard/node hashes unchanged.
+- [x] Services/content 55-node fixture is kept separate: it needs migrated
+  public tables and its own strict DSN/guard contract. Found historical real-PG
+  164-test adjacent evidence and unchanged role-test/direct-API bytes; this is
+  not a new current 55-node run or 165-stage callback.
+- [x] Independent final-controller/runtime/package review now PASS. The earlier
+  usage-limit interruption is retained as history; the same reviewer verified
+  final hashes, exact phase accounting, cleanup and bounded claims after resuming.
+- [ ] Remaining integration and fresh aggregate, image 206 candidates, owner
+  decisions, current load/browser/CI/demo and whole-diff review remain open.
+
+Evidence: task `evidence/rbac-pg51-results-20260922.md` and its 15-artifact hashed
+bundle. Initial bundle-only secret scan: zero findings, exit 0. No application
+change, production/provider/Docker use, restricted-test
+retry, foreign-file adoption, push or deployment. The reviewed evidence package
+awaits the final scoped scan and local commit.
+
 ## Current checkpoint — 22 September, gate reconciliation
 
 - [x] HEAD `202b9c95` locally commits the polling/dist fixes and their24-node

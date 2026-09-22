@@ -1,5 +1,64 @@
 # Readiness handoff
 
+## Latest continuation — 22 September, PG51 and Sheets16 accepted
+
+Current HEAD `3ce90e4a42aff8975a6462d39c0f64cdc63faf20`, branch
+`codex/production-readiness-20260917`. Original tracked foreign eight-file diff
+still SHA `40afa0141e5fe1b9fe9d18ee651ba61e19a27367158d71984f5a90a4d2a4c6d1`;
+five foreign untracked files plus restricted OAuth candidate remain untouched.
+Owned uncommitted changes are only PG51/Sheets16 evidence and readiness documentation.
+
+First real PG51 run is terminal: 51 nodes / 153 passing phases, no skips/xfails/
+warnings/collection errors, outer 12.366546 s / exit 0. Seven runtime controls,
+19 pure controls and helper Ruff pass. Private runtime
+`/private/tmp/localos-rbac-pg51.iz76jsb2/`, generated DB removed, owned PostgreSQL
+PID 30998 and child 31032 stopped/absent. Do not restart completed tmux session
+`audit-rbac-pg51-v1`. Stopped private cluster still has system-database files.
+Source manifest 6,340 files unchanged; 10 current input paths bridge to d0ef.
+
+Durable bundle: task `evidence/rbac-pg51-20260922/` (15 raw/source artifact hashes
+verified), report `evidence/rbac-pg51-results-20260922.md`. Exact executed controller
+`bc587d82`, guard `be5b92ac`, node list `8d8323fa` remain in
+`/private/tmp/localos-rbac-pg106-MtvalX/`; directory name is historical, actual
+selection is 51, not 106. Earlier pre-execution review accepted controller805;
+only final node-list hash bookkeeping differs. Root checked it and the runtime.
+Independent rebind/runtime/package review initially hit Codex usage limit, then
+passed after a fresh account-state read allowed the same reviewer to resume.
+No alternative model/account, credit redemption or quota workaround was used.
+
+Next: finish the exact owned diff review and strict scoped secret scan, then
+make a local evidence-only commit. PG51 independent runtime/package PASS is done.
+Initial bundle directory scan already passes (zero findings / exit 0); the final
+complete owned diff still needs its scoped pre-commit scan.
+The safe immediate verification is `shasum -a 256 -c SHA256SUMS` from the durable
+PG51 bundle directory, not rerunning its historical controller.
+
+Sheets16 also passed 16 nodes / 48 phases, 9.875424 s / exit 0; independent runtime
+review PASS. Runtime `/private/tmp/localos-sheet-pg16.mknhb6m_/`, wrapper
+`/private/tmp/localos-sheet-pg16.dwUDW3/run_sheet_pg16.py` SHA a700e6c8. Literal
+selection is 11 queue + five recovery nodes (not 21). Source/guard/node hashes,
+seven runtime/19 pure controls and helper Ruff pass. Owned DB is absent,
+PostgreSQL PID 34240 stopped, child 34273 exited and registries empty.
+Durable task `evidence/sheet-pg16-20260922/` has 12 verified artifact hashes;
+its result report explains the committed-HEAD-only executor bridge. Never claim
+this runs the existing dirty executor or production QueryAdapter seam.
+
+Read-only triage of those two dirty SQL edits identifies an adapter candidate:
+DBCursorWrapper sends parameterized SQL containing JSONB `?` to the legacy
+placeholder translator, which sees one marker but four parameters. Native tests
+substitute raw psycopg2 cursors and miss it. A separate private causal proof is
+being prepared; no original foreign file was edited or adopted. Do not call this
+candidate a verified product failure before observing the exact red check.
+
+Services/content55 has historical real-PG evidence at be1b1a95 (164 adjacent
+tests passed); prior recon's "no evidence" was too broad. Test/direct API bytes
+match current, two runtime changes are outside the exercised role paths. This
+does not replace current migrated-profile/aggregate proof. Empty PG51 DB cannot
+run that fixture, and its fixed port/name/pinned guard must not be relaxed.
+
+All other original DoD gaps and restricted OAuth/native-picker constraints remain.
+Pending author/diagnostic dirty adoption choice is unchanged. No push/deploy.
+
 ## Latest continuation — 22 September, current gates reconciled
 
 Current HEAD `202b9c95afc58a2e2d5ebb3fb89523700bcb6892`, same readiness branch.

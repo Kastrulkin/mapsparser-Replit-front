@@ -1,5 +1,22 @@
 # Readiness decisions
 
+## D-124 — Preserve each PostgreSQL fixture's actual prerequisites
+
+The first three Operator/finance role modules require only per-test synthetic
+schemas; the services/content module clones twelve fully migrated public tables
+and requires a separately pinned DSN/guard contract. Split these execution phases
+instead of relaxing the latter guard or manufacturing a partial schema. Keep the
+full original goal and label the pending family explicitly.
+
+Distinguish historical adjacent passes, static source continuity and fresh current
+execution. An old successful run may remain relevant without being a new current
+aggregate or per-node callback. Preserve review provenance too: the reviewer
+accepted PG51's core preparation; its final hash-only addition and runtime were
+accepted after a fresh account-state check allowed the same reviewer to resume.
+Root verification was not renamed independent acceptance, and no quota workaround
+was used. Sheets16 also retains the explicit HEAD-only executor bridge: dirty
+SQL edits are not implicitly adopted or declared tested by raw psycopg2 fixtures.
+
 ## D-123 — Reconcile exact source coverage before expanding test runs
 
 Historical admission inventories are plans, not runtime outcomes. Preserve the

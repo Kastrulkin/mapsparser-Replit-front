@@ -1,5 +1,49 @@
 # Verified commands and evidence
 
+## RBAC native PostgreSQL — 22 September, parent 3ce90e4a
+
+Completed named tmux `audit-rbac-pg51-v1`, captured with 420 s outer timeout:
+
+```text
+/usr/bin/arch -arm64 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -B -I /private/tmp/localos-rbac-pg106-MtvalX/run_rbac_pg51.py --execute
+```
+
+This historical command is **not** a new-run instruction. It completed with
+51 passed nodes / 153 phases, exit 0, outer 12,366.546 ms, no timeout/truncation,
+collection errors, skips, xfails or recorded warnings. Seven isolation controls
+pass; exact generated DB absent, owned PostgreSQL stopped, source unchanged.
+The reused preparation directory's `pg106` name does not describe the final scope.
+
+Pure controls final: 19 pass, 72.827 ms / exit 0. Ruff of controller/guard/pure
+controls: no findings, 96.810 ms / exit 0. Both were captured, as was an earlier
+pure-control run without an independently pinned running-source version.
+Raw stdout of pytest is hash/byte-count only; the safe callback stores exact
+nodes, outcomes, stages and warning categories. No raw warning text is retained.
+
+Durable report and 15-artifact manifest: task `evidence/rbac-pg51-results-20260922.md`
+and `evidence/rbac-pg51-20260922/`. Redacted Gitleaks directory scan of the initial
+bundle passes (113,483 bytes; zero findings; outer 990.710 ms / exit 0). It does
+not cover the later scan captures themselves, readiness-doc diff or whole history.
+Pre-execution independent review passed for controller805; final node-hash delta
+and runtime subsequently passed independent review after the transient usage
+error cleared. No current full-suite or production claim.
+
+Sheets queue/recovery follows the same bounded lifecycle in completed named tmux
+`audit-sheet-pg16-v1`:
+
+```text
+/usr/bin/arch -arm64 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -B -I /private/tmp/localos-sheet-pg16.dwUDW3/run_sheet_pg16.py --execute
+```
+
+Historical command only: 16 nodes / 48 phases, 9,875.424 ms, exit 0; no timeout,
+truncation, collection error, skip, xfail or warning. Seven runtime controls,
+19 pure controls (79.113 ms), helper Ruff (108.886 ms), unchanged snapshot and
+exact generated DB/process cleanup pass. Independent review PASS. Pure/Ruff
+preceded a comment-only wording correction; actual executed hash is `a700e6c8`.
+Task `evidence/sheet-pg16-20260922/` has 12 verified artifact hashes. Executor
+bridges to committed HEAD only; the pre-existing dirty SQL edits and production
+query-adapter behavior are outside this native psycopg2 proof.
+
 ## Gate reconciliation — 22 September, HEAD202b9c95
 
 Actual current-tree CI undefined-name check:

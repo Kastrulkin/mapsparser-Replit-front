@@ -1,5 +1,22 @@
 # Production-readiness change log
 
+## Operator/finance integration evidence — 22 September, parent 3ce90e4a
+
+No application changes. Execute 51 existing role tests (including 42 prior PG
+setup skips) on a fresh native PostgreSQL cluster: 153 phases pass, outer
+12.366546 s. Preserve exact controller, guard, node list and raw captures; seven
+isolation controls, 19 pure controls, helper lint and cleanup checks pass.
+Final independent runtime/package review passes after the transient reviewer
+usage-limit interruption cleared; root and independent checks are distinguished.
+Reconcile historical services/content proof without pretending it is a current
+55-node execution. No foreign adoption, production/provider access or deployment.
+
+Separate Sheets queue/recovery run: 16 nodes / 48 phases pass, outer 9.875424 s,
+independent review PASS. Literal count is 11 queue + five recovery, not 21. The
+executor's existing dirty SQL changes remain excluded via an explicit committed
+HEAD-only bridge. Preserve 12 hashed artifacts and a separate adapter-seam
+investigation; native PostgreSQL passes do not prove the compatibility wrapper.
+
 ## Schema/security integration evidence — 22 September, parent202b9c95
 
 No application changes. Execute seven previously setup-skipped schema/security
