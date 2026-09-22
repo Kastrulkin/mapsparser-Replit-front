@@ -1,5 +1,28 @@
 # Production-readiness progress
 
+## Current checkpoint — 22 September, Sheets adapter fix verified locally
+
+- [x] PG51/Sheets16 evidence is locally committed as `b3a808ea`; strict staged
+  scan zero findings, commit exit 0. Older pending-commit statements are historical.
+- [x] SHEETS-QUERY-ADAPTER-01 reproduced in 2.640908 s: the committed executor
+  fails at one legacy placeholder versus four parameters; the existing two-line
+  SQL candidate reaches all three cursor calls with unchanged approval semantics.
+  Frozen input/source hashes and independent causal/runtime review pass.
+- [x] Add three permanent real-runtime-cursor PG cases; preserve the existing
+  pure test and executor bytes unchanged. Targeted Ruff and source review pass.
+- [x] Fresh guarded native20: all60 phases pass in9.030334s, no skip/xfail/errors/
+  warnings. Seven isolation/19 pure controls, source/input hashes and exact owned
+  DB/process cleanup pass. Includes16 adjacent +3 runtime-cursor PG +1pure case.
+- [x] Independent final native runtime and package reviews PASS; exact-PID observation
+  also confirms neither owned process remains.
+- [ ] Final strict scoped scan and local
+  commit adopting only the two exact SQL changes and related regression tests.
+- [ ] Original aggregate, security/image206, load/browser/CI/demo, owner decisions
+  and whole-diff review remain incomplete. No production or provider effects.
+
+Evidence: task `evidence/sheet-adapter-20260922/`. Scoped local FIX_PROVEN,
+not live Google, deployed behavior or whole-project readiness.
+
 ## Current checkpoint — 22 September, Sheets recovery and independent acceptance
 
 - [x] Fresh Sheets queue/recovery proof: 16 nodes / 48 phases passed in

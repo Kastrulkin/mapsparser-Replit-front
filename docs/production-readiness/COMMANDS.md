@@ -1,5 +1,42 @@
 # Verified commands and evidence
 
+## Sheets cursor causal check — 22 September, parent b3a808ea
+
+Completed named tmux `audit-sheet-adapter-red-green`, captured with 60 s limit:
+
+```text
+/usr/bin/env -i PATH=/usr/bin:/bin PYTHON_DOTENV_DISABLED=1 PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 /usr/bin/sandbox-exec -f /private/tmp/localos-sheet-adapter-proof-LnSslv/deny-external.sb /usr/bin/arch -arm64 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -B -I /private/tmp/localos-sheet-adapter-proof-LnSslv/run_sheet_adapter_proof.py --execute
+```
+
+Historical command, not restart guidance: exit0, 2,640.908 ms, no timeout or
+truncation. Old query produces exact expected ValueError after two calls; patched
+copy preserves predicates/parameters and reaches three calls. No PG/provider use.
+Independent runtime PASS, source6,340 unchanged. Task bundle
+`evidence/sheet-adapter-20260922/` preserves runner, inputs, policy and raw results.
+
+Targeted Ruff executor + existing pure test + new runtime-cursor test: initial
+F811 fixture-import nonpass120.421 ms, corrected import final PASS91.970 ms.
+Native20 first execution passed9,030.334ms/exit0 in named tmux
+`audit-sheet-wrapper-pg20-v1` using:
+
+```text
+/usr/bin/arch -arm64 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -B -I /private/tmp/localos-sheet-wrapper-pg20.sJ8pci/run_sheet_wrapper_pg20.py --execute
+```
+
+Historical completed command, not restart guidance. All20nodes60phases pass,
+no collection errors/skips/xfails/warnings, timeout or output truncation. Seven
+runtime/19 pure controls74.817ms, helper Ruff89.000ms, immutable input checks
+and exact native DB/process cleanup pass. Final runtime result9bfe5eda is in
+the same durable19-artifact bundle. Do not add these separate scoped successes
+into the old failed aggregate or claim live Google/provider coverage.
+
+First strict staged scan:1,477.534ms/exit1, two generic-api-key matches on the
+same verified source-file SHA in pure-result before/after metadata. Initial
+capture remains `/private/tmp/localos-sheet-wrapper-pg20.sJ8pci/staged-scan-command.json`.
+Archive renames only the two ambiguous hash-field labels; raw original SHA and
+normalization are documented in bundle README. No scanner suppression is used;
+the final edited/staged package requires a fresh strict scan.
+
 ## RBAC native PostgreSQL — 22 September, parent 3ce90e4a
 
 Completed named tmux `audit-rbac-pg51-v1`, captured with 420 s outer timeout:

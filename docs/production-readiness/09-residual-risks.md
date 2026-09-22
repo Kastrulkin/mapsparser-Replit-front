@@ -1,5 +1,16 @@
 # Residual risks — working register
 
+## 22 September — reproduced Sheets cursor mismatch
+
+SHEETS-QUERY-ADAPTER-01 is now reproduced, not merely a code-reading candidate.
+When async agent processing is enabled, the wrapped claim query raises before
+provider dispatch. The exact two-line local SQL candidate now passes pure causal
+red/green and native20/60 phases, including three real-runtime-cursor cases and
+prior queue/recovery cases. Independent package review PASS; final scan/commit
+and any separately authorized rollout remain. No production configuration or
+live provider behavior was tested.
+Other global gates and the earlier failed aggregate remain open.
+
 ## 22 September — scoped PG51/Sheets16 passes are not full readiness
 
 Fresh Operator/finance role execution passes 51 nodes / 153 phases, including

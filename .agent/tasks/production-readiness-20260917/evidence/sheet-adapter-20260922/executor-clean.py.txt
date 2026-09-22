@@ -65,7 +65,7 @@ def hold_invalid_sheet_provider_requests(cursor: Any) -> int:
             provider_result_json=jsonb_build_object('certainty','not_sent','reason','approval_or_binding_invalid'), updated_at=NOW()
         WHERE request.apply_state='provider_request_queued' AND (
             request.bound_run_id IS NULL OR request.bound_step_id IS NULL OR request.bound_approval_id IS NULL OR request.request_hash IS NULL
-            OR NOT EXISTS (SELECT 1 FROM agent_approvals approval WHERE approval.id=request.bound_approval_id AND approval.run_id=request.bound_run_id AND approval.status='approved' AND approval.approval_type='sheet_update' AND jsonb_exists(approval.payload_json, 'sheet_write_snapshot'))
+            OR NOT EXISTS (SELECT 1 FROM agent_approvals approval WHERE approval.id=request.bound_approval_id AND approval.run_id=request.bound_run_id AND approval.status='approved' AND approval.approval_type='sheet_update' AND approval.payload_json ? 'sheet_write_snapshot')
             OR EXISTS (SELECT 1 FROM agent_runs run WHERE run.id=request.bound_run_id AND (LOWER(COALESCE(run.input_json->>'preview_mode','false')) IN ('true','1') OR LOWER(COALESCE(run.input_json->>'external_side_effects_allowed','true')) IN ('false','0')))
         )
     """)
@@ -83,7 +83,7 @@ def claim_next_sheet_provider_request(cursor: Any, *, business_id: str = "", lea
             FROM agent_sheet_operation_requests request
             JOIN agent_approvals approval ON approval.id=request.bound_approval_id AND approval.run_id=request.bound_run_id
                 AND approval.status='approved' AND approval.approval_type='sheet_update'
-                AND jsonb_exists(approval.payload_json, 'sheet_write_snapshot')
+                AND approval.payload_json ? 'sheet_write_snapshot'
             JOIN agent_runs run ON run.id=request.bound_run_id AND run.status='waiting_provider' AND run.business_id=request.business_id
                 AND LOWER(COALESCE(run.input_json->>'preview_mode','false')) NOT IN ('true','1')
                 AND LOWER(COALESCE(run.input_json->>'external_side_effects_allowed','true')) NOT IN ('false','0')

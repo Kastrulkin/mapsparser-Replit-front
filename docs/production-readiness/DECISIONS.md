@@ -1,5 +1,21 @@
 # Readiness decisions
 
+## D-125 — Test and fix the production cursor boundary
+
+Passing PostgreSQL tests with raw driver cursors does not prove the production
+compatibility wrapper. The Sheets claim's JSONB `?` operator is demonstrably
+misread as a legacy bind marker. Prefer the existing two-line `jsonb_exists`
+candidate over broad changes to the shared QueryAdapter: same authorization
+predicate, no schema/API change, small reversible blast radius. Only the
+parameterized claim query causes the red proof; do not attribute an independent
+failure to the unparameterized hold query.
+
+Keep the existing candidate and pure test byte-identical, add direct real-runtime
+PG coverage, and explicitly name their eventual adoption. The goal authorizes
+necessary local fixes/commits; it does not authorize absorbing unrelated dirty
+work. Pending author/diagnostic choices remain pending. A pure red/green is
+REPRODUCED but not complete fix acceptance before native adjacent validation.
+
 ## D-124 — Preserve each PostgreSQL fixture's actual prerequisites
 
 The first three Operator/finance role modules require only per-test synthetic

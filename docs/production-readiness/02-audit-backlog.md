@@ -1,5 +1,33 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Sheets runtime cursor compatibility — 22 September
+
+**SHEETS-QUERY-ADAPTER-01 — P1, backend/integration, locally FIX_PROVEN.**
+With `AGENT_ASYNC_RUNS_ENABLED`,
+the worker calls the Sheets processor through DatabaseManager/DBCursorWrapper.
+The claim CTE contains a PostgreSQL JSONB `?` operator and four `%s` parameters;
+the legacy adapter mistakes the operator for one bind marker and raises ValueError.
+Even an empty queue hits this path. The outer worker catches/logs the error,
+so the demonstrated blast radius is Sheets queue progress, not whole-worker death.
+Approved requests cannot reach provider execution through this query. High
+confidence/deterministic in the enabled path; production flag/state not inspected.
+
+Evidence: `src/worker.py:2352`, `src/services/agent_sheet_provider_executor.py:79`,
+`src/database_manager.py:44`, `src/query_adapter.py:73`; task
+`evidence/sheet-adapter-20260922/` records exact causal red/green in2.640908s.
+Existing raw-psycopg2 tests omitted the compatibility layer. Proposed fix adopts
+the two existing `jsonb_exists` substitutions unchanged (S effort, low reversible
+risk, no schema/API/approval change), not a shared adapter rewrite. The claim
+substitution is causal; the hold substitution keeps the predicate consistent.
+
+Acceptance: original adapter failure disappears; real-runtime cursor claims once,
+holds missing approval and handles empty queue; previous16 queue/recovery cases
+and existing pure regression pass; lint and independent review pass. Pure proof,
+lint/source review and native20/60 phases are done (9.030334s, no skips/xfails,
+exact DB/process cleanup). Final independent runtime/package reviews pass;
+strict staged scan and local commit remain;
+no deployment or live-provider result is claimed.
+
 ## Test and build-check isolation — 22 September
 
 **TEST-POLLING-HEARTBEAT-01 — P2, testing, locally FIX_PROVEN.** Four tests use

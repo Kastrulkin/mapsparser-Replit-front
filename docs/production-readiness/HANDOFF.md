@@ -1,5 +1,50 @@
 # Readiness handoff
 
+## Latest continuation — 22 September, causal Sheets regression
+
+HEAD `b3a808ea5af6fb69f3ef6e7398e3a878ec60ff8e` on the same readiness branch.
+Its PG51/Sheets16 evidence commit completed (204.213 ms, exit 0); exact staged
+scan SHA `931b5e164ba3ae1dc6a4ad20771988b07339fee11f0a5df38010c19068160739`
+covered 226,122 bytes, zero findings, 1,837.520 ms. Do not rerun that commit.
+
+Pure adapter proof is terminal: `/private/tmp/localos-sheet-adapter-proof-LnSslv/`
+command/result, 2,640.908 ms exit 0, independent PASS. Old executor f310241a fails
+at the expected parameter adapter mismatch; current dirty fd190611 reaches the
+same three calls. All 6,340 source files and direct input hashes unchanged.
+Initial eight-artifact bundle, later expanded to19, is `evidence/sheet-adapter-20260922/`.
+
+Root owns new `tests/test_sheet_provider_runtime_cursor_pg.py`, final SHA
+5d688a39 (three real DatabaseManager/wrapper cases); targeted Ruff91.970 ms and
+independent source review PASS. The pre-existing executor two-line change and
+pure regression87749d57 remain byte-identical and are intended for scoped adoption
+only after native validation. No other dirty change is adopted; author/diagnostic
+fixture decisions and restricted OAuth/native-picker constraints remain unchanged.
+
+Fresh native20 is terminal and green: profile
+`/private/tmp/localos-sheet-wrapper-pg20.sJ8pci/run_sheet_wrapper_pg20.py` final
+cbb3a6ff, runtime `/private/tmp/localos-sheet-wrapper-pg20.son1iimr/`, result
+9bfe5eda. All20nodes60phases pass,9.030334s, no skips/xfails/errors/warnings.
+Seven isolation/19 pure controls and helper Ruff pass. Source6,340 and pinned
+overlay/private/current test hashes unchanged. Schema/DB absent, system-only
+catalog, owned postmaster39195 stopped and child39231 clean; no remaining
+processes. Native real-runtime coverage closes this narrow wrapper regression.
+Durable bundle now has19 verified hashed artifacts. Final independent native
+runtime review PASS; approved read-only `ps` also finds neither owned PID.
+Independent package review PASS; scoped secret scan/local commit are next. Never rerun completed
+`audit-sheet-wrapper-pg20-v1`, earlier native sessions, or change frozen source.
+Full original DoD remains open; no push/deploy/production/provider authorization.
+
+Bundle pure `result.json` is explicitly metadata-normalized: only two source
+hash-field labels renamed after confirmed scanner false positives; raw private
+8792cea4 remains unchanged, normalized archive37fa7b06 is manifest-bound.
+Outcomes/values are identical; no secret detector rule or exclusion changed.
+
+Next aggregate prerequisite remains the pending author/diagnostic fixture choice.
+Read-only follow-up confirms the dirty diagnostic guard still needs `connect_ex`
+and available `os.spawnv/spawnve/spawnvp/spawnvpe` coverage plus denial/teardown
+regressions; the already-proven leaf fixture is the minimal pattern. No changes
+to those original files or new execution were made in this Sheets package.
+
 ## Latest continuation — 22 September, PG51 and Sheets16 accepted
 
 Current HEAD `3ce90e4a42aff8975a6462d39c0f64cdc63faf20`, branch

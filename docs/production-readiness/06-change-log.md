@@ -1,5 +1,16 @@
 # Production-readiness change log
 
+## Sheets cursor regression — 22 September, parent b3a808ea
+
+Adopt the existing two-line executor correction and pure regression without
+changing their bytes; add three PostgreSQL tests through the actual
+DatabaseManager/DBCursorWrapper boundary. Pure old/new proof reproduces and
+eliminates the one-placeholder/four-argument error. Native20/60 phases pass in
+9.030334s, including prior16 queue/recovery cases; all isolation/input/cleanup
+checks pass. No broad QueryAdapter rewrite or approval weakening, migrations,
+dependencies, production data/provider operations, push or deployment. Other
+foreign edits remain preserved; final independent review PASS, scan/commit pending.
+
 ## Operator/finance integration evidence — 22 September, parent 3ce90e4a
 
 No application changes. Execute 51 existing role tests (including 42 prior PG

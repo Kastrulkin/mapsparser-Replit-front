@@ -1,0 +1,7 @@
+(version 1)
+(allow default)
+(deny network*)
+(deny file-read* (subpath "/Users"))
+(deny file-write*)
+(allow file-write* (subpath "/private/tmp/localos-sheet-adapter-proof-LnSslv"))
+(allow file-write* (literal "/dev/null"))
