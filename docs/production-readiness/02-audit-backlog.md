@@ -1,5 +1,22 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Fresh full backend checkpoint — 22 September, a38720ce
+
+Current committed-source offline aggregate is NONPASS:5,522nodes,
+4,391passed/12failed/1,119skipped,14additional passing subtests,104.458056s.
+Exact node order is stable without ZIP-ID normalization; no collection errors,
+xfails or recorded warning categories. All41 previously failing IDs removed
+from the failed set now pass setup/call/teardown; the12 remaining failed IDs are
+all old. This corroborates the bounded fixture fixes without claiming overall
+production readiness. Source, isolation, exact lifecycle accounting and cleanup
+are independently accepted. Artifact: `evidence/current-backend-a38720ce-20260922/`.
+
+Residual offline failures are prerequisites: ingress5loopback binds,
+compiled3loopback binds+2fixed `/tmp` temporary-output writes, and Vite2missing
+frontend dependency checks. Retain them as nonpasses, not confirmed product bugs
+or silently waived successes. Separate native/browser capability proof and
+remaining PG55/schema/integration work must retain their exact source scopes.
+
 ## Diagnostic/author test isolation — 22 September
 
 **TEST-DIAGNOSTIC-GUARD-01 — P2, testing, locally FIX_PROVEN.** The diagnostic

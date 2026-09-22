@@ -1,5 +1,48 @@
 # Readiness handoff
 
+## Latest continuation — 22 September, fresh committed-source aggregate
+
+Current tested-fix HEAD `a38720ce3530783caf59f6515a00baa1c532ce01`, same
+readiness branch. Fixture package19paths committed245.926ms/exit0 after strict
+staged scan1,336.788ms/exit0, zero findings,88,285bytes/exact diff SHA
+60a398c99939092ddbac6e2f33beac1a03058ec5f3a34c66354b3862d64f1f7c.
+The previous turn is PROGRESS: accepted test changes and durable proof committed.
+Historical pending-stage/commit wording below is superseded, not a reason to
+repeat those operations. Captures are in the final fixture private package.
+
+Next is a fresh archive of this literal commit for the complete offline backend
+collection/run, with the existing strict v10 isolation and process ownership.
+No dirty or untracked file is included. The restricted related-OAuth candidate
+remains untracked and absent. Do not reuse/overwrite terminal v10 outputs or
+add scoped native/browser counts to make an old aggregate green. Preparation
+is now accepted: independent pre-execution PASS. Fresh profile is
+`/private/tmp/localos-current-full-a387-0iwMmh/`, runner056c47fc/policy70285c3c/
+owner4f16b6c3; archive54aa4944 matches an independently recreated Git archive.
+All6,469 files match content and Git executable bits. Tar0664/0775 is safely
+normalized by umask to0644/0755; freeze pins those extracted modes exactly.
+
+Freeze passed13.166664s/exit0, exactly5,522 nodes/no collection errors. Control
+passed3.025704s/exit0; both retain eight OS and nine pure controls, unchanged
+source and clean child registry. Node SHA312fed27, freeze SHA9911b634. Full
+tmux `audit-a387-full` is now terminal:104.458056s outer/exit1,5,522nodes,
+4,391passed/12failed/1,119skipped,14passing subtests. No node drift, collection
+error, xfail or recorded warning. Exactly1,094 absent calls come from failed/
+skipped setup; no duplicate/extra stages. Source and inputs unchanged,112owned
+identities/0remaining/0signals/errors. Independent final runtime/accounting PASS
+for the NONPASS evidence. Never restart completed handles.
+
+Remaining12: ingress5bind, compiled3bind+2explicit `/tmp` output denials,
+Vite2missing-node_modules prerequisites. All41 removed old failing IDs pass
+three phases; no new failed ID. Durable14-artifact bundle is
+`evidence/current-backend-a38720ce-20260922/`, full-result SHA5d8d458d.
+Next stage/strict scan/local evidence commit, then services/content55 on fresh
+owned fully migrated nativePG15. Read-only recon found installed vector0.8.6
+and pgcrypto metadata, strict fixture port35418/generated DB/pinned guard and
+12public tables. Preparation is delegated only; no migration/test has run.
+Five foreign tracked edits retain
+combined SHA3c70e23b; four foreign untracked paths plus restricted candidate are
+untouched. No production/provider/DB/Docker build or deployment is authorized.
+
 ## Latest continuation — 22 September, final fixture validation
 
 HEAD `954979662e95fc45d026c9a5e9aa1c0413577325`, same readiness branch. Sheets

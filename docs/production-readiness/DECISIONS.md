@@ -1,5 +1,20 @@
 # Readiness decisions
 
+## D-127 — Re-run the aggregate on exact committed sources
+
+After closing the proven test-contamination causes, collect and execute the
+whole backend test tree from a fresh literal-commit archive. Exclude dirty and
+untracked files structurally through Git archive, not a growing selective test
+allowlist. Retain the platform-restricted candidate's exclusion. Reuse the
+accepted no-network/no-user-files policy, exact source/input hashes, process
+ownership and disk/time/output bounds; do not widen capabilities to obtain green.
+
+Keep genuine failures, prerequisite failures and skips visible. Separate native
+PostgreSQL, isolated-loopback and browser passes may explain an offline nonpass
+only with exact source continuity; they are not extra arithmetic passes in this
+run. Record warning categories/counts without retaining arbitrary warning text.
+The old failed aggregate remains immutable historical evidence.
+
 ## D-126 — Adopt the two proven test fixtures within existing local authority
 
 The original goal explicitly authorizes necessary reversible fixes, regression

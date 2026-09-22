@@ -1,5 +1,27 @@
 # Production-readiness progress
 
+## Current checkpoint — 22 September, committed fixture fixes
+
+- [x] Fixture isolation/adoption package is committed locally as `a38720ce`:
+  exact19paths, commit245.926ms/exit0; strict88,285-byte staged scan1,336.788ms,
+  zero findings. Prior pending packaging statements are historical.
+- [x] Fresh full offline backend aggregate at the literal committed revision
+  completed104.458056s:5,522nodes,4,391passed/12failed/1,119skipped,14additional
+  passing subtests; no collection errors, xfails, node drift or recorded warnings.
+  All41 old failures removed from the failed set now have three passing phases;
+  all12 remaining failed IDs already existed. Full result remains NONPASS.
+- [x] Independent source/archive, pre-execution and runtime/accounting review
+  PASS for evidence only. Eight OS/nine pure controls, source/input invariance,
+  no timeout/truncation and112-owned-process clean registry confirmed.
+- [ ] Scoped evidence scan/local commit, then remaining integration families.
+- [ ] PostgreSQL/capability/browser integration results must remain separately
+  scoped; no full-pass claim from adding historical test counts. Original
+  security/image206, load, CI/demo and whole-diff DoD gates remain open.
+
+Evidence: `evidence/current-backend-a38720ce-20260922/`,14 manifest-bound artifacts.
+Remaining failures: ingress5bind, compiled3bind+2fixed-temp-path, Vite2missing
+dependency prerequisites. Do not convert them into passes using historical runs.
+
 ## Current checkpoint — 22 September, fixture isolation follow-up
 
 - [x] Sheets fix and its native20/pure evidence are committed locally as

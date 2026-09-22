@@ -1,5 +1,34 @@
 # Verified commands and evidence
 
+## Exact-commit full aggregate — 22 September, a38720ce
+
+New profile `/private/tmp/localos-current-full-a387-0iwMmh/`, runner056c47fc,
+policy70285c3c, ownership helper4f16b6c3; independently reviewed before execution.
+Committed-source archive54aa4944 contains6,469 regular files. Content and Git
+executable bits match exactly; extraction strips group-write via umask
+(0664/0775 to0644/0755), explicitly not full Unix-mode equality to the tar.
+
+Commands run serially in named tmux sessions `audit-a387-freeze`,
+`audit-a387-control`, then `audit-a387-full`, captured separately:
+
+```text
+/usr/bin/arch -arm64 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -B -I /private/tmp/localos-current-full-a387-0iwMmh/run_current_full_a387.py freeze
+/usr/bin/arch -arm64 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -B -I /private/tmp/localos-current-full-a387-0iwMmh/run_current_full_a387.py control
+/usr/bin/arch -arm64 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -B -I /private/tmp/localos-current-full-a387-0iwMmh/run_current_full_a387.py full
+```
+
+Freeze13,166.664ms/exit0:5,522 unique nodes, no collection errors. Control
+3,025.704ms/exit0. Both preserve eight OS/nine pure controls, input/source
+integrity and owned-process cleanup. Full completed104,458.056ms/exit1,
+5,522nodes:4,391passed/12failed/1,119skipped;14extra subtests passed. No node
+drift/collection errors/xfails/recorded warning categories/timeout/truncation.
+Setup4,428pass/4fail/1,090skip; call4,391pass/8fail/29skip; teardown5,522pass.
+Eight OS/nine pure controls and source/input/process cleanup pass;112observed
+process identities,0remaining/signalled/errors. Independent runtime review
+accepts NONPASS evidence, not a green suite. Commands are historical handles,
+not restart instructions. Durable14-artifact bundle:
+`evidence/current-backend-a38720ce-20260922/`, full-result SHA5d8d458d.
+
 ## Final test-fixture isolation — 22 September, parent95497966
 
 One completed tmux `audit-fixtures-final-v1`, outer capture360s limit:

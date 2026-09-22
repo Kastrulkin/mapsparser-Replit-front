@@ -1,5 +1,17 @@
 # Production-readiness change log
 
+## Fresh whole-backend diagnostic — 22 September, parenta38720ce
+
+No application/test edits. Create a clean committed-source snapshot, reuse the
+reviewed offline runner with only binding changes and warning-category counters,
+then complete freeze/control/full serially. Actual5,522-node result is4,391pass,
+12fail,1,119skip plus14passing subtests;104.458056s/exit1. Exact node IDs now
+match between collection/execution. All41 removed old failed IDs pass all three
+phases; no new failed ID appears. Remaining12 are explicitly classified offline
+bind/temp-path or missing-Vite prerequisites, not ignored or renamed passes.
+Independent source/safety/runtime review and process cleanup pass. Preserve raw
+evidence and source bindings; do not add older native successes to this count.
+
 ## Test-fixture isolation — 22 September, parent95497966
 
 Adopt the already-proven author mock fields unchanged; retain every original

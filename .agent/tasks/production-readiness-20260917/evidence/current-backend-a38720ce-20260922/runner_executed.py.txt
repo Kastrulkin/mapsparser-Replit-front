@@ -1,0 +1,306 @@
+"""Frozen full-only runner; no network, source writes or raw diagnostic retention."""
+import collections
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import threading
+import time
+
+ROOT = Path('/private/tmp/localos-current-full-a387-0iwMmh')
+SOURCE = ROOT / 'source'
+EVIDENCE = ROOT / 'evidence'
+WRITABLE = ROOT / 'writable'
+POLICY = ROOT / 'policy-a387.sb'
+PYTHON = Path('/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python')
+FREEZE = EVIDENCE / 'freeze-a387.json'
+NODES = EVIDENCE / 'nodes-a387.json'
+MARK = 'CURRENT_FULL_A387_CALLBACK='
+SOURCE_REF = 'a38720ce3530783caf59f6515a00baa1c532ce01'
+ARCHIVE = ROOT / 'source-a38720ce.tar'
+ARCHIVE_SHA = '54aa49449522b5aec428e0b314d72016e938e740967dc3b706877b15e3cb4e77'
+POLICY_SHA = '70285c3cbf4d027c08bb95a8d818efb47e578a3a58961e11915b5eda27b24e80'
+HELPER_SHA = '4f16b6c343223717dcf3b5bdbf86ff9159594b33fa92d744527891188c4c227b'
+PSUTIL = Path('/private/tmp/localos-content-perf-deps.7zNvCi/python')
+CAP = 16 * 1024**2
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+def require(condition, label):
+    if not condition:
+        raise RuntimeError(label)
+
+def manifest():
+    require(not any(p.is_symlink() for p in SOURCE.rglob('*')), 'source_symlink')
+    return [[str(p.relative_to(SOURCE)), sha(p), p.stat().st_size, p.stat().st_mode & 0o777]
+            for p in sorted(SOURCE.rglob('*')) if p.is_file()]
+
+def invoke(code, limit):
+    argv = ['/usr/bin/sandbox-exec', '-f', str(POLICY), '/usr/bin/arch',
+            '-arm64', str(PYTHON), '-B', '-I', '-c', code]
+    env = {'PATH': '/usr/local/bin:/usr/bin:/bin', 'PYTEST_DISABLE_PLUGIN_AUTOLOAD': '1',
+           'PYTHONDONTWRITEBYTECODE': '1', 'PYTHONNOUSERSITE': '1',
+           'PYTHON_DOTENV_DISABLED': '1', 'TMPDIR': str(WRITABLE),
+           'TMP': str(WRITABLE), 'TEMP': str(WRITABLE),
+           'XDG_CACHE_HOME': str(WRITABLE / 'cache'),
+           'DATABASE_URL': 'postgresql+psycopg2://metadata_only@127.0.0.1:1/localos_metadata_only'}
+    started = time.monotonic()
+    from owned_processes import OwnedProcesses
+    child = subprocess.Popen(argv, cwd=SOURCE, env=env, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, start_new_session=True)
+    try:
+        ownership = OwnedProcesses(child)
+    except BaseException:
+        child.kill()
+        child.wait(timeout=5)
+        raise
+    buffers = {'stdout': bytearray(), 'stderr': bytearray()}
+    counts = {'stdout': 0, 'stderr': 0}
+    errors = []
+    def drain(label, stream):
+        try:
+            while True:
+                block = stream.read(8192)
+                if not block:
+                    break
+                counts[label] += len(block)
+                buffers[label].extend(block[:max(0, CAP - len(buffers[label]))])
+        except BaseException:
+            errors.append(label)
+    threads = [threading.Thread(target=drain, args=(label, pipe), daemon=True)
+               for label, pipe in [('stdout', child.stdout), ('stderr', child.stderr)]]
+    for thread in threads:
+        thread.start()
+    reason = None
+    try:
+        while child.poll() is None:
+            ownership.observe()
+            if time.monotonic() - started > limit:
+                reason = 'timeout'
+            if shutil.disk_usage(ROOT).free < 2 * 1024**3:
+                reason = 'disk_floor'
+            if errors or any(value > CAP for value in counts.values()):
+                reason = 'capture_failure'
+            if reason:
+                break
+            time.sleep(.2)
+    finally:
+        cleanup = ownership.cleanup()
+        child.wait(timeout=5)
+        for thread in threads:
+            thread.join(timeout=5)
+    require(not errors and not any(thread.is_alive() for thread in threads), 'pipe_cleanup')
+    require(cleanup['status'] == 'clean', 'owned_process_cleanup')
+    metadata = {'exit_code': child.returncode, 'stopped_reason': reason,
+                'process_cleanup': cleanup,
+                'duration_seconds': round(time.monotonic() - started, 3),
+                'argv': argv, 'streams': {label: {'total_bytes': counts[label],
+                    'captured_bytes': len(value), 'sha256': hashlib.sha256(value).hexdigest(),
+                    'truncated': counts[label] != len(value)} for label, value in buffers.items()}}
+    return metadata, bytes(buffers['stdout']).decode('utf-8', errors='strict')
+
+CONTROL = '''import json,socket,subprocess,sys
+from pathlib import Path
+d={}
+def check(k,f):
+ try:f();d[k]=None
+ except OSError:d[k]=sys.exception().errno
+check('users',lambda:Path('/Users/alexdemyanov/.ssh').read_bytes())
+check('source_write',lambda:Path(%r).write_text('forbidden'))
+s=socket.socket();d['tcp']=s.connect_ex(('127.0.0.1',1));s.close()
+s=socket.socket(socket.AF_UNIX);check('docker',lambda:s.connect('/Users/alexdemyanov/.docker/run/docker.sock'));s.close()
+n=subprocess.run(['/usr/bin/nc','-v','-z','-w','1','127.0.0.1','1'],capture_output=True)
+d['native_tcp']=n.returncode!=0 and b'Operation not permitted' in n.stderr
+owned=Path('/private/tmp/localos-current-full-a387-0iwMmh/writable/a387-owned-probe')
+owned.write_text('owned probe');d['owned_write']=owned.read_text()=='owned probe'
+link=Path('/private/tmp/localos-current-full-a387-0iwMmh/writable/a387-escape-probe')
+target='/private/tmp/localos-current-full-a387-0iwMmh/source/.a387-forbidden'
+if not link.is_symlink():link.symlink_to(target)
+d['symlink_target']=str(link.readlink())==target
+check('symlink_write',lambda:link.write_text('forbidden'))
+print(json.dumps(d));raise SystemExit(0 if all(d[k] in (1,13) for k in ('users','source_write','tcp','docker','symlink_write')) and d['native_tcp'] and d['owned_write'] and d['symlink_target'] else 1)
+''' % str(SOURCE / '.a387-forbidden')
+
+TESTS = '''import json,pytest,os,sys
+s={'nodes':[],'collection_errors':[],'reports':[],'subtests':[],'warning_categories':{}}
+try: from _pytest.subtests import SubtestReport
+except ImportError: SubtestReport=()
+class H:
+ @pytest.hookimpl(hookwrapper=True)
+ def pytest_runtest_makereport(self,item,call):
+  outcome=yield
+  report=outcome.get_result()
+  if report.failed and call.excinfo is not None:
+   error=call.excinfo.value;frames=[]
+   for frame in call.excinfo.traceback:
+    name=str(frame.path)
+    for root,label in [(os.getcwd(),'source'),(sys.prefix,'venv')]:
+     if name.startswith(root+'/'):
+      frames.append({'path':label+name[len(root):],'line':frame.lineno+1});break
+   report.safe_failure={'exception_type':type(error).__name__,'errno':error.errno if isinstance(error,OSError) and isinstance(error.errno,int) else None,'frames':frames[-12:]}
+ def pytest_collection_finish(self,session):s['nodes']=[item.nodeid for item in session.items]
+ def pytest_collectreport(self,report):
+  if report.failed:s['collection_errors'].append(report.nodeid)
+ def pytest_runtest_logreport(self,report):
+  row={'nodeid':report.nodeid,'when':report.when,'outcome':report.outcome,'xfail':bool(getattr(report,'wasxfail',False)),'failure':getattr(report,'safe_failure',None)}
+  dest=s['subtests'] if isinstance(report,SubtestReport) else s['reports'];dest.append(row)
+ def pytest_warning_recorded(self,warning_message,when,nodeid,location):
+  name=warning_message.category.__name__;s['warning_categories'][name]=s['warning_categories'].get(name,0)+1
+r=pytest.main(['tests','-q','-p','no:cacheprovider','--tb=no','--show-capture=no','--basetemp',%r],plugins=[H()])
+s['return_code']=r;print(%r+json.dumps(s,sort_keys=True));raise SystemExit(r)
+''' % (str(WRITABLE / 'full-a387'), MARK)
+
+COLLECT = '''import json,pytest
+s={'nodes':[],'errors':[]}
+class H:
+ def pytest_collection_finish(self,session):s['nodes']=[item.nodeid for item in session.items]
+ def pytest_collectreport(self,report):
+  if report.failed:s['errors'].append(report.nodeid)
+r=pytest.main(['tests','--collect-only','-q','-p','no:cacheprovider','--tb=no','--show-capture=no'],plugins=[H()])
+s['return_code']=r;print(%r+json.dumps(s,sort_keys=True));raise SystemExit(r)
+''' % MARK
+
+def account(expected, data, capture):
+    reasons = []
+    if capture['exit_code'] != 0 or capture['stopped_reason'] or data.get('return_code') != 0:
+        reasons.append('process_nonpass')
+    if data.get('nodes') != expected or len(set(expected)) != len(expected):
+        reasons.append('node_drift')
+    if data.get('collection_errors'):
+        reasons.append('collection_error')
+    stages = collections.Counter((row['nodeid'], row['when']) for row in data['reports'])
+    desired = collections.Counter((node, when) for node in expected for when in ('setup', 'call', 'teardown'))
+    if stages != desired:
+        reasons.append('missing_duplicate_or_unknown_stage')
+    if any(row['outcome'] != 'passed' or row['xfail'] for row in data['reports'] + data['subtests']):
+        reasons.append('failed_skipped_or_xfail')
+    if any(row['nodeid'] not in expected for row in data['subtests']):
+        reasons.append('unknown_subtest')
+    if any(stream['truncated'] for stream in capture['streams'].values()):
+        reasons.append('truncated')
+    return reasons
+
+def pure_controls():
+    expected = ['fixture::test_one']
+    base = {'nodes': expected, 'collection_errors': [], 'return_code': 0, 'subtests': [],
+            'reports': [{'nodeid': expected[0], 'when': when, 'outcome': 'passed', 'xfail': False}
+                        for when in ('setup', 'call', 'teardown')]}
+    capture = {'exit_code': 0, 'stopped_reason': None, 'streams': {}}
+    require(not account(expected, base, capture), 'pure_positive')
+    for mode in ('missing', 'duplicate', 'skip', 'xfail', 'node', 'collection', 'subtest', 'exit'):
+        changed = json.loads(json.dumps(base)); meta = dict(capture)
+        if mode == 'missing': changed['reports'].pop()
+        if mode == 'duplicate': changed['reports'].append(changed['reports'][0])
+        if mode == 'skip': changed['reports'][1]['outcome'] = 'skipped'
+        if mode == 'xfail': changed['reports'][1]['xfail'] = True
+        if mode == 'node': changed['nodes'] = ['other']
+        if mode == 'collection': changed['collection_errors'] = ['fixture']
+        if mode == 'subtest': changed['subtests'] = [{'nodeid': expected[0], 'when': 'call', 'outcome': 'failed', 'xfail': False}]
+        if mode == 'exit': meta['exit_code'] = 1
+        require(bool(account(expected, changed, meta)), 'pure_' + mode)
+    return 9
+
+def put(path, value):
+    descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    try:
+        raw = (json.dumps(value, indent=2, sort_keys=True) + '\n').encode()
+        while raw:
+            raw = raw[os.write(descriptor, raw):]
+    finally:
+        os.close(descriptor)
+
+def main():
+    require(len(sys.argv) == 2 and sys.argv[1] in {'freeze', 'control', 'full'}, 'invalid_mode')
+    mode = sys.argv[1]
+    destination = EVIDENCE / (('freeze-run' if mode == 'freeze' else mode) + '-a387.json')
+    require(not destination.exists() and not destination.is_symlink(), 'existing_evidence')
+    result = {'status': 'failed', 'mode': mode, 'phase': 'preflight', 'wrapper_sha256': sha(Path(__file__))}
+    started = time.monotonic()
+    try:
+        require(shutil.disk_usage(ROOT).free >= 5 * 1024**3, 'start_disk_floor')
+        require((ROOT / 'source.git').read_text().strip() == SOURCE_REF, 'source_ref_drift')
+        require(sha(ARCHIVE) == ARCHIVE_SHA, 'archive_drift')
+        require(sha(POLICY) == POLICY_SHA, 'policy_drift')
+        require(sha(ROOT / 'owned_processes.py') == HELPER_SHA, 'helper_drift')
+        require(not (SOURCE / 'tests/test_google_oauth_related_refresh_pg.py').exists(), 'restricted_source_present')
+        require(not (SOURCE / '.env').exists(), 'dotenv_present')
+        sys.path.insert(0, str(ROOT))
+        sys.path.insert(0, str(PSUTIL))
+        import psutil
+        require(psutil.__version__ == '7.0.0', 'psutil_version')
+        source_before = manifest()
+        result['source_ref'] = SOURCE_REF
+        result['archive_sha256'] = ARCHIVE_SHA
+        if mode == 'freeze':
+            require(not FREEZE.exists() and not NODES.exists(), 'existing_freeze')
+        else:
+            frozen = json.loads(FREEZE.read_text())
+            require(frozen['wrapper_sha256'] == result['wrapper_sha256'], 'frozen_wrapper_drift')
+            require(frozen['policy_sha256'] == sha(POLICY), 'frozen_policy_drift')
+            require(frozen['helper_sha256'] == sha(ROOT / 'owned_processes.py'), 'frozen_helper_drift')
+            require(frozen['nodes_sha256'] == sha(NODES), 'nodes_drift')
+            expected = json.loads(NODES.read_text())
+            require(expected and len(set(expected)) == len(expected), 'node_count')
+            require(source_before == frozen['source_manifest'], 'source_drift_before')
+            result['input_hashes'] = {'freeze': sha(FREEZE), 'nodes': sha(NODES), 'policy': sha(POLICY)}
+        result['pure_controls'] = pure_controls()
+        result['phase'] = 'os_controls'
+        capture, output = invoke(CONTROL, 30)
+        result['controls'] = {'capture': capture, 'checks': json.loads(output)}
+        require(capture['exit_code'] == 0 and capture['stopped_reason'] is None, 'os_control_failed')
+        if mode == 'freeze':
+            result['phase'] = 'collection'
+            capture, output = invoke(COLLECT, 180)
+            callbacks = [line[len(MARK):] for line in output.splitlines() if line.startswith(MARK)]
+            require(len(callbacks) == 1, 'collection_callback')
+            collected = json.loads(callbacks[0])
+            result['collection'] = {'capture': capture, 'callback': collected}
+            require(capture['exit_code'] == 0 and capture['stopped_reason'] is None and not collected['errors'], 'collection_failed')
+            require(not any(stream['truncated'] for stream in capture['streams'].values()), 'collection_truncated')
+            expected = collected['nodes']
+            require(expected and len(expected) == len(set(expected)), 'collection_nodes')
+            require(manifest() == source_before, 'source_drift_collection')
+            put(NODES, expected)
+            put(FREEZE, {'source_ref': SOURCE_REF, 'archive_sha256': ARCHIVE_SHA,
+                         'source_manifest': source_before, 'wrapper_sha256': result['wrapper_sha256'],
+                         'nodes_sha256': sha(NODES), 'policy_sha256': sha(POLICY),
+                         'helper_sha256': sha(ROOT / 'owned_processes.py')})
+            result['input_hashes'] = {'freeze': sha(FREEZE), 'nodes': sha(NODES), 'policy': sha(POLICY)}
+            result['node_count'] = len(expected)
+            result['nonpass_reasons'] = []
+        elif mode == 'full':
+            result['phase'] = 'full'
+            control = json.loads((EVIDENCE / 'control-a387.json').read_text())
+            require(control['status'] == 'passed' and control['wrapper_sha256'] == result['wrapper_sha256'], 'control_binding')
+            require(control['input_hashes'] == result['input_hashes'], 'control_input_binding')
+            capture, output = invoke(TESTS, 900)
+            result['capture'] = capture
+            callbacks = [line[len(MARK):] for line in output.splitlines() if line.startswith(MARK)]
+            require(len(callbacks) == 1, 'callback_missing_or_duplicate')
+            result['callback'] = json.loads(callbacks[0])
+            result['nonpass_reasons'] = account(expected, result['callback'], capture)
+        else:
+            result['nonpass_reasons'] = []
+        require(manifest() == source_before, 'source_drift_after')
+        require(result['wrapper_sha256'] == sha(Path(__file__)), 'wrapper_changed')
+        require(result['input_hashes'] == {'freeze': sha(FREEZE), 'nodes': sha(NODES), 'policy': sha(POLICY)}, 'inputs_changed')
+        result['source_manifest_unchanged'] = True
+        result['phase'] = 'finished'
+        result['status'] = 'nonpass' if result['nonpass_reasons'] else 'passed'
+    except BaseException:
+        result['error_type'] = type(sys.exc_info()[1]).__name__
+        # Only fixed internal labels, never exception text from pytest.
+        result['status'] = 'failed'
+    finally:
+        result['duration_seconds'] = round(time.monotonic() - started, 3)
+        result['free_bytes_after'] = shutil.disk_usage(ROOT).free
+        put(destination, result)
+    print(json.dumps({'mode': mode, 'status': result['status'], 'duration_seconds': result['duration_seconds']}))
+    return 0 if result['status'] == 'passed' else 1
+
+if __name__ == '__main__':
+    raise SystemExit(main())
