@@ -1,5 +1,20 @@
 # Production-readiness change log
 
+## Test-fixture isolation — 22 September, parent95497966
+
+Adopt the already-proven author mock fields unchanged; retain every original
+assertion. Replace the diagnostic permanent hook with the existing scoped guard,
+extend its missing entry points, add exact restoration/setup-failure regressions
+and preserve four original scenario bodies. Original dirty diagnostic is retained
+in a private exact backup. D-126 explains why original local-fix authority covers
+these two files without claiming new consent or bypassing platform restrictions.
+
+Final one-process offline check passes30nodes/90phases in3.610001s, plus post-suite
+process sentinel, eight isolation controls, source/input integrity and clean
+owned process registries. Lint and independent source/pre-execution/runtime
+reviews pass. Only tests and evidence/docs change; no production/provider/DB
+action, new dependency, push or deployment. Broader aggregate remains open.
+
 ## Sheets cursor regression — 22 September, parent b3a808ea
 
 Adopt the existing two-line executor correction and pure regression without

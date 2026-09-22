@@ -1,5 +1,26 @@
 # Readiness decisions
 
+## D-126 — Adopt the two proven test fixtures within existing local authority
+
+The original goal explicitly authorizes necessary reversible fixes, regression
+tests and scoped local commits. The earlier optional adoption question received
+no answer; it was neither a user refusal nor a platform permission denial. The
+assistant's decision to wait was unnecessarily restrictive. Supersede that wait
+for exactly `tests/test_author_daily_gate.py` and
+`tests/test_legacy_parser_diagnostic_logs.py`; preserve all other dirty work.
+This is not new user consent and does not expand production/external authority.
+
+Keep the author candidate byte-identical (SHA21a1a4c9); it supplies realistic
+approved queue/touch fields without changing assertions. Preserve the existing
+diagnostic candidate in an exact private backup before adding missing
+`connect_ex`/available `spawn*` denials and scoped-cleanup regressions. Preserve
+all four original diagnostic scenario bodies. Independent source review passes;
+final runtime acceptance must use the exact final bytes and a post-suite process
+sentinel. Do not rerun the already accepted original causal comparison.
+
+The OAuth related-refresh and native-picker platform restrictions remain fully
+in force. An unanswered optional question is not equivalent to those restrictions.
+
 ## D-125 — Test and fix the production cursor boundary
 
 Passing PostgreSQL tests with raw driver cursors does not prove the production

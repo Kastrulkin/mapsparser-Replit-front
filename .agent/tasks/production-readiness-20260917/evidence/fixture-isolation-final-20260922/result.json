@@ -1,0 +1,732 @@
+{
+  "callback": {
+    "sentinel": {
+      "status": "completed"
+    },
+    "suites": [
+      {
+        "collection_errors": [],
+        "label": "diagnostic",
+        "nodes": [
+          "LegacyParserDiagnosticLogsTests::test_browser_launch_fallback_omits_exception_text_and_preserves_failure",
+          "LegacyParserDiagnosticLogsTests::test_entry_diagnostic_omits_url_and_leaves_url_value_unchanged",
+          "LegacyParserDiagnosticLogsTests::test_overview_fallback_omits_exception_text_and_continues",
+          "LegacyParserDiagnosticLogsTests::test_completion_diagnostic_omits_title_and_address_and_returns_same_data",
+          "LegacyParserDiagnosticGuardTests::test_guard_denies_complete_entry_point_set_and_restores_socket_methods",
+          "LegacyParserDiagnosticGuardTests::test_unittest_cleanup_restores_guard_when_setup_raises"
+        ],
+        "reports": [
+          {
+            "nodeid": "LegacyParserDiagnosticLogsTests::test_browser_launch_fallback_omits_exception_text_and_preserves_failure",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserDiagnosticLogsTests::test_browser_launch_fallback_omits_exception_text_and_preserves_failure",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserDiagnosticLogsTests::test_browser_launch_fallback_omits_exception_text_and_preserves_failure",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserDiagnosticLogsTests::test_entry_diagnostic_omits_url_and_leaves_url_value_unchanged",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserDiagnosticLogsTests::test_entry_diagnostic_omits_url_and_leaves_url_value_unchanged",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserDiagnosticLogsTests::test_entry_diagnostic_omits_url_and_leaves_url_value_unchanged",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserDiagnosticLogsTests::test_overview_fallback_omits_exception_text_and_continues",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserDiagnosticLogsTests::test_overview_fallback_omits_exception_text_and_continues",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserDiagnosticLogsTests::test_overview_fallback_omits_exception_text_and_continues",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserDiagnosticLogsTests::test_completion_diagnostic_omits_title_and_address_and_returns_same_data",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserDiagnosticLogsTests::test_completion_diagnostic_omits_title_and_address_and_returns_same_data",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserDiagnosticLogsTests::test_completion_diagnostic_omits_title_and_address_and_returns_same_data",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserDiagnosticGuardTests::test_guard_denies_complete_entry_point_set_and_restores_socket_methods",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserDiagnosticGuardTests::test_guard_denies_complete_entry_point_set_and_restores_socket_methods",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserDiagnosticGuardTests::test_guard_denies_complete_entry_point_set_and_restores_socket_methods",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserDiagnosticGuardTests::test_unittest_cleanup_restores_guard_when_setup_raises",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserDiagnosticGuardTests::test_unittest_cleanup_restores_guard_when_setup_raises",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserDiagnosticGuardTests::test_unittest_cleanup_restores_guard_when_setup_raises",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          }
+        ],
+        "return_code": 0,
+        "subtests": []
+      },
+      {
+        "collection_errors": [],
+        "label": "author_daily_gate",
+        "nodes": [
+          "test_author_gate_serializes_concurrent_reservations_and_uses_moscow_day",
+          "test_author_gate_counts_sending_unknown_and_manual_history_but_retry_is_idempotent",
+          "test_legacy_activity_contributes_across_all_platform_author_channels",
+          "test_confirmed_send_after_later_claim_still_consumes_the_slot",
+          "test_author_gate_blocks_cross_channel_second_touch_for_same_profile",
+          "test_author_gate_uses_normalized_contact_to_merge_duplicate_profiles",
+          "test_author_gate_enforces_total_and_channel_caps",
+          "test_author_gate_requires_exact_policy_and_canonical_profile",
+          "test_non_author_lane_keeps_legacy_policy_path",
+          "test_manual_touch_accepts_user_confirmed_historical_send_with_actual_chronology",
+          "test_manual_touch_historical_reply_uses_actual_time_without_provider_proof",
+          "test_manual_touch_rejects_invalid_actual_time_before_database_access[naive-must include a timezone]",
+          "test_manual_touch_rejects_invalid_actual_time_before_database_access[future-must not be in the future]",
+          "test_native_author_dispatch_remains_blocked_without_trusted_reply_window_receipt",
+          "test_author_preflight_carries_sender_identity_and_runs_generic_guards_before_receipt",
+          "test_preflight_result_carries_the_selected_sender_identity",
+          "test_author_dispatch_uses_creator_bridge_fingerprint_and_fails_closed_on_change",
+          "test_author_preview_defaults_to_email_and_rejects_unreserved_manual_channels"
+        ],
+        "reports": [
+          {
+            "nodeid": "test_author_gate_serializes_concurrent_reservations_and_uses_moscow_day",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_gate_serializes_concurrent_reservations_and_uses_moscow_day",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_gate_serializes_concurrent_reservations_and_uses_moscow_day",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_gate_counts_sending_unknown_and_manual_history_but_retry_is_idempotent",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_gate_counts_sending_unknown_and_manual_history_but_retry_is_idempotent",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_gate_counts_sending_unknown_and_manual_history_but_retry_is_idempotent",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_legacy_activity_contributes_across_all_platform_author_channels",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_legacy_activity_contributes_across_all_platform_author_channels",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_legacy_activity_contributes_across_all_platform_author_channels",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_confirmed_send_after_later_claim_still_consumes_the_slot",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_confirmed_send_after_later_claim_still_consumes_the_slot",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_confirmed_send_after_later_claim_still_consumes_the_slot",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_gate_blocks_cross_channel_second_touch_for_same_profile",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_gate_blocks_cross_channel_second_touch_for_same_profile",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_gate_blocks_cross_channel_second_touch_for_same_profile",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_gate_uses_normalized_contact_to_merge_duplicate_profiles",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_gate_uses_normalized_contact_to_merge_duplicate_profiles",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_gate_uses_normalized_contact_to_merge_duplicate_profiles",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_gate_enforces_total_and_channel_caps",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_gate_enforces_total_and_channel_caps",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_gate_enforces_total_and_channel_caps",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_gate_requires_exact_policy_and_canonical_profile",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_gate_requires_exact_policy_and_canonical_profile",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_gate_requires_exact_policy_and_canonical_profile",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_non_author_lane_keeps_legacy_policy_path",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_non_author_lane_keeps_legacy_policy_path",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_non_author_lane_keeps_legacy_policy_path",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_manual_touch_accepts_user_confirmed_historical_send_with_actual_chronology",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_manual_touch_accepts_user_confirmed_historical_send_with_actual_chronology",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_manual_touch_accepts_user_confirmed_historical_send_with_actual_chronology",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_manual_touch_historical_reply_uses_actual_time_without_provider_proof",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_manual_touch_historical_reply_uses_actual_time_without_provider_proof",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_manual_touch_historical_reply_uses_actual_time_without_provider_proof",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_manual_touch_rejects_invalid_actual_time_before_database_access[naive-must include a timezone]",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_manual_touch_rejects_invalid_actual_time_before_database_access[naive-must include a timezone]",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_manual_touch_rejects_invalid_actual_time_before_database_access[naive-must include a timezone]",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_manual_touch_rejects_invalid_actual_time_before_database_access[future-must not be in the future]",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_manual_touch_rejects_invalid_actual_time_before_database_access[future-must not be in the future]",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_manual_touch_rejects_invalid_actual_time_before_database_access[future-must not be in the future]",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_native_author_dispatch_remains_blocked_without_trusted_reply_window_receipt",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_native_author_dispatch_remains_blocked_without_trusted_reply_window_receipt",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_native_author_dispatch_remains_blocked_without_trusted_reply_window_receipt",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_preflight_carries_sender_identity_and_runs_generic_guards_before_receipt",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_preflight_carries_sender_identity_and_runs_generic_guards_before_receipt",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_preflight_carries_sender_identity_and_runs_generic_guards_before_receipt",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_preflight_result_carries_the_selected_sender_identity",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_preflight_result_carries_the_selected_sender_identity",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_preflight_result_carries_the_selected_sender_identity",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_dispatch_uses_creator_bridge_fingerprint_and_fails_closed_on_change",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_dispatch_uses_creator_bridge_fingerprint_and_fails_closed_on_change",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_dispatch_uses_creator_bridge_fingerprint_and_fails_closed_on_change",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_preview_defaults_to_email_and_rejects_unreserved_manual_channels",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_preview_defaults_to_email_and_rejects_unreserved_manual_channels",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "test_author_preview_defaults_to_email_and_rejects_unreserved_manual_channels",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          }
+        ],
+        "return_code": 0,
+        "subtests": []
+      },
+      {
+        "collection_errors": [],
+        "label": "legacy_leaf_diagnostics",
+        "nodes": [
+          "LegacyParserLeafDiagnosticLogsTests::test_all_declared_changed_leaf_sinks_are_fixed_nonempty_events",
+          "LegacyParserLeafDiagnosticLogsTests::test_overview_fake_page_keeps_private_fields_without_console_values",
+          "LegacyParserLeafDiagnosticLogsTests::test_main_page_review_fallback_keeps_default_result_when_page_raises",
+          "LegacyParserLeafDiagnosticGuardTests::test_guard_denies_network_while_active_and_restores_it_afterward",
+          "LegacyParserLeafDiagnosticGuardTests::test_guard_denies_remaining_external_entry_points_while_active",
+          "LegacyParserLeafDiagnosticGuardTests::test_guard_restores_popen_after_exception_path"
+        ],
+        "reports": [
+          {
+            "nodeid": "LegacyParserLeafDiagnosticLogsTests::test_all_declared_changed_leaf_sinks_are_fixed_nonempty_events",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserLeafDiagnosticLogsTests::test_all_declared_changed_leaf_sinks_are_fixed_nonempty_events",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserLeafDiagnosticLogsTests::test_all_declared_changed_leaf_sinks_are_fixed_nonempty_events",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserLeafDiagnosticLogsTests::test_overview_fake_page_keeps_private_fields_without_console_values",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserLeafDiagnosticLogsTests::test_overview_fake_page_keeps_private_fields_without_console_values",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserLeafDiagnosticLogsTests::test_overview_fake_page_keeps_private_fields_without_console_values",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserLeafDiagnosticLogsTests::test_main_page_review_fallback_keeps_default_result_when_page_raises",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserLeafDiagnosticLogsTests::test_main_page_review_fallback_keeps_default_result_when_page_raises",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserLeafDiagnosticLogsTests::test_main_page_review_fallback_keeps_default_result_when_page_raises",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserLeafDiagnosticGuardTests::test_guard_denies_network_while_active_and_restores_it_afterward",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserLeafDiagnosticGuardTests::test_guard_denies_network_while_active_and_restores_it_afterward",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserLeafDiagnosticGuardTests::test_guard_denies_network_while_active_and_restores_it_afterward",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserLeafDiagnosticGuardTests::test_guard_denies_remaining_external_entry_points_while_active",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserLeafDiagnosticGuardTests::test_guard_denies_remaining_external_entry_points_while_active",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserLeafDiagnosticGuardTests::test_guard_denies_remaining_external_entry_points_while_active",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserLeafDiagnosticGuardTests::test_guard_restores_popen_after_exception_path",
+            "outcome": "passed",
+            "when": "setup",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserLeafDiagnosticGuardTests::test_guard_restores_popen_after_exception_path",
+            "outcome": "passed",
+            "when": "call",
+            "xfail": false
+          },
+          {
+            "nodeid": "LegacyParserLeafDiagnosticGuardTests::test_guard_restores_popen_after_exception_path",
+            "outcome": "passed",
+            "when": "teardown",
+            "xfail": false
+          }
+        ],
+        "return_code": 0,
+        "subtests": []
+      }
+    ]
+  },
+  "capture": {
+    "argv": [
+      "/usr/bin/sandbox-exec",
+      "-f",
+      "/private/tmp/localos-current-full-v10.BYwJr6/policy-v10.sb",
+      "/usr/bin/arch",
+      "-arm64",
+      "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+      "-B",
+      "-I",
+      "-c",
+      "import json,os,pytest,subprocess,sys\nselected=[('diagnostic', '/private/tmp/localos-current-full-v10.BYwJr6/writable/fixtures-final-eUzlmH/diagnostic/test_legacy_parser_diagnostic_logs.py', ['LegacyParserDiagnosticLogsTests::test_browser_launch_fallback_omits_exception_text_and_preserves_failure', 'LegacyParserDiagnosticLogsTests::test_entry_diagnostic_omits_url_and_leaves_url_value_unchanged', 'LegacyParserDiagnosticLogsTests::test_overview_fallback_omits_exception_text_and_continues', 'LegacyParserDiagnosticLogsTests::test_completion_diagnostic_omits_title_and_address_and_returns_same_data', 'LegacyParserDiagnosticGuardTests::test_guard_denies_complete_entry_point_set_and_restores_socket_methods', 'LegacyParserDiagnosticGuardTests::test_unittest_cleanup_restores_guard_when_setup_raises']), ('author_daily_gate', '/private/tmp/localos-current-full-v10.BYwJr6/writable/fixtures-final-eUzlmH/author/test_author_daily_gate.py', ['test_author_gate_serializes_concurrent_reservations_and_uses_moscow_day', 'test_author_gate_counts_sending_unknown_and_manual_history_but_retry_is_idempotent', 'test_legacy_activity_contributes_across_all_platform_author_channels', 'test_confirmed_send_after_later_claim_still_consumes_the_slot', 'test_author_gate_blocks_cross_channel_second_touch_for_same_profile', 'test_author_gate_uses_normalized_contact_to_merge_duplicate_profiles', 'test_author_gate_enforces_total_and_channel_caps', 'test_author_gate_requires_exact_policy_and_canonical_profile', 'test_non_author_lane_keeps_legacy_policy_path', 'test_manual_touch_accepts_user_confirmed_historical_send_with_actual_chronology', 'test_manual_touch_historical_reply_uses_actual_time_without_provider_proof', 'test_manual_touch_rejects_invalid_actual_time_before_database_access[naive-must include a timezone]', 'test_manual_touch_rejects_invalid_actual_time_before_database_access[future-must not be in the future]', 'test_native_author_dispatch_remains_blocked_without_trusted_reply_window_receipt', 'test_author_preflight_carries_sender_identity_and_runs_generic_guards_before_receipt', 'test_preflight_result_carries_the_selected_sender_identity', 'test_author_dispatch_uses_creator_bridge_fingerprint_and_fails_closed_on_change', 'test_author_preview_defaults_to_email_and_rejects_unreserved_manual_channels']), ('legacy_leaf_diagnostics', '/private/tmp/localos-current-full-v10.BYwJr6/writable/fixtures-final-eUzlmH/leaf/test_legacy_parser_leaf_diagnostics.py', ['LegacyParserLeafDiagnosticLogsTests::test_all_declared_changed_leaf_sinks_are_fixed_nonempty_events', 'LegacyParserLeafDiagnosticLogsTests::test_overview_fake_page_keeps_private_fields_without_console_values', 'LegacyParserLeafDiagnosticLogsTests::test_main_page_review_fallback_keeps_default_result_when_page_raises', 'LegacyParserLeafDiagnosticGuardTests::test_guard_denies_network_while_active_and_restores_it_afterward', 'LegacyParserLeafDiagnosticGuardTests::test_guard_denies_remaining_external_entry_points_while_active', 'LegacyParserLeafDiagnosticGuardTests::test_guard_restores_popen_after_exception_path'])]\npytest_ini='/private/tmp/localos-current-full-v10.BYwJr6/source/pytest.ini'\nbase_temp='/private/tmp/localos-current-full-v10.BYwJr6/writable/fixtures-final-eUzlmH/basetemp'\nsource_src='/private/tmp/localos-current-full-v10.BYwJr6/source/src'\nsys.path.insert(0,source_src)\nstate={'suites':[],'sentinel':None}\ntry: from _pytest.subtests import SubtestReport\nexcept ImportError: SubtestReport=()\nclass H:\n def __init__(self,label): self.label=label;self.nodes=[];self.errors=[];self.reports=[];self.subtests=[]\n def pytest_collection_finish(self,session): self.nodes=['::'.join(item.nodeid.split('::')[1:]) for item in session.items]\n def pytest_collectreport(self,report):\n  if report.failed:self.errors.append(report.nodeid)\n def pytest_runtest_logreport(self,report):\n  row={'nodeid':'::'.join(report.nodeid.split('::')[1:]),'when':report.when,'outcome':report.outcome,'xfail':bool(getattr(report,'wasxfail',False))}\n  (self.subtests if isinstance(report,SubtestReport) else self.reports).append(row)\nfor label,path,nodes in selected:\n h=H(label);code=pytest.main([path+'::'+node for node in nodes]+['-q','-c',pytest_ini,'-p','no:cacheprovider','--tb=no','--show-capture=no','--basetemp',base_temp+'/'+label],plugins=[h])\n state['suites'].append({'label':label,'nodes':h.nodes,'collection_errors':h.errors,'reports':h.reports,'subtests':h.subtests,'return_code':code})\n if code: break\nif all(suite['return_code']==0 for suite in state['suites']):\n try:\n  subprocess.run([sys.executable,'-B','-I','-c','pass'],check=True,capture_output=True)\n  state['sentinel']={'status':'completed'}\n except BaseException:\n  state['sentinel']={'status':'failed','exception_type':type(sys.exception()).__name__}\nprint('OFFLINE_FIXTURES_FINAL_CALLBACK='+json.dumps(state,sort_keys=True));raise SystemExit(0 if state['sentinel']=={'status':'completed'} and len(state['suites'])==len(selected) else 1)\n"
+    ],
+    "duration_seconds": 1.246,
+    "exit_code": 0,
+    "process_cleanup": {
+      "errors": [],
+      "observed": [
+        {
+          "created": 1790097053.025884,
+          "pid": 45365
+        }
+      ],
+      "remaining": [],
+      "signalled": [],
+      "status": "clean"
+    },
+    "stopped_reason": null,
+    "streams": {
+      "stderr": {
+        "captured_bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "total_bytes": 0,
+        "truncated": false
+      },
+      "stdout": {
+        "captured_bytes": 17125,
+        "sha256": "9c2a232c979dc003bcf2f079a0acee472a3e9e65399c61408152de599920dd6b",
+        "total_bytes": 17125,
+        "truncated": false
+      }
+    }
+  },
+  "controls": {
+    "capture": {
+      "argv": [
+        "/usr/bin/sandbox-exec",
+        "-f",
+        "/private/tmp/localos-current-full-v10.BYwJr6/policy-v10.sb",
+        "/usr/bin/arch",
+        "-arm64",
+        "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+        "-B",
+        "-I",
+        "-c",
+        "import json,socket,subprocess,sys\nfrom pathlib import Path\nd={}\ndef check(k,f):\n try:f();d[k]=None\n except OSError:d[k]=sys.exception().errno\ncheck('users',lambda:Path('/Users/alexdemyanov/.ssh').read_bytes())\ncheck('source_write',lambda:Path('/private/tmp/localos-current-full-v10.BYwJr6/source/.v10-forbidden').write_text('forbidden'))\ns=socket.socket();d['tcp']=s.connect_ex(('127.0.0.1',1));s.close()\ns=socket.socket(socket.AF_UNIX);check('docker',lambda:s.connect('/Users/alexdemyanov/.docker/run/docker.sock'));s.close()\nn=subprocess.run(['/usr/bin/nc','-v','-z','-w','1','127.0.0.1','1'],capture_output=True)\nd['native_tcp']=n.returncode!=0 and b'Operation not permitted' in n.stderr\nowned=Path('/private/tmp/localos-current-full-v10.BYwJr6/writable/v10-owned-probe')\nowned.write_text('owned probe');d['owned_write']=owned.read_text()=='owned probe'\nlink=Path('/private/tmp/localos-current-full-v10.BYwJr6/writable/v10-escape-probe')\ntarget='/private/tmp/localos-current-full-v10.BYwJr6/source/.v10-forbidden'\nif not link.is_symlink():link.symlink_to(target)\nd['symlink_target']=str(link.readlink())==target\ncheck('symlink_write',lambda:link.write_text('forbidden'))\nprint(json.dumps(d));raise SystemExit(0 if all(d[k] in (1,13) for k in ('users','source_write','tcp','docker','symlink_write')) and d['native_tcp'] and d['owned_write'] and d['symlink_target'] else 1)\n"
+      ],
+      "duration_seconds": 0.208,
+      "exit_code": 0,
+      "process_cleanup": {
+        "errors": [],
+        "observed": [
+          {
+            "created": 1790097052.817125,
+            "pid": 45363
+          }
+        ],
+        "remaining": [],
+        "signalled": [],
+        "status": "clean"
+      },
+      "stopped_reason": null,
+      "streams": {
+        "stderr": {
+          "captured_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "total_bytes": 0,
+          "truncated": false
+        },
+        "stdout": {
+          "captured_bytes": 140,
+          "sha256": "eb5bc95d715a02639587234b78215b610ce97a139f5a693fc8344b668973b05d",
+          "total_bytes": 140,
+          "truncated": false
+        }
+      }
+    },
+    "checks": {
+      "docker": 1,
+      "native_tcp": true,
+      "owned_write": true,
+      "source_write": 1,
+      "symlink_target": true,
+      "symlink_write": 1,
+      "tcp": 1,
+      "users": 1
+    }
+  },
+  "duration_seconds": 3.545,
+  "input_hashes_after": {
+    "/private/tmp/localos-current-full-v10.BYwJr6/source/src/services/outreach_campaign_service.py": "45d7b3c92ab9b17d4c5eb0774a8cb3db8f5ccfce26fe13c26065fadd2630db17",
+    "/private/tmp/localos-current-full-v10.BYwJr6/source/src/services/outreach_safety_service.py": "b62b88334f854b9acaffec83dc5d504180396928626362fc3275e46b368ff7ac",
+    "/private/tmp/localos-current-full-v10.BYwJr6/source/src/yandex_maps_scraper.py": "3a069c6724f31990792d74ff217e19ded6a39e24a0512139e4ea21fe9ef423c5",
+    "/private/tmp/localos-current-full-v10.BYwJr6/writable/fixtures-final-eUzlmH/author/test_author_daily_gate.py": "21a1a4c9c3337bb516a8c80a354b860d6ba380bf1c4ce0aed4ba0bc5196f782c",
+    "/private/tmp/localos-current-full-v10.BYwJr6/writable/fixtures-final-eUzlmH/diagnostic/test_legacy_parser_diagnostic_logs.py": "b654f5c74ef9f52c1b7e2add05f3dd7d08723feb135ec6dca1ee3f20a9519b18",
+    "/private/tmp/localos-current-full-v10.BYwJr6/writable/fixtures-final-eUzlmH/leaf/test_legacy_parser_leaf_diagnostics.py": "152c0163f04a4072b469c7a36883a947a3ea49cca7785459e6abbc5b6c32b422",
+    "/private/tmp/localos-current-full-v10.BYwJr6/writable/fixtures-final-eUzlmH/offline_suite_manifest.json": "99eea21488e53c1cd21e2f06e7a8168cb56af45ad679fffb0b3ed976ded51312",
+    "/private/tmp/localos-current-full-v10.BYwJr6/writable/fixtures-final-eUzlmH/src/yandex_maps_scraper.py": "3a069c6724f31990792d74ff217e19ded6a39e24a0512139e4ea21fe9ef423c5"
+  },
+  "input_hashes_before": {
+    "/private/tmp/localos-current-full-v10.BYwJr6/source/src/services/outreach_campaign_service.py": "45d7b3c92ab9b17d4c5eb0774a8cb3db8f5ccfce26fe13c26065fadd2630db17",
+    "/private/tmp/localos-current-full-v10.BYwJr6/source/src/services/outreach_safety_service.py": "b62b88334f854b9acaffec83dc5d504180396928626362fc3275e46b368ff7ac",
+    "/private/tmp/localos-current-full-v10.BYwJr6/source/src/yandex_maps_scraper.py": "3a069c6724f31990792d74ff217e19ded6a39e24a0512139e4ea21fe9ef423c5",
+    "/private/tmp/localos-current-full-v10.BYwJr6/writable/fixtures-final-eUzlmH/author/test_author_daily_gate.py": "21a1a4c9c3337bb516a8c80a354b860d6ba380bf1c4ce0aed4ba0bc5196f782c",
+    "/private/tmp/localos-current-full-v10.BYwJr6/writable/fixtures-final-eUzlmH/diagnostic/test_legacy_parser_diagnostic_logs.py": "b654f5c74ef9f52c1b7e2add05f3dd7d08723feb135ec6dca1ee3f20a9519b18",
+    "/private/tmp/localos-current-full-v10.BYwJr6/writable/fixtures-final-eUzlmH/leaf/test_legacy_parser_leaf_diagnostics.py": "152c0163f04a4072b469c7a36883a947a3ea49cca7785459e6abbc5b6c32b422",
+    "/private/tmp/localos-current-full-v10.BYwJr6/writable/fixtures-final-eUzlmH/offline_suite_manifest.json": "99eea21488e53c1cd21e2f06e7a8168cb56af45ad679fffb0b3ed976ded51312",
+    "/private/tmp/localos-current-full-v10.BYwJr6/writable/fixtures-final-eUzlmH/src/yandex_maps_scraper.py": "3a069c6724f31990792d74ff217e19ded6a39e24a0512139e4ea21fe9ef423c5"
+  },
+  "nonpass_reasons": [],
+  "source_file_count": 6340,
+  "source_unchanged": true,
+  "status": "passed"
+}

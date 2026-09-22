@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import ast
 import copy
-from contextlib import redirect_stdout
+from contextlib import ExitStack, redirect_stdout
 import io
+import os
 from pathlib import Path
+import socket
+import sqlite3
+import subprocess
 import sys
 import unittest
+from unittest.mock import patch
 
 
 SOURCE_PATH = Path(__file__).parents[1] / "src" / "yandex_maps_scraper.py"
@@ -96,21 +101,34 @@ def _capture_exception(callback):
     raise AssertionError("expected legacy parser branch to raise")
 
 
-class LegacyParserDiagnosticLogsTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        def deny_external_side_effects(event, _args):
-            if event in {
-                "socket.connect",
-                "subprocess.Popen",
-                "os.system",
-                "os.posix_spawn",
-                "os.spawn",
-                "sqlite3.connect",
-            }:
-                raise AssertionError(f"unexpected external side effect: {event}")
+def _deny_external_side_effects(*_args, **_kwargs):
+    raise AssertionError("unexpected external side effect")
 
-        sys.addaudithook(deny_external_side_effects)
+
+def _guard_external_side_effects(stack):
+    targets = [
+        "socket.socket.connect",
+        "socket.socket.connect_ex",
+        "subprocess.Popen",
+        "os.system",
+        "os.posix_spawn",
+        "os.posix_spawnp",
+        "sqlite3.connect",
+    ]
+    targets.extend(
+        f"os.{name}"
+        for name in ("spawnv", "spawnve", "spawnvp", "spawnvpe")
+        if hasattr(os, name)
+    )
+    for target in targets:
+        stack.enter_context(patch(target, side_effect=_deny_external_side_effects))
+
+
+class LegacyParserDiagnosticLogsTests(unittest.TestCase):
+    def setUp(self):
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        _guard_external_side_effects(stack)
 
     def test_browser_launch_fallback_omits_exception_text_and_preserves_failure(self):
         launch_browser = copy.deepcopy(_function(_tree(), "_launch_browser"))
@@ -216,6 +234,76 @@ def exercise(data, browser_name):
         self.assertEqual(data["address"], SYNTHETIC_MARKER)
         self.assertEqual(stdout, "Legacy-парсинг завершен\n")
         self.assertNotIn(SYNTHETIC_MARKER, stdout)
+
+
+class LegacyParserDiagnosticGuardTests(unittest.TestCase):
+    def test_guard_denies_complete_entry_point_set_and_restores_socket_methods(self):
+        originals = [
+            (socket.socket, "connect", socket.socket.connect),
+            (socket.socket, "connect_ex", socket.socket.connect_ex),
+            (subprocess, "Popen", subprocess.Popen),
+            (os, "system", os.system),
+            (os, "posix_spawn", os.posix_spawn),
+            (os, "posix_spawnp", os.posix_spawnp),
+            (sqlite3, "connect", sqlite3.connect),
+        ]
+        originals.extend(
+            (os, name, getattr(os, name))
+            for name in ("spawnv", "spawnve", "spawnvp", "spawnvpe")
+            if hasattr(os, name)
+        )
+        stack = ExitStack()
+        probe = socket.socket()
+        try:
+            _guard_external_side_effects(stack)
+            for callback in (
+                lambda: probe.connect(("127.0.0.1", 1)),
+                lambda: probe.connect_ex(("127.0.0.1", 1)),
+                lambda: sqlite3.connect(":memory:"),
+                lambda: subprocess.Popen(["not-run"]),
+                lambda: os.system("not-run"),
+                lambda: os.posix_spawn("not-run", ["not-run"], {}),
+                lambda: os.posix_spawnp("not-run", ["not-run"], {}),
+            ):
+                with self.assertRaisesRegex(AssertionError, "unexpected external side effect"):
+                    callback()
+            for name in ("spawnv", "spawnve", "spawnvp", "spawnvpe"):
+                if not hasattr(os, name):
+                    continue
+                arguments = (os.P_WAIT, "not-run", ["not-run"])
+                if name in {"spawnve", "spawnvpe"}:
+                    arguments = (*arguments, {})
+                with self.assertRaisesRegex(AssertionError, "unexpected external side effect"):
+                    getattr(os, name)(*arguments)
+        finally:
+            stack.close()
+            probe.close()
+
+        for owner, name, original in originals:
+            self.assertIs(getattr(owner, name), original)
+
+    def test_unittest_cleanup_restores_guard_when_setup_raises(self):
+        original_connect_ex = socket.socket.connect_ex
+        original_popen = subprocess.Popen
+
+        class SetupFailureCase(unittest.TestCase):
+            def setUp(self):
+                stack = ExitStack()
+                self.addCleanup(stack.close)
+                _guard_external_side_effects(stack)
+                raise RuntimeError("synthetic setup failure")
+
+            def test_never_runs(self):
+                self.fail("setup failure must prevent this test")
+
+        result = unittest.TestResult()
+        SetupFailureCase("test_never_runs").run(result)
+
+        self.assertEqual(len(result.errors), 1)
+        self.assertEqual(result.failures, [])
+        self.assertIn("RuntimeError: synthetic setup failure", result.errors[0][1])
+        self.assertIs(socket.socket.connect_ex, original_connect_ex)
+        self.assertIs(subprocess.Popen, original_popen)
 
 
 if __name__ == "__main__":

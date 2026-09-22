@@ -1,5 +1,33 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Diagnostic/author test isolation — 22 September
+
+**TEST-DIAGNOSTIC-GUARD-01 — P2, testing, locally FIX_PROVEN.** The diagnostic
+class installs a permanent audit hook and blocks later tests' legitimate local
+subprocess/socket/database API use. Original four tests pass but a following
+harmless subprocess raises AssertionError; the existing dirty scoped patch
+removes that leak. High confidence, deterministic ordering impact, test-only
+blast radius; no application failure inferred. Preserve that patch, add missing
+`connect_ex`/available spawn denials, register cleanup before setup can fail,
+and add exact denial/restoration/setup-error regressions. Low-risk, reversible,
+small effort. All original scenario bodies are unchanged. Acceptance: no leaked
+guard and no weakened active denial, same-process adjacent tests pass.
+
+**TEST-AUTHOR-FIXTURE-01 — P2, testing, locally FIX_PROVEN.** Existing fingerprint
+test mock lacks the approved queue/touch identity and payload fields now required
+by preflight, so it fails before its intended fingerprint assertion. Exact
+original call assertion fails at line540; unchanged pre-existing21a1a4c9 candidate
+passes after supplying those fields. Assertions and fail-closed checks remain
+unchanged. High confidence/deterministic, isolated test-only impact, small effort
+and low reversible risk. No production approval change is authorized or applied.
+
+Evidence: original causal bundle `evidence/test-fixture-followup-20260922/` and
+final `evidence/fixture-isolation-final-20260922/`:30nodes90phases pass3.610001s,
+eight OS controls, post-suite subprocess sentinel, source/input integrity and
+owned process cleanup pass. Targeted Ruff and independent source/runtime review
+PASS. D-126 documents scoped adoption authority. Both author PG selectors remain
+outside this run; original full aggregate and broader readiness are still open.
+
 ## Sheets runtime cursor compatibility — 22 September
 
 **SHEETS-QUERY-ADAPTER-01 — P1, backend/integration, locally FIX_PROVEN.**
@@ -25,7 +53,7 @@ holds missing approval and handles empty queue; previous16 queue/recovery cases
 and existing pure regression pass; lint and independent review pass. Pure proof,
 lint/source review and native20/60 phases are done (9.030334s, no skips/xfails,
 exact DB/process cleanup). Final independent runtime/package reviews pass;
-strict staged scan and local commit remain;
+strict staged scan passed with zero findings and local commit95497966 is complete;
 no deployment or live-provider result is claimed.
 
 ## Test and build-check isolation — 22 September

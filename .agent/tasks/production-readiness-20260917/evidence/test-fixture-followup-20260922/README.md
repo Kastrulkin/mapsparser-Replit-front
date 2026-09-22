@@ -1,5 +1,11 @@
 # Backend fixture follow-up — 22 September
 
+Later checkpoint: D-126 resolves the assistant-imposed adoption wait under the
+original local-fix authority. Final strengthened diagnostic and unchanged author
+candidate pass a30-node same-process adjacent check; see
+[final acceptance](../fixture-isolation-final-20260922/README.md). Statements
+below about pending adoption describe this earlier causal diagnosis only.
+
 These are bounded diagnostics following the preserved **NONPASS** full run at
 `d0ef4ce8`. The media-ID fix and that full evidence were committed separately as
 `45393b30`; its exact staged scan returned0/0findings in20.234s, local commit

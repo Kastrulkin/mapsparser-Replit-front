@@ -1,5 +1,43 @@
 # Readiness handoff
 
+## Latest continuation — 22 September, final fixture validation
+
+HEAD `954979662e95fc45d026c9a5e9aa1c0413577325`, same readiness branch. Sheets
+strict staged scan completed1,533.333ms/exit0, zero findings, exact diff SHA
+574048ebd7975d6ea55113fd34a0224f24000f0c40caf748b8ebdae83931b5f4
+(166,350 bytes); local commit137.539ms/exit0. Do not rerun completed commands.
+
+D-126 supersedes the assistant-imposed optional fixture-adoption wait, not any
+user/platform denial. Adopt only author SHA21a1a4c9 unchanged and the diagnostic
+guard improvement. Before-edit diagnostic copy is
+`/private/tmp/localos-legacy-diagnostic-guard-AqES9r/test_legacy_parser_diagnostic_logs.before.py`
+(SHA6b368126); final test SHAb654f5c7. Four original diagnostic methods and all
+author assertions are unchanged; independent source acceptance PASS. Production
+source is not modified. Final runtime is terminal PASS:30nodes90phases,
+outer3.610001s/exit0, sentinel completed; eight isolation probes/source6,340/
+input hashes/owned process cleanup allpass. No skip/xfail/collection error.
+Independent final pre-execution/runtime acceptance PASS; test Ruff135.524ms.
+
+Private final runner40958c49 and manifest99eea214 are frozen at
+`/private/tmp/localos-current-full-v10.BYwJr6/writable/fixtures-final-eUzlmH/`.
+It reuses the existing offline v10 OS policy and exact process ownership; never
+modify the frozen source or rerun the terminal historical full-v10 outputs.
+Scope is diagnostic6 then author18 pure then leaf6, followed by a harmless
+subprocess sentinel. Exclude both author PG selectors. Restricted OAuth and
+native-picker work remain prohibited; all original whole-goal gaps remain.
+
+Completed `audit-fixtures-final-v1` must not be restarted. Raw result SHAa13d9267;
+durable eight-artifact bundle `evidence/fixture-isolation-final-20260922/`.
+Before any launch, reviewer caught missing selector-manifest pin; fixed before
+execution. Initial unused-import Ruff failure is retained, final helper Ruff100.8ms
+passes. Next: exact scoped stage/scan/local commit, then new current aggregate and
+remaining integration families. Do not infer a full5516-node pass from this30.
+
+Five remaining unrelated tracked edits have combined diff SHA
+3c70e23be24b8c80af60a3823344b4952d0bf736b2e49a655762c16838bf1ffe
+(voice pilot doc, outreach_routes, main, knowledge_public_telegram, core_public_spa).
+Four unrelated untracked paths plus the restricted OAuth candidate remain preserved.
+
 ## Latest continuation — 22 September, causal Sheets regression
 
 HEAD `b3a808ea5af6fb69f3ef6e7398e3a878ec60ff8e` on the same readiness branch.

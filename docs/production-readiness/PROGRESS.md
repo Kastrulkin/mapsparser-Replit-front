@@ -1,5 +1,27 @@
 # Production-readiness progress
 
+## Current checkpoint — 22 September, fixture isolation follow-up
+
+- [x] Sheets fix and its native20/pure evidence are committed locally as
+  `954979662e95fc45d026c9a5e9aa1c0413577325`; strict staged scan zero findings
+  (1,533.333 ms), commit exit0 (137.539 ms). Older pending statements are history.
+- [x] Resolve the unnecessary author/diagnostic adoption wait under the original
+  goal's reversible-local-fix authority (D-126); no new consent is claimed.
+- [x] Preserve author candidate SHA21a1a4c9 unchanged; preserve diagnostic dirty
+  baseline SHA6b368126 in a private exact copy. Add complete scoped guard coverage
+  and two cleanup regressions; final diagnostic SHAb654f5c7. Independent source
+  review confirms original assertions/scenarios unchanged and diff-check passes.
+- [x] Final diagnostic6 + pure author18 + adjacent leaf6 pass all90 lifecycle
+  phases in3.610001s, exit0; no skip/xfail/subtests/collection errors. Post-suite
+  subprocess sentinel, eight OS probes, input hashes and6,340-source manifest
+  pass; owned processes clean. Targeted Ruff and independent runtime review PASS.
+- [ ] Final scoped staged scan and local commit for these two test fixtures.
+- [ ] Fresh full aggregate and original integration/security/image206,
+  load/browser/CI/demo/final whole-diff gates remain open. No production effects.
+
+Evidence: task `evidence/fixture-isolation-final-20260922/`, eight manifest-bound
+raw/source artifacts. Both author PG tests are outside this30-node run.
+
 ## Current checkpoint — 22 September, Sheets adapter fix verified locally
 
 - [x] PG51/Sheets16 evidence is locally committed as `b3a808ea`; strict staged

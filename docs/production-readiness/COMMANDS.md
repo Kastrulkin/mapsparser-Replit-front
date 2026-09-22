@@ -1,5 +1,31 @@
 # Verified commands and evidence
 
+## Final test-fixture isolation — 22 September, parent95497966
+
+One completed tmux `audit-fixtures-final-v1`, outer capture360s limit:
+
+```text
+/usr/bin/arch -arm64 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -B -I /private/tmp/localos-current-full-v10.BYwJr6/writable/fixtures-final-eUzlmH/run_offline_fixture_regressions.py --execute
+```
+
+Historical completed command, not restart guidance. Outer3,610.001ms/exit0,
+no timeout/truncation. Diagnostic6 then author18 pure then adjacent leaf6 share
+one child,30nodes90phases PASS, no skip/xfail/subtests/collection errors; final
+harmless subprocess sentinel succeeds. Eight OS probes, frozen6,340-file source,
+input hashes and clean owned process registries pass. Independent source,
+final pre-execution and runtime reviews PASS. Runner40958c49/config99eea214/result
+a13d9267 are archived in task `evidence/fixture-isolation-final-20260922/`.
+
+Targeted two-test-file Ruff135.524ms/exit0. Helper initial unused-import error
+107.391ms/exit1 is retained; removal89.654ms/exit0, final manifest-pin revision
+100.800ms/exit0. Pre-execution manifest-scope review rejection was corrected
+before the only runtime execution. No DB/provider/Docker/production use.
+
+Previous Sheets final exact staged scan:1,533.333ms/exit0, zero findings,
+166,350bytes/SHA574048eb; local commit137.539ms/exit0 produced95497966.
+Captures remain `/private/tmp/localos-sheet-wrapper-pg20.sJ8pci/` under
+`staged-scan-final-command.json` and `commit-command.json`.
+
 ## Sheets cursor causal check — 22 September, parent b3a808ea
 
 Completed named tmux `audit-sheet-adapter-red-green`, captured with 60 s limit:
