@@ -1,5 +1,26 @@
 # Production-readiness progress
 
+## Current checkpoint — 22 September, Services55 verified
+
+- [x] Independent-reviewed aggregate bundle committed as `654d09c7`,22paths;
+  strict staged secret scan passed20.319130s, zero findings. Local only.
+- [x] Services55 native profile final pure preflight26checks/1.389872s;
+  controller Ruff89.804ms. Existing tests/production source are unchanged.
+- [x] Fresh migrated native Services55:55nodes/165phases allpass19.615268s,
+  no skips/xfails/warnings. Head20260907_001,12tables,pgcrypto1.3/vector0.8.6;
+  seven isolation controls, source6469/input hashes and generated DB/process
+  cleanup pass. Independent final runtime review PASS. Earlier1.396s occupied
+  IPv4 port and7.006s launcher import-path failures remain harness history.
+  IPv6-only ::1:35418 preserves the original Docker IPv4 endpoint; no fixture
+  admission/assertion was relaxed. Bundle `evidence/services55-native-20260922/`.
+- [ ] Original full DoD remains incomplete: aggregateNONPASS, image206/security,
+  wider integration/load/browser/CI/demo and final whole-diff gates remain.
+
+Foreign5tracked+4untracked files and the restricted additional candidate remain
+preserved. No production/provider effects, Docker build, push or deployment.
+Next: commit this independently accepted evidence package, then bounded
+five-journey stress/resource work and remaining original security/CI/demo gates.
+
 ## Current checkpoint — 22 September, committed fixture fixes
 
 - [x] Fixture isolation/adoption package is committed locally as `a38720ce`:

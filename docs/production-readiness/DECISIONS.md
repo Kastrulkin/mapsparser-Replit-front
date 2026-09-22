@@ -1,5 +1,27 @@
 # Readiness decisions
 
+## D-128 — Fresh migrated services proof keeps strict source and lifecycle gates
+
+Use the real current Flask/Alembic chain on one new synthetic native PostgreSQL
+database for the existing55 services/content role tests. Do not manufacture a
+partial schema or relax the fixture's loopback35418/name/guard contract. Bind
+the accepted a387 archive manifest and nodes before starting processes; require
+the exact repository Alembic head and twelve real tables before testing. Record
+extension availability/installation, bounded child outcomes and guard origins.
+Signals target only birth-identified owned processes or the original unreaped
+direct Popen if tracker construction fails, with verified generated DB removal;
+no group-kill fallback. These are audit-harness corrections, not
+application bug fixes. Historical aggregateNONPASS and all untested scopes stay.
+
+The first native launch found Docker already bound to127.0.0.1:35418. Preserve
+it and use the fixture's already-supported IPv6 loopback::1, same port. Match
+PostgreSQL/psql/DSN/guard identity and admit only ip6 in the OS policy; verify
+IPv4 EPERM separately. This resolves an ordinary address conflict, not a
+permission/security restriction. The unrelated restricted OAuth lane stays
+prohibited. A subsequent canonical src import-path repair only fixes the audit
+launcher; actual migrations and all55 tests now pass. Do not change product
+code to repair harness initialization or call a scoped pass full readiness.
+
 ## D-127 — Re-run the aggregate on exact committed sources
 
 After closing the proven test-contamination causes, collect and execute the

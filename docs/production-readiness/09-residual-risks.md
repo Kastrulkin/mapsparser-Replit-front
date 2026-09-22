@@ -1,5 +1,19 @@
 # Residual risks — working register
 
+## 22 September — current services/content role proof passes
+
+Current a387 source now passes55 native Services/content tests/165phases, with
+actual migrated schema and verified cleanup. Provider/session seams remain
+synthetic; it is not the full role matrix or production PostgreSQL16 proof.
+The fresh full offline aggregate is4,391pass/12fail/1,119skip, not the older
+53-failure run below. All41 removed failures pass; no new failed node IDs.
+Existing fixture fixes are committed as a38720ce and aggregate proof as654d09c7;
+historical "pending adoption" paragraphs below are superseded. Services55
+evidence is independently accepted and being packaged for a local commit.
+The12 offline environment failures retain their original result; prior scoped
+Linux/browser evidence is separate. Image206/history/security/owner decisions,
+bounded load/resources, broader CI/demo and final whole-diff DoD remain open.
+
 ## 22 September — reproduced Sheets cursor mismatch
 
 SHEETS-QUERY-ADAPTER-01 is now reproduced, not merely a code-reading candidate.

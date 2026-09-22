@@ -1,5 +1,48 @@
 # Readiness handoff
 
+## Current continuation — committed aggregate, Services55 complete
+
+Entry HEAD `654d09c739654f92c90373b5f540c53fcf61b0a9`; evidence-only local commit
+completed295.232ms/exit0. Exact22-path staged diff7,830,661bytes passed strict
+secret scan20.319130s/exit0, zero findings, SHA
+66775059747002c51025a679292b4954a385ed882790a167d0447f827dd3a6e8.
+Both command captures are in the private a387 profile `evidence/` and copied
+into the durable Services55 bundle. At entry the index was empty; five foreign
+tracked edits retain combined SHA3c70e23b. No push/deploy.
+The previous explanation-only response did not advance the goal; this turn
+does, by completing the independently reviewed aggregate evidence commit.
+
+Completed profile is `/private/tmp/localos-services55-g839Mw/`. Root repaired draft
+preflight defects before any database launch: exact generated database name,
+accepted a387 source/node pins, bounded guarded real Flask migration callbacks,
+exact repository-head comparison, extension metadata, copied guard/context
+checks and birth-owned process cleanup without group-kill fallback. Final runner
+afc8d1af/guard9aff5c84/private native helper78ce5ebf are accepted. V1 failed1.396014s
+before cluster creation because existing Docker holds127.0.0.1:35418. The fixture
+already accepts::1; reviewed IPv6-only adaptation preserves Docker and verifies
+IPv4 OS denial. V2 failed7.005995s at Flask NoSuchCommand; canonical src import
+path was missing, its owned DB/processes cleanly removed/stopped. V3 passes
+19.615268s/exit0:55nodes165phases, no skips/xfails/warnings/collection errors,
+seven controls, actual current head20260907_001/12tables/extensions and source
+6469/input hashes unchanged. DB absent/system-only catalog; postmaster52990 and
+children53016/53024/53028 stopped/absent. Independent runtime review PASS.
+Durable20-artifact bundle `evidence/services55-native-20260922/`; result829b8c32.
+Next scoped scan/local commit; do not rerun completed sessions. Native start5GiB /
+live2GiB floors remain. Restricted OAuth/native picker
+remain prohibited; whole original security/image/load/CI/demo/final gates stay open.
+
+Following Services55, the existing five-journey measurement driver admits a
+bounded stress-only profile:0warmup+1serial+20stress/ref, concurrency2;42runs,
+630requests/126invariants if all valid. No need to repeat accepted50/ref serial.
+This is a candidate only: first remove inherited group-kill fallback from its
+private execution path through reviewed exact birth ownership; no launch yet.
+No serial quantile/capacity claim follows from that minimal sample.
+
+Read-only capability recon also maps the remaining12 offline nonpasses to the
+earlier accepted Linux13/browser2 evidence with unchanged relevant a387 source.
+That source-bridge assessment still needs durable independent review; it does
+not change the offline aggregate's status/counts or add tests arithmetically.
+
 ## Latest continuation — 22 September, fresh committed-source aggregate
 
 Current tested-fix HEAD `a38720ce3530783caf59f6515a00baa1c532ce01`, same

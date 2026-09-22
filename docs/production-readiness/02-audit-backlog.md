@@ -1,5 +1,17 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Current migrated services/content proof — 22 September
+
+SEC-RBAC-04 and the scoped content-target checks now have a fresh a387-source
+native PostgreSQL proof:55nodes/165phases allpass19.615268s, no skips/xfails/
+warnings. Real Flask upgrade reaches head20260907_001;12tables and installed
+pgcrypto/vector are verified. Seven isolation controls, source/hash invariance,
+owned schema/DB/process cleanup and independent runtime review pass. Session
+and provider seams remain synthetic; full role/tenant/production gates remain.
+Earlier port conflict and launcher import failures are retained as harness
+nonpasses, not product defects. Evidence: `evidence/services55-native-20260922/`.
+The full offline aggregate stays NONPASS; never add scoped counts to rewrite it.
+
 ## Fresh full backend checkpoint — 22 September, a38720ce
 
 Current committed-source offline aggregate is NONPASS:5,522nodes,

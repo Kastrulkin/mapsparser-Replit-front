@@ -1,5 +1,30 @@
 # Verified commands and evidence
 
+## Aggregate evidence commit and Services55 preparation — 22 September
+
+Completed tmux `audit-a387-evidence-scan`: strict full staged diff scan,
+20,319.130ms/exit0, zero findings,7,830,661bytes/SHA66775059747002c51025a679292b4954a385ed882790a167d0447f827dd3a6e8.
+Completed `audit-a387-evidence-commit`:295.232ms/exit0, local `654d09c7`,22files.
+Captures: private a387 `evidence/staged-scan-command.json`, `commit-command.json`.
+Never restart these completed handles or treat the evidence commit as a deploy.
+
+Services55 private profile `/private/tmp/localos-services55-g839Mw/`:
+`check_preflight.py` pure checks23/23 passed1,454.250ms/exit0 via completed
+`audit-services55-pure`; no socket/database/application imports. Ruff on the
+controller, guard and pure checker passed117.138ms/exit0. Exact commands and
+hashes are in `pure-command.json` / `ruff-command.json`. Runtime was unrun at
+that early preparation checkpoint.
+
+The later reviewed profiles supersede that preparation state. Completed
+`audit-services55-pg-v1`:1,396.014ms/exit1, IPv4 port occupied before cluster.
+Completed v2:7,005.995ms/exit1, guarded Flask bootstrap NoSuchCommand, owned DB
+removed/PG stopped. Completed v3:19,615.268ms/exit0,55nodes165passing phases,
+zero skips/xfails/warnings, current migrations/head/extensions and cleanup pass.
+Final pure26checks1,389.872ms/exit0; controller Ruff89.804ms/exit0. IPv4 OS-denial
+probe33.154ms/exit0. Final runtime commands/captures are in the durable20-artifact
+`evidence/services55-native-20260922/` bundle. These are completed historical
+handles, not instructions to restart or reuse any old generated database.
+
 ## Exact-commit full aggregate — 22 September, a38720ce
 
 New profile `/private/tmp/localos-current-full-a387-0iwMmh/`, runner056c47fc,

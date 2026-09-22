@@ -1,0 +1,129 @@
+"""Pure checks only: no sockets, databases, process launch or application imports."""
+import copy
+import importlib.util
+import io
+import json
+from pathlib import Path
+from types import SimpleNamespace
+
+ROOT = Path(__file__).resolve().parent
+
+
+def load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+runner = load("services55_controller_check", ROOT / "run_services55_pg.py")
+guard = load("services55_guard_check", ROOT / "services55_sitecustomize.py")
+checks = []
+
+
+def denied(label, operation, error_class):
+    try:
+        operation()
+    except error_class:
+        checks.append(label)
+    else:
+        raise AssertionError(label)
+
+
+assert runner.plan()["bridge_paths"] == [runner.TEST_PATH]
+checks.append("nonexecuting_plan")
+assert runner.sha256_path(runner.SOURCE_FREEZE) == runner.EXPECTED_SOURCE_FREEZE_SHA256
+assert runner.source_manifest(runner.SOURCE) == json.loads(runner.SOURCE_FREEZE.read_text())["source_manifest"]
+checks.append("accepted_source_manifest_6469")
+assert len(runner.NODES) == len(set(runner.NODES)) == 55
+checks.append("accepted_current_nodes_55")
+for name, code in (("test_child", runner.child_code()), ("migration_child", runner.migration_code())):
+    compile(code, "<" + name + ">", "exec")
+    checks.append(name + "_compiles")
+context = {"host": "::1", "port": 35418, "role": "readiness_perf_owner", "database": "readiness_full_test_12345678_123456789abc"}
+assert guard.validate_context(context) == context
+checks.append("valid_guard_context")
+for key, value in (("host", "remote.invalid"), ("port", 5432), ("role", "postgres"), ("database", "postgres"), ("extra", True)):
+    denied("context_" + key, lambda: guard.validate_context({**context, key: value}), PermissionError)
+parameters = {"host": context["host"], "port": str(context["port"]), "user": context["role"], "dbname": context["database"]}
+guard.validate_parameters(parameters, context)
+checks.append("valid_parameters")
+for key, value in (("dbname", "postgres"), ("port", "5432"), ("hostaddr", "127.0.0.1"), ("options", "bad")):
+    denied("dsn_" + key, lambda: guard.validate_parameters({**parameters, key: value}, context), PermissionError)
+result = {"status": 0, "nodes": list(runner.NODES), "collection_errors": [], "controls": ["foreign_database", "foreign_port", "libpq_options", "inherited_libpq_env", "native_offport_os_denial", "guard_write_denied", "user_read_denied"], "reports": [{"nodeid": node, "when": phase, "outcome": "passed", "wasxfail": False} for node in runner.NODES for phase in ("setup", "call", "teardown")]}
+runner.assert_test_result(result, 0)
+checks.append("valid_165_reports")
+for label, replacement in (("failed", {"outcome": "failed"}), ("skipped", {"outcome": "skipped"}), ("xfail", {"wasxfail": True}), ("unknown", {"when": "unknown"})):
+    invalid = copy.deepcopy(result)
+    invalid["reports"][0].update(replacement)
+    denied(label, lambda: runner.assert_test_result(invalid, 0), RuntimeError)
+invalid = copy.deepcopy(result)
+invalid["reports"].pop()
+denied("missing_phase", lambda: runner.assert_test_result(invalid, 0), RuntimeError)
+invalid = copy.deepcopy(result)
+invalid["reports"][0] = invalid["reports"][1]
+denied("duplicate_phase", lambda: runner.assert_test_result(invalid, 0), RuntimeError)
+
+
+class FakeChild:
+    def __init__(self, status):
+        self.returncode = status
+        self.stdout = io.BytesIO(b"")
+        self.stderr = io.BytesIO(b"")
+        self.terminated = False
+
+    def poll(self):
+        return self.returncode
+
+    def terminate(self):
+        self.terminated = True
+        self.returncode = -15
+
+    def wait(self, timeout):
+        assert self.returncode is not None
+        return self.returncode
+
+
+def failed_tracker(_process):
+    raise ValueError("synthetic tracker construction failure")
+
+
+class BrokenStream:
+    def read(self, _size):
+        raise OSError("synthetic read failure")
+
+
+original_popen = runner.subprocess.Popen
+try:
+    fake = FakeChild(None)
+    runner.subprocess.Popen = lambda *_args, **_kwargs: fake
+    denied("tracker_failure_stops_direct_child", lambda: runner.run_capped_child([], cwd=ROOT, env={}, timeout=1, performance=SimpleNamespace(OwnedProcesses=failed_tracker)), ValueError)
+    assert fake.terminated and fake.returncode == -15
+    fake = FakeChild(0)
+    fake.stderr = BrokenStream()
+    tracker = SimpleNamespace(observe=lambda: None, cleanup=lambda: {"status": "clean", "signalled": []})
+    denied("stream_reader_error_is_nonpass", lambda: runner.run_capped_child([], cwd=ROOT, env={}, timeout=1, performance=SimpleNamespace(OwnedProcesses=lambda _process: tracker)), RuntimeError)
+finally:
+    runner.subprocess.Popen = original_popen
+
+
+class SlowPostmaster(FakeChild):
+    pid = 12345
+
+    def send_signal(self, signal):
+        assert signal == runner.signal.SIGINT
+
+    def wait(self, timeout):
+        if self.returncode is None:
+            raise runner.subprocess.TimeoutExpired("fake", timeout)
+        return self.returncode
+
+
+fake_postmaster = SlowPostmaster(None)
+verified = []
+stop = runner.stop_direct_postmaster(SimpleNamespace(verify_postmaster=lambda pid, path: verified.append((pid, path))), fake_postmaster, ROOT)
+assert stop["status"] == "stopped" and stop["signals"] == ["interrupt", "terminate"]
+assert fake_postmaster.terminated and fake_postmaster.returncode == -15
+assert verified == [(12345, ROOT), (12345, ROOT)]
+checks.append("postmaster_interrupt_timeout_reaps_direct_child")
+print(json.dumps({"status": "passed", "checks": checks, "count": len(checks), "controller_sha256": runner.sha256_path(runner.CONTROLLER), "guard_sha256": runner.sha256_path(runner.GUARD_SOURCE)}))

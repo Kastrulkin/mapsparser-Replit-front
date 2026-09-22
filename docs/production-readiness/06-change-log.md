@@ -1,5 +1,18 @@
 # Production-readiness change log
 
+## Fresh Services55 native proof — 22 September, parent654d09c7
+
+No product/test source edits. Prepare and independently review a strict native
+profile for the unchanged55 services/content tests. Correct only private
+launcher lifecycle, source pins, migration diagnostics and import setup. The
+first occupied IPv4 port does not justify stopping existing Docker: use the
+fixture's existing::1 support with IPv6-only OS policy and separate IPv4-denial
+proof. Retain failed v1/v2 evidence. V3 passes55/165 after real current migrations,
+12tables and pgcrypto/vector checks. Exact26pure controls, source/guard/policy
+invariance, owned DB cleanup and clean postmaster/children are independently
+accepted.20-artifact durable bundle records all results and executed sources.
+No deploy, push, production/provider call or changes to existing databases.
+
 ## Fresh whole-backend diagnostic — 22 September, parenta38720ce
 
 No application/test edits. Create a clean committed-source snapshot, reuse the

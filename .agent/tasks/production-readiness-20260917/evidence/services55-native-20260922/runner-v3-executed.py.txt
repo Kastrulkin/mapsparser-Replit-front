@@ -1,0 +1,717 @@
+#!/usr/bin/env python3
+"""Controller for frozen native-PostgreSQL services/content viewer readiness tests.
+
+The default action is a non-mutating plan.  ``--execute`` is intentionally
+required to create a fresh native cluster and run pytest.  It never uses a
+retained Docker container, application server, production database, or dirty
+workspace source.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.util
+import json
+import re
+import shutil
+import signal
+import socket
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import uuid
+from pathlib import Path
+from typing import Any
+
+
+CONTROLLER = Path(__file__).resolve()
+ROOT = CONTROLLER.parent
+SOURCE = Path("/private/tmp/localos-current-full-a387-0iwMmh/source")
+SOURCE_FREEZE = Path("/private/tmp/localos-current-full-a387-0iwMmh/evidence/freeze-a387.json")
+EXPECTED_SOURCE_FREEZE_SHA256 = "9911b634a622f53666043e640e154e18775e09ea62b808b470bf3370cb3ba57f"
+SUPPORT = SOURCE / ".agent/tasks/production-readiness-20260917/support"
+PERFORMANCE_HELPER = ROOT / "native_ipv6.py"
+OWNED_HELPER = SUPPORT / "content_performance_processes_20260922.py"
+PSUTIL_SUPPORT = Path("/private/tmp/localos-content-perf-deps.7zNvCi/python")
+GUARD_SOURCE = ROOT / "services55_sitecustomize.py"
+NODES_SOURCE = ROOT / "nodes-a387.json"
+VENV_PYTHON = Path("/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python")
+ROLE = "readiness_perf_owner"
+HOST = "::1"
+DATABASE_PREFIX = "readiness_full_test_"
+DATABASE_PATTERN = re.compile(r"readiness_full_test_[0-9a-f]{8}_[0-9a-f]{12}")
+OWNED_SCHEMA_PATTERN = "^viewer_mutation_[0-9a-f]{32}$"
+MAX_SECONDS = 300
+MIN_START_BYTES = 5 * 1024**3
+MIN_LIVE_BYTES = 2 * 1024**3
+MAX_STREAM_BYTES = 4 * 1024**2
+EXPECTED_PERFORMANCE_HELPER_SHA256 = "78ce5ebfa37acefd2d30b9cc89b145f410535bc02c0c03ef4a3fe16bff06835c"
+EXPECTED_OWNED_HELPER_SHA256 = "4f16b6c343223717dcf3b5bdbf86ff9159594b33fa92d744527891188c4c227b"
+TEST_PATH = "tests/test_services_content_viewer_readiness.py"
+EXPECTED_TEST_SHA256 = "0ebeb619681898775bfd8a29eeffb68e8031b4bcf60914917dc5ae8b644ca72d"
+
+
+def sha256_path(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+EXPECTED_NODES_SHA256 = "312fed27be40620a124b0c911327c508f18dee011f719589a5a73739a8d79ec4"
+
+
+def frozen_nodes() -> tuple[str, ...]:
+    if sha256_path(NODES_SOURCE) != EXPECTED_NODES_SHA256:
+        raise RuntimeError("frozen callback node list changed")
+    all_nodes = json.loads(NODES_SOURCE.read_text(encoding="utf-8"))
+    candidate = [node for node in all_nodes if isinstance(node, str) and node.startswith(TEST_PATH + "::")]
+    if not isinstance(all_nodes, list) or len(candidate) != 55 or len(candidate) != len(set(candidate)):
+        raise RuntimeError("frozen callback node list is invalid")
+    if any(not isinstance(node, str) or not node.startswith("tests/test_") for node in candidate):
+        raise RuntimeError("frozen callback node list contains an invalid node")
+    return tuple(candidate)
+
+
+NODES = frozen_nodes()
+
+
+def source_manifest(root: Path) -> list[list[object]]:
+    records: list[list[object]] = []
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root)
+        if path.is_symlink():
+            raise RuntimeError("immutable source contains a symlink")
+        if path.is_file():
+            records.append([str(relative), sha256_path(path), path.stat().st_size, path.stat().st_mode & 0o777])
+    return records
+
+
+def bridged_source() -> list[dict[str, str]]:
+    path = SOURCE / TEST_PATH
+    if not path.is_file() or sha256_path(path) != EXPECTED_TEST_SHA256:
+        raise RuntimeError("frozen viewer-readiness test changed")
+    return [{"path": TEST_PATH, "sha256": EXPECTED_TEST_SHA256, "source_kind": "immutable_a387"}]
+
+
+def load_module(name: str, path: Path) -> object:
+    if str(OWNED_HELPER.parent) not in sys.path:
+        sys.path.insert(0, str(OWNED_HELPER.parent))
+    if str(PSUTIL_SUPPORT) not in sys.path:
+        sys.path.insert(0, str(PSUTIL_SUPPORT))
+    if str(path.parent) not in sys.path:
+        sys.path.insert(0, str(path.parent))
+    specification = importlib.util.spec_from_file_location(name, path)
+    if specification is None or specification.loader is None:
+        raise RuntimeError("cannot load reviewed support helper")
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+    return module
+
+
+def free_bytes(path: Path) -> int:
+    return shutil.disk_usage(path).free
+
+
+def require_literal_port_free() -> None:
+    probe = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    try:
+        probe.bind((HOST, 35418))
+    except OSError:
+        raise RuntimeError("owned native services55 port is unavailable")
+    finally:
+        probe.close()
+
+
+def write_json(path: Path, value: object) -> None:
+    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def run_checked(command: list[str], *, env: dict[str, str], cwd: Path, timeout: int) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(command, cwd=cwd, env=env, text=True, capture_output=True, timeout=timeout, check=True)
+
+
+def catalog_rows(performance: object, env: dict[str, str], port: int, database: str, query: str) -> list[str]:
+    command = [str(performance.PSQL), "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-h", HOST, "-p", str(port), "-U", ROLE, "-d", database, "-c", query]
+    output = run_checked(command, env=env, cwd=SOURCE, timeout=20).stdout
+    return [row for row in output.splitlines() if row]
+
+
+def scrubbed_stream(value: str) -> dict[str, object]:
+    encoded = value.encode("utf-8", errors="replace")
+    return {"bytes": len(encoded), "sha256": hashlib.sha256(encoded).hexdigest(), "truncated": len(encoded) > MAX_STREAM_BYTES}
+
+
+def make_policy(run_root: Path, port: int) -> Path:
+    policy = run_root / "services55-pg.sb"
+    content = "\n".join(
+        (
+            "(version 1)",
+            "(allow default)",
+            "(allow process*)",
+            '(deny file-read* (subpath "/Users"))',
+            "(deny network*)",
+            f'(allow network-outbound (remote ip6 "localhost:{port}"))',
+            "(deny file-write*)",
+            f'(allow file-write* (subpath "{run_root}"))',
+            '(allow file-write* (literal "/dev/null"))',
+            '(deny file-write* (subpath ' + json.dumps(str(run_root / "guard")) + '))',
+        )
+    ) + "\n"
+    policy.write_text(content, encoding="utf-8")
+    return policy
+
+
+def child_code() -> str:
+    return r'''
+import json
+import os
+import sys
+from pathlib import Path
+
+import pytest
+
+source = Path(os.environ["LOCALOS_SCHEMA_PG7_SOURCE"])
+nodes = json.loads(os.environ["LOCALOS_SCHEMA_PG7_NODES"])
+base_temp = os.environ["LOCALOS_SCHEMA_PG7_BASETEMP"]
+sys.path.insert(0, str(source / "src"))
+os.chdir(source)
+import sitecustomize
+import psycopg2
+from psycopg2.extensions import parse_dsn, make_dsn
+
+controls = []
+parameters = parse_dsn(os.environ["LOCALOS_VIEWER_MUTATION_TEST_DATABASE_URL"])
+for name, override in (("foreign_database", {"dbname": "not_owned"}), ("foreign_port", {"port": "1"}), ("libpq_options", {"options": "-c application_name=bad"})):
+    try:
+        psycopg2.connect(make_dsn(**{**parameters, **override}))
+    except PermissionError:
+        controls.append(name)
+    else:
+        raise RuntimeError("guard control failed")
+os.environ["PGHOSTADDR"] = "127.0.0.1"
+try:
+    psycopg2.connect(os.environ["LOCALOS_VIEWER_MUTATION_TEST_DATABASE_URL"])
+except PermissionError:
+    controls.append("inherited_libpq_env")
+else:
+    raise RuntimeError("environment guard control failed")
+finally:
+    del os.environ["PGHOSTADDR"]
+try:
+    psycopg2._connect(make_dsn(**{**parameters, "port": "1", "connect_timeout": "1"}))
+except psycopg2.OperationalError:
+    if "Operation not permitted" not in str(sys.exception()):
+        raise RuntimeError("native OS denial was not proven")
+    controls.append("native_offport_os_denial")
+else:
+    raise RuntimeError("native port was not denied")
+try:
+    descriptor = os.open(Path(sitecustomize.__file__).with_name("forbidden-probe"), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+except PermissionError:
+    controls.append("guard_write_denied")
+else:
+    os.close(descriptor)
+    raise RuntimeError("guard was writable")
+try:
+    descriptor = os.open("/Users/alexdemyanov", os.O_RDONLY)
+except PermissionError:
+    controls.append("user_read_denied")
+else:
+    os.close(descriptor)
+    raise RuntimeError("user home reads were not denied")
+
+class Recorder:
+    def __init__(self):
+        self.nodes = []
+        self.collection_errors = []
+        self.reports = []
+        self.warnings = []
+    def pytest_collection_finish(self, session):
+        self.nodes = [item.nodeid for item in session.items]
+    def pytest_collectreport(self, report):
+        if report.failed:
+            self.collection_errors.append(report.nodeid)
+    def pytest_runtest_logreport(self, report):
+        self.reports.append({"nodeid": report.nodeid, "outcome": report.outcome, "when": report.when, "wasxfail": bool(getattr(report, "wasxfail", False))})
+    def pytest_warning_recorded(self, warning_message, when, nodeid, location):
+        self.warnings.append({"category": warning_message.category.__name__, "when": when})
+
+recorder = Recorder()
+status = pytest.main(["--tb=short", "--show-capture=no", "--basetemp=" + base_temp, "-p", "no:cacheprovider", "-o", "addopts=", *nodes], plugins=[recorder])
+safe = {"controls": controls, "collection_errors": recorder.collection_errors, "nodes": recorder.nodes, "reports": recorder.reports, "status": status, "warnings": recorder.warnings}
+print("SCHEMA_PG7_CALLBACK=" + json.dumps(safe, sort_keys=True, separators=(",", ":")))
+raise SystemExit(status)
+'''
+
+
+def migration_code() -> str:
+    return r'''
+import hashlib
+import importlib
+import json
+import os
+import sys
+from pathlib import Path
+import sitecustomize
+
+payload = {"guard_verified": False, "status": 1}
+source = Path(os.environ["LOCALOS_SCHEMA_PG7_SOURCE"])
+try:
+    guard = Path(os.environ["PYTHONPATH"]) / "sitecustomize.py"
+    context = guard.with_name("context.json")
+    if Path(sitecustomize.__file__).resolve() != guard.resolve():
+        raise RuntimeError("unexpected guard origin")
+    if hashlib.sha256(guard.read_bytes()).hexdigest() != os.environ["LOCALOS_VIEWER_MUTATION_GUARD_SHA256"]:
+        raise RuntimeError("unexpected guard hash")
+    if hashlib.sha256(context.read_bytes()).hexdigest() != os.environ["LOCALOS_SERVICES55_CONTEXT_SHA256"]:
+        raise RuntimeError("unexpected guard context")
+    payload["guard_verified"] = True
+    sys.path.extend([str(source / "src"), str(source)])
+    importlib.import_module("src.main")
+    from flask.cli import cli
+    cli.main(args=["db", sys.argv[1]], prog_name="flask", standalone_mode=False)
+    from alembic.script import ScriptDirectory
+    payload["repository_heads"] = ScriptDirectory(str(source / "alembic_migrations")).get_heads()
+    payload["status"] = 0
+except BaseException:
+    error = sys.exception()
+    frames = []
+    frame = error.__traceback__
+    while frame is not None:
+        path = Path(frame.tb_frame.f_code.co_filename)
+        if path.is_relative_to(source):
+            frames.append({"path": str(path.relative_to(source)), "line": frame.tb_lineno})
+        frame = frame.tb_next
+    payload["error"] = {"type": type(error).__name__, "frames": frames}
+print("SERVICES55_MIGRATION=" + json.dumps(payload, sort_keys=True))
+raise SystemExit(payload["status"])
+'''
+
+
+def migration_callback(output: str) -> dict[str, object]:
+    prefix = "SERVICES55_MIGRATION="
+    rows = [line[len(prefix):] for line in output.splitlines() if line.startswith(prefix)]
+    if len(rows) != 1:
+        raise RuntimeError("missing unique migration callback")
+    payload = json.loads(rows[0])
+    if not isinstance(payload, dict):
+        raise RuntimeError("invalid migration callback")
+    return payload
+
+
+def parse_callback(stdout: str) -> dict[str, object]:
+    candidates = [line.removeprefix("SCHEMA_PG7_CALLBACK=") for line in stdout.splitlines() if line.startswith("SCHEMA_PG7_CALLBACK=")]
+    if len(candidates) != 1:
+        raise RuntimeError("test child did not emit exactly one safe callback")
+    payload = json.loads(candidates[0])
+    if not isinstance(payload, dict):
+        raise RuntimeError("test child callback was malformed")
+    return payload
+
+
+def run_capped_child(command: list[str], *, cwd: Path, env: dict[str, str], timeout: int, performance: object) -> tuple[int, str, str, dict[str, object]]:
+    process = subprocess.Popen(command, cwd=cwd, env=env, text=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+    tracker = None
+    captured: dict[str, bytearray] = {"stdout": bytearray(), "stderr": bytearray()}
+    metadata: dict[str, dict[str, object]] = {"stdout": {"bytes": 0, "truncated": False}, "stderr": {"bytes": 0, "truncated": False}}
+    drain_errors: list[str] = []
+
+    def drain(name: str, stream: Any) -> None:
+        digest = hashlib.sha256()
+        try:
+            while True:
+                block = stream.read(65536)
+                if not block:
+                    break
+                digest.update(block)
+                metadata[name]["bytes"] += len(block)
+                if len(captured[name]) < MAX_STREAM_BYTES:
+                    captured[name].extend(block[:MAX_STREAM_BYTES - len(captured[name])])
+                else:
+                    metadata[name]["truncated"] = True
+        except BaseException:
+            drain_errors.append(name + ":" + type(sys.exception()).__name__)
+        finally:
+            metadata[name]["sha256"] = digest.hexdigest()
+            metadata[name]["truncated"] = metadata[name]["truncated"] or metadata[name]["bytes"] > MAX_STREAM_BYTES
+
+    threads = [threading.Thread(target=drain, args=("stdout", process.stdout), daemon=True), threading.Thread(target=drain, args=("stderr", process.stderr), daemon=True)]
+    started = time.monotonic()
+    failure = None
+    cleanup = None
+    try:
+        tracker = performance.OwnedProcesses(process)
+        for thread in threads:
+            thread.start()
+        while True:
+            tracker.observe()
+            if process.poll() is not None:
+                break
+            if time.monotonic() - started > timeout:
+                raise RuntimeError("bounded child deadline elapsed")
+            if free_bytes(ROOT) < MIN_LIVE_BYTES:
+                raise RuntimeError("child live disk floor")
+            if any(item["bytes"] > MAX_STREAM_BYTES for item in metadata.values()):
+                raise RuntimeError("child stream limit")
+            time.sleep(0.05)
+    except BaseException:
+        failure = type(sys.exception()).__name__
+        raise
+    finally:
+        if tracker is not None:
+            cleanup = tracker.cleanup()
+        elif process.poll() is None:
+            # This unreaped direct child is still owned by its original Popen;
+            # never signal a numeric process group or rediscover by substring.
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+        process.wait(timeout=10)
+        for thread in threads:
+            if thread.ident is not None:
+                thread.join(timeout=5)
+        if failure is None and (cleanup is None or cleanup["status"] != "clean" or cleanup["signalled"] or drain_errors or any(thread.is_alive() for thread in threads)):
+            raise RuntimeError("child process or stream cleanup incomplete")
+    return process.returncode, captured["stdout"].decode("utf-8", errors="replace"), captured["stderr"].decode("utf-8", errors="replace"), {"process": cleanup, "streams": metadata, "drain_errors": drain_errors, "duration_seconds": time.monotonic() - started}
+
+
+def assert_test_result(result: dict[str, object], child_returncode: int) -> None:
+    if child_returncode != 0 or result.get("status") != 0:
+        raise RuntimeError("pytest did not exit cleanly")
+    nodes = result.get("nodes")
+    reports = result.get("reports")
+    if nodes != list(NODES) or len(set(NODES)) != len(NODES):
+        raise RuntimeError("collection did not contain exactly the frozen requested nodes")
+    if result.get("collection_errors"):
+        raise RuntimeError("collection errors occurred")
+    if result.get("controls") != ["foreign_database", "foreign_port", "libpq_options", "inherited_libpq_env", "native_offport_os_denial", "guard_write_denied", "user_read_denied"]:
+        raise RuntimeError("isolation controls incomplete")
+    if not isinstance(reports, list) or len(reports) != len(NODES) * 3:
+        raise RuntimeError("expected exactly three reports per frozen node")
+    expected = {(node, phase) for node in NODES for phase in ("setup", "call", "teardown")}
+    seen: set[tuple[str, str]] = set()
+    for report in reports:
+        if not isinstance(report, dict):
+            raise RuntimeError("malformed report")
+        key = (report.get("nodeid"), report.get("when"))
+        if key not in expected or key in seen:
+            raise RuntimeError("unexpected or duplicate phase report")
+        if report.get("outcome") != "passed" or report.get("wasxfail"):
+            raise RuntimeError("skip, xfail, or failure occurred")
+        seen.add(key)
+    if seen != expected:
+        raise RuntimeError("phase coverage was incomplete")
+
+
+def controlled_environment(performance: object, run_root: Path, port: int, database: str) -> dict[str, str]:
+    environment = performance.private_environment(run_root)
+    for name in tuple(environment):
+        if name.startswith("PG"):
+            environment.pop(name)
+    environment.update(
+        {
+            "PATH": f"{Path(performance.POSTGRES_BIN)}:{environment.get('PATH', '')}",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONNOUSERSITE": "1",
+            "LOCALOS_SCHEMA_PG7_SOURCE": str(SOURCE),
+            "LOCALOS_SCHEMA_PG7_NODES": json.dumps(NODES),
+            "LOCALOS_SCHEMA_PG7_BASETEMP": str(run_root / "pytest-tmp"),
+            "LOCALOS_VIEWER_MUTATION_TEST_DATABASE_URL": f"postgresql://{ROLE}@[{HOST}]:{port}/{database}",
+            "LOCALOS_VIEWER_MUTATION_GUARD_SHA256": sha256_path(GUARD_SOURCE),
+            "DATABASE_URL": f"postgresql://{ROLE}@[{HOST}]:{port}/{database}",
+            "FLASK_APP": "src.main:app",
+        }
+    )
+    return environment
+
+
+def stop_direct_postmaster(performance: object, process: subprocess.Popen, data_directory: Path) -> dict[str, object]:
+    record: dict[str, object] = {"pid": process.pid, "direct_owned_fallback": True, "signals": []}
+    for operation, wait_seconds in (("interrupt", 45), ("terminate", 5), ("kill", 5)):
+        if process.poll() is not None:
+            record["status"] = "already_exited"
+            return record
+        performance.verify_postmaster(process.pid, data_directory)
+        if operation == "interrupt":
+            process.send_signal(signal.SIGINT)
+        else:
+            getattr(process, operation)()
+        record["signals"].append(operation)
+        try:
+            process.wait(timeout=wait_seconds)
+            record["status"] = "stopped"
+            return record
+        except subprocess.TimeoutExpired:
+            continue
+    raise RuntimeError("owned direct postmaster did not stop before bounded deadline")
+
+
+def run_execute() -> dict[str, object]:
+    if free_bytes(Path("/private/tmp")) < MIN_START_BYTES:
+        raise RuntimeError("insufficient free disk before native cluster startup")
+    if not SOURCE.is_dir() or not VENV_PYTHON.is_file():
+        raise RuntimeError("immutable source or reviewed virtual environment is unavailable")
+    bridges = bridged_source()
+    if sha256_path(SOURCE_FREEZE) != EXPECTED_SOURCE_FREEZE_SHA256:
+        raise RuntimeError("accepted a387 source freeze changed")
+    frozen_source = json.loads(SOURCE_FREEZE.read_text(encoding="utf-8")).get("source_manifest")
+    source_before = source_manifest(SOURCE)
+    if source_before != frozen_source or len(source_before) != 6469:
+        raise RuntimeError("immutable a387 source does not match accepted freeze")
+    controller_before = sha256_path(CONTROLLER)
+    guard_before = sha256_path(GUARD_SOURCE)
+    nodes_before = sha256_path(NODES_SOURCE)
+    if sha256_path(PERFORMANCE_HELPER) != EXPECTED_PERFORMANCE_HELPER_SHA256 or sha256_path(OWNED_HELPER) != EXPECTED_OWNED_HELPER_SHA256:
+        raise RuntimeError("reviewed lifecycle helper hash changed")
+    require_literal_port_free()
+    token = uuid.uuid4().hex
+    database = DATABASE_PREFIX + token[:8] + "_" + token[8:20]
+    if not DATABASE_PATTERN.fullmatch(database):
+        raise RuntimeError("generated database name violates profile contract")
+    performance = load_module("services55_performance", PERFORMANCE_HELPER)
+    run_root = Path(tempfile.mkdtemp(prefix="localos-services55-pg.", dir="/private/tmp"))
+    (run_root / "tmp").mkdir(mode=0o700)
+    (run_root / "pytest-tmp").mkdir(mode=0o700)
+    port = 35418
+    started = time.monotonic()
+    result: dict[str, object] = {
+        "bridge": bridges,
+        "database": database,
+        "deadline_seconds": MAX_SECONDS,
+        "helpers": {"owned_processes_sha256": sha256_path(OWNED_HELPER), "performance_native_sha256": sha256_path(PERFORMANCE_HELPER)},
+        "nodes": list(NODES),
+        "port": port,
+        "run_root": str(run_root),
+        "source_before": source_before,
+        "controller_before_sha256": controller_before,
+        "guard_before_sha256": guard_before,
+        "nodes_before_sha256": nodes_before,
+        "status": "started",
+    }
+    write_json(run_root / "controller-start.json", result)
+    environment = controlled_environment(performance, run_root, port, database)
+    tracker = None
+    cluster_identity = None
+    postmaster = None
+    cluster_started = False
+    completed = False
+    stop_verified = False
+    try:
+        try:
+            cluster_identity, postmaster = performance.initialize_cluster(run_root, port, environment)
+        except performance.ClusterInitializationError as error:
+            candidate_process = getattr(error, "process", None)
+            candidate_identity = getattr(error, "identity", None)
+            if candidate_process is not None and isinstance(candidate_identity, dict) and candidate_identity.get("pid") == candidate_process.pid and candidate_identity.get("data_directory"):
+                cluster_identity = candidate_identity
+                postmaster = candidate_process
+                cluster_started = True
+                tracker = performance.OwnedProcesses(postmaster)
+            raise
+        cluster_started = True
+        tracker = performance.OwnedProcesses(postmaster)
+        result["postmaster"] = {"identity": cluster_identity, "birth": tracker.root}
+        if free_bytes(Path("/private/tmp")) < MIN_LIVE_BYTES:
+            raise RuntimeError("free disk fell below live-cluster minimum")
+        run_checked([str(performance.PSQL), "-X", "-v", "ON_ERROR_STOP=1", "-h", HOST, "-p", str(port), "-U", ROLE, "-d", "postgres", "-c", f"CREATE DATABASE {database}"], env=environment, cwd=SOURCE, timeout=20)
+        result["available_extensions"] = catalog_rows(performance, environment, port, database, "SELECT name || ':' || default_version FROM pg_available_extensions WHERE name IN ('vector', 'pgcrypto') ORDER BY name")
+        if [row.split(":", 1)[0] for row in result["available_extensions"]] != ["pgcrypto", "vector"]:
+            raise RuntimeError("required extension installation is unavailable")
+        pre_schemas = catalog_rows(performance, environment, port, database, "SELECT nspname FROM pg_namespace WHERE nspname ~ '" + OWNED_SCHEMA_PATTERN + "' ORDER BY 1")
+        if pre_schemas:
+            raise RuntimeError("fresh cluster unexpectedly contains owned test artifacts")
+        guard_dir = run_root / "guard"
+        guard_dir.mkdir(mode=0o700)
+        shutil.copyfile(GUARD_SOURCE, guard_dir / "sitecustomize.py")
+        write_json(guard_dir / "context.json", {"database": database, "host": HOST, "port": port, "role": ROLE})
+        guard_copy = guard_dir / "sitecustomize.py"
+        guard_context = guard_dir / "context.json"
+        guard_copy_before = sha256_path(guard_copy)
+        guard_context_before = sha256_path(guard_context)
+        if guard_copy_before != guard_before:
+            raise RuntimeError("copied guard hash differs from reviewed guard")
+        policy = make_policy(run_root, port)
+        policy_sha256 = sha256_path(policy)
+        result["policy_sha256"] = policy_sha256
+        migration_env = dict(environment)
+        migration_env["PYTHONPATH"] = str(guard_dir)
+        migration_env["LOCALOS_SERVICES55_CONTEXT_SHA256"] = guard_context_before
+        result["guard_copy"] = {"source_sha256": guard_copy_before, "context_sha256": guard_context_before}
+        migration_command = ["sandbox-exec", "-f", str(policy), str(VENV_PYTHON), "-B", "-c", migration_code(), "upgrade"]
+        migration_returncode, migration_stdout, _migration_stderr, migration_capture = run_capped_child(migration_command, cwd=SOURCE, env=migration_env, timeout=120, performance=performance)
+        result["migration_upgrade"] = {"returncode": migration_returncode, "capture": migration_capture}
+        result["migration_upgrade"]["callback"] = migration_callback(migration_stdout)
+        if sha256_path(policy) != policy_sha256:
+            raise RuntimeError("sandbox policy changed during migration")
+        if migration_returncode != 0 or migration_capture["streams"]["stdout"]["truncated"] or migration_capture["streams"]["stderr"]["truncated"]:
+            raise RuntimeError("bounded Flask migration failed")
+        tables = (
+            "users", "businesses", "business_members", "network_members", "networks", "userservices",
+            "service_catalog_compression_requests", "serviceregenerationjobs", "serviceregenerationjobitems",
+            "contentplans", "contentplanitems", "ailearningevents",
+        )
+        table_rows = catalog_rows(performance, environment, port, database, "SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname IN (" + ",".join("'" + table + "'" for table in tables) + ") ORDER BY relname")
+        if sorted(table_rows) != sorted(tables):
+            raise RuntimeError("current Flask migration did not create the twelve viewer-readiness public tables")
+        migration_head = catalog_rows(performance, environment, port, database, "SELECT version_num FROM alembic_version")
+        if sha256_path(guard_copy) != guard_copy_before or sha256_path(guard_context) != guard_context_before:
+            raise RuntimeError("copied guard or context changed before current-head check")
+        current_command = ["sandbox-exec", "-f", str(policy), str(VENV_PYTHON), "-B", "-c", migration_code(), "current"]
+        current_returncode, current_output, _current_stderr, current_capture = run_capped_child(current_command, cwd=SOURCE, env=migration_env, timeout=30, performance=performance)
+        result["migration_current"] = {"returncode": current_returncode, "capture": current_capture}
+        result["migration_current"]["callback"] = migration_callback(current_output)
+        if sha256_path(policy) != policy_sha256:
+            raise RuntimeError("sandbox policy changed during head verification")
+        if current_returncode != 0 or current_capture["streams"]["stdout"]["truncated"] or current_capture["streams"]["stderr"]["truncated"]:
+            raise RuntimeError("bounded Flask migration head check failed")
+        repository_heads = result["migration_current"]["callback"].get("repository_heads")
+        if len(migration_head) != 1 or migration_head != repository_heads or repository_heads != result["migration_upgrade"]["callback"].get("repository_heads"):
+            raise RuntimeError("Flask migration is not at the current Alembic head")
+        result["installed_extensions"] = catalog_rows(performance, environment, port, database, "SELECT extname || ':' || extversion FROM pg_extension WHERE extname IN ('vector', 'pgcrypto') ORDER BY extname")
+        if [row.split(":", 1)[0] for row in result["installed_extensions"]] != ["pgcrypto", "vector"]:
+            raise RuntimeError("migrations did not install both required extensions")
+        result["migration"] = {"alembic_head": migration_head[0], "public_tables": sorted(table_rows), "upgrade_capture": migration_capture, "current_capture": current_capture}
+        if sha256_path(guard_copy) != guard_copy_before or sha256_path(guard_context) != guard_context_before:
+            raise RuntimeError("copied guard or context changed before pytest")
+        child_env = dict(environment)
+        child_env["PYTHONPATH"] = str(guard_dir)
+        child_env["PYTEST_ADDOPTS"] = ""
+        child_env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
+        command = ["sandbox-exec", "-f", str(policy), str(VENV_PYTHON), "-B", "-c", child_code()]
+        child_timeout = max(1.0, MAX_SECONDS - (time.monotonic() - started) - 40)
+        child_returncode, child_stdout, child_stderr, child_capture = run_capped_child(command, cwd=SOURCE, env=child_env, timeout=child_timeout, performance=performance)
+        if time.monotonic() - started > MAX_SECONDS:
+            raise RuntimeError("controller deadline exceeded")
+        result["child"] = {"returncode": child_returncode, **child_capture}
+        if child_capture["streams"]["stdout"]["truncated"] or child_capture["streams"]["stderr"]["truncated"]:
+            raise RuntimeError("test output exceeded the active stream cap")
+        callback = parse_callback(child_stdout)
+        result["callback"] = callback
+        assert_test_result(callback, child_returncode)
+        if sha256_path(policy) != policy_sha256:
+            raise RuntimeError("sandbox policy changed during pytest")
+        if sha256_path(guard_copy) != guard_copy_before or sha256_path(guard_context) != guard_context_before:
+            raise RuntimeError("copied guard or context changed during pytest")
+        result["post_test_schemas"] = catalog_rows(performance, environment, port, database, "SELECT nspname FROM pg_namespace WHERE nspname ~ '" + OWNED_SCHEMA_PATTERN + "' ORDER BY 1")
+        if result["post_test_schemas"]:
+            raise RuntimeError("tests left owned schemas")
+        run_checked([str(performance.PSQL), "-X", "-v", "ON_ERROR_STOP=1", "-h", HOST, "-p", str(port), "-U", ROLE, "-d", "postgres", "-c", f"DROP DATABASE {database}"], env=environment, cwd=SOURCE, timeout=20)
+        result["generated_database_absent"] = catalog_rows(performance, environment, port, "postgres", f"SELECT datname FROM pg_database WHERE datname = '{database}'")
+        if result["generated_database_absent"]:
+            raise RuntimeError("generated database remains after drop")
+        result["catalog_after_database_drop"] = catalog_rows(performance, environment, port, "postgres", "SELECT datname FROM pg_database ORDER BY 1")
+        if result["catalog_after_database_drop"] != ["postgres", "template0", "template1"]:
+            raise RuntimeError("post-drop database catalog is not system-only")
+        result["source_after"] = source_manifest(SOURCE)
+        if sha256_path(PERFORMANCE_HELPER) != EXPECTED_PERFORMANCE_HELPER_SHA256:
+            raise RuntimeError("private IPv6 lifecycle helper changed")
+        if result["source_before"] != result["source_after"]:
+            raise RuntimeError("immutable source changed during test run")
+        result["controller_after_sha256"] = sha256_path(CONTROLLER)
+        result["guard_after_sha256"] = sha256_path(GUARD_SOURCE)
+        result["nodes_after_sha256"] = sha256_path(NODES_SOURCE)
+        if result["controller_before_sha256"] != result["controller_after_sha256"] or result["guard_before_sha256"] != result["guard_after_sha256"] or result["nodes_before_sha256"] != result["nodes_after_sha256"]:
+            raise RuntimeError("controller, guard, or frozen node list changed during test run")
+        completed = True
+    except BaseException:
+        result["status"] = "failed"
+        result["failure"] = {"type": type(sys.exception()).__name__}
+        raise
+    finally:
+        try:
+            if cluster_started and postmaster is not None and cluster_identity is not None:
+                cleanup_observation: dict[str, object] = {}
+                try:
+                    cleanup_observation["database"] = catalog_rows(performance, environment, port, "postgres", f"SELECT datname FROM pg_database WHERE datname = '{database}'")
+                    if cleanup_observation["database"]:
+                        cleanup_observation["schemas"] = catalog_rows(performance, environment, port, database, "SELECT nspname FROM pg_namespace WHERE nspname ~ '" + OWNED_SCHEMA_PATTERN + "' ORDER BY 1")
+                    else:
+                        cleanup_observation["schema_database_already_absent"] = True
+                except BaseException as error:
+                    result["status"] = "failed"
+                    cleanup_observation["catalog_error"] = type(error).__name__
+                result["cleanup_observation"] = cleanup_observation
+                if cleanup_observation.get("database"):
+                    try:
+                        run_checked([str(performance.PSQL), "-X", "-v", "ON_ERROR_STOP=1", "-h", HOST, "-p", str(port), "-U", ROLE, "-d", "postgres", "-c", f"DROP DATABASE {database}"], env=environment, cwd=SOURCE, timeout=20)
+                        result["cleanup_database_absent"] = catalog_rows(performance, environment, port, "postgres", f"SELECT datname FROM pg_database WHERE datname = '{database}'")
+                        if result["cleanup_database_absent"]:
+                            raise RuntimeError("owned database cleanup did not remove database")
+                    except BaseException:
+                        result["status"] = "failed"
+                        result["cleanup_database_error"] = type(sys.exception()).__name__
+                if tracker is not None and tracker.root is not None and tracker.live(tracker.root):
+                    performance.verify_postmaster(postmaster.pid, Path(cluster_identity["data_directory"]))
+                    if not tracker.live(tracker.root):
+                        raise RuntimeError("postmaster birth changed before signal")
+                    postmaster.send_signal(signal.SIGINT)
+                    postmaster.wait(timeout=45)
+                    result["stop"] = {"status": "stopped", "pid": postmaster.pid}
+                elif postmaster.poll() is not None:
+                    result["stop"] = {"status": "already_exited"}
+                elif tracker is None:
+                    # Failed tracker construction does not relinquish ownership
+                    # of our unreaped direct Popen; identity must still match.
+                    result["stop"] = stop_direct_postmaster(performance, postmaster, Path(cluster_identity["data_directory"]))
+                else:
+                    raise RuntimeError("owned postmaster birth identity changed before stop")
+                if result["stop"].get("status") not in {"stopped", "already_exited"}:
+                    raise RuntimeError("exact postmaster stop was refused")
+                stop_verified = True
+        except BaseException:
+            result["status"] = "failed"
+            result["cleanup_error"] = type(sys.exception()).__name__
+            raise
+        finally:
+            if tracker is not None:
+                result["owned_processes"] = tracker.cleanup()
+                if result["owned_processes"]["status"] != "clean" or result["owned_processes"]["signalled"]:
+                    result["status"] = "failed"
+            if completed and stop_verified and result["status"] == "started":
+                result["status"] = "passed"
+            result["finished_at"] = time.time()
+            result["duration_seconds"] = time.monotonic() - started
+            write_json(run_root / "result.json", result)
+    return result
+
+
+def plan() -> dict[str, object]:
+    return {
+        "action": "preparation_only",
+        "bridge_paths": [TEST_PATH],
+        "controller_sha256": sha256_path(CONTROLLER),
+        "guard_sha256": sha256_path(GUARD_SOURCE),
+        "nodes_sha256": sha256_path(NODES_SOURCE),
+        "reviewed_helpers": {
+            "native_lifecycle_sha256": sha256_path(PERFORMANCE_HELPER),
+            "owned_processes_sha256": sha256_path(OWNED_HELPER),
+        },
+        "immutable_source": str(SOURCE),
+        "nodes": list(NODES),
+        "required_free_bytes": {"before_start": MIN_START_BYTES, "live": MIN_LIVE_BYTES},
+        "tmux": f"tmux new-session -s audit-services55-pg-v1 '{VENV_PYTHON} -B {CONTROLLER} --execute'",
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--execute", action="store_true")
+    arguments = parser.parse_args()
+    if not arguments.execute:
+        print(json.dumps(plan(), indent=2, sort_keys=True))
+        return 0
+    result = run_execute()
+    print(json.dumps({"result": str(Path(result["run_root"]) / "result.json"), "status": result["status"]}, sort_keys=True))
+    return 0 if result["status"] == "passed" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
