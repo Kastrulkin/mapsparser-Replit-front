@@ -1,0 +1,206 @@
+"""Single bounded canonical build from an immutable, clean Git export."""
+
+import hashlib
+import importlib.util
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tarfile
+import time
+
+ROOT = Path('/private/tmp/localos-current-image-20260922.SJ9dlO')
+REPO = Path('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре')
+REVISION = '33c9c7027d78a29d181d0347718563c22de2963a'
+SOURCE = ROOT / 'source'
+IMAGE = 'localos-audit-20260922:33c9c702-sj9dlo'
+OWNER = 'production-readiness-20260917-sj9dlo'
+DOCKER = ['/Applications/Docker.app/Contents/Resources/bin/docker', '--context', 'desktop-linux']
+HELPER = REPO / '.agent/tasks/production-readiness-20260917/support/content_performance_processes_20260922.py'
+HELPER_SHA = '4f16b6c343223717dcf3b5bdbf86ff9159594b33fa92d744527891188c4c227b'
+ENV = {key: os.environ[key] for key in ('PATH', 'HOME', 'TMPDIR', 'LANG') if key in os.environ}
+GIB = 1024**3
+
+
+def digest(path):
+    value = hashlib.sha256()
+    with path.open('rb') as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b''):
+            value.update(block)
+    return value.hexdigest()
+
+
+def write(path, value):
+    with path.open('x') as stream:
+        json.dump(value, stream, indent=2, sort_keys=True)
+        stream.write('\n')
+
+
+def command(args, cwd=ROOT, check=True):
+    result = subprocess.run(args, cwd=cwd, env=ENV, capture_output=True,
+                            text=True, timeout=45, check=check)
+    return result
+
+
+def docker_state():
+    return {
+        'containers': sorted(command(DOCKER + ['ps', '-a', '--no-trunc', '--format', '{{.ID}} {{.State}}']).stdout.splitlines()),
+        'volumes': sorted(command(DOCKER + ['volume', 'ls', '--format', '{{.Name}}']).stdout.splitlines()),
+        'networks': sorted(command(DOCKER + ['network', 'ls', '--no-trunc', '--format', '{{.ID}}']).stdout.splitlines()),
+    }
+
+
+def manifest():
+    rows = []
+    for path in sorted(SOURCE.rglob('*')):
+        if path.is_symlink():
+            raise RuntimeError('Unexpected source symlink')
+        if path.is_file():
+            rows.append([str(path.relative_to(SOURCE)), digest(path), path.stat().st_size, path.stat().st_mode & 0o111])
+    return {'files': len(rows), 'bytes': sum(row[2] for row in rows),
+            'sha256': hashlib.sha256(json.dumps(rows, separators=(',', ':')).encode()).hexdigest()}
+
+
+def freeze():
+    if command(['/usr/bin/git', 'rev-parse', REVISION + '^{commit}'], cwd=REPO).stdout.strip() != REVISION:
+        raise RuntimeError('Revision mismatch')
+    archive = ROOT / 'source.tar'
+    with archive.open('xb') as stream:
+        subprocess.run(['/usr/bin/git', 'archive', '--format=tar', REVISION], cwd=REPO,
+                       stdout=stream, stderr=subprocess.PIPE, env=ENV, timeout=60, check=True)
+    SOURCE.mkdir()
+    with tarfile.open(archive) as package:
+        members = package.getmembers()
+        names = [member.name for member in members]
+        if len(names) != len(set(names)):
+            raise RuntimeError('Duplicate archive entries')
+        for member in members:
+            name = Path(member.name)
+            if name.is_absolute() or '..' in name.parts or not (member.isfile() or member.isdir()):
+                raise RuntimeError('Unsafe archive entry')
+            if member.name in ('tests/test_google_oauth_related_refresh_pg.py', '.env', 'local.env'):
+                raise RuntimeError('Prohibited archive entry')
+        for member in members:
+            package.extract(member, SOURCE)
+    return {'revision': REVISION, 'archive_sha256': digest(archive), 'source': manifest()}
+
+
+def direct_cleanup(process):
+    # This is the original unreaped child handle, never a rediscovered PID.
+    if process is None or process.poll() is not None:
+        return []
+    signals = ['terminate']
+    process.terminate()
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        signals.append('kill')
+        process.kill()
+        process.wait(timeout=10)
+    return signals
+
+
+def main():
+    if sys.argv[1:] != ['--execute']:
+        raise SystemExit('Explicit --execute required after review')
+    if ROOT.is_symlink() or ROOT.resolve() != ROOT or SOURCE.exists():
+        raise SystemExit('Unexpected or reused build root')
+    if (ROOT / 'result.json').exists() or (ROOT / 'build.log').exists():
+        raise SystemExit('Refusing to overwrite evidence')
+    if shutil.disk_usage(ROOT).free < 10 * GIB:
+        raise SystemExit('Need >=10 GiB before preparing canonical build')
+    if digest(HELPER) != HELPER_SHA:
+        raise SystemExit('Ownership helper changed')
+    sys.path.insert(0, '/private/tmp/localos-content-perf-deps.7zNvCi/python')
+    spec = importlib.util.spec_from_file_location('build_owned', HELPER)
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    existing = command(DOCKER + ['image', 'inspect', IMAGE], check=False)
+    if existing.returncode == 0:
+        raise SystemExit('Image tag already exists')
+    baseline = docker_state()  # Also proves daemon access, not just inspect failure.
+    frozen = freeze()
+    write(ROOT / 'freeze.json', frozen)
+    if shutil.disk_usage(ROOT).free < 10 * GIB:
+        raise SystemExit('Need >=10 GiB after source export')
+    args = DOCKER + ['build', '--pull', '--platform', 'linux/arm64', '--progress', 'plain',
+                    '--build-arg', 'INSTALL_PLAYWRIGHT_BROWSER=true',
+                    '--label', 'localos.audit.owner=' + OWNER,
+                    '--label', 'org.opencontainers.image.revision=' + REVISION,
+                    '--tag', IMAGE, str(SOURCE)]
+    started = time.monotonic()
+    process = None
+    owned = None
+    errors = []
+    samples = []
+    exit_code = None
+    result = {'command': args, 'revision': REVISION, 'image': IMAGE,
+              'owner': OWNER, 'freeze': frozen, 'docker_before': baseline,
+              'free_start_bytes': shutil.disk_usage(ROOT).free,
+              'controller_sha256': digest(Path(__file__)), 'owner_helper_sha256': HELPER_SHA,
+              'cache_policy': 'clean Git export; ordinary Docker layer cache allowed'}
+    try:
+        with (ROOT / 'build.log').open('xb') as stream:
+            process = subprocess.Popen(args, cwd=SOURCE, env=ENV, stdout=stream,
+                                       stderr=subprocess.STDOUT, start_new_session=True)
+            owned = helper.OwnedProcesses(process)
+            while process.poll() is None:
+                owned.observe()
+                free = shutil.disk_usage(ROOT).free
+                elapsed = time.monotonic() - started
+                samples.append({'elapsed': round(elapsed, 3), 'free_bytes': free})
+                if free < 2 * GIB:
+                    result['stop_reason'] = 'disk_floor'
+                    raise RuntimeError('Live disk floor reached')
+                if elapsed > 3600:
+                    result['stop_reason'] = 'deadline'
+                    raise RuntimeError('Build deadline reached')
+                if (ROOT / 'build.log').stat().st_size > 32 * 1024**2:
+                    result['stop_reason'] = 'log_cap'
+                    raise RuntimeError('Build log cap reached')
+                time.sleep(1)
+            exit_code = process.wait(timeout=10)
+    except Exception:
+        errors.append(type(sys.exception()).__name__)
+    finally:
+        try:
+            if owned is not None:
+                result['process_cleanup'] = owned.cleanup()
+        except Exception:
+            errors.append('cleanup_' + type(sys.exception()).__name__)
+        result['direct_cleanup_signals'] = direct_cleanup(process)
+        if process is not None:
+            exit_code = process.wait(timeout=10)
+        result.update({'exit_code': exit_code, 'duration_seconds': round(time.monotonic() - started, 3),
+                       'samples': samples, 'free_end_bytes': shutil.disk_usage(ROOT).free,
+                       'errors': errors, 'log_sha256': digest(ROOT / 'build.log')})
+        try:
+            result['source_after'] = manifest()
+            result['docker_after'] = docker_state()
+            if exit_code == 0 and not errors:
+                identity = json.loads(command(DOCKER + ['image', 'inspect', IMAGE]).stdout)[0]
+                result['image_identity'] = {'id': identity['Id'], 'architecture': identity['Architecture'],
+                                            'user': identity['Config']['User'],
+                                            'owner': identity['Config']['Labels'].get('localos.audit.owner'),
+                                            'revision': identity['Config']['Labels'].get('org.opencontainers.image.revision')}
+        except Exception:
+            errors.append(type(sys.exception()).__name__)
+        cleanup = result.get('process_cleanup', {})
+        identity = result.get('image_identity', {})
+        passed = (exit_code == 0 and not errors and not result['direct_cleanup_signals']
+                  and cleanup.get('status') == 'clean' and not cleanup.get('signalled')
+                  and result.get('source_after') == frozen['source']
+                  and result.get('docker_after') == baseline
+                  and identity.get('architecture') == 'arm64'
+                  and identity.get('user') == 'localos:localos'
+                  and identity.get('owner') == OWNER and identity.get('revision') == REVISION)
+        result['status'] = 'PASS' if passed else 'NONPASS'
+        write(ROOT / 'result.json', result)
+    print(json.dumps({key: result[key] for key in ('status', 'exit_code', 'duration_seconds', 'errors', 'free_end_bytes')}))
+    raise SystemExit(0 if passed else 1)
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,8 @@
+Reachable dynamic assets checked: 200 JS files
+OK: frontend/dist integrity check passed
+JS: /assets/index-CEo5by3A.js
+CSS: /assets/index-BM6vOqzw.css
+Reachable dynamic assets checked: 12 JS files
+OK: frontend/dist integrity check passed
+JS: /public-audit/assets/index-DhBnL0tP.js
+CSS: /public-audit/assets/index-BM6vOqzw.css

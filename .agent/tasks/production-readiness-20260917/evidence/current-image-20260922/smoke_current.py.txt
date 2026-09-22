@@ -1,0 +1,312 @@
+"""Offline image-only smoke for the reviewed current canonical image."""
+
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import time
+
+
+ROOT = Path("/private/tmp/localos-current-image-20260922.SJ9dlO")
+BUILD_RESULT = ROOT / "result.json"
+RESULT = ROOT / "smoke-result.json"
+DOCKER = ["/Applications/Docker.app/Contents/Resources/bin/docker", "--context", "desktop-linux"]
+REVISION = "33c9c7027d78a29d181d0347718563c22de2963a"
+OWNER = "production-readiness-20260917-sj9dlo"
+CAP = 1024 * 1024
+DEADLINE_SECONDS = 180
+ENV = {key: os.environ[key] for key in ("PATH", "HOME", "TMPDIR", "LANG") if key in os.environ}
+
+
+def digest_bytes(value):
+    return hashlib.sha256(value).hexdigest()
+
+
+def digest(path):
+    return digest_bytes(path.read_bytes())
+
+
+def run(arguments, *, timeout=30, check=True):
+    completed = subprocess.run(
+        arguments,
+        cwd=ROOT,
+        env=ENV,
+        capture_output=True,
+        timeout=timeout,
+        check=False,
+    )
+    if len(completed.stdout) > CAP or len(completed.stderr) > CAP:
+        raise RuntimeError("docker command output cap")
+    if check and completed.returncode:
+        raise RuntimeError("docker command failed")
+    return completed
+
+
+def state():
+    return {
+        "containers": sorted(
+            run(DOCKER + ["ps", "-a", "--no-trunc", "--format", "{{.ID}} {{.State}}"]).stdout.decode().splitlines()
+        ),
+        "volumes": sorted(run(DOCKER + ["volume", "ls", "--format", "{{.Name}}"]).stdout.decode().splitlines()),
+        "networks": sorted(
+            run(DOCKER + ["network", "ls", "--no-trunc", "--format", "{{.ID}}"]).stdout.decode().splitlines()
+        ),
+    }
+
+
+def inspect_container(container_id):
+    payload = json.loads(run(DOCKER + ["container", "inspect", container_id]).stdout)
+    if len(payload) != 1:
+        raise RuntimeError("container inspect cardinality")
+    return payload[0]
+
+
+def inspect_image(image_id):
+    payload = json.loads(run(DOCKER + ["image", "inspect", image_id]).stdout)
+    if len(payload) != 1:
+        raise RuntimeError("image inspect cardinality")
+    return payload[0]
+
+
+def assert_owned_container(container_id, image_id):
+    record = inspect_container(container_id)
+    labels = record["Config"]["Labels"] or {}
+    host = record["HostConfig"]
+    if record["Id"] != container_id:
+        raise RuntimeError("container identity mismatch")
+    if labels.get("localos.audit.owner") != OWNER:
+        raise RuntimeError("container ownership mismatch")
+    if record["Image"] != image_id:
+        raise RuntimeError("container image mismatch")
+    if record["Mounts"]:
+        raise RuntimeError("container mount boundary mismatch")
+    if host.get("NetworkMode") != "none":
+        raise RuntimeError("container network boundary mismatch")
+    if host.get("PortBindings") not in ({}, None) or record["NetworkSettings"].get("Ports") not in ({}, None):
+        raise RuntimeError("container port boundary mismatch")
+    if host.get("CapDrop") != ["ALL"]:
+        raise RuntimeError("container capability boundary mismatch")
+    if "no-new-privileges:true" not in (host.get("SecurityOpt") or []):
+        raise RuntimeError("container privilege boundary mismatch")
+    if host.get("Memory") != 768 * 1024 * 1024 or host.get("PidsLimit") != 256:
+        raise RuntimeError("container resource boundary mismatch")
+    return record
+
+
+def recover_created_container(container_name, image_id):
+    found = run(DOCKER + ["container", "inspect", container_name], check=False)
+    if found.returncode:
+        return None
+    payload = json.loads(found.stdout)
+    if len(payload) != 1:
+        raise RuntimeError("ambiguous create recovery")
+    record = payload[0]
+    labels = record["Config"]["Labels"] or {}
+    if record["Name"] != "/" + container_name or record["Image"] != image_id:
+        raise RuntimeError("create recovery identity mismatch")
+    if labels.get("localos.audit.owner") != OWNER:
+        raise RuntimeError("create recovery ownership mismatch")
+    return record["Id"]
+
+
+def write_log(path, content):
+    stream = path.open("xb")
+    try:
+        stream.write(content)
+    finally:
+        stream.close()
+    return {"path": str(path), "bytes": len(content), "sha256": digest_bytes(content)}
+
+
+def capture_logs(container_id, detail):
+    if container_id is None or "logs" in detail:
+        return
+    try:
+        logs = run(DOCKER + ["logs", "--tail", "200", container_id], check=False)
+        name = detail["name"]
+        detail["logs"] = {
+            "stdout": write_log(ROOT / ("smoke-" + name + ".stdout.log"), logs.stdout),
+            "stderr": write_log(ROOT / ("smoke-" + name + ".stderr.log"), logs.stderr),
+            "requires_secret_scan_before_archive": True,
+        }
+    except Exception:
+        detail["log_capture"] = "failed_" + type(sys.exception()).__name__
+
+
+def cleanup(container_id, detail, container_name, create_attempted):
+    try:
+        if container_id is None:
+            if not create_attempted:
+                detail["cleanup"] = "not_created"
+                return
+            container_id = recover_created_container(container_name, detail["image_id"])
+            if container_id is None:
+                detail["cleanup"] = "create_not_present"
+                return
+            detail["recovered_container_id"] = container_id
+        record = assert_owned_container(container_id, detail["image_id"])
+        if record["State"]["Running"]:
+            detail["unexpected_stop"] = True
+            run(DOCKER + ["stop", "--time", "15", container_id], timeout=25)
+        run(DOCKER + ["rm", container_id])
+        detail["cleanup"] = "removed"
+    except Exception:
+        detail["cleanup"] = "failed_" + type(sys.exception()).__name__
+
+
+def check_specifications(image_id):
+    browser_code = """
+import os
+from pathlib import Path
+from playwright.sync_api import sync_playwright
+assert os.geteuid() == 10001
+for forbidden in ("/app/.env", "/app/.git", "/app/.agent"):
+    assert not Path(forbidden).exists()
+for directory in ("/app/uploads", "/app/debug_data", "/app/operator_audio", "/home/localos/.cache"):
+    probe = Path(directory) / "current-image-smoke-probe"
+    assert not probe.exists()
+    probe.write_text("synthetic-only", encoding="utf-8")
+    probe.unlink()
+browser_manager = sync_playwright().start()
+try:
+    browser = browser_manager.chromium.launch(headless=True)
+    try:
+        page = browser.new_page()
+        page.set_content("<main><h1>current image smoke</h1></main>")
+        assert page.get_by_role("heading").inner_text() == "current image smoke"
+    finally:
+        browser.close()
+finally:
+    browser_manager.stop()
+print("uid-and-browser-ok")
+"""
+    return [
+        ("pip", ["--entrypoint", "python", image_id, "-m", "pip", "check"], 45),
+        ("uid-browser", ["--entrypoint", "python", image_id, "-c", browser_code], 120),
+        (
+            "assets",
+            [
+                "--entrypoint",
+                "bash",
+                image_id,
+                "-c",
+                "scripts/verify_frontend_dist_integrity.sh frontend/dist && "
+                "scripts/verify_frontend_dist_integrity.sh frontend/public-dist frontend/public-dist/public-audit/index.html",
+            ],
+            60,
+        ),
+    ]
+
+
+def execute_check(name, arguments, timeout, image_id, started):
+    container_id = None
+    create_attempted = False
+    detail = {"name": name, "image_id": image_id, "status": "started", "create_attempted": False}
+    container_name = "localos-current-image-smoke-" + name + "-sj9dlo"
+    try:
+        if run(DOCKER + ["container", "inspect", container_name], check=False).returncode == 0:
+            raise RuntimeError("smoke container name already exists")
+        create_attempted = True
+        detail["create_attempted"] = True
+        created = run(
+            DOCKER
+            + [
+                "create",
+                "--name",
+                container_name,
+                "--label",
+                "localos.audit.owner=" + OWNER,
+                "--network",
+                "none",
+                "--cap-drop",
+                "ALL",
+                "--security-opt",
+                "no-new-privileges:true",
+                "--memory",
+                "768m",
+                "--pids-limit",
+                "256",
+            ]
+            + arguments
+        )
+        container_id = created.stdout.decode().strip()
+        assert_owned_container(container_id, image_id)
+        run(DOCKER + ["start", container_id])
+        deadline = min(started + DEADLINE_SECONDS, time.monotonic() + timeout)
+        while True:
+            record = assert_owned_container(container_id, image_id)
+            if not record["State"]["Running"]:
+                detail["terminal_state"] = {
+                    "status": record["State"]["Status"],
+                    "exit_code": record["State"]["ExitCode"],
+                    "oom_killed": record["State"]["OOMKilled"],
+                }
+                break
+            if time.monotonic() >= deadline:
+                detail["deadline"] = True
+                raise RuntimeError("smoke check deadline")
+            time.sleep(0.25)
+        terminal = detail["terminal_state"]
+        detail["status"] = "passed" if terminal["exit_code"] == 0 and not terminal["oom_killed"] else "nonpass_exit"
+    except Exception:
+        detail["status"] = "nonpass_" + type(sys.exception()).__name__
+    finally:
+        capture_logs(container_id, detail)
+        cleanup(container_id, detail, container_name, create_attempted)
+    if detail.get("cleanup") != "removed" or detail.get("unexpected_stop") or detail.get("log_capture"):
+        detail["status"] = "nonpass_cleanup"
+    return detail
+
+
+def main():
+    if sys.argv[1:] != ["--execute"]:
+        raise SystemExit("Explicit --execute required after review")
+    if RESULT.exists():
+        raise SystemExit("Refusing to overwrite smoke evidence")
+    build = json.loads(BUILD_RESULT.read_bytes())
+    if build.get("status") != "PASS" or build.get("revision") != REVISION or build.get("owner") != OWNER:
+        raise SystemExit("Successful reviewed build result required")
+    image_id = build.get("image_identity", {}).get("id")
+    if not image_id:
+        raise SystemExit("Immutable image ID missing")
+    image = inspect_image(image_id)
+    labels = image["Config"]["Labels"]
+    if image["Id"] != image_id or image["Architecture"] != "arm64" or image["Config"]["User"] != "localos:localos":
+        raise SystemExit("Unexpected immutable image identity")
+    if labels.get("localos.audit.owner") != OWNER or labels.get("org.opencontainers.image.revision") != REVISION:
+        raise SystemExit("Unexpected immutable image labels")
+    started = time.monotonic()
+    before = state()
+    checks = [execute_check(name, arguments, timeout, image_id, started) for name, arguments, timeout in check_specifications(image_id)]
+    after = state()
+    passed = (
+        all(check["status"] == "passed" and check.get("cleanup") == "removed" for check in checks)
+        and before == after
+        and time.monotonic() - started <= DEADLINE_SECONDS
+    )
+    result = {
+        "status": "PASS" if passed else "NONPASS",
+        "revision": REVISION,
+        "owner": OWNER,
+        "image_id": image_id,
+        "build_controller_sha256": build.get("controller_sha256"),
+        "smoke_controller_sha256": digest(Path(__file__)),
+        "docker_before": before,
+        "docker_after": after,
+        "checks": checks,
+        "duration_seconds": round(time.monotonic() - started, 3),
+    }
+    stream = RESULT.open("x")
+    try:
+        json.dump(result, stream, indent=2, sort_keys=True)
+        stream.write("\n")
+    finally:
+        stream.close()
+    print(json.dumps({key: result[key] for key in ("status", "duration_seconds", "image_id")}))
+    raise SystemExit(0 if passed else 1)
+
+
+if __name__ == "__main__":
+    main()

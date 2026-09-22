@@ -1,5 +1,37 @@
 # Production-readiness progress
 
+## Current checkpoint — 22 September, safe space recovery and clean image
+
+- [x] Revalidated HEAD33c9c702 and foreign tracked diff SHA3c70e23b; unrelated
+  files and the restricted candidate remain untouched. Explanation-only preceding
+  turn was NO_PROGRESS; this continuation makes actual cleanup/build progress.
+- [x] Independently verified and removed only completed synthetic PG data,
+  old Git exports/archives, unused generated browser/npm caches, and closed
+  aged Yandex HTTP/JS/WASM cache files. No containers/volumes, user DBs,
+  browser profile/cookies/tabs or protected Python/current-source environment
+  removed. Free space grew from6.5GiB to10.47GiB before fresh build preparation.
+- [x] Preserved old capability source/testdeps: live Virtualization file handles
+  make these unsuitable for cleanup now. No application/VM shutdown.
+- [x] Fresh clean33c9c702 Git export:6536files/148362997bytes. Reviewed bounded
+  ARM64 canonical build controller, browser enabled, ordinary layer cache allowed;
+  start10GiB/live2GiB thresholds unchanged, exact labels and Docker-state checks.
+- [x] Current canonical build passes182.501915s/exit0 (177.067s controller),
+  imagef5f8970b ARM64/nonroot, source unchanged, owned processes clean and original
+  Docker state preserved. Both frontend builds pass; four heuristic Dockerfile
+  name warnings on false feature flags are retained, not confirmed secrets.
+- [x] Offline immutable-image smoke passes5.067507s: pipcheck, UID10001/writable
+  dirs/Chromium, both frontend transitive asset checks. Three containers exit0,
+  noOOM, exact cleanup and Docker-state equality pass; independent review PASS.
+- [ ] Package/strict scan/local commit, then current synthetic PG16 migration,
+  Gunicorn HTTP, worker shutdown and full CI gates. Terminal build/smoke handles
+  must not be rerun. Private profile `/private/tmp/localos-current-image-20260922.SJ9dlO/`.
+- [ ] Original image206/history-security, broader browser/demo and whole-diff
+  requirements remain open. No production, provider writes, push or deployment.
+
+Evidence: task `evidence/current-image-preparation-20260922.md` and durable
+`evidence/current-image-20260922/`:17manifest-bound raw artifacts. Remaining free
+space about7.1GiB after the build; no current runtime/CI/security pass is inferred.
+
 ## Current checkpoint — 22 September, bounded five-journey stress complete
 
 - [x] Capability bridge independently verifies all12 nonpass IDs and named

@@ -1,5 +1,36 @@
 # Verified commands and evidence
 
+## Current clean image and bounded cleanup — 22 September
+
+Completed `audit-cache-cleanup-sj9dlo`:11,773.424ms/exit0,30951generated closed
+cache files,1,003,102,208allocated bytes. Exact command/candidate manifest and
+result are in `/private/tmp/localos-current-image-20260922.SJ9dlO/`; do not rerun.
+Other exact source/PG/cache removals and verification are in task
+`evidence/current-image-preparation-20260922.md`. No Docker prune/shutdown.
+
+Completed tmux handle `audit-current-image-sj9dlo` ran the reviewed
+`build_current.py --execute` via bounded capture (4200s outer/3600s build).
+Its fixed command is canonical `docker --context desktop-linux build --pull
+--platform linux/arm64 --progress plain --build-arg INSTALL_PLAYWRIGHT_BROWSER=true`
+with owner/revision labels, unique tag `localos-audit-20260922:33c9c702-sj9dlo`
+and the private clean `source/`. Required start10GiB/live2GiB floors remain.
+
+Result182501.915ms/exit0; controller177.067s. Immutable imagef5f8970b, exact
+source/user/labels, source/process/Docker preservation gates allpass. Completed
+`audit-current-image-smoke-sj9dlo`:5067.507ms/exit0, three offline checks pass,
+temporary containers removed, pre-existing Docker state unchanged. Independent
+terminal review PASS. Full raw captures/scripts/logs in17-entry hash-bound
+`evidence/current-image-20260922/`. Inspect these terminal results, do not rerun:
+
+```sh
+jq '{exit_code,duration_ms,stdout,stderr}' /private/tmp/localos-current-image-20260922.SJ9dlO/build-command.json
+tail -20 /private/tmp/localos-current-image-20260922.SJ9dlO/build.log
+```
+
+`build-command.json`, `result.json`, `smoke-command.json` and `smoke-result.json`
+now exist. Both execution handles are terminal; a fresh isolated migrated runtime
+profile, not another build/smoke run, is the next required action.
+
 ## Bounded five-journey stress — 22 September
 
 Final exact37-path staged diff secret scan:15,505.887ms/exit0, zero findings,

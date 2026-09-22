@@ -1,5 +1,41 @@
 # Readiness handoff
 
+## Current continuation — 22 September, clean canonical image and offline smoke pass
+
+Entry HEAD `33c9c7027d78a29d181d0347718563c22de2963a`, same branch. This turn is
+PROGRESS: independently verified task-generated cleanup actually completed,
+free space6.5→10.47GiB, and a fresh canonical build passed from that exact clean
+Git revision. Do not replay historical stress/Services55/full-backend commands.
+Foreign5 tracked edits retain SHA3c70e23b; ordinary4 untracked plus restricted1
+remain untouched. Root owns only readiness evidence/docs for this phase.
+
+Private profile `/private/tmp/localos-current-image-20260922.SJ9dlO/`:
+build controller SHA611e7395; smoke controller SHAb1c64db1; reviewed cache
+controller SHAf809a78b. Cache cleanup is terminal11.773424s/exit0,30951oldclosed
+generated entries removed, no profile/cookie/tab deletion. Completed source/PG
+and cache cleanup exact allowlists are in `current-image-preparation-20260922.md`.
+Deleted source snapshots/PG data are no longer executable test environments;
+their durable evidence remains. Keep a387/source, native/venv, psutil Python,
+all evidence/helpers, old image9d6edac8 and existing Docker resources.
+
+Completed build handle `audit-current-image-sj9dlo`:182.501915s/exit0,
+controller177.067s, source/archive16c923ce/manifest eafa0240 unchanged,
+6536files148362997bytes. New immutable image is
+`sha256:f5f8970b270d7b74b96e2b188cbfd471477a5a5655d9eb57bf007d45c96f59d6`,
+ARM64/localos owner+revision exact; three process identities clean, no signals,
+original Docker state unchanged. Build four warning names are false feature
+flags, not confirmed credentials; retain logs and separate security scope.
+Completed `audit-current-image-smoke-sj9dlo`:5.067507s/exit0 (4.923s controller),
+pip/nonroot-browser/both-assets allpass; three exact owned containers removed,
+noOOM or unexpectedstop, Docker state unchanged. Independent terminal review
+PASS. No completed build/smoke handle should be rerun. Durable17-artifact bundle
+`evidence/current-image-20260922/` hashes verify. Next is its scoped package
+scan/local commit, then new synthetic PG16/migrations/Gunicorn/worker and full
+CI integration on this immutable image. Free about7.1GiB; no new Docker build
+needed. No deployment/provider operation.
+The global original security206/browser/demo/final review gates stay open.
+Restricted OAuth and native finance picker remain prohibited.
+
 ## Current terminal stress checkpoint — 22 September
 
 Evidence package is committed locally as

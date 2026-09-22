@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "label": "current-image-offline-smoke",
+  "captured_at": "2026-09-22T19:42:10.235657+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+    "-B",
+    "-I",
+    "/private/tmp/localos-current-image-20260922.SJ9dlO/smoke_current.py",
+    "--execute"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 5067.507,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"status\": \"PASS\", \"duration_seconds\": 4.923, \"image_id\": \"sha256:f5f8970b270d7b74b96e2b188cbfd471477a5a5655d9eb57bf007d45c96f59d6\"}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

@@ -1,0 +1,866 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 6.33kB 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
+#2 ...
+
+#3 [internal] load metadata for docker.io/library/python:3.11-bookworm@sha256:35d3a4a3d5e42e02ab916d44513a050689f12c0533d45598d229672503fe77ca
+#3 DONE 1.9s
+
+#2 [internal] load metadata for docker.io/library/node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
+#2 DONE 2.8s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 1.13kB done
+#4 DONE 0.0s
+
+#5 [stage-1  1/14] FROM docker.io/library/python:3.11-bookworm@sha256:35d3a4a3d5e42e02ab916d44513a050689f12c0533d45598d229672503fe77ca
+#5 resolve docker.io/library/python:3.11-bookworm@sha256:35d3a4a3d5e42e02ab916d44513a050689f12c0533d45598d229672503fe77ca 0.0s done
+#5 DONE 0.0s
+
+#6 [frontend-builder 1/7] FROM docker.io/library/node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
+#6 resolve docker.io/library/node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 44.31MB 0.8s done
+#7 DONE 0.8s
+
+#8 [stage-1  2/14] RUN set -eux;     apt-get -o Acquire::Retries=5 -o Acquire::ForceIPv4=true update     && apt-get -o Acquire::Retries=5 -o Acquire::ForceIPv4=true install -y --no-install-recommends     libpq-dev     libexpat1     libexpat1-dev     gcc     postgresql-client     ffmpeg     fonts-liberation     libasound2     libatk-bridge2.0-0     libatk1.0-0     libatspi2.0-0     libcairo2     libcups2     libdbus-1-3     libdrm2     libegl1     libgbm1     libglib2.0-0     libgtk-3-0     libnspr4     libnss3     libpango-1.0-0     libx11-6     libx11-xcb1     libxcb1     libxcomposite1     libxdamage1     libxext6     libxfixes3     libxrandr2     libxshmfence1     && rm -rf /var/lib/apt/lists/*
+#8 CACHED
+
+#9 [stage-1  3/14] WORKDIR /app
+#9 CACHED
+
+#10 [stage-1  4/14] RUN set -eux;     PIP_DISABLE_PIP_VERSION_CHECK=1     PIP_DEFAULT_TIMEOUT=30     python -m pip install --no-cache-dir --retries 3     --index-url https://mirrors.aliyun.com/pypi/simple     --extra-index-url https://pypi.org/simple     "pip==26.2"
+#10 CACHED
+
+#6 [frontend-builder 1/7] FROM docker.io/library/node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
+#6 DONE 0.1s
+
+#11 [stage-1  5/14] COPY requirements.txt requirements.release.constraints.txt ./
+#11 DONE 0.1s
+
+#12 [stage-1  6/14] RUN set -eux;     PIP_DISABLE_PIP_VERSION_CHECK=1     PIP_DEFAULT_TIMEOUT=30     python -m pip install --no-cache-dir --retries 3     --index-url https://mirrors.aliyun.com/pypi/simple     --extra-index-url https://pypi.org/simple     -c requirements.release.constraints.txt     -r requirements.txt
+#12 1.121 + PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_DEFAULT_TIMEOUT=30 python -m pip install --no-cache-dir --retries 3 --index-url https://mirrors.aliyun.com/pypi/simple --extra-index-url https://pypi.org/simple -c requirements.release.constraints.txt -r requirements.txt
+#12 2.161 Looking in indexes: https://mirrors.aliyun.com/pypi/simple, https://pypi.org/simple
+#12 3.973 Collecting psycopg2-binary (from -r requirements.txt (line 1))
+#12 4.450   Downloading psycopg2_binary-2.9.13-cp311-cp311-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl.metadata (4.9 kB)
+#12 4.799 Collecting flask (from -r requirements.txt (line 2))
+#12 4.856   Downloading flask-3.1.3-py3-none-any.whl.metadata (3.2 kB)
+#12 5.214 Collecting flask-cors (from -r requirements.txt (line 3))
+#12 5.272   Downloading flask_cors-6.0.5-py3-none-any.whl.metadata (5.4 kB)
+#12 ...
+
+#6 [frontend-builder 1/7] FROM docker.io/library/node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
+#6 sha256:d5912031533eab227ffbb29397d65bcf3d39a8d12b32f2fc56261c52cc66dda9 448B / 448B 1.0s done
+#6 sha256:05e409eae5f2e1ca109b718c864fc5fc7bfe06ce6b30d38a2c17fd045b76bfa6 50.06MB / 50.06MB 2.1s done
+#6 sha256:26189716fda9c974217999e79ff43087bd9611673b23fa84ff586000b4c3bf1d 1.71MB / 1.71MB 0.6s done
+#6 sha256:37dfd750e835f46db88ab706ff6b449bc576c39657523b619466c84ce5dc8624 3.31kB / 3.31kB 1.7s done
+#6 sha256:75782e20ea1f4a9d9259bc20a5ecbbea8d5943bf5370bf0f5727900728f1cc9a 28.12MB / 28.12MB 1.9s done
+#6 extracting sha256:75782e20ea1f4a9d9259bc20a5ecbbea8d5943bf5370bf0f5727900728f1cc9a 1.9s done
+#6 extracting sha256:37dfd750e835f46db88ab706ff6b449bc576c39657523b619466c84ce5dc8624 done
+#6 extracting sha256:05e409eae5f2e1ca109b718c864fc5fc7bfe06ce6b30d38a2c17fd045b76bfa6
+#6 ...
+
+#12 [stage-1  6/14] RUN set -eux;     PIP_DISABLE_PIP_VERSION_CHECK=1     PIP_DEFAULT_TIMEOUT=30     python -m pip install --no-cache-dir --retries 3     --index-url https://mirrors.aliyun.com/pypi/simple     --extra-index-url https://pypi.org/simple     -c requirements.release.constraints.txt     -r requirements.txt
+#12 5.905 Collecting flask-limiter (from -r requirements.txt (line 4))
+#12 5.966   Downloading flask_limiter-4.1.1-py3-none-any.whl.metadata (6.3 kB)
+#12 6.121 Collecting redis<6.0,>=5.0 (from -r requirements.txt (line 5))
+#12 6.179   Downloading redis-5.3.1-py3-none-any.whl.metadata (9.2 kB)
+#12 6.504 Collecting flask-sqlalchemy (from -r requirements.txt (line 6))
+#12 6.578   Downloading flask_sqlalchemy-3.1.1-py3-none-any.whl.metadata (3.4 kB)
+#12 ...
+
+#6 [frontend-builder 1/7] FROM docker.io/library/node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
+#6 extracting sha256:05e409eae5f2e1ca109b718c864fc5fc7bfe06ce6b30d38a2c17fd045b76bfa6 2.3s done
+#6 DONE 6.9s
+
+#6 [frontend-builder 1/7] FROM docker.io/library/node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
+#6 extracting sha256:26189716fda9c974217999e79ff43087bd9611673b23fa84ff586000b4c3bf1d 0.1s done
+#6 extracting sha256:d5912031533eab227ffbb29397d65bcf3d39a8d12b32f2fc56261c52cc66dda9 done
+#6 DONE 7.0s
+
+#12 [stage-1  6/14] RUN set -eux;     PIP_DISABLE_PIP_VERSION_CHECK=1     PIP_DEFAULT_TIMEOUT=30     python -m pip install --no-cache-dir --retries 3     --index-url https://mirrors.aliyun.com/pypi/simple     --extra-index-url https://pypi.org/simple     -c requirements.release.constraints.txt     -r requirements.txt
+#12 6.919 Collecting flask-migrate (from -r requirements.txt (line 7))
+#12 6.984   Downloading Flask_Migrate-4.1.0-py3-none-any.whl.metadata (3.3 kB)
+#12 7.338 Collecting gunicorn (from -r requirements.txt (line 8))
+#12 ...
+
+#13 [frontend-builder 2/7] WORKDIR /app
+#13 DONE 0.5s
+
+#14 [frontend-builder 3/7] COPY frontend/package.json frontend/package-lock.json ./frontend/
+#14 DONE 0.1s
+
+#15 [frontend-builder 4/7] WORKDIR /app/frontend
+#15 DONE 0.0s
+
+#12 [stage-1  6/14] RUN set -eux;     PIP_DISABLE_PIP_VERSION_CHECK=1     PIP_DEFAULT_TIMEOUT=30     python -m pip install --no-cache-dir --retries 3     --index-url https://mirrors.aliyun.com/pypi/simple     --extra-index-url https://pypi.org/simple     -c requirements.release.constraints.txt     -r requirements.txt
+#12 7.400   Downloading gunicorn-26.2.0-py3-none-any.whl.metadata (5.5 kB)
+#12 7.738 Collecting python-dotenv (from -r requirements.txt (line 9))
+#12 7.796   Downloading python_dotenv-1.2.3-py3-none-any.whl.metadata (29 kB)
+#12 8.139 Collecting python-dateutil (from -r requirements.txt (line 10))
+#12 8.194   Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+#12 8.453 Collecting requests (from -r requirements.txt (line 11))
+#12 8.510   Downloading requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+#12 8.843 Collecting stripe (from -r requirements.txt (line 12))
+#12 8.903   Downloading stripe-15.6.1-py3-none-any.whl.metadata (22 kB)
+#12 9.359 Collecting beautifulsoup4 (from -r requirements.txt (line 13))
+#12 9.417   Downloading beautifulsoup4-4.15.0-py3-none-any.whl.metadata (3.8 kB)
+#12 9.773 Collecting dnspython (from -r requirements.txt (line 14))
+#12 9.833   Downloading dnspython-2.8.0-py3-none-any.whl.metadata (5.7 kB)
+#12 10.16 Collecting defusedxml (from -r requirements.txt (line 15))
+#12 10.22   Downloading defusedxml-0.7.1-py2.py3-none-any.whl.metadata (32 kB)
+#12 10.49 Collecting phonenumbers (from -r requirements.txt (line 16))
+#12 10.55   Downloading phonenumbers-9.0.39-py2.py3-none-any.whl.metadata (10 kB)
+#12 10.82 Collecting playwright (from -r requirements.txt (line 17))
+#12 10.88   Downloading playwright-1.63.0-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (3.3 kB)
+#12 11.32 Collecting openai (from -r requirements.txt (line 18))
+#12 11.38   Downloading openai-3.15.0-py3-none-any.whl.metadata (43 kB)
+#12 11.74 Collecting anthropic (from -r requirements.txt (line 19))
+#12 11.81   Downloading anthropic-1.6.0-py3-none-any.whl.metadata (3.3 kB)
+#12 12.16 Collecting google-generativeai (from -r requirements.txt (line 20))
+#12 12.23   Downloading google_generativeai-0.8.6-py3-none-any.whl.metadata (3.9 kB)
+#12 12.60 Collecting google-auth-oauthlib>=1.2.0 (from -r requirements.txt (line 21))
+#12 12.68   Downloading google_auth_oauthlib-1.4.1-py3-none-any.whl.metadata (2.6 kB)
+#12 13.03 Collecting googlemaps (from -r requirements.txt (line 22))
+#12 13.10   Downloading googlemaps-4.10.0.tar.gz (33 kB)
+#12 13.14   Installing build dependencies: started
+#12 16.95   Installing build dependencies: finished with status 'done'
+#12 16.96   Getting requirements to build wheel: started
+#12 17.47   Getting requirements to build wheel: finished with status 'done'
+#12 ...
+
+#16 [frontend-builder 5/7] RUN npm ci --legacy-peer-deps
+#16 ...
+
+#12 [stage-1  6/14] RUN set -eux;     PIP_DISABLE_PIP_VERSION_CHECK=1     PIP_DEFAULT_TIMEOUT=30     python -m pip install --no-cache-dir --retries 3     --index-url https://mirrors.aliyun.com/pypi/simple     --extra-index-url https://pypi.org/simple     -c requirements.release.constraints.txt     -r requirements.txt
+#12 17.48   Installing backend dependencies: started
+#12 24.16   Installing backend dependencies: finished with status 'done'
+#12 24.17   Preparing metadata (pyproject.toml): started
+#12 24.68   Preparing metadata (pyproject.toml): finished with status 'done'
+#12 ...
+
+#16 [frontend-builder 5/7] RUN npm ci --legacy-peer-deps
+#16 17.36 
+#16 17.36 added 470 packages, and audited 471 packages in 17s
+#16 17.36 
+#16 17.36 85 packages are looking for funding
+#16 17.36   run `npm fund` for details
+#16 17.36 
+#16 17.36 found 0 vulnerabilities
+#16 17.36 npm notice
+#16 17.36 npm notice New major version of npm available! 10.9.8 -> 12.0.2
+#16 17.36 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2
+#16 17.36 npm notice To update run: npm install -g npm@12.0.2
+#16 17.36 npm notice
+#16 DONE 18.1s
+
+#12 [stage-1  6/14] RUN set -eux;     PIP_DISABLE_PIP_VERSION_CHECK=1     PIP_DEFAULT_TIMEOUT=30     python -m pip install --no-cache-dir --retries 3     --index-url https://mirrors.aliyun.com/pypi/simple     --extra-index-url https://pypi.org/simple     -c requirements.release.constraints.txt     -r requirements.txt
+#12 25.62 Collecting apify-client (from -r requirements.txt (line 23))
+#12 25.68   Downloading apify_client-3.2.0-py3-none-any.whl.metadata (14 kB)
+#12 ...
+
+#17 [frontend-builder 6/7] COPY frontend/ .
+#17 DONE 0.4s
+
+#18 [frontend-builder 7/7] RUN npm run build:all
+#18 0.358 
+#18 0.358 > vite_react_shadcn_ts@0.0.0 build:all
+#18 0.358 > npm run build && npm run build:public
+#18 0.358 
+#18 0.512 
+#18 0.512 > vite_react_shadcn_ts@0.0.0 build
+#18 0.512 > vite build
+#18 0.512 
+#18 0.883 vite v7.3.5 building client environment for production...
+#18 0.952 transforming...
+#18 ...
+
+#12 [stage-1  6/14] RUN set -eux;     PIP_DISABLE_PIP_VERSION_CHECK=1     PIP_DEFAULT_TIMEOUT=30     python -m pip install --no-cache-dir --retries 3     --index-url https://mirrors.aliyun.com/pypi/simple     --extra-index-url https://pypi.org/simple     -c requirements.release.constraints.txt     -r requirements.txt
+#12 26.54 Collecting cryptography (from -r requirements.txt (line 24))
+#12 26.62   Downloading cryptography-50.0.1-cp311-abi3-manylinux_2_34_aarch64.whl.metadata (4.3 kB)
+#12 26.80 Collecting pytz==2025.2 (from -r requirements.txt (line 25))
+#12 26.87   Downloading pytz-2025.2-py2.py3-none-any.whl.metadata (22 kB)
+#12 27.09 Collecting telethon (from -r requirements.txt (line 26))
+#12 27.15   Downloading telethon-1.45.0-py3-none-any.whl.metadata (4.2 kB)
+#12 27.48 Collecting pysocks (from -r requirements.txt (line 27))
+#12 27.53   Downloading PySocks-1.7.1-py3-none-any.whl.metadata (13 kB)
+#12 27.80 Collecting pypdf==6.16.1 (from -r requirements.txt (line 29))
+#12 27.86   Downloading pypdf-6.16.1-py3-none-any.whl.metadata (7.5 kB)
+#12 28.42 Collecting PyMuPDF<2,>=1.24 (from -r requirements.txt (line 30))
+#12 28.50   Downloading pymupdf-1.28.2-cp310-abi3-manylinux_2_28_aarch64.whl.metadata (26 kB)
+#12 29.36 Collecting Pillow<13,>=10.4 (from -r requirements.txt (line 31))
+#12 29.43   Downloading pillow-12.3.0-cp311-cp311-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl.metadata (9.1 kB)
+#12 29.77 Collecting openpyxl (from -r requirements.txt (line 32))
+#12 29.85   Downloading openpyxl-3.1.5-py2.py3-none-any.whl.metadata (2.5 kB)
+#12 30.37 Collecting reportlab<5,>=4.0 (from -r requirements.txt (line 33))
+#12 30.42   Downloading reportlab-4.5.1-py3-none-any.whl.metadata (1.7 kB)
+#12 31.36 Collecting boto3 (from -r requirements.txt (line 34))
+#12 31.43   Downloading boto3-1.43.97-py3-none-any.whl.metadata (6.6 kB)
+#12 31.89 Collecting pillow-heif<2,>=0.22 (from -r requirements.txt (line 36))
+#12 31.95   Downloading pillow_heif-1.7.0-cp311-cp311-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl.metadata (9.7 kB)
+#12 32.29 Collecting python-socks[asyncio] (from -r requirements.txt (line 28))
+#12 32.36   Downloading python_socks-3.1.1-py3-none-any.whl.metadata (8.9 kB)
+#12 32.86 Collecting PyJWT>=2.9.0 (from redis<6.0,>=5.0->-r requirements.txt (line 5))
+#12 32.91   Downloading pyjwt-2.14.0-py3-none-any.whl.metadata (3.4 kB)
+#12 33.65 Collecting charset-normalizer (from reportlab<5,>=4.0->-r requirements.txt (line 33))
+#12 33.71   Downloading charset_normalizer-3.5.1-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (45 kB)
+#12 34.07 Collecting blinker>=1.9.0 (from flask->-r requirements.txt (line 2))
+#12 34.12   Downloading blinker-1.9.0-py3-none-any.whl.metadata (1.6 kB)
+#12 34.49 Collecting click>=8.1.3 (from flask->-r requirements.txt (line 2))
+#12 34.57   Downloading click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+#12 34.93 Collecting itsdangerous>=2.2.0 (from flask->-r requirements.txt (line 2))
+#12 34.99   Downloading itsdangerous-2.2.0-py3-none-any.whl.metadata (1.9 kB)
+#12 35.43 Collecting jinja2>=3.1.2 (from flask->-r requirements.txt (line 2))
+#12 35.58   Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+#12 35.95 Collecting markupsafe>=2.1.1 (from flask->-r requirements.txt (line 2))
+#12 36.01   Downloading markupsafe-3.0.3-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (2.7 kB)
+#12 36.16 Collecting werkzeug>=3.1.0 (from flask->-r requirements.txt (line 2))
+#12 36.22   Downloading werkzeug-3.1.8-py3-none-any.whl.metadata (4.0 kB)
+#12 36.40 Collecting limits>=3.13 (from flask-limiter->-r requirements.txt (line 4))
+#12 36.46   Downloading limits-5.8.0-py3-none-any.whl.metadata (10 kB)
+#12 36.92 Collecting ordered-set<5,>4 (from flask-limiter->-r requirements.txt (line 4))
+#12 36.98   Downloading ordered_set-4.1.0-py3-none-any.whl.metadata (5.3 kB)
+#12 37.34 Collecting typing-extensions>=4.3 (from flask-limiter->-r requirements.txt (line 4))
+#12 37.42   Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+#12 39.05 Collecting sqlalchemy>=2.0.16 (from flask-sqlalchemy->-r requirements.txt (line 6))
+#12 39.12   Downloading sqlalchemy-2.0.54-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (9.7 kB)
+#12 39.27 Collecting alembic>=1.9.0 (from flask-migrate->-r requirements.txt (line 7))
+#12 39.34   Downloading alembic-1.20.0-py3-none-any.whl.metadata (7.3 kB)
+#12 ...
+
+#18 [frontend-builder 7/7] RUN npm run build:all
+#18 13.52 node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js (1:4471): A comment
+#18 13.52 
+#18 13.52 "/*#__PURE__*/"
+#18 13.52 
+#18 13.52 in "node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+#18 13.52 node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js (1:6197): A comment
+#18 13.52 
+#18 13.52 "/*#__PURE__*/"
+#18 13.52 
+#18 13.52 in "node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+#18 13.52 node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js (1:7493): A comment
+#18 13.52 
+#18 13.52 "/*#__PURE__*/"
+#18 13.52 
+#18 13.52 in "node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+#18 13.52 node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js (1:10459): A comment
+#18 13.52 
+#18 13.52 "/*#__PURE__*/"
+#18 13.52 
+#18 13.52 in "node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+#18 ...
+
+#12 [stage-1  6/14] RUN set -eux;     PIP_DISABLE_PIP_VERSION_CHECK=1     PIP_DEFAULT_TIMEOUT=30     python -m pip install --no-cache-dir --retries 3     --index-url https://mirrors.aliyun.com/pypi/simple     --extra-index-url https://pypi.org/simple     -c requirements.release.constraints.txt     -r requirements.txt
+#12 39.70 Collecting six>=1.5 (from python-dateutil->-r requirements.txt (line 10))
+#12 39.78   Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+#12 40.17 Collecting idna<4,>=2.5 (from requests->-r requirements.txt (line 11))
+#12 40.24   Downloading idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+#12 40.43 Collecting urllib3<3,>=1.26 (from requests->-r requirements.txt (line 11))
+#12 40.50   Downloading urllib3-2.8.0-py3-none-any.whl.metadata (7.4 kB)
+#12 40.85 Collecting certifi>=2023.5.7 (from requests->-r requirements.txt (line 11))
+#12 40.91   Downloading certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+#12 41.27 Collecting soupsieve>=1.6.1 (from beautifulsoup4->-r requirements.txt (line 13))
+#12 41.33   Downloading soupsieve-2.9.2-py3-none-any.whl.metadata (4.6 kB)
+#12 41.70 Collecting pyee<14,>=13 (from playwright->-r requirements.txt (line 17))
+#12 41.84   Downloading pyee-13.0.1-py3-none-any.whl.metadata (3.0 kB)
+#12 42.75 Collecting greenlet<4.0.0,>=3.1.1 (from playwright->-r requirements.txt (line 17))
+#12 42.81   Downloading greenlet-3.5.6-cp311-cp311-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl.metadata (3.8 kB)
+#12 43.18 Collecting anyio<5,>=4.10.0 (from openai->-r requirements.txt (line 18))
+#12 43.24   Downloading anyio-4.15.1-py3-none-any.whl.metadata (4.7 kB)
+#12 43.69 Collecting httpx2<3,>=2.7.0 (from openai->-r requirements.txt (line 18))
+#12 43.74   Downloading httpx2-2.13.0-py3-none-any.whl.metadata (10 kB)
+#12 44.22 Collecting jiter<1,>=0.16.0 (from openai->-r requirements.txt (line 18))
+#12 44.28   Downloading jiter-0.17.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (5.2 kB)
+#12 44.83 Collecting pydantic!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.*,<3,>=1.10.13 (from openai->-r requirements.txt (line 18))
+#12 44.89   Downloading pydantic-2.13.5-py3-none-any.whl.metadata (110 kB)
+#12 45.36 Collecting sniffio (from openai->-r requirements.txt (line 18))
+#12 45.47   Downloading sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+#12 45.82 Collecting httpcore2==2.13.0 (from httpx2<3,>=2.7.0->openai->-r requirements.txt (line 18))
+#12 45.89   Downloading httpcore2-2.13.0-py3-none-any.whl.metadata (26 kB)
+#12 46.22 Collecting truststore>=0.10 (from httpx2<3,>=2.7.0->openai->-r requirements.txt (line 18))
+#12 46.28   Downloading truststore-0.10.4-py3-none-any.whl.metadata (4.4 kB)
+#12 46.62 Collecting h11>=0.16 (from httpcore2==2.13.0->httpx2<3,>=2.7.0->openai->-r requirements.txt (line 18))
+#12 46.70   Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+#12 47.05 Collecting annotated-types>=0.6.0 (from pydantic!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.*,<3,>=1.10.13->openai->-r requirements.txt (line 18))
+#12 47.13   Downloading annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+#12 ...
+
+#18 [frontend-builder 7/7] RUN npm run build:all
+#18 23.84 ✓ 4067 modules transformed.
+#18 26.90 rendering chunks...
+#18 ...
+
+#12 [stage-1  6/14] RUN set -eux;     PIP_DISABLE_PIP_VERSION_CHECK=1     PIP_DEFAULT_TIMEOUT=30     python -m pip install --no-cache-dir --retries 3     --index-url https://mirrors.aliyun.com/pypi/simple     --extra-index-url https://pypi.org/simple     -c requirements.release.constraints.txt     -r requirements.txt
+#12 51.41 Collecting pydantic-core==2.46.5 (from pydantic!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.*,<3,>=1.10.13->openai->-r requirements.txt (line 18))
+#12 51.47   Downloading pydantic_core-2.46.5-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (6.6 kB)
+#12 51.82 Collecting typing-inspection>=0.4.2 (from pydantic!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.*,<3,>=1.10.13->openai->-r requirements.txt (line 18))
+#12 51.88   Downloading typing_inspection-0.4.4-py3-none-any.whl.metadata (2.6 kB)
+#12 52.23 Collecting docstring-parser<1,>=0.15 (from anthropic->-r requirements.txt (line 19))
+#12 52.30   Downloading docstring_parser-0.18.0-py3-none-any.whl.metadata (3.5 kB)
+#12 52.67 Collecting google-ai-generativelanguage==0.6.15 (from google-generativeai->-r requirements.txt (line 20))
+#12 52.74   Downloading google_ai_generativelanguage-0.6.15-py3-none-any.whl.metadata (5.7 kB)
+#12 53.02 Collecting google-api-core (from google-generativeai->-r requirements.txt (line 20))
+#12 53.09   Downloading google_api_core-2.33.0-py3-none-any.whl.metadata (3.2 kB)
+#12 53.31 Collecting google-api-python-client (from google-generativeai->-r requirements.txt (line 20))
+#12 53.37   Downloading google_api_python_client-2.200.0-py3-none-any.whl.metadata (6.8 kB)
+#12 53.57 Collecting google-auth>=2.15.0 (from google-generativeai->-r requirements.txt (line 20))
+#12 53.64   Downloading google_auth-2.58.0-py3-none-any.whl.metadata (6.0 kB)
+#12 54.93 Collecting protobuf (from google-generativeai->-r requirements.txt (line 20))
+#12 55.01   Downloading protobuf-5.29.6-cp38-abi3-manylinux2014_aarch64.whl.metadata (592 bytes)
+#12 55.34 Collecting tqdm (from google-generativeai->-r requirements.txt (line 20))
+#12 55.42   Downloading tqdm-4.70.1-py3-none-any.whl.metadata (57 kB)
+#12 56.38 Collecting proto-plus<2.0.0dev,>=1.22.3 (from google-ai-generativelanguage==0.6.15->google-generativeai->-r requirements.txt (line 20))
+#12 56.44   Downloading proto_plus-1.28.2-py3-none-any.whl.metadata (2.2 kB)
+#12 56.85 Collecting googleapis-common-protos<2.0.0,>=1.63.2 (from google-api-core->google-generativeai->-r requirements.txt (line 20))
+#12 56.91   Downloading googleapis_common_protos-1.75.0-py3-none-any.whl.metadata (8.6 kB)
+#12 ...
+
+#18 [frontend-builder 7/7] RUN npm run build:all
+#18 29.64 computing gzip size...
+#18 29.87 dist/index.html                                              13.61 kB │ gzip:   4.51 kB
+#18 29.87 dist/public-page-fallbacks.json                              20.80 kB │ gzip:   5.10 kB
+#18 29.87 dist/assets/logo-BY03Vnee.png                               431.60 kB
+#18 29.87 dist/localos-logo.png                                       431.60 kB
+#18 29.87 dist/assets/workflow-graph-BnuhLJ6X.css                      15.87 kB │ gzip:   2.67 kB
+#18 29.87 dist/assets/index-BM6vOqzw.css                              298.14 kB │ gzip:  38.89 kB
+#18 29.87 dist/assets/logo-DEeOMDDZ.js                                  0.05 kB │ gzip:   0.07 kB
+#18 29.87 dist/assets/useLatestCallback-DmoUltQj.js                     0.17 kB │ gzip:   0.16 kB
+#18 29.87 dist/assets/design-tokens-BMZ5hB0u.js                         0.19 kB │ gzip:   0.18 kB
+#18 29.87 dist/assets/featureFlags-DuiHfkbZ.js                          0.21 kB │ gzip:   0.18 kB
+#18 29.87 dist/assets/query-Bq483iDg.js                                 0.22 kB │ gzip:   0.19 kB
+#18 29.87 dist/assets/label-Cr8mWV3R.js                                 0.37 kB │ gzip:   0.27 kB
+#18 29.87 dist/assets/communityFeed-hSmPD_ji.js                         0.44 kB │ gzip:   0.32 kB
+#18 29.87 dist/assets/progress-C8ERtRq3.js                              0.47 kB │ gzip:   0.33 kB
+#18 29.87 dist/assets/Pricing-B7TDZ2TU.js                               0.48 kB │ gzip:   0.31 kB
+#18 29.87 dist/assets/WorkJournalPage-VFbuBirk.js                       0.50 kB │ gzip:   0.32 kB
+#18 29.87 dist/assets/DiskImportPanel.logic-DO_KPls8.js                 0.58 kB │ gzip:   0.46 kB
+#18 29.87 dist/assets/NotFound-Bw32DBzo.js                              0.66 kB │ gzip:   0.40 kB
+#18 29.87 dist/assets/checkbox-CXgUnRmb.js                              0.74 kB │ gzip:   0.42 kB
+#18 29.87 dist/assets/PublicBrandBackdrop-BfanXzd3.js                   0.81 kB │ gzip:   0.45 kB
+#18 29.87 dist/assets/popover-8npEMuF8.js                               0.81 kB │ gzip:   0.43 kB
+#18 29.88 dist/assets/badge-BEcUN8L3.js                                 0.84 kB │ gzip:   0.44 kB
+#18 29.88 dist/assets/switch-CB98OcsO.js                                0.85 kB │ gzip:   0.45 kB
+#18 29.88 dist/assets/OperatorVoice.logic-8FGP_Zu1.js                   0.91 kB │ gzip:   0.62 kB
+#18 29.88 dist/assets/api-os5bkzjc.js                                   0.94 kB │ gzip:   0.41 kB
+#18 29.88 dist/assets/ServicePhrases-Cxm4Khno.js                        1.10 kB │ gzip:   0.60 kB
+#18 29.88 dist/assets/card-BBbGNvxw.js                                  1.12 kB │ gzip:   0.44 kB
+#18 29.88 dist/assets/networkRepresentative-CRdnvs4A.js                 1.16 kB │ gzip:   0.55 kB
+#18 29.88 dist/assets/CardRecommendations-D--v46wu.js                   1.17 kB │ gzip:   0.65 kB
+#18 29.88 dist/assets/tabs-CphkioRW.js                                  1.21 kB │ gzip:   0.52 kB
+#18 29.88 dist/assets/mobileDataClient-MAgaURTQ.js                      1.24 kB │ gzip:   0.65 kB
+#18 29.88 dist/assets/TelegramRadarPage-D0IzLjjx.js                     1.29 kB │ gzip:   0.71 kB
+#18 29.88 dist/assets/AgentBlueprintsPage-B-IVXwU5.js                   1.31 kB │ gzip:   0.67 kB
+#18 29.88 dist/assets/useApiData-Ni4HgxgU.js                            1.36 kB │ gzip:   0.76 kB
+#18 29.88 dist/assets/SeoMeta-Cf92md97.js                               1.49 kB │ gzip:   0.70 kB
+#18 29.88 dist/assets/AccessBoundary-DVReTpbZ.js                        1.62 kB │ gzip:   0.81 kB
+#18 29.88 dist/assets/sticky-bottom-horizontal-scrollbar-DEFn4vTj.js    1.71 kB │ gzip:   0.88 kB
+#18 29.88 dist/assets/table-CLk8VDKO.js                                 1.72 kB │ gzip:   0.66 kB
+#18 29.88 dist/assets/influencerWorkspace-B5RkMnEY.js                   1.79 kB │ gzip:   0.98 kB
+#18 29.88 dist/assets/ArticlesPage-C841NpiM.js                          1.83 kB │ gzip:   0.95 kB
+#18 29.88 dist/assets/subscriptionAccess-P_QHrDhi.js                    1.86 kB │ gzip:   0.84 kB
+#18 29.88 dist/assets/CasesPage-wIJ_YJLW.js                             1.91 kB │ gzip:   0.97 kB
+#18 29.88 dist/assets/calendar-C9SXhpae.js                              1.93 kB │ gzip:   0.84 kB
+#18 29.88 dist/assets/DocumentsPage-C9qOWpaP.js                         1.99 kB │ gzip:   0.98 kB
+#18 29.88 dist/assets/Requisites-BkCxTeu1.js                            1.99 kB │ gzip:   0.77 kB
+#18 29.88 dist/assets/dialog-DTy4ZcLH.js                                2.26 kB │ gzip:   0.89 kB
+#18 29.88 dist/assets/sheet-Bxy_fhjk.js                                 2.29 kB │ gzip:   0.91 kB
+#18 29.88 dist/assets/PlanDownload-jvp64Hjs.js                          2.34 kB │ gzip:   1.34 kB
+#18 29.88 dist/assets/DocumentDetailPage-BoMHItJ0.js                    2.37 kB │ gzip:   1.19 kB
+#18 29.88 dist/assets/VerifyEmail-n98IZBbn.js                           2.59 kB │ gzip:   1.39 kB
+#18 29.88 dist/assets/workflow-graph-DcMWENJE.js                        2.64 kB │ gzip:   1.41 kB
+#18 29.88 dist/assets/DemoEntryPage-DJsAKUFF.js                         2.89 kB │ gzip:   1.41 kB
+#18 29.88 dist/assets/CaseDetailPage-Coq5kvLX.js                        3.16 kB │ gzip:   1.32 kB
+#18 29.88 dist/assets/BusinessSwitcher-D9vR-YTH.js                      3.39 kB │ gzip:   1.57 kB
+#18 29.88 dist/assets/subscriptionPlanCopy-2kuoPrUW.js                  3.41 kB │ gzip:   1.59 kB
+#18 29.88 dist/assets/Contact-D4YKzFwG.js                               3.45 kB │ gzip:   1.33 kB
+#18 29.88 dist/assets/documents-en-CN5PaEMB.js                          3.50 kB │ gzip:   1.45 kB
+#18 29.88 dist/assets/ArticleDetailPage-I6jzXszh.js                     3.65 kB │ gzip:   1.79 kB
+#18 29.88 dist/assets/MorePage-DfXj8vCP.js                              3.75 kB │ gzip:   1.69 kB
+#18 29.88 dist/assets/DashboardPrimitives-D4m2YusR.js                   3.90 kB │ gzip:   1.20 kB
+#18 29.88 dist/assets/documents-tr-CepUw6kU.js                          4.00 kB │ gzip:   1.63 kB
+#18 29.88 dist/assets/documents-es-CKMXECok.js                          4.05 kB │ gzip:   1.64 kB
+#18 29.88 dist/assets/documents-de-C3kCfd33.js                          4.10 kB │ gzip:   1.74 kB
+#18 29.88 dist/assets/CheckoutReturn-CorekhFC.js                        4.16 kB │ gzip:   1.85 kB
+#18 29.88 dist/assets/Sprint-DEtFK4nP.js                                4.19 kB │ gzip:   1.77 kB
+#18 29.88 dist/assets/CreatorCityCombobox-DpR62bRU.js                   4.23 kB │ gzip:   2.12 kB
+#18 29.88 dist/assets/documents-fr-BFo96zkV.js                          4.30 kB │ gzip:   1.73 kB
+#18 29.88 dist/assets/CrmIntegrationRequestsAdmin-BfFQo5Ai.js           4.37 kB │ gzip:   1.92 kB
+#18 29.88 dist/assets/LanguageSwitcher-Dglvb97v.js                      4.64 kB │ gzip:   1.47 kB
+#18 29.88 dist/assets/PromotionHubPage-CNvsAFzB.js                      4.79 kB │ gzip:   2.10 kB
+#18 29.88 dist/assets/SetPassword-YihUzQi5.js                           4.93 kB │ gzip:   2.08 kB
+#18 29.88 dist/assets/GrowthPathsPage-cKUVos0h.js                       4.98 kB │ gzip:   2.05 kB
+#18 29.88 dist/assets/BusinessInputSettings-Cim3jVCj.js                 5.03 kB │ gzip:   2.23 kB
+#18 29.88 dist/assets/cases-en-p1ydcp1f.js                              5.09 kB │ gzip:   2.04 kB
+#18 29.88 dist/assets/DiagnosticsMobileModule-w_oqgxMn.js               5.10 kB │ gzip:   2.24 kB
+#18 29.88 dist/assets/cases-ha-CDCAkWIr.js                              5.23 kB │ gzip:   1.94 kB
+#18 29.88 dist/assets/cases-tr-BGOaMft0.js                              5.57 kB │ gzip:   2.15 kB
+#18 29.88 dist/assets/AgentsMobileModule-8g13Xv6Z.js                    5.59 kB │ gzip:   2.51 kB
+#18 29.88 dist/assets/cases-de-CMss5ZD9.js                              5.92 kB │ gzip:   2.47 kB
+#18 29.88 dist/assets/cases-es-CAu76F3A.js                              5.95 kB │ gzip:   2.33 kB
+#18 29.88 dist/assets/cases-fr-CnsqlBvL.js                              6.23 kB │ gzip:   2.39 kB
+#18 29.88 dist/assets/ContentRules-QbjSCMAt.js                          6.37 kB │ gzip:   2.67 kB
+#18 29.88 dist/assets/documents-el-DolNcyLz.js                          6.54 kB │ gzip:   2.15 kB
+#18 29.88 dist/assets/LeadJourneyOnboarding-CSJ_eN2c.js                 6.68 kB │ gzip:   2.45 kB
+#18 29.88 dist/assets/Footer-BQdHQm4W.js                                6.71 kB │ gzip:   3.28 kB
+#18 29.88 dist/assets/GrowthNavigation-D6RG6Sp6.js                      6.87 kB │ gzip:   2.57 kB
+#18 29.88 dist/assets/cases-ar-DPffn3zI.js                              6.98 kB │ gzip:   2.39 kB
+#18 29.88 dist/assets/growthPathsCopy-C4MSqgwZ.js                       7.09 kB │ gzip:   2.68 kB
+#18 29.88 dist/assets/Header-Nq2xhxGl.js                                7.30 kB │ gzip:   2.50 kB
+#18 29.88 dist/assets/OperatorWorkdayInput-D27mcqML.js                  7.54 kB │ gzip:   2.73 kB
+#18 29.88 dist/assets/WizardYandex-iWiC6u6k.js                          7.81 kB │ gzip:   2.04 kB
+#18 29.88 dist/assets/OutreachLearningInsights-C3Afrly-.js              7.93 kB │ gzip:   2.76 kB
+#18 29.88 dist/assets/FinanceDailyPanel-GdJkWt7O.js                     8.10 kB │ gzip:   3.08 kB
+#18 29.88 dist/assets/TelegramOpportunityRadar-Cbcc3vuL.js              8.22 kB │ gzip:   2.57 kB
+#18 29.88 dist/assets/TelegramConnection-CKW2Nh-U.js                    8.72 kB │ gzip:   3.06 kB
+#18 29.88 dist/assets/FinanceCrmMobilePanel-Bwqw8cuR.js                 8.75 kB │ gzip:   2.93 kB
+#18 29.88 dist/assets/OperatorVoice-bUqT6mzZ.js                         9.16 kB │ gzip:   3.75 kB
+#18 29.88 dist/assets/TokenUsageStats-DRkD5bxz.js                       9.23 kB │ gzip:   1.77 kB
+#18 29.88 dist/assets/AuditDisplayPrimitives-Ce6kdRG1.js                9.58 kB │ gzip:   3.03 kB
+#18 29.88 dist/assets/GrowthLoopPanel-BvqFtNwx.js                       9.72 kB │ gzip:   3.22 kB
+#18 29.88 dist/assets/productEvents-CheUB7rs.js                         9.83 kB │ gzip:   4.76 kB
+#18 29.88 dist/assets/cases-el-C1rcoN-e.js                              9.96 kB │ gzip:   2.97 kB
+#18 29.88 dist/assets/cases-th-BKobpqAf.js                              9.99 kB │ gzip:   2.47 kB
+#18 29.88 dist/assets/PartnershipResults-CQkKOr8L.js                   10.34 kB │ gzip:   3.61 kB
+#18 29.88 dist/assets/Policy-BnB53fFT.js                               10.36 kB │ gzip:   2.99 kB
+#18 29.88 dist/assets/TelegramSourceCatalog-CXtHlmW_.js                10.74 kB │ gzip:   3.59 kB
+#18 29.88 dist/assets/ProxyManagement-IETvtVGn.js                      11.06 kB │ gzip:   3.35 kB
+#18 29.88 dist/assets/CommunityFeedPage-DO1-kMxE.js                    11.33 kB │ gzip:   3.82 kB
+#18 29.88 dist/assets/WebTrackingDiagnostics-hIHKhzVP.js               11.59 kB │ gzip:   3.77 kB
+#18 29.88 dist/assets/YclientsConnect-DTRNmVCM.js                      11.79 kB │ gzip:   3.83 kB
+#18 29.88 dist/assets/PartnershipAnalyticsPanels-6gJCTZuJ.js           11.81 kB │ gzip:   3.49 kB
+#18 29.88 dist/assets/CreatorRoomPage-4XQg4upm.js                      13.19 kB │ gzip:   4.07 kB
+#18 29.88 dist/assets/AIChatPromotionPage-aPjNNUdJ.js                  13.35 kB │ gzip:   5.42 kB
+#18 29.89 dist/assets/CompaniesMobileModule-9rOaDyDy.js                13.38 kB │ gzip:   4.27 kB
+#18 29.89 dist/assets/maps-BbN0u8oG.js                                 13.56 kB │ gzip:   3.82 kB
+#18 29.89 dist/assets/collectionCopy-9ZoKkGhT.js                       14.12 kB │ gzip:   5.14 kB
+#18 29.89 dist/assets/useLocalizedCollections-BOuX096c.js              15.10 kB │ gzip:   4.36 kB
+#18 29.89 dist/assets/ContentShared-7MXd7YAu.js                        15.72 kB │ gzip:   5.68 kB
+#18 29.89 dist/assets/contentCopy-DLeRlqk1.js                          15.94 kB │ gzip:   5.95 kB
+#18 29.89 dist/assets/ProgressMobileModule-D4JKodTO.js                 16.13 kB │ gzip:   4.75 kB
+#18 29.89 dist/assets/InfluencersMobileModule-8Ozujpb1.js              16.17 kB │ gzip:   4.90 kB
+#18 29.89 dist/assets/ROICalculator-CqEdYhJH.js                        17.06 kB │ gzip:   4.12 kB
+#18 29.89 dist/assets/WorkJournal-DKbUO9FF.js                          17.42 kB │ gzip:   5.45 kB
+#18 29.89 dist/assets/CommunityFeedMobile-d6evF5JU.js                  18.03 kB │ gzip:   5.55 kB
+#18 29.89 dist/assets/TodayMobileV2-CNyJzr30.js                        18.67 kB │ gzip:   5.70 kB
+#18 29.89 dist/assets/JourneyAdminPage-CT9RVZf-.js                     19.96 kB │ gzip:   6.50 kB
+#18 29.89 dist/assets/InfluencerRegistryPage-D04ZMW1j.js               21.62 kB │ gzip:   6.41 kB
+#18 29.89 dist/assets/OutreachTouchMessageEditor-ejcv7ikv.js           22.57 kB │ gzip:   7.12 kB
+#18 29.89 dist/assets/KnowledgeMarketOverview-CldrceeW.js              22.88 kB │ gzip:   6.56 kB
+#18 29.89 dist/assets/LeadJourneyPage-jOW_bK1G.js                      22.97 kB │ gzip:   7.28 kB
+#18 29.89 dist/assets/Login-BtNT24h9.js                                23.22 kB │ gzip:   6.88 kB
+#18 29.89 dist/assets/CommunitySourcesMobileModule-B8kfrv2B.js         24.68 kB │ gzip:   7.27 kB
+#18 29.89 dist/assets/AverageTicketPage-Dd2FuOES.js                    25.34 kB │ gzip:   6.97 kB
+#18 29.89 dist/assets/TelegramResearchSetup-BdBeUPMY.js                25.78 kB │ gzip:   6.70 kB
+#18 29.89 dist/assets/PromptsManagement-BMTJX7eU.js                    26.10 kB │ gzip:   6.95 kB
+#18 29.89 dist/assets/IndustryPatternsManagement-ieCNi8QG.js           28.06 kB │ gzip:   7.15 kB
+#18 29.89 dist/assets/AgentApiManagement-C6GDvk6n.js                   28.07 kB │ gzip:   7.19 kB
+#18 29.89 dist/assets/CompiledScriptBuilder-CGtogK4Q.js                34.43 kB │ gzip:  11.02 kB
+#18 29.89 dist/assets/date-utils-BOGabufX.js                           34.77 kB │ gzip:   8.88 kB
+#18 29.89 dist/assets/VeselayaRascheskaOfferPage-CJTdEPgv.js           35.41 kB │ gzip:   8.57 kB
+#18 29.89 dist/assets/ChatsPage-BeGTSq4s.js                            36.35 kB │ gzip:  11.25 kB
+#18 29.89 dist/assets/InfluencersPage-DtjsqGpf.js                      36.68 kB │ gzip:   9.43 kB
+#18 29.89 dist/assets/OutreachEmailSetup-CCHtECs_.js                   37.49 kB │ gzip:  10.47 kB
+#18 29.89 dist/assets/lodash-BxfgeEfM.js                               37.82 kB │ gzip:  13.96 kB
+#18 29.89 dist/assets/DemoAgentsPage-Btj7Ect1.js                       38.59 kB │ gzip:  13.49 kB
+#18 29.89 dist/assets/router-CrQWBzyS.js                               39.17 kB │ gzip:  14.12 kB
+#18 29.89 dist/assets/operatorPageCopy-CTbhv43B.js                     39.83 kB │ gzip:  15.06 kB
+#18 29.89 dist/assets/NetworkDashboardPage-D4SeO3bY.js                 39.84 kB │ gzip:  11.47 kB
+#18 29.89 dist/assets/DocsPage-SttEPoBY.js                             40.85 kB │ gzip:  12.24 kB
+#18 29.89 dist/assets/CompanyRegistry-NDpbqW0y.js                      40.96 kB │ gzip:  11.79 kB
+#18 29.89 dist/assets/OperatorPage-BLAKUBmY.js                         41.87 kB │ gzip:  11.93 kB
+#18 29.89 dist/assets/ha-CHsvHCvS.js                                   42.02 kB │ gzip:  15.83 kB
+#18 29.89 dist/assets/es-MQX1MrI7.js                                   44.61 kB │ gzip:  16.64 kB
+#18 29.89 dist/assets/de-DDwbPRuL.js                                   44.68 kB │ gzip:  16.89 kB
+#18 29.89 dist/assets/PartnershipsMobileModule-BYLKqbzI.js             46.53 kB │ gzip:  12.15 kB
+#18 29.89 dist/assets/icons-_pJAQ21Z.js                                46.81 kB │ gzip:  13.90 kB
+#18 29.89 dist/assets/fr-ssLS4kmq.js                                   46.92 kB │ gzip:  17.15 kB
+#18 29.89 dist/assets/CreatorPortalPage-BZaoLrwI.js                    46.93 kB │ gzip:  12.24 kB
+#18 29.89 dist/assets/demoWorkspaceCopy-Co2A1ASv.js                    47.26 kB │ gzip:  15.01 kB
+#18 29.89 dist/assets/About-8YsI3zHI.js                                48.10 kB │ gzip:  17.11 kB
+#18 29.89 dist/assets/ar-BvqQTJwV.js                                   49.07 kB │ gzip:  17.06 kB
+#18 29.89 dist/assets/WebAnalyticsPage-BCEzxK6F.js                     50.17 kB │ gzip:  17.25 kB
+#18 29.89 dist/assets/en-CtpeG6V_.js                                   51.10 kB │ gzip:  18.52 kB
+#18 29.89 dist/assets/tr-xp_iwt75.js                                   51.89 kB │ gzip:  18.42 kB
+#18 29.89 dist/assets/ParsingManagement-Cs__IYlE.js                    53.21 kB │ gzip:  10.68 kB
+#18 29.89 dist/assets/progressPageCopy-pzZME7-u.js                     54.52 kB │ gzip:  17.59 kB
+#18 29.89 dist/assets/PublicSalesRoomPage-D8ExktzK.js                  61.29 kB │ gzip:  19.78 kB
+#18 29.90 dist/assets/th-BcGPBLgG.js                                   63.43 kB │ gzip:  17.68 kB
+#18 29.90 dist/assets/ru-BQzx-Z45.js                                   66.34 kB │ gzip:  19.33 kB
+#18 29.90 dist/assets/en-Dy64bY2Y.js                                   66.49 kB │ gzip:  20.66 kB
+#18 29.90 dist/assets/el-DYUGY-cm.js                                   66.91 kB │ gzip:  20.29 kB
+#18 29.90 dist/assets/InfluencerPromotionPage-x6FILqO2.js              67.80 kB │ gzip:  16.98 kB
+#18 29.90 dist/assets/DashboardLayout-DPHaJCaY.js                      68.30 kB │ gzip:  22.42 kB
+#18 29.90 dist/assets/ha-CkDxvUpm.js                                   69.01 kB │ gzip:  20.15 kB
+#18 29.90 dist/assets/ProfilePage-BA9Msjss.js                          69.09 kB │ gzip:  19.70 kB
+#18 29.90 dist/assets/tr-CGrmMNJv.js                                   71.65 kB │ gzip:  21.68 kB
+#18 29.90 dist/assets/de-tqQs1WWa.js                                   75.23 kB │ gzip:  23.99 kB
+#18 29.90 dist/assets/es-1YJ7Rb_q.js                                   75.24 kB │ gzip:  22.19 kB
+#18 29.90 dist/assets/NewsGenerator-Ccnlcjan.js                        78.24 kB │ gzip:  22.14 kB
+#18 29.90 dist/assets/fr-CJHYV46j.js                                   80.67 kB │ gzip:  23.37 kB
+#18 29.90 dist/assets/PartnershipLeadDetailDrawer-ssJmJ_EE.js          82.20 kB │ gzip:  22.39 kB
+#18 29.90 dist/assets/TodayPage-B7xAERWd.js                            82.92 kB │ gzip:  26.01 kB
+#18 29.90 dist/assets/ar-I1Um7AV3.js                                  101.20 kB │ gzip:  24.42 kB
+#18 29.90 dist/assets/index-CEo5by3A.js                               104.76 kB │ gzip:  33.27 kB
+#18 29.90 dist/assets/motion-BsSHNlk2.js                              110.61 kB │ gzip:  36.54 kB
+#18 29.90 dist/assets/FinancePage-BEkE7CS5.js                         111.72 kB │ gzip:  33.63 kB
+#18 29.90 dist/assets/Index-C2LGnT8p.js                               121.03 kB │ gzip:  39.18 kB
+#18 29.90 dist/assets/workflow-graph-C0yrWj51.js                      124.35 kB │ gzip:  40.31 kB
+#18 29.90 dist/assets/SettingsPage-TuSwTHbY.js                        127.71 kB │ gzip:  30.66 kB
+#18 29.90 dist/assets/el-BYtXvgOf.js                                  129.14 kB │ gzip:  28.04 kB
+#18 29.90 dist/assets/react-core-D69hn_d-.js                          142.43 kB │ gzip:  45.84 kB
+#18 29.90 dist/assets/AgentBlueprintsWorkspace-C1dtLL6a.js            145.56 kB │ gzip:  39.50 kB
+#18 29.90 dist/assets/useLocalizedArticles-Cofsazau.js                153.00 kB │ gzip:  36.11 kB
+#18 29.90 dist/assets/th-CSPydZU5.js                                  156.80 kB │ gzip:  26.83 kB
+#18 29.90 dist/assets/guidedTourCopy-DbgR4jNX.js                      164.18 kB │ gzip:  53.04 kB
+#18 29.90 dist/assets/CardOverviewPage-BW8cDkcr.js                    166.53 kB │ gzip:  47.40 kB
+#18 29.90 dist/assets/ProgressPage-B2Tf4XDH.js                        180.34 kB │ gzip:  49.84 kB
+#18 29.90 dist/assets/Dashboard-CJw2RbDC.js                           184.88 kB │ gzip:  40.97 kB
+#18 29.90 dist/assets/TelegramControlPage-Cx7dEAul.js                 193.80 kB │ gzip:  49.61 kB
+#18 29.90 dist/assets/PartnershipSearchPage-B7GTB3_m.js               195.14 kB │ gzip:  52.50 kB
+#18 29.90 dist/assets/ContentPage-C-IxE5W4.js                         196.26 kB │ gzip:  56.64 kB
+#18 29.90 dist/assets/PublicPartnershipOfferPage-k2T01acA.js          229.23 kB │ gzip:  62.47 kB
+#18 29.90 dist/assets/AdminPage-BGwRRZm2.js                           278.46 kB │ gzip:  68.14 kB
+#18 29.90 dist/assets/charts-C9OH2ssb.js                              298.56 kB │ gzip:  67.24 kB
+#18 29.90 dist/assets/view-DnuyJUgq.js                                379.47 kB │ gzip:  97.12 kB
+#18 29.90 dist/assets/vendor-CyztLQ06.js                              430.76 kB │ gzip: 137.51 kB
+#18 29.90 ✓ built in 29.00s
+#18 31.45 
+#18 31.45 > vite_react_shadcn_ts@0.0.0 build:public
+#18 31.45 > vite build --config vite.public.config.ts
+#18 31.45 
+#18 31.74 vite v7.3.5 building client environment for production...
+#18 32.16 transforming...
+#18 ...
+
+#12 [stage-1  6/14] RUN set -eux;     PIP_DISABLE_PIP_VERSION_CHECK=1     PIP_DEFAULT_TIMEOUT=30     python -m pip install --no-cache-dir --retries 3     --index-url https://mirrors.aliyun.com/pypi/simple     --extra-index-url https://pypi.org/simple     -c requirements.release.constraints.txt     -r requirements.txt
+#12 59.41 Collecting grpcio<2.0.0,>=1.41.0 (from google-api-core[grpc]!=2.0.*,!=2.1.*,!=2.10.*,!=2.2.*,!=2.3.*,!=2.4.*,!=2.5.*,!=2.6.*,!=2.7.*,!=2.8.*,!=2.9.*,<3.0.0dev,>=1.34.1->google-ai-generativelanguage==0.6.15->google-generativeai->-r requirements.txt (line 20))
+#12 59.48   Downloading grpcio-1.84.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl.metadata (3.8 kB)
+#12 59.64 Collecting grpcio-status<2.0.0,>=1.41.0 (from google-api-core[grpc]!=2.0.*,!=2.1.*,!=2.10.*,!=2.2.*,!=2.3.*,!=2.4.*,!=2.5.*,!=2.6.*,!=2.7.*,!=2.8.*,!=2.9.*,<3.0.0dev,>=1.34.1->google-ai-generativelanguage==0.6.15->google-generativeai->-r requirements.txt (line 20))
+#12 59.70   Downloading grpcio_status-1.71.2-py3-none-any.whl.metadata (1.1 kB)
+#12 59.85 Collecting pyasn1-modules>=0.2.1 (from google-auth>=2.15.0->google-generativeai->-r requirements.txt (line 20))
+#12 59.92   Downloading pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
+#12 60.26 Collecting requests-oauthlib>=0.7.0 (from google-auth-oauthlib>=1.2.0->-r requirements.txt (line 21))
+#12 60.32   Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl.metadata (11 kB)
+#12 60.67 Collecting colorama>=0.4.0 (from apify-client->-r requirements.txt (line 23))
+#12 60.73   Downloading colorama-0.4.6-py2.py3-none-any.whl.metadata (17 kB)
+#12 61.59 Collecting impit~=0.14.0 (from apify-client->-r requirements.txt (line 23))
+#12 61.65   Downloading impit-0.14.1-cp311-cp311-manylinux_2_28_aarch64.whl.metadata (3.3 kB)
+#12 61.99 Collecting more-itertools>=10.0.0 (from apify-client->-r requirements.txt (line 23))
+#12 62.04   Downloading more_itertools-11.1.0-py3-none-any.whl.metadata (41 kB)
+#12 62.62 Collecting cffi>=2.0.0 (from cryptography->-r requirements.txt (line 24))
+#12 62.67   Downloading cffi-2.1.1-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl.metadata (2.5 kB)
+#12 63.02 Collecting pyaes (from telethon->-r requirements.txt (line 26))
+#12 63.09   Downloading pyaes-1.6.1.tar.gz (28 kB)
+#12 63.09   Installing build dependencies: started
+#12 63.82   Installing build dependencies: finished with status 'done'
+#12 63.82   Getting requirements to build wheel: started
+#12 64.14   Getting requirements to build wheel: finished with status 'done'
+#12 64.15   Preparing metadata (pyproject.toml): started
+#12 64.32   Preparing metadata (pyproject.toml): finished with status 'done'
+#12 64.69 Collecting rsa (from telethon->-r requirements.txt (line 26))
+#12 64.75   Downloading rsa-4.9.1-py3-none-any.whl.metadata (5.6 kB)
+#12 65.10 Collecting et-xmlfile (from openpyxl->-r requirements.txt (line 32))
+#12 65.16   Downloading et_xmlfile-2.0.0-py3-none-any.whl.metadata (2.7 kB)
+#12 ...
+
+#18 [frontend-builder 7/7] RUN npm run build:all
+#18 39.36 ✓ 1982 modules transformed.
+#18 39.67 rendering chunks...
+#18 39.84 computing gzip size...
+#18 39.86 public-dist/public-audit/index.html      0.51 kB │ gzip:   0.31 kB
+#18 39.86 public-dist/assets/index-BM6vOqzw.css  298.14 kB │ gzip:  38.89 kB
+#18 39.86 public-dist/assets/ha-CHsvHCvS.js       42.02 kB │ gzip:  15.83 kB
+#18 39.87 public-dist/assets/es-MQX1MrI7.js       44.61 kB │ gzip:  16.64 kB
+#18 39.87 public-dist/assets/de-DDwbPRuL.js       44.68 kB │ gzip:  16.89 kB
+#18 39.87 public-dist/assets/fr-ssLS4kmq.js       46.92 kB │ gzip:  17.15 kB
+#18 39.87 public-dist/assets/ar-BvqQTJwV.js       49.07 kB │ gzip:  17.06 kB
+#18 39.87 public-dist/assets/en-CtpeG6V_.js       51.10 kB │ gzip:  18.52 kB
+#18 39.87 public-dist/assets/tr-xp_iwt75.js       51.89 kB │ gzip:  18.42 kB
+#18 39.87 public-dist/assets/th-BcGPBLgG.js       63.43 kB │ gzip:  17.68 kB
+#18 39.87 public-dist/assets/ru-BQzx-Z45.js       66.34 kB │ gzip:  19.33 kB
+#18 39.87 public-dist/assets/el-DYUGY-cm.js       66.91 kB │ gzip:  20.29 kB
+#18 39.87 public-dist/assets/index-DhBnL0tP.js   309.77 kB │ gzip:  87.85 kB
+#18 39.87 public-dist/assets/vendor-DeO24QJs.js  320.49 kB │ gzip: 105.88 kB
+#18 39.87 ✓ built in 8.10s
+#18 DONE 40.2s
+
+#12 [stage-1  6/14] RUN set -eux;     PIP_DISABLE_PIP_VERSION_CHECK=1     PIP_DEFAULT_TIMEOUT=30     python -m pip install --no-cache-dir --retries 3     --index-url https://mirrors.aliyun.com/pypi/simple     --extra-index-url https://pypi.org/simple     -c requirements.release.constraints.txt     -r requirements.txt
+#12 66.74 Collecting botocore<1.44.0,>=1.43.97 (from boto3->-r requirements.txt (line 34))
+#12 66.81   Downloading botocore-1.43.97-py3-none-any.whl.metadata (5.6 kB)
+#12 67.14 Collecting jmespath<2.0.0,>=0.7.1 (from boto3->-r requirements.txt (line 34))
+#12 67.21   Downloading jmespath-1.1.0-py3-none-any.whl.metadata (7.6 kB)
+#12 67.58 Collecting s3transfer<0.20.0,>=0.19.0 (from boto3->-r requirements.txt (line 34))
+#12 67.64   Downloading s3transfer-0.19.2-py3-none-any.whl.metadata (1.7 kB)
+#12 68.05 Collecting Mako (from alembic>=1.9.0->flask-migrate->-r requirements.txt (line 7))
+#12 68.12   Downloading mako-1.4.1-py3-none-any.whl.metadata (2.9 kB)
+#12 68.49 Collecting pycparser (from cffi>=2.0.0->cryptography->-r requirements.txt (line 24))
+#12 68.55   Downloading pycparser-3.0-py3-none-any.whl.metadata (8.2 kB)
+#12 68.92 Collecting deprecated>=1.2 (from limits>=3.13->flask-limiter->-r requirements.txt (line 4))
+#12 68.98   Downloading deprecated-1.3.1-py2.py3-none-any.whl.metadata (5.9 kB)
+#12 68.99 Requirement already satisfied: packaging>=21 in /usr/local/lib/python3.11/site-packages (from limits>=3.13->flask-limiter->-r requirements.txt (line 4)) (26.3)
+#12 70.61 Collecting wrapt<3,>=1.10 (from deprecated>=1.2->limits>=3.13->flask-limiter->-r requirements.txt (line 4))
+#12 70.68   Downloading wrapt-2.4.1-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (7.4 kB)
+#12 70.85 Collecting pyasn1<0.7.0,>=0.6.1 (from pyasn1-modules>=0.2.1->google-auth>=2.15.0->google-generativeai->-r requirements.txt (line 20))
+#12 70.91   Downloading pyasn1-0.6.4-py3-none-any.whl.metadata (8.4 kB)
+#12 71.25 Collecting email-validator>=2.0.0 (from pydantic[email]>=2.11.0->apify-client->-r requirements.txt (line 23))
+#12 71.32   Downloading email_validator-2.3.0-py3-none-any.whl.metadata (26 kB)
+#12 71.74 Collecting oauthlib>=3.0.0 (from requests-oauthlib>=0.7.0->google-auth-oauthlib>=1.2.0->-r requirements.txt (line 21))
+#12 71.80   Downloading oauthlib-3.3.1-py3-none-any.whl.metadata (7.9 kB)
+#12 72.18 Collecting httplib2<1.0.0,>=0.19.0 (from google-api-python-client->google-generativeai->-r requirements.txt (line 20))
+#12 72.25   Downloading httplib2-0.32.0-py3-none-any.whl.metadata (2.2 kB)
+#12 72.59 Collecting google-auth-httplib2<1.0.0,>=0.2.0 (from google-api-python-client->google-generativeai->-r requirements.txt (line 20))
+#12 72.67   Downloading google_auth_httplib2-0.4.2-py3-none-any.whl.metadata (3.0 kB)
+#12 73.01 Collecting uritemplate<5,>=3.0.1 (from google-api-python-client->google-generativeai->-r requirements.txt (line 20))
+#12 73.08   Downloading uritemplate-4.2.0-py3-none-any.whl.metadata (2.6 kB)
+#12 73.26 Collecting pyparsing<4,>=3.1 (from httplib2<1.0.0,>=0.19.0->google-api-python-client->google-generativeai->-r requirements.txt (line 20))
+#12 73.33   Downloading pyparsing-3.3.2-py3-none-any.whl.metadata (5.8 kB)
+#12 73.41 Downloading pytz-2025.2-py2.py3-none-any.whl (509 kB)
+#12 73.50 Downloading pypdf-6.16.1-py3-none-any.whl (382 kB)
+#12 73.69 Downloading redis-5.3.1-py3-none-any.whl (272 kB)
+#12 73.77 Downloading pymupdf-1.28.2-cp310-abi3-manylinux_2_28_aarch64.whl (25.1 MB)
+#12 74.44    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 25.1/25.1 MB 37.9 MB/s  0:00:00
+#12 74.50 Downloading pillow-12.3.0-cp311-cp311-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl (6.3 MB)
+#12 74.72    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.3/6.3 MB 27.7 MB/s  0:00:00
+#12 74.78 Downloading reportlab-4.5.1-py3-none-any.whl (2.0 MB)
+#12 74.86    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.0/2.0 MB 23.4 MB/s  0:00:00
+#12 74.92 Downloading pillow_heif-1.7.0-cp311-cp311-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl (6.4 MB)
+#12 75.15    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.4/6.4 MB 28.7 MB/s  0:00:00
+#12 75.20 Downloading psycopg2_binary-2.9.13-cp311-cp311-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl (5.9 MB)
+#12 75.39    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.9/5.9 MB 31.1 MB/s  0:00:00
+#12 75.45 Downloading flask-3.1.3-py3-none-any.whl (103 kB)
+#12 75.52 Downloading flask_cors-6.0.5-py3-none-any.whl (16 kB)
+#12 75.59 Downloading flask_limiter-4.1.1-py3-none-any.whl (30 kB)
+#12 75.66 Downloading ordered_set-4.1.0-py3-none-any.whl (7.6 kB)
+#12 75.72 Downloading flask_sqlalchemy-3.1.1-py3-none-any.whl (25 kB)
+#12 75.79 Downloading Flask_Migrate-4.1.0-py3-none-any.whl (21 kB)
+#12 75.95 Downloading gunicorn-26.2.0-py3-none-any.whl (228 kB)
+#12 76.02 Downloading python_dotenv-1.2.3-py3-none-any.whl (22 kB)
+#12 76.08 Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+#12 76.15 Downloading requests-2.34.2-py3-none-any.whl (73 kB)
+#12 76.22 Downloading charset_normalizer-3.5.1-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (251 kB)
+#12 76.29 Downloading idna-3.20-py3-none-any.whl (69 kB)
+#12 76.35 Downloading urllib3-2.8.0-py3-none-any.whl (135 kB)
+#12 76.43 Downloading stripe-15.6.1-py3-none-any.whl (2.2 MB)
+#12 76.50    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.2/2.2 MB 31.3 MB/s  0:00:00
+#12 76.55 Downloading beautifulsoup4-4.15.0-py3-none-any.whl (109 kB)
+#12 76.62 Downloading dnspython-2.8.0-py3-none-any.whl (331 kB)
+#12 76.68 Downloading defusedxml-0.7.1-py2.py3-none-any.whl (25 kB)
+#12 76.84 Downloading phonenumbers-9.0.39-py2.py3-none-any.whl (2.6 MB)
+#12 76.92    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.6/2.6 MB 33.6 MB/s  0:00:00
+#12 76.98 Downloading playwright-1.63.0-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (47.9 MB)
+#12 78.57    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 47.9/47.9 MB 30.1 MB/s  0:00:01
+#12 78.63 Downloading greenlet-3.5.6-cp311-cp311-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl (613 kB)
+#12 78.65    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 613.4/613.4 kB 26.2 MB/s  0:00:00
+#12 78.72 Downloading pyee-13.0.1-py3-none-any.whl (15 kB)
+#12 78.80 Downloading openai-3.15.0-py3-none-any.whl (2.0 MB)
+#12 78.89    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.0/2.0 MB 19.3 MB/s  0:00:00
+#12 78.95 Downloading anyio-4.15.1-py3-none-any.whl (132 kB)
+#12 79.01 Downloading httpx2-2.13.0-py3-none-any.whl (95 kB)
+#12 79.19 Downloading httpcore2-2.13.0-py3-none-any.whl (83 kB)
+#12 79.27 Downloading jiter-0.17.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (343 kB)
+#12 79.35 Downloading pydantic-2.13.5-py3-none-any.whl (472 kB)
+#12 79.46 Downloading pydantic_core-2.46.5-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (1.9 MB)
+#12 79.70    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.9/1.9 MB 7.7 MB/s  0:00:00
+#12 79.76 Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+#12 79.94 Downloading anthropic-1.6.0-py3-none-any.whl (1.2 MB)
+#12 80.15    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 4.9 MB/s  0:00:00
+#12 80.21 Downloading docstring_parser-0.18.0-py3-none-any.whl (22 kB)
+#12 80.28 Downloading sniffio-1.3.1-py3-none-any.whl (10 kB)
+#12 80.35 Downloading google_generativeai-0.8.6-py3-none-any.whl (155 kB)
+#12 80.44 Downloading google_ai_generativelanguage-0.6.15-py3-none-any.whl (1.3 MB)
+#12 80.58    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.3/1.3 MB 9.9 MB/s  0:00:00
+#12 80.64 Downloading google_api_core-2.33.0-py3-none-any.whl (176 kB)
+#12 80.72 Downloading google_auth-2.58.0-py3-none-any.whl (262 kB)
+#12 80.80 Downloading googleapis_common_protos-1.75.0-py3-none-any.whl (300 kB)
+#12 80.88 Downloading grpcio-1.84.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (7.0 MB)
+#12 81.31    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.0/7.0 MB 16.4 MB/s  0:00:00
+#12 81.37 Downloading grpcio_status-1.71.2-py3-none-any.whl (14 kB)
+#12 81.44 Downloading proto_plus-1.28.2-py3-none-any.whl (50 kB)
+#12 81.51 Downloading protobuf-5.29.6-cp38-abi3-manylinux2014_aarch64.whl (320 kB)
+#12 81.58 Downloading google_auth_oauthlib-1.4.1-py3-none-any.whl (19 kB)
+#12 81.75 Downloading apify_client-3.2.0-py3-none-any.whl (158 kB)
+#12 81.82 Downloading impit-0.14.1-cp311-cp311-manylinux_2_28_aarch64.whl (4.9 MB)
+#12 82.16    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.9/4.9 MB 14.1 MB/s  0:00:00
+#12 82.24 Downloading cryptography-50.0.1-cp311-abi3-manylinux_2_34_aarch64.whl (4.7 MB)
+#12 82.47    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.7/4.7 MB 19.5 MB/s  0:00:00
+#12 82.54 Downloading telethon-1.45.0-py3-none-any.whl (804 kB)
+#12 82.57    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 804.1/804.1 kB 23.2 MB/s  0:00:00
+#12 82.63 Downloading PySocks-1.7.1-py3-none-any.whl (16 kB)
+#12 82.70 Downloading python_socks-3.1.1-py3-none-any.whl (49 kB)
+#12 82.77 Downloading openpyxl-3.1.5-py2.py3-none-any.whl (250 kB)
+#12 82.83 Downloading boto3-1.43.97-py3-none-any.whl (140 kB)
+#12 82.92 Downloading botocore-1.43.97-py3-none-any.whl (15.8 MB)
+#12 83.57    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 15.8/15.8 MB 23.8 MB/s  0:00:00
+#12 83.63 Downloading jmespath-1.1.0-py3-none-any.whl (20 kB)
+#12 83.68 Downloading s3transfer-0.19.2-py3-none-any.whl (90 kB)
+#12 83.75 Downloading alembic-1.20.0-py3-none-any.whl (268 kB)
+#12 83.82 Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+#12 83.88 Downloading blinker-1.9.0-py3-none-any.whl (8.5 kB)
+#12 83.95 Downloading certifi-2026.7.22-py3-none-any.whl (136 kB)
+#12 84.02 Downloading cffi-2.1.1-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (218 kB)
+#12 84.09 Downloading click-8.5.0-py3-none-any.whl (125 kB)
+#12 84.15 Downloading colorama-0.4.6-py2.py3-none-any.whl (25 kB)
+#12 84.21 Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+#12 84.29 Downloading itsdangerous-2.2.0-py3-none-any.whl (16 kB)
+#12 84.35 Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+#12 84.52 Downloading limits-5.8.0-py3-none-any.whl (60 kB)
+#12 84.59 Downloading deprecated-1.3.1-py2.py3-none-any.whl (11 kB)
+#12 84.66 Downloading wrapt-2.4.1-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (228 kB)
+#12 84.74 Downloading markupsafe-3.0.3-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (24 kB)
+#12 84.81 Downloading more_itertools-11.1.0-py3-none-any.whl (72 kB)
+#12 84.98 Downloading pyasn1_modules-0.4.2-py3-none-any.whl (181 kB)
+#12 85.04 Downloading pyasn1-0.6.4-py3-none-any.whl (84 kB)
+#12 85.10 Downloading email_validator-2.3.0-py3-none-any.whl (35 kB)
+#12 85.17 Downloading pyjwt-2.14.0-py3-none-any.whl (32 kB)
+#12 85.22 Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl (24 kB)
+#12 85.29 Downloading oauthlib-3.3.1-py3-none-any.whl (160 kB)
+#12 85.45 Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+#12 85.53 Downloading soupsieve-2.9.2-py3-none-any.whl (37 kB)
+#12 85.61 Downloading sqlalchemy-2.0.54-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (3.4 MB)
+#12 85.74    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.4/3.4 MB 25.7 MB/s  0:00:00
+#12 85.80 Downloading truststore-0.10.4-py3-none-any.whl (18 kB)
+#12 85.90 Downloading typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+#12 85.97 Downloading werkzeug-3.1.8-py3-none-any.whl (226 kB)
+#12 86.03 Downloading et_xmlfile-2.0.0-py3-none-any.whl (18 kB)
+#12 86.10 Downloading google_api_python_client-2.200.0-py3-none-any.whl (16.1 MB)
+#12 86.91    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.1/16.1 MB 19.7 MB/s  0:00:00
+#12 86.97 Downloading google_auth_httplib2-0.4.2-py3-none-any.whl (9.5 kB)
+#12 87.03 Downloading httplib2-0.32.0-py3-none-any.whl (93 kB)
+#12 87.09 Downloading pyparsing-3.3.2-py3-none-any.whl (122 kB)
+#12 87.16 Downloading uritemplate-4.2.0-py3-none-any.whl (11 kB)
+#12 87.22 Downloading mako-1.4.1-py3-none-any.whl (80 kB)
+#12 87.29 Downloading pycparser-3.0-py3-none-any.whl (48 kB)
+#12 87.35 Downloading rsa-4.9.1-py3-none-any.whl (34 kB)
+#12 87.42 Downloading tqdm-4.70.1-py3-none-any.whl (80 kB)
+#12 87.82 Building wheels for collected packages: googlemaps, pyaes
+#12 87.82   Building wheel for googlemaps (pyproject.toml): started
+#12 87.98   Building wheel for googlemaps (pyproject.toml): finished with status 'done'
+#12 87.98   Created wheel for googlemaps: filename=googlemaps-4.10.0-py3-none-any.whl size=40820 sha256=1769d620713f71264ac8351dc93be0071bf1f854ddc864ac5a41683289e91772
+#12 87.98   Stored in directory: /tmp/pip-ephem-wheel-cache-67if_968/wheels/f1/09/77/3cc2f5659cbc62341b30f806aca2b25e6a26c351daa5b1f49a
+#12 87.98   Building wheel for pyaes (pyproject.toml): started
+#12 88.11   Building wheel for pyaes (pyproject.toml): finished with status 'done'
+#12 88.11   Created wheel for pyaes: filename=pyaes-1.6.1-py3-none-any.whl size=26422 sha256=8e4fe075eb31a7f626dbe70c42b3d1d7053ba43c512d3b8385373dddacee0080
+#12 88.11   Stored in directory: /tmp/pip-ephem-wheel-cache-67if_968/wheels/4e/52/33/010d0843550bffb6a591b11629070ae140c0ad4f53e68a3bd3
+#12 88.11 Successfully built googlemaps pyaes
+#12 88.23 Installing collected packages: pytz, pyaes, wrapt, urllib3, uritemplate, typing-extensions, truststore, tqdm, soupsieve, sniffio, six, python-socks, python-dotenv, pysocks, pypdf, pyparsing, PyMuPDF, PyJWT, pycparser, pyasn1, psycopg2-binary, protobuf, Pillow, phonenumbers, ordered-set, oauthlib, more-itertools, markupsafe, jmespath, jiter, itsdangerous, impit, idna, h11, gunicorn, greenlet, et-xmlfile, docstring-parser, dnspython, defusedxml, colorama, click, charset-normalizer, certifi, blinker, annotated-types, werkzeug, typing-inspection, sqlalchemy, rsa, requests, reportlab, redis, python-dateutil, pyee, pydantic-core, pyasn1-modules, proto-plus, pillow-heif, openpyxl, Mako, jinja2, httplib2, httpcore2, grpcio, googleapis-common-protos, email-validator, deprecated, cffi, beautifulsoup4, anyio, telethon, stripe, requests-oauthlib, pydantic, playwright, limits, httpx2, grpcio-status, googlemaps, flask, cryptography, botocore, alembic, s3transfer, openai, google-auth, flask-sqlalchemy, flask-limiter, flask-cors, anthropic, google-auth-oauthlib, google-auth-httplib2, google-api-core, flask-migrate, boto3, apify-client, google-api-python-client, google-ai-generativelanguage, google-generativeai
+#12 102.8 
+#12 102.8 Successfully installed Mako-1.4.1 Pillow-12.3.0 PyJWT-2.14.0 PyMuPDF-1.28.2 alembic-1.20.0 annotated-types-0.8.0 anthropic-1.6.0 anyio-4.15.1 apify-client-3.2.0 beautifulsoup4-4.15.0 blinker-1.9.0 boto3-1.43.97 botocore-1.43.97 certifi-2026.7.22 cffi-2.1.1 charset-normalizer-3.5.1 click-8.5.0 colorama-0.4.6 cryptography-50.0.1 defusedxml-0.7.1 deprecated-1.3.1 dnspython-2.8.0 docstring-parser-0.18.0 email-validator-2.3.0 et-xmlfile-2.0.0 flask-3.1.3 flask-cors-6.0.5 flask-limiter-4.1.1 flask-migrate-4.1.0 flask-sqlalchemy-3.1.1 google-ai-generativelanguage-0.6.15 google-api-core-2.33.0 google-api-python-client-2.200.0 google-auth-2.58.0 google-auth-httplib2-0.4.2 google-auth-oauthlib-1.4.1 google-generativeai-0.8.6 googleapis-common-protos-1.75.0 googlemaps-4.10.0 greenlet-3.5.6 grpcio-1.84.0 grpcio-status-1.71.2 gunicorn-26.2.0 h11-0.16.0 httpcore2-2.13.0 httplib2-0.32.0 httpx2-2.13.0 idna-3.20 impit-0.14.1 itsdangerous-2.2.0 jinja2-3.1.6 jiter-0.17.0 jmespath-1.1.0 limits-5.8.0 markupsafe-3.0.3 more-itertools-11.1.0 oauthlib-3.3.1 openai-3.15.0 openpyxl-3.1.5 ordered-set-4.1.0 phonenumbers-9.0.39 pillow-heif-1.7.0 playwright-1.63.0 proto-plus-1.28.2 protobuf-5.29.6 psycopg2-binary-2.9.13 pyaes-1.6.1 pyasn1-0.6.4 pyasn1-modules-0.4.2 pycparser-3.0 pydantic-2.13.5 pydantic-core-2.46.5 pyee-13.0.1 pyparsing-3.3.2 pypdf-6.16.1 pysocks-1.7.1 python-dateutil-2.9.0.post0 python-dotenv-1.2.3 python-socks-3.1.1 pytz-2025.2 redis-5.3.1 reportlab-4.5.1 requests-2.34.2 requests-oauthlib-2.0.0 rsa-4.9.1 s3transfer-0.19.2 six-1.17.0 sniffio-1.3.1 soupsieve-2.9.2 sqlalchemy-2.0.54 stripe-15.6.1 telethon-1.45.0 tqdm-4.70.1 truststore-0.10.4 typing-extensions-4.16.0 typing-inspection-0.4.4 uritemplate-4.2.0 urllib3-2.8.0 werkzeug-3.1.8 wrapt-2.4.1
+#12 102.9 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+#12 DONE 105.2s
+
+#19 [stage-1  7/14] RUN set -eux;     PIP_DISABLE_PIP_VERSION_CHECK=1     PIP_DEFAULT_TIMEOUT=30     pip install --no-cache-dir --retries 3     --index-url https://mirrors.aliyun.com/pypi/simple     --extra-index-url https://pypi.org/simple     "setuptools==84.0.0"     "wheel==0.48.0"
+#19 0.502 + PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_DEFAULT_TIMEOUT=30 pip install --no-cache-dir --retries 3 --index-url https://mirrors.aliyun.com/pypi/simple --extra-index-url https://pypi.org/simple setuptools==84.0.0 wheel==0.48.0
+#19 0.987 Looking in indexes: https://mirrors.aliyun.com/pypi/simple, https://pypi.org/simple
+#19 3.289 Collecting setuptools==84.0.0
+#19 3.972   Downloading setuptools-84.0.0-py3-none-any.whl.metadata (6.6 kB)
+#19 4.347 Collecting wheel==0.48.0
+#19 4.425   Downloading wheel-0.48.0-py3-none-any.whl.metadata (2.3 kB)
+#19 4.431 Requirement already satisfied: packaging>=24.0 in /usr/local/lib/python3.11/site-packages (from wheel==0.48.0) (26.3)
+#19 4.499 Downloading setuptools-84.0.0-py3-none-any.whl (818 kB)
+#19 4.551    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 818.2/818.2 kB 17.8 MB/s  0:00:00
+#19 4.621 Downloading wheel-0.48.0-py3-none-any.whl (33 kB)
+#19 4.721 Installing collected packages: wheel, setuptools
+#19 4.721   Attempting uninstall: wheel
+#19 4.722     Found existing installation: wheel 0.46.3
+#19 4.729     Uninstalling wheel-0.46.3:
+#19 4.744       Successfully uninstalled wheel-0.46.3
+#19 4.765   Attempting uninstall: setuptools
+#19 4.766     Found existing installation: setuptools 79.0.1
+#19 4.819     Uninstalling setuptools-79.0.1:
+#19 5.164       Successfully uninstalled setuptools-79.0.1
+#19 5.472 
+#19 5.475 Successfully installed setuptools-84.0.0 wheel-0.48.0
+#19 5.475 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+#19 DONE 5.6s
+
+#20 [stage-1  8/14] RUN if [ "true" = "true" ]; then python -m playwright install chromium; fi
+#20 0.605 Downloading Chrome for Testing 153.0.8010.12 (playwright chromium v1243) from https://cdn.playwright.dev/builds/cft/153.0.8010.12/linux-arm64/chrome-linux-arm64.zip
+#20 1.618 |                                                                                |   0% of 186.8 MiB
+#20 3.024 |■■■■■■■■                                                                        |  10% of 186.8 MiB
+#20 3.597 |■■■■■■■■■■■■■■■■                                                                |  20% of 186.8 MiB
+#20 4.175 |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 186.8 MiB
+#20 4.723 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 186.8 MiB
+#20 5.271 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 186.8 MiB
+#20 5.763 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 186.8 MiB
+#20 6.303 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 186.8 MiB
+#20 6.889 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 186.8 MiB
+#20 7.448 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 186.8 MiB
+#20 8.090 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 186.8 MiB
+#20 11.69 Chrome for Testing 153.0.8010.12 (playwright chromium v1243) downloaded to /ms-playwright/chromium-1243
+#20 11.69 Downloading FFmpeg (playwright ffmpeg v1011) from https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/1011/ffmpeg-linux-arm64.zip
+#20 12.88 |                                                                                |   0% of 1.6 MiB
+#20 13.50 |■■■■■■■■                                                                        |  10% of 1.6 MiB
+#20 13.76 |■■■■■■■■■■■■■■■■                                                                |  20% of 1.6 MiB
+#20 13.92 |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 1.6 MiB
+#20 14.04 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 1.6 MiB
+#20 14.18 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 1.6 MiB
+#20 14.29 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 1.6 MiB
+#20 14.41 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 1.6 MiB
+#20 14.50 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 1.6 MiB
+#20 14.61 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 1.6 MiB
+#20 14.79 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 1.6 MiB
+#20 14.88 FFmpeg (playwright ffmpeg v1011) downloaded to /ms-playwright/ffmpeg-1011
+#20 14.88 Downloading Chrome Headless Shell 153.0.8010.12 (playwright chromium-headless-shell v1243) from https://cdn.playwright.dev/builds/cft/153.0.8010.12/linux-arm64/chrome-headless-shell-linux-arm64.zip
+#20 15.80 |                                                                                |   0% of 114.7 MiB
+#20 16.98 |■■■■■■■■                                                                        |  10% of 114.7 MiB
+#20 17.31 |■■■■■■■■■■■■■■■■                                                                |  20% of 114.7 MiB
+#20 17.64 |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 114.7 MiB
+#20 17.97 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 114.7 MiB
+#20 18.30 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 114.7 MiB
+#20 18.63 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 114.7 MiB
+#20 18.96 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 114.7 MiB
+#20 19.31 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 114.7 MiB
+#20 19.62 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 114.7 MiB
+#20 19.96 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 114.7 MiB
+#20 22.39 Chrome Headless Shell 153.0.8010.12 (playwright chromium-headless-shell v1243) downloaded to /ms-playwright/chromium_headless_shell-1243
+#20 DONE 22.9s
+
+#21 [stage-1  9/14] RUN set -eux;     groupadd --gid "10001" localos     && useradd --uid "10001" --gid "10001"       --create-home --home-dir /home/localos --shell /usr/sbin/nologin localos
+#21 0.155 + groupadd --gid 10001 localos
+#21 0.171 + useradd --uid 10001 --gid 10001 --create-home --home-dir /home/localos --shell /usr/sbin/nologin localos
+#21 DONE 0.2s
+
+#22 [stage-1 10/14] COPY . .
+#22 DONE 0.8s
+
+#23 [stage-1 11/14] COPY --chown=localos:localos --from=frontend-builder /app/frontend/dist ./frontend/dist
+#23 DONE 0.1s
+
+#24 [stage-1 12/14] COPY --chown=localos:localos --from=frontend-builder /app/frontend/public-dist ./frontend/public-dist
+#24 DONE 0.1s
+
+#25 [stage-1 13/14] COPY entrypoint.sh /app/entrypoint.sh
+#25 DONE 0.0s
+
+#26 [stage-1 14/14] RUN set -eux;     chmod +x /app/entrypoint.sh     && mkdir -p /app/debug_data /app/uploads /app/operator_audio /home/localos/.cache /ms-playwright     && chown -R localos:localos /app/debug_data /app/uploads /app/operator_audio /home/localos
+#26 0.145 + chmod +x /app/entrypoint.sh
+#26 0.149 + mkdir -p /app/debug_data /app/uploads /app/operator_audio /home/localos/.cache /ms-playwright
+#26 0.152 + chown -R localos:localos /app/debug_data /app/uploads /app/operator_audio /home/localos
+#26 DONE 0.2s
+
+#27 exporting to image
+#27 exporting layers
+#27 exporting layers 20.2s done
+#27 exporting manifest sha256:a2bd0a84b210da767d898abb6fe4343d3394154888722d5554c5a332ae02e761 done
+#27 exporting config sha256:e382de0a6416c52e0421ed0704da3980b1d904757135faa9652d79eb8ae454aa done
+#27 exporting attestation manifest sha256:e74592c6aad1a63176fe1c490b1e2ca1d1d58a778f85718f7af91c279515e2b3 done
+#27 exporting manifest list sha256:f5f8970b270d7b74b96e2b188cbfd471477a5a5655d9eb57bf007d45c96f59d6 done
+#27 naming to docker.io/library/localos-audit-20260922:33c9c702-sj9dlo done
+#27 unpacking to docker.io/library/localos-audit-20260922:33c9c702-sj9dlo
+#27 unpacking to docker.io/library/localos-audit-20260922:33c9c702-sj9dlo 16.1s done
+#27 DONE 36.4s
+
+ [33m4 warnings found (use docker --debug to expand):
+[0m - SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ARG "VITE_JOURNEY_POST_AUTH_REDIRECT_ENABLED") (line 8)
+ - SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ARG "VITE_BROWSER_COOKIE_AUTH_ENABLED") (line 11)
+ - SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ENV "VITE_JOURNEY_POST_AUTH_REDIRECT_ENABLED") (line 16)
+ - SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ENV "VITE_BROWSER_COOKIE_AUTH_ENABLED") (line 19)
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/eo6moahevp260cti5j9g6txga

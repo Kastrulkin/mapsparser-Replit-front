@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "label": "bounded-browser-cache-cleanup",
+  "captured_at": "2026-09-22T19:37:47.430527+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+    "-B",
+    "-I",
+    "/private/tmp/localos-current-image-20260922.SJ9dlO/cache_cleanup.py",
+    "--execute",
+    "42cce8ce659b830dc0274d9fd47b5c5b08e027223d9734645939b260d32757e2"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 11773.424,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"removed_files\": 30951, \"allocated_bytes\": 1003102208, \"skipped_files\": 0, \"free_bytes\": 11240230912}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

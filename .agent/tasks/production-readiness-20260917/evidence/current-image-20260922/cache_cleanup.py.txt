@@ -1,0 +1,119 @@
+"""Remove only closed, aged, regular generated browser-cache entries."""
+
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import time
+
+PROFILE = Path('/private/tmp/localos-current-image-20260922.SJ9dlO')
+ROOTS = (
+    Path('/Users/alexdemyanov/Library/Caches/Yandex/YandexBrowser/Default/Cache/Cache_Data'),
+    Path('/Users/alexdemyanov/Library/Caches/Yandex/YandexBrowser/Default/Code Cache/js'),
+    Path('/Users/alexdemyanov/Library/Caches/Yandex/YandexBrowser/Default/Code Cache/wasm'),
+)
+NAME = re.compile(r'[0-9a-f]{16}_[0-9]+\Z')
+PLAN = PROFILE / 'cache-cleanup-plan.json'
+RESULT = PROFILE / 'cache-cleanup-result.json'
+
+
+def fingerprint(info):
+    return [info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_nlink, info.st_uid]
+
+
+def roots_safe():
+    for root in ROOTS:
+        if root.is_symlink() or root.resolve() != root or not root.is_dir():
+            raise RuntimeError('Unexpected cache root')
+
+
+def opened():
+    paths = set()
+    for root in ROOTS:
+        output = subprocess.run(['/usr/sbin/lsof', '-n', '-P', '-Fn', '+D', str(root)],
+                                capture_output=True, timeout=45, check=False)
+        if output.returncode not in (0, 1) or output.stderr:
+            raise RuntimeError('Open-file probe incomplete')
+        for line in output.stdout.decode().splitlines():
+            if line.startswith('n'):
+                paths.add(line[1:])
+    return paths
+
+
+def write_new(path, payload):
+    stream = path.open('x')
+    try:
+        json.dump(payload, stream, indent=2, sort_keys=True)
+        stream.write('\n')
+    finally:
+        stream.close()
+
+
+def main():
+    roots_safe()
+    if sys.argv[1:] == ['--plan']:
+        cutoff = time.time_ns() - 3600 * 10**9
+        in_use = opened()
+        entries = []
+        for root in ROOTS:
+            for path in root.iterdir():
+                info = path.lstat()
+                if (NAME.fullmatch(path.name) and stat.S_ISREG(info.st_mode)
+                        and info.st_nlink == 1 and info.st_uid == os.getuid()
+                        and info.st_mtime_ns < cutoff and str(path) not in in_use):
+                    entries.append({'root': str(root), 'name': path.name,
+                                    'identity': fingerprint(info), 'allocated': info.st_blocks * 512})
+        write_new(PLAN, {'cutoff_ns': cutoff, 'entries': entries})
+        print(json.dumps({'files': len(entries), 'allocated_bytes': sum(item['allocated'] for item in entries),
+                          'plan_sha256': hashlib.sha256(PLAN.read_bytes()).hexdigest()}))
+        return
+    if len(sys.argv) != 3 or sys.argv[1] != '--execute':
+        raise SystemExit('Use --plan or --execute EXACT_PLAN_SHA256')
+    raw = PLAN.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != sys.argv[2] or RESULT.exists():
+        raise SystemExit('Plan identity mismatch or prior execution')
+    plan = json.loads(raw)
+    allowed_roots = {str(root) for root in ROOTS}
+    if time.time_ns() - plan['cutoff_ns'] < 3600 * 10**9:
+        raise SystemExit('Cache age floor mismatch')
+    in_use = opened()
+    before = shutil.disk_usage(PROFILE).free
+    removed = []
+    skipped = []
+    try:
+        for item in plan['entries']:
+            root = item['root']
+            name = item['name']
+            if root not in allowed_roots or not NAME.fullmatch(name):
+                raise RuntimeError('Unexpected planned cache path')
+            descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                try:
+                    info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+                except FileNotFoundError:
+                    skipped.append([root, name, 'already_absent'])
+                    continue
+                if (not stat.S_ISREG(info.st_mode) or fingerprint(info) != item['identity']
+                        or info.st_mtime_ns >= plan['cutoff_ns'] or str(Path(root) / name) in in_use):
+                    skipped.append([root, name, 'changed_or_open'])
+                    continue
+                os.unlink(name, dir_fd=descriptor)
+                removed.append([root, name, item['allocated']])
+            finally:
+                os.close(descriptor)
+    finally:
+        write_new(RESULT, {'plan_sha256': sys.argv[2], 'controller_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                           'removed': removed, 'skipped': skipped, 'free_before_bytes': before,
+                           'free_after_bytes': shutil.disk_usage(PROFILE).free,
+                           'scope': 'aged closed cache entries only; browser/profile/cookies/storage unchanged'})
+    print(json.dumps({'removed_files': len(removed), 'allocated_bytes': sum(item[2] for item in removed),
+                      'skipped_files': len(skipped), 'free_bytes': shutil.disk_usage(PROFILE).free}))
+
+
+if __name__ == '__main__':
+    main()

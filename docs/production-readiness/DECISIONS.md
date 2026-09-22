@@ -1,5 +1,21 @@
 # Readiness decisions
 
+## D-130 — Reclaim proved disposable bytes, retain runtime and evidence boundaries
+
+Do not lower the10GiB Docker-build start floor merely because APFS clone sizes
+overstate recoverable space. Verify terminal tests and durable hashes, remove
+only exact regenerable exports/caches and stopped synthetic data, then measure
+actual free space. Preserve live VM-held source/dependency trees and all existing
+Docker resources. An obsolete read-only search mentioning deleted paths is not
+an active application/data writer and needs no unsafe PID-based termination.
+
+For the active browser, only SHA-bound, closed, aged regular generated cache
+entries may be removed under the user's cache-cleanup authorization. Keep all
+indexes, directory structure, cookies, profile, history, tabs and local storage.
+Recheck identity/open descriptors; accept only the limited cache-refetch race.
+The fresh image uses exact33c9c702 Git archive, never dirty source overlays,
+and must pass its own current image/runtime checks; old998evidence is not enough.
+
 ## D-129 — Source continuity explains prerequisite failures, not current coverage
 
 The independent bridge review maps all twelve a387 offline nonpass IDs to

@@ -1,0 +1,234 @@
+{
+  "build_controller_sha256": "611e739530d819b028285cf5aaf4a39e0660767a4603990abd0b0599cc4646e4",
+  "checks": [
+    {
+      "cleanup": "removed",
+      "create_attempted": true,
+      "image_id": "sha256:f5f8970b270d7b74b96e2b188cbfd471477a5a5655d9eb57bf007d45c96f59d6",
+      "logs": {
+        "requires_secret_scan_before_archive": true,
+        "stderr": {
+          "bytes": 0,
+          "path": "/private/tmp/localos-current-image-20260922.SJ9dlO/smoke-pip.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "bytes": 30,
+          "path": "/private/tmp/localos-current-image-20260922.SJ9dlO/smoke-pip.stdout.log",
+          "sha256": "9261363b733079a641c2e4cc9bc46ffa1d8336945a87f807b6cf68847dbc9b09"
+        }
+      },
+      "name": "pip",
+      "status": "passed",
+      "terminal_state": {
+        "exit_code": 0,
+        "oom_killed": false,
+        "status": "exited"
+      }
+    },
+    {
+      "cleanup": "removed",
+      "create_attempted": true,
+      "image_id": "sha256:f5f8970b270d7b74b96e2b188cbfd471477a5a5655d9eb57bf007d45c96f59d6",
+      "logs": {
+        "requires_secret_scan_before_archive": true,
+        "stderr": {
+          "bytes": 0,
+          "path": "/private/tmp/localos-current-image-20260922.SJ9dlO/smoke-uid-browser.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "bytes": 19,
+          "path": "/private/tmp/localos-current-image-20260922.SJ9dlO/smoke-uid-browser.stdout.log",
+          "sha256": "cfc83c9efe29e7159fc6f2b16d0b8103d4aaad789d6b00e5bb84f59f955ccfcd"
+        }
+      },
+      "name": "uid-browser",
+      "status": "passed",
+      "terminal_state": {
+        "exit_code": 0,
+        "oom_killed": false,
+        "status": "exited"
+      }
+    },
+    {
+      "cleanup": "removed",
+      "create_attempted": true,
+      "image_id": "sha256:f5f8970b270d7b74b96e2b188cbfd471477a5a5655d9eb57bf007d45c96f59d6",
+      "logs": {
+        "requires_secret_scan_before_archive": true,
+        "stderr": {
+          "bytes": 0,
+          "path": "/private/tmp/localos-current-image-20260922.SJ9dlO/smoke-assets.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "bytes": 325,
+          "path": "/private/tmp/localos-current-image-20260922.SJ9dlO/smoke-assets.stdout.log",
+          "sha256": "12c067bc37028565e7650464284d7c1027cc435d3a2bce381f0f114f06bba96b"
+        }
+      },
+      "name": "assets",
+      "status": "passed",
+      "terminal_state": {
+        "exit_code": 0,
+        "oom_killed": false,
+        "status": "exited"
+      }
+    }
+  ],
+  "docker_after": {
+    "containers": [
+      "0ac27cea6b3dfbdfdcf934459642bea24e91080691814c3f3ace5c27bdf60375 exited",
+      "0fa9e9bbe0f7eb51ac03321b39f2361ea380da8618df5f056143929a8d91f467 exited",
+      "30155e246757b8aae638c39c3ecfa9ab8909de19bb93c9ecaca26a81be12ca19 exited",
+      "423858f43fb80952016d98749da9dab11841403b8a76450ce7d6f46f3b2ca318 exited",
+      "43fbd7306d20e6aec5ce43c14f7a61b3235a438a1b20bf2186a55d693fbacff5 exited",
+      "44bbd4f5fbc74cebde383dcb4f9a8893512b338aa0662b9e7f346b6c1cdb02ff exited",
+      "4740a61e9e765da896ad6f4526cfb1731866662d258181c58c47c32c65c499d0 exited",
+      "5dd879dc4bb7c64796a3af4e07108edddb1f76d7106699126b1461eca5b53e74 running",
+      "76e7108a4543f60d7d9aa34a6cfeefdbc027d35b608299539d644644e217176b exited",
+      "78711cc66e0b8fc3ee852c0029f74b5c0b828fdbac387a734338faa914fa99c2 exited",
+      "7a43535423085aa12cfdb819fafaee744f3100862cf1f3065d3434b482f571a6 exited",
+      "7b77a4ba49aabb39ae4e3c87cfcb7acde7b9ead4d9ed000e2da881c2284d06f3 exited",
+      "81af5fdf5a89bb3b9384d30116549ed834e4bd4d26a2ccab322669c17d6971dc exited",
+      "83c6450f7e10aeb894197a04c167ec4baa0a222870fde64ae781c7f8a60a30e8 running",
+      "9e2ef27cd293a1c4e7223e4b9cfecc3301be7f863a2402c8cd9f8255ce71aaeb exited",
+      "9e3032a967e2364ee319b4253476ce238aa11e20d13d632a9327f0ed90538956 exited",
+      "a099d92bbf720eaa20a9899ef9dc02cde6f8e2f012c00883191e517b53c74226 running",
+      "c4d4921b0c077594b4bf86cf9c0588dc8790505f4c1a9ff2991ab8163b21834d exited",
+      "c8a753b1e7d1fc49e3f539a23a4e36568ba82e0920e2377721f033c27467bd2d exited",
+      "cbe74d81ca987e2ec7cc4f619c5f88cef4671bf7eaed3addaac4bc031784bb27 exited",
+      "e550abaad78e5ba43cda042379df7004060188909807f0f750f503309ec76e14 exited",
+      "f288e1a93b754e2b456a6e9bfe557ac2497fea1240f206333126d9dbdfb03fb0 running",
+      "f85d3d9de490e52cb91c1d48976adc186e14c319e982a9db374665782cb6859e exited"
+    ],
+    "networks": [
+      "14eb788754cc5333564a174ae89819dfa0930f4c2740a62992290fd91d53770d",
+      "196736a47eb6764acb15f024bac42fe67dc4fd0306364fa042b917e8070c3818",
+      "1aa3d29bef3a4ca11eab7e48a77185d5003832bc1339c48414cf0d1729513e8d",
+      "2cd2dc4ae411ec71f425d0b1ace252b39cbee1fcf3fa00bb0cd974ac383902fc",
+      "2f54a8880f9a7d182aebe6d4cde845bb0acfd93516a4f48ab525e2374c732f51",
+      "4fc30b10fada96a21b3c972c37ea3c5a6a2a4cc8c892941dea573e2a55f728b6",
+      "54b1dc1d3973f1b466f54e8c438ed06cbe9428c041b60900fdb3ee9af30319f1",
+      "56d5d63428f7fcea169103283cc1b6b2bf2b0f20b2986e92e133a27e35fdeb7a",
+      "6d17e4c18db02bb3ed28f90dd6a9232c4d768f0262d270c438ea7bd352f10f0c",
+      "6fc9dbcb68ce40e46030cec829ed4613840327eda4109cd09de4ada422a4a0b4",
+      "70b178929e228f9552e789d944fbcb992abdd0bb41e6856aed291841bb69f1cd",
+      "879fb9c7d6e60f983f8eba0872ad3677197e3f87ebab8fd3bca75c3e514ce19a",
+      "946bf51b45c01f139dddc8bdda227dc819ed9c5e720ccaba3eabecd8e9f6ffc4",
+      "9483e233341c882912506146446ae9d7463c06a69dc9bd34a48a1f543f311dfe",
+      "9f9fbc8a0f433fdc7208b91cad9cb128816f71f96ae32965c97dd442d7b60691",
+      "a0677740edd82b79c1986489e746a0770a8b17e8ae3d1031cdf7cd9a5d3cb1fe",
+      "ab08e57188ae4252bbbe07ee7401e37b36a6869413457aeea3332f6567ecc2ee",
+      "acc2b2f6c8edf755adba097fe3682004b1b556b620c8b1ec1854ba885f408d23",
+      "bcb70851b87126a9171eedfab4e376bc93834ad20c1049e3da160d35f72041bf",
+      "c68f2b706e85fb9cb4a385b8f95a8e7141777c607663b5ace86a67ed4dc7150e",
+      "cc0c385b09492a03deb4428adc7bdea88ff843528d112357f3098a448e3a8cd4",
+      "da073e1ceeb3baa7121e9572fdad026b68ae4fe1918abf974b1c32799edf9f55",
+      "ed873d2e2a25954b4445550a8295e09cc5bc234522fe406a6e9957d0c5a23761"
+    ],
+    "volumes": [
+      "2a81eb4ccdbe1c2137a0b259fb320e780ccd2dbc36bb31c21bc96c72713f7e5c",
+      "7fe8f72617077cf83b2dbbd880fbd2544da040a4f7870cc5cd863e9473f852a4",
+      "c2f1835191dc69a8f648762a915b01cf8ce51b953bbca377c271a6765dd20398",
+      "cd1bac9a55481a9f433429b099eb421e9a692b5045964fdaf909098580836bab",
+      "localos-backend-full-5cc-a2f974eb33e8",
+      "localos-plan-20260906_pgdata",
+      "localos-plan-20260906_redisdata",
+      "localos-readiness-20260917_pgdata",
+      "localos-readiness-20260917_redisdata",
+      "localos-readiness-compiled-20260918_pgdata",
+      "localos-readiness-compiled-20260918_redisdata",
+      "localos-readiness-hflypi-pgdata",
+      "localos-readiness-resume-20260918-pgdata",
+      "localos-staging_pgdata",
+      "localos-staging_redisdata",
+      "riderra-main_postgres_data",
+      "seo_pgdata",
+      "seo_redisdata",
+      "webtrack-stage_pgdata",
+      "webtrack-stage_redisdata"
+    ]
+  },
+  "docker_before": {
+    "containers": [
+      "0ac27cea6b3dfbdfdcf934459642bea24e91080691814c3f3ace5c27bdf60375 exited",
+      "0fa9e9bbe0f7eb51ac03321b39f2361ea380da8618df5f056143929a8d91f467 exited",
+      "30155e246757b8aae638c39c3ecfa9ab8909de19bb93c9ecaca26a81be12ca19 exited",
+      "423858f43fb80952016d98749da9dab11841403b8a76450ce7d6f46f3b2ca318 exited",
+      "43fbd7306d20e6aec5ce43c14f7a61b3235a438a1b20bf2186a55d693fbacff5 exited",
+      "44bbd4f5fbc74cebde383dcb4f9a8893512b338aa0662b9e7f346b6c1cdb02ff exited",
+      "4740a61e9e765da896ad6f4526cfb1731866662d258181c58c47c32c65c499d0 exited",
+      "5dd879dc4bb7c64796a3af4e07108edddb1f76d7106699126b1461eca5b53e74 running",
+      "76e7108a4543f60d7d9aa34a6cfeefdbc027d35b608299539d644644e217176b exited",
+      "78711cc66e0b8fc3ee852c0029f74b5c0b828fdbac387a734338faa914fa99c2 exited",
+      "7a43535423085aa12cfdb819fafaee744f3100862cf1f3065d3434b482f571a6 exited",
+      "7b77a4ba49aabb39ae4e3c87cfcb7acde7b9ead4d9ed000e2da881c2284d06f3 exited",
+      "81af5fdf5a89bb3b9384d30116549ed834e4bd4d26a2ccab322669c17d6971dc exited",
+      "83c6450f7e10aeb894197a04c167ec4baa0a222870fde64ae781c7f8a60a30e8 running",
+      "9e2ef27cd293a1c4e7223e4b9cfecc3301be7f863a2402c8cd9f8255ce71aaeb exited",
+      "9e3032a967e2364ee319b4253476ce238aa11e20d13d632a9327f0ed90538956 exited",
+      "a099d92bbf720eaa20a9899ef9dc02cde6f8e2f012c00883191e517b53c74226 running",
+      "c4d4921b0c077594b4bf86cf9c0588dc8790505f4c1a9ff2991ab8163b21834d exited",
+      "c8a753b1e7d1fc49e3f539a23a4e36568ba82e0920e2377721f033c27467bd2d exited",
+      "cbe74d81ca987e2ec7cc4f619c5f88cef4671bf7eaed3addaac4bc031784bb27 exited",
+      "e550abaad78e5ba43cda042379df7004060188909807f0f750f503309ec76e14 exited",
+      "f288e1a93b754e2b456a6e9bfe557ac2497fea1240f206333126d9dbdfb03fb0 running",
+      "f85d3d9de490e52cb91c1d48976adc186e14c319e982a9db374665782cb6859e exited"
+    ],
+    "networks": [
+      "14eb788754cc5333564a174ae89819dfa0930f4c2740a62992290fd91d53770d",
+      "196736a47eb6764acb15f024bac42fe67dc4fd0306364fa042b917e8070c3818",
+      "1aa3d29bef3a4ca11eab7e48a77185d5003832bc1339c48414cf0d1729513e8d",
+      "2cd2dc4ae411ec71f425d0b1ace252b39cbee1fcf3fa00bb0cd974ac383902fc",
+      "2f54a8880f9a7d182aebe6d4cde845bb0acfd93516a4f48ab525e2374c732f51",
+      "4fc30b10fada96a21b3c972c37ea3c5a6a2a4cc8c892941dea573e2a55f728b6",
+      "54b1dc1d3973f1b466f54e8c438ed06cbe9428c041b60900fdb3ee9af30319f1",
+      "56d5d63428f7fcea169103283cc1b6b2bf2b0f20b2986e92e133a27e35fdeb7a",
+      "6d17e4c18db02bb3ed28f90dd6a9232c4d768f0262d270c438ea7bd352f10f0c",
+      "6fc9dbcb68ce40e46030cec829ed4613840327eda4109cd09de4ada422a4a0b4",
+      "70b178929e228f9552e789d944fbcb992abdd0bb41e6856aed291841bb69f1cd",
+      "879fb9c7d6e60f983f8eba0872ad3677197e3f87ebab8fd3bca75c3e514ce19a",
+      "946bf51b45c01f139dddc8bdda227dc819ed9c5e720ccaba3eabecd8e9f6ffc4",
+      "9483e233341c882912506146446ae9d7463c06a69dc9bd34a48a1f543f311dfe",
+      "9f9fbc8a0f433fdc7208b91cad9cb128816f71f96ae32965c97dd442d7b60691",
+      "a0677740edd82b79c1986489e746a0770a8b17e8ae3d1031cdf7cd9a5d3cb1fe",
+      "ab08e57188ae4252bbbe07ee7401e37b36a6869413457aeea3332f6567ecc2ee",
+      "acc2b2f6c8edf755adba097fe3682004b1b556b620c8b1ec1854ba885f408d23",
+      "bcb70851b87126a9171eedfab4e376bc93834ad20c1049e3da160d35f72041bf",
+      "c68f2b706e85fb9cb4a385b8f95a8e7141777c607663b5ace86a67ed4dc7150e",
+      "cc0c385b09492a03deb4428adc7bdea88ff843528d112357f3098a448e3a8cd4",
+      "da073e1ceeb3baa7121e9572fdad026b68ae4fe1918abf974b1c32799edf9f55",
+      "ed873d2e2a25954b4445550a8295e09cc5bc234522fe406a6e9957d0c5a23761"
+    ],
+    "volumes": [
+      "2a81eb4ccdbe1c2137a0b259fb320e780ccd2dbc36bb31c21bc96c72713f7e5c",
+      "7fe8f72617077cf83b2dbbd880fbd2544da040a4f7870cc5cd863e9473f852a4",
+      "c2f1835191dc69a8f648762a915b01cf8ce51b953bbca377c271a6765dd20398",
+      "cd1bac9a55481a9f433429b099eb421e9a692b5045964fdaf909098580836bab",
+      "localos-backend-full-5cc-a2f974eb33e8",
+      "localos-plan-20260906_pgdata",
+      "localos-plan-20260906_redisdata",
+      "localos-readiness-20260917_pgdata",
+      "localos-readiness-20260917_redisdata",
+      "localos-readiness-compiled-20260918_pgdata",
+      "localos-readiness-compiled-20260918_redisdata",
+      "localos-readiness-hflypi-pgdata",
+      "localos-readiness-resume-20260918-pgdata",
+      "localos-staging_pgdata",
+      "localos-staging_redisdata",
+      "riderra-main_postgres_data",
+      "seo_pgdata",
+      "seo_redisdata",
+      "webtrack-stage_pgdata",
+      "webtrack-stage_redisdata"
+    ]
+  },
+  "duration_seconds": 4.923,
+  "image_id": "sha256:f5f8970b270d7b74b96e2b188cbfd471477a5a5655d9eb57bf007d45c96f59d6",
+  "owner": "production-readiness-20260917-sj9dlo",
+  "revision": "33c9c7027d78a29d181d0347718563c22de2963a",
+  "smoke_controller_sha256": "b1c64db16a1664b3cd1b02269a657b0b2f8e5848f0e5a880ba7bb9e9914bd863",
+  "status": "PASS"
+}
