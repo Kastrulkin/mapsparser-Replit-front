@@ -1,5 +1,65 @@
 # Readiness handoff
 
+## Current terminal stress checkpoint — 22 September
+
+Entry HEAD remains `cb15cb0e`, same branch. This goal turn is PROGRESS: scoped
+source-bridge reconciliation and actual bounded five-journey stress/resource
+execution, not a restated plan. Root owns only the eight readiness documents
+and two new evidence bundles; five tracked foreign edits retain SHA3c70e23b and
+four ordinary untracked plus one restricted file are untouched.
+
+Private profile `/private/tmp/localos-five-journey-stress-WySOBr/`:
+controller v2 SHAda7d54bb, driver6ca99695, owned adapter0f5a2c1; reviewed manifest
+v2 SHA8e858fba. Pure31/558.679ms and targeted Ruff pass; independent pre-exec
+and cwd-correction review pass. Completed `audit-five-stress-native-v1` failed
+19.978820s at a pre-driver Python import from inherited forbidden /Users cwd;
+zero workload, exact DB/process cleanup. Final v2 only changes cwd to its new
+owned runtime and does not relax the policy. Never rerun either completed handle.
+
+Completed `audit-five-stress-native-v2`: outer242.315327s/exit0; runtime
+`/private/tmp/localos-five-stress._nca2inu/`. Exactly42runs/630requests/126invariants
+pass; each ref272794a4/a387 has1serial+20stress, concurrency2. ResultSHA28678a77,
+driverSHA6cd34264. DB catalog3system-only, intentional PGstop, driver120observed
+process identities clean; no forced signals/remaining/errors, source/input and
+guard/policy checks pass. Root ps confirms PG58370/driver58395 absent; tmux gone.
+Native v1 data is `/private/tmp/localos-five-stress.afdg9mej/` and remains retained.
+Durable stress bundle has22 hash-bound artifacts plus README/SHA256SUMS.
+CPU/RSS figures are sampled live-tree observations including setup/migrations;
+the current higher RSS is not hidden or labelled a speedup. No leak/capacity claim.
+
+Bridge bundle independently maps all12 offline nonpasses to historical Linux10
+and browser2 scopes. It explains prerequisites but closes no current transitive
+environment/aggregate gate. Independent final runtime acceptance now PASS:
+all756samples,42DB identities, every recorded PID absent and source/provenance
+bindings verified. Next: final package review and strict scoped scan/local
+commit, then current clean Docker/runtime/CI gate
+(10GiB start floor; currently6.5GiB). Review only safe regenerable temporary
+artifacts if more room is needed; never delete unknown user data or existing DBs.
+Image206/security, broader browser/demo and whole-diff review remain open.
+Restricted OAuth candidate and native finance picker remain prohibited.
+
+## Current continuation — Services55 committed, next evidence lanes
+
+Branch `codex/production-readiness-20260917`, HEAD
+`cb15cb0e79b4325a8c88f149d585a23f21c47fad`. The Services55 evidence-only local
+commit completed in 222.376 ms, exit 0, 29 paths. Final strict staged scan:
+6,672.426 ms, zero findings, 3,941,287 bytes, exact diff SHA
+`246e52b8dfbd52e791d824e2bc87d0e055a6d53538228bacab4b637f2f06c6c1`.
+Captures remain `/private/tmp/localos-services55-g839Mw/commit-command.json`
+and `staged-scan-final-command.json`; do not repeat completed handles.
+At entry the index is empty and the five foreign tracked plus four untracked
+paths and the additional restricted candidate remain untouched. Disk: 8.6 GiB
+free at this continuation's check, above native start floor 5 GiB but below
+the Docker-build floor 10 GiB. No Docker build or production action is planned.
+
+The immediately preceding question/answer is NO_PROGRESS for implementation;
+the earlier Services55 goal turn is PROGRESS. The goal remains ACTIVE. Work now
+continues on the private five-journey stress profile and on an independent
+source/dependency bridge for the 12 offline aggregate prerequisite failures.
+Preparation is not execution evidence. Do not relabel the aggregate as PASS or
+add historical counts. The restricted OAuth test and native finance picker
+remain prohibited; image206, CI/demo and whole-goal review are still open.
+
 ## Current continuation — committed aggregate, Services55 complete
 
 Entry HEAD `654d09c739654f92c90373b5f540c53fcf61b0a9`; evidence-only local commit

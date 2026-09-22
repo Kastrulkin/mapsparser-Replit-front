@@ -1,0 +1,559 @@
+"""Fresh native PG, safe archives and a bounded five-journey stress matrix.
+
+Default is read-only planning. --execute requires independent preflight review.
+No retained DB/container, production configuration or dirty source is used.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.util
+import json
+import os
+from pathlib import Path
+import shutil
+import signal
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+
+PROFILE = Path(__file__).resolve().parent
+REPO = Path(
+    "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре"
+)
+FROZEN = Path("/private/tmp/localos-current-full-a387-0iwMmh/source")
+SUPPORT = FROZEN / ".agent/tasks/production-readiness-20260917/support"
+PYTHON = Path("/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python")
+PSUTIL = Path("/private/tmp/localos-content-perf-deps.7zNvCi/python")
+MEASURE = FROZEN / "scripts/readiness_journey_measure.py"
+BENCHMARK = FROZEN / "scripts/readiness_journey_benchmark.py"
+NATIVE = SUPPORT / "content_performance_native_20260922.py"
+OWNER_HELPER = SUPPORT / "content_performance_processes_20260922.py"
+GUARD = SUPPORT / "content_performance_sitecustomize_20260922.py"
+CAPTURE_HELPER = Path("/private/tmp/localos-services55-g839Mw/run_services55_pg.py")
+REFS = {
+    "baseline": "272794a439a76204536480f158e79276ccd7b318",
+    "current": "a38720ce3530783caf59f6515a00baa1c532ce01",
+}
+START_FLOOR = 5 * 1024**3
+LIVE_FLOOR = 2 * 1024**3
+MAX_WALL = 900
+KNOWN = {
+    NATIVE: "0cafe7e3828d950db73b5fb88b6dc3177e329aee5eba10f98b10b59b9a43b6ba",
+    OWNER_HELPER: "4f16b6c343223717dcf3b5bdbf86ff9159594b33fa92d744527891188c4c227b",
+    MEASURE: "5fd78e2770cfd4e0d325ec04748be3572027ce75ce7eeb6336fab3ca0ac403e1",
+    BENCHMARK: "28308a23ce8ac3e04f4c60e0438076ce60b15e5fc506667acb4ef93eb65d8a26",
+    GUARD: "9b1dedef6d1277d225a400edc42325689b5162c296343af7f941fcdabc6badfb",
+    CAPTURE_HELPER: "afc8d1aff0450a94490c2b7e50b9583c442d3ad6785e7180cff81869c84cc1d8",
+}
+
+
+def digest(path):
+    value = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            value.update(block)
+    return value.hexdigest()
+
+
+def write(path, value):
+    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
+
+
+def load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def manifest(root):
+    rows = []
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink():
+            raise RuntimeError("source symlink")
+        if path.is_file():
+            rows.append(
+                [
+                    str(path.relative_to(root)),
+                    digest(path),
+                    path.stat().st_size,
+                    path.stat().st_mode & 0o777,
+                ]
+            )
+    encoded = json.dumps(rows, separators=(",", ":")).encode()
+    return {
+        "count": len(rows),
+        "bytes": sum(row[2] for row in rows),
+        "sha256": hashlib.sha256(encoded).hexdigest(),
+        "records": rows,
+    }
+
+
+def safe_member(member):
+    name = Path(member.name)
+    if (
+        name.is_absolute()
+        or ".." in name.parts
+        or not (member.isfile() or member.isdir())
+    ):
+        raise RuntimeError("unsafe archive member")
+    if member.name == "tests/test_google_oauth_related_refresh_pg.py":
+        raise RuntimeError("prohibited untracked candidate unexpectedly in Git archive")
+
+
+def archive(ref, target, archive_path):
+    with archive_path.open("xb") as stream:
+        subprocess.run(
+            ["/usr/bin/git", "archive", "--format=tar", ref],
+            cwd=REPO,
+            stdout=stream,
+            stderr=subprocess.PIPE,
+            timeout=45,
+            check=True,
+        )
+    target.mkdir()
+    with tarfile.open(archive_path) as package:
+        members = package.getmembers()
+        names = [member.name for member in members]
+        if len(names) != len(set(names)):
+            raise RuntimeError("duplicate archive members")
+        for member in members:
+            safe_member(member)
+        for member in members:
+            package.extract(member, target)
+    original = manifest(target)
+    # Same reviewed benchmark on both versions, explicitly outside original Git bytes.
+    destination = target / "scripts/readiness_journey_benchmark.py"
+    overlay_before = digest(destination) if destination.is_file() else None
+    shutil.copyfile(BENCHMARK, destination)
+    return {
+        "ref": ref,
+        "archive_sha256": digest(archive_path),
+        "git_source": original,
+        "runtime_source": manifest(target),
+        "benchmark_overlay": {"before": overlay_before, "after": digest(destination)},
+    }
+
+
+def policy(root, port):
+    return (
+        "\n".join(
+            [
+                "(version 1)",
+                "(allow default)",
+                "(deny network*)",
+                f'(allow network-outbound (remote ip "localhost:{port}"))',
+                '(deny file-read* (subpath "/Users"))',
+                "(deny file-write*)",
+                '(allow file-write* (literal "/dev/null"))',
+                f'(allow file-write* (subpath "{root}"))',
+                f'(deny file-write* (subpath "{root / "guard"}"))',
+                f'(deny file-write* (subpath "{root / "baseline"}"))',
+                f'(deny file-write* (subpath "{root / "current"}"))',
+                f'(deny file-write* (literal "{root / "job.json"}"))',
+                f'(deny file-write* (literal "{root / "sandbox.sb"}"))',
+            ]
+        )
+        + "\n"
+    )
+
+
+def assert_matrix(payload):
+    if payload.get("status") != "passed" or payload.get("refs") != REFS:
+        raise RuntimeError("driver status/ref mismatch")
+    if payload.get("profile") != {
+        "warmup": 0,
+        "serial": 1,
+        "stress": 20,
+        "concurrency": 2,
+    }:
+        raise RuntimeError("driver profile mismatch")
+    if set(payload.get("runs", {})) != set(REFS):
+        raise RuntimeError("missing reference bucket")
+    names = []
+    requests = invariants = 0
+    for label, runs in payload["runs"].items():
+        if len(runs) != 21:
+            raise RuntimeError("wrong run count")
+        for phase, count in [("serial", 1), ("full_harness_stress", 20)]:
+            selected = [run for run in runs if run.get("phase") == phase]
+            if sorted(run.get("sample_number") for run in selected) != list(
+                range(count)
+            ):
+                raise RuntimeError("incorrect phase matrix")
+        for run in runs:
+            if (
+                run.get("ref") != REFS[label]
+                or run.get("valid") is not True
+                or run.get("invalid_reasons")
+            ):
+                raise RuntimeError("invalid sample")
+            samples = run.get("samples", [])
+            req = [row for row in samples if row.get("kind") == "request"]
+            inv = [row for row in samples if row.get("kind") == "invariant"]
+            if (
+                len(req) != 15
+                or len(inv) != 3
+                or len(samples) != 18
+                or any(row.get("success") is not True for row in samples)
+            ):
+                raise RuntimeError("incorrect request/invariant accounting")
+            if {(row.get("journey"), row.get("step")) for row in inv} != {
+                ("service_compression", "apply_invariants"),
+                ("operator", "confirm_invariants"),
+                ("operator", "foreign_plan_untouched"),
+            }:
+                raise RuntimeError("incorrect invariant identities")
+            requests += len(req)
+            invariants += len(inv)
+            names.append(run["planned_database_name"])
+    if len(set(names)) != 42 or requests != 630 or invariants != 126:
+        raise RuntimeError("incorrect total matrix")
+    return {
+        "runs": 42,
+        "requests": requests,
+        "invariants": invariants,
+        "databases": names,
+    }
+
+
+def isolation_probe_code(root):
+    return (
+        """
+import errno
+import os
+import socket
+import sys
+targets = """
+        + repr(
+            [
+                str(root / "guard/probe"),
+                str(root / "baseline/probe"),
+                str(root / "current/probe"),
+            ]
+        )
+        + """
+for target in targets:
+    try:
+        handle = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except PermissionError:
+        pass
+    else:
+        os.close(handle)
+        raise RuntimeError('protected source/guard writable')
+try:
+    handle = os.open('/Users/alexdemyanov', os.O_RDONLY)
+except PermissionError:
+    pass
+else:
+    os.close(handle)
+    raise RuntimeError('user home readable')
+for address in [('127.0.0.1', 1), ('192.0.2.1', 443)]:
+    sock = socket.socket()
+    code = sock.connect_ex(address)
+    sock.close()
+    if code not in (errno.EPERM, errno.EACCES):
+        raise RuntimeError('offport/external connection not OS denied')
+print('ISOLATION_CONTROLS=6')
+"""
+    )
+
+
+def verify_reviewed_inputs(path, expected_digest, inputs):
+    if path is None:
+        raise RuntimeError(
+            "execution requires externally pinned reviewed-input manifest"
+        )
+    reviewed_bytes = path.read_bytes()
+    if hashlib.sha256(reviewed_bytes).hexdigest() != expected_digest:
+        raise RuntimeError("reviewed-input manifest digest mismatch")
+    if json.loads(reviewed_bytes) != inputs:
+        raise RuntimeError("source differs from independent-reviewed input manifest")
+
+
+def finalized_cleanly(report):
+    cleanup = report.get("process_cleanup", {})
+    return (
+        report.get("database_catalog") == ["postgres", "template0", "template1"]
+        and report.get("identity_verified_before_stop") is True
+        and report.get("cluster_stop") == "stopped"
+        and cleanup.get("status") == "clean"
+        and cleanup.get("signalled") == []
+        and cleanup.get("remaining") == []
+        and cleanup.get("errors") == []
+    )
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--reviewed-inputs", type=Path)
+    parser.add_argument("--reviewed-inputs-sha256")
+    args = parser.parse_args()
+    for path, expected in KNOWN.items():
+        if digest(path) != expected:
+            raise RuntimeError("trusted helper hash mismatch: " + path.name)
+    inputs = {
+        str(path): digest(path)
+        for path in [
+            *KNOWN,
+            GUARD,
+            Path(__file__),
+            PROFILE / "stress_driver.py",
+            PROFILE / "owned_harness.py",
+        ]
+    }
+    if not args.execute:
+        print(
+            json.dumps(
+                {
+                    "status": "not_executed",
+                    "inputs": inputs,
+                    "refs": REFS,
+                    "free_bytes": shutil.disk_usage("/private/tmp").free,
+                }
+            )
+        )
+        return 0
+    verify_reviewed_inputs(args.reviewed_inputs, args.reviewed_inputs_sha256, inputs)
+    if shutil.disk_usage("/private/tmp").free < START_FLOOR:
+        raise RuntimeError("start disk floor")
+    sys.path.extend([str(SUPPORT), str(PSUTIL)])
+    native = load("stress_native", NATIVE)
+    capture = load("stress_capture", CAPTURE_HELPER)
+    root = Path(tempfile.mkdtemp(prefix="localos-five-stress.", dir="/private/tmp"))
+    # Guard probes inherit cwd; never let their import machinery consult /Users.
+    os.chdir(root)
+    (root / "tmp").mkdir()
+    env = native.private_environment(root)
+    report = {"status": "started", "inputs": inputs, "root": str(root), "refs": REFS}
+    postmaster = tracker = None
+    started = time.monotonic()
+    try:
+        report["archives"] = {
+            label: archive(ref, root / label, root / (label + ".tar"))
+            for label, ref in REFS.items()
+        }
+        port = native.choose_loopback_port()
+        report["port"] = port
+        # Start the direct postmaster ourselves so birth ownership is pinned immediately.
+        (root / "socket").mkdir()
+        subprocess.run(
+            [
+                str(native.INITDB),
+                "-D",
+                str(root / "data"),
+                "-U",
+                native.OWNER,
+                "--auth-host=trust",
+                "--auth-local=trust",
+                "--encoding=UTF8",
+                "--locale=C",
+                "--no-sync",
+            ],
+            env=env,
+            capture_output=True,
+            timeout=120,
+            check=True,
+        )
+        with (root / "postgres.log").open("xb") as log:
+            postmaster = subprocess.Popen(
+                [
+                    str(native.POSTGRES),
+                    "-D",
+                    str(root / "data"),
+                    *native.postgres_options(root, port),
+                ],
+                env=env,
+                stdout=log,
+                stderr=log,
+                start_new_session=True,
+            )
+        tracker = native.OwnedProcesses(postmaster)
+        deadline = time.monotonic() + 45
+        while time.monotonic() < deadline:
+            tracker.observe()
+            if postmaster.poll() is not None:
+                raise RuntimeError("postmaster exited")
+            if (root / "data/postmaster.pid").is_file():
+                try:
+                    identity = native.psql_scalar(
+                        native.dsn(port, "postgres"),
+                        "SELECT current_user || '|' || current_setting('data_directory') || '|' || current_setting('port') || '|' || current_setting('listen_addresses')",
+                        env,
+                    )
+                    if identity != f"{native.OWNER}|{root / 'data'}|{port}|127.0.0.1":
+                        raise RuntimeError("cluster identity mismatch")
+                    break
+                except RuntimeError:
+                    if time.monotonic() + 1 >= deadline:
+                        raise
+            time.sleep(0.1)
+        else:
+            raise RuntimeError("postmaster readiness deadline")
+        native.verify_postmaster(postmaster.pid, root / "data")
+        report["postmaster_birth"] = tracker.root
+        guard_dir = root / "guard"
+        guard_dir.mkdir()
+        shutil.copyfile(GUARD, guard_dir / "sitecustomize.py")
+        write(guard_dir / "context.json", native.context_payload(port))
+        (root / "sandbox.sb").write_text(policy(root, port))
+        job = {
+            "inputs": inputs,
+            "support": str(SUPPORT),
+            "psutil": str(PSUTIL),
+            "measure": str(MEASURE),
+            "refs": REFS,
+            "roots": {key: str(root / key) for key in REFS},
+        }
+        write(root / "job.json", job)
+        env.update(
+            {
+                "PYTHONPATH": str(guard_dir),
+                "LOCALOS_READINESS_JOURNEY_DATABASE_URL": native.dsn(port),
+            }
+        )
+        native.sandbox_policy = lambda selected_port, _guard: policy(
+            root, selected_port
+        )
+        report["guard_probes"] = native.run_negative_probes(
+            root, port, env, guard_dir, guard_dir / "context.json"
+        )
+        controls = [
+            "/usr/bin/sandbox-exec",
+            "-f",
+            str(root / "sandbox.sb"),
+            str(PYTHON),
+            "-S",
+            "-B",
+            "-c",
+            isolation_probe_code(root),
+        ]
+        control_status, control_out, _control_err, control_capture = (
+            capture.run_capped_child(
+                controls, cwd=root, env=env, timeout=30, performance=native
+            )
+        )
+        report["isolation_controls"] = {
+            "status": control_status,
+            "capture": control_capture,
+        }
+        if control_status != 0 or control_out.strip() != "ISOLATION_CONTROLS=6":
+            raise RuntimeError("OS isolation controls failed")
+        report["runtime_input_hashes"] = {
+            str(path): digest(path)
+            for path in [
+                root / "job.json",
+                root / "sandbox.sb",
+                guard_dir / "sitecustomize.py",
+                guard_dir / "context.json",
+            ]
+        }
+        command = [
+            "/usr/bin/sandbox-exec",
+            "-f",
+            str(root / "sandbox.sb"),
+            str(PYTHON),
+            "-B",
+            str(PROFILE / "stress_driver.py"),
+            str(root / "job.json"),
+        ]
+        remaining = MAX_WALL - (time.monotonic() - started) - 60
+        if remaining < 240:
+            raise RuntimeError("insufficient driver deadline")
+        status, _out, _err, observation = capture.run_capped_child(
+            command, cwd=root, env=env, timeout=remaining, performance=native
+        )
+        report["driver"] = {"exit_code": status, "capture": observation}
+        if status != 0:
+            raise RuntimeError("stress driver failed")
+        payload = json.loads((root / "driver-result.json").read_text())
+        report["matrix"] = assert_matrix(payload)
+        report["source_after"] = {key: manifest(root / key)["sha256"] for key in REFS}
+        if any(
+            report["source_after"][key]
+            != report["archives"][key]["runtime_source"]["sha256"]
+            for key in REFS
+        ):
+            raise RuntimeError("source drift")
+        if any(digest(Path(path)) != value for path, value in inputs.items()):
+            raise RuntimeError("input drift")
+        if any(
+            digest(Path(path)) != value
+            for path, value in report["runtime_input_hashes"].items()
+        ):
+            raise RuntimeError("runtime policy/guard/input drift")
+        report["status"] = "passed"
+    except BaseException:
+        report["status"] = "failed"
+        report["error_type"] = type(sys.exception()).__name__
+        raise
+    finally:
+        if postmaster is not None:
+            try:
+                if postmaster.poll() is None:
+                    report["database_catalog"] = native.psql_scalar(
+                        native.dsn(report["port"], "postgres"),
+                        "SELECT datname FROM pg_database ORDER BY datname",
+                        env,
+                    ).splitlines()
+                    if report["database_catalog"] != [
+                        "postgres",
+                        "template0",
+                        "template1",
+                    ]:
+                        report["status"] = "failed"
+                    native.verify_postmaster(postmaster.pid, root / "data")
+                    if (
+                        tracker is not None
+                        and tracker.root is not None
+                        and not tracker.live(tracker.root)
+                    ):
+                        raise RuntimeError("postmaster birth mismatch")
+                    report["identity_verified_before_stop"] = True
+                    postmaster.send_signal(signal.SIGINT)
+                    postmaster.wait(timeout=45)
+                    report["cluster_stop"] = "stopped"
+                else:
+                    report["cluster_stop"] = "unexpected_exit"
+                    report["postmaster_exit_code"] = postmaster.returncode
+                    report["status"] = "failed"
+            except BaseException:
+                report["status"] = "failed"
+                report["cleanup_error"] = type(sys.exception()).__name__
+            finally:
+                if tracker is not None:
+                    report["process_cleanup"] = tracker.cleanup()
+                    if (
+                        report["process_cleanup"]["status"] != "clean"
+                        or report["process_cleanup"]["signalled"]
+                    ):
+                        report["status"] = "failed"
+                elif postmaster.poll() is None:
+                    postmaster.terminate()
+                    report["status"] = "failed"
+                try:
+                    postmaster.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    postmaster.kill()
+                    postmaster.wait(timeout=5)
+                    report["status"] = "failed"
+        if report["status"] == "passed" and not finalized_cleanly(report):
+            report["status"] = "failed"
+            report["finalization_gate_failed"] = True
+        report["duration_seconds"] = time.monotonic() - started
+        write(root / "result.json", report)
+        print(
+            json.dumps(
+                {"status": report["status"], "result": str(root / "result.json")}
+            )
+        )
+    return 0 if report["status"] == "passed" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

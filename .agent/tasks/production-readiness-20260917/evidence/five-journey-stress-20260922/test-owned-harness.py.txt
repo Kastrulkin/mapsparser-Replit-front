@@ -1,0 +1,231 @@
+"""Pure fake-only checks for owned_harness; intentionally not run in preparation."""
+
+import io
+import subprocess
+from types import SimpleNamespace
+
+import owned_harness
+from owned_harness import _run_once_owned
+
+
+class FakeRegistry:
+    def __init__(self, _process):
+        self.observed = 0
+
+    def observe(self):
+        self.observed += 1
+
+    def cleanup(self):
+        return {"status": "clean", "signalled": [], "remaining": []}
+
+
+def test_absent_gate_does_not_start_process(monkeypatch, tmp_path):
+    called = []
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: called.append(1))
+    value = _run_once_owned(
+        tmp_path,
+        "",
+        "",
+        tmp_path / "out",
+        "r",
+        "p",
+        1,
+        command=["false"],
+        environment={},
+        owned_processes=FakeRegistry,
+        timeout_seconds=1,
+        database_absent=lambda _name: False,
+        database_cleanup=lambda *_: {},
+        parse_output=lambda _: {},
+        database_name="owned",
+    )
+    assert not called and value["cleanup"]["skipped"] == "not_absent"
+
+
+def test_cleanup_runs_before_database_cleanup(monkeypatch, tmp_path):
+    events = []
+
+    class Process:
+        stdout = io.BytesIO()
+        stderr = io.BytesIO()
+        returncode = 0
+
+        def poll(self):
+            return 0
+
+        def wait(self, timeout):
+            events.append("wait")
+
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: Process())
+
+    class RegistryWithOrder(FakeRegistry):
+        def cleanup(self):
+            events.append("registry")
+            return super().cleanup()
+
+    value = _run_once_owned(
+        tmp_path,
+        "",
+        "",
+        tmp_path / "out",
+        "r",
+        "p",
+        1,
+        command=["fake"],
+        environment={},
+        owned_processes=RegistryWithOrder,
+        timeout_seconds=1,
+        database_absent=lambda _: True,
+        database_cleanup=lambda *_: events.append("database") or {},
+        parse_output=lambda _: {},
+        database_name="owned",
+    )
+    assert (
+        events.index("registry") < events.index("database") and value["exit_code"] == 0
+    )
+
+
+def fake_run(monkeypatch, tmp_path, registry=FakeRegistry, data=b"hello", payload=None):
+    class Process:
+        returncode = 0
+
+        def __init__(self):
+            self.stdout = io.BytesIO(data)
+            self.stderr = io.BytesIO()
+
+        def poll(self):
+            return 0
+
+        def wait(self, timeout):
+            return 0
+
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: Process())
+    output = tmp_path / "result"
+    output.write_text("{}")
+    cleanup_calls = []
+    result = _run_once_owned(
+        tmp_path,
+        "",
+        "",
+        output,
+        "ref",
+        "serial",
+        0,
+        command=["fake"],
+        environment={},
+        owned_processes=registry,
+        timeout_seconds=1,
+        database_absent=lambda _: True,
+        database_cleanup=lambda *_: cleanup_calls.append(1) or {},
+        parse_output=lambda _: payload or {},
+        database_name="owned",
+    )
+    return result, cleanup_calls
+
+
+def test_actual_streams_are_drained_and_provenance_is_not_fabricated(
+    monkeypatch, tmp_path
+):
+    payload = {
+        "samples": [{"success": True}],
+        "guard": {"sha256": "actual"},
+        "provider_seams": ["actual_seam"],
+        "script_sha256": "actual_script",
+    }
+    result, cleanup = fake_run(monkeypatch, tmp_path, payload=payload)
+    assert result["capture"]["streams"]["stdout"]["bytes"] == 5
+    assert result["harness_provenance"]["guard"] == payload["guard"]
+    assert result["harness_provenance"]["provider_seams"] == ["actual_seam"]
+    assert result["harness_provenance"]["script_sha256"] == "actual_script"
+    assert cleanup == [1]
+
+
+def test_fast_exit_stream_overflow_still_fails(monkeypatch, tmp_path):
+    monkeypatch.setattr(owned_harness, "CAPTURE_CAP", 8)
+    result, cleanup = fake_run(monkeypatch, tmp_path, data=b"x" * 9)
+    assert result["harness_error"] == "stream_nonpass"
+    assert cleanup == [1]
+
+
+def test_registry_cleanup_exception_cannot_skip_database_cleanup(monkeypatch, tmp_path):
+    class BrokenRegistry(FakeRegistry):
+        def cleanup(self):
+            raise RuntimeError("fake")
+
+    result, cleanup = fake_run(monkeypatch, tmp_path, registry=BrokenRegistry)
+    assert result["harness_error"] == "owned_process_cleanup_nonpass"
+    assert cleanup == [1]
+
+
+def test_tracker_constructor_failure_reaps_exact_popen(monkeypatch, tmp_path):
+    events = []
+
+    class Process:
+        returncode = None
+        stdout = io.BytesIO()
+        stderr = io.BytesIO()
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self):
+            events.append("terminate")
+            self.returncode = -15
+
+        def wait(self, timeout):
+            events.append("wait")
+            return self.returncode
+
+    def broken(_process):
+        raise RuntimeError("fake")
+
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: Process())
+    result = _run_once_owned(
+        tmp_path,
+        "",
+        "",
+        tmp_path / "unused",
+        "ref",
+        "serial",
+        0,
+        command=["fake"],
+        environment={},
+        owned_processes=broken,
+        timeout_seconds=1,
+        database_absent=lambda _: True,
+        database_cleanup=lambda *_: events.append("database") or {},
+        parse_output=lambda _: {},
+        database_name="owned",
+    )
+    assert events == ["terminate", "wait", "database"]
+    assert result["harness_error"] == "owned_process_cleanup_nonpass"
+
+
+def test_wrapper_keeps_actual_invalid_provenance(monkeypatch, tmp_path):
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    script = scripts / "benchmark.py"
+    script.write_text("")
+    result = {
+        "samples": [],
+        "cleanup": {},
+        "harness_provenance": {"script_sha256": "wrong"},
+    }
+    monkeypatch.setattr(owned_harness, "_run_once_owned", lambda *a, **k: result)
+    seen = []
+    measure = SimpleNamespace(
+        safe_environment=lambda *a: {},
+        guard_provenance=lambda _: {"sha256": "expected"},
+        HARNESS_SOURCE=script,
+        HARNESS_TIMEOUT_SECONDS=1,
+        owned_database_absent=lambda *a: True,
+        cleanup_owned_database=lambda *a: {},
+        validation_reasons=lambda run: (
+            seen.append(run["harness_provenance"]) or ["mismatch"]
+        ),
+    )
+    value = owned_harness.run_harness_once(
+        measure, tmp_path, "", "", tmp_path / "out", "ref", "serial", 0
+    )
+    assert seen == [{"script_sha256": "wrong"}]
+    assert value["valid"] is False

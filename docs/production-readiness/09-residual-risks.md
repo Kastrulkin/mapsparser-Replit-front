@@ -1,5 +1,21 @@
 # Residual risks — working register
 
+## 22 September — bounded stress complete; current image/integration still open
+
+Five synthetic journeys now pass42concurrency-two runs/630requests/126invariants
+with sampled CPU/RSS and clean owned DB/process shutdown. This closes only the
+small bounded stress/resource observation gap. Current sampled RSS is higher
+than baseline; order, startup/migration inclusion and incomplete peak capture
+do not establish causality. Sustained leaks, capacity and representative large
+data remain unproven; do not elevate the whole performance score from this run.
+
+The12-node capability bridge explains current offline prerequisite failures but
+does not prove full current-image/browser dependency equivalence. The aggregate
+remains4,391pass/12fail/1,119skip. Current canonical Docker/runtime/CI proof is
+still mandatory;10GiB start floor versus6.5GiB now. Image206/security/owner
+decisions, broader browser/demo and final whole-diff review remain open.
+Services55 is already committed ascb15cb0e; older pending-commit text is history.
+
 ## 22 September — current services/content role proof passes
 
 Current a387 source now passes55 native Services/content tests/165phases, with

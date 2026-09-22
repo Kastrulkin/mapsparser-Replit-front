@@ -1,0 +1,288 @@
+"""Private, bounded replacement for measure.run_harness_once supervision.
+
+This module deliberately has no import of application code and never starts a
+process at import time.  The caller supplies its already-reviewed environment,
+database admission/cleanup and output parser callbacks.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import threading
+import time
+from typing import Callable, Protocol
+import uuid
+from content_performance_processes_20260922 import OwnedProcesses
+
+
+CAPTURE_CAP = 4 * 1024 * 1024
+
+
+class Registry(Protocol):
+    def observe(self) -> None: ...
+    def cleanup(self) -> dict: ...
+
+
+def _drain(pipe, sink: bytearray, meta: dict, errors: list[str]) -> None:
+    digest = hashlib.sha256()
+    try:
+        while True:
+            block = pipe.read(65536)
+            if not block:
+                break
+            digest.update(block)
+            meta["bytes"] += len(block)
+            if len(sink) < CAPTURE_CAP:
+                sink.extend(block[: CAPTURE_CAP - len(sink)])
+    except BaseException:
+        errors.append("stream")
+    meta["sha256"] = digest.hexdigest()
+    meta["truncated"] = meta["bytes"] > CAPTURE_CAP
+
+
+def _run_once_owned(
+    source_root: Path,
+    database_url: str,
+    guard_pythonpath: str,
+    output_path: Path,
+    ref: str,
+    phase: str,
+    sample_number: int,
+    *,
+    command: list[str],
+    environment: dict[str, str],
+    owned_processes: Callable[[subprocess.Popen], Registry],
+    timeout_seconds: float,
+    database_absent: Callable[[str], bool],
+    database_cleanup: Callable[[str, bool], dict],
+    parse_output: Callable[[Path], dict],
+    database_name: str,
+) -> dict:
+    """Run one already-admitted child; retain only hashes/counts, never raw logs."""
+    result = {
+        "ref": ref,
+        "phase": phase,
+        "sample_number": sample_number,
+        "planned_database_name": database_name,
+        "exit_code": None,
+        "samples": [],
+        "process_observation": {
+            "samples": 0,
+            "max_rss_bytes": 0,
+            "max_cpu_seconds": 0.0,
+        },
+    }
+    absent = database_absent(database_name)
+    result["absent_before_child"] = absent
+    if not absent:
+        result.update(
+            harness_error="planned owned database already exists",
+            cleanup={"skipped": "not_absent"},
+        )
+        return result
+    process = None
+    registry = None
+    buffers = {"stdout": bytearray(), "stderr": bytearray()}
+    metadata = {name: {"bytes": 0, "truncated": False} for name in buffers}
+    errors: list[str] = []
+    threads = []
+    started = time.monotonic()
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=source_root,
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=False,
+            start_new_session=True,
+        )
+        # Pin immediately, before the first poll; descendants remain attributable after parent exit.
+        registry = owned_processes(process)
+        threads = [
+            threading.Thread(
+                target=_drain,
+                args=(getattr(process, name), buffers[name], metadata[name], errors),
+                daemon=True,
+            )
+            for name in buffers
+        ]
+        for thread in threads:
+            thread.start()
+        while process.poll() is None:
+            registry.observe()
+            try:
+                live = [key for key in registry.owned if registry.live(key)]
+                cpu_seconds = 0.0
+                rss = 0
+                for key in live:
+                    current = registry.owned[key]
+                    try:
+                        cpu = current.cpu_times()
+                        memory = current.memory_info().rss
+                        if not registry.live(key):
+                            continue
+                        cpu_seconds += cpu.user + cpu.system
+                        rss += memory
+                    except registry.backend.NoSuchProcess:
+                        continue
+                observation = result["process_observation"]
+                observation["samples"] += 1
+                observation["max_rss_bytes"] = max(observation["max_rss_bytes"], rss)
+                observation["max_cpu_seconds"] = max(
+                    observation["max_cpu_seconds"], cpu_seconds
+                )
+            except BaseException:
+                result["harness_error"] = "process_observation_failed"
+                break
+            if time.monotonic() - started > timeout_seconds:
+                result["stop_reason"] = "timeout"
+                break
+            if errors or any(row["bytes"] > CAPTURE_CAP for row in metadata.values()):
+                result["stop_reason"] = "stream_limit"
+                break
+            if shutil.disk_usage(source_root).free < 2 * 1024**3:
+                result["stop_reason"] = "live_disk_floor"
+                break
+            time.sleep(0.05)
+    except BaseException:
+        result["harness_error"] = type(sys.exception()).__name__
+    finally:
+        cleanup = {"status": "not_started", "remaining": []}
+        try:
+            try:
+                if registry is not None:
+                    cleanup = registry.cleanup()
+            except BaseException:
+                cleanup = {
+                    "status": "registry_cleanup_error",
+                    "error": type(sys.exception()).__name__,
+                }
+            finally:
+                if process is not None:
+                    if process.poll() is None:
+                        process.terminate()
+                        cleanup["direct_popen_fallback"] = "terminate"
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        cleanup["direct_popen_fallback"] = "kill"
+                        process.wait(timeout=5)
+                    result["exit_code"] = process.returncode
+                for thread in threads:
+                    if thread.ident is not None:
+                        thread.join(timeout=5)
+        except BaseException:
+            cleanup["reap_error"] = type(sys.exception()).__name__
+        finally:
+            result["capture"] = {
+                "streams": metadata,
+                "cleanup": cleanup,
+                "duration_seconds": round(time.monotonic() - started, 3),
+            }
+            try:
+                result["cleanup"] = database_cleanup(database_name, absent)
+            except BaseException:
+                result["cleanup"] = {"error": type(sys.exception()).__name__}
+    if errors or any(row["bytes"] > CAPTURE_CAP for row in metadata.values()):
+        result["harness_error"] = "stream_nonpass"
+        return result
+    if (
+        any(thread.is_alive() for thread in threads)
+        or cleanup.get("status") != "clean"
+        or cleanup.get("signalled")
+        or cleanup.get("remaining")
+        or cleanup.get("direct_popen_fallback")
+        or cleanup.get("reap_error")
+    ):
+        result["harness_error"] = "owned_process_cleanup_nonpass"
+        return result
+    if result.get("stop_reason"):
+        result["harness_error"] = "supervision_" + result["stop_reason"]
+        return result
+    if not output_path.is_file() or output_path.stat().st_size > CAPTURE_CAP:
+        result["harness_error"] = "invalid_harness_output_size"
+        return result
+    try:
+        payload = parse_output(output_path)
+        result["samples"] = payload.get("samples") or []
+        result["harness_provenance"] = {
+            key: payload.get(key)
+            for key in (
+                "guard",
+                "provider_seams",
+                "script_sha256",
+                "sample_type",
+                "worktree_dirty",
+            )
+        }
+    except BaseException:
+        result["harness_error"] = "invalid_harness_output"
+    return result
+
+
+def run_harness_once(
+    measure,
+    source_root: Path,
+    database_url: str,
+    guard_pythonpath: str,
+    output_path: Path,
+    ref: str,
+    phase: str,
+    sample_number: int,
+) -> dict:
+    """Drop-in compatible replacement; `measure` is the canonical loaded module."""
+    environment = measure.safe_environment(database_url, source_root, guard_pythonpath)
+    expected_guard = measure.guard_provenance(guard_pythonpath)
+    expected_script = hashlib.sha256(
+        (source_root / "scripts" / measure.HARNESS_SOURCE.name).read_bytes()
+    ).hexdigest()
+    database_name = "localos_readiness_measure_" + uuid.uuid4().hex
+    command = [
+        sys.executable,
+        str(source_root / "scripts" / measure.HARNESS_SOURCE.name),
+        "--output",
+        str(output_path),
+        "--database-name",
+        database_name,
+    ]
+    result = _run_once_owned(
+        source_root,
+        database_url,
+        guard_pythonpath,
+        output_path,
+        ref,
+        phase,
+        sample_number,
+        command=command,
+        environment=environment,
+        owned_processes=OwnedProcesses,
+        timeout_seconds=measure.HARNESS_TIMEOUT_SECONDS,
+        database_absent=lambda name: measure.owned_database_absent(database_url, name),
+        database_cleanup=lambda name, absent: measure.cleanup_owned_database(
+            database_url, name, absent
+        ),
+        parse_output=lambda path: json.loads(path.read_text(encoding="utf-8")),
+        database_name=database_name,
+    )
+    result["expected_guard"] = expected_guard
+    result["expected_harness_script_sha256"] = expected_script
+    result["invalid_reasons"] = measure.validation_reasons(result)
+    if result.get("cleanup", {}).get("error"):
+        result["invalid_reasons"].append("database_cleanup_error")
+    try:
+        result["database_absent_after"] = measure.owned_database_absent(
+            database_url, database_name
+        )
+    except BaseException:
+        result["database_absent_after"] = False
+    if not result["database_absent_after"]:
+        result["invalid_reasons"].append("database_remains_after_cleanup")
+    result["valid"] = not result["invalid_reasons"]
+    return result

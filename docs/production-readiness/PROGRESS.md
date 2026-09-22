@@ -1,5 +1,27 @@
 # Production-readiness progress
 
+## Current checkpoint — 22 September, bounded five-journey stress complete
+
+- [x] Capability bridge independently verifies all12 nonpass IDs and named
+  unchanged sources. Transitive/current-runtime equivalence remains UNKNOWN;
+  the offline aggregate stays NONPASS. Durable `capability-bridge-20260922/`.
+- [x] Private stress controller passes31 fake-only controls/558.679ms and Ruff.
+  Independent pre-execution review accepted finalization and manifest binding.
+- [x] Native v2 completes42/42runs,630/630requests,126/126invariants in242.315327s.
+  One serial+20stress/ref, concurrency2. All generated DBs absent, PostgreSQL
+  intentionally stopped, input/source/policy checks and process cleanup pass.
+  Prior v1 cwd failure19.978820s is retained: zero workload runs, clean shutdown.
+- [x] CPU/RSS observations recorded with explicit scope: current sampled tree
+  RSS311,050,240bytes versus baseline269,680,640; not a proven causal regression,
+  improvement, capacity result or sustained memory-leak test.
+- [x] Independent terminal review recomputes all756samples, phase/DB accounting,
+  source/input/provenance and cleanup; every recorded owned PID is absent.
+- [ ] Final package review, exact staged scan/local commit.
+- [ ] Full original DoD still open: current canonical Docker/runtime/CI proof,
+  image206/security, wider browser/demo, and final whole-diff review. Docker
+  build start requires10GiB; current free space6.5GiB. Do not reuse old998image
+  proof as current-source evidence. No production/provider/push/deploy action.
+
 ## Current checkpoint — 22 September, Services55 verified
 
 - [x] Independent-reviewed aggregate bundle committed as `654d09c7`,22paths;
@@ -18,8 +40,14 @@
 
 Foreign5tracked+4untracked files and the restricted additional candidate remain
 preserved. No production/provider effects, Docker build, push or deployment.
-Next: commit this independently accepted evidence package, then bounded
-five-journey stress/resource work and remaining original security/CI/demo gates.
+Services55 evidence is committed locally as `cb15cb0e` (29 paths, 222.376 ms,
+exit 0). Its final strict staged scan passed in 6,672.426 ms with zero findings;
+the exact 3,941,287-byte diff SHA is
+`246e52b8dfbd52e791d824e2bc87d0e055a6d53538228bacab4b637f2f06c6c1`.
+Next: bounded five-journey stress/resource work and independent reconciliation
+of the 12 offline prerequisite failures with source-bound capability evidence.
+The previous user-question turn only explained the restricted OAuth scope and
+is NO_PROGRESS for the implementation goal; it did not pause the active goal.
 
 ## Current checkpoint — 22 September, committed fixture fixes
 

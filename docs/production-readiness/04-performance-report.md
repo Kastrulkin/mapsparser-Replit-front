@@ -1,5 +1,32 @@
 # Performance — working measurements, not a capacity claim
 
+## Bounded five-journey stress/resources — 22 September, `272794a4` → `a38720ce`
+
+Fresh synthetic native-PostgreSQL profile completed 42/42 runs, 630 successful
+requests and 126 successful invariants in 242.315 seconds. Per reference: one
+serial smoke plus twenty full-harness stress samples, concurrency two. No product
+code or benchmark assertion changed. Generated databases are absent and all
+owned processes stopped cleanly; guard/source/input checks pass.
+
+| Sampled observation, 21 children per reference | Baseline | Current |
+| --- | ---: | ---: |
+| Highest sampled process-tree RSS, bytes | 269,680,640 | 311,050,240 |
+| Mean of sampled live-tree CPU maxima, seconds | 3.104 | 3.217 |
+| Mean complete child duration, seconds | 9.906 | 10.148 |
+
+Retain the higher current RSS/CPU observations; no speedup or causal regression
+is established. Baseline stress runs precede current stress runs. Cold startup,
+real synthetic migrations and fixture setup are included in resources/durations;
+these are not request latencies. Sampling misses short-lived processes/peaks;
+summed RSS may double-count shared pages and CPU maxima are not total CPU.
+The profile closes this small concurrency-two correctness/resource observation
+gap, not capacity, sustained memory-leak, representative production-data or
+whole-performance certification. The earlier 50-sample serial distributions
+below remain independent evidence.
+
+Method, preserved initial launcher failure and raw evidence:
+[five-journey stress bundle](../../.agent/tasks/production-readiness-20260917/evidence/five-journey-stress-20260922/README.md).
+
 ## Current paired refresh — 22 September, `272794a4` → `dc1a6b76`
 
 The changed-content timing gap identified below is now closed for the explicit

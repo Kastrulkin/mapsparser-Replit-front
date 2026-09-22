@@ -1,0 +1,6 @@
+{
+  "base_database": "readiness_perf_control",
+  "host": "127.0.0.1",
+  "port": 62048,
+  "role": "readiness_perf_owner"
+}

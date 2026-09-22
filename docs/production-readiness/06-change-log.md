@@ -1,5 +1,20 @@
 # Production-readiness change log
 
+## Synthetic stress/resource proof and source reconciliation — parentcb15cb0e
+
+No product or test-assertion changes. Add a private supervised runner for the
+unchanged five-journey benchmark: safe clean archives, external input manifest,
+immediate birth-owned process tracking, bounded streams, real output provenance
+and strict database/process finalization. Review caught false-PASS and manifest
+read issues before workload;31fake-only controls pass. Initial runtime cwd-only
+failure is retained, final42runs/630requests/126invariants pass242.315327s.
+CPU/RSS observations are reported without capacity/leak/causal speedup claims.
+
+Separately verify the exact12-node historical capability/source bridge without
+relabeling the current aggregate or claiming complete transitive equivalence.
+Keep Services55 final scan/commit captures. No production, provider, existing
+database/container, push or deployment changes; original full DoD stays open.
+
 ## Fresh Services55 native proof — 22 September, parent654d09c7
 
 No product/test source edits. Prepare and independently review a strict native

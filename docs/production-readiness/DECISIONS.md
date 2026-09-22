@@ -1,5 +1,22 @@
 # Readiness decisions
 
+## D-129 — Source continuity explains prerequisite failures, not current coverage
+
+The independent bridge review maps all twelve a387 offline nonpass IDs to
+previous capability/browser checks and verifies the named unchanged sources.
+Keep that evidence, but do not infer complete transitive equivalence: Linux
+image/dependencies are historical and the browser path list is not a full Vite
+dependency graph. Current integration coverage remains open and the aggregate
+stays NONPASS. This avoids both repeating known offline capability denials and
+silently counting a different environment as a fresh passing suite.
+
+For the next five-journey stress phase, keep existing benchmark behavior and
+source refs unchanged. Adapt only private supervision: immediate owned-process
+registration, bounded streams, actual (not synthesized) harness provenance,
+cleanup even when registry operations fail, and sampled CPU/RSS observations.
+An external independently reviewed input manifest is required before execution.
+Preparation and fake-only controls are not application/load results.
+
 ## D-128 — Fresh migrated services proof keeps strict source and lifecycle gates
 
 Use the real current Flask/Alembic chain on one new synthetic native PostgreSQL

@@ -1,5 +1,35 @@
 # Verified commands and evidence
 
+## Bounded five-journey stress — 22 September
+
+Completed tmux profiles: `audit-five-stress-pure-v1/v2/v3` (22/22/31 fake-only
+checks,620.847/376.066/558.679ms); `audit-five-stress-cwd-probe` (38.510ms/exit0,
+offport denied); `audit-five-stress-native-v1` (19.978820s/exit1 before workload),
+`audit-five-stress-native-v2` (242.315327s/exit0,42runs/630requests/126invariants).
+These are terminal historical handles. The v2 command was:
+
+```text
+/usr/bin/arch -arm64 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -B -I /private/tmp/localos-five-journey-stress-WySOBr/stress_controller.py --execute --reviewed-inputs /private/tmp/localos-five-journey-stress-WySOBr/reviewed-inputs-v2.json --reviewed-inputs-sha256 8e858fbae671c42332b6208d4fd8e6129ca748cf29df439c6156e734c5b33ab1
+```
+
+Exact command captures, executed scripts, fixed inputs, policies, failure and
+terminal results are in `evidence/five-journey-stress-20260922/`. All22 manifest
+entries verify. Do not execute old capture commands to inspect results. Initial
+Ruff15 style/import findings were fixed; final five-file Ruff passes.
+The next current-image build must first recheck10GiB free and prepare a new
+reviewed clean-revision profile; do not replay the hardcoded998 image wrapper.
+
+## Services55 package committed — 22 September
+
+Completed `audit-services55-evidence-scan-final`: strict staged diff scan,
+6,672.426 ms / exit 0, zero findings; 3,941,287 bytes with SHA
+`246e52b8dfbd52e791d824e2bc87d0e055a6d53538228bacab4b637f2f06c6c1`.
+Completed local `git commit -m "test: verify services and content roles on migrated PostgreSQL"`:
+222.376 ms / exit 0, commit `cb15cb0e`, 29 paths. Captures are
+`/private/tmp/localos-services55-g839Mw/staged-scan-final-command.json` and
+`commit-command.json`. These are terminal historical operations, not rerun
+instructions. No push or deployment followed.
+
 ## Aggregate evidence commit and Services55 preparation — 22 September
 
 Completed tmux `audit-a387-evidence-scan`: strict full staged diff scan,

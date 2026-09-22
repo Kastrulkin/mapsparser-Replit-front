@@ -1,5 +1,19 @@
 # Audit backlog — evidence, not a readiness claim
 
+## Bounded load/resources and capability reconciliation — 22 September
+
+The small five-journey concurrency-two gap has fresh synthetic evidence:
+42validruns/630requests/126invariants, owned native PG cleanup,31pure controls
+and sampled CPU/RSS observations. Preserve current higher sampled RSS and the
+time-ordered baseline/current design; this does not prove a capacity ceiling,
+absence of leaks, optimization or complete AC7. No product code changed.
+
+All12 remaining a387 offline nonpasses have an independently verified historical
+capability/source bridge. That does not establish the full transitive current
+environment: aggregateNONPASS and current canonical image/runtime/CI gates stay
+open. Current image build requires10GiB versus6.5GiB free at this checkpoint.
+Evidence: `five-journey-stress-20260922/`, `capability-bridge-20260922/`.
+
 ## Current migrated services/content proof — 22 September
 
 SEC-RBAC-04 and the scoped content-target checks now have a fresh a387-source

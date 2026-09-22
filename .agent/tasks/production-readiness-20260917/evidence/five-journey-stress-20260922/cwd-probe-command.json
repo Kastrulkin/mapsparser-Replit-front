@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "label": "five-stress-cwd-probe",
+  "captured_at": "2026-09-22T18:51:52.047863+00:00",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "/usr/bin/sandbox-exec",
+    "-f",
+    "/private/tmp/localos-five-stress.afdg9mej/sandbox.sb",
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+    "-B",
+    "-I",
+    "-S",
+    "-c",
+    "import errno,socket; s=socket.socket(); code=s.connect_ex(('127.0.0.1',1)); s.close(); print('offport_denied=' + str(code in {errno.EPERM,errno.EACCES})); raise SystemExit(0 if code in {errno.EPERM,errno.EACCES} else 1)"
+  ],
+  "cwd": "/private/tmp/localos-five-stress.afdg9mej",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 38.51,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "offport_denied=True\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}
