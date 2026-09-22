@@ -22,8 +22,12 @@
 - [x] Offline immutable-image smoke passes5.067507s: pipcheck, UID10001/writable
   dirs/Chromium, both frontend transitive asset checks. Three containers exit0,
   noOOM, exact cleanup and Docker-state equality pass; independent review PASS.
-- [ ] Package/strict scan/local commit, then current synthetic PG16 migration,
-  Gunicorn HTTP, worker shutdown and full CI gates. Terminal build/smoke handles
+- [x] Final24-path package independently reviewed and committed locally as
+  `5a6bac9c` (235.215ms/exit0); strict182937-byte staged scan1569.425ms/exit0,
+  zero findings. Only byte-exact raw build log has19 trailing-space suffixes;
+  all other files pass whitespace checks. No push/deploy or foreign-file adoption.
+- [ ] Next: current synthetic PG16 migration, Gunicorn HTTP, worker shutdown
+  and full CI gates. Terminal build/smoke handles
   must not be rerun. Private profile `/private/tmp/localos-current-image-20260922.SJ9dlO/`.
 - [ ] Original image206/history-security, broader browser/demo and whole-diff
   requirements remain open. No production, provider writes, push or deployment.

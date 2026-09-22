@@ -1,5 +1,33 @@
 # Readiness handoff
 
+## Terminal image package checkpoint — 22 September
+
+The24-path evidence/docs package is committed locally as
+`5a6bac9c23cd873abe18958025210e77f2c203de` (235.215ms/exit0; duplicate hookPASS).
+Independent package reviewPASS; final strict staged scan1569.425ms/exit0,
+zero findings,182937bytes/SHA db3d2b8207685b1e7293184530893b443836ab8e4cff9db9ec0de1c3a69753d6.
+Private `commit-command.json` and `staged-scan-final-command.json` are terminal;
+do not rerun them. The index was empty afterwards; only foreign5tracked plus
+4ordinary/1restricted untracked paths remain. No production/push/deploy.
+
+Next substantive phase is current-image synthetic PG16/Redis, migration/schema
+checks, canonical Gunicorn HTTP, and bounded worker lifecycle; all remain
+unexecuted on imagef5f8970b. Do not rebuild the accepted image. Use fresh labelled
+resources/internal network/no host ports or mounts; preserve existing Docker
+state. Source recon found `WORKER_ROLE=general` is an intentionally idle branch,
+not proof of parser/dispatcher/agent role behavior; no explicit worker SIGTERM
+handler was established, so do not claim graceful application shutdown in advance.
+Frozen-source paths: `docker-compose.yml`, `docker-compose.staging.yml`,
+`entrypoint.sh`, `src/worker.py` under the private image profile's `source/`.
+Read-only identity check before preparing the new profile:
+
+```sh
+docker --context desktop-linux image inspect sha256:f5f8970b270d7b74b96e2b188cbfd471477a5a5655d9eb57bf007d45c96f59d6 --format '{{.Id}} {{.Architecture}} {{.Config.User}}'
+```
+
+Free space after build/checkpoint is about6.9GiB. This supports bounded runtime
+preparation, not another10GiB-minimum build. Full goal remains ACTIVE/unproven.
+
 ## Current continuation — 22 September, clean canonical image and offline smoke pass
 
 Entry HEAD `33c9c7027d78a29d181d0347718563c22de2963a`, same branch. This turn is
@@ -29,8 +57,8 @@ Completed `audit-current-image-smoke-sj9dlo`:5.067507s/exit0 (4.923s controller)
 pip/nonroot-browser/both-assets allpass; three exact owned containers removed,
 noOOM or unexpectedstop, Docker state unchanged. Independent terminal review
 PASS. No completed build/smoke handle should be rerun. Durable17-artifact bundle
-`evidence/current-image-20260922/` hashes verify. Next is its scoped package
-scan/local commit, then new synthetic PG16/migrations/Gunicorn/worker and full
+`evidence/current-image-20260922/` hashes verify. Package review/scan/commit is
+complete as recorded above; next is synthetic PG16/migrations/Gunicorn/worker and full
 CI integration on this immutable image. Free about7.1GiB; no new Docker build
 needed. No deployment/provider operation.
 The global original security206/browser/demo/final review gates stay open.

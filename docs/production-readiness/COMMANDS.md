@@ -2,6 +2,13 @@
 
 ## Current clean image and bounded cleanup — 22 September
 
+Completed local package commit `5a6bac9c23cd873abe18958025210e77f2c203de`:
+24paths,235.215ms/exit0, duplicate hookPASS. Final strict staged scan:
+1569.425ms/exit0, zero findings,182937bytes,
+SHA db3d2b8207685b1e7293184530893b443836ab8e4cff9db9ec0de1c3a69753d6.
+Private captures `commit-command.json` and `staged-scan-final-command.json` are
+terminal, not rerun commands. No push/deployment.
+
 Completed `audit-cache-cleanup-sj9dlo`:11,773.424ms/exit0,30951generated closed
 cache files,1,003,102,208allocated bytes. Exact command/candidate manifest and
 result are in `/private/tmp/localos-current-image-20260922.SJ9dlO/`; do not rerun.
