@@ -33,12 +33,17 @@ OAuth-related refresh is platform-restricted and unrun, not a proven flaw.
 
 ## Current update — image scan candidates need triage
 
-Completed all20layers+config of pinned audit image;219redacted matches are
-untriaged, not verified secrets or false positives.17private-key labels merit
+Completed all20layers+config of pinned audit image;219redacted matches were
+mapped. Exact source equality classified13;206 remain unresolved, not verified
+secrets or false positives.17private-key labels merit
 prompt exact-source review, not live validation. A real exposure could require
 an explicit remediation/rotation decision. SEC-BUILD-CONTEXT-02 remains OPEN.
 Runtime source919a differs from post-start reported diskhashc76; preserve the
 qualified provenance note with raw results. No production readiness promotion.
+
+The later candidate-map and PEM-observation evidence supersedes the initial
+219-untriaged count. Three delimiter observations explain specific detector
+signals only; they do not clear whole files or reduce the206-open ledger.
 
 ## Current update — full backend failures are now observed
 

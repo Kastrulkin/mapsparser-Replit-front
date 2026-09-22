@@ -1,5 +1,38 @@
 # Readiness handoff
 
+## Latest continuation — 22 September, current gates reconciled
+
+Current HEAD `202b9c95afc58a2e2d5ebb3fb89523700bcb6892`, same readiness branch.
+The previously reviewed polling/dist package is committed, not still dirty.
+Foreign8tracked/5untracked files plus restricted OAuth candidate remain preserved.
+
+Current F821 CI command passes164.514ms/exit0; first invalid-cache-env command
+exits2 before analysis. Raw copies and manifest are in task
+`evidence/current-gate-reconciliation-20260922/`. The accompanying report binds
+two already-passed compiled-runner tests to unchanged current bytes, and corrects
+the image ledger to206unresolved/13classified out of219. Independent bounded
+read-only reconciliation review PASS; whole-project readiness remains incomplete.
+
+Seven PG schema/security nodes previously skipped at setup now pass21stages;
+first actual run exit0/8.540894s, seven isolation controls pass. Generated schemas
+and roles0, exact DB absent, system-only catalog, owned postmaster23208 stopped,
+tracked processes0. Runtime/source/cleanup independent review PASS. Executed
+controllerc56d5c94 and guardb0943730 stayed unchanged,6340-source manifest matches
+and8explicit files bridge d0ef→202b. Initial controller drafts failed review,
+but none ran. Durable proof: task `evidence/schema-security-pg7-20260922/` and
+`schema-security-pg7-results-20260922.md`; private runtime
+`/private/tmp/localos-schema-pg7.c72qakfx/`. Do not rerun completed exclusive names.
+The executed controller is archived verbatim (one unused-import Ruff warning),
+not introduced as a general project runner. Current owned package is evidence/
+documentation only; next verify remaining RBAC/services/legacy PG families and
+pending dirty-fixture adoption before a new full aggregate. Image206 remainsopen.
+
+Image helper `/private/tmp/localos-image-structural-v1.QqytCs/` was rejected at
+preflight and made fail-closed; do not adopt or run it. Its pure predicate checks
+are not image clearance. Existing committed scanner evidence remains unchanged.
+Restricted OAuth/native-picker scenarios and pending author/diagnostic adoption
+choice are unchanged; no route-around, push, deploy or additional cleanup.
+
 ## Current continuation — 22 September, two bounded fixes and fixture diagnosis
 
 HEAD `45393b30`, same readiness branch. Media fix/failed aggregate committed;

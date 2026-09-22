@@ -1,5 +1,16 @@
 # Production-readiness change log
 
+## Schema/security integration evidence — 22 September, parent202b9c95
+
+No application changes. Execute seven previously setup-skipped schema/security
+tests on a fresh local PostgreSQL cluster:7nodes/21stages pass in8.540894s outer
+runtime. Verify7isolation controls, empty generated schemas/roles, exact DB
+absence and owned process shutdown; independent runtime review PASS. Preserve
+exact executed helper sources and raw evidence. Reconcile the already-covered
+compiled-runner pair/current F821 gate and correct image open count219→206 after
+13prior classifications. Image-helper draft rejected before execution. No push,
+deploy, production/provider access, restricted-test retry or foreign adoption.
+
 ## Backend fixture reliability — 22 September, parent45393b30
 
 Give Telegram-polling tests a per-test heartbeat path; retain behavior/assertions

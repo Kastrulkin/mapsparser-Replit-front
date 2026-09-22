@@ -1,5 +1,26 @@
 # Production-readiness progress
 
+## Current checkpoint — 22 September, gate reconciliation
+
+- [x] HEAD `202b9c95` locally commits the polling/dist fixes and their24-node
+  adjacent proof. Earlier "uncommitted" handoff entries are historical.
+- [x] Current Python F821 CI gate passes164.514ms/exit0; its explicit exclusions
+  remain. The invalid `RUFF_NO_CACHE=1` setup attempt is retained separately.
+- [x] Two compiled-runner nodes already have six passed stages on bytes identical
+  to current code. Independent review confirms no new run is needed for that pair.
+- [x] Correct security count:219mapped,13classified,206unresolved. A proposed
+  image structural helper failed pre-execution review and was not used/adopted.
+- [x] Those seven migration/runtime-schema PG tests now pass21stages on a fresh
+  synthetic PostgreSQL15.15 cluster, outer8.540894s/exit0. Seven isolation controls
+  pass; schemas/roles0, generated DB absent, owned PostgreSQL stopped. Independent
+  runtime review PASS;6340-file snapshot and8current source bridges unchanged.
+- [ ] Whole aggregate/integration, security/owner decisions, current load/browser
+  performance, CI/demo/final whole-diff review and pending dirty adoption remain.
+
+Evidence: task `evidence/current-gate-reconciliation-20260922.md` and
+`evidence/schema-security-pg7-results-20260922.md`. No new
+production/provider/Docker operations, restricted-test retry, push or deploy.
+
 ## Current checkpoint — 22 September, fixture causes reproduced
 
 - [x] Local commit `45393b30` saves stable media IDs and exact failed aggregate;

@@ -1,0 +1,286 @@
+{
+  "bridge": [
+    {
+      "path": "tests/test_action_orchestrator_schema_pg.py",
+      "sha256": "e8d8051bd8c31daae3eb1cc2d0e23e4bd016a9401a7d6e704815cbbeedb3efd7"
+    },
+    {
+      "path": "tests/test_agent_api_security_runtime_pg.py",
+      "sha256": "a2ec0288c55619027123f3cbab60b6d586ae560cff2a6e643e114833a9b382da"
+    },
+    {
+      "path": "tests/conftest.py",
+      "sha256": "893fef47376fdf4cd1bc1b8029b0f7bdaaf46a0385d3c7f91f94cecef669b1c0"
+    },
+    {
+      "path": "alembic_migrations/versions/20260906_move_action_orchestrator_runtime_ddl.py",
+      "sha256": "27588ec41e4da018a175daa4007de8546de0fac35fdc22427ac95fda995ea5cf"
+    },
+    {
+      "path": "alembic_migrations/versions/20260514_add_agent_api_security.py",
+      "sha256": "1f43ebe8d6584fa25d934c8d1a3673ae2ef47809a07ee991476ad30ab11cac3b"
+    },
+    {
+      "path": "src/core/action_orchestrator.py",
+      "sha256": "6d9bc1131f467a8e55095010761bad3f60e4d3dcc59768dd89f6469c468f5638"
+    },
+    {
+      "path": "src/core/action_ledger.py",
+      "sha256": "7d181f7d2d97165f99fc0022521123699d0fa7921d0d14b641cfe35987dca5a9"
+    },
+    {
+      "path": "src/core/agent_api_security.py",
+      "sha256": "e2e2f1788fdc0b62811761cd18e6db353908d125fe29e70eda7803c3f90fccbe"
+    }
+  ],
+  "callback": {
+    "collection_errors": [],
+    "controls": [
+      "foreign_database",
+      "foreign_port",
+      "libpq_options",
+      "inherited_libpq_env",
+      "native_offport_os_denial",
+      "guard_write_denied",
+      "user_read_denied"
+    ],
+    "nodes": [
+      "tests/test_action_orchestrator_schema_pg.py::test_action_schema_migration_is_idempotent_and_preserves_legacy_outbox",
+      "tests/test_action_orchestrator_schema_pg.py::test_runtime_schema_checks_and_ledger_write_work_with_dml_only_role",
+      "tests/test_action_orchestrator_schema_pg.py::test_runtime_schema_check_fails_with_actionable_missing_column",
+      "tests/test_agent_api_security_runtime_pg.py::test_existing_migration_has_all_ten_runtime_indexes",
+      "tests/test_agent_api_security_runtime_pg.py::test_security_client_discovery_and_ledger_work_with_dml_only_role",
+      "tests/test_agent_api_security_runtime_pg.py::test_missing_schema_fails_clearly_without_ddl_or_commit[DROP TABLE agent_discovery_events-agent_discovery_events: id]",
+      "tests/test_agent_api_security_runtime_pg.py::test_missing_schema_fails_clearly_without_ddl_or_commit[ALTER TABLE agent_action_ledger DROP COLUMN approval_id-agent_action_ledger: approval_id]"
+    ],
+    "reports": [
+      {
+        "nodeid": "tests/test_action_orchestrator_schema_pg.py::test_action_schema_migration_is_idempotent_and_preserves_legacy_outbox",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "setup"
+      },
+      {
+        "nodeid": "tests/test_action_orchestrator_schema_pg.py::test_action_schema_migration_is_idempotent_and_preserves_legacy_outbox",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "call"
+      },
+      {
+        "nodeid": "tests/test_action_orchestrator_schema_pg.py::test_action_schema_migration_is_idempotent_and_preserves_legacy_outbox",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "teardown"
+      },
+      {
+        "nodeid": "tests/test_action_orchestrator_schema_pg.py::test_runtime_schema_checks_and_ledger_write_work_with_dml_only_role",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "setup"
+      },
+      {
+        "nodeid": "tests/test_action_orchestrator_schema_pg.py::test_runtime_schema_checks_and_ledger_write_work_with_dml_only_role",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "call"
+      },
+      {
+        "nodeid": "tests/test_action_orchestrator_schema_pg.py::test_runtime_schema_checks_and_ledger_write_work_with_dml_only_role",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "teardown"
+      },
+      {
+        "nodeid": "tests/test_action_orchestrator_schema_pg.py::test_runtime_schema_check_fails_with_actionable_missing_column",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "setup"
+      },
+      {
+        "nodeid": "tests/test_action_orchestrator_schema_pg.py::test_runtime_schema_check_fails_with_actionable_missing_column",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "call"
+      },
+      {
+        "nodeid": "tests/test_action_orchestrator_schema_pg.py::test_runtime_schema_check_fails_with_actionable_missing_column",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "teardown"
+      },
+      {
+        "nodeid": "tests/test_agent_api_security_runtime_pg.py::test_existing_migration_has_all_ten_runtime_indexes",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "setup"
+      },
+      {
+        "nodeid": "tests/test_agent_api_security_runtime_pg.py::test_existing_migration_has_all_ten_runtime_indexes",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "call"
+      },
+      {
+        "nodeid": "tests/test_agent_api_security_runtime_pg.py::test_existing_migration_has_all_ten_runtime_indexes",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "teardown"
+      },
+      {
+        "nodeid": "tests/test_agent_api_security_runtime_pg.py::test_security_client_discovery_and_ledger_work_with_dml_only_role",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "setup"
+      },
+      {
+        "nodeid": "tests/test_agent_api_security_runtime_pg.py::test_security_client_discovery_and_ledger_work_with_dml_only_role",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "call"
+      },
+      {
+        "nodeid": "tests/test_agent_api_security_runtime_pg.py::test_security_client_discovery_and_ledger_work_with_dml_only_role",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "teardown"
+      },
+      {
+        "nodeid": "tests/test_agent_api_security_runtime_pg.py::test_missing_schema_fails_clearly_without_ddl_or_commit[DROP TABLE agent_discovery_events-agent_discovery_events: id]",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "setup"
+      },
+      {
+        "nodeid": "tests/test_agent_api_security_runtime_pg.py::test_missing_schema_fails_clearly_without_ddl_or_commit[DROP TABLE agent_discovery_events-agent_discovery_events: id]",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "call"
+      },
+      {
+        "nodeid": "tests/test_agent_api_security_runtime_pg.py::test_missing_schema_fails_clearly_without_ddl_or_commit[DROP TABLE agent_discovery_events-agent_discovery_events: id]",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "teardown"
+      },
+      {
+        "nodeid": "tests/test_agent_api_security_runtime_pg.py::test_missing_schema_fails_clearly_without_ddl_or_commit[ALTER TABLE agent_action_ledger DROP COLUMN approval_id-agent_action_ledger: approval_id]",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "setup"
+      },
+      {
+        "nodeid": "tests/test_agent_api_security_runtime_pg.py::test_missing_schema_fails_clearly_without_ddl_or_commit[ALTER TABLE agent_action_ledger DROP COLUMN approval_id-agent_action_ledger: approval_id]",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "call"
+      },
+      {
+        "nodeid": "tests/test_agent_api_security_runtime_pg.py::test_missing_schema_fails_clearly_without_ddl_or_commit[ALTER TABLE agent_action_ledger DROP COLUMN approval_id-agent_action_ledger: approval_id]",
+        "outcome": "passed",
+        "wasxfail": false,
+        "when": "teardown"
+      }
+    ],
+    "status": 0
+  },
+  "catalog_after_database_drop": [
+    "postgres",
+    "template0",
+    "template1"
+  ],
+  "child": {
+    "process": {
+      "errors": [],
+      "observed": [
+        {
+          "created": 1790091538.240981,
+          "pid": 23247
+        }
+      ],
+      "remaining": [],
+      "signalled": [],
+      "status": "clean"
+    },
+    "returncode": 0,
+    "streams": {
+      "stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "truncated": false
+      },
+      "stdout": {
+        "bytes": 5685,
+        "sha256": "fd6ffbddf2b335b445e535f8df0477cc2ac8cafb525611e13a23baad59daca14",
+        "truncated": false
+      }
+    }
+  },
+  "cleanup_observation": {
+    "database": [],
+    "roles": [],
+    "schema_database_already_absent": true
+  },
+  "controller_after_sha256": "c56d5c94008df1933d5a65e43bb8b37f368317d710475074796d18445bbd1787",
+  "controller_before_sha256": "c56d5c94008df1933d5a65e43bb8b37f368317d710475074796d18445bbd1787",
+  "database": "readiness_schema_test_79de042fd3b14f869bd20de3d23d4066",
+  "deadline_seconds": 300,
+  "finished_at": 1790091541.118714,
+  "generated_database_absent": [],
+  "guard_after_sha256": "b09437305887a33aa7b2470f7886f0c573c4cef3aeda6c75d928285f315d821e",
+  "guard_before_sha256": "b09437305887a33aa7b2470f7886f0c573c4cef3aeda6c75d928285f315d821e",
+  "helpers": {
+    "owned_processes_sha256": "4f16b6c343223717dcf3b5bdbf86ff9159594b33fa92d744527891188c4c227b",
+    "performance_native_sha256": "0cafe7e3828d950db73b5fb88b6dc3177e329aee5eba10f98b10b59b9a43b6ba"
+  },
+  "nodes": [
+    "tests/test_action_orchestrator_schema_pg.py::test_action_schema_migration_is_idempotent_and_preserves_legacy_outbox",
+    "tests/test_action_orchestrator_schema_pg.py::test_runtime_schema_checks_and_ledger_write_work_with_dml_only_role",
+    "tests/test_action_orchestrator_schema_pg.py::test_runtime_schema_check_fails_with_actionable_missing_column",
+    "tests/test_agent_api_security_runtime_pg.py::test_existing_migration_has_all_ten_runtime_indexes",
+    "tests/test_agent_api_security_runtime_pg.py::test_security_client_discovery_and_ledger_work_with_dml_only_role",
+    "tests/test_agent_api_security_runtime_pg.py::test_missing_schema_fails_clearly_without_ddl_or_commit[DROP TABLE agent_discovery_events-agent_discovery_events: id]",
+    "tests/test_agent_api_security_runtime_pg.py::test_missing_schema_fails_clearly_without_ddl_or_commit[ALTER TABLE agent_action_ledger DROP COLUMN approval_id-agent_action_ledger: approval_id]"
+  ],
+  "owned_processes": {
+    "birth": [
+      23208,
+      1790091535.809269
+    ],
+    "remaining": []
+  },
+  "port": 62956,
+  "post_test_roles": [],
+  "post_test_schemas": [],
+  "postmaster": {
+    "birth": [
+      23208,
+      1790091535.809269
+    ],
+    "identity": {
+      "client_encoding": "UTF8",
+      "current_user": "readiness_perf_owner",
+      "data_directory": "/private/tmp/localos-schema-pg7.c72qakfx/data",
+      "pid": 23208,
+      "server_encoding": "UTF8",
+      "show_data_directory": "/private/tmp/localos-schema-pg7.c72qakfx/data",
+      "show_listen_addresses": "127.0.0.1",
+      "show_port": "62956",
+      "verified": true
+    }
+  },
+  "run_root": "/private/tmp/localos-schema-pg7.c72qakfx",
+  "source_after": {
+    "count": 6340,
+    "sha256": "48af8ec2a135fbb7858a859bdf59c680eb8076b5ff9c1d6b3a12d42ea5892067"
+  },
+  "source_before": {
+    "count": 6340,
+    "sha256": "48af8ec2a135fbb7858a859bdf59c680eb8076b5ff9c1d6b3a12d42ea5892067"
+  },
+  "status": "passed",
+  "stop": {
+    "data_directory": "/private/tmp/localos-schema-pg7.c72qakfx/data",
+    "expected_pid": 23208,
+    "status": "stopped"
+  }
+}

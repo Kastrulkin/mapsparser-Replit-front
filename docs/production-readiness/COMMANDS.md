@@ -1,5 +1,32 @@
 # Verified commands and evidence
 
+## Gate reconciliation — 22 September, HEAD202b9c95
+
+Actual current-tree CI undefined-name check:
+
+```text
+env RUFF_NO_CACHE=true PYTHON_BIN=/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python bash scripts/ci_gate_python_f821.sh
+```
+
+Named tmux `audit-current-f821-v2`: exit0,164.514ms, no timeout/truncation.
+This is F821-only with the script's six exclusions, not full Python lint. First
+`RUFF_NO_CACHE=1` command exits2/65.693ms before analysis; retained as a CLI setup
+error. Both raw captures and verified SHA256SUMS are in task
+`evidence/current-gate-reconciliation-20260922/`. Read-only bridge checks confirm
+two compiled-runner nodes already passed on identical current bytes; no rerun.
+The seven PG schema nodes then ran under named tmux `audit-schema-pg7-v1`:
+
+```text
+/usr/bin/arch -arm64 /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python -B -I /private/tmp/localos-schema-pg7-20260922/run_schema_pg7.py --execute
+```
+
+Actual exit0/8.540894s,7nodes/21stages pass,7isolation controls pass. Generated DB,
+roles/schemas and owned process cleanup verified; source/hash and independent
+runtime review PASS. Exact final controllerc56d5c94 and raw captures are in
+`evidence/schema-security-pg7-20260922/`;15pure helper controls passed separately.
+Do not reuse this HEAD-bound temporary command as a general runner. No image
+scan was executed by the rejected structural helper.
+
 ## Test fixture follow-up — 22 September
 
 All runtime commands use ARM64 native Python3.11.7 `-B -I`, bug-reproducer

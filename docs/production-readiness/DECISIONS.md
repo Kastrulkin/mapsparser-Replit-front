@@ -1,5 +1,15 @@
 # Readiness decisions
 
+## D-123 — Reconcile exact source coverage before expanding test runs
+
+Historical admission inventories are plans, not runtime outcomes. Preserve the
+failed aggregate and bridge existing bounded passes only when the actual test
+and runtime bytes match. This avoids repeating the covered compiled-runner pair
+while exposing seven genuine schema/security setup skips. A fresh owned native
+PostgreSQL cluster is sufficient for those literal tests; a broad Testcontainers
+profile expansion is unnecessary. No new runner is accepted before lifecycle,
+cleanup and test-accounting review; preparation failures are not product bugs.
+
 ## D-122 — Preserve the failing environment and isolate test-owned files
 
 Tests must not unlink the runtime's fixed global heartbeat; give each test its

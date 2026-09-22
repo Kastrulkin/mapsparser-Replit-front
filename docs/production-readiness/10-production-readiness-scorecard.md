@@ -7,8 +7,9 @@ results do not certify provider/website/current browser/load or production
 capacity. Scores and original acceptance verdicts remain unchanged; current
 aggregate, broad security/integration/performance/CI/demo/final review stay open.
 
-22September: all-layer credential scan completed913.092s with219untriaged
-candidates; security gate remains OPEN, scores unchanged. Coverage integrity is
+22September: all-layer credential scan completed913.092s with219candidates;
+later exact-source mapping classifies13 and leaves206unresolved. The security
+gate remains OPEN, scores unchanged. Coverage integrity is
 not absence of credentials. Runner startup fix locally verified separately.
 
 22September full backend evidence, parentc1dd64ee: two5481-node frozen attempts
