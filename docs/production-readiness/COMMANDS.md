@@ -2,6 +2,12 @@
 
 ## Bounded five-journey stress — 22 September
 
+Final exact37-path staged diff secret scan:15,505.887ms/exit0, zero findings,
+10,681,444bytes/SHA7188253173776a88117b06344f41259d2e8010b4a94d17e1c216693b1a2a1cd9.
+Completed `audit-five-stress-commit`:378.949ms/exit0, local71a2f97b.
+Private profile captures `staged-scan-command.json` and `commit-command.json`;
+no push/deployment. This supersedes any pending packaging wording below.
+
 Completed tmux profiles: `audit-five-stress-pure-v1/v2/v3` (22/22/31 fake-only
 checks,620.847/376.066/558.679ms); `audit-five-stress-cwd-probe` (38.510ms/exit0,
 offport denied); `audit-five-stress-native-v1` (19.978820s/exit1 before workload),

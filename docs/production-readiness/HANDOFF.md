@@ -2,7 +2,19 @@
 
 ## Current terminal stress checkpoint — 22 September
 
-Entry HEAD remains `cb15cb0e`, same branch. This goal turn is PROGRESS: scoped
+Evidence package is committed locally as
+`71a2f97b3f08436261f08c1a8b4d4f67a8b0c9e8`:37scopedpaths,378.949ms/exit0.
+Final package review PASS; strict scan15.505887s/exit0, zero findings,
+10,681,444bytes/diffSHA7188253173776a88117b06344f41259d2e8010b4a94d17e1c216693b1a2a1cd9.
+Captures: private profile `staged-scan-command.json` and `commit-command.json`.
+No completed runtime/scan/commit handle should be rerun. The next substantive
+step is safe disk-space recovery and current clean image/CI integration, not
+another stress test. Read-only size recon identifies about978MiB of regenerable
+Git copies/archives and stopped synthetic PG data inside only the two private
+stress roots below; no deletion was performed. Preserve their raw evidence and
+the frozen a387 source, Python environment and dependency support used elsewhere.
+
+Entry HEAD for this stress phase was `cb15cb0e`, same branch. This goal turn is PROGRESS: scoped
 source-bridge reconciliation and actual bounded five-journey stress/resource
 execution, not a restated plan. Root owns only the eight readiness documents
 and two new evidence bundles; five tracked foreign edits retain SHA3c70e23b and
@@ -31,8 +43,8 @@ Bridge bundle independently maps all12 offline nonpasses to historical Linux10
 and browser2 scopes. It explains prerequisites but closes no current transitive
 environment/aggregate gate. Independent final runtime acceptance now PASS:
 all756samples,42DB identities, every recorded PID absent and source/provenance
-bindings verified. Next: final package review and strict scoped scan/local
-commit, then current clean Docker/runtime/CI gate
+bindings verified. Package review/scan/commit are complete as recorded above.
+Next is the current clean Docker/runtime/CI gate
 (10GiB start floor; currently6.5GiB). Review only safe regenerable temporary
 artifacts if more room is needed; never delete unknown user data or existing DBs.
 Image206/security, broader browser/demo and whole-diff review remain open.
