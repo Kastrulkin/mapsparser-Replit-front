@@ -206,6 +206,10 @@ def load_candidate_rows(cursor: Any) -> list[dict[str, Any]]:
         """SELECT ws.id AS workstream_id,ws.lead_id,ws.workstream_type,ws.client_business_id,
                   ws.lifecycle_status,ws.status AS workstream_status,
                   lead.name AS company,lead.city,lead.category,lead.pipeline_status,lead.status AS lead_status,
+                  lead.search_payload_json,
+                  EXISTS(SELECT 1 FROM operator_async_jobs job
+                         WHERE job.kind='outreach_continue' AND job.business_id=ws.client_business_id
+                           AND job.result_json->'lead_ids' @> jsonb_build_array(lead.id)) AS continuation_managed,
                   contact.id AS contact_point_id,contact.contact_type,contact.verification_status,
                   lower(btrim(contact.normalized_value)) AS recipient,
                   research.evidence_json,research.signals_json,research.report_hash,
@@ -231,6 +235,8 @@ def load_candidate_rows(cursor: Any) -> list[dict[str, Any]]:
 
 
 def candidate_exclusion(row: dict[str, Any], *, now: datetime) -> str | None:
+    if row.get("continuation_managed") or (row.get("search_payload_json") or {}).get("continuation_id"):
+        return "continuation_manual_review_required"
     if "berlin" in str(row.get("city") or "").casefold():
         return "excluded_city"
     if not str(row.get("city") or "").strip():
@@ -362,6 +368,9 @@ def record_run(cursor: Any, result: dict[str, Any]) -> dict[str, Any]:
         ),
     )
     persisted = _dict(cursor.fetchone())
+    if result.get("status") == "shortage":
+        from services.outreach_continuation import wake_after_riderra_shortage
+        wake_after_riderra_shortage(cursor, business_id=BUSINESS_ID, run_id=str(persisted.get("id") or run_id))
     return {**result, "run_id": str(persisted.get("id") or run_id), "fingerprint": fingerprint,
             "should_notify": bool(persisted.get("notification_required") and not persisted.get("notified_at"))}
 

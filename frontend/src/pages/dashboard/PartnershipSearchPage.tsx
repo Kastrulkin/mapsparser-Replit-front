@@ -1,3 +1,4 @@
+import { OutreachContinuation } from '@/components/prospecting/OutreachContinuation';
 import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
 import { OutreachLearningInsights } from '@/components/prospecting/OutreachLearningInsights';
 import { PartnershipAnalyticsWorkspace } from '@/components/prospecting/PartnershipAnalyticsWorkspace';
@@ -2274,6 +2275,8 @@ export const PartnershipSearchPage: React.FC = () => {
         visibleReactionsCount={visibleReactions.length}
         onWorkspaceChange={(value) => setWorkspaceView(toPartnershipWorkspaceView(value))}
       />
+
+      {currentBusinessId && <OutreachContinuation key={currentBusinessId} businessId={currentBusinessId} />}
 
       {currentBusinessId && journeyActions.length ? <section aria-label="Текущий шаг по партнёрствам" className="space-y-3">{journeyActions.slice(0, 2).map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={() => void loadPartnershipJourneyActions()} />)}</section> : null}
 

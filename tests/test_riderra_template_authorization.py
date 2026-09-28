@@ -107,7 +107,7 @@ def phuket_attestation():
     source = attestation()
     source["rows"] = {
         "200": ["Thailand", "Phuket International Airport (HKT)", "Phuket town", "Standard class car", 3, "22,00", "EUR"],
-        "201": ["Thailand", "Phuket International Airport (HKT)", "PaTong, Phuket", "Standard class car", 3, "25,00", "EUR"],
+        "201": ["Thailand", "Phuket International Airport (HKT)", "PaTong, Phuket", "Standard class car", 3, "26,00", "EUR"],
         "202": ["Thailand", "Phuket International Airport (HKT)", "Karon Beach, Phuket", "Standard minivan 8 pax", 8, "32,00", "EUR"],
     }
     source["row_records"] = {
@@ -145,7 +145,7 @@ def test_manifest_is_closed_exact_template_and_frozen_quote():
     assert member["subject"] == "Malaca Instituto | Riderra | Malaga airport transfers"
     assert "€46 (standard minivan, up to 6 passengers)" in member["body"]
     assert member["pricebook"]["source_row_values"][1] == "Malaga Airport (AGP)"
-    assert result["daily_limit"] == 150
+    assert result["daily_limit"] == 200
 
 
 def test_phuket_manifest_preserves_approved_copy_and_three_database_quotes():
@@ -154,7 +154,7 @@ def test_phuket_manifest_preserves_approved_copy_and_three_database_quotes():
     assert result["template_sha256"] == riderra.PHUKET_TEMPLATE_SHA256
     assert member["subject"] == "Example Travel | Riderra | Phuket airport transfers"
     assert "Phuket Town: €22" in member["body"]
-    assert "Patong: €25" in member["body"]
+    assert "Patong: €26" in member["body"]
     assert "Karon Beach: €32" in member["body"]
     assert [quote["source_record_id"] for quote in member["pricebook_examples"]] == [
         "price-200", "price-201", "price-202",
@@ -273,8 +273,8 @@ def test_revocation_succeeds_with_expired_or_damaged_previous_manifest():
 
 
 @pytest.mark.parametrize("count,duplicate,allowed,reason", [
-    (150, False, True, "riderra_daily_slot_reserved"),
-    (151, False, False, "riderra_daily_limit_reached"),
+    (200, False, True, "riderra_daily_slot_reserved"),
+    (201, False, False, "riderra_daily_limit_reached"),
     (1, True, False, "riderra_company_already_reserved"),
 ])
 def test_daily_cap_counts_unique_queued_reserved_sent_and_unknown(count, duplicate, allowed, reason):
@@ -656,32 +656,32 @@ def test_daily_company_cap_sql_executes_atomically_on_isolated_postgres(postgres
               campaign_id text, event_type text, payload_json jsonb, created_at timestamptz
             );
             INSERT INTO prospectingleads
-              SELECT 'lead-'||n, 'Company '||n FROM generate_series(1,151) n;
+              SELECT 'lead-'||n, 'Company '||n FROM generate_series(1,201) n;
             INSERT INTO lead_workstreams
-              SELECT 'ws-'||n, %s, 'client_partnership' FROM generate_series(1,151) n;
+              SELECT 'ws-'||n, %s, 'client_partnership' FROM generate_series(1,201) n;
             INSERT INTO outreach_campaigns
-              SELECT 'campaign-'||n, %s, 'lead-'||n, 'ws-'||n FROM generate_series(1,151) n;
+              SELECT 'campaign-'||n, %s, 'lead-'||n, 'ws-'||n FROM generate_series(1,201) n;
             INSERT INTO outreach_campaign_events
               SELECT 'campaign-'||n, 'manual_sent',
                      jsonb_build_object('evidence_kind','user_confirmed','occurred_at',NOW()::text), NOW()
-              FROM generate_series(1,149) n;
+              FROM generate_series(1,199) n;
             INSERT INTO outreach_campaign_touches VALUES
-              ('touch-150','campaign-150'),('touch-151','campaign-151');
+              ('touch-200','campaign-200'),('touch-201','campaign-201');
             INSERT INTO outreachsendqueue VALUES
-              ('queue-150','lead-150','touch-150','ws-150','queued',NULL,NULL,NOW(),NULL,NOW(),NOW()),
-              ('queue-151','lead-151','touch-151','ws-151','queued',NULL,NULL,NOW(),NULL,NOW()+INTERVAL '1 second',NOW()+INTERVAL '1 second');
+              ('queue-200','lead-200','touch-200','ws-200','queued',NULL,NULL,NOW(),NULL,NOW(),NOW()),
+              ('queue-201','lead-201','touch-201','ws-201','queued',NULL,NULL,NOW(),NULL,NOW()+INTERVAL '1 second',NOW()+INTERVAL '1 second');
             """,
             (riderra.BUSINESS_ID, riderra.BUSINESS_ID),
         )
         base = {"business_id": riderra.BUSINESS_ID, "workstream_type": "client_partnership",
                 "policy_json": {"approval_mode": "riderra_template"}}
         first = riderra.reserve_daily_company_slot(
-            cursor, queue_id="queue-150", item={**base, "lead_id": "lead-150", "lead_name": "Company 150"},
+            cursor, queue_id="queue-200", item={**base, "lead_id": "lead-200", "lead_name": "Company 200"},
         )
         next_item = riderra.reserve_daily_company_slot(
-            cursor, queue_id="queue-151", item={**base, "lead_id": "lead-151", "lead_name": "Company 151"},
+            cursor, queue_id="queue-201", item={**base, "lead_id": "lead-201", "lead_name": "Company 201"},
         )
-        assert first["allowed"] is True and first["riderra_daily_company_count"] == 150
+        assert first["allowed"] is True and first["riderra_daily_company_count"] == 200
         assert next_item["allowed"] is False and next_item["reason_code"] == "riderra_daily_limit_reached"
         connection.rollback()
     finally:
@@ -920,7 +920,7 @@ def test_native_preview_persist_and_template_approval_hooks_use_same_grant(monke
     assert saved["status"] == "draft"
     policy_params = next(params for sql, params in persisted_cursor.calls if "INSERT INTO outreach_campaigns" in sql)
     assert policy_params[11].adapted["approval_mode"] == "riderra_template"
-    assert policy_params[11].adapted["daily_limit"] == 150
+    assert policy_params[11].adapted["daily_limit"] == 200
 
     campaign = {
         "id": saved["id"], "status": "draft", "workstream_type": "client_partnership",

@@ -2013,9 +2013,13 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
     cursor.execute(
         """
         SELECT ws.*, l.name AS lead_name, l.address, l.city, l.category,
-               l.rating, l.reviews_count, l.website, l.source_url,
+               l.rating, l.reviews_count, l.website, l.source_url, l.preferred_language,
                l.source_external_id,
                l.services_json, l.reviews_json, l.search_payload_json,
+               EXISTS(SELECT 1 FROM operator_async_jobs continuation_job
+                      WHERE continuation_job.kind='outreach_continue'
+                        AND continuation_job.business_id=ws.client_business_id
+                        AND continuation_job.result_json->'lead_ids' @> jsonb_build_array(l.id)) AS continuation_managed,
                CASE
                    WHEN LOWER(COALESCE(
                        l.raw_payload_json->>'isVerifiedOwner',
@@ -4085,6 +4089,17 @@ def build_preview(
     manual_review_context: str | None = None,
 ) -> dict[str, Any]:
     context = _apply_sender_mode(_load_context(cursor, workstream_id), sender_mode)
+    continuation = None
+    if context.get("continuation_managed") or (context.get("search_payload_json") or {}).get("continuation_id"):
+        from services.outreach_continuation import load_workstream_contract
+        continuation = load_workstream_contract(cursor, workstream_id)
+        if (not continuation or not continuation.get("enabled")
+                or continuation.get("status") not in {"running", "queued"}
+                or continuation.get("blocker")
+                or (continuation.get("qualification") or {}).get("status") != "qualified"):
+            return {"workstream_id": workstream_id, "status": "needs_evidence", "touches": [],
+                    "reason_code": "continuation_audience_review_required"}
+        context["continuation_contract"] = continuation
     source_fact_fingerprint = _context_source_fact_fingerprint(context)
     author_lane = (
         context.get("workstream_type") == "creator_collaboration"
@@ -4109,6 +4124,14 @@ def build_preview(
     reviewer_role = _text(manual_reviewer_role) or "authorized_user"
     review_context = _text(manual_review_context)
     ledger = build_evidence_ledger(context)
+    if continuation:
+        qualification = continuation["qualification"]
+        evidence = qualification.get("evidence") or {}
+        if not evidence.get("fact") or not evidence.get("source_url"):
+            return {"workstream_id": workstream_id, "status": "needs_evidence", "touches": [], "reason_code": "continuation_evidence_missing"}
+        # Use the actual qualified public fact, not an unrelated map-rating opener.
+        ledger = [{**evidence, "kind": "public_signal", "status": "observed", "relevance": continuation["config"]["offer"],
+                   "observed_at": evidence.get("observed_at"), "freshness": "current_snapshot", "confidence": 0.8}]
     pain_playbook = None
     localos_sales = context.get("workstream_type") == "localos_sales"
     beauty_sales = bool(
@@ -4600,6 +4623,9 @@ def build_preview(
             "forbidden_claims": [],
         }
 
+        if continuation:
+            generation_story = {**generation_story, "offer": continuation["config"]["offer"]}
+
         def voice_example_text(item: Any) -> str:
             if isinstance(item, dict):
                 return _text(item.get("text") or item.get("message") or item.get("example"))
@@ -4617,7 +4643,7 @@ def build_preview(
                 "contact_name": _text(primary_candidate.get("contact_name")),
                 "contact_role": _text(primary_candidate.get("contact_role")),
             },
-            candidate=primary_candidate,
+            candidate={**primary_candidate, "language": ((continuation or {}).get("config") or {}).get("language") or context.get("preferred_language") or "ru"},
             founder_story=generation_story,
             sequence=touches,
             voice_examples=voice_examples,
@@ -5014,6 +5040,7 @@ def build_riderra_template_preview(
     """Build one native campaign preview from a live grant member."""
     from services.riderra_template_authorization_service import (
         BUSINESS_ID as RIDERRA_BUSINESS_ID,
+        NORTH_CHINA_TEMPLATE_ID as RIDERRA_NORTH_CHINA_TEMPLATE_ID,
         PHUKET_TEMPLATE_ID as RIDERRA_PHUKET_TEMPLATE_ID,
         SENDER_ACCOUNT_ID as RIDERRA_SENDER_ACCOUNT_ID,
         exact_invitation as exact_riderra_invitation,
@@ -5068,7 +5095,9 @@ def build_riderra_template_preview(
     if suppression.get("suppressed"):
         raise ValueError("riderra_template_recipient_suppressed")
     is_phuket = normalized.get("template_id") == RIDERRA_PHUKET_TEMPLATE_ID
-    quote_context = normalized.get("pricebook_examples") if is_phuket else normalized.get("pricebook")
+    is_north_china = normalized.get("template_id") == RIDERRA_NORTH_CHINA_TEMPLATE_ID
+    is_example_template = is_phuket or is_north_china
+    quote_context = normalized.get("pricebook_examples") if is_example_template else normalized.get("pricebook")
     source_url = _text(context.get("source_url") or "riderra-postgresql-city-pricing")
     evidence = build_evidence_ledger(context)
     candidate = {
@@ -5076,7 +5105,11 @@ def build_riderra_template_preview(
         "evidence_id": f"riderra:{normalized['source_fact_fingerprint']}",
         "source_url": source_url,
         "observed_fact": normalized["opening"],
-        "relevance_to_offer": "Phuket airport transfer examples" if is_phuket else quote_context["route"],
+        "relevance_to_offer": (
+            "Phuket airport transfer examples" if is_phuket else
+            "Northern Europe and Moscow airport transfer examples" if is_north_china else
+            quote_context["route"]
+        ),
     }
     gate = {
         "passed": True, "verdict": "approve", "score": 18, "total_score": 18,
@@ -5092,7 +5125,11 @@ def build_riderra_template_preview(
         "sender_account_id": RIDERRA_SENDER_ACCOUNT_ID, "evidence_id": candidate["evidence_id"],
         "evidence_kind": "riderra_buyer_opening", "source_url": source_url,
         "observation": normalized["opening"],
-        "solution": "Phuket airport transfer examples" if is_phuket else quote_context["route"],
+        "solution": (
+            "Phuket airport transfer examples" if is_phuket else
+            "Northern Europe and Moscow airport transfer examples" if is_north_china else
+            quote_context["route"]
+        ),
         "source_fact_fingerprint": normalized["source_fact_fingerprint"],
         "strategy": {"workstream_type": "client_partnership", "sender_mode": "partner_business",
                      "segment": "transfer_buyer", "template_version": normalized.get("template_version")},

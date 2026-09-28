@@ -398,6 +398,8 @@ def run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
             shadow=request.shadow,
         )
     provider = _provider_for_request(definition, request)
+    if request.task_key in {"outreach_public_copy", "outreach_audience_qualify", "outreach_language_review"} and provider != definition.primary_provider:
+        return LLMTaskResult(status="task_blocked", fallback_reason="OUTREACH_EXPLICIT_PROVIDER_REQUIRED", shadow=request.shadow)
     result = _generate_with_provider_fallback(
         request,
         definition,

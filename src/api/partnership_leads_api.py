@@ -134,3 +134,53 @@ def delete_lead(lead_id):
 @partnership_leads_bp.route('/api/admin/prospecting/lead/<string:lead_id>/workstreams', methods=['POST'])
 def create_lead_workstream(lead_id):
     return service.create_lead_workstream(lead_id)
+
+
+@partnership_leads_bp.route('/api/partnership/continuations', methods=['GET', 'POST'])
+@partnership_leads_bp.route('/api/partnership/continuations/<task_id>', methods=['POST'])
+def partnership_continuations(task_id=None):
+    from flask import request, jsonify
+    from psycopg2.extras import RealDictCursor
+    from api.prospecting.access_schema import _require_auth, _resolve_business_for_user
+    from pg_db_utils import get_db_connection
+    from services.partnership_leads_service import _partnership_write_access
+    from services.outreach_continuation import create_task, list_tasks, control_task, continuation_enabled, actor_can_write
+
+    user, error = _require_auth()
+    if error:
+        return error
+    data = (request.get_json(silent=True) or {}) if request.method == 'POST' else request.args
+    if not isinstance(data, dict) and request.method == 'POST':
+        return jsonify({'error': 'invalid_payload'}), 400
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        requested = str(data.get('business_id') or '').strip()
+        if not requested:
+            return jsonify({'error': 'business_required'}), 400
+        business_id = _resolve_business_for_user(cursor, user, requested)
+        if business_id != requested:
+            return jsonify({'error': 'access_denied'}), 403
+        if not continuation_enabled(business_id):
+            return jsonify({'enabled': False, 'items': []}) if request.method == 'GET' else (jsonify({'error': 'feature_disabled'}), 404)
+        if not actor_can_write(cursor, business_id, user):
+            return jsonify({'error': 'write_access_required'}), 403
+        denied = _partnership_write_access(business_id, user)
+        if denied:
+            return denied
+        user_id = str(user['user_id'])
+        if request.method == 'GET':
+            from services.riderra_template_authorization_service import BUSINESS_ID
+            result = {'enabled': True, 'supports_shortage_replenishment': business_id == BUSINESS_ID, 'items': list_tasks(cursor, business_id=business_id, user_id=user_id)}
+        elif task_id:
+            result = control_task(cursor, task_id=task_id, business_id=business_id, user_id=user_id,
+                action=str(data.get('action') or ''), revision=str(data.get('revision') or ''))
+        else:
+            result = create_task(cursor, business_id=business_id, user_id=user_id, config=data.get('config'), request_id=str(data.get('request_id') or ''))
+        conn.commit()
+        return jsonify(result)
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({'error': str(exc)}), 409
+    finally:
+        conn.close()

@@ -2489,6 +2489,7 @@ def prepare_first_message(
     semantic_review: dict[str, Any] | None = None
     if ai_enabled:
         candidate = dict(personalization_candidate or {})
+        candidate["language"] = str(lead.get("preferred_language") or "ru")
         if not candidate.get("observed_fact") or not (
             candidate.get("source_url") or (brief.get("source_urls") or [None])[0]
         ):
@@ -2876,7 +2877,11 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
                lead.telegram_url, lead.whatsapp_url, lead.website, lead.source_url,
                lead.messenger_links_json, lead.pipeline_status, lead.rating,
                lead.reviews_count, lead.reviews_json, lead.services_json,
-               lead.description, lead.raw_payload_json, lead.enrich_payload_json,
+               lead.description, lead.raw_payload_json, lead.enrich_payload_json, lead.search_payload_json, lead.preferred_language,
+               EXISTS(SELECT 1 FROM operator_async_jobs continuation_job
+                      WHERE continuation_job.kind='outreach_continue'
+                        AND continuation_job.business_id=ws.client_business_id
+                        AND continuation_job.result_json->'lead_ids' @> jsonb_build_array(lead.id)) AS continuation_managed,
                lead.status AS legacy_lead_status
         FROM lead_workstreams ws
         JOIN prospectingleads lead ON lead.id = ws.lead_id
@@ -2895,7 +2900,7 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
             "lead_id", "name", "category", "city", "address", "phone", "email",
             "telegram_url", "whatsapp_url", "website", "source_url", "messenger_links_json",
             "rating", "reviews_count", "reviews_json", "services_json", "description",
-            "raw_payload_json", "enrich_payload_json",
+            "raw_payload_json", "enrich_payload_json", "search_payload_json", "preferred_language",
         )
     }
     lead["id"] = combined.get("lead_id")
@@ -3045,6 +3050,10 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
     draft_id = None
     draft_brief = brief
     quality: dict[str, Any] = {"passed": False, "failures": readiness.get("missing") or []}
+    if workstream.get("continuation_managed") or (lead.get("search_payload_json") or {}).get("continuation_id"):
+        # This lane only collects sources and contacts. Its owning continuation
+        # creates the canonical campaign with the reviewed offer afterwards.
+        readiness = {**readiness, "code": "needs_evidence", "missing": ["continuation_campaign_preparation"]}
     if readiness.get("code") == "ready" and sender and best_contact:
         selected_candidate = personalization_candidates[0] if personalization_candidates else None
         try:

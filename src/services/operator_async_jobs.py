@@ -490,6 +490,9 @@ def process_next_operator_async_job(*, background: bool = False, background_only
     heartbeat = _OperatorJobHeartbeat(job_id, lease_token)
     heartbeat.start()
     try:
+        if kind == "outreach_continue":
+            from services.outreach_continuation import process_job
+            return {"id": job_id, "kind": kind, **process_job(claimed)}
         if kind in {"voice_receive", "voice_execute"}:
             from services.operator_voice_queue import process_job
             result = process_job(claimed)

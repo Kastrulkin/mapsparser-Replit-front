@@ -24,20 +24,20 @@ APPROVAL_MODE = "riderra_template"
 BUSINESS_ID = "edbd961a-273f-4f15-836e-33aacc0aa0e3"
 SENDER_ACCOUNT_ID = "5e9ce7db-44d1-49dc-9aed-b35ed7174089"
 SENDER_IDENTITY = "riderracs@gmail.com"
-AUTHORIZATION_REFERENCE = "codex:019fd1f3-f2a4-7ea3-8741-0b54ffec3b7e/01a084f0-4624-7650-82d3-8c86c9771af7"
+AUTHORIZATION_REFERENCE = "codex:01a080aa-f3ca-7fe2-8e8d-d560a9f634b7/2026-09-16-riderra-daily-limit-200"
 PRICEBOOK_ID = "riderra-postgresql-city-pricing"
 PRICEBOOK_SHEET = "CityPricing"
 PRICEBOOK_PROVIDER = "Riderra PostgreSQL CityPricing via internal API"
-DAILY_LIMIT = 150
+DAILY_LIMIT = 200
 TIMEZONE = "Europe/Moscow"
 MANIFEST_VERSION = 2
 TEMPLATE_VERSION = "riderra-buyer-first-email-v1"
-PHUKET_TEMPLATE_ID = "riderra_buyer_phuket_examples_v1"
-PHUKET_TEMPLATE_VERSION = "1.0"
-PHUKET_TEMPLATE_SHA256 = "796ba361098d5285adcfe49420d586ba84c861150c4cdcc1387fb9615fb0619a"
+PHUKET_TEMPLATE_ID = "riderra_buyer_phuket_examples_v2"
+PHUKET_TEMPLATE_VERSION = "2.0"
+PHUKET_TEMPLATE_SHA256 = "21327e5886db77dbcb8a196fa889cacca3d038fc62b013285afb5c58b4814f8e"
 APPROVED_TEMPLATE_ARTIFACT_SHA256 = "00862a0e8b463746a58f4008702d5151690f416ecd12548e412f9fc2ef524237"
 APPROVED_TEMPLATE_DEFINITION_SHA256 = "40ad6f4afa17cc1180ca65902194d6da4fb8802ea9171dbcb05ea70de83d7854"
-STANDING_POLICY_VERSION = 2
+STANDING_POLICY_VERSION = 3
 
 SUBJECT_TEMPLATE = "{company} | Riderra | {city} airport transfers"
 
@@ -76,7 +76,7 @@ We keep the chain short, so more of your payment reaches the local operator and 
 
 Example rates from Phuket Airport (HKT):
 - Phuket Town: €22, standard car, up to 3 passengers
-- Patong: €25, standard car, up to 3 passengers
+- Patong: €26, standard car, up to 3 passengers
 - Karon Beach: €32, standard minivan, up to 8 passengers
 
 Would you be open to trying us on an upcoming Phuket booking? You can submit a request at https://riderra.com.
@@ -87,8 +87,44 @@ Riderra"""
 
 PHUKET_QUOTE_SPECS = (
     ("Phuket Town", "Phuket town", "Standard class car", 3, "22,00", "EUR"),
-    ("Patong", "PaTong, Phuket", "Standard class car", 3, "25,00", "EUR"),
+    ("Patong", "PaTong, Phuket", "Standard class car", 3, "26,00", "EUR"),
     ("Karon Beach", "Karon Beach, Phuket", "Standard minivan 8 pax", 8, "32,00", "EUR"),
+)
+
+NORTH_CHINA_TEMPLATE_ID = "riderra_buyer_china_north_examples_v1"
+NORTH_CHINA_TEMPLATE_VERSION = "1.0"
+NORTH_CHINA_SUBJECT_TEMPLATE = "{company} | Riderra | 北欧及莫斯科接送"
+NORTH_CHINA_BODY_TEMPLATE = """您好，{company}团队：
+
+我们看到贵司正在销售前往北欧及其他北方目的地的旅游线路。Riderra 为旅行社提供预订制机场与城市接送服务。
+
+许多大型平台会增加多层中间商，却不一定提高服务质量。我们缩短合作链，直接向经过核验的当地承运方支付更多费用，在相同预算下为旅客安排更好的服务。
+
+我们已有 10 年以上经验，投诉率为 0.24%，曾服务私人航空机组、部长及总统家庭成员。
+
+当前价格示例：
+
+- 赫尔辛基机场（HEL）→ 赫尔辛基：标准轿车（最多 3 人）€38；小型客车（最多 6 人）€70。
+- 哥本哈根凯斯楚普机场（CPH）→ 哥本哈根：标准轿车（最多 3 人）€60；小型客车（最多 6 人）€120。
+- 斯德哥尔摩阿兰达机场（ARN）→ 斯德哥尔摩市中心：标准轿车（最多 3 人）€67；小型客车（最多 7 人）€102。
+- 莫斯科谢列梅捷沃国际机场（SVO）→ 莫斯科：标准轿车（最多 3 人）€52；小型客车（最多 8 人）€108。
+
+如果您愿意尝试合作，请回复一条近期行程，包括日期、航班、乘客人数和酒店地址。我们会针对该行程提供具体报价，无需长期承诺。
+
+此致
+Alex
+Riderra
+https://riderra.com"""
+NORTH_CHINA_TEMPLATE_SHA256 = hashlib.sha256(NORTH_CHINA_BODY_TEMPLATE.encode("utf-8")).hexdigest()
+NORTH_CHINA_QUOTE_SPECS = (
+    ("Helsinki car", "Finland", "Helsinki Vantaa airport (HEL)", "Helsinki", "Standard class car", 3, "38,00", "EUR"),
+    ("Helsinki minivan", "Finland", "Helsinki Vantaa airport (HEL)", "Helsinki", "Standard minivan 6 pax", 6, "70,00", "EUR"),
+    ("Copenhagen car", "Denmark", "Copenhagen Kastrup Airport (CPH)", "Copenhagen", "Standard class car", 3, "60,00", "EUR"),
+    ("Copenhagen minivan", "Denmark", "Copenhagen Kastrup Airport (CPH)", "Copenhagen", "Standard minivan 6 pax", 6, "120,00", "EUR"),
+    ("Stockholm car", "Sweden", "Stockholm Arlanda Airport (ARN)", "Stockholm city center", "Standard class car", 3, "67,00", "EUR"),
+    ("Stockholm minivan", "Sweden", "Stockholm Arlanda Airport (ARN)", "Stockholm city center", "Standard minivan 7 pax", 7, "102,00", "EUR"),
+    ("Moscow car", "Russia", "Moscow Sheremetyevo International Airport (SVO)", "Moscow", "Standard class car", 3, "52,00", "EUR"),
+    ("Moscow minivan", "Russia", "Moscow Sheremetyevo International Airport (SVO)", "Moscow", "Standard minivan 8 pax", 8, "108,00", "EUR"),
 )
 
 
@@ -259,6 +295,113 @@ def build_phuket_manifest(records: list[dict[str, Any]], *, pricebook_attestatio
     }
 
 
+def render_north_china_record(record: dict[str, Any]) -> dict[str, str]:
+    company = str(record.get("company") or "").strip()
+    if not company or "\n" in company or not re.fullmatch(r"[^{}]{2,160}", company):
+        raise ValueError("riderra_template_slot_invalid")
+    subject = NORTH_CHINA_SUBJECT_TEMPLATE.format(company=company)
+    body = NORTH_CHINA_BODY_TEMPLATE.format(company=company)
+    return {
+        "subject": subject,
+        "body": body,
+        "content_sha256": hashlib.sha256((subject + "\n\n" + body).encode("utf-8")).hexdigest(),
+    }
+
+
+def normalize_north_china_record(record: dict[str, Any], *, pricebook_attestation: dict[str, Any]) -> dict[str, Any]:
+    if str(record.get("template_id") or "") != NORTH_CHINA_TEMPLATE_ID:
+        raise ValueError("riderra_north_china_template_invalid")
+    quotes = record.get("pricebook_examples") if isinstance(record.get("pricebook_examples"), list) else []
+    if len(quotes) != len(NORTH_CHINA_QUOTE_SPECS):
+        raise ValueError("riderra_north_china_quotes_invalid")
+    normalized_quotes: list[dict[str, Any]] = []
+    for quote, spec in zip(quotes, NORTH_CHINA_QUOTE_SPECS):
+        row_number = quote.get("row") if isinstance(quote, dict) else None
+        raw_cells = pricebook_attestation.get("rows", {}).get(str(row_number or ""))
+        source_record = pricebook_attestation.get("row_records", {}).get(str(row_number or "")) or {}
+        label, country, route_from, route_to, vehicle, pax, price, currency = spec
+        expected = [country, route_from, route_to, vehicle, pax, price, currency]
+        if (
+            type(row_number) is not int or row_number < 2 or raw_cells != expected
+            or str(quote.get("source_record_id") or "") != source_record.get("record_id")
+            or str(quote.get("source_record_updated_at") or "") != source_record.get("updated_at")
+            or str(quote.get("source_row_sha256") or "") != _hash(raw_cells)
+            or str(quote.get("source_artifact_sha256") or "") != pricebook_attestation.get("artifact_sha256")
+            or str(quote.get("source_version") or "") != pricebook_attestation.get("source_version")
+        ):
+            raise ValueError("riderra_north_china_quote_provenance_invalid")
+        normalized_quotes.append({
+            **quote,
+            "label": label,
+            "source_row_values": raw_cells,
+            "verified_at": pricebook_attestation["verified_at"],
+        })
+    normalized = {
+        "audience": "transfer_buyer",
+        "template_id": NORTH_CHINA_TEMPLATE_ID,
+        "template_version": NORTH_CHINA_TEMPLATE_VERSION,
+        "template_sha256": NORTH_CHINA_TEMPLATE_SHA256,
+        "lead_id": str(record.get("lead_id") or "").strip(),
+        "workstream_id": str(record.get("workstream_id") or "").strip(),
+        "contact_point_id": str(record.get("contact_point_id") or "").strip(),
+        "recipient": str(record.get("recipient") or "").strip().lower(),
+        "company": str(record.get("company") or "").strip(),
+        "company_key": canonical_company_key(record.get("company")),
+        "city": str(record.get("city") or "").strip(),
+        "opening": "",
+        "opening_source_url": "",
+        "opening_variant": "no_opening_v1",
+        "source_fact_fingerprint": str(record.get("source_fact_fingerprint") or ""),
+        "pricebook_examples": normalized_quotes,
+    }
+    if (
+        not all(normalized[key] for key in ("lead_id", "workstream_id", "contact_point_id", "recipient", "company", "city"))
+        or "@" not in normalized["recipient"] or "berlin" in normalized["city"].lower()
+        or not re.fullmatch(r"(?:facts:|report:)[0-9a-f]{64}", normalized["source_fact_fingerprint"])
+    ):
+        raise ValueError("riderra_template_identity_missing")
+    rendered = render_north_china_record(normalized)
+    if str(record.get("content_sha256") or "") != rendered["content_sha256"]:
+        raise ValueError("riderra_template_content_hash_changed")
+    normalized.update(rendered)
+    return normalized
+
+
+def build_north_china_manifest(records: list[dict[str, Any]], *, pricebook_attestation: dict[str, Any]) -> dict[str, Any]:
+    if not str(pricebook_attestation.get("id") or ""):
+        raise ValueError("riderra_pricebook_attestation_required")
+    _iso_timestamp(pricebook_attestation.get("verified_at"))
+    normalized = [normalize_north_china_record(record, pricebook_attestation=pricebook_attestation) for record in records]
+    keys = [(item["workstream_id"], item["lead_id"], item["contact_point_id"]) for item in normalized]
+    if (
+        not normalized or len(normalized) > DAILY_LIMIT or len(keys) != len(set(keys))
+        or len({item["lead_id"] for item in normalized}) != len(normalized)
+        or len({item["company_key"] for item in normalized}) != len(normalized)
+        or len({item["recipient"] for item in normalized}) != len(normalized)
+    ):
+        raise ValueError("riderra_template_membership_invalid")
+    return {
+        "manifest_version": MANIFEST_VERSION,
+        "scope": "riderra_buyer_china_north_examples",
+        "business_id": BUSINESS_ID,
+        "sender_account_id": SENDER_ACCOUNT_ID,
+        "sender_identity": SENDER_IDENTITY,
+        "workstream_type": "client_partnership",
+        "audience": "transfer_buyer",
+        "channels": ["email"],
+        "daily_limit": DAILY_LIMIT,
+        "timezone": TIMEZONE,
+        "template_id": NORTH_CHINA_TEMPLATE_ID,
+        "template_version": NORTH_CHINA_TEMPLATE_VERSION,
+        "template_sha256": NORTH_CHINA_TEMPLATE_SHA256,
+        "pricebook_id": PRICEBOOK_ID,
+        "pricebook_sheet": PRICEBOOK_SHEET,
+        "pricebook_attestation": pricebook_attestation,
+        "records_sha256": _hash(normalized),
+        "records": normalized,
+    }
+
+
 def normalize_pricebook_attestation(artifact: dict[str, Any], artifact_sha256: str) -> dict[str, Any]:
     if (not isinstance(artifact, dict)
         or
@@ -367,6 +510,8 @@ def normalize_record(record: dict[str, Any], *, pricebook_attestation: dict[str,
 
 
 def build_manifest(records: list[dict[str, Any]], *, pricebook_attestation: dict[str, Any]) -> dict[str, Any]:
+    if records and all(str(record.get("template_id") or "") == NORTH_CHINA_TEMPLATE_ID for record in records):
+        return build_north_china_manifest(records, pricebook_attestation=pricebook_attestation)
     if records and all(str(record.get("template_id") or "") == PHUKET_TEMPLATE_ID for record in records):
         return build_phuket_manifest(records, pricebook_attestation=pricebook_attestation)
     if (not str(pricebook_attestation.get("id") or "")
@@ -775,7 +920,12 @@ def exact_invitation(*, record: dict[str, Any], authorization: dict[str, Any], s
     member = manifest_record(authorization, workstream_id=str(record.get("workstream_id") or ""),
                              lead_id=str(record.get("lead_id") or ""), contact_point_id=str(record.get("contact_point_id") or ""))
     try:
-        rendered = render_phuket_record(member) if member.get("template_id") == PHUKET_TEMPLATE_ID else render_record(member)
+        if member.get("template_id") == PHUKET_TEMPLATE_ID:
+            rendered = render_phuket_record(member)
+        elif member.get("template_id") == NORTH_CHINA_TEMPLATE_ID:
+            rendered = render_north_china_record(member)
+        else:
+            rendered = render_record(member)
     except (TypeError, ValueError):
         return False
     return bool(member == record and authorization.get("sender_account_id") == SENDER_ACCOUNT_ID

@@ -77,7 +77,7 @@ def candidate(**updates):
 def test_standing_policy_fixes_sender_template_slots_pricebook_and_daily_limit():
     policy = riderra.standing_policy()
     assert policy["sender_identity"] == "riderracs@gmail.com"
-    assert policy["daily_limit"] == 150
+    assert policy["daily_limit"] == 200
     assert policy["template_definition_sha256"] == riderra.APPROVED_TEMPLATE_DEFINITION_SHA256
     assert policy["pricebook_id"] == riderra.PRICEBOOK_ID
     assert policy["allowed_slot_names"] == [
@@ -302,3 +302,16 @@ def test_standing_authorization_api_records_explicit_scope_without_dispatch(monk
         "authorization_reference": riderra.AUTHORIZATION_REFERENCE,
     }
     assert connection.commits == 1
+
+
+def test_continuation_leads_cannot_enter_existing_automatic_sender():
+    row = candidate(search_payload_json={'continuation_id':'prepare-only-task'})
+    assert systematic.candidate_exclusion(row,now=datetime.now(timezone.utc)) == 'continuation_manual_review_required'
+    eligible, exclusions, _ = systematic.classify_candidates([row], attestation(), now=datetime.now(timezone.utc))
+    assert eligible == []
+    assert exclusions == {'continuation_manual_review_required':1}
+
+
+def test_durable_continuation_link_blocks_sender_after_search_metadata_replaced():
+    row=candidate(search_payload_json={'other_search':'replacement'},continuation_managed=True)
+    assert systematic.candidate_exclusion(row,now=datetime.now(timezone.utc))=='continuation_manual_review_required'

@@ -1355,6 +1355,36 @@ def _operator_tool_catalog(
             ),
         },
         {
+            "name": "partnerships.continue_outreach",
+            "capability": "partnerships.prepare_message",
+            "title": "Продолжающийся поиск партнёров",
+            "description": "Создаёт сохраняемый план поиска новых компаний и подготовки обращений или показывает текущие задачи. Запуск после проверки в разделе Партнёрства; ничего не отправляет.",
+            "input_schema": {
+                "type": "object", "additionalProperties": False,
+                "properties": {
+                    "operation": {"type": "string", "enum": ["create", "list", "pause", "stop", "resume", "start", "retry_failed", "acknowledge_search"]},
+                    "task_id": {"type": "string"}, "revision": {"type": "string"},
+                    "config": {"type": "object", "properties": {
+                        "audience": {"type": "string", "maxLength": 500},
+                        "offer": {"type": "string", "maxLength": 2000},
+                        "language": {"type": "string"},
+                        "evidence_terms": {"type": "array", "maxItems": 5, "items": {"type": "string"}},
+                        "riderra_shortage_only": {"type": "boolean", "description": "Для Riderra: запускать поиск только после подтверждённой нехватки готового пула"},
+                        "search_budget_cents": {"type": "integer", "minimum": 1, "maximum": 1000},
+                        "queries": {"type": "array", "maxItems": 20, "items": {
+                            "type": "object", "properties": {"query": {"type": "string"}, "city": {"type": "string"}},
+                            "required": ["query", "city"]}},
+                        "max_search_calls": {"type": "integer", "minimum": 1, "maximum": 20},
+                        "max_candidates": {"type": "integer", "minimum": 1, "maximum": 100},
+                        "batch_size": {"type": "integer", "minimum": 1, "maximum": 10}
+                    }, "required": ["audience", "offer", "queries"]}
+                }, "required": ["operation"]
+            },
+            "risk_class": "draft_only", "approval_required": False,
+            "execute": lambda arguments: __import__("services.outreach_continuation", fromlist=["operator_task"]).operator_task(
+                cursor, business_id=business_id, user_id=user_id, arguments=arguments),
+        },
+        {
             "name": "partnerships.prepare_message",
             "capability": "partnerships.prepare_message",
             "title": "Черновик партнёрского сообщения",
@@ -1570,6 +1600,9 @@ def _operator_tool_catalog(
     from services import work_journal, operator_work_journal
     if work_journal.enabled(business_id):
         tools.extend(operator_work_journal.tools(cursor,business_id,user_id,channel,message,work_message_id,work_request_key or str(uuid.uuid4()),work_saved if work_saved is not None else [],action_orchestrator))
+    from services.outreach_continuation import continuation_enabled
+    if not continuation_enabled(business_id):
+        tools = [tool for tool in tools if tool["name"] != "partnerships.continue_outreach"]
     return [_normalize_tool_contract(tool, business_id=business_id) for tool in tools]
 
 
