@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Language } from './LanguageContext.logic';
 import { getTodayOperationalCopy, getTodayPageCopy } from './todayPageCopy';
 
-const languages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr'];
+const languages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr', 'hy'];
 
 describe('today page localization', () => {
   it.each(languages)('contains complete copy for %s', (language) => {

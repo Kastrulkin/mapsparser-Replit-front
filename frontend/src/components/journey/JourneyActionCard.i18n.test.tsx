@@ -51,7 +51,7 @@ const localizedCard = (language: Language, nextAction: JourneyAction) => (
   </LanguageContext.Provider>
 );
 
-const languages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr'];
+const languages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr', 'hy'];
 let originalClipboardDescriptor: PropertyDescriptor | undefined;
 
 describe('JourneyActionCard localization', () => {

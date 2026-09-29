@@ -109,9 +109,28 @@ const copy: Record<Language, DemoWorkspaceCopy> = {
     sidebar: { telegramRadar: 'Telegram Radarı', telegramRadarHint: 'Telegram mesajları: yanıtla, fikir kaydet veya gizle.', upsells: 'Ek satışlar', upsellsHint: 'Müşteri verilerine göre ek hizmetler ve paketler.', geoPromotionHint: 'Yapay zekâ yanıtlarında işletme görünürlüğü.' },
     geoFallbackSteps: [{ id: 1, title: 'İşletme varlığını kontrol edin', description: 'Web sitesi, haritalar ve herkese açık verileri karşılaştırın.', details: ['Adı, adresi, telefonu ve hizmetleri doğrulayın.'], links: [] }],
   },
-};
 
-export const getDemoWorkspaceCopy = (language: Language): DemoWorkspaceCopy => copy[language];
+  hy: {
+    telegram: { pageTitle: "Telegram ռադար", pageDescription: "Ընտրված զրույցներից հաղորդագրությունների աշխատանքային ցուցակ. որոշեք, թե ինչին պատասխանել, պահպանել որպես գաղափար կամ մերժել:", connect: "Միացրեք Telegram-ը", manualTitle: "Պատասխանել միայն ձեռքով", manualDescription: "LocalOS-ը կարդում է ընտրված զրույցները, բայց երբեք ինքնաբերաբար չի փակցնում դրանցում:", workTitle: "Գտնվել են հաղորդագրություններ", settingsTitle: "Telegram ռադար", workDescription: "Վերանայեք հաղորդագրությունները և որոշեք, թե ինչին է պետք պատասխանը, գաղափարը կամ աշխատանքից հեռացնելը:", settingsDescription: "LocalOS-ը վերահսկում է ընտրված զրույցները՝ ձեռքով վերանայելու համար:", newItems: "նոր", chooseBusiness: "Ընտրեք բիզնես մոնիտորինգը կարգավորելու համար:", peerLabel: "Զրուցարան կամ ալիք", peerPlaceholder: "@channel կամ ID", titleLabel: "Ցուցակի անունը", titlePlaceholder: "Բիզնեսի սեփականատերեր", add: "Ավելացնել", keywordsLabel: "Որոնել բառեր", keywordsDescription: "LocalOS-ը կարևորում է այս բառերն ու արտահայտությունները պարունակող հաղորդագրությունները: Առանձնացրեք դրանք ստորակետերով կամ տողերի ընդմիջումներով:", keywordsPlaceholder: "պատվեր, առաջարկություն, հաճախորդներ, առաջխաղացում", words: "բառերը", saving: "Պահվում է...", saveWords: "Պահպանեք բառերը", savedFor: "Պահպանված է", loadError: "Չհաջողվեց բեռնել ռադարը", addError: "Չհաջողվեց ավելացնել զրույցը", saveError: "Չհաջողվեց պահպանել որոնման բառերը", refresh: "Թարմացնել", workHint: "Աղբյուրները և որոնման բառերը կազմաձևված են այստեղ:", settingsHint: "LocalOS-ը կարդում է միայն ընտրված աղբյուրները. պատասխանները մնում են ձեռքով:", sources: "Աղբյուրներ", emptySources: "Մոնիտորինգի համար ավելացրեք առաջին զրույցը կամ ալիքը:", emptyMessages: "Համապատասխան հաղորդագրությունները կհայտնվեն այստեղ:", answered: "Պատասխանեց", idea: "Գաղափար", useful: "Օգտակար", hide: "Թաքցնել", statuses: { new: "Նոր", useful: "Օգտակար", answered: "Պատասխանեց", saved_as_content_idea: "Գաղափար", ignored: "Աշխատանքից ազատվել է" } },
+    averageTicket: { title: 'Upsells', description: "Upsells, cross-sells, scripts, փաթեթներ և առաջարկի պլան, որը հիմնված է իրական հանդիպումների վրա:", link: "Հղում", finance: "Ֆինանսներ", refresh: "Թարմացնել", generate: "Ստեղծել", averageTicket: "Միջին տոմս", averageTicketHint: "30 օր", addOnRate: "Հավելյալ տոկոսադրույքը", addOnRateHint: "Այցելությունների մասնաբաժինը վաճառքի հետ", upsellRevenue: "Գումարների ավելացում", upsellRevenueHint: "Գնումների իրադարձությունների հիման վրա", packages: "Փաթեթներ", conversion: "Փոխակերպում", potential: "Պոտենցիալ", potentialHint: "Գնահատեք ակտիվ հղումներից", unavailable: 'N/A', chooseBusiness: "Ընտրեք բիզնես", chooseBusinessDescription: "Միջին տոմսերի մատրիցան կառուցված է մեկ բիզնեսի ծառայություններից:", emptyTitle: "Մատրիցը դեռ չի ստեղծվել", emptyDescription: "LocalOS-ը կօգտագործի Քարտեզների կառավարման ծառայությունները՝ վաճառքի, սցենարի և փաթեթի նախագիծ պատրաստելու համար:", generateDraft: "Ստեղծեք նախագիծ", loadError: "Չհաջողվեց բեռնել Upsells-ը", retry: "Ստուգեք կապը և նորից փորձեք:" },
+    competitors: { title: "Մրցակիցներ", description: "Ավելացրեք մոտակա կարևոր ցուցակներ՝ նրանց գործունեությանը հետևելու և կենտրոնացված աուդիտներ իրականացնելու համար:", addHint: "Ավելացրեք մրցակցին՝ նրա գործունեությունը հետևելու համար:", urlPlaceholder: "Մրցակցի հղում (https://...)", namePlaceholder: "Անուն (ըստ ցանկության)", adding: "Ավելացվում է...", add: "Ավելացնել մրցակցին", manualTitle: "Ձեռքով ավելացված մրցակիցներ", competitor: "Մրցակից", audit: "Աուդիտ", requested: "խնդրեց", ready: "պատրաստ", notRequested: "չի պահանջվել", openReport: "Բացեք զեկույցը", sending: "Ուղարկում...", delete: "Ջնջել", deleting: "Ջնջվում է...", unnamed: "Անանուն", viewOnMap: "Դիտել քարտեզի վրա", empty: "Մրցակիցներ չեն գտնվել: Փորձեք թարմացնել վերլուծված տվյալները:" },
+    sidebar: { telegramRadar: "Telegram ռադար", telegramRadarHint: "Հաղորդագրություններ ընտրված Telegram զրույցներից. պատասխանել, պահպանել գաղափարը կամ մերժել:", upsells: 'Upsells', upsellsHint: "Լրացուցիչ ծառայություններ և փաթեթներ՝ հիմնված հաճախորդների տվյալների վրա:", geoPromotionHint: "Բիզնեսի տեսանելիությունը AI-ի վրա հիմնված պատասխաններում:" },
+    geoFallbackSteps: [{ id: 1, title: "Ստուգեք ձեր բիզնեսի ներկայությունը", description: "Համեմատեք կայքը, քարտեզները և հանրային բիզնեսի տվյալները:", details: ["Ստուգեք անունը, հասցեն, հեռախոսը և ծառայությունները:"], links: [] }],
+  },};
+
+export const getDemoWorkspaceCopy = (language: Language): DemoWorkspaceCopy => language === 'hy'
+  ? {
+    ...copy.hy,
+    averageTicket: {
+      ...copy.hy.averageTicket,
+      title: 'Հավելյալ վաճառքներ',
+      averageTicket: 'Միջին չեկ',
+      chooseBusinessDescription: 'Միջին չեկի առաջարկները կազմվում են մեկ բիզնեսի ծառայությունների հիման վրա:',
+      loadError: 'Չհաջողվեց բեռնել հավելյալ վաճառքների բաժինը',
+    },
+    sidebar: { ...copy.hy.sidebar, upsells: 'Հավելյալ վաճառքներ' },
+  }
+  : copy[language];
 
 export const normalizeGeoPromotionSteps = (language: Language, value: unknown) => (
   Array.isArray(value) ? value : copy[language].geoFallbackSteps

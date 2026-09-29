@@ -81,6 +81,29 @@ const en: PublicLeadJourneyCopy = {
   lockedResult: 'Create a business profile to open the full result.',
 };
 
+const hy: PublicLeadJourneyCopy = {
+  seoTitle: "Վեց LocalOS ուղղություններ ձեր բիզնեսի համար",
+  seoDescription: "Ընտրեք վեց ուղղություններից մեկը՝ տեղական ստեղծողներ, մոտակա ձեռնարկություններ, ցուցակներ, բովանդակություն, միջին տոմս կամ ավտոմատացում:",
+  loading: "Ձեր հնարավորությունները բեռնվում են…", unavailableTitle: "Այս անձնական հղումն անհասանելի է", unavailableBack: "Վերադարձ դեպի LocalOS",
+  allDirections: "Բոլոր ուղղությունները", home: "Վերադարձ դեպի տուն", eyebrow: "6 ուղղություն", title: "Ընտրեք ուղղություն",
+  intro: "Բացեք ուղղություն՝ տեսնելու, թե ինչպես է այն աշխատում և որտեղից սկսել:", customers: "Հաճախորդներ", customersIntro: "Տեղական հեղինակներ, մոտակա ձեռնարկություններ և ցանկեր:", work: "Բովանդակություն և ավտոմատացում",
+  moreOptions: "Լրացուցիչ ընտրանքներ.", secondary: "Հասանելի է ուսումնասիրել գրանցումից հետո", defaultChoice: "Դիտեք հնարավորությունը", resultPreview: "Սա նախադիտում է, թե ինչ է պարունակում արդյունքը, այլ ոչ թե ավարտված աշխատանք:",
+  howItWorks: "Ինչպես է այն աշխատում", processRoles: "Դերերը գործընթացում", businessRoleTitle: "Ինչ է անում ձեր բիզնեսը", localosRoleTitle: "Ինչ է անում LocalOS-ը", publicExample: "Դիտեք հանրային օրինակ",
+  continueTitle: "Շարունակեք այս ուղղությամբ", continueText: "Գրանցվելուց հետո LocalOS-ը բացում է համապատասխան աշխատանքային տարածքը։ Ոչինչ ինքնաբերաբար չի ուղարկվում կամ հրապարակվում:", continueButton: "Շարունակեք LocalOS-ում",
+  recommendedMechanic: "Առաջարկվող մոտեցում", openDirection: "Բացեք ընտրված ուղղությունը", openDirectionText: "Ստեղծեք բիզնեսի պրոֆիլ: LocalOS-ը կպահի ձեր ընտրությունը և կբացի ճիշտ աշխատանքային տարածքը:",
+  approvalNote: "Արտաքին հաղորդագրություններն ու փոփոխությունները դեռ պահանջում են ձեր հաստատումը:", otherTitle: "Էլ ինչ կարող եք բարելավել", otherText: "Դուք կարող եք ավելի ուշ վերանայել այլ ոլորտներ: Ձեր ընտրած գործողությունը կպահպանվի:", prepareError: "Չհաջողվեց պատրաստել արդյունքը",
+  genericSteps: [
+    { title: "Ավելացրեք բիզնեսի համատեքստը", description: "Տրամադրեք միայն այս ուղղությունը վերանայելու համար անհրաժեշտ մանրամասները:" },
+    { title: "Վերանայեք պատրաստված արդյունքը", description: "LocalOS-ը ցույց է տալիս թեկնածուներին, ստուգումները կամ նախագիծը նախքան որևէ բան օգտագործելը:" },
+    { title: "Հաստատեք հաջորդ քայլը", description: "Արտաքին հաղորդագրությունները, հրապարակումները և փոփոխությունները սպասում են ձեր հաստատմանը:" },
+  ],
+  businessRole: "Դուք ընտրում եք ուղղությունը, վերանայում եք պատրաստված արդյունքը և հաստատում ցանկացած արտաքին գործողություն։",
+  localosRole: "LocalOS-ը ստուգում է առկա տվյալները, պատրաստում է օգտակար հաջորդ քայլը և արդյունքը պահում մեկ աշխատանքային տարածքում:",
+  prepareLabel: "Ցույց տալ անձնական նախադիտում", directionResultTitle: "Ձեր նախադիտումը պատրաստ է",
+  directionResultPreview: ["Հստակ առաջին քայլ", "Առաջարկության համար օգտագործված ապացույցները", "Հաջորդ գործողությունը սպասում է ձեր վերանայմանը"],
+  lockedResult: "Ստեղծեք բիզնեսի պրոֆիլ՝ ամբողջական արդյունքը բացելու համար:",
+};
+
 const es: PublicLeadJourneyCopy = {
   seoTitle: 'Seis direcciones de LocalOS para tu negocio',
   seoDescription: 'Elige una de seis direcciones: creadores locales, negocios cercanos, fichas, contenido, ticket medio o automatización.',
@@ -105,6 +128,7 @@ const es: PublicLeadJourneyCopy = {
 };
 
 export const publicLeadJourneyCopyFor = (language: Language): PublicLeadJourneyCopy => {
+  if (language === 'hy') return hy;
   if (language === 'ru') return ru;
   if (language === 'es') return es;
   return en;

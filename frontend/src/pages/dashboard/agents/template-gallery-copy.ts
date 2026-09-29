@@ -105,7 +105,15 @@ export const agentTemplateGalleryCopy: Record<Language, AgentTemplateGalleryCopy
     needs: 'Bağlantı gerekli', localos: 'Yalnızca LocalOS verileri', preparing: 'Oluşturuluyor…', use: 'İnceleme için oluştur',
     plannedTitle: 'Geliştiriliyor', plannedDescription: 'Bu görevler henüz etkinleştirilemez.', recommended: 'Önerilen başlangıç',
   },
-};
+
+  hy: {
+    eyebrow: "Պատրաստ առաջադրանքներ", title: "Ի՞նչ պետք է զբաղվի LocalOS-ով:",
+    description: "Ընտրեք առաջադրանք, և LocalOS-ը կստեղծի գործակալ վերանայման ռեժիմում: Գործարկումները, հրապարակումները և հաղորդագրությունները սկսվում են միայն ձեր վերանայումից հետո:",
+    count: "տարբերակները", loading: "Պատրաստի առաջադրանքների բեռնում", scheduled: "Ամեն օր", weekly: "Ամեն շաբաթ", review: "Երբ նոր վերանայում է գալիս", manual: "Ըստ պահանջի",
+    certified: "Ստուգված է", beta: "Պատրաստ է վերանայման", testing: "Փորձարկվող", draft: "Զարգացման մեջ",
+    needs: "Միացնել", localos: "Միայն LocalOS-ի տվյալները", preparing: "Ստեղծվում է…", use: "Ստեղծել վերանայման համար",
+    plannedTitle: "Զարգացման մեջ", plannedDescription: "Այս առաջադրանքները դեռ հնարավոր չէ միացնել:", recommended: "Առաջարկվող սկիզբ",
+  },};
 
 export const getAgentTemplateGalleryCopy = (language: Language) => agentTemplateGalleryCopy[language];
 

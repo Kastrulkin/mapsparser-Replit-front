@@ -13,13 +13,13 @@ import { getPartnershipWorkspaceCopy } from '@/i18n/partnershipWorkspaceCopy';
 import { getPublicSalesRoomAuditCopy, getPublicSalesRoomCopy } from '@/i18n/publicSalesRoomCopy';
 import { getCardOverviewPageCopy } from './cardOverviewPageCopy';
 
-const supportedLanguages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr'];
+const supportedLanguages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr', 'hy'];
 const localizedCardLanguages = supportedLanguages.filter((language) => language !== 'ru' && language !== 'en');
 const nonRussianLanguages = supportedLanguages.filter((language) => language !== 'ru');
 
 describe('demo language coverage', () => {
   it('keeps the language contract aligned with all 44 guided-tour steps', () => {
-    expect(supportedLanguages).toHaveLength(10);
+    expect(supportedLanguages).toHaveLength(11);
     expect(GUIDED_TOUR_STEP_LAYOUTS).toHaveLength(44);
     supportedLanguages.forEach((language) => {
       expect(guidedTourStepsForLanguage(language)).toHaveLength(44);

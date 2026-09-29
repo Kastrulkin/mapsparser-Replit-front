@@ -1,4 +1,5 @@
 import Footer from "@/components/Footer";
+import docsHy from "@/content/docs-hy.json";
 import SeoMeta from "@/components/SeoMeta";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -351,6 +352,8 @@ const enSections: DocSection[] = [
   },
 ];
 
+const hySections: DocSection[] = docsHy.sections;
+
 const statusClassName = (status?: string) => {
   if (!status) {
     return "border-slate-200 bg-slate-50 text-slate-600";
@@ -367,9 +370,21 @@ const statusClassName = (status?: string) => {
   return "border-slate-200 bg-slate-100 text-slate-700";
 };
 
-const statusLabel = (status: string | undefined, language: "ru" | "en") => {
+const statusLabel = (status: string | undefined, language: "ru" | "en" | "hy") => {
   if (!status) return "";
   if (language === "en") return status;
+  if (language === "hy") {
+    const labels: Record<string, string> = {
+      available: "հասանելի",
+      beta: "բետա",
+      internal: "ներքին",
+      planned: "պլանավորված",
+      "planned/gap": "պլանավորված / մշակման կարիք ունի",
+      "available / gap": "հասանելի / մշակման կարիք ունի",
+      "beta/internal": "բետա / ներքին",
+    };
+    return labels[status] ?? status;
+  }
   if (status === "available") return "готово";
   if (status === "beta") return "бета";
   if (status === "internal") return "внутренне";
@@ -432,6 +447,13 @@ curl -s -X POST "https://localos.pro/api/agent-api/clients/promotion/request" \\
   -H "Content-Type: application/json" \\
   -d '{"requested_scopes":["audit:read","reviews:draft","approvals:create"],"use_case":"Read audits and prepare review reply drafts under human approval.","contact":"ops@example.com"}'`;
 
+const hyAgentQuickstart = enAgentQuickstart
+  .replace('# 1. Read the Agent API contract', '# 1. Կարդացեք Agent API-ի պայմանագիրը')
+  .replace('# 2. Check the security policy', '# 2. Ստուգեք անվտանգության քաղաքականությունը')
+  .replace('# 3. Run the sandbox self-test', '# 3. Գործարկեք փորձնական միջավայրի ինքնաստուգումը')
+  .replace('# 4. Create a safe test approval request', '# 4. Ստեղծեք հաստատման անվտանգ փորձնական հարցում')
+  .replace('# 5. Request live access after sandbox verification', '# 5. Փորձնական միջավայրի ստուգումից հետո դիմեք աշխատանքային հասանելիության համար');
+
 type DocsShellCopy = {
   badge: string;
   heroTitle: string;
@@ -462,7 +484,7 @@ type DocsShellCopy = {
   pageTitleSuffix: string;
 };
 
-const docsShellCopy: Record<"ru" | "en", DocsShellCopy> = {
+const docsShellCopy: Record<"ru" | "en" | "hy", DocsShellCopy> = {
   ru: {
     badge: "Документация для людей и ИИ-агентов",
     heroTitle: "Документация LocalOS для пользователей, API и ИИ-агентов",
@@ -521,11 +543,16 @@ const docsShellCopy: Record<"ru" | "en", DocsShellCopy> = {
     toolsIntro: "Capability map:",
     pageTitleSuffix: "LocalOS documentation",
   },
+  hy: {
+    ...docsHy.shell,
+    agentTextButton: "Գործակալների ուղեցույց (EN)",
+    machineIntro: "Գործակալների ամբողջական ուղեցույցը անգլերեն է՝",
+  },
 };
 
 type AvailabilityNotice = { title: string; body: string };
 
-const availabilityNotices: Record<Exclude<Language, "ru" | "en">, AvailabilityNotice> = {
+const availabilityNotices: Record<Exclude<Language, "ru" | "en" | "hy">, AvailabilityNotice> = {
   fr: { title: "Langues de la documentation technique", body: "La documentation technique complète est actuellement disponible en anglais et en russe. Le contenu ci-dessous est affiché en anglais." },
   es: { title: "Idiomas de la documentación técnica", body: "La documentación técnica completa está disponible actualmente en inglés y ruso. El contenido técnico de esta página se muestra en inglés." },
   el: { title: "Γλώσσες τεχνικής τεκμηρίωσης", body: "Η πλήρης τεχνική τεκμηρίωση είναι προς το παρόν διαθέσιμη στα αγγλικά και στα ρωσικά. Το τεχνικό περιεχόμενο παρακάτω εμφανίζεται στα αγγλικά." },
@@ -539,14 +566,14 @@ const availabilityNotices: Record<Exclude<Language, "ru" | "en">, AvailabilityNo
 const DocsPage = () => {
   const { section } = useParams();
   const { language, setLanguage } = useLanguage();
-  const docsLanguage: "ru" | "en" = language === "ru" ? "ru" : "en";
-  const sections = docsLanguage === "ru" ? ruSections : enSections;
+  const docsLanguage: "ru" | "en" | "hy" = language === "ru" ? "ru" : language === "hy" ? "hy" : "en";
+  const sections = docsLanguage === "ru" ? ruSections : docsLanguage === "hy" ? hySections : enSections;
   const copy = docsShellCopy[docsLanguage];
   const activeSection = getActiveSection(sections, section);
-  const availabilityNotice = language === "ru" || language === "en" ? null : availabilityNotices[language];
+  const availabilityNotice = language === "ru" || language === "en" || language === "hy" ? null : availabilityNotices[language];
   const agentGuideHref = docsLanguage === "ru" ? "/localos-agents-ru.txt" : "/localos-agents.txt";
   const llmsHref = docsLanguage === "ru" ? "/llms-ru.txt" : "/llms.txt";
-  const agentQuickstart = docsLanguage === "ru" ? ruAgentQuickstart : enAgentQuickstart;
+  const agentQuickstart = docsLanguage === "ru" ? ruAgentQuickstart : docsLanguage === "hy" ? hyAgentQuickstart : enAgentQuickstart;
 
   const pageTitle = `${activeSection.title} - ${copy.pageTitleSuffix}`;
   const pagePath = activeSection.slug === "overview" ? "/docs" : `/docs/${activeSection.slug}`;
@@ -634,7 +661,7 @@ const DocsPage = () => {
               </Button>
               <Button asChild variant="outline">
                 <a href="/api/agent-api/openapi.json">
-                  OpenAPI агента
+                  {docsLanguage === "ru" ? "OpenAPI агента" : docsLanguage === "hy" ? "Գործակալի OpenAPI" : "Agent OpenAPI"}
                   <ExternalLink className="ml-2 h-4 w-4" />
                 </a>
               </Button>

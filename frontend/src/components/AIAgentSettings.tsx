@@ -85,6 +85,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
     { value: 'de', label: 'Deutsch' },
     { value: 'fr', label: 'Français' },
     { value: 'tr', label: 'Türkçe' },
+    { value: 'hy', label: 'Հայերեն' },
   ];
 
 

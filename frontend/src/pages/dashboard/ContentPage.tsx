@@ -453,7 +453,7 @@ const normalizeIsoDate = (value?: string) => {
   return Number.isNaN(parsed.getTime()) ? '' : toIsoDate(parsed);
 };
 
-const DATE_LOCALES = { ru: 'ru-RU', en: 'en-US', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR' };
+const DATE_LOCALES = { ru: 'ru-RU', en: 'en-US', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR', hy: 'hy-AM' };
 
 const formatDate = (value: string | undefined, language: keyof typeof DATE_LOCALES = 'ru') => {
   if (!value) return '';

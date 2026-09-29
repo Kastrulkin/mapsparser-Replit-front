@@ -164,4 +164,15 @@ export const contentCopy: Record<Language, ContentCopy> = {
     articles: { eyebrow: "LocalOS kaynakları", title: "İşletme, müşteriler ve büyüme üzerine makaleler", description: "Haritalardaki işletme profilleri, yorumlar, müşteriler, finans ve işletme sahibinin günlük işleri için pratik rehberler.", latest: "Yeni makaleler", chooseTopic: "Konunuzu seçin ve size en faydalı rehberden başlayın.", all: "Tümü", back: "Makalelere dön", seoTitle: "Yerel işletme sahipleri için makaleler — LocalOS", seoDescription: "Haritalar, yorumlar, müşteriler, finans ve tekrarlanan işlerin otomasyonu hakkında LocalOS makaleleri." },
     shared: { readMore: "Devamını okuyun", related: "Bunlara da göz atın", ctaTitle: "LocalOS'a hangi işleri devredebileceğinizi görmek ister misiniz?", ctaDescription: "Ücretsiz işletme profili kontrolüyle başlayın. Müşterilerin sizi bulmasını ve seçmesini zorlaştıran noktaları gösterelim.", audit: "Ücretsiz kontrol alın", discuss: "Uygulamayı görüşün", loading: "Makale yükleniyor…" },
   },
-};
+
+  hy: {
+    materials: "Ռեսուրսներ",
+    navigation: {
+      articles: { name: "Հոդվածներ", description: "Քարտեզներ, ակնարկներ և տեղական բիզնեսի վարում" },
+      documents: { name: "Փաստաթղթեր", description: "Ստուգաթերթեր, ձևանմուշներ և աղյուսակներ" },
+      cases: { name: "Դեպքի ուսումնասիրություններ", description: "Ինչ բիզնեսի սեփականատերերն արդեն փոխել են" },
+      documentation: { name: "Փաստաթղթեր", description: "LocalOS for users, APIs, and AI agents" },
+    },
+    articles: { eyebrow: "LocalOS ռեսուրսներ", title: "Հոդվածներ բիզնեսի, հաճախորդների և աճի մասին", description: "Գործնական ուղեցույցներ քարտեզների, ակնարկների, հաճախորդների, ֆինանսների և սեփականատիրոջ ամենօրյա աշխատանքի վերաբերյալ:", latest: "Վերջին հոդվածները", chooseTopic: "Ընտրեք թեմա և սկսեք ամենաօգտակար ուղեցույցից:", all: "Բոլորը", back: "Վերադարձ դեպի հոդվածներ", seoTitle: "Հոդվածներ տեղական բիզնեսի սեփականատերերի համար — LocalOS", seoDescription: "LocalOS-ի հոդվածներ քարտեզների, ակնարկների, հաճախորդների, ֆինանսների և տեղական բիզնեսում կրկնվող աշխատանքի ավտոմատացման մասին:" },
+    shared: { readMore: "Կարդալ ավելին", related: "Առնչվող ընթերցանություն", ctaTitle: "Ցանկանու՞մ եք տեսնել, թե ինչ աշխատանք կարող եք հանձնել LocalOS-ին:", ctaDescription: "Սկսեք անվճար ցուցակման աուդիտով: Մենք ցույց կտանք, թե ինչն է խանգարում հաճախորդներին գտնել և ընտրել ձեզ:", audit: "Ստացեք անվճար աուդիտ", discuss: "Քննարկել իրականացումը", loading: "Հոդվածի բեռնում…" },
+  },};

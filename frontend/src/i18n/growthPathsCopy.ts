@@ -54,6 +54,23 @@ const en: GrowthPathsCopy = {
   },
 };
 
+const hy: GrowthPathsCopy = {
+  eyebrow: "Աճի ուղիներ", title: "Ընտրեք ուղղություն", intro: "Ընտրեք այն աշխատանքը, որից ցանկանում եք սկսել: Ձեր ընթացիկ ուղին միշտ առաջինը կհայտնվի:",
+  chooseBusiness: "Ընտրեք բիզնես՝ ուղղությունները տեսնելու համար:", loading: "Բեռնվում են ուղղությունները", loadError: "Չհաջողվեց բեռնել ուղղությունները:", retry: "Նորից փորձեք",
+  emptyTitle: "Ուղղությունները դեռ չեն բեռնվել", emptyDescription: "Թարմացրեք էջը կամ փորձեք ավելի ուշ:", accessTitle: "Այն, ինչ դուք կստանաք",
+  lockedReason: "Ամբողջական բաժինը հասանելի է համապատասխան պլանում:", lockedCta: "Դիտեք պլանները", obstacle: "Ինչն է խանգարում.",
+  statuses: { payment: "Մեկ այլ պլան է պահանջվում", blocked: "Ուշադրության կարիք ունի", action: "Հաջորդ քայլը պատրաստ է", available: "Պատրաստ է սկսել" },
+  directions: {
+    maps: { title: "Ձեր ցուցակները կարգի բերեք", description: "Ստուգեք ծառայությունները և գները, լուսանկարները, վարկանիշները, ակնարկները և ամրագրման հղումները: Տեսեք, թե ինչ պետք է շտկել առաջինը:", cta: "Ստուգեք ցուցակը" },
+    maps_content: { title: "Ձեր ցուցակները կարգի բերեք", description: "Ստուգեք ծառայությունները և գները, լուսանկարները, վարկանիշները, ակնարկները և ամրագրման հղումները: Տեսեք, թե ինչ պետք է շտկել առաջինը:", cta: "Ստուգեք ցուցակը" },
+    influencer: { title: "Գտեք տեղական ստեղծողներին", description: "Գտեք մոտակայքում գտնվող հեղինակներին, համաձայնեցրեք պայմանները և հետևեք այցելություններին և գրառումներին:", cta: "Դիտեք ստեղծողներին" },
+    partnership: { title: "Գտեք բիզնեսներ փոխադարձ ուղղորդումների համար", description: "Տեսեք, թե մոտակա ընկերությունները կարող են ուղղորդումներ փոխանակել ձեզ հետ և ինչ առաջարկել նրանց:", cta: "Դիտեք բիզնեսները" },
+    content: { title: "Դադարեք մտածել, թե ինչ հրապարակել", description: "Ստացեք թեմաներ և նախագծեր՝ հիմնված ձեր ծառայությունների, ակնարկների և բիզնես իրադարձությունների վրա:", cta: "Բաց բովանդակություն" },
+    average_ticket: { title: "Տեսեք, թե ուրիշ ինչ առաջարկել յուրաքանչյուր հաճախորդին", description: "Գտեք համապատասխան հավելումներ և հետևեք՝ արդյոք թիմն առաջարկում է դրանք և ամրագրում հաջորդ այցը:", cta: "Դիտել ընտրանքները" },
+    automation: { title: "Վերցրեք կրկնվող առաջադրանքները ձեր ափսեից", description: "Ընտրեք կրկնվող աշխատանք և տեսեք, թե ինչ է արվում և որտեղ է անհրաժեշտ ձեր որոշումը:", cta: "Դիտեք առաջադրանքները" },
+  },
+};
+
 const es: GrowthPathsCopy = {
   eyebrow: 'Rutas de crecimiento', title: 'Elige una dirección', intro: 'Elige la tarea con la que quieres empezar. Tu ruta actual aparecerá siempre primero.',
   chooseBusiness: 'Elige un negocio para ver las direcciones.', loading: 'Cargando direcciones', loadError: 'No se pudieron cargar las direcciones.', retry: 'Reintentar',
@@ -72,6 +89,7 @@ const es: GrowthPathsCopy = {
 };
 
 export const growthPathsCopyFor = (language: Language): GrowthPathsCopy => {
+  if (language === 'hy') return hy;
   if (language === 'ru') return ru;
   if (language === 'es') return es;
   return en;

@@ -22,7 +22,8 @@ const textByLanguage: Record<Language, DemoShowcaseText> = {
   ar: { service: 'العناية بشعر الكلاب', serviceDescription: 'قص دقيق وعناية احترافية بالشعر.', keyword: 'العناية بالكلاب', review: 'مراجعة تجريبية عن العناية واهتمام المختص وسهولة الحجز.', reply: 'شكرًا لك! يسعدنا أنك قدّرت العناية وسهولة الحجز.', newsTitle: 'العناية بالحيوانات صيفًا', newsText: 'دليل عملي للعناية بالشعر في الطقس الحار.', competitor: 'أسلوب ناعم' },
   ha: { service: 'Gyaran gashin kare', serviceDescription: 'Gyara da kula da gashi cikin ƙwarewa.', keyword: 'gyaran kare', review: 'Sharhin demo game da kulawa, ƙwarewar ma’aikaci da sauƙin yin booking.', reply: 'Mun gode! Muna farin ciki da kuka ji daɗin kulawa da sauƙin booking.', newsTitle: 'Kula da dabba a lokacin zafi', newsText: 'Jagora mai amfani don kula da gashi a yanayin zafi.', competitor: 'Salon Gashi Mai Laushi' },
   tr: { service: 'Köpek tıraşı', serviceDescription: 'Özenli tıraş ve tüy bakımı.', keyword: 'köpek bakımı', review: 'Bakım, uzmanın ilgisi ve kolay randevu hakkında demo yorumu.', reply: 'Teşekkür ederiz! İlgi ve kolay randevudan memnun kalmanıza sevindik.', newsTitle: 'Yaz aylarında evcil hayvan bakımı', newsText: 'Sıcak havalarda tüy bakımı için pratik bir rehber.', competitor: 'Pofuduk Stil' },
-};
+
+  hy: { service: "Շների խնամք", serviceDescription: "Զգուշորեն վարսահարդարում և վերարկուի խնամք:", keyword: "շների խնամք", review: "Դեմո ակնարկ հարդարման, մասնագետի խնամքի և հեշտ ամրագրման մասին:", reply: "Շնորհակալություն Ուրախ ենք, որ գնահատեցիք մասնագետի խնամքը և հեշտ ամրագրումը:", newsTitle: "Կենդանիների ամառային խնամք", newsText: "Շոգ եղանակին վերարկուի խնամքի գործնական ուղեցույց:", competitor: 'Fluffy Style' },};
 
 export const getDemoShowcaseData = (language: Language) => {
   const text = textByLanguage[language];

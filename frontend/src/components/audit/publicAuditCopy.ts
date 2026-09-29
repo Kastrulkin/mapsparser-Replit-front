@@ -1,6 +1,6 @@
-export type PublicAuditLanguage = 'ru' | 'en' | 'fr' | 'es' | 'el' | 'de' | 'th' | 'ar' | 'ha' | 'tr';
+export type PublicAuditLanguage = 'ru' | 'en' | 'fr' | 'es' | 'el' | 'de' | 'th' | 'ar' | 'ha' | 'tr' | 'hy';
 
-export const supportedPublicAuditLanguages: PublicAuditLanguage[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr'];
+export const supportedPublicAuditLanguages: PublicAuditLanguage[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr', 'hy'];
 
 const publicAuditCopy = {
   ru: {
@@ -59,8 +59,36 @@ const publicAuditCopy = {
     auditFullPlanHint: 'Additional issues, the 7-day plan, listing comparison, and sources.',
     auditHidePlan: 'Hide full plan',
   },
-};
+
+  hy: {
+    auditScore: "Միավոր",
+    auditFixYourself: "Ինքներդ շտկեք",
+    auditPrepareWithLocalOS: "Պատրաստեք բարելավումներ LocalOS-ի հետ",
+    auditFixToday: "Ինչ շտկել այսօր",
+    auditFixTodayHint: "Սկսեք այս առաջնահերթություններից. դրանք ամենաուժեղ ազդեցությունն ունեն հստակության և վստահության վրա:",
+    auditWhyImportant: "Ինչու է դա կարևոր",
+    auditActions: "Ինչ անել",
+    auditDetails: "Մանրամասներ",
+    auditHideDetails: "Թաքցնել մանրամասները",
+    auditStrengths: "Ինչն արդեն լավ է աշխատում",
+    auditNoStrengths: "Առայժմ բավարար ստուգված տվյալներ չկան ուժեղ կողմերը հաստատելու համար:",
+    auditCustomerUnderstanding: "Ինչպես են հաճախորդները հասկանում ցուցակը",
+    auditStrongAnswers: "Լավ է պատասխանում",
+    auditWeakAnswers: "Տեղեկություններ բացակայում են",
+    auditMissingPhotos: "Լուսանկարներ ավելացնելու համար",
+    auditNeedPhoto: "Պահանջվում է լուսանկար",
+    auditCardData: "Ինչ կարող են տեսնել հաճախորդները",
+    auditShowMore: "Ցույց տալ ավելին",
+    auditShowLess: "Ցույց տալ ավելի քիչ",
+    auditNoReply: "Ոչ մի պատասխան",
+    auditHasReply: "Պատասխանել ներկա",
+    auditShowFull: "Ցույց տալ ամբողջական տեքստը",
+    auditHideFull: "Փլուզում",
+    auditFullPlan: "Ամբողջական պլան և մեթոդաբանություն",
+    auditFullPlanHint: "Լրացուցիչ խնդիրներ, 7-օրյա պլան, ցուցակման համեմատություն և աղբյուրներ:",
+    auditHidePlan: "Թաքցնել ամբողջական պլանը",
+  },};
 
 export const publicAuditUiTextForLanguage = (lang: PublicAuditLanguage) => (
-  lang === 'ru' ? publicAuditCopy.ru : publicAuditCopy.en
+  lang === 'ru' ? publicAuditCopy.ru : lang === 'hy' ? publicAuditCopy.hy : publicAuditCopy.en
 );

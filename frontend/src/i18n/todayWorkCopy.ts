@@ -103,7 +103,16 @@ const copy: Record<Language, WorkCopy> = {
     unavailable: 'Ana buƙatar damar shiga takardar lissafi don rubutu. Buɗe sakamakon don duba haɗin.',
     invalidApproval: 'Amincewar rubutun ba ta da inganci kuma. Buɗe sakamakon don dubawa.',
   },
-};
+
+  hy: {
+    open: "Բաց",
+    waiting: "Աղյուսակային գրությունը հաստատված է և սպասում է գործարկման:",
+    executing: "Գրավոր աղյուսակում:",
+    reconciliation: "Գրելու արդյունքն անհայտ է: Ստուգեք աղյուսակը հետագա գործողություններից առաջ:",
+    failed: "Գրությունը ուշադրության կարիք ունի. Բացեք արդյունքը՝ պատճառը ստուգելու համար:",
+    unavailable: "Գրելու համար անհրաժեշտ է մուտք գործել աղյուսակ: Բացեք արդյունքը՝ կապը ստուգելու համար:",
+    invalidApproval: "Գրելու հաստատումն այլևս վավեր չէ: Բացեք արդյունքը՝ այն վերանայելու համար:",
+  },};
 
 const descriptionKeys = new Map<string, keyof Omit<WorkCopy, 'open'>>([
   ['today.automation.waiting_provider', 'waiting'],

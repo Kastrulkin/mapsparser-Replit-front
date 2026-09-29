@@ -86,6 +86,23 @@ const en: LoginCopy = {
   journeyResultTitle: 'Your chosen direction is saved', journeyResultText: 'The relevant LocalOS section will open after registration.',
 };
 
+const hy: LoginCopy = {
+  loginTitle: "Մուտք գործեք", registerTitle: "Ստեղծեք հաշիվ", resetTitle: "Վերականգնել ձեր գաղտնաբառը", journeyTitle: "Կատարեք ձեր առաջին գործողությունը", loginSubtitle: "Նոր հաճախորդներ ձեր բիզնեսի համար",
+  loginTab: "Մուտք գործել", registerTab: "Գրանցվել", resetTab: "Վերականգնել", loginError: "Մուտքի սխալ.", registerError: "Գրանցման սխալ.", registrationFailed: "Գրանցումը ձախողվեց",
+  registerRequired: "Պահանջվում է էլ.փոստ և գաղտնաբառը", businessRequired: "Բիզնեսի անվանումը, հասցեն և քաղաքը պարտադիր են", consentRequired: "Անձնական տվյալների համաձայնությունը պարտադիր է",
+  consentText: "Ես համաձայն եմ անձնական տվյալների մշակմանը և ընդունում եմ ծառայության քաղաքականությունը", policyLabel: "Անձնական տվյալների քաղաքականություն",
+  registerSuccess: "Գրանցումը գրեթե ավարտված է։ Ստուգեք ձեր էլ.փոստը և հաստատեք այն:", registerPending: "Ձեր բիզնեսը սպասվում է հսկողության: Շարունակելու համար հաստատեք ձեր էլ.",
+  resetSent: "Գաղտնաբառի վերակայման հրահանգները ուղարկվել են ձեր էլ.", resetError: "Գաղտնաբառի վերակայման սխալ.", resetFailed: "Գաղտնաբառի վերականգնումը ձախողվեց",
+  email: "Էլ", password: "Գաղտնաբառ", personalData: "Անձնական տվյալներ", businessData: "Բիզնեսի մանրամասները", name: "Անուն", phone: "Հեռախոս", businessName: "Ձեռնարկության անվանումը *",
+  address: "Հասցե *", addressPlaceholder: "Օրինակ՝ 123 Main St", city: "Քաղաք *", country: "Երկիր", countryPlaceholder: "Սկսեք մուտքագրել երկիր",
+  countryHint: "Ընտրեք ցանկից կամ մուտքագրեք երկիրը ձեռքով:", signIn: "Մուտք գործեք", signingIn: "Մուտք գործել...", signUp: "Գրանցվեք", signingUp: "Գրանցվում է...",
+  postRegisterHint: "Էլփոստի հաստատումից հետո կարող եք լրացնել ձեր պրոֆիլը և ավելացնել ընկերության հղումը: Վճարովի գործողությունները միացված են առանձին:",
+  checkEmailHint: "Մենք ուղարկել ենք հաստատման հղում: Էլփոստը հաստատելուց հետո դուք մուտք կգործեք առանց վճարման:",
+  resendVerification: "Նորից էլփոստ ուղարկեք", resendVerificationDone: "Հաստատման նամակը կրկին ուղարկվել է:", resendVerificationFailed: "Չհաջողվեց նորից ուղարկել էլ",
+  sendReset: "Վերականգնել գաղտնաբառը", sendingReset: "Ուղարկում...", mapLinkAddressError: "Հասցեի դաշտը չպետք է պարունակի քարտեզի հղում", mapLinkCityError: "Քաղաքի դաշտը չպետք է պարունակի քարտեզի հղում",
+  journeyResultTitle: "Ձեր ընտրած ուղղությունը պահպանված է", journeyResultText: "Գրանցվելուց հետո կբացվի համապատասխան LocalOS բաժինը։",
+};
+
 const es: LoginCopy = {
   loginTitle: 'Iniciar sesión', registerTitle: 'Crea tu cuenta', resetTitle: 'Recupera tu contraseña', journeyTitle: 'Completa el primer paso', loginSubtitle: 'Más clientes para tu negocio',
   loginTab: 'Acceso', registerTab: 'Registro', resetTab: 'Recuperar', loginError: 'Error al iniciar sesión: ', registerError: 'Error al registrarse: ', registrationFailed: 'No se pudo completar el registro',
@@ -104,6 +121,7 @@ const es: LoginCopy = {
 };
 
 export const loginCopyFor = (language: Language): LoginCopy => {
+  if (language === 'hy') return hy;
   if (language === 'ru') return ru;
   if (language === 'es') return es;
   return en;

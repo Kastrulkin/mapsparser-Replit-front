@@ -15,6 +15,7 @@ const loadArticles = async (language: Language): Promise<ArticleContent[]> => {
     case "ar": return import("./article-locales/ar.json").then((module) => module.default);
     case "ha": return import("./article-locales/ha.json").then((module) => module.default);
     case "tr": return import("./article-locales/tr.json").then((module) => module.default);
+    case "hy": return import("./article-locales/hy.json").then((module) => module.default);
   }
 };
 

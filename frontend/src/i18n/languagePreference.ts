@@ -10,7 +10,8 @@ export const isSupportedLanguage = (value: string): value is Language => (
   value === 'th' ||
   value === 'ar' ||
   value === 'ha' ||
-  value === 'tr'
+  value === 'tr' ||
+  value === 'hy'
 );
 
 export const resolveInitialLanguage = (
@@ -19,7 +20,7 @@ export const resolveInitialLanguage = (
   savedLanguage: string | null,
   browserLanguage: string,
 ): Language => {
-  const requestedLanguage = (pathname === '/demo' || pathname.startsWith('/room/') || pathname.startsWith('/offer/'))
+  const requestedLanguage = (pathname === '/demo' || pathname === '/docs' || pathname.startsWith('/docs/') || pathname.startsWith('/room/') || pathname.startsWith('/offer/'))
     ? new URLSearchParams(search).get('lang')
     : null;
 

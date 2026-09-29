@@ -32,6 +32,7 @@ const languageOptions = [
   { value: 'de', label: 'Deutsch' },
   { value: 'fr', label: 'Français' },
   { value: 'tr', label: 'Türkçe' },
+  { value: 'hy', label: 'Հայերեն' },
   { value: 'it', label: 'Italiano' },
   { value: 'pt', label: 'Português' },
   { value: 'zh', label: '中文' },
@@ -51,7 +52,7 @@ export default function ServiceOptimizer({
   businessName?: string;
   businessId?: string;
   tone?: Tone;
-  language?: 'ru' | 'en' | 'es' | 'de' | 'fr' | 'it' | 'pt' | 'zh';
+  language?: 'ru' | 'en' | 'es' | 'de' | 'fr' | 'hy' | 'it' | 'pt' | 'zh';
   region?: string;
   descriptionLength?: number;
   instructions?: string;
@@ -62,7 +63,7 @@ export default function ServiceOptimizer({
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [tone, setTone] = useState<Tone>(externalTone || 'professional');
-  const [language, setLanguage] = useState<'ru' | 'en' | 'es' | 'de' | 'fr' | 'it' | 'pt' | 'zh'>(externalLanguage || 'ru');
+  const [language, setLanguage] = useState<'ru' | 'en' | 'es' | 'de' | 'fr' | 'hy' | 'it' | 'pt' | 'zh'>(externalLanguage || 'ru');
   const [instructions, setInstructions] = useState(externalInstructions || '');
   const [region, setRegion] = useState(externalRegion || '');
   const [length, setLength] = useState(externalLength || 150);

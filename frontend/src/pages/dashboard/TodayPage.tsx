@@ -107,7 +107,8 @@ const analyticsModuleLabels: Record<Language, Record<string, string>> = {
   ar: { sales: 'المبيعات ومتوسط الفاتورة', services: 'الخدمات والمبيعات الإضافية', capacity: 'إشغال الفريق' },
   ha: { sales: 'Tallace-tallace da matsakaicin sayayya', services: 'Ayyuka da ƙarin sayarwa', capacity: 'Yawan aikin ma’aikata' },
   tr: { sales: 'Satışlar ve ortalama sepet', services: 'Hizmetler ve ek satışlar', capacity: 'Ekip kapasitesi' },
-};
+
+  hy: { sales: "Վաճառք և միջին վաճառք", services: "Ծառայություններ և վաճառքներ", capacity: "Թիմային կարողություններ" },};
 
 const analyticsLabel = (language: Language, copy: TodayPageCopy, key?: string, fallback?: string) => {
   if (key === 'trend') return copy.trend;
@@ -131,7 +132,8 @@ const resultSourceLabel = (copy: TodayPageCopy, source?: string) => {
   return source;
 };
 
-const localeByLanguage: Record<Language, string> = { ru: 'ru-RU', en: 'en-GB', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR' };
+const localeByLanguage: Record<Language, string> = { ru: 'ru-RU', en: 'en-GB', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR' ,
+  hy: 'hy-AM',};
 
 const formatDate = (language: Language, value?: string | null) => {
   if (!value) return null;
@@ -152,7 +154,8 @@ const flowLabels: Record<Language, Record<TodayPreference['primary_flow'], strin
   ar: { overview: 'نظرة عامة', content: 'المحتوى', influencers: 'صناع المحتوى', partnerships: 'الشراكات', maps: 'الخرائط', upsells: 'المبيعات الإضافية', automation: 'الأتمتة' },
   ha: { overview: 'Bayani', content: 'Abun ciki', influencers: 'Masu ƙirƙira', partnerships: 'Haɗin gwiwa', maps: 'Taswira', upsells: 'Ƙarin tallace-tallace', automation: 'Aiki ta atomatik' },
   tr: { overview: 'Genel bakış', content: 'İçerik', influencers: 'İçerik üreticileri', partnerships: 'Ortaklıklar', maps: 'Haritalar', upsells: 'Ek satışlar', automation: 'Otomasyon' },
-};
+
+  hy: { overview: "Ընդհանուր ակնարկ", content: "Բովանդակություն", influencers: "Ստեղծողներ", partnerships: "Գործընկերություններ", maps: "Քարտեզներ", upsells: 'Upsells', automation: "Ավտոմատացում" },};
 
 export const TodayPage = () => {
   const navigate = useNavigate();

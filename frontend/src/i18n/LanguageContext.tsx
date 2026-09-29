@@ -52,6 +52,8 @@ const loadTranslations = async (language: Language): Promise<Record<string, unkn
       return import("./locales/ha").then((module) => module.ha);
     case "tr":
       return import("./locales/tr").then((module) => module.tr);
+    case "hy":
+      return import("./locales/hy").then((module) => module.hy);
   }
 };
 

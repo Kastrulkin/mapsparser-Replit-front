@@ -55,9 +55,11 @@ const dataHealthCopy: Record<Language, DataHealthCopy> = {
   ar: { aria: 'حداثة البيانات وإيقاع التحليل', needsUpdate: 'تحتاج البيانات إلى تحديث', ready: 'البيانات جاهزة للتحليل', source: 'المصدر', missing: 'أضف البيانات الناقصة لإكمال التقرير.', stale: 'حمّل تصديراً حديثاً لعرض التحليلات المحدثة.', current: 'تُحدّث المؤشرات من مصدر موثّق. الخطوة التالية هي مراجعة نتائج الفترة.', upload: 'تحميل ملف من نظام CRM', manual: 'إدخال يدوي', calculated: 'حساب LocalOS', file: 'ملف محمّل', unknown: 'غير محدد' },
   ha: { aria: 'Sabuntar bayanai da tsarin nazari', needsUpdate: 'Ana buƙatar sabunta bayanai', ready: 'Bayanai sun shirya don nazari', source: 'Tushe', missing: 'Ƙara bayanan da suka rage domin kammala rahoton.', stale: 'Loda sabon fayil domin buɗe nazari na yanzu.', current: 'Ana sabunta ma’aunai daga tushe da aka tabbatar. Sai a duba sakamakon wannan lokacin.', upload: 'Loda fayil daga CRM', manual: 'shigarwa da hannu', calculated: 'lissafin LocalOS', file: 'fayil da aka loda', unknown: 'ba a bayyana ba' },
   tr: { aria: 'Veri güncelliği ve analiz ritmi', needsUpdate: 'Verilerin güncellenmesi gerekiyor', ready: 'Veriler analize hazır', source: 'Kaynak', missing: 'Raporu tamamlamak için eksik verileri ekleyin.', stale: 'Güncel analizleri açmak için yeni bir dışa aktarma dosyası yükleyin.', current: 'Göstergeler doğrulanmış bir kaynaktan güncellenir. Sonraki adım dönem sonuçlarını incelemektir.', upload: 'CRM’den dosya yükle', manual: 'manuel giriş', calculated: 'LocalOS hesaplaması', file: 'yüklenen dosya', unknown: 'belirtilmedi' },
-};
 
-const dateLocales: Record<Language, string> = { ru: 'ru-RU', en: 'en-GB', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR' };
+  hy: { aria: "Տվյալների թարմություն և վերլուծության ռիթմ", needsUpdate: "Տվյալները թարմացման կարիք ունեն", ready: "Տվյալները պատրաստ են վերլուծության", source: "Աղբյուր", missing: "Զեկույցը լրացնելու համար ավելացրեք բաց թողնված տվյալները:", stale: "Վերբեռնեք թարմ արտահանում` արդի վերլուծությունները բացելու համար:", current: "Չափումները թարմացվում են ստուգված աղբյուրից: Հաջորդը, վերանայեք ժամանակաշրջանի արդյունքները:", upload: "Վերբեռնեք ֆայլ ձեր CRM-ից", manual: "ձեռքով մուտքագրում", calculated: "LocalOS-ի հաշվարկ", file: "բեռնված ֆայլը", unknown: "չի նշվում" },};
+
+const dateLocales: Record<Language, string> = { ru: 'ru-RU', en: 'en-GB', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR' ,
+  hy: 'hy-AM',};
 
 const dateLabel = (value: string | null | undefined, locale: string) => {
   if (!value) return null;

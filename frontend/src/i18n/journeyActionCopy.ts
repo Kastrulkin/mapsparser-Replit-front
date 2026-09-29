@@ -94,6 +94,12 @@ const copy: Record<Language, JourneyActionCopy> = {
     outcomes: { interested: 'İlgileniyor', paid: 'Ödeme istiyor', barter: 'Takasla ilgileniyor', details: 'Ayrıntı gerekiyor', refused: 'Reddetti', other: 'Diğer' },
     useCases: { reviews_without_reply: 'Yanıtsız yorumları topla', content_drafts: 'İçerik taslakları hazırla', map_changes: 'İşletme kartı değişikliklerini kontrol et', weekly_summary: 'Haftalık özet hazırla' },
   },
-};
+
+  hy: {
+    now: "Ինչ անել հիմա", due: "Պայմանավորված", replyOutcomeLabel: "Պատասխանի արդյունքը", saveError: "Չհաջողվեց պահել գործողությունը", publicationUrl: "Հրապարակման հղում", termsOrComment: "Պայմաններ կամ մեկնաբանություններ", reviewDraft: "Դիտեք և խմբագրեք նախագիծը", publicationDate: "Հրապարակման ամսաթիվը", assignTask: "Առաջադրանք նշանակեք", expectedResult: "Ակնկալվող արդյունք", defaultExpectedResult: "Պատրաստված նյութեր վերանայման համար", runInstructions: "Ստեղծեք և գործարկեք AI օգնականը ստորև բերված աշխատանքային տարածքում: Այնուհետև վերադարձեք այս քայլին և ընտրեք «Ստուգել ավարտված գործարկումը»:", confirmedResult: "Ինչը հաստատեց վազքի արդյունքը", inquiries: "Հարցումներ", sales: "Վաճառք", views: "Դիտումներ", copy: "Պատճենել", noReplyFollowup: "Պատասխան չկա. պատրաստեք հետագա գործողությունները",
+    commands: { mark_sent: "Հաղորդագրությունը նշված է որպես ուղարկված", record_reply: "Պահպանել պատասխանը", prepare_followup: "Պատրաստեք հետագա գործողությունները", save_terms: "Պահպանել պայմանները", mark_launched: "Գործընկերությունը նշվել է որպես մեկնարկած", mark_published: "Տեղադրությունը նշված է որպես հրապարակված", add_result: "Ավելացնել արդյունք", complete: "Կատարված է", start_next_cycle: "Սկսեք հաջորդ ցիկլը", open_upgrade: "Ընտրեք պլան", prepare: "Նախագիծ պատրաստել", save_draft: "Պահպանել նախագիծը", schedule: "Ավելացնել օրացույցին", refresh: "Թարմացրեք տվյալները", retry_refresh: "Նորից փորձեք թարմացնել", save_configuration: "Պահպանել կարգավորումը", approve: "Հաստատեք պլանը", link_run: "Ստուգեք ավարտված վազքը" },
+    outcomes: { interested: "Հետաքրքրված է", paid: "Պահանջում է վճարում", barter: "Բաց փոխանակման համար", details: "Մանրամասներ են պետք", refused: "Մերժվել է", other: "Այլ" },
+    useCases: { reviews_without_reply: "Հավաքեք ակնարկներ առանց պատասխանների", content_drafts: "Պատրաստեք բովանդակության նախագծեր", map_changes: "Ստուգեք ցանկի փոփոխությունները", weekly_summary: "Պատրաստեք շաբաթական ամփոփագիր" },
+  },};
 
 export const journeyActionCopy = (language: Language): JourneyActionCopy => copy[language];

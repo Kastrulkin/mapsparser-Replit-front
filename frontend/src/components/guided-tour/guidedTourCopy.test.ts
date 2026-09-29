@@ -84,15 +84,18 @@ describe('guided tour localization', () => {
   it('uses the demo link language before saved and browser preferences', () => {
     expect(resolveInitialLanguage('/demo', '?lang=tr', 'ru', 'de-DE')).toBe('tr');
     expect(resolveInitialLanguage('/demo', '?lang=ar', null, 'en-US')).toBe('ar');
+    expect(resolveInitialLanguage('/demo', '?lang=hy', null, 'en-US')).toBe('hy');
   });
 
   it('uses an explicit public-room link language before saved and browser preferences', () => {
     expect(resolveInitialLanguage('/room/room-test-audit-offer-20260629', '?lang=el', 'ru', 'ru-RU')).toBe('el');
+    expect(resolveInitialLanguage('/docs/api', '?lang=hy', 'ru', 'ru-RU')).toBe('hy');
   });
 
   it('falls back to saved, browser, and English preferences in that order', () => {
     expect(resolveInitialLanguage('/demo', '?lang=unsupported', 'fr', 'de-DE')).toBe('fr');
     expect(resolveInitialLanguage('/demo', '', null, 'th-TH')).toBe('th');
+    expect(resolveInitialLanguage('/demo', '', null, 'hy-AM')).toBe('hy');
     expect(resolveInitialLanguage('/demo', '', null, 'it-IT')).toBe('en');
   });
 });

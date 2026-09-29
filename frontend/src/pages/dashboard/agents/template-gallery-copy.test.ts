@@ -8,7 +8,7 @@ import {
 } from './template-gallery-copy';
 import type { AgentTemplate } from './types';
 
-const supportedLanguages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr'];
+const supportedLanguages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr', 'hy'];
 
 const template: AgentTemplate = {
   key: 'daily_owner_digest',

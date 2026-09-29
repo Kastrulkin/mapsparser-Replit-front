@@ -151,7 +151,7 @@ TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS = max(1, int(os.environ.get("TELEGRAM_REPLY_SY
 TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT = max(1, min(int(os.environ.get("TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT", "12")), 50))
 TELEGRAM_REPLY_SYNC_TIMEOUT_SEC = max(5, int(os.environ.get("TELEGRAM_REPLY_SYNC_TIMEOUT_SEC", "12")))
 LEAD_OUTREACH_MODERATION_STATUS = "lead_outreach"
-PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr")
+PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr", "hy")
 PIPELINE_UNPROCESSED = "unprocessed"
 PIPELINE_IN_PROGRESS = "in_progress"
 PIPELINE_POSTPONED = "postponed"
@@ -1464,6 +1464,7 @@ def _language_label(language: str) -> str:
         "th": "ไทย",
         "ar": "العربية",
         "ha": "Hausa",
+        "hy": "Հայերեն",
     }
     return labels.get(language, "English")
 

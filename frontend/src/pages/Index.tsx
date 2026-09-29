@@ -263,7 +263,8 @@ const compiledArticleLinkByLanguage: Record<Language, string> = {
   ar: "اقرأ عن تقنية Compiled AI",
   ha: "Karanta game da fasahar Compiled AI",
   tr: "Compiled AI teknolojisini okuyun",
-};
+
+  hy: "Կարդացեք Compiled AI-ի մասին",};
 
 const networkQuestionsByLanguage: Record<Language, NetworkQuestionSet> = {
   ru: {
@@ -366,7 +367,17 @@ const networkQuestionsByLanguage: Record<Language, NetworkQuestionSet> = {
       { text: "Fiyatlarınızı ne sıklıkla artırıyorsunuz?", href: "https://t.me/beutyrussia/2702" },
     ],
   },
-};
+
+  hy: {
+    intro: "Սեփականատերերն այս հարցերը նորից ու նորից են տալիս միմյանց աշխատանքային զրույցներում: Խնդիրները կրկնվում են, ուստի օգտակար լուծումը կարող է վերանայվել, պահպանվել և նորից օգտագործվել:",
+    sourceNote: "Իրական հարցեր հանրային արդյունաբերության զրույցներից: Հղումները բացում են բնօրինակ ռուսերեն հաղորդագրությունները:",
+    questions: [
+      { text: "Ինչպե՞ս եք առաջին հերթին հաճախորդներ գտնում:", href: "https://t.me/beutyrussia/2486" },
+      { text: "Ինչպե՞ս եք արձագանքում նման ակնարկներին:", href: "https://t.me/beutyrussia/2499" },
+      { text: "Ինչպե՞ս եք աշխատում հաճախորդների հետ, ովքեր դադարել են գալ:", href: "https://t.me/salon_fm/2654" },
+      { text: "Որքա՞ն հաճախ եք բարձրացնում գները և ի՞նչ եք պահանջում այժմ:", href: "https://t.me/beutyrussia/2702" },
+    ],
+  },};
 
 const productPreviewByLanguage: Record<Language, ProductPreviewCopy> = {
   ru: {
@@ -479,7 +490,18 @@ const productPreviewByLanguage: Record<Language, ProductPreviewCopy> = {
     ],
     ownerNote: "Yalnızca karar gerektiğinde devreye girersiniz.",
   },
-};
+
+  hy: {
+    eyebrow: "Այսօր LocalOS-ում",
+    title: "Աշխատանքները շարունակվում են առանց հիշեցումների",
+    active: "Համակարգը աշխատում է",
+    items: [
+      { title: "Քարտեզների ցանկեր", detail: "Ծառայությունները, գները և ակնարկները ստուգված են", status: "Ստուգված է" },
+      { title: "Անպատասխան ակնարկներ", detail: "Սևագրերն ավելացվել են հերթին", status: "Պատրաստված" },
+      { title: "Շաբաթական գրառում", detail: "Պատճենը պատրաստ է ձեր որոշման համար", status: "Հաստատել" },
+    ],
+    ownerNote: "Դուք ներխուժում եք միայն այն ժամանակ, երբ անհրաժեշտ է որոշում:",
+  },};
 
 const copyForLanguage = (language: Language): LandingCopy => {
   switch (language) {
@@ -503,6 +525,8 @@ const copyForLanguage = (language: Language): LandingCopy => {
       return { ...landingTranslations.ha, networkSummary: 'Ayyuka iri ɗaya suna maimaituwa a kamfanoni da yawa. LocalOS yana adana abin da ke aiki.' };
     case "tr":
       return { ...landingTranslations.tr, networkSummary: 'Aynı işler birçok işletmede tekrar eder. LocalOS işe yarayanları saklar.' };
+    case "hy":
+      return landingTranslations.hy;
   }
 };
 

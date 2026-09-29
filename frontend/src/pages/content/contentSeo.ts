@@ -13,7 +13,8 @@ const dateLocales: Record<Language, string> = {
   ar: "ar",
   ha: "ha-NG",
   tr: "tr-TR",
-};
+
+  hy: "hy-AM",};
 
 export const formatContentDate = (date: string, language: Language = "ru") =>
   new Intl.DateTimeFormat(dateLocales[language], {

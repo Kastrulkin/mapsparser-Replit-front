@@ -10,12 +10,13 @@ import { en } from '@/i18n/locales/en';
 import { es } from '@/i18n/locales/es';
 import { fr } from '@/i18n/locales/fr';
 import { ha } from '@/i18n/locales/ha';
+import { hy } from '@/i18n/locales/hy';
 import { ru } from '@/i18n/locales/ru';
 import { th } from '@/i18n/locales/th';
 import { tr } from '@/i18n/locales/tr';
 
-const locales = { ru, en, fr, es, el, de, th, ar, ha, tr };
-const supportedLanguages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr'];
+const locales = { ru, en, fr, es, el, de, th, ar, ha, tr, hy };
+const supportedLanguages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr', 'hy'];
 
 describe('AIChatPromotionPage locale contract', () => {
   it.each(supportedLanguages)('%s exposes renderable promotion steps', (language) => {
