@@ -788,8 +788,10 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
                 onClick={() => {
                   if (tier.id === 'elite') {
                     toast({
-                      title: "Contact Manager",
-                      description: "Please contact support to activate Elite plan.",
+                      title: language === 'hy' ? 'Կապվեք մեզ հետ' : "Contact Manager",
+                      description: language === 'hy'
+                        ? 'Elite սակագինը միացնելու համար կապվեք աջակցության թիմի հետ։'
+                        : "Please contact support to activate Elite plan.",
                     });
                   } else {
                     handleSubscribe(tier.id);
