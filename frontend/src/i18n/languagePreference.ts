@@ -15,14 +15,12 @@ export const isSupportedLanguage = (value: string): value is Language => (
 );
 
 export const resolveInitialLanguage = (
-  pathname: string,
+  _pathname: string,
   search: string,
   savedLanguage: string | null,
   browserLanguage: string,
 ): Language => {
-  const requestedLanguage = (pathname === '/demo' || pathname === '/docs' || pathname.startsWith('/docs/') || pathname.startsWith('/room/') || pathname.startsWith('/offer/'))
-    ? new URLSearchParams(search).get('lang')
-    : null;
+  const requestedLanguage = new URLSearchParams(search).get('lang');
 
   if (requestedLanguage && isSupportedLanguage(requestedLanguage)) {
     return requestedLanguage;
@@ -34,4 +32,15 @@ export const resolveInitialLanguage = (
 
   const browserLang = browserLanguage.split('-')[0];
   return isSupportedLanguage(browserLang) ? browserLang : 'en';
+};
+
+export const urlWithLanguage = (
+  pathname: string,
+  search: string,
+  hash: string,
+  language: Language,
+): string => {
+  const params = new URLSearchParams(search);
+  params.set('lang', language);
+  return `${pathname}?${params.toString()}${hash}`;
 };

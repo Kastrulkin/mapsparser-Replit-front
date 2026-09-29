@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveInitialLanguage } from '@/i18n/languagePreference';
+import { resolveInitialLanguage, urlWithLanguage } from '@/i18n/languagePreference';
 import { guidedTourCopyForLanguage, supportedGuidedTourLanguages } from './guidedTourCopy';
 import { GUIDED_TOUR_STEP_LAYOUTS, guidedTourStepsForLanguage } from './tourConfig';
 
@@ -90,6 +90,16 @@ describe('guided tour localization', () => {
   it('uses an explicit public-room link language before saved and browser preferences', () => {
     expect(resolveInitialLanguage('/room/room-test-audit-offer-20260629', '?lang=el', 'ru', 'ru-RU')).toBe('el');
     expect(resolveInitialLanguage('/docs/api', '?lang=hy', 'ru', 'ru-RU')).toBe('hy');
+  });
+
+  it('uses an explicit language link on every page', () => {
+    expect(resolveInitialLanguage('/', '?lang=hy', 'ru', 'ru-RU')).toBe('hy');
+    expect(resolveInitialLanguage('/dashboard/services', '?lang=hy', 'ru', 'ru-RU')).toBe('hy');
+  });
+
+  it('creates a shareable language link without losing other URL state', () => {
+    expect(urlWithLanguage('/about', '?ref=partner&lang=ru', '#pricing', 'hy'))
+      .toBe('/about?ref=partner&lang=hy#pricing');
   });
 
   it('falls back to saved, browser, and English preferences in that order', () => {

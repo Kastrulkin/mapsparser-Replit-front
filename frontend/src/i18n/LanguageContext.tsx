@@ -1,7 +1,7 @@
 import React, { ReactNode, useEffect, useMemo, useState } from "react";
 import { LanguageContext, type Language, type Translations } from './LanguageContext.logic';
 
-import { resolveInitialLanguage } from './languagePreference';
+import { resolveInitialLanguage, urlWithLanguage } from './languagePreference';
 
 const isTranslationRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -113,6 +113,8 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
   }, [language]);
 
   const setLanguage = (lang: Language) => {
+    const { pathname, search, hash } = window.location;
+    window.history.replaceState(window.history.state, '', urlWithLanguage(pathname, search, hash, lang));
     setLanguageState(lang);
   };
 
