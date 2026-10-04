@@ -64,6 +64,7 @@ const Header = () => {
     ha: { how: 'Yadda LocalOS ke aiki', about: 'Game da LocalOS' },
     tr: { how: 'LocalOS nasıl çalışır', about: 'LocalOS hakkında' },
     hy: { how: "Ինչպես է աշխատում LocalOS-ը", about: "LocalOS-ի մասին" },
+    kk: { how: "LocalOS қалай жұмыс істейді", about: "LocalOS туралы" },
   };
 
   const navigation = [

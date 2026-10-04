@@ -1452,11 +1452,94 @@ const UI_TEXT_BASE = {
     priorityYandexRating: "Սկսեք բարելավել Yandex Maps-ը. նրա վարկանիշն ավելի ցածր է, քան Google Maps-ը:",
     priorityGoogleReviews: "Սկսեք բարելավել Google Քարտեզները. այն նկատելիորեն ավելի քիչ ակնարկներ ունի, քան Yandex Maps-ը:",
     priorityGeneric: "Սկսեք քարտեզի ցանկից, որն ունի ավելի քիչ ակնարկներ և թույլ սոցիալական ապացույցներ, այնուհետև բովանդակությունը հավասարեցրեք բոլոր քարտերին:",
+  },
+  kk: {
+    loading: "Ұсыныс беті жүктелуде...",
+    notFound: "Ұсыныс беті табылмады",
+    companyLogo: "Компания логотипі",
+    categoryMissing: "Санат көрсетілмеген",
+    lastAudit: "Соңғы аудит",
+    processingFallback: "Есеп дайын болған кезде осында пайда болады.",
+    cardScore: "Карта рейтингі",
+    stateUnknown: "Күй анықталмаған",
+    rating: "Рейтинг",
+    reviews: "Пікірлер",
+    services: "Қызметтер",
+    monthlyPotential: "Карточкалардан маңызды жоғалтулар",
+    estimateUnavailable: "Рейтинг қолжетімді емес",
+    currentStateTitle: "Ағымдағы карта күйі",
+    currentStateText: "Бұл негізгі аймақтардың қимасы. Төменде сіз қазірдің өзінде ненің реттелгенін және қолданбалардың не жоғалып жатқанын бірден көре аласыз.",
+    stateServices: "Картадағы қызметтер",
+    stateWebsite: "Веб-сайт",
+    stateReviews: "Пікірлермен жұмыс",
+    stateActivity: "Карточка әрекеті",
+    found: "табылды",
+    servicesMissing: "Толтырылмаған немесе танылмаған",
+    websitePresent: "Сайтқа сілтеме бар",
+    websiteMissing: "Сайт көрсетілмеген",
+    repliesExist: "Пікірлерге жауаптар бар",
+    noAnswerPrefix: "Жауап жоқ",
+    activityPresent: "Жаңа жаңартулар бар",
+    activityMissing: "Жаңалықтар/жаңартулар қажет",
+    allMapsTitle: "Барлық қолжетімді карталарды талдау",
+    allMapsText: "Бұл компания үшін бірнеше карта табылды. Төменде әлеуметтік дәлелдер қай жерде күштірек екенін және картаны қай жерде шығару керектігін көре аласыз.",
+    bestReviews: "Пікірлерге қарағанда жақсырақ",
+    bestRating: "Жақсырақ бағаланған",
+    priority: "Басымдық",
+    sourceFallback: "Дереккөз",
+    open: "Ашық",
+    updated: "Жаңартылған",
+    improveFirstTitle: "Егжей-тегжейлі талдау",
+    issueFallback: "Мәселе",
+    recommendationFallback: "Ұсыныс",
+    noDescription: "Сипаттама көрсетілмеген",
+    problem: "Мәселе",
+    fact: "Факт",
+    impact: "Әсер ету",
+    whatToDo: "Не істеу керек",
+    cadenceTitle: "Карточкамен тұрақты жұмыс істеу ережесі",
+    cadenceText: "Жаңалықтар мен жаңартулар: айына ең аз {news}. Фотосуреттер: айына ең аз {photos} жаңа фотосуреттер. Пікірлерге жауап: {hours} сағатқа дейін.",
+    implementationPlan: "Іске асыру жоспары",
+    in24h: "24 сағатта",
+    in7d: "7 күнде",
+    ongoing: "Тұрақты негізде",
+    servicesTitle: "Картадағы қызметтер",
+    current: "Қазір",
+    category: "Санат",
+    canShowLikeThis: "Сіз оны осылай көрсете аласыз",
+    price: "Бағасы",
+    source: "Дереккөз",
+    servicesUnavailable: "Қызметтер толтырылмаған немесе картада жоқ.",
+    photosTitle: "Фото және көрнекі карта",
+    photoAlt: "Фото {index}",
+    activityTitle: "Карточка әрекеті",
+    freshReviewsMissing: "Бөлімде соңғы шолулар жоқ.",
+    newsPosts: "Жаңалықтар/жазбалар",
+    newsMissing: "Бөлімде жарияланымдар табылмады.",
+    newsStale: "Бөлімде жарияланымдар бар, бірақ соңғы айларда тиістілері табылмады.",
+    newsLatest: "Соңғы жарияланым",
+    businessReply: "Іскерлік жауап",
+    nextTitle: "Картаны және жұмыс жоспарын бөлшектеңіз",
+    nextText: "Кейбір өңдеулерді өзіңіз жасай аласыз. LocalOS мұны жылдамырақ, жүйелі түрде орындау және жаңа деректер жинақтарынан кейін бақылауды жоғалтпау үшін қажет.",
+    optimizeMaps: "Картаны және жұмыс жоспарын бөлшектеңіз",
+    contactExpert: "Алдымен өзіңіз түзетіңіз",
+    contactTelegram: "Telegram арқылы хабарласыңыз",
+    contactEmail: "Электрондық поштаға жазыңыз",
+    goToWebsite: "Веб-сайтқа өтіңіз",
+    openMapCard: "Картада картаны ашу",
+    firstDraft: "Бірінші апелляцияның жобасы",
+    client: "Клиент",
+    mapStrengthReviews: "Пікірлерге қарағанда жақсырақ",
+    mapStrengthRating: "Жақсырақ бағаланған",
+    priorityYandexReviews: "Біріншіден, Яндекс карталарын күшейткен жөн: қазір Google Maps-ке қарағанда шолулар {gap} аз.",
+    priorityYandexRating: "Біріншіден, сіз Яндекс карталарын жақсартуыңыз керек: ондағы рейтинг Google Maps-тен төмен.",
+    priorityGoogleReviews: "Біріншіден, Google Maps-ті күшейту керек: онда Яндекс карталарына қарағанда шолулар айтарлықтай аз.",
+    priorityGeneric: "Алдымен картаны ең аз шолулар мен әлсіз әлеуметтік дәлелдермен күшейтіңіз, содан кейін мазмұнды барлық карталар арасында туралаңыз.",
   },};
 
 type PageLang = PublicAuditLanguage;
 const isPageLang = (value: string): value is PageLang =>
-  value === 'ru' || value === 'en' || value === 'fr' || value === 'es' || value === 'el' || value === 'de' || value === 'th' || value === 'ar' || value === 'ha' || value === 'tr' || value === 'hy';
+  value === 'ru' || value === 'en' || value === 'fr' || value === 'es' || value === 'el' || value === 'de' || value === 'th' || value === 'ar' || value === 'ha' || value === 'tr' || value === 'hy' || value === 'kk';
 
 const normalizePageLanguages = (value?: string[] | null): PageLang[] => {
   const result: PageLang[] = [];
@@ -1483,6 +1566,7 @@ const UI_TEXT = {
   ha: { ...UI_TEXT_BASE.en, ...publicAuditUiTextForLanguage('ha') },
   tr: { ...UI_TEXT_BASE.tr, ...publicAuditUiTextForLanguage('tr') },
   hy: { ...UI_TEXT_BASE.hy, ...publicAuditUiTextForLanguage('hy') },
+  kk: { ...UI_TEXT_BASE.kk, ...publicAuditUiTextForLanguage('kk') },
 };
 
 const AUDIT_TEXT_TRANSLATIONS = {
@@ -2647,6 +2731,11 @@ const AUDIT_HEALTH_LABELS = {
     strong: "Ուժեղ ցուցակագրում",
     growth: "Աճելու տեղ կա",
     risk: "Ցուցակումը կորցնում է հաճախորդներին",
+  },
+  kk: {
+    strong: "Күшті карта",
+    growth: "Өсу нүктелері бар",
+    risk: "Карта тұтынушыларын жоғалтады",
   },};
 
 const ISSUE_TRANSLATIONS: Record<'en' | 'el' | 'tr' | 'ar' | 'hy', Record<string, { title: string; problem: string; impact: string; fix: string }>> = {
@@ -3395,7 +3484,7 @@ const formatMoney = (lang: PageLang, value?: number | null): string => {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return '—';
   if (lang === 'ru') return `${Number(value).toLocaleString('ru-RU')} ₽`;
   const usdValue = Math.max(1, Math.round(Number(value) / RUB_TO_USD));
-  return `$${usdValue.toLocaleString(lang === 'el' ? 'el-GR' : lang === 'tr' ? 'tr-TR' : lang === 'ar' ? 'ar-EG' : lang === 'hy' ? 'hy-AM' : 'en-GB')}`;
+  return `$${usdValue.toLocaleString(lang === 'el' ? 'el-GR' : lang === 'tr' ? 'tr-TR' : lang === 'ar' ? 'ar-EG' : lang === 'hy' ? 'hy-AM' : lang === 'kk' ? 'kk-KZ' : 'en-GB')}`;
 };
 
 const stateBadgeClass = (score?: number) => {
@@ -3648,7 +3737,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
     params.set('business_country', lang === 'ru' ? 'Россия' : 'Russia');
     window.location.assign(`/login?${params.toString()}`);
   };
-  const locale = lang === 'el' ? 'el-GR' : lang === 'tr' ? 'tr-TR' : lang === 'ar' ? 'ar-EG' : lang === 'hy' ? 'hy-AM' : lang === 'ru' ? 'ru-RU' : 'en-GB';
+  const locale = lang === 'el' ? 'el-GR' : lang === 'tr' ? 'tr-TR' : lang === 'ar' ? 'ar-EG' : lang === 'hy' ? 'hy-AM' : lang === 'kk' ? 'kk-KZ' : lang === 'ru' ? 'ru-RU' : 'en-GB';
   const text = UI_TEXT[lang] || UI_TEXT.en;
   const interpolate = (template: string, values: Record<string, string | number>) => {
     let out = template;
@@ -3673,6 +3762,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
     ar: 'AR',
     ha: 'HA',
     hy: 'HY',
+    kk: 'KK',
   };
 
   if (loading) {

@@ -264,7 +264,8 @@ const compiledArticleLinkByLanguage: Record<Language, string> = {
   ha: "Karanta game da fasahar Compiled AI",
   tr: "Compiled AI teknolojisini okuyun",
 
-  hy: "Կարդացեք Compiled AI-ի մասին",};
+  hy: "Կարդացեք Compiled AI-ի մասին",
+  kk: "Құрастырылған AI технологиясы туралы оқыңыз",};
 
 const networkQuestionsByLanguage: Record<Language, NetworkQuestionSet> = {
   ru: {
@@ -376,6 +377,16 @@ const networkQuestionsByLanguage: Record<Language, NetworkQuestionSet> = {
       { text: "Ինչպե՞ս եք արձագանքում նման ակնարկներին:", href: "https://t.me/beutyrussia/2499" },
       { text: "Ինչպե՞ս եք աշխատում հաճախորդների հետ, ովքեր դադարել են գալ:", href: "https://t.me/salon_fm/2654" },
       { text: "Որքա՞ն հաճախ եք բարձրացնում գները և ի՞նչ եք պահանջում այժմ:", href: "https://t.me/beutyrussia/2702" },
+    ],
+  },
+  kk: {
+    intro: "Бұл сұрақтарды иелері жұмыс чаттары арқылы бір-біріне қайта-қайта қояды. Тапсырмалар қайталанады, яғни табылған шешімді тексеруге, сақтауға және қайта пайдалануға болады.",
+    sourceNote: "Ашық салалық чаттардан нақты сұрақтар. Сілтемелер түпнұсқа жазбаларға апарады.",
+    questions: [
+      { text: "Сіз тіпті клиенттерді қалай іздейсіз?", href: "https://t.me/beutyrussia/2486" },
+      { text: "Сіз мұндай пікірлерге қалай жауап бересіз?", href: "https://t.me/beutyrussia/2499" },
+      { text: "Жоғалған клиенттермен қалай күресуге болады?", href: "https://t.me/salon_fm/2654" },
+      { text: "Сіз бағаңызды қаншалықты жиі көтересіз және қазіргі бағаңыз қандай?", href: "https://t.me/beutyrussia/2702" },
     ],
   },};
 
@@ -501,6 +512,17 @@ const productPreviewByLanguage: Record<Language, ProductPreviewCopy> = {
       { title: "Շաբաթական գրառում", detail: "Պատճենը պատրաստ է ձեր որոշման համար", status: "Հաստատել" },
     ],
     ownerNote: "Դուք ներխուժում եք միայն այն ժամանակ, երբ անհրաժեշտ է որոշում:",
+  },
+  kk: {
+    eyebrow: "Бүгін LocalOS жүйесінде",
+    title: "Жұмыс еске салғыштарсыз жалғасуда",
+    active: "Жүйе жұмыс істеп тұр",
+    items: [
+      { title: "Карточкалардағы карталар", detail: "Тексерілген қызметтер, бағалар және шолулар", status: "Тексерілді" },
+      { title: "Жауапсыз шолулар", detail: "Нобайлар кезекке қойылған", status: "Дайындалды" },
+      { title: "Апталық басылым", detail: "Мәтін сіздің шешіміңізге дайын", status: "Растау" },
+    ],
+    ownerNote: "Шешім қажет жерде ғана қосыласыз.",
   },};
 
 const copyForLanguage = (language: Language): LandingCopy => {
@@ -527,6 +549,8 @@ const copyForLanguage = (language: Language): LandingCopy => {
       return { ...landingTranslations.tr, networkSummary: 'Aynı işler birçok işletmede tekrar eder. LocalOS işe yarayanları saklar.' };
     case "hy":
       return landingTranslations.hy;
+    case "kk":
+      return landingTranslations.kk;
   }
 };
 

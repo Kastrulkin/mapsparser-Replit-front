@@ -918,6 +918,7 @@ def _generate_news_for_business(conn, business_id: str) -> dict[str, Any]:
         "tr": "Turkish",
         "ar": "Arabic",
         "hy": "Armenian",
+        "kk": "Kazakh",
     }
     settings = _load_settings_row(conn, business_id)
     news_content_source = str(settings.get("news_content_source") or "services").strip().lower() or "services"
@@ -1099,6 +1100,7 @@ def _generate_review_reply_drafts(conn, business_id: str, batch_size: int = 5) -
         "tr": "Turkish",
         "ar": "Arabic",
         "hy": "Armenian",
+        "kk": "Kazakh",
     }
     examples_text = _load_user_examples(conn, owner_id, "review", limit=5)
     review_industry_key = detect_industry_key(

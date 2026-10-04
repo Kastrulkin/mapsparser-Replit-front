@@ -1,6 +1,6 @@
-export type PublicAuditLanguage = 'ru' | 'en' | 'fr' | 'es' | 'el' | 'de' | 'th' | 'ar' | 'ha' | 'tr' | 'hy';
+export type PublicAuditLanguage = 'ru' | 'en' | 'fr' | 'es' | 'el' | 'de' | 'th' | 'ar' | 'ha' | 'tr' | 'hy' | 'kk';
 
-export const supportedPublicAuditLanguages: PublicAuditLanguage[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr', 'hy'];
+export const supportedPublicAuditLanguages: PublicAuditLanguage[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr', 'hy', 'kk'];
 
 const publicAuditCopy = {
   ru: {
@@ -87,6 +87,34 @@ const publicAuditCopy = {
     auditFullPlan: "Ամբողջական պլան և մեթոդաբանություն",
     auditFullPlanHint: "Լրացուցիչ խնդիրներ, 7-օրյա պլան, ցուցակման համեմատություն և աղբյուրներ:",
     auditHidePlan: "Թաքցնել ամբողջական պլանը",
+  },
+  kk: {
+    auditScore: "Бағалау",
+    auditFixYourself: "Өзіңіз жөндеңіз",
+    auditPrepareWithLocalOS: "LocalOS көмегімен патчтарды дайындаңыз",
+    auditFixToday: "Бүгін нені түзету керек",
+    auditFixTodayHint: "Осы тармақтардан бастаңыз: олар айқындық пен сенімділікке ең үлкен әсер етеді.",
+    auditWhyImportant: "Неліктен маңызды",
+    auditActions: "Не істеу керек",
+    auditDetails: "Қосымша мәліметтер",
+    auditHideDetails: "Мәліметтерді жасыру",
+    auditStrengths: "Бұл қазірдің өзінде жақсы",
+    auditNoStrengths: "Күшті жақтарды растау үшін әлі деректер жеткіліксіз.",
+    auditCustomerUnderstanding: "Клиент картаны қалай түсінеді?",
+    auditStrongAnswers: "Жақсы жауап береді",
+    auditWeakAnswers: "Ақпарат жеткіліксіз",
+    auditMissingPhotos: "Қандай фотосуреттер қосу керек",
+    auditNeedPhoto: "Қосу керек",
+    auditCardData: "Картада не көрінеді",
+    auditShowMore: "Көбірек көрсету",
+    auditShowLess: "Жасыру",
+    auditNoReply: "Жауап жоқ",
+    auditHasReply: "Жауабы бар",
+    auditShowFull: "Толық көрсету",
+    auditHideFull: "Жыйрату",
+    auditFullPlan: "Толық жоспар және әдістеме",
+    auditFullPlanHint: "Қосымша қиындықтар, 7 күндік жоспар, картаны салыстыру және дереккөздер.",
+    auditHidePlan: "Толық жоспарды жасыру",
   },};
 
 export const publicAuditUiTextForLanguage = (lang: PublicAuditLanguage) => (

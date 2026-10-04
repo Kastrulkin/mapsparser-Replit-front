@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Language } from './LanguageContext.logic';
 import { getTodayOperationalCopy, getTodayPageCopy } from './todayPageCopy';
 
-const languages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr', 'hy'];
+const languages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr', 'hy', 'kk'];
 
 describe('today page localization', () => {
   it.each(languages)('contains complete copy for %s', (language) => {
@@ -12,7 +12,7 @@ describe('today page localization', () => {
     expect(values.every((value) => value.trim().length > 0)).toBe(true);
   });
 
-  it.each(languages.filter((language) => language !== 'ru'))('does not contain Russian fallback for %s', (language) => {
+  it.each(languages.filter((language) => language !== 'ru' && language !== 'kk'))('does not contain Russian fallback for %s', (language) => {
     expect(JSON.stringify(getTodayPageCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
   });
 
@@ -29,7 +29,12 @@ describe('today page localization', () => {
     expect(values.every((value) => value.trim().length > 0)).toBe(true);
   });
 
-  it.each(languages.filter((language) => language !== 'ru'))('does not use Russian operational fallback for %s', (language) => {
+  it.each(languages.filter((language) => language !== 'ru' && language !== 'kk'))('does not use Russian operational fallback for %s', (language) => {
     expect(JSON.stringify(getTodayOperationalCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('contains Kazakh instead of the English Today heading', () => {
+    expect(JSON.stringify(getTodayPageCopy('kk'))).toMatch(/[ӘәҒғҚқҢңӨөҰұҮүҺһІі]/);
+    expect(getTodayPageCopy('kk').title).not.toBe(getTodayPageCopy('en').title);
   });
 });

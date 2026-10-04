@@ -102,6 +102,22 @@ const hy: LoginCopy = {
   sendReset: "Վերականգնել գաղտնաբառը", sendingReset: "Ուղարկում...", mapLinkAddressError: "Հասցեի դաշտը չպետք է պարունակի քարտեզի հղում", mapLinkCityError: "Քաղաքի դաշտը չպետք է պարունակի քարտեզի հղում",
   journeyResultTitle: "Ձեր ընտրած ուղղությունը պահպանված է", journeyResultText: "Գրանցվելուց հետո կբացվի համապատասխան LocalOS բաժինը։",
 };
+const kk: LoginCopy = {
+  loginTitle: "Жүйеге кіру", registerTitle: "Тіркеу", resetTitle: "Құпия сөзді қалпына келтіру", journeyTitle: "Бірінші әрекетті орындаңыз", loginSubtitle: "Сіздің бизнесіңіз үшін жаңа клиенттер",
+  loginTab: "Жүйеге кіру", registerTab: "Тіркеу", resetTab: "Қалпына келтіру", loginError: "Жүйеге кіру қатесі:", registerError: "Тіркеу қатесі:", registrationFailed: "Тіркеу қатесі",
+  registerRequired: "Электрондық пошта мен құпия сөз қажет", businessRequired: "Кәсіпорын атауы, мекенжайы және қаласы қажет", consentRequired: "Жеке деректерді өңдеуге келісім қажет",
+  consentText: "Мен жеке деректерді өңдеуге келісемін және қызмет көрсету саясатын қабылдаймын", policyLabel: "Жеке деректерді өңдеу саясаты",
+  registerSuccess: "Тіркелу аяқталуға жақын. Поштаңызды тексеріп, электрондық поштаңызды растаңыз.", registerPending: "Бизнес құрылды және модерацияны күтуде. Электрондық поштаңызды электрондық пошта арқылы растау ғана қалады.",
+  resetSent: "Құпия сөзді қалпына келтіру нұсқаулары электрондық пошта арқылы жіберілді. Поштаңызды тексеріңіз!", resetError: "Құпия сөзді қалпына келтіру қатесі:", resetFailed: "Құпия сөзді қалпына келтіру қатесі",
+  email: 'Email', password: "Құпия сөз", personalData: "Жеке ақпарат", businessData: "Іскерлік деректер", name: "Аты", phone: "Телефон", businessName: "Кәсіпорын атауы *",
+  address: "Мекенжай *", addressPlaceholder: "Мысалы: Невский даңғылы, 10", city: "Қала *", country: "Ел", countryPlaceholder: "Ел атауын теруді бастаңыз",
+  countryHint: "Тізімнен таңдауға немесе елді қолмен енгізуге болады.", signIn: "Жүйеге кіру", signingIn: "Жүйеге кіру...", signUp: "Тіркелу", signingUp: "Тіркелу...",
+  postRegisterHint: "Электрондық поштаңызды растағаннан кейін тіркелгіңіз ашылады: профиліңізді толтырып, компанияға сілтеме қоса аласыз. Ақылы әрекеттер бөлек қосылады.",
+  checkEmailHint: "Біз растау сілтемесі бар электрондық хат жібердік. Электрондық поштаңызды растағаннан кейін сіз автоматты түрде төлемсіз тіркелгіңізге кіресіз.",
+  resendVerification: "Хатты қайта жіберіңіз", resendVerificationDone: "Растау электрондық поштасы қайта жіберілді.", resendVerificationFailed: "Электрондық поштаны қайта жіберу мүмкін болмады",
+  sendReset: "Құпия сөзді қалпына келтіру", sendingReset: "Жіберілуде...", mapLinkAddressError: "«Мекенжай» өрісінде картаға сілтеме болмауы керек", mapLinkCityError: "«Қала» өрісінде картаға сілтеме болмауы керек",
+  journeyResultTitle: "Таңдалған бағыт сақталады", journeyResultText: "Тіркелгеннен кейін қажетті LocalOS бөлімі ашылады.",
+};
 
 const es: LoginCopy = {
   loginTitle: 'Iniciar sesión', registerTitle: 'Crea tu cuenta', resetTitle: 'Recupera tu contraseña', journeyTitle: 'Completa el primer paso', loginSubtitle: 'Más clientes para tu negocio',
@@ -122,6 +138,7 @@ const es: LoginCopy = {
 
 export const loginCopyFor = (language: Language): LoginCopy => {
   if (language === 'hy') return hy;
+  if (language === 'kk') return kk;
   if (language === 'ru') return ru;
   if (language === 'es') return es;
   return en;

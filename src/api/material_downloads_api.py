@@ -69,7 +69,7 @@ def request_material_download():
     consent_given = payload.get("personal_data_consent") is True
     consent_version = CONSENT_VERSION
     source_language_raw = str(payload.get("source_language") or "ru").strip().lower()
-    source_language = source_language_raw if source_language_raw in {"ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr", "hy"} else "ru"
+    source_language = source_language_raw if source_language_raw in {"ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr", "hy", "kk"} else "ru"
     material = MATERIAL_DOWNLOADS.get(material_slug)
 
     if not email or len(email) > 254 or not EMAIL_PATTERN.fullmatch(email):

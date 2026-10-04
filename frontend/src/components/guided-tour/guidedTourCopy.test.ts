@@ -42,7 +42,7 @@ describe('guided tour localization', () => {
     expect(localizedSteps.every((step, index) => (
       step.title !== russianSteps[index].title && step.body !== russianSteps[index].body
     ))).toBe(true);
-    expect(JSON.stringify(guidedTourCopyForLanguage(language))).not.toMatch(/[А-Яа-яЁё]/);
+    if (language !== 'kk') expect(JSON.stringify(guidedTourCopyForLanguage(language))).not.toMatch(/[А-Яа-яЁё]/);
   });
 
   it.each(supportedGuidedTourLanguages)('keeps customer-facing tour copy concise for %s', (language) => {
@@ -50,7 +50,8 @@ describe('guided tour localization', () => {
     const steps = guidedTourStepsForLanguage(language);
     const internalJargon = /\b(?:LLM|prompt|workflow|blueprint|capability|orchestrator|trigger)\b/i;
 
-    expect(steps.every((step) => step.title.length <= 48 && step.body.length <= 280)).toBe(true);
+    expect(steps.filter((step) => step.title.length > 48 || step.body.length > 280)
+      .map((step) => `${step.key}: title=${step.title.length}, body=${step.body.length}`)).toEqual([]);
     expect(JSON.stringify(copy)).not.toMatch(internalJargon);
   });
 
@@ -85,6 +86,7 @@ describe('guided tour localization', () => {
     expect(resolveInitialLanguage('/demo', '?lang=tr', 'ru', 'de-DE')).toBe('tr');
     expect(resolveInitialLanguage('/demo', '?lang=ar', null, 'en-US')).toBe('ar');
     expect(resolveInitialLanguage('/demo', '?lang=hy', null, 'en-US')).toBe('hy');
+    expect(resolveInitialLanguage('/demo', '?lang=kk', null, 'en-US')).toBe('kk');
   });
 
   it('uses an explicit public-room link language before saved and browser preferences', () => {
@@ -95,6 +97,7 @@ describe('guided tour localization', () => {
   it('uses an explicit language link on every page', () => {
     expect(resolveInitialLanguage('/', '?lang=hy', 'ru', 'ru-RU')).toBe('hy');
     expect(resolveInitialLanguage('/dashboard/services', '?lang=hy', 'ru', 'ru-RU')).toBe('hy');
+    expect(resolveInitialLanguage('/pricing', '?lang=kk', 'ru', 'ru-RU')).toBe('kk');
   });
 
   it('creates a shareable language link without losing other URL state', () => {
@@ -106,6 +109,7 @@ describe('guided tour localization', () => {
     expect(resolveInitialLanguage('/demo', '?lang=unsupported', 'fr', 'de-DE')).toBe('fr');
     expect(resolveInitialLanguage('/demo', '', null, 'th-TH')).toBe('th');
     expect(resolveInitialLanguage('/demo', '', null, 'hy-AM')).toBe('hy');
+    expect(resolveInitialLanguage('/demo', '', null, 'kk-KZ')).toBe('kk');
     expect(resolveInitialLanguage('/demo', '', null, 'it-IT')).toBe('en');
   });
 });

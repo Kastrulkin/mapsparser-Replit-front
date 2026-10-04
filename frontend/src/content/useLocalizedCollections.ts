@@ -17,6 +17,7 @@ const loadDocuments = async (language: Language): Promise<DocumentContent[]> => 
     case "ha": return import("./collection-locales/documents-en.json").then((module) => module.default);
     case "tr": return import("./collection-locales/documents-tr.json").then((module) => module.default);
     case "hy": return import("./collection-locales/documents-hy.json").then((module) => module.default);
+    case "kk": return import("./collection-locales/documents-kk.json").then((module) => module.default);
   }
 };
 
@@ -33,6 +34,7 @@ const loadCases = async (language: Language): Promise<CaseContent[]> => {
     case "ha": return import("./collection-locales/cases-ha.json").then((module) => module.default);
     case "tr": return import("./collection-locales/cases-tr.json").then((module) => module.default);
     case "hy": return import("./collection-locales/cases-hy.json").then((module) => module.default);
+    case "kk": return import("./collection-locales/cases-kk.json").then((module) => module.default);
   }
 };
 

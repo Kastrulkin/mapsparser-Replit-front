@@ -8,7 +8,7 @@ import {
 } from './template-gallery-copy';
 import type { AgentTemplate } from './types';
 
-const supportedLanguages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr', 'hy'];
+const supportedLanguages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr', 'hy', 'kk'];
 
 const template: AgentTemplate = {
   key: 'daily_owner_digest',
@@ -46,7 +46,7 @@ describe('agent template gallery localization', () => {
     const serialized = JSON.stringify(getAgentDeepCopy(language));
     expect(serialized).not.toContain('undefined');
     expect(serialized.length).toBeGreaterThan(500);
-    if (language !== 'ru') {
+    if (language !== 'ru' && language !== 'kk') {
       expect(serialized).not.toMatch(/[А-Яа-яЁё]/);
     }
   });

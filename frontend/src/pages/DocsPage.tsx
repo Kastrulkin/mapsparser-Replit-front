@@ -1,5 +1,6 @@
 import Footer from "@/components/Footer";
 import docsHy from "@/content/docs-hy.json";
+import docsKk from "@/content/docs-kk.json";
 import SeoMeta from "@/components/SeoMeta";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -353,6 +354,7 @@ const enSections: DocSection[] = [
 ];
 
 const hySections: DocSection[] = docsHy.sections;
+const kkSections: DocSection[] = docsKk.sections;
 
 const statusClassName = (status?: string) => {
   if (!status) {
@@ -370,9 +372,21 @@ const statusClassName = (status?: string) => {
   return "border-slate-200 bg-slate-100 text-slate-700";
 };
 
-const statusLabel = (status: string | undefined, language: "ru" | "en" | "hy") => {
+const statusLabel = (status: string | undefined, language: "ru" | "en" | "hy" | "kk") => {
   if (!status) return "";
   if (language === "en") return status;
+  if (language === "kk") {
+    const labels: Record<string, string> = {
+      available: "қолжетімді",
+      beta: "бета",
+      internal: "ішкі",
+      planned: "жоспарда",
+      "planned/gap": "жоспарда / толықтыру қажет",
+      "available / gap": "қолжетімді / толықтыру қажет",
+      "beta/internal": "бета / ішкі",
+    };
+    return labels[status] ?? status;
+  }
   if (language === "hy") {
     const labels: Record<string, string> = {
       available: "հասանելի",
@@ -454,6 +468,13 @@ const hyAgentQuickstart = enAgentQuickstart
   .replace('# 4. Create a safe test approval request', '# 4. Ստեղծեք հաստատման անվտանգ փորձնական հարցում')
   .replace('# 5. Request live access after sandbox verification', '# 5. Փորձնական միջավայրի ստուգումից հետո դիմեք աշխատանքային հասանելիության համար');
 
+const kkAgentQuickstart = enAgentQuickstart
+  .replace('# 1. Read the Agent API contract', '# 1. Agent API келісімін оқыңыз')
+  .replace('# 2. Check the security policy', '# 2. Қауіпсіздік саясатын тексеріңіз')
+  .replace('# 3. Run the sandbox self-test', '# 3. Сынақ ортасында өзін-өзі тексеруді іске қосыңыз')
+  .replace('# 4. Create a safe test approval request', '# 4. Қауіпсіз сынақ растау сұрауын жасаңыз')
+  .replace('# 5. Request live access after sandbox verification', '# 5. Сынақтан кейін жұмыс ортасына рұқсат сұраңыз');
+
 type DocsShellCopy = {
   badge: string;
   heroTitle: string;
@@ -484,7 +505,7 @@ type DocsShellCopy = {
   pageTitleSuffix: string;
 };
 
-const docsShellCopy: Record<"ru" | "en" | "hy", DocsShellCopy> = {
+const docsShellCopy: Record<"ru" | "en" | "hy" | "kk", DocsShellCopy> = {
   ru: {
     badge: "Документация для людей и ИИ-агентов",
     heroTitle: "Документация LocalOS для пользователей, API и ИИ-агентов",
@@ -548,11 +569,40 @@ const docsShellCopy: Record<"ru" | "en" | "hy", DocsShellCopy> = {
     agentTextButton: "Գործակալների ուղեցույց (EN)",
     machineIntro: "Գործակալների ամբողջական ուղեցույցը անգլերեն է՝",
   },
+  kk: {
+    badge: "Адамдарға және AI агенттеріне арналған құжаттама",
+    heroTitle: "Пайдаланушыларға, API және AI агенттеріне арналған LocalOS құжаттамасы",
+    heroDescription: "LocalOS қалай жұмыс істейді, не қол жетімді және адам әрекетті қайда растауы керек.",
+    capabilitiesButton: "Мүмкіндіктерді көру",
+    agentTextButton: "Агенттерге арналған нұсқаулық (EN)",
+    policyButton: "JSON агент саясаты",
+    toolsButton: "JSON агент құралдары",
+    agentRuleLabel: "Агент ережесі",
+    agentRuleTitle: "Растаусыз әрекет етпеңіз",
+    agentRuleBody: "Агент талдау жасай алады, жобаларды дайындайды және тәуекелдерді түсіндіре алады. Жариялау, хабар алмасу, төлемдер және жаппай өзгертулер адамның растауын талап етеді.",
+    publicLabel: "көпшілік алдында",
+    quickstartBadge: "Құм жәшігінде жылдам бастау",
+    quickstartTitle: "Агентті қалай қосуға болады",
+    quickstartBody: "Агент құм жәшігінен басталады, кілтті тексереді, сынақты растау сұрауын жасайды, содан кейін ғана өндіріске кіру рұқсатын сұрайды. Барлық әрекеттер журналда қалады.",
+    overviewCard: "Қарау",
+    overviewCardBody: "LocalOS дегеніміз не және оны қашан ұсыну керек.",
+    integrationsCard: "Интеграциялар",
+    integrationsCardBody: "Нені қосуға болады және қай жерде келісімшарт қажет.",
+    approvalsCard: "Растаулар",
+    approvalsCardBody: "Қандай әрекеттер адамның қатысуын талап етеді.",
+    gapsCard: "Жақсартулар",
+    gapsCardBody: "Қоғамдық API үшін нені тұрақтандыру керек.",
+    machineTitle: "Машина оқылатын кіру нүктелері",
+    machineIntro: "Агенттерге арналған толық нұсқаулық ағылшын тілінде:",
+    policyIntro: "Қауіпсіздік саясаты:",
+    toolsIntro: "Мүмкіндіктер картасы:",
+    pageTitleSuffix: "LocalOS құжаттамасы",
+  },
 };
 
 type AvailabilityNotice = { title: string; body: string };
 
-const availabilityNotices: Record<Exclude<Language, "ru" | "en" | "hy">, AvailabilityNotice> = {
+const availabilityNotices: Record<Exclude<Language, "ru" | "en" | "hy" | "kk">, AvailabilityNotice> = {
   fr: { title: "Langues de la documentation technique", body: "La documentation technique complète est actuellement disponible en anglais et en russe. Le contenu ci-dessous est affiché en anglais." },
   es: { title: "Idiomas de la documentación técnica", body: "La documentación técnica completa está disponible actualmente en inglés y ruso. El contenido técnico de esta página se muestra en inglés." },
   el: { title: "Γλώσσες τεχνικής τεκμηρίωσης", body: "Η πλήρης τεχνική τεκμηρίωση είναι προς το παρόν διαθέσιμη στα αγγλικά και στα ρωσικά. Το τεχνικό περιεχόμενο παρακάτω εμφανίζεται στα αγγλικά." },
@@ -566,14 +616,14 @@ const availabilityNotices: Record<Exclude<Language, "ru" | "en" | "hy">, Availab
 const DocsPage = () => {
   const { section } = useParams();
   const { language, setLanguage } = useLanguage();
-  const docsLanguage: "ru" | "en" | "hy" = language === "ru" ? "ru" : language === "hy" ? "hy" : "en";
-  const sections = docsLanguage === "ru" ? ruSections : docsLanguage === "hy" ? hySections : enSections;
+  const docsLanguage: "ru" | "en" | "hy" | "kk" = language === "ru" ? "ru" : language === "hy" ? "hy" : language === "kk" ? "kk" : "en";
+  const sections = docsLanguage === "ru" ? ruSections : docsLanguage === "hy" ? hySections : docsLanguage === "kk" ? kkSections : enSections;
   const copy = docsShellCopy[docsLanguage];
   const activeSection = getActiveSection(sections, section);
-  const availabilityNotice = language === "ru" || language === "en" || language === "hy" ? null : availabilityNotices[language];
+  const availabilityNotice = language === "ru" || language === "en" || language === "hy" || language === "kk" ? null : availabilityNotices[language];
   const agentGuideHref = docsLanguage === "ru" ? "/localos-agents-ru.txt" : "/localos-agents.txt";
   const llmsHref = docsLanguage === "ru" ? "/llms-ru.txt" : "/llms.txt";
-  const agentQuickstart = docsLanguage === "ru" ? ruAgentQuickstart : docsLanguage === "hy" ? hyAgentQuickstart : enAgentQuickstart;
+  const agentQuickstart = docsLanguage === "ru" ? ruAgentQuickstart : docsLanguage === "hy" ? hyAgentQuickstart : docsLanguage === "kk" ? kkAgentQuickstart : enAgentQuickstart;
 
   const pageTitle = `${activeSection.title} - ${copy.pageTitleSuffix}`;
   const pagePath = activeSection.slug === "overview" ? "/docs" : `/docs/${activeSection.slug}`;
@@ -661,7 +711,7 @@ const DocsPage = () => {
               </Button>
               <Button asChild variant="outline">
                 <a href="/api/agent-api/openapi.json">
-                  {docsLanguage === "ru" ? "OpenAPI агента" : docsLanguage === "hy" ? "Գործակալի OpenAPI" : "Agent OpenAPI"}
+                  {docsLanguage === "ru" ? "OpenAPI агента" : docsLanguage === "hy" ? "Գործակալի OpenAPI" : docsLanguage === "kk" ? "Агенттің OpenAPI-і" : "Agent OpenAPI"}
                   <ExternalLink className="ml-2 h-4 w-4" />
                 </a>
               </Button>

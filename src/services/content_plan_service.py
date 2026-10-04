@@ -2947,6 +2947,7 @@ CONTENT_PLAN_LANGUAGE_LABELS = {
     "fr": "French",
     "tr": "Turkish",
     "hy": "Armenian",
+    "kk": "Kazakh",
     "it": "Italian",
     "pt": "Portuguese",
     "zh": "Chinese",

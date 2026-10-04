@@ -1615,4 +1615,4 @@ export type ContentPlanZone = 'overview' | 'plan' | 'queue';
 
 export type ContentPlanMode = 'point' | 'network';
 
-export type ContentLanguageKey = 'ru' | 'en' | 'es' | 'de' | 'fr' | 'tr' | 'hy' | 'it' | 'pt' | 'zh';
+export type ContentLanguageKey = 'ru' | 'en' | 'es' | 'de' | 'fr' | 'tr' | 'hy' | 'kk' | 'it' | 'pt' | 'zh';

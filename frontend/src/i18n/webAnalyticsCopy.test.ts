@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Language } from './LanguageContext.logic';
 import { formatWebAnalyticsCopy, getWebAnalyticsCopy } from './webAnalyticsCopy';
 
-const languages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr', 'hy'];
+const languages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr', 'hy', 'kk'];
 
 describe('webAnalyticsCopy', () => {
   it('provides complete analytics copy for every supported language', () => {

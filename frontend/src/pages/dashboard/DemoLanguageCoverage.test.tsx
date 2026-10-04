@@ -13,13 +13,13 @@ import { getPartnershipWorkspaceCopy } from '@/i18n/partnershipWorkspaceCopy';
 import { getPublicSalesRoomAuditCopy, getPublicSalesRoomCopy } from '@/i18n/publicSalesRoomCopy';
 import { getCardOverviewPageCopy } from './cardOverviewPageCopy';
 
-const supportedLanguages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr', 'hy'];
+const supportedLanguages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr', 'hy', 'kk'];
 const localizedCardLanguages = supportedLanguages.filter((language) => language !== 'ru' && language !== 'en');
 const nonRussianLanguages = supportedLanguages.filter((language) => language !== 'ru');
 
 describe('demo language coverage', () => {
   it('keeps the language contract aligned with all 44 guided-tour steps', () => {
-    expect(supportedLanguages).toHaveLength(11);
+    expect(supportedLanguages).toHaveLength(12);
     expect(GUIDED_TOUR_STEP_LAYOUTS).toHaveLength(44);
     supportedLanguages.forEach((language) => {
       expect(guidedTourStepsForLanguage(language)).toHaveLength(44);
@@ -39,18 +39,18 @@ describe('demo language coverage', () => {
     const english = getDemoWorkspaceCopy('en');
     const renderedCopy = JSON.stringify(localized);
 
-    expect(renderedCopy).not.toMatch(/[А-Яа-яЁё]/);
-    expect(JSON.stringify(getDashboardNavigationCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
-    expect(JSON.stringify(getDashboardShellCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
-    expect(JSON.stringify(getContentCalendarCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
-    expect(JSON.stringify(getDemoContentCalendarThemes(language))).not.toMatch(/[А-Яа-яЁё]/);
-    expect(JSON.stringify(getContentWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
-    expect(JSON.stringify(getAgentsWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
-    expect(JSON.stringify(getNewsWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
-    expect(JSON.stringify(getPartnershipWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
-    expect(JSON.stringify(getPublicSalesRoomCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
-    expect(JSON.stringify(getPublicSalesRoomAuditCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
-    expect(JSON.stringify(guidedTourStepsForLanguage(language))).not.toMatch(/[А-Яа-яЁё]/);
+    if (language !== 'kk') expect(renderedCopy).not.toMatch(/[А-Яа-яЁё]/);
+    if (language !== 'kk') expect(JSON.stringify(getDashboardNavigationCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    if (language !== 'kk') expect(JSON.stringify(getDashboardShellCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    if (language !== 'kk') expect(JSON.stringify(getContentCalendarCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    if (language !== 'kk') expect(JSON.stringify(getDemoContentCalendarThemes(language))).not.toMatch(/[А-Яа-яЁё]/);
+    if (language !== 'kk') expect(JSON.stringify(getContentWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    if (language !== 'kk') expect(JSON.stringify(getAgentsWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    if (language !== 'kk') expect(JSON.stringify(getNewsWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    if (language !== 'kk') expect(JSON.stringify(getPartnershipWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    if (language !== 'kk') expect(JSON.stringify(getPublicSalesRoomCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    if (language !== 'kk') expect(JSON.stringify(getPublicSalesRoomAuditCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    if (language !== 'kk') expect(JSON.stringify(guidedTourStepsForLanguage(language))).not.toMatch(/[А-Яа-яЁё]/);
     if (language !== 'en') {
       expect(localized.telegram.pageTitle).not.toBe(english.telegram.pageTitle);
       expect(getContentCalendarCopy(language).contentReady).not.toBe(getContentCalendarCopy('en').contentReady);

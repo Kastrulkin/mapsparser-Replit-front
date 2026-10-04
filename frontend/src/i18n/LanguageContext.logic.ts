@@ -2,7 +2,7 @@ import { createContext, useContext } from "react";
 
 export type Translations = typeof import('./locales/en').en;
 
-export type Language = "ru" | "en" | "fr" | "es" | "el" | "de" | "th" | "ar" | "ha" | "tr" | "hy";
+export type Language = "ru" | "en" | "fr" | "es" | "el" | "de" | "th" | "ar" | "ha" | "tr" | "hy" | "kk";
 
 export interface LanguageContextType {
   language: Language;

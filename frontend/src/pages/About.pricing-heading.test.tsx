@@ -42,4 +42,15 @@ describe("About pricing heading hierarchy", () => {
     expect(screen.getByText('$15 /ամիս')).toBeInTheDocument();
     expect(screen.queryByText('Choose the business tasks you want LocalOS to help with')).toBeNull();
   });
+
+  it("shows Kazakh pricing copy on a shared /pricing language link", async () => {
+    window.localStorage.setItem("language", "ru");
+    window.history.replaceState({}, '', '/pricing?lang=kk');
+    renderAbout(true);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "LocalOS тарифтері" })).toBeInTheDocument();
+    expect(screen.getByText('LocalOS көмектесетін бизнес міндеттерін таңдаңыз')).toBeInTheDocument();
+    expect(screen.getByText('$15 /ай')).toBeInTheDocument();
+    expect(screen.queryByText('Choose the business tasks you want LocalOS to help with')).toBeNull();
+  });
 });

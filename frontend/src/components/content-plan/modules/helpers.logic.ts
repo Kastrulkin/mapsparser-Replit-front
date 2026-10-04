@@ -27,6 +27,7 @@ export const CONTENT_LANGUAGE_OPTIONS: Array<{ value: ContentLanguageKey; label:
   { value: 'fr', label: 'Français' },
   { value: 'tr', label: 'Türkçe' },
   { value: 'hy', label: 'Հայերեն' },
+  { value: 'kk', label: 'Қазақша' },
   { value: 'it', label: 'Italiano' },
   { value: 'pt', label: 'Português' },
   { value: 'zh', label: '中文' },

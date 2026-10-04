@@ -74,15 +74,13 @@ const replaceTerm = (value, from, to) => {
 const preserveProductTerms = (translatedArticles) => {
   const translatedLocalOs = translatedArticles[0]?.tags?.[4] ?? "LocalOS";
   const normalized = replaceTerm(translatedArticles, translatedLocalOs, "LocalOS");
-  const compiledArticle = normalized[0];
-
-  if (compiledArticle) {
-    compiledArticle.title = `Compiled AI:${compiledArticle.title.includes(":") ? compiledArticle.title.slice(compiledArticle.title.indexOf(":") + 1) : ` ${compiledArticle.title}`}`;
-    compiledArticle.seoTitle = `Compiled AI:${compiledArticle.seoTitle.includes(":") ? compiledArticle.seoTitle.slice(compiledArticle.seoTitle.indexOf(":") + 1) : ` ${compiledArticle.seoTitle}`}`;
-    compiledArticle.tags[0] = "Compiled AI";
-  }
-
   normalized.forEach((article, articleIndex) => {
+    const sourceArticle = publishedArticles[articleIndex];
+    if (sourceArticle.title.startsWith("Compiled AI:")) {
+      article.title = `Compiled AI: ${article.title.includes(":") ? article.title.slice(article.title.indexOf(":") + 1).trim() : article.title}`;
+      article.seoTitle = `Compiled AI: ${article.seoTitle.includes(":") ? article.seoTitle.slice(article.seoTitle.indexOf(":") + 1).trim() : article.seoTitle}`;
+      article.tags[0] = "Compiled AI";
+    }
     article.body.forEach((section, sectionIndex) => {
       section.bodyLinks?.forEach((link, linkIndex) => {
         if (link.href.includes("arxiv.org")) {

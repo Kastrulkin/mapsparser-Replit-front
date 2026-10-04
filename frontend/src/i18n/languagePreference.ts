@@ -11,7 +11,8 @@ export const isSupportedLanguage = (value: string): value is Language => (
   value === 'ar' ||
   value === 'ha' ||
   value === 'tr' ||
-  value === 'hy'
+  value === 'hy' ||
+  value === 'kk'
 );
 
 export const resolveInitialLanguage = (

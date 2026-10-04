@@ -113,6 +113,14 @@ export const agentTemplateGalleryCopy: Record<Language, AgentTemplateGalleryCopy
     certified: "Ստուգված է", beta: "Պատրաստ է վերանայման", testing: "Փորձարկվող", draft: "Զարգացման մեջ",
     needs: "Միացնել", localos: "Միայն LocalOS-ի տվյալները", preparing: "Ստեղծվում է…", use: "Ստեղծել վերանայման համար",
     plannedTitle: "Զարգացման մեջ", plannedDescription: "Այս առաջադրանքները դեռ հնարավոր չէ միացնել:", recommended: "Առաջարկվող սկիզբ",
+  },
+  kk: {
+    eyebrow: "Дайын тапсырмалар", title: "LocalOS үшін не төлеу керек",
+    description: "Тапсырманы таңдаңыз - LocalOS тексеру режимінде агент жасайды. Іске қосулар, жарияланымдар және жіберулер тек растаудан кейін басталады.",
+    count: "опциялары", loading: "Дайын тапсырмалар жүктелді", scheduled: "Күн сайын", weekly: "Апта сайын", review: "Жаңа шолумен", manual: "Бұйрық бойынша",
+    certified: "Тексерілді", beta: "Тестілеуге дайын", testing: "Тексеру жүріп жатыр", draft: "Даму үстінде",
+    needs: "Қосылу керек", localos: "Тек LocalOS деректері", preparing: "Біз жасаймыз...", use: "Қарау үшін жасаңыз",
+    plannedTitle: "Даму үстінде", plannedDescription: "Бұл тапсырмаларды әлі қосу мүмкін емес.", recommended: "Бастауды ұсынамыз",
   },};
 
 export const getAgentTemplateGalleryCopy = (language: Language) => agentTemplateGalleryCopy[language];
