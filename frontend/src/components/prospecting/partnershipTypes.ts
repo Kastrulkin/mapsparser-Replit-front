@@ -51,6 +51,7 @@ export type PartnershipLead = {
     last_message_excerpt?: string | null;
   };
   updated_at?: string;
+  created_at?: string;
   rating?: number;
   reviews_count?: number;
   parse_task_id?: string;

@@ -1,4 +1,5 @@
 import { OutreachContinuation } from '@/components/prospecting/OutreachContinuation';
+import { buildCandidateSearchGroups, type SearchTaskGroup } from '@/components/prospecting/partnershipSearchGroups';
 import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
 import { OutreachLearningInsights } from '@/components/prospecting/OutreachLearningInsights';
 import { PartnershipAnalyticsWorkspace } from '@/components/prospecting/PartnershipAnalyticsWorkspace';
@@ -550,11 +551,14 @@ export const PartnershipSearchPage: React.FC = () => {
   const [query, setQuery] = useState(showDemoPartner ? 'Ромашка' : '');
   const [workspaceView, setWorkspaceView] = useState<PartnershipWorkspaceView>(showDemoPartner ? 'pipeline' : 'overview');
   const [items, setItems] = useState<PartnershipLead[]>([]);
+  const [searchTasks, setSearchTasks] = useState<SearchTaskGroup[]>([]);
+  const [selectedSearchGroup, setSelectedSearchGroup] = useState('all');
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [leadView, setLeadView] = useState<LeadView>('all');
   const [leadBucket, setLeadBucket] = useState<'active' | 'deferred'>('active');
   const [lastGeoSearchLeadIds, setLastGeoSearchLeadIds] = useState<string[]>([]);
+  useEffect(() => { setSearchTasks([]); setSelectedSearchGroup('all'); }, [currentBusinessId]);
   const [preferredSourceFilter, setPreferredSourceFilter] = useState<{ source_kind?: string; source_provider?: string } | null>(null);
   const [bulkStage, setBulkStage] = useState('');
   const [bulkChannel, setBulkChannel] = useState('');
@@ -667,6 +671,16 @@ export const PartnershipSearchPage: React.FC = () => {
     reactionView,
     outcomes,
   });
+
+  const candidateSearchGroups = useMemo(() => buildCandidateSearchGroups(rawLeads, searchTasks), [rawLeads, searchTasks]);
+  const visibleRawLeads = useMemo(() => selectedSearchGroup === 'all' ? rawLeads
+    : rawLeads.filter((lead) => candidateSearchGroups.leadGroup.get(lead.id) === selectedSearchGroup),
+    [rawLeads, selectedSearchGroup, candidateSearchGroups]);
+  useEffect(() => {
+    if (selectedSearchGroup !== 'all' && !candidateSearchGroups.groups.some((group) => group.id === selectedSearchGroup)) {
+      setSelectedSearchGroup('all');
+    }
+  }, [candidateSearchGroups, selectedSearchGroup]);
 
   const partnershipBoardColumns = useMemo(() => {
     const buckets: Record<PartnershipBoardColumnId, PartnershipLead[]> = {
@@ -2276,7 +2290,7 @@ export const PartnershipSearchPage: React.FC = () => {
         onWorkspaceChange={(value) => setWorkspaceView(toPartnershipWorkspaceView(value))}
       />
 
-      {currentBusinessId && <OutreachContinuation key={currentBusinessId} businessId={currentBusinessId} />}
+      {currentBusinessId && <OutreachContinuation key={currentBusinessId} businessId={currentBusinessId} onTasksChange={setSearchTasks} />}
 
       {currentBusinessId && journeyActions.length ? <section aria-label="Текущий шаг по партнёрствам" className="space-y-3">{journeyActions.slice(0, 2).map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={() => void loadPartnershipJourneyActions()} />)}</section> : null}
 
@@ -2459,20 +2473,31 @@ export const PartnershipSearchPage: React.FC = () => {
             badges={[
               { label: 'Новые кандидаты', value: rawLeadCount },
               { label: 'В работе', value: pipelineLeadCount },
-              { label: 'Последний поиск', value: lastGeoSearchLeadCount },
+              { label: 'Групп поиска', value: candidateSearchGroups.groups.length },
             ]}
           >
+            {candidateSearchGroups.groups.length > 0 && <div className="mb-4 flex flex-wrap items-end gap-3">
+              <label className="text-sm font-medium text-slate-700">Показать кандидатов из поиска
+                <select aria-label="Показать кандидатов из поиска" className="mt-1 block min-h-10 max-w-full rounded-md border border-input bg-background px-3 text-sm" value={selectedSearchGroup} onChange={(event) => setSelectedSearchGroup(event.target.value)}>
+                  <option value="all">Все поиски ({rawLeads.length})</option>
+                  {candidateSearchGroups.groups.map((group) => <option key={group.id} value={group.id}>{group.label} ({group.count})</option>)}
+                </select>
+              </label>
+              {selectedSearchGroup !== 'all' && <span className="text-sm text-muted-foreground">Показано {visibleRawLeads.length} из {rawLeads.length}</span>}
+            </div>}
+            {candidateSearchGroups.groups.length > 0 && <p className="mb-3 text-xs text-muted-foreground">Метка показывает, каким поиском найдена запись. Страна компании, продаваемое направление и контакт проверяются отдельно.</p>}
             {rawLeads.length === 0 ? (
               <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-muted-foreground">
                 Кандидатов пока нет. Запустите поиск по радиусу, импортируйте список или добавьте ссылки вручную.
               </div>
             ) : (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {rawLeads.map((item) => (
+                {visibleRawLeads.map((item) => (
                   <PartnershipLeadCard
                     key={item.id}
                     lead={item}
                     mode="raw"
+                    searchLabel={candidateSearchGroups.labels.get(candidateSearchGroups.leadGroup.get(item.id) || '')}
                     dragging={false}
                     loading={loading}
                     nextStage={getNextPipelineStage(item)}

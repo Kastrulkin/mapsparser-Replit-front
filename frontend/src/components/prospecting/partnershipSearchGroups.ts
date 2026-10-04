@@ -1,0 +1,53 @@
+import type { PartnershipLead } from './partnershipTypes';
+
+export type SearchTaskGroup = {
+  id: string;
+  created_at?: string;
+  config: { audience?: string; agency_country?: string; sold_destination?: string };
+  state?: { lead_ids?: string[]; history?: Array<{ action?: string; at?: string }> };
+};
+
+export type CandidateSearchGroup = { id: string; label: string; count: number };
+
+const shortDate = (value?: string) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+};
+
+const taskLabel = (task: SearchTaskGroup) => {
+  const country = String(task.config.agency_country || '').trim();
+  const destination = String(task.config.sold_destination || '').trim();
+  const audience = String(task.config.audience || '').trim();
+  const purpose = country && destination ? `${country} → ${destination}` : audience || 'Поиск компаний';
+  const launch = [...(task.state?.history || [])].reverse().find((entry) => entry.action === 'start');
+  return [purpose, shortDate(launch?.at || task.created_at)].filter(Boolean).join(' · ');
+};
+
+export function buildCandidateSearchGroups(leads: PartnershipLead[], tasks: SearchTaskGroup[]) {
+  const leadToTask = new Map<string, SearchTaskGroup>();
+  for (const task of tasks) {
+    for (const leadId of task.state?.lead_ids || []) {
+      if (!leadToTask.has(leadId)) leadToTask.set(leadId, task);
+    }
+  }
+  const labels = new Map<string, string>();
+  const leadGroup = new Map<string, string>();
+  const counts = new Map<string, number>();
+  for (const lead of leads) {
+    const task = leadToTask.get(lead.id);
+    const payload = lead.search_payload_json || {};
+    const continuationId = String(payload.continuation_id || '').trim();
+    const jobId = String(payload.job_id || '').trim();
+    const id = task ? `task:${task.id}` : continuationId ? `task:${continuationId}` : jobId ? `job:${jobId}` : 'other';
+    const label = task ? taskLabel(task)
+      : continuationId ? 'Поиск из чата'
+      : jobId ? [String(payload.location || payload.query || 'Поиск на картах'), shortDate(lead.created_at)].filter(Boolean).join(' · ')
+      : 'Другие кандидаты';
+    leadGroup.set(lead.id, id);
+    if (!labels.has(id)) labels.set(id, label);
+    counts.set(id, (counts.get(id) || 0) + 1);
+  }
+  const groups: CandidateSearchGroup[] = [...counts].map(([id, count]) => ({ id, count, label: labels.get(id) || 'Поиск компаний' }));
+  return { groups, leadGroup, labels };
+}

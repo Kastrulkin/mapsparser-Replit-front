@@ -472,6 +472,7 @@ const EditableLeadBasics = ({
 type PartnershipLeadCardProps = {
   lead: PipelineLead;
   mode: 'raw' | 'pipeline';
+  searchLabel?: string;
   dragging: boolean;
   loading: boolean;
   nextStage: string;
@@ -490,6 +491,7 @@ type PartnershipLeadCardProps = {
 export const PartnershipLeadCard = ({
   lead,
   mode,
+  searchLabel,
   dragging,
   loading,
   nextStage,
@@ -542,6 +544,7 @@ export const PartnershipLeadCard = ({
           {lead.client_business_name ? (
             <Badge variant="outline" className="mt-2 max-w-full truncate">Лид-партнёр · {lead.client_business_name}</Badge>
           ) : null}
+          {searchLabel ? <div className="mt-2 truncate text-xs text-muted-foreground" title={searchLabel}>Поиск: {searchLabel}</div> : null}
         </div>
         <div className="flex max-w-[45%] shrink-0 flex-wrap justify-end gap-1">
           {lead.source_provider ? <Badge variant="outline" className="max-w-full truncate">{sourceProviderLabel(lead.source_provider)}</Badge> : null}

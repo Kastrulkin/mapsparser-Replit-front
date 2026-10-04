@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import type { SearchTaskGroup } from './partnershipSearchGroups';
 
 type Config = { riderra_shortage_only?: boolean; evidence_terms: string[]; language: string; audience: string; offer: string; queries: { query: string; city: string }[]; max_search_calls: number; max_candidates: number; batch_size: number; search_budget_cents: number };
-type Task = { id: string; revision: string; stage: string; status: string; config: Config; state: { started?: boolean; search_calls?: number; lead_ids?: string[]; blocker?: string; inflight_search?: boolean; qualifications?: Record<string, { status: string; reason?: string }>; campaign_results?: Record<string, { status: string; campaign_id?: string; lead_id?: string; reason_code?: string }> } };
+type Task = { id: string; created_at?: string; revision: string; stage: string; status: string; config: Config; state: { started?: boolean; search_calls?: number; lead_ids?: string[]; history?: Array<{ action?: string; at?: string }>; blocker?: string; inflight_search?: boolean; qualifications?: Record<string, { status: string; reason?: string }>; campaign_results?: Record<string, { status: string; campaign_id?: string; lead_id?: string; reason_code?: string }> } };
 
-export function OutreachContinuation({ businessId }: { businessId: string }) {
+export function OutreachContinuation({ businessId, onTasksChange }: { businessId: string; onTasksChange?: (tasks: SearchTaskGroup[]) => void }) {
   const [enabled, setEnabled] = useState(false);
   const [supportsShortage, setSupportsShortage] = useState(false);
   const [shortageOnly, setShortageOnly] = useState(false);
@@ -33,20 +34,20 @@ export function OutreachContinuation({ businessId }: { businessId: string }) {
     scope.current += 1;
     setItems([]); setEnabled(false); setSupportsShortage(false); setShortageOnly(false); setError(''); setEditing(false); setBusy(false);
     const refresh = async () => {
-      try { const result = await load(); if (active) { setItems(result.items || []); setEnabled(result.enabled === true); setSupportsShortage(result.supports_shortage_replenishment === true); setError(''); } }
+      try { const result = await load(); if (active) { setItems(result.items || []); onTasksChange?.(result.items || []); setEnabled(result.enabled === true); setSupportsShortage(result.supports_shortage_replenishment === true); setError(''); } }
       catch { if (active) setError('Не удалось загрузить задачи. Повторите попытку.'); }
     };
     void refresh();
     const timer = window.setInterval(() => void refresh(), 15000);
     return () => { scope.current += 1; active = false; window.clearInterval(timer); };
-  }, [load]);
+  }, [load, onTasksChange]);
   const mutate = async (path: string, body: object) => {
     const epoch = scope.current;
     setBusy(true); setError('');
     try {
       await newAuth.makeRequest(path, { method: 'POST', body: JSON.stringify({ business_id: businessId, ...body }) });
       if (epoch !== scope.current) return;
-      const result = await load(); if (epoch === scope.current) { setItems(result.items || []); setEditing(false); }
+      const result = await load(); if (epoch === scope.current) { setItems(result.items || []); onTasksChange?.(result.items || []); setEditing(false); }
     } catch { if (epoch === scope.current) setError('Действие не выполнено. Обновите список и проверьте условия задачи.'); }
     finally { if (epoch === scope.current) setBusy(false); }
   };
