@@ -11,14 +11,14 @@ describe('Outreach continuation', () => {
     const request = vi.spyOn(newAuth, 'makeRequest').mockResolvedValue({ enabled: false, items: [] });
     render(<OutreachContinuation businessId="b" />);
     await act(async () => {});
-    expect(screen.queryByText('Настроить поиск')).not.toBeInTheDocument();
+    expect(screen.queryByText('Новый поиск')).not.toBeInTheDocument();
     expect(request).toHaveBeenCalledWith('/partnership/continuations?business_id=b');
     expect(request).toHaveBeenCalledTimes(1);
   });
   it('starts only after explicit review action with current revision', async () => {
     const request = vi.spyOn(newAuth, 'makeRequest').mockResolvedValue({ enabled: true, items: [task] });
     render(<OutreachContinuation businessId="b" />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Начать поручение' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Начать поиск' }));
     expect(request).toHaveBeenCalledWith('/partnership/continuations/task-1', { method: 'POST', body: JSON.stringify({ business_id: 'b', action: 'start', revision: 'revision-1' }) });
   });
   it('previews a new search and starts it with one confirmation', async () => {
@@ -31,7 +31,7 @@ describe('Outreach continuation', () => {
       return { enabled: true, items: [] };
     });
     render(<OutreachContinuation businessId="b" />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Настроить поиск' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Новый поиск' }));
     await userEvent.click(screen.getByRole('radio', { name: 'Только найти и проверить компании' }));
     await userEvent.type(screen.getByLabelText('Кого ищем'), 'Travel agencies selling Phuket');
     await userEvent.clear(screen.getByLabelText('Сколько новых подходящих компаний найти'));
@@ -53,11 +53,28 @@ describe('Outreach continuation', () => {
     await act(async () => {});
     expect(onTasksChange).toHaveBeenCalledWith([expect.objectContaining({ id: 'task-1', state: { lead_ids: ['lead-1'] } })]);
   });
+  it('separates raw results from confirmed partners and keeps completed shortfall actionable', async () => {
+    vi.spyOn(newAuth, 'makeRequest').mockResolvedValue({ enabled: true, items: [{
+      ...task,
+      status: 'completed',
+      config: { ...task.config, target_count: 2, mode: 'find_only' },
+      stage: 'Поиск завершён с недобором; проверьте причины и результаты',
+      report: { found: 10, imported: 3, eligible: 0, excluded: 10, duplicates: 7, credits_charged: 9, credit_limit: 15, credit_estimate_only: true },
+      state: { search_calls: 1 },
+    }] });
+    render(<OutreachContinuation businessId="b" />);
+    expect(await screen.findByText('Завершён · недобор')).toBeVisible();
+    expect(screen.getByText('Найдено всего').previousElementSibling).toHaveTextContent('10');
+    expect(screen.getByText('Новые кандидаты').previousElementSibling).toHaveTextContent('3');
+    expect(screen.getByText('Подтверждены · цель').previousElementSibling).toHaveTextContent('0 / 2');
+    expect(screen.getByRole('link', { name: 'Посмотреть кандидатов' })).toHaveAttribute('href', '/dashboard/partnerships?business_id=b&search_task_id=task-1');
+    expect(screen.queryByText('Условия поручения')).not.toBeInTheDocument();
+  });
   it('offers explicit reconciliation instead of impossible resume', async () => {
     vi.spyOn(newAuth, 'makeRequest').mockResolvedValue({ enabled: true, items: [{ ...task, state: { started: true, inflight_search: true, blocker: 'search_result_uncertain' } }] });
     render(<OutreachContinuation businessId="b" />);
     expect(await screen.findByRole('button', { name: 'Учесть поиск и списать до 10 кредитов' })).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Продолжить поручение' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Продолжить поиск' })).not.toBeInTheDocument();
   });
   it('does not offer a retry while the provider minimum exceeds the approved limit', async () => {
     vi.spyOn(newAuth, 'makeRequest').mockResolvedValue({ enabled: true, items: [{ ...task,
@@ -66,7 +83,7 @@ describe('Outreach continuation', () => {
     }] });
     render(<OutreachContinuation businessId="b" />);
     expect(await screen.findByText('Нужны новые условия поиска')).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Продолжить поручение' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Продолжить поиск' })).not.toBeInTheDocument();
   });
   it('ignores delayed data from the previous business', async () => {
     let finish: (value: object) => void = () => {};
@@ -92,14 +109,14 @@ it('provides recovery for interrupted drafting while keeping resume blocked', as
   render(<OutreachContinuation businessId="b" />);
   await userEvent.click(await screen.findByRole('button', { name: 'Повторить неудавшиеся проверки' }));
   expect(request).toHaveBeenCalledWith('/partnership/continuations/task-1', { method: 'POST', body: JSON.stringify({ business_id: 'b', action: 'retry_failed', revision: 'revision-1' }) });
-  expect(screen.queryByRole('button', { name: 'Продолжить поручение' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Продолжить поиск' })).not.toBeInTheDocument();
   vi.restoreAllMocks();
 });
 
 it('shows shortage replenishment only when this business supports it', async () => {
   vi.spyOn(newAuth, 'makeRequest').mockResolvedValue({ enabled: true, supports_shortage_replenishment: true, items: [] });
   render(<OutreachContinuation businessId="riderra" />);
-  await userEvent.click(await screen.findByRole('button', { name: 'Настроить поиск' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Новый поиск' }));
   const option = screen.getByRole('checkbox', { name: 'Пополнять базу только при нехватке готовых кандидатов Riderra' });
   expect(option).not.toBeChecked();
   await userEvent.click(option);
@@ -114,16 +131,16 @@ it('explains shared-balance actual billing and hides estimate-only settlement', 
     state: { started: true, inflight_search: true, search_credit_reservation_id: 'reservation' },
   }] });
   render(<OutreachContinuation businessId="b" />);
-  expect(await screen.findByText(/Ориентир на весь объём: до 65 кредитов с общего баланса/)).toBeVisible();
+  expect(await screen.findByText(/ориентир до 65 кр./)).toBeVisible();
   expect(screen.queryByRole('button', { name: /Учесть поиск/ })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Остановить поручение' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Остановить поиск' })).not.toBeInTheDocument();
   vi.restoreAllMocks();
 });
 
 it('find-only does not require an offer and retains the qualified target in the saved plan', async () => {
   const request = vi.spyOn(newAuth, 'makeRequest').mockResolvedValue({ enabled: true, items: [] });
   render(<OutreachContinuation businessId="b" />);
-  await userEvent.click(await screen.findByRole('button', { name: 'Настроить поиск' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Новый поиск' }));
   await userEvent.click(screen.getByRole('radio', { name: 'Только найти и проверить компании' }));
   expect(screen.queryByLabelText('Что предлагаем')).not.toBeInTheDocument();
   await userEvent.type(screen.getByLabelText('Кого ищем'), 'Travel agencies');
