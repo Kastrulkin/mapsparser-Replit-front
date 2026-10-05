@@ -13,6 +13,7 @@ import {
 	Download,
 	Eye,
 	FileText,
+  GripVertical,
 	ImageIcon,
 	Lightbulb,
 	Loader2,
@@ -2276,7 +2277,7 @@ function ContentWorkspace() {
   const renderCalendarCard = (item: PlanItem) => {
     const posts = postsByItem[item.id] || [];
     const calendarState = getCalendarItemState(item, posts);
-    const channels = posts.slice(0, 3).map(platformShortLabel);
+    const channels = [...new Set(posts.map(platformShortLabel).filter(Boolean))];
     const canDrag = !posts.some((post) => ['publishing', 'published'].includes(String(post.status || '').toLowerCase()));
     return (
       <button
@@ -2293,23 +2294,26 @@ function ContentWorkspace() {
         onClick={(event) => openItem(item, event.currentTarget)}
         aria-label={`${item.theme || item.goal || calendarCopy.publication}, ${formatDate(item.scheduled_for, language)}${canDrag ? ', перетащите, чтобы изменить дату' : ''}`}
         title={canDrag ? 'Перетащите публикацию на другую дату' : 'Эту публикацию нельзя перенести: размещение уже началось или завершено'}
-        className={cn('w-full min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-left shadow-sm transition-[border-color,box-shadow,opacity] hover:border-slate-300 hover:shadow-md', draggedItemId === item.id && 'opacity-50')}
+        className={cn('w-full min-w-0 rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-left shadow-sm transition-[border-color,box-shadow,opacity] hover:border-slate-300 hover:shadow-md', canDrag && 'cursor-grab active:cursor-grabbing', draggedItemId === item.id && 'opacity-50')}
       >
-        <div className="line-clamp-2 break-words text-xs font-semibold leading-4 text-slate-950 [overflow-wrap:anywhere]">
-          {item.theme || item.goal || calendarCopy.publication}
+        <div className="flex items-start gap-1">
+          {canDrag ? <GripVertical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" /> : null}
+          <span className="min-w-0 break-words text-[13px] font-semibold leading-[1.35] text-slate-950 [overflow-wrap:anywhere]">
+            {item.theme || item.goal || calendarCopy.publication}
+          </span>
         </div>
-        <div className="mt-1 flex min-w-0 flex-wrap gap-1">
-          {(channels.length ? channels : [calendarCopy.content]).map((channel) => (
-            <span key={channel} className="inline-flex max-w-full min-w-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium leading-4 text-slate-600 [overflow-wrap:anywhere]">
-              {channel}
+        <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-1 text-[10px] font-medium leading-4 text-slate-600">
+          {(channels.length ? channels : [calendarCopy.content]).map((channel, index) => (
+            <span key={channel} className="whitespace-nowrap">
+              {index > 0 ? <span className="mr-1 text-slate-300" aria-hidden="true">·</span> : null}{channel}
             </span>
           ))}
         </div>
         <div className="mt-1.5 flex min-w-0 flex-wrap gap-1">
-          <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-4 ring-1 [overflow-wrap:anywhere]', getStatusClassName(calendarState.status))}>
+          <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-nowrap rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-4 ring-1', getStatusClassName(calendarState.status))}>
             {localizeContentCalendarStatus(calendarState.status, calendarCopy)}
           </span>
-          <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-4 ring-1 [overflow-wrap:anywhere]', getStatusClassName(calendarState.action))}>
+          <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-nowrap rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-4 ring-1', getStatusClassName(calendarState.action))}>
             {localizeContentCalendarStatus(calendarState.action, calendarCopy)}
           </span>
         </div>

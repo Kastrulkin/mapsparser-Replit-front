@@ -526,6 +526,24 @@ describe('Content page calendar scheduling', () => {
     expect(await screen.findByText(new RegExp(`Публикация перенесена на`))).toBeInTheDocument();
   });
 
+  it('keeps the full topic and every channel readable on the calendar card', async () => {
+    renderScheduledPlan([
+      { id: 'post-google', content_plan_item_id: 'item-1', platform: 'google_business', status: 'needs_review' },
+      { id: 'post-telegram', content_plan_item_id: 'item-1', platform: 'telegram', status: 'needs_review' },
+      { id: 'post-vk', content_plan_item_id: 'item-1', platform: 'vk', status: 'needs_review' },
+      { id: 'post-max', content_plan_item_id: 'item-1', platform: 'max', status: 'needs_review' },
+    ]);
+
+    const card = await screen.findByRole('button', { name: /Тестовая тема публикации/ });
+    expect(card).toHaveTextContent('Тестовая тема публикации');
+    expect(card).toHaveTextContent('Google');
+    expect(card).toHaveTextContent('Telegram');
+    expect(card).toHaveTextContent('VK');
+    expect(card).toHaveTextContent('MAX');
+    expect(card).toHaveClass('cursor-grab');
+    expect(card.querySelector('.line-clamp-2')).toBeNull();
+  });
+
   it('does not allow dragging an item whose channel post is already published', async () => {
     renderScheduledPlan([{
       id: 'post-published', content_plan_item_id: 'item-1', platform: 'telegram',
