@@ -44,12 +44,22 @@ def test_shared_or_unsafe_asset_does_not_receive_compatibility_fallback(tmp_path
     assert resolve_current_lazy_chunk(str(tmp_path), "../TelegramRadarPage-D9FqvOsj.js") is None
 
 
-def test_existing_stale_page_chunk_is_replaced_with_current_build_chunk(
+def test_existing_page_chunk_is_served_without_replacement(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    import main
-    from legacy_routes import core_public
+    import ast
+    import os
+    from flask import Flask, send_from_directory
+
+    route_source = Path(__file__).resolve().parents[1] / "src/legacy_routes/core_public.py"
+    tree = ast.parse(route_source.read_text())
+    route = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "serve_assets")
+    route.decorator_list = []
+    app = Flask(__name__)
+    namespace = {"os": os, "FRONTEND_DIST_DIR": str(tmp_path), "send_from_directory": send_from_directory, "resolve_current_lazy_chunk": resolve_current_lazy_chunk}
+    exec(compile(ast.Module(body=[route], type_ignores=[]), str(route_source), "exec"), namespace)
+    app.add_url_rule("/assets/<path:filename>", view_func=namespace["serve_assets"])
 
     assets_dir = tmp_path / "assets"
     assets_dir.mkdir()
@@ -63,16 +73,20 @@ def test_existing_stale_page_chunk_is_replaced_with_current_build_chunk(
     )
     (assets_dir / "ContentPage-Current123.js").write_text("CURRENT", encoding="utf-8")
     (assets_dir / "ContentPage-Oldhash12.js").write_text("OLD", encoding="utf-8")
-    monkeypatch.setattr(main, "FRONTEND_DIST_DIR", str(tmp_path))
-    monkeypatch.setattr(core_public, "FRONTEND_DIST_DIR", str(tmp_path))
-
-    def fail_on_sync_log(*_args, **_kwargs) -> None:
-        raise AssertionError("stale asset fallback must not block on synchronous logging")
-
-    monkeypatch.setattr(core_public.logger, "warning", fail_on_sync_log)
-
-    response = main.app.test_client().get("/assets/ContentPage-Oldhash12.js")
+    response = app.test_client().get("/assets/ContentPage-Oldhash12.js")
 
     assert response.status_code == 200
-    assert response.get_data(as_text=True) == "CURRENT"
-    assert response.headers["X-LocalOS-Asset-Fallback"] == "ContentPage-Current123.js"
+    assert response.get_data(as_text=True) == "OLD"
+    assert "X-LocalOS-Asset-Fallback" not in response.headers
+
+
+def test_existing_public_chunk_is_not_replaced_by_private_build(tmp_path: Path) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    (tmp_path / "index.html").write_text('<script src="/assets/index-private1.js"></script>')
+    (tmp_path / "public-seo-index.html").write_text('<script src="/assets/index-public12.js"></script>')
+    (assets / "index-private1.js").write_text('import("./Header-Private12.js")')
+    (assets / "index-public12.js").write_text('import("./Header-Public123.js")')
+    (assets / "Header-Private12.js").write_text('import "./router-private1.js"')
+    (assets / "Header-Public123.js").write_text('import "./router-public12.js"')
+    assert resolve_current_lazy_chunk(str(tmp_path), "Header-Public123.js") is None
