@@ -4,6 +4,7 @@ from core.db_helpers import assert_schema_columns
 
 DEFAULT_BUSINESS_TYPES = [
     ("beauty_salon", "Салон красоты", "Салон красоты с полным спектром услуг"),
+    ("children_hair_salon", "Детская парикмахерская", "Парикмахерская для детей и семей с детьми"),
     ("barbershop", "Барбершоп", "Мужской барбершоп"),
     ("spa", "SPA/Wellness", "SPA и wellness центр"),
     ("nail_studio", "Ногтевая студия", "Студия маникюра и педикюра"),

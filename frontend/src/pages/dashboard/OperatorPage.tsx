@@ -4,6 +4,7 @@ import { voiceHeaders, waitForOperatorResult } from '@/components/operator/Opera
 import { OperatorWorkdayInput } from '@/components/operator/OperatorWorkdayInput';
 import {
 	Bot,
+	AlertTriangle,
 	CheckCircle2,
 	ChevronDown,
 	Copy,
@@ -30,6 +31,8 @@ import {
 
 type DashboardContext = {
   currentBusinessId: string | null;
+  controlScope?: { kind: 'business' | 'network' | 'platform'; id: string; name?: string } | null;
+  user?: { is_superadmin?: boolean };
   currentBusiness?: {
     id: string;
     name?: string;
@@ -40,6 +43,15 @@ type OperatorChatResult = {
   message_id?: string;
   input_type?: string;
   status: 'completed' | 'blocked' | 'unsupported' | string;
+  search_started?: boolean;
+  task?: {
+    id: string;
+    status: string;
+    stage?: string;
+    config?: { target_count?: number; max_candidates?: number; max_search_calls?: number };
+    state?: { search_calls?: number };
+    report?: { eligible?: number; shortfall?: number; credit_limit?: number; credits_charged?: number };
+  };
   intent?: string;
   chat_response?: string;
   queue_id?: string;
@@ -76,7 +88,9 @@ type OperatorChatResult = {
     status?: string;
     action_id?: string;
     summary?: string;
+    capability?: string;
   };
+  credit_quote?: { total_max?: number };
   ai_router?: {
     status?: string;
     intent?: string;
@@ -245,8 +259,23 @@ const mapStoredMessages = (items: Array<{
   result: item.role === 'operator' ? item.result_json : undefined,
 }));
 
+const isOperatorBlocker = (result?: OperatorChatResult | RefreshResult) => (
+  ['blocked', 'failed', 'clarification_required'].includes(String(result?.status || '').toLowerCase())
+);
+
+const blockerNeedsBusinessSettings = (result?: OperatorChatResult | RefreshResult) => {
+  const reasons = 'blocked_reasons' in (result || {}) ? (result?.blocked_reasons || []).join(' ') : '';
+  return /город|валют|часов.{0,10}пояс|\bcity\b|\bcurrency\b|\btimezone\b/i.test(`${resultText(result)} ${reasons}`);
+};
+
+const operatorMessageText = (message: ChatMessage) => (
+  message.result && 'capability' in message.result && message.result.capability === 'partnerships.prepare_message'
+    ? message.text.replace(/DeepSeek/gi, 'ИИ')
+    : message.text
+);
+
 export const OperatorPage = () => {
-  const { currentBusinessId, currentBusiness } = useOutletContext<DashboardContext>();
+  const { currentBusinessId, currentBusiness, controlScope, user } = useOutletContext<DashboardContext>();
   const { language } = useLanguage();
   const copy = operatorPageCopyForLanguage(language);
   const businessName = localizeDemoBusinessName(currentBusiness?.name || '', language) || copy.selectedBusiness;
@@ -356,6 +385,36 @@ export const OperatorPage = () => {
   const sendOperatorChatMessage = async (overrideText?: string, source?: VoiceSubmission) => {
     const text = (overrideText || chatMessage).trim();
     if (!currentBusinessId || !text || chatSendInFlightRef.current) return;
+    const asksAllClients = /всем\s+клиент|все\s+клиент|all\s+(clients|businesses)|every\s+client/i.test(text);
+    const platformContentRequest = controlScope?.kind === 'platform' || (asksAllClients && user?.is_superadmin === true);
+    if (platformContentRequest) {
+      const asksTodayContent = /\b(today|today's)\b|сегодня|публикац|пост(ы|а|ов)?/i.test(text);
+      chatSendInFlightRef.current = true;
+      setChatLoading(true);
+      try {
+        if (!user?.is_superadmin) throw new Error('Обзор всех клиентских бизнесов доступен только администратору LocalOS.');
+        if (!asksTodayContent) {
+          appendPair(text, { status: 'unsupported', intent: 'platform_scope', chat_response: 'В области «LocalOS · все бизнесы» сейчас доступна общая сверка публикаций на сегодня. Для редактирования плана выберите конкретный бизнес — так изменение будет привязано к правильной компании.' });
+        } else {
+          const response = await api.get('/operator/content/today', { params: { scope_type: 'platform' } });
+          const entries = Array.isArray(response.data.businesses) ? response.data.businesses : [];
+          const lines = entries.map((entry: { name?: string; posts?: Array<{ title?: string; channel?: string; status?: string; scheduled_for?: string }> }) => {
+            const posts = Array.isArray(entry.posts) ? entry.posts : [];
+            if (!posts.length) return `• ${entry.name}: на сегодня нет заведённых публикаций.`;
+            return `• ${entry.name}:\n${posts.map((post) => `  — ${post.title || 'Без темы'} · ${post.channel || 'канал не указан'} · ${post.status || 'статус неизвестен'}`).join('\n')}`;
+          });
+          const warnings = Array.isArray(response.data.warnings) ? response.data.warnings : [];
+          appendPair(text, { status: 'completed', intent: 'platform_content_today', chat_response: `Сверка плана публикаций по всем бизнесам LocalOS на сегодня:\n\n${lines.join('\n') || 'Активных клиентских бизнесов не найдено.'}${warnings.length ? `\n\nПримечания: ${warnings.join(' ')}` : ''}\n\nЭто данные LocalOS о плане и статусах каналов, а не независимое подтверждение публикации на площадках.` });
+        }
+        if (!overrideText) setChatMessage('');
+      } catch (err) {
+        appendPair(text, { status: 'blocked', intent: 'platform_content_today', chat_response: err instanceof Error ? err.message : 'Не удалось получить обзор публикаций.' });
+      } finally {
+        chatSendInFlightRef.current = false;
+        setChatLoading(false);
+      }
+      return;
+    }
     if (pendingRequest.current.businessId !== currentBusinessId || pendingRequest.current.text !== text) pendingRequest.current = { businessId: currentBusinessId, text, id: crypto.randomUUID() };
     historyVersion.current++;
     setHistoryLoading(false);
@@ -620,9 +679,8 @@ export const OperatorPage = () => {
         description={copy.betaDescription}
         businessId={currentBusinessId}
         businessName={businessName}
+        compact
       />
-
-      {currentBusinessId && <Link to="/dashboard/profile" className="text-sm text-primary underline">{language === 'ru' ? 'Город и валюта — в «Профиль и бизнес»' : 'City and currency — Profile and business'}</Link>}
 
       {currentBusinessId && <OperatorRequestHistory key={currentBusinessId} businessId={currentBusinessId} language={language} />}
 
@@ -674,7 +732,7 @@ export const OperatorPage = () => {
               </div>
             </div>
           ) : (
-            messages.map((message) => (
+            messages.map((message, index) => (
               <div key={message.id} className={cn('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
                 <div
                   className={cn(
@@ -684,11 +742,30 @@ export const OperatorPage = () => {
                       : 'border border-slate-200 bg-white text-slate-800',
                   )}
                 >
-                  <div className="whitespace-pre-wrap">{message.text}</div>
+                  {message.role === 'operator' && isOperatorBlocker(message.result) ? (
+                    <div role={message.result?.status === 'clarification_required' ? 'status' : 'alert'} className="space-y-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 text-amber-950">
+                      <div className="flex items-center gap-2 text-sm font-semibold">
+                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                        {language === 'ru' ? 'Нужен следующий шаг' : 'Action needed'}
+                      </div>
+                      <div className="whitespace-pre-wrap text-sm leading-6">{operatorMessageText(message)}</div>
+                      {currentBusinessId && blockerNeedsBusinessSettings(message.result) ? (
+                        <Link to="/dashboard/profile" className="inline-flex min-h-9 items-center rounded-lg bg-white px-3 text-sm font-semibold text-amber-950 underline ring-1 ring-amber-300">
+                          {language === 'ru' ? 'Проверить данные бизнеса' : 'Check business details'}
+                        </Link>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="whitespace-pre-wrap">{message.role === 'operator' && message.result && 'approval' in message.result && message.result.approval?.capability === 'partnerships.continue_outreach' && !('credit_quote' in message.result && message.result.credit_quote)
+                      ? 'Прежние условия поиска устарели. Откройте актуальную стоимость в кредитах LocalOS.'
+                      : operatorMessageText(message)}</div>
+                  )}
                   {message.role === 'operator' && currentBusinessId && <OperatorSpeech key={`${currentBusinessId}:${message.id}`} businessId={currentBusinessId} messageId={message.result?.message_id || message.id} prepare={message.result?.input_type === 'voice'} />}
                   {message.role === 'operator' && message.result ? (
                     <OperatorResultActions
                       result={message.result}
+                      businessId={currentBusinessId}
+                      canStartPreview={index === messages.length - 1}
                       copiedKey={copiedKey}
                       loading={{
                         refreshCheckingQueueId,
@@ -707,6 +784,7 @@ export const OperatorPage = () => {
                       onMarkManualPublished={markManualPublished}
                       onConfirmOperatorAction={confirmOperatorAction}
                       onRejectOperatorAction={rejectOperatorAction}
+                      onSendCommand={sendOperatorChatMessage}
                     />
                   ) : null}
                 </div>
@@ -760,8 +838,57 @@ export const OperatorPage = () => {
   );
 };
 
+type OutreachTask = NonNullable<OperatorChatResult['task']>;
+
+function OutreachTaskStatus({ businessId, initialTask }: { businessId: string; initialTask: OutreachTask }) {
+  const [task, setTask] = useState(initialTask);
+  const [refreshError, setRefreshError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const response = await api.get('/partnership/continuations', { params: { business_id: businessId } });
+        if (!active) return;
+        const current = (response.data.items as OutreachTask[] | undefined)?.find((item) => item.id === initialTask.id);
+        if (current) setTask(current);
+        setRefreshError(!current);
+      } catch {
+        if (active) setRefreshError(true);
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 15000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [businessId, initialTask.id]);
+  const target = task.config?.target_count || task.config?.max_candidates || 0;
+  const eligible = task.report?.eligible || 0;
+  const active = task.status === 'running' || task.status === 'queued';
+  const label = task.status === 'running' ? 'Поиск идёт'
+    : task.status === 'queued' ? 'Поиск в очереди'
+      : task.status === 'completed' ? 'Поиск завершён'
+        : task.status === 'cancelled' ? 'Поиск остановлен'
+          : task.status === 'failed' ? 'Поиск прерван'
+            : 'Ожидает подтверждения или проверки';
+  return <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-slate-800" role="status" aria-live="polite">
+    <div className="flex items-center gap-2 font-medium">
+      {active ? <Loader2 className="h-4 w-4 animate-spin text-sky-700" aria-hidden="true" /> : null}
+      {label}
+    </div>
+    {task.stage ? <p className="mt-1">{task.stage.replace(/DeepSeek/gi, 'ИИ')}</p> : null}
+    <p className="mt-1 tabular-nums">Подходящих с контактом: {eligible}{target ? ` из ${target}` : ''}. Поисковых вызовов: {task.state?.search_calls || 0}{task.config?.max_search_calls ? ` из ${task.config.max_search_calls}` : ''}.</p>
+    {typeof task.report?.credit_limit === 'number' ? <p className="mt-1 tabular-nums">Списано: {task.report.credits_charged || 0} из лимита {task.report.credit_limit} кредитов.</p> : null}
+    {target ? <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200" aria-label={`Найдено ${eligible} из ${target}`}>
+      <div className="h-full bg-sky-600 transition-[width]" style={{ width: `${Math.min(100, eligible / target * 100)}%` }} />
+    </div> : null}
+    {refreshError ? <p className="mt-1 text-amber-800">Не удалось обновить прогресс. Проверьте задачу в разделе «Партнёрства».</p> : null}
+    <Link className="mt-2 inline-block font-medium underline" to="/dashboard/partnerships">Открыть задачу</Link>
+  </div>;
+}
+
 type OperatorResultActionsProps = {
   result: OperatorChatResult | RefreshResult;
+  businessId: string;
+  canStartPreview: boolean;
   copiedKey: string | null;
   loading: {
     refreshCheckingQueueId: string | null;
@@ -780,10 +907,13 @@ type OperatorResultActionsProps = {
   onMarkManualPublished: (draftId: string | undefined) => Promise<void>;
   onConfirmOperatorAction: (actionId: string | undefined) => Promise<void>;
   onRejectOperatorAction: (actionId: string | undefined) => Promise<void>;
+  onSendCommand: (text: string) => Promise<void>;
 };
 
 const OperatorResultActions = ({
   result,
+  businessId,
+  canStartPreview,
   copiedKey,
   loading,
   onCopy,
@@ -794,6 +924,7 @@ const OperatorResultActions = ({
   onMarkManualPublished,
   onConfirmOperatorAction,
   onRejectOperatorAction,
+  onSendCommand,
 }: OperatorResultActionsProps) => {
   const capabilityPanelId = useId();
   const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
@@ -808,12 +939,17 @@ const OperatorResultActions = ({
   const drafts = 'drafts' in result ? result.drafts || [] : [];
   const billingUrl = 'billing_url' in result ? result.billing_url : undefined;
   const resultRef = 'result_ref' in result ? result.result_ref : undefined;
+  const searchPreview = 'capability' in result && result.capability === 'partnerships.prepare_message'
+    && 'search_started' in result && result.search_started === false;
+  const searchTask = 'task' in result ? result.task : undefined;
   const approval = 'approval' in result ? result.approval : undefined;
+  const outdatedOutreachApproval = approval?.capability === 'partnerships.continue_outreach'
+    && !('credit_quote' in result && result.credit_quote?.total_max !== undefined);
   const capabilityCatalog = 'capability_catalog' in result ? result.capability_catalog || [] : [];
   const capabilityExamples = 'capabilities' in result ? result.capabilities || [] : [];
   const isOperatorHelp =
     ('intent' in result && result.intent === 'operator_help') || capabilityCatalog.length > 0 || capabilityExamples.length > 0;
-  const hasUsefulResultRef = Boolean(resultRef?.href && resultRef.href !== '/dashboard/operator');
+  const hasUsefulResultRef = !searchPreview && Boolean(resultRef?.href && resultRef.href !== '/dashboard/operator');
   const aiRouter = result.ai_router;
   const queueId = result.queue_id;
   const status = result.status || '';
@@ -837,7 +973,9 @@ const OperatorResultActions = ({
                 : 'bg-amber-50 text-amber-800 ring-amber-200',
           )}
         >
-          {status || 'operator'}
+          {searchPreview ? 'Условия показаны' : searchTask?.id
+            ? status === 'approval_required' ? 'Ожидает подтверждения запуска' : 'Поручение сохранено'
+            : status || 'operator'}
         </span>
         {'credit_charged' in result && result.credit_charged ? <span>Списано {result.charged_credits || 0} кредитов</span> : null}
         {'manual_publication_only' in result && result.manual_publication_only ? <span>Публикация вручную</span> : null}
@@ -848,6 +986,17 @@ const OperatorResultActions = ({
           </span>
         ) : null}
       </div>
+
+      {searchPreview && canStartPreview ? (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-sky-950">
+          <p className="font-medium">Поиск ещё не начался</p>
+          <p className="mt-1">Условия и лимиты показаны выше. Создайте поручение, затем подтвердите запуск.</p>
+          <Button type="button" size="sm" className="mt-2" onClick={() => void onSendCommand('Начни поиск по показанным условиям')}>
+            Создать поручение
+          </Button>
+        </div>
+      ) : null}
+      {searchTask?.id ? <OutreachTaskStatus businessId={businessId} initialTask={searchTask} /> : null}
 
       {textToCopy ? (
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
@@ -978,7 +1127,15 @@ const OperatorResultActions = ({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        {approval?.action_id && approval.status === 'pending' ? (
+        {approval?.action_id && approval.status === 'pending' && outdatedOutreachApproval ? (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+            Условия этого подтверждения устарели. Стоимость поиска теперь указана в кредитах LocalOS.
+            <Button type="button" size="sm" variant="outline" className="mt-2 block" onClick={() => void onSendCommand('Покажи актуальные условия и стоимость в кредитах для последнего поручения по поиску компаний и подготовь новое подтверждение запуска')}>
+              Показать актуальные условия
+            </Button>
+          </div>
+        ) : null}
+        {approval?.action_id && approval.status === 'pending' && !outdatedOutreachApproval ? (
           <>
             <Button
               type="button"

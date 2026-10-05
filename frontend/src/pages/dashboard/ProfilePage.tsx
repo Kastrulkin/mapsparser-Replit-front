@@ -86,6 +86,7 @@ const ProfileStatusStrip = ({
 
 const defaultBusinessTypeOptions: Array<{ type_key: string; label: string }> = [
   { type_key: 'beauty_salon', label: 'Салон красоты' },
+  { type_key: 'children_hair_salon', label: 'Детская парикмахерская' },
   { type_key: 'barbershop', label: 'Барбершоп' },
   { type_key: 'spa', label: 'SPA/Wellness' },
   { type_key: 'nail_studio', label: 'Ногтевая студия' },
@@ -1294,10 +1295,24 @@ export const ProfilePage = () => {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-semibold text-gray-700" htmlFor="business-currency">{isRu ? 'Валюта бизнеса' : 'Business currency'}</label>
-            <input id="business-currency" value={clientInfo.currency} maxLength={3} list="profile-currencies" disabled={!editClientInfo} placeholder="EUR"
-              onChange={event => setClientInfo({ ...clientInfo, currency: event.target.value.toUpperCase() })}
-              className="w-full px-4 py-2.5 border rounded-xl disabled:bg-gray-50" />
-            <datalist id="profile-currencies">{['EUR','RUB','USD','THB','KZT','GBP','AED','GEL','AMD','BYN'].map(code => <option key={code} value={code} />)}</datalist>
+            <Select
+              value={clientInfo.currency || undefined}
+              onValueChange={currency => setClientInfo({ ...clientInfo, currency })}
+              disabled={!editClientInfo}
+            >
+              <SelectTrigger id="business-currency" className="h-11 w-full rounded-xl">
+                <SelectValue placeholder={isRu ? 'Выберите валюту' : 'Select currency'} />
+              </SelectTrigger>
+              <SelectContent>
+                {[
+                  ['EUR', 'Евро'], ['RUB', 'Российский рубль'], ['USD', 'Доллар США'], ['THB', 'Тайский бат'],
+                  ['KZT', 'Казахстанский тенге'], ['GBP', 'Фунт стерлингов'], ['AED', 'Дирхам ОАЭ'], ['GEL', 'Грузинский лари'],
+                  ['AMD', 'Армянский драм'], ['BYN', 'Белорусский рубль'],
+                ].map(([code, label]) => (
+                  <SelectItem key={code} value={code}>{isRu ? `${code} — ${label}` : code}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="text-sm text-gray-500">{isRu ? 'Оператор использует этот город и эту валюту, в том числе для голосовых команд.' : 'The Operator uses this city and currency, including for voice commands.'}</p>
             <details><summary className="text-sm cursor-pointer">{isRu ? 'Часовой пояс' : 'Time zone'}</summary>
               <input aria-label={isRu ? 'Часовой пояс бизнеса' : 'Business time zone'} value={clientInfo.timezone} disabled={!editClientInfo} placeholder="Europe/Tallinn"

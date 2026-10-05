@@ -596,6 +596,7 @@ export const ru = {
       errorSave: "Ошибка сохранения информации",
       businessTypes: {
         beauty_salon: "Салон красоты",
+        children_hair_salon: "Детская парикмахерская",
         barbershop: "Барбершоп",
         spa: "SPA/Wellness",
         nail_studio: "Ногтевая студия",
