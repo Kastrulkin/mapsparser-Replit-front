@@ -1,3 +1,6 @@
+import { publishedArticles } from "./articles";
+import { publishedDocuments } from "./documents";
+import { solutions } from "./solutions";
 import { describe, expect, it } from "vitest";
 import { publishedCases } from "./cases";
 import { publicHomeContent } from "./publicHomeContent";
@@ -6,7 +9,7 @@ import { buildPublicPageFallbacks } from "./publicPageFallbacks";
 describe("public page fallback manifest", () => {
   it("has the exact finite public route set and renderer contract", () => {
     const manifest = buildPublicPageFallbacks();
-    const expectedRoutes = ["/", "/about", "/pricing", "/cases", ...publishedCases.map((caseItem) => `/cases/${caseItem.slug}`)].sort();
+    const expectedRoutes = ["/", "/about", "/pricing", "/cases", ...publishedCases.map((caseItem) => `/cases/${caseItem.slug}`), "/articles", "/documents", ...publishedArticles.map((item) => `/articles/${item.slug}`), ...publishedDocuments.map((item) => `/documents/${item.slug}`), ...solutions.map((item) => `/solutions/${item.slug}`)].sort();
 
     expect(manifest.version).toBe(1);
     expect(Object.keys(manifest.routes).sort()).toEqual(expectedRoutes);
@@ -16,7 +19,7 @@ describe("public page fallback manifest", () => {
       expect(page.description).not.toHaveLength(0);
       expect(page.heading).not.toHaveLength(0);
       for (const section of page.sections) {
-        for (const link of section.links ?? []) expect(link.href.startsWith("/")).toBe(true);
+        for (const link of section.links ?? []) expect(link.href.startsWith("/") || link.href.startsWith("https://")).toBe(true);
       }
     }
   });
@@ -59,5 +62,29 @@ describe("public page fallback manifest", () => {
         expect.objectContaining({ heading: caseItem.title, items: caseItem.metrics.map((metric) => `${metric.label}: ${metric.value}`) }),
       ]));
     }
+  });
+});
+
+
+describe("public content coverage", () => {
+  it("includes every published article, document and solution with its actual body", () => {
+    const { routes } = buildPublicPageFallbacks();
+    for (const { prefix, items } of [{ prefix: "articles", items: publishedArticles }, { prefix: "documents", items: publishedDocuments }, { prefix: "solutions", items: solutions }]) {
+      for (const item of items) {
+        const page = routes[`/${prefix}/${item.slug}`];
+        expect(page.heading).toBe(item.title);
+        expect(page.title).toBe(item.seoTitle);
+        for (const section of item.body) {
+          if (section.body) expect(JSON.stringify(page)).toContain(section.body);
+          for (const text of section.items || []) expect(JSON.stringify(page)).toContain(text);
+        }
+      }
+    }
+    expect(routes["/articles/missing"]).toBeUndefined();
+    expect(routes["/solutions/missing"]).toBeUndefined();
+  });
+  it("provides review examples without the download form", () => {
+    const page = buildPublicPageFallbacks().routes["/documents/shablony-otvetov-na-otzyvy"];
+    expect(page.sections.map((section) => section.heading)).toEqual(expect.arrayContaining(["Положительный отзыв", "Отзыв без текста", "Претензия к ожиданию", "Конфликт"]));
   });
 });

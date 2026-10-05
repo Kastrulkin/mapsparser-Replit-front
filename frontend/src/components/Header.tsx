@@ -68,7 +68,7 @@ const Header = () => {
   const navigation = [
     { name: publicNavigationCopy[language].how, href: '/#agents' },
     { name: publicNavigationCopy[language].about, href: '/about' },
-    { name: t.header.prices, href: '/about#pricing' },
+    { name: t.header.prices, href: '/pricing' },
   ];
 
   const materialsCopy = contentCopy[language];

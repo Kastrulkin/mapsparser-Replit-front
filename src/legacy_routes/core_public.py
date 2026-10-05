@@ -346,7 +346,7 @@ def _render_spa_index(path: str = "", status_code: int = 200):
     index_html = _set_named_meta(index_html, "property", "og:image", image)
     index_html = _set_named_meta(index_html, "name", "twitter:image", image)
     index_html = _set_canonical(index_html, canonical_url)
-    index_html = _set_jsonld(index_html, _schema_for_route(route_path, route_seo))
+    index_html = _set_jsonld(index_html, public_page.get("schema") if public_page is not None and public_page.get("schema") else _schema_for_route(route_path, route_seo))
 
     response = Response(index_html, status=status_code, mimetype="text/html")
     if status_code == 404:

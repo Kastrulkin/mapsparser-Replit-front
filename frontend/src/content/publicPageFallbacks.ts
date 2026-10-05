@@ -1,3 +1,7 @@
+import { publicContentSchema } from "./publicContentSchema";
+import { publishedArticles } from "./articles";
+import { publishedDocuments } from "./documents";
+import { solutions } from "./solutions";
 import { aboutStoryCopy } from "./aboutStoryCopy";
 import { publishedCases } from "./cases";
 import { collectionCopy } from "./collectionCopy";
@@ -17,10 +21,12 @@ export type PublicPageFallback = {
   heading: string;
   intro: string[];
   sections: PublicPageSection[];
+  schema?: unknown;
 };
 
 export type PublicPageFallbackManifest = {
   version: 1;
+  publicShell?: string;
   routes: Record<string, PublicPageFallback>;
 };
 
@@ -99,5 +105,20 @@ export const buildPublicPageFallbacks = (): PublicPageFallbackManifest => {
     };
   }
 
-  return { version: 1, routes };
+  const sections = (body: Array<{ title: string; body?: string; items?: string[]; bodyLinks?: Array<{ text: string; href: string }> }>) => body.map((section) => ({ heading: section.title, paragraphs: section.body ? [section.body] : [], items: section.items || [], links: (section.bodyLinks || []).map((link) => ({ href: link.href, label: link.text })) }));
+  const related = (links: Array<{ title: string; href: string }>) => ({ heading: "Материалы по теме", links: links.map((item) => ({ href: item.href, label: item.title })) });
+  const articleCopy = { seoTitle: "Статьи для владельцев локального бизнеса — LocalOS", seoDescription: "Статьи LocalOS о картах, отзывах, клиентах, финансах и автоматизации регулярной работы локального бизнеса.", title: "Статьи о бизнесе, клиентах и росте", description: "Практические разборы о картах, отзывах, клиентах, финансах и ежедневной работе владельца." };
+  routes["/articles"] = { title: articleCopy.seoTitle, description: articleCopy.seoDescription, heading: articleCopy.title, intro: [articleCopy.description], sections: publishedArticles.map((item) => ({ heading: item.title, paragraphs: [item.excerpt], links: [{ href: `/articles/${item.slug}`, label: "Читать статью" }] })) };
+  routes["/documents"] = { title: collectionCopy.ru.documents.seoTitle, description: collectionCopy.ru.documents.seoDescription, heading: collectionCopy.ru.documents.title, intro: [collectionCopy.ru.documents.description], sections: publishedDocuments.map((item) => ({ heading: item.title, paragraphs: [item.excerpt], links: [{ href: `/documents/${item.slug}`, label: "Открыть документ" }] })) };
+  for (const item of publishedArticles) {
+    routes[`/articles/${item.slug}`] = { title: item.seoTitle, description: item.seoDescription, heading: item.title, intro: [item.excerpt], sections: [{ heading: "Дата публикации", paragraphs: [item.publishedAt] }, ...sections(item.body), related(item.related)], schema: publicContentSchema(item, "articles", "Статьи") };
+  }
+  for (const item of publishedDocuments) {
+    routes[`/documents/${item.slug}`] = { title: item.seoTitle, description: item.seoDescription, heading: item.title, intro: [item.excerpt], sections: [{ heading: "Что внутри", items: item.inside }, ...sections(item.body), related(item.related)], schema: publicContentSchema(item, "documents", "Документы") };
+  }
+  for (const item of solutions) {
+    routes[`/solutions/${item.slug}`] = { title: item.seoTitle, description: item.seoDescription, heading: item.title, intro: [item.excerpt], sections: [...sections(item.body), related(item.related)] };
+  }
+  routes["/"].sections.unshift({ heading: "Задачи владельца", links: [{ href: "/solutions/yandex-maps", label: "Привлечь клиентов через карты" }, { href: "/solutions/ai-review-replies", label: "Подготовить ответы на отзывы" }, { href: "/articles/kak-uvelichit-sredniy-chek", label: "Увеличить средний чек" }, { href: "/solutions/business-automation", label: "Передать регулярные задачи" }, { href: "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus", label: "Разобраться с прибылью" }] });
+  return { version: 1, publicShell: "public-seo-index.html", routes };
 };

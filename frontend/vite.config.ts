@@ -1,13 +1,21 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import { readFileSync } from "node:fs";
+import { readFileSync, copyFileSync } from "node:fs";
 import { buildPublicPageFallbacks } from "./src/content/publicPageFallbacks";
 
 const publicPageFallbacks = (): Plugin => ({
   name: "public-page-fallbacks",
+  closeBundle() {
+    copyFileSync(path.resolve(__dirname, "dist/index.html"), path.resolve(__dirname, "dist/public-seo-index.html"));
+  },
   generateBundle() {
-    this.emitFile({ type: "asset", fileName: "public-page-fallbacks.json", source: JSON.stringify(buildPublicPageFallbacks()) });
+    const manifest = buildPublicPageFallbacks();
+    this.emitFile({ type: "asset", fileName: "public-page-fallbacks.json", source: JSON.stringify(manifest) });
+    const seo = JSON.parse(readFileSync(path.resolve(__dirname, "public/content-seo.json"), "utf8"));
+    for (const route of Object.keys(seo.routes)) if ((route.startsWith("/articles/") || route.startsWith("/documents/")) && !manifest.routes[route]) delete seo.routes[route];
+    for (const [route, page] of Object.entries(manifest.routes)) seo.routes[route] = { ...seo.routes[route], title: page.title, description: page.description };
+    this.emitFile({ type: "asset", fileName: "content-seo.json", source: JSON.stringify(seo) });
     this.emitFile({ type: "asset", fileName: "localos-logo.png", source: readFileSync(path.resolve(__dirname, "src/assets/images/logo.png")) });
   },
 });

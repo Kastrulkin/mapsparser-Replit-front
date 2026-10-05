@@ -1,3 +1,4 @@
+import { publicContentSchema } from "@/content/publicContentSchema";
 import SeoMeta from "@/components/SeoMeta";
 import { collectionCopy } from "@/content/collectionCopy";
 import { contentCopy } from "@/content/contentCopy";
@@ -12,7 +13,7 @@ import {
 	RelatedMaterials,
 	SectionRenderer,
 } from "./ContentShared";
-import { SITE_URL, makeBreadcrumbSchema } from "./contentSeo";
+
 
 const DocumentDetailPage = () => {
   const { slug } = useParams();
@@ -30,26 +31,7 @@ const DocumentDetailPage = () => {
     return <Navigate replace to="/documents" />;
   }
 
-  const schema = [
-    {
-      "@context": "https://schema.org",
-      "@type": "CreativeWork",
-      name: documentItem.title,
-      description: documentItem.excerpt,
-      datePublished: documentItem.publishedAt,
-      dateModified: documentItem.updatedAt,
-      url: `${SITE_URL}/documents/${documentItem.slug}`,
-      publisher: {
-        "@type": "Organization",
-        name: "LocalOS",
-      },
-    },
-    makeBreadcrumbSchema([
-      { name: "LocalOS", path: "/" },
-      { name: navigationTitle, path: "/documents" },
-      { name: documentItem.title, path: `/documents/${documentItem.slug}` },
-    ]),
-  ];
+  const schema = publicContentSchema(documentItem, "documents", navigationTitle);
 
   return (
     <PageFrame>

@@ -22,15 +22,16 @@ const ArticlesPage = () => {
     setActiveCategory(copy.all);
   }, [copy.all]);
 
+  const categoryLabels: Record<string, string> = language === "ru" ? { "Карты": "Клиенты из карт", "Отзывы": "Отзывы и репутация", "Финансы": "Средний чек и прибыль", "Бизнес": "Рутина и управление", "Клиенты": "Привлечение и удержание", "Кафе": "Задачи кафе" } : {};
   const filteredArticles = useMemo(() => {
     if (activeCategory === copy.all) {
       return articles;
     }
 
-    return articles.filter((article) => article.category === activeCategory);
-  }, [activeCategory, articles, copy.all]);
+    return articles.filter((article) => (categoryLabels[article.category] || article.category) === activeCategory);
+  }, [activeCategory, articles, copy.all, language]);
 
-  const filters = [copy.all, ...Array.from(new Set(articles.map((article) => article.category)))];
+  const filters = [copy.all, ...Array.from(new Set(articles.map((article) => categoryLabels[article.category] || article.category)))];
 
   return (
     <PageFrame>

@@ -4,6 +4,7 @@ import html
 import json
 from pathlib import Path
 import re
+from urllib.parse import urlsplit
 
 
 MANIFEST_NAME = "public-page-fallbacks.json"
@@ -61,6 +62,15 @@ def _local_href(value):
     )
 
 
+def _safe_href(value):
+    if _local_href(value):
+        return True
+    if not isinstance(value, str) or any(c.isspace() or c == "\\" for c in value):
+        return False
+    parsed = urlsplit(value)
+    return parsed.scheme == "https" and bool(parsed.hostname) and parsed.username is None and parsed.password is None
+
+
 def _valid_page(page):
     if not isinstance(page, dict):
         return False
@@ -75,7 +85,7 @@ def _valid_page(page):
             return False
         links = section.get("links", [])
         if not isinstance(links, list) or not all(
-            isinstance(link, dict) and isinstance(link.get("label"), str) and _local_href(link.get("href"))
+            isinstance(link, dict) and isinstance(link.get("label"), str) and _safe_href(link.get("href"))
             for link in links
         ):
             return False

@@ -1,3 +1,4 @@
+import SolutionPage from "./pages/content/SolutionPage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Suspense, lazy, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
@@ -342,6 +343,7 @@ const AppShell = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/demo" element={<DemoEntryPage />} />
           <Route path="/telegram/control" element={<TelegramControlPage />} />
+          <Route path="/solutions/:slug" element={<SolutionPage />} />
           <Route path="/articles" element={<ArticlesPage />} />
           <Route path="/articles/:slug" element={<ArticleDetailPage />} />
           <Route path="/documents" element={<DocumentsPage />} />

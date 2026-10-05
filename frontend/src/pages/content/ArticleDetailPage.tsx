@@ -1,3 +1,4 @@
+import { publicContentSchema } from "@/content/publicContentSchema";
 import SeoMeta from "@/components/SeoMeta";
 import { contentCopy } from "@/content/contentCopy";
 import type { ArticleContent } from "@/content/contentTypes";
@@ -11,7 +12,7 @@ import {
 	RelatedMaterials,
 	SectionRenderer,
 } from "./ContentShared";
-import { SITE_URL, makeBreadcrumbSchema } from "./contentSeo";
+
 
 const BURNOUT_ARTICLE_SLUG = "pochemu-predprinimateli-vygorayut";
 const STATS_SECTION_INDEX = 4;
@@ -74,42 +75,10 @@ const ArticleDetailPage = () => {
     return <Navigate replace to="/articles" />;
   }
 
-  const schema = [
-    {
-      "@context": "https://schema.org",
-      "@type": "Article",
-      headline: article.title,
-      description: article.excerpt,
-      datePublished: article.publishedAt,
-      dateModified: article.updatedAt,
-      mainEntityOfPage: `${SITE_URL}/articles/${article.slug}`,
-      author: {
-        "@type": "Organization",
-        name: "LocalOS",
-      },
-      publisher: {
-        "@type": "Organization",
-        name: "LocalOS",
-      },
-    },
-    makeBreadcrumbSchema([
-      { name: "LocalOS", path: "/" },
-      { name: contentCopy[language].navigation.articles.name, path: "/articles" },
-      { name: article.title, path: `/articles/${article.slug}` },
-    ]),
-    ...(article.video ? [{
-      "@context": "https://schema.org",
-      "@type": "VideoObject",
-      name: article.video.title,
-      description: article.excerpt,
-      embedUrl: `https://www.youtube-nocookie.com/embed/${article.video.youtubeId}`,
-      contentUrl: `https://www.youtube.com/watch?v=${article.video.youtubeId}`,
-      thumbnailUrl: `https://i.ytimg.com/vi/${article.video.youtubeId}/hqdefault.jpg`,
-    }] : []),
-  ];
+  const schema = publicContentSchema(article, "articles", contentCopy[language].navigation.articles.name);
 
   const otherArticles = articles
-    .filter((item) => item.slug !== article.slug)
+    .filter((item) => item.slug !== article.slug && item.category === article.category && !article.related.some((link) => link.href === `/articles/${item.slug}`))
     .slice(0, 2)
     .map((item) => ({
       title: item.title,
