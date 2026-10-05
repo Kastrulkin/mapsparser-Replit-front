@@ -528,6 +528,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const showDemoPartner = searchParams.get('demo') === 'romashka';
   const requestedLeadId = searchParams.get('lead');
   const requestedFocus = searchParams.get('focus');
+  const requestedSection = searchParams.get('section');
   const requestedSearchTaskId = searchParams.get('search_task_id');
   const [loading, setLoading] = useState(false);
   const [journeyActions, setJourneyActions] = useState<JourneyAction[]>([]);
@@ -562,7 +563,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [leadBucket, setLeadBucket] = useState<'active' | 'deferred'>('active');
   const [lastGeoSearchLeadIds, setLastGeoSearchLeadIds] = useState<string[]>([]);
   useEffect(() => { setSearchTasks([]); setSelectedSearchGroup(requestedSearchTaskId ? `task:${requestedSearchTaskId}` : 'all'); }, [currentBusinessId, requestedSearchTaskId]);
-  useEffect(() => { if (requestedSearchTaskId) setWorkspaceView('raw'); }, [requestedSearchTaskId]);
+  useEffect(() => { if (requestedSearchTaskId) setWorkspaceView(requestedSection === 'drafts' ? 'drafts' : 'raw'); }, [requestedSearchTaskId, requestedSection]);
   const handleSearchTasksChange = useCallback((tasks: SearchTaskGroup[]) => {
     setSearchTasks((current) => [...tasks, ...current.filter((task) => task.id === requestedSearchTaskId && !tasks.some((item) => item.id === task.id))]);
   }, [requestedSearchTaskId]);
@@ -1828,7 +1829,7 @@ export const PartnershipSearchPage: React.FC = () => {
     pipelineStatus: string,
     options?: { deferredReason?: string | null; deferredUntil?: string | null }
   ) => {
-    if (!currentBusinessId) return;
+    if (!currentBusinessId) return false;
     const previousItems = items;
     const currentLead = items.find((item) => item.id === leadId);
     const partnershipStage = partnershipStageForPipelineStatus(pipelineStatus, currentLead);
@@ -1852,9 +1853,11 @@ export const PartnershipSearchPage: React.FC = () => {
         deferred_reason: options?.deferredReason !== undefined ? options?.deferredReason : undefined,
         deferred_until: options?.deferredUntil !== undefined ? options?.deferredUntil : undefined,
       });
+      return true;
     } catch (e: unknown) {
       setItems(previousItems);
       setError(errorMessage(e) || 'Не удалось обновить этап партнёра');
+      return false;
     }
   };
 
@@ -1933,6 +1936,13 @@ export const PartnershipSearchPage: React.FC = () => {
   };
 
   const requestBulkDraftApproval = () => {
+    if (selectedDraftIds.some((id) => {
+      const draft = drafts.find((item) => item.id === id);
+      return Boolean(draft?.learning_note_json?.search_task_id && draft.learning_note_json.manual_review_required);
+    })) {
+      setError('В выбранных письмах есть черновики по поиску. Сначала подтвердите соответствие компаний и контакты.');
+      return;
+    }
     const review = selectedDraftIds.map((draftId) => {
       const draft = drafts.find((item) => item.id === draftId);
       if (!draft) return null;
@@ -2239,16 +2249,8 @@ export const PartnershipSearchPage: React.FC = () => {
   };
 
   const moveLeadToPipeline = (leadId: string) => {
-    if (!currentBusinessId) return;
-    void runPartnershipAction('Не удалось взять компанию в отбор', async () => {
-      await patchPartnershipLead(currentBusinessId, leadId, {
-        pipeline_status: PIPELINE_IN_PROGRESS,
-        // Manual selection must not claim that audience evidence or outreach is approved.
-        partnership_stage: 'imported',
-      });
-      setMessage('Компания взята в отбор. Проверьте направление и контакт перед обращением.');
-      await refreshOperationalData();
-    });
+    void updateLeadStageOptimistic(leadId, PIPELINE_IN_PROGRESS, { deferredReason: '', deferredUntil: '' })
+      .then((saved) => { if (saved) setMessage('Компания взята в отбор. Проверьте направление и контакт перед обращением.'); });
   };
 
   const toggleCatalogShortlist = async (lead: PartnershipLead) => {

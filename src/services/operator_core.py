@@ -143,6 +143,7 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("partnerships.read", "Партнёрские лиды", "available", "read_only", "none", "/dashboard/partnerships", ("Покажи партнёров в работе",)),
     OperatorCapability("partnerships.search", "Поиск партнёров в LocalOS", "available", "read_only", "none", "/dashboard/partnerships", ("Найди партнёров в нашем списке",)),
     OperatorCapability("partnerships.prepare_message", "Черновик партнёрского сообщения", "draft_only", "draft", "none", "/dashboard/partnerships", ("Подготовь сообщение партнёру",), "partnership.draft_offer"),
+    OperatorCapability("partnerships.prepare_search_drafts", "Черновики по группе поиска", "draft_only", "paid_compute", "credit_policy", "/dashboard/partnerships", ("Подготовь письма по отобранным компаниям поиска",)),
     OperatorCapability("partnerships.continue_outreach", "Поиск партнёров", "approval_required", "paid_external", "separate_confirmation", "/dashboard/partnerships", ("Найди и проверь новых партнёров",)),
     OperatorCapability("network.manage", "Сеть и локации", "manual", "write_internal", "manual_handoff", "/dashboard/network", ("Покажи проблемные локации",)),
     OperatorCapability("network.read", "Состояние сети и локаций", "available", "read_only", "none", "/dashboard/network", ("Покажи проблемные локации",)),
@@ -1424,6 +1425,24 @@ def _operator_tool_catalog(
                 cursor, business_id=business_id, user_id=user_id, arguments=arguments, actor_context=actor_context),
         },
         {
+            "name": "partnerships.prepare_search_drafts",
+            "capability": "partnerships.prepare_search_drafts",
+            "title": "Черновики по компаниям поиска",
+            "description": "Для команды о нескольких письмах из поиска используй этот инструмент, а не partnerships.prepare_message. Сначала preview: покажи число уникальных компаний и цену, затем start только после подтверждения пользователя. По умолчанию бери отмеченных «В отбор»; scope=all_new только при явном запросе всех результатов. Непроверенные остаются только черновиками. Не отправляет письма, исключённые дубли не входят.",
+            "input_schema": {"type": "object", "additionalProperties": False, "properties": {
+                "operation": {"type": "string", "enum": ["preview", "start", "status"]},
+                "task_id": {"type": "string"},
+                "scope": {"type": "string", "enum": ["shortlist", "all_new"]},
+                "count": {"type": "integer", "minimum": 1, "maximum": 100},
+                "offer": {"type": "string", "maxLength": 1000},
+                "revision": {"type": "string"},
+            }, "required": ["operation"]},
+            "risk_class": "draft_only", "approval_required": False,
+            "deterministic_response": True,
+            "execute": lambda arguments: __import__("services.partner_search_drafts", fromlist=["operator_task"]).operator_task(
+                cursor, business_id=business_id, user_id=user_id, arguments=arguments, actor_context=actor_context),
+        },
+        {
             "name": "partnerships.prepare_message",
             "capability": "partnerships.prepare_message",
             "title": "Черновик партнёрского сообщения",
@@ -2083,6 +2102,14 @@ def route_operator_message(
             result = operator_task(cursor, business_id=business_id, user_id=user_id,
                 arguments={'operation': 'create', 'config': preview_config}, actor_context=actor_context)
             return standardize_operator_result(result, 'partnerships.continue_outreach'), {}
+    if pending.get('capability') == 'partnerships.prepare_search_drafts' and pending.get('stage') == 'preview':
+        if re.fullmatch(r'\s*(?:создай|подготовь|начни|запусти|подтверждаю|да)(?:\s+(?:тексты|письма|черновики))?(?:\s+по\s+(?:этому|этим)\s+поиску)?[.!]?\s*', clean_message, re.I):
+            from services.partner_search_drafts import operator_task
+            result = operator_task(cursor, business_id=business_id, user_id=user_id,
+                arguments={'operation': 'start', 'task_id': pending['task_id'], 'scope': pending['scope'],
+                           'offer': pending['offer'], 'revision': pending['revision'], 'count': pending['count']},
+                actor_context=actor_context)
+            return standardize_operator_result(result, 'partnerships.prepare_search_drafts'), {}
     from services.operator_query import read_reviews_request
     if tool_planner is None and re.search(r'отзыв',clean_message,re.I):
         blocked=operator_subscription_block(subscription_access,'reviews.read')
@@ -2451,6 +2478,11 @@ def route_operator_message(
                          'config': tool_result['config']}
                         if capability == 'partnerships.prepare_message' and tool_result.get('search_started') is False
                         and isinstance(tool_result.get('config'), dict) else {})
+        if capability == 'partnerships.prepare_search_drafts' and tool_result.get('preview_ready'):
+            next_context = {'capability': capability, 'stage': 'preview',
+                'task_id': tool_result['task_id'], 'scope': tool_result['scope'],
+                'offer': tool_result['offer'], 'revision': tool_result['revision'],
+                'count': tool_result['eligible_count']}
         return standardize_operator_result(tool_result, capability), next_context
 
     if should_use_ai_intent_router(clean_message):

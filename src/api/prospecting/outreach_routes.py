@@ -2038,6 +2038,11 @@ def partnership_approve_draft(draft_id):
                 "id": row[0], "lead_id": row[1], "generated_text": row[2], "edited_text": row[3], "status": row[4], "learning_note_json": row[5],
                 "approved_text": row[6], "updated_at": row[7], "channel": row[8], "email": row[9], "selected_channel": row[10]
             }
+            draft_origin = draft_row.get("learning_note_json")
+            if isinstance(draft_origin, dict) and draft_origin.get("search_task_id") and draft_origin.get("manual_review_required"):
+                conn.rollback()
+                return jsonify({"error": "Это черновик по поиску. Сначала подтвердите соответствие компании и контакт, затем отдельно согласуйте отправку.",
+                                "code": "search_draft_not_send_ready"}), 409
             if expected_review_digest != draft_review_digest(draft_row):
                 conn.rollback()
                 return jsonify({"error": "Черновик или контакт изменился. Обновите список и проверьте письмо ещё раз.", "code": "draft_review_stale"}), 409

@@ -266,6 +266,10 @@ def approve_outreach_draft(draft_id):
             if not draft:
                 return jsonify({"error": "Draft not found"}), 404
             draft_dict = dict(draft)
+            draft_origin = draft_dict.get("learning_note_json")
+            if isinstance(draft_origin, dict) and draft_origin.get("search_task_id") and draft_origin.get("manual_review_required"):
+                return jsonify({"error": "Черновик по поиску нельзя утвердить для отправки до проверки компании и отдельного разрешения.",
+                                "code": "search_draft_not_send_ready"}), 409
 
             cur.execute(
                 """

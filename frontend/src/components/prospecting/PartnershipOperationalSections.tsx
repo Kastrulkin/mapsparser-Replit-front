@@ -18,6 +18,7 @@ type PartnershipDraftItem = {
   edited_text?: string;
   approved_text?: string;
   email?: string;
+  learning_note_json?: { search_task_id?: string; manual_review_required?: boolean };
 };
 
 type PartnershipQueueItem = {
@@ -165,13 +166,16 @@ export function PartnershipDraftsSection({
 }: DraftsSectionProps) {
   const approvedCount = drafts.filter((draft) => String(draft.status || '').toLowerCase() === 'approved').length;
   const waitingApprovalCount = drafts.length - approvedCount;
+  const searchDraftCount = drafts.filter((draft) => draft.learning_note_json?.search_task_id && draft.learning_note_json.manual_review_required).length;
 
   return (
     <div className="space-y-4 rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-slate-950">Письма ({drafts.length})</h2>
-          <p className="mt-1 text-sm text-slate-500">Проверьте первое письмо или КП, поправьте текст и утвердите его для ручной отправки.</p>
+          <p className="mt-1 text-sm text-slate-500">{searchDraftCount === drafts.length && drafts.length > 0
+            ? 'Проверьте подготовленные тексты. Отправка станет доступна после проверки компаний и отдельного согласования.'
+            : 'Проверьте первое письмо или КП, поправьте текст и утвердите его для ручной отправки.'}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Select value={draftView} onValueChange={onDraftViewChange}>
@@ -242,7 +246,8 @@ export function PartnershipDraftsSection({
           </label>
           {drafts.map((draft) => {
             const draftText = draft.approved_text || draft.edited_text || draft.generated_text || '';
-            const mailtoHref = buildMailtoHref(draft.email, draft.lead_name || draft.lead_id, draftText);
+            const searchDraftNeedsReview = Boolean(draft.learning_note_json?.search_task_id && draft.learning_note_json?.manual_review_required);
+            const mailtoHref = searchDraftNeedsReview ? '' : buildMailtoHref(draft.email, draft.lead_name || draft.lead_id, draftText);
             return (
               <div key={draft.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-start gap-3">
@@ -257,6 +262,7 @@ export function PartnershipDraftsSection({
                     <div className="mb-2 text-xs text-muted-foreground">
                       {statusLabel(draft.status)} · {channelLabel(draft.channel)}
                     </div>
+                    {searchDraftNeedsReview ? <p className="mb-2 text-xs text-amber-800">Черновик по поиску. Компания и контакт ещё не подтверждены; отправка недоступна.</p> : null}
                     <Textarea
                       rows={5}
                       value={draftText}
@@ -272,11 +278,11 @@ export function PartnershipDraftsSection({
                         ) : (
                           <>
                             <Mail className="mr-2 h-4 w-4" />
-                            Нет email
+                            {searchDraftNeedsReview ? 'После проверки' : 'Нет email'}
                           </>
                         )}
                       </Button>
-                      <Button size="sm" onClick={() => onApproveDraft(draft.id, draftText)} disabled={loading}>
+                      <Button size="sm" onClick={() => onApproveDraft(draft.id, draftText)} disabled={loading || searchDraftNeedsReview}>
                         Утвердить для отправки
                       </Button>
                     </div>

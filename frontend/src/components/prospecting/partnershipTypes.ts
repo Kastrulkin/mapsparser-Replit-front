@@ -97,6 +97,7 @@ export type PartnershipDraft = {
   sender_name?: string;
   scheduled_at?: string;
   review_digest?: string;
+  learning_note_json?: { search_task_id?: string; manual_review_required?: boolean };
 };
 
 export type PartnershipBatch = {
