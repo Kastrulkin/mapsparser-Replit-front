@@ -268,6 +268,9 @@ export const OperatorPage = () => {
   const [chatMessage, setChatMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const [pendingChatMessage, setPendingChatMessage] = useState<string | null>(null);
+  const chatWindowRef = useRef<HTMLDivElement>(null);
+  const scrollToLatestRef = useRef(false);
   const chatSendInFlightRef = useRef(false);
   const pendingRequest = useRef({ businessId: "", text: "", id: "" });
   const [refreshCheckingQueueId, setRefreshCheckingQueueId] = useState<string | null>(null);
@@ -303,7 +306,7 @@ export const OperatorPage = () => {
       setMessages([]);
       return;
     }
-    setMessages([]); setConversationId(null);
+    setMessages([]); setConversationId(null); setPendingChatMessage(null);
     chatSendInFlightRef.current = false; setChatLoading(false); setConfirmingActionId(null); setRejectingActionId(null);
     const storageKey = `localos_operator_conversation_${currentBusinessId}`;
     const storedConversationId = window.localStorage.getItem(storageKey);
@@ -323,6 +326,7 @@ export const OperatorPage = () => {
       const storedMessages = Array.isArray(response.data.messages) ? response.data.messages : [];
       const loadedConversationId = storedConversationId || response.data.conversation?.id || null;
       setConversationId(loadedConversationId);
+      scrollToLatestRef.current = true;
       setMessages(mapStoredMessages(storedMessages));
       if (loadedConversationId) window.localStorage.setItem(storageKey, loadedConversationId);
     }).catch((error: unknown) => {
@@ -359,6 +363,12 @@ export const OperatorPage = () => {
     };
   }, [currentBusinessId, historyRetry]);
 
+  useEffect(() => {
+    if (!scrollToLatestRef.current || !chatWindowRef.current) return;
+    chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
+    scrollToLatestRef.current = false;
+  }, [messages, pendingChatMessage]);
+
   const appendPair = (userText: string, result: OperatorChatResult) => {
     const stamp = String(Date.now());
     setMessages((current) => [
@@ -387,6 +397,8 @@ export const OperatorPage = () => {
     historyVersion.current++;
     setHistoryLoading(false);
     chatSendInFlightRef.current = true;
+    scrollToLatestRef.current = true;
+    setPendingChatMessage(text);
     setChatLoading(true);
     try {
       const response = await api.post('/operator/chat', {
@@ -405,16 +417,18 @@ export const OperatorPage = () => {
       const result=await waitForOperatorResult(initialResult,currentBusinessId,voiceHeaders,()=>activeBusiness.current===currentBusinessId);
       if(activeBusiness.current!==currentBusinessId)return;
       pendingRequest.current = { businessId: "", text: "", id: "" };
+      scrollToLatestRef.current = true;
       appendPair(text, result);
       const nextConversationId = response.data.conversation_id || result.conversation_id;
       if (nextConversationId) {
         setConversationId(nextConversationId);
         window.localStorage.setItem(`localos_operator_conversation_${currentBusinessId}`, nextConversationId);
       }
-      if (!overrideText) setChatMessage('');
+      if (!overrideText) setChatMessage((current) => current.trim() === text ? '' : current);
     } catch (err) {
       if (activeBusiness.current !== currentBusinessId) return;
       if (source) throw err;
+      scrollToLatestRef.current = true;
       appendPair(text, {
         status: 'blocked',
         intent: 'error',
@@ -424,6 +438,7 @@ export const OperatorPage = () => {
     } finally {
       if (activeBusiness.current === currentBusinessId) {
         chatSendInFlightRef.current = false;
+        setPendingChatMessage(null);
         setChatLoading(false);
       }
     }
@@ -663,7 +678,7 @@ export const OperatorPage = () => {
           </div>
         </div>
 
-        <div className="max-h-[62vh] min-h-[480px] space-y-4 overflow-y-auto bg-slate-50/70 px-4 py-4">
+        <div ref={chatWindowRef} data-testid="operator-message-list" className="max-h-[62vh] min-h-[480px] space-y-4 overflow-y-auto bg-slate-50/70 px-4 py-4">
           {historyError ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="status">
               <span>{historyError}</span>
@@ -678,7 +693,7 @@ export const OperatorPage = () => {
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               <span translate="no" className="notranslate">{copy.loadingHistory}</span>
             </div>
-          ) : messages.length === 0 ? (
+          ) : messages.length === 0 && !pendingChatMessage ? (
             <div className="mx-auto flex min-h-[320px] max-w-2xl flex-col items-center justify-center text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white">
                 <Bot className="h-6 w-6" />
@@ -747,6 +762,14 @@ export const OperatorPage = () => {
               </div>
             ))
           )}
+          {pendingChatMessage && <div className="flex justify-end">
+            <div className="max-w-3xl rounded-2xl bg-slate-950 px-4 py-3 text-sm leading-6 text-white shadow-sm">
+              <div className="whitespace-pre-wrap">{pendingChatMessage}</div>
+              <div className="mt-2 flex items-center gap-2 text-xs text-slate-300" role="status">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />Отправляем сообщение…
+              </div>
+            </div>
+          </div>}
         </div>
 
         {currentBusinessId && activeSearchTask?.id && <div className="border-t border-slate-200 bg-white px-4 py-3"><OutreachTaskStatus key={`${currentBusinessId}:${activeSearchTask.id}`} businessId={currentBusinessId} initialTask={activeSearchTask} /></div>}

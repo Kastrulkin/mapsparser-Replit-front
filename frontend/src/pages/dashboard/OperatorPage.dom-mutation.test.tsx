@@ -163,4 +163,40 @@ describe('OperatorPage DOM ownership', () => {
     expect(await screen.findByText('Поиск идёт')).toBeInTheDocument();
     expect(document.body.textContent).toContain('Подходящих с подтверждённым контактом: 2 из 10');
   });
+
+  it('keeps a submitted message visible while waiting and shows its saved reply', async () => {
+    const reply = deferredResponse<{ data: { conversation_id: string; operator_result: { status: string; chat_response: string } } }>();
+    vi.mocked(api.get).mockImplementation(async (url) => url === '/partnership/continuations'
+      ? { data: { items: [] } }
+      : { data: { conversation: { id: 'conversation-1' }, messages: [] } });
+    vi.mocked(api.post).mockReturnValue(reply.promise);
+
+    render(<MemoryRouter initialEntries={['/dashboard/operator']}><LanguageProvider><ErrorBoundary><Routes>
+      <Route element={<ContextRoute />}><Route path="/dashboard/operator" element={<OperatorPage />} /></Route>
+    </Routes></ErrorBoundary></LanguageProvider></MemoryRouter>);
+
+    const input = await screen.findByPlaceholderText('Например: покажи отзывы без ответа…');
+    const messageList = screen.getByTestId('operator-message-list');
+    Object.defineProperty(messageList, 'scrollHeight', { configurable: true, value: 300 });
+    fireEvent.change(input, { target: { value: 'Составь первые письма для поиска Индия — Пхукет' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
+
+    expect(await screen.findByText('Отправляем сообщение…')).toBeInTheDocument();
+    expect(screen.getAllByText('Составь первые письма для поиска Индия — Пхукет')).toHaveLength(2);
+    await waitFor(() => expect(messageList.scrollTop).toBe(300));
+
+    fireEvent.change(input, { target: { value: 'Следующая задача' } });
+
+    await act(async () => {
+      reply.resolve({ data: { conversation_id: 'conversation-1', operator_result: {
+        status: 'completed', chat_response: 'Письма требуют отдельной подготовки.',
+      } } });
+      await reply.promise;
+    });
+
+    expect(screen.getAllByText('Составь первые письма для поиска Индия — Пхукет')).toHaveLength(1);
+    expect(screen.getByText('Письма требуют отдельной подготовки.')).toBeInTheDocument();
+    expect(screen.queryByText('Отправляем сообщение…')).not.toBeInTheDocument();
+    expect(input).toHaveValue('Следующая задача');
+  });
 });
