@@ -515,7 +515,7 @@ export const PartnershipLeadCard = ({
   const verifiedForSearch = !verification || (['verified', 'not_required'].includes(verification.country?.status || '')
     && ['verified', 'not_required'].includes(verification.destination?.status || '') && verification.contactVerified === true);
   const primaryActionLabel = mode === 'raw'
-    ? (isUnprocessed && verifiedForSearch ? 'В отбор' : 'Проверить карточку')
+    ? (isUnprocessed ? 'В отбор' : 'Открыть карточку')
     : nextStage
       ? 'Дальше'
       : 'Открыть карточку';
@@ -564,6 +564,7 @@ export const PartnershipLeadCard = ({
           </div>
         ))}
         <div className="mt-1">Рабочий контакт: {verification.contactVerified ? 'подтверждён' : 'не проверен'}</div>
+        {!verifiedForSearch && <div className="mt-2 text-amber-800">Можно взять в ручной отбор. Это не подтверждает соответствие поиску и не запускает письма.</div>}
       </div>}
       <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
         <ContactPresenceBadges
@@ -601,7 +602,7 @@ export const PartnershipLeadCard = ({
       </div>
       {lead.parse_error ? <div className="mt-2 text-xs text-red-600">{lead.parse_error}</div> : null}
       <WorkflowActionRow
-        primary={mode === 'raw' && isUnprocessed && verifiedForSearch
+        primary={mode === 'raw' && isUnprocessed
           ? {
               label: primaryActionLabel,
               onClick: () => onMoveToPipeline(lead.id),

@@ -2239,7 +2239,16 @@ export const PartnershipSearchPage: React.FC = () => {
   };
 
   const moveLeadToPipeline = (leadId: string) => {
-    void updateLeadStageOptimistic(leadId, PIPELINE_IN_PROGRESS, { deferredReason: '', deferredUntil: '' });
+    if (!currentBusinessId) return;
+    void runPartnershipAction('Не удалось взять компанию в отбор', async () => {
+      await patchPartnershipLead(currentBusinessId, leadId, {
+        pipeline_status: PIPELINE_IN_PROGRESS,
+        // Manual selection must not claim that audience evidence or outreach is approved.
+        partnership_stage: 'imported',
+      });
+      setMessage('Компания взята в отбор. Проверьте направление и контакт перед обращением.');
+      await refreshOperationalData();
+    });
   };
 
   const toggleCatalogShortlist = async (lead: PartnershipLead) => {
@@ -2541,7 +2550,7 @@ export const PartnershipSearchPage: React.FC = () => {
               { label: 'Групп поиска', value: searchTaskOptions.length + candidateSearchGroups.groups.filter((group) => !group.id.startsWith('task:')).length },
             ]}
           >
-            {selectedTask && <p className="mb-3 text-sm">Сырых результатов: {selectedTask.report?.found ?? selectedTask.report?.imported ?? 0}. Новых записей: {selectedTask.report?.imported ?? 0}. Подтверждено с рабочим контактом: {selectedTask.report?.eligible ?? 0}. Остальные ещё проверяются или исключены.</p>}
+            {selectedTask && <p className="mb-3 text-sm">Сырых результатов: {selectedTask.report?.found ?? selectedTask.report?.imported ?? 0}. Новых записей: {selectedTask.report?.imported ?? 0}. Подтверждено с рабочим контактом: {selectedTask.report?.eligible ?? 0}. Откройте сайт или источник, затем нажмите «В отбор» у интересной компании. Это ручной выбор для дальнейшей проверки, без писем и без отметки «подтверждено».</p>}
             {candidateSearchGroups.groups.length > 0 && <p className="mb-3 text-xs text-muted-foreground">Метка показывает, каким поиском найдена запись. Страна компании, продаваемое направление и контакт проверяются отдельно.</p>}
             {rawLeads.length === 0 ? (
               <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-muted-foreground">
