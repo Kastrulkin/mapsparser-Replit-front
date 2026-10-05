@@ -220,7 +220,7 @@ export function PartnershipDraftsSection({
             <div className="text-xs text-muted-foreground">Выбрано писем: {selectedDraftIds.length}</div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={onBulkApprove} disabled={loading || selectedDraftIds.length === 0}>
-                Проверить выбранные
+                Утвердить выбранные
               </Button>
               <Button variant="outline" onClick={onBulkDelete} disabled={loading || selectedDraftIds.length === 0}>
                 Удалить выбранные
