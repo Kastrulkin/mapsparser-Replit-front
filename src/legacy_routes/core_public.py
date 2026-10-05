@@ -2,7 +2,7 @@ from legacy_routes import shared as _shared
 from core.frontend_asset_compatibility import resolve_current_lazy_chunk
 from core.auth_helpers import verify_business_access
 from core.html_head import replace_or_insert_tag as _replace_or_insert_tag
-from core.public_page_html import load_public_page, load_public_shell, replace_public_page_body
+from core.public_page_html import is_known_spa_route, load_public_page, load_public_shell, replace_public_page_body
 from core.readiness import database_ready
 
 globals().update(_shared.runtime_namespace)
@@ -306,11 +306,15 @@ def _set_jsonld(html_text: str, schema: Any) -> str:
         return updated
     return html_text.replace("</head>", f"  {script}\n</head>", 1)
 
-def _render_spa_index(path: str = ""):
+def _render_spa_index(path: str = "", status_code: int = 200):
     route_path = _normalize_content_route(path)
     index_html = _read_frontend_index_html()
     if index_html is None:
-        return send_from_directory(FRONTEND_DIST_DIR, "index.html")
+        response = send_from_directory(FRONTEND_DIST_DIR, "index.html")
+        response.status_code = status_code
+        if status_code == 404:
+            response.headers["X-Robots-Tag"] = "noindex"
+        return response
 
     seo_data = _load_content_seo_data()
     routes = seo_data.get("routes") if isinstance(seo_data.get("routes"), dict) else {}
@@ -344,7 +348,9 @@ def _render_spa_index(path: str = ""):
     index_html = _set_canonical(index_html, canonical_url)
     index_html = _set_jsonld(index_html, _schema_for_route(route_path, route_seo))
 
-    response = Response(index_html, mimetype="text/html")
+    response = Response(index_html, status=status_code, mimetype="text/html")
+    if status_code == 404:
+        response.headers["X-Robots-Tag"] = "noindex"
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
@@ -1412,8 +1418,12 @@ def spa_fallback(path):
             response.headers["Expires"] = "0"
         return response
 
-    # Иначе - SPA индекс с route-specific SEO/JSON-LD для краулеров без JavaScript.
-    return _render_spa_index(path)
+    # Unknown URLs must not look like successful copies of the homepage to crawlers.
+    route_path = _normalize_content_route(path)
+    seo_data = _load_content_seo_data()
+    seo_routes = seo_data.get("routes") if isinstance(seo_data.get("routes"), dict) else {}
+    status_code = 200 if is_known_spa_route(route_path, seo_routes) else 404
+    return _render_spa_index(path, status_code=status_code)
 
 @app.route('/api/users/reports', methods=['GET'])
 def stub_users_reports():

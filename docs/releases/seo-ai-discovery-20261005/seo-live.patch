@@ -1,0 +1,103 @@
+--- a/src/legacy_routes/core_public.py
++++ b/src/legacy_routes/core_public.py
+@@ -3,7 +3,7 @@
+ from core.auth_helpers import verify_business_access
+ from core.html_head import replace_or_insert_tag as _replace_or_insert_tag
+ from core.readiness import database_ready
+-from core.public_page_html import load_public_page, load_public_shell, replace_public_page_body
++from core.public_page_html import is_known_spa_route, load_public_page, load_public_shell, replace_public_page_body
+ 
+ globals().update(_shared.runtime_namespace)
+ 
+@@ -306,11 +306,15 @@
+         return updated
+     return html_text.replace("</head>", f"  {script}\n</head>", 1)
+ 
+-def _render_spa_index(path: str = ""):
++def _render_spa_index(path: str = "", status_code: int = 200):
+     route_path = _normalize_content_route(path)
+     index_html = _read_frontend_index_html()
+     if index_html is None:
+-        return send_from_directory(FRONTEND_DIST_DIR, "index.html")
++        response = send_from_directory(FRONTEND_DIST_DIR, "index.html")
++        response.status_code = status_code
++        if status_code == 404:
++            response.headers["X-Robots-Tag"] = "noindex"
++        return response
+ 
+     seo_data = _load_content_seo_data()
+     routes = seo_data.get("routes") if isinstance(seo_data.get("routes"), dict) else {}
+@@ -344,7 +348,9 @@
+     index_html = _set_canonical(index_html, canonical_url)
+     index_html = _set_jsonld(index_html, _schema_for_route(route_path, route_seo))
+ 
+-    response = Response(index_html, mimetype="text/html")
++    response = Response(index_html, status=status_code, mimetype="text/html")
++    if status_code == 404:
++        response.headers["X-Robots-Tag"] = "noindex"
+     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+     response.headers["Pragma"] = "no-cache"
+     response.headers["Expires"] = "0"
+@@ -1412,8 +1418,12 @@
+             response.headers["Expires"] = "0"
+         return response
+ 
+-    # Иначе - SPA индекс с route-specific SEO/JSON-LD для краулеров без JavaScript.
+-    return _render_spa_index(path)
++    # Unknown URLs must not look like successful copies of the homepage to crawlers.
++    route_path = _normalize_content_route(path)
++    seo_data = _load_content_seo_data()
++    seo_routes = seo_data.get("routes") if isinstance(seo_data.get("routes"), dict) else {}
++    status_code = 200 if is_known_spa_route(route_path, seo_routes) else 404
++    return _render_spa_index(path, status_code=status_code)
+ 
+ @app.route('/api/users/reports', methods=['GET'])
+ def stub_users_reports():
+--- a/src/core/public_page_html.py
++++ b/src/core/public_page_html.py
+@@ -8,6 +8,32 @@
+ 
+ MANIFEST_NAME = "public-page-fallbacks.json"
+ PUBLIC_SHELL_NAME = "public-seo-index.html"
++
++# Public content detail routes are validated against the build's SEO manifest.
++# Application routes retain their client-side authentication and token validation.
++SPA_ENTRY_ROUTES = {
++    "/", "/about", "/pricing", "/contact", "/policy", "/privacy",
++    "/data-deletion", "/requisites", "/docs", "/login", "/demo",
++    "/articles", "/documents", "/cases", "/bazich", "/dashboard-old",
++    "/wizard", "/sprint", "/phrases", "/card-recs", "/set-password",
++    "/reset-password", "/verify-email", "/checkout/return", "/growth",
++    "/telegram/control", "/yclients/connect", "/veselaya-rascheska-hit",
++    "/web-analytics", "/creator", "/creator/login", "/creator/login/telegram",
++    "/documents/checklist-audita-kartochki-kompanii",
++    "/documents/shablony-otvetov-na-otzyvy",
++    "/documents/tablica-kontrolya-lokalnogo-marketinga",
++}
++
++
++def is_known_spa_route(route_path, seo_routes):
++    if route_path in SPA_ENTRY_ROUTES or route_path in seo_routes:
++        return True
++    if route_path == "/dashboard" or route_path.startswith("/dashboard/"):
++        return True
++    return bool(re.fullmatch(
++        r"/(?:docs/[^/]+|start/[^/]+|room/[^/]+|creator-room/[^/]+|"
++        r"creator/(?:join|verify-email|reset-password|offers)/[^/]+)", route_path
++    ))
+ 
+ 
+ def load_public_shell(dist_dir, fallback_html):
+--- a/frontend/public/robots.txt
++++ b/frontend/public/robots.txt
+@@ -1,5 +1,10 @@
+ User-agent: Googlebot
+ Allow: /
++
++User-agent: Yandex
++Allow: /
++# Chunk recovery changes the URL, not the page content.
++Clean-param: __localos_reload
+ 
+ User-agent: Bingbot
+ Allow: /

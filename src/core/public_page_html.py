@@ -9,6 +9,32 @@ import re
 MANIFEST_NAME = "public-page-fallbacks.json"
 PUBLIC_SHELL_NAME = "public-seo-index.html"
 
+# Public content detail routes are validated against the build's SEO manifest.
+# Application routes retain their client-side authentication and token validation.
+SPA_ENTRY_ROUTES = {
+    "/", "/about", "/pricing", "/contact", "/policy", "/privacy",
+    "/data-deletion", "/requisites", "/docs", "/login", "/demo",
+    "/articles", "/documents", "/cases", "/bazich", "/dashboard-old",
+    "/wizard", "/sprint", "/phrases", "/card-recs", "/set-password",
+    "/reset-password", "/verify-email", "/checkout/return", "/growth",
+    "/telegram/control", "/yclients/connect", "/veselaya-rascheska-hit",
+    "/web-analytics", "/creator", "/creator/login", "/creator/login/telegram",
+    "/documents/checklist-audita-kartochki-kompanii",
+    "/documents/shablony-otvetov-na-otzyvy",
+    "/documents/tablica-kontrolya-lokalnogo-marketinga",
+}
+
+
+def is_known_spa_route(route_path, seo_routes):
+    if route_path in SPA_ENTRY_ROUTES or route_path in seo_routes:
+        return True
+    if route_path == "/dashboard" or route_path.startswith("/dashboard/"):
+        return True
+    return bool(re.fullmatch(
+        r"/(?:docs/[^/]+|start/[^/]+|room/[^/]+|creator-room/[^/]+|"
+        r"creator/(?:join|verify-email|reset-password|offers)/[^/]+)", route_path
+    ))
+
 
 def load_public_shell(dist_dir, fallback_html):
     """Allow public-only releases without replacing the private application's entry."""

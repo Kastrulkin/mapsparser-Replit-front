@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-05",
+  "deployment": "verified",
+  "backup": "/opt/seo-app/backups/seo-ai-discovery-20261005T133918Z",
+  "restart": "app only",
+  "home_alice_ua": 200,
+  "missing_page": 404,
+  "missing_page_noindex": true,
+  "pricing": 200,
+  "case": 200,
+  "document": 200,
+  "login": 200,
+  "clean_param": "__localos_reload",
+  "recrawl": {
+    "status": "queued",
+    "submitted_at_moscow": "2026-10-05 16:42",
+    "urls": [
+      "https://localos.pro/",
+      "https://localos.pro/about",
+      "https://localos.pro/pricing",
+      "https://localos.pro/cases",
+      "https://localos.pro/cases/rost-lidov-v-massazhnoi-studii",
+      "https://localos.pro/cases/kak-salon-poluchil-novye-zapisi-iz-kart",
+      "https://localos.pro/cases/kak-kafe-usililo-potok-gostei-v-budni"
+    ]
+  },
+  "sitemap": {
+    "status_before_resubmission": "ок",
+    "last_loaded": "2026-09-28 12:22",
+    "url_count": 27,
+    "recrawl_requested": true,
+    "evidence": "remaining submissions decreased from 10 to 9; button disabled after submission"
+  }
+}

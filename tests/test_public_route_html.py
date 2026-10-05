@@ -13,7 +13,7 @@ from flask import Flask, Response, jsonify, request, send_from_directory
 import pytest
 
 from core.html_head import replace_or_insert_tag
-from core.public_page_html import load_public_page, load_public_shell, replace_public_page_body
+from core.public_page_html import is_known_spa_route, load_public_page, load_public_shell, replace_public_page_body
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -75,6 +75,7 @@ def renderer(tmp_path):
         "_replace_or_insert_tag": replace_or_insert_tag,
         "load_public_page": load_public_page, "replace_public_page_body": replace_public_page_body,
         "load_public_shell": load_public_shell,
+        "is_known_spa_route": is_known_spa_route,
     }
     exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), "exec"), namespace)
     app = Flask(__name__)
@@ -206,3 +207,16 @@ def test_known_public_routes_do_not_query_offer_database(renderer):
     with client.application.test_request_context("/actual-offer"):
         namespace["spa_fallback"]("actual-offer")
     assert lookup_calls == ["actual-offer"]
+
+    # Preserve SPA rendering and valid token routes, but stop indexing made-up URLs.
+    for path in ("missing-page", "missing-file.html", "articles/missing", "cases/missing", "documents/missing"):
+        with client.application.test_request_context("/" + path):
+            response = namespace["spa_fallback"](path)
+            assert response.status_code == 404
+            assert response.headers["X-Robots-Tag"] == "noindex"
+            assert 'src="/assets/index-frozen.js"' in response.get_data(as_text=True)
+    for path in ("contact", "docs/api", "login", "dashboard/agents", "start/example", "room/example", "creator/offers/example", "articles/kept", "documents/checklist-audita-kartochki-kompanii", "documents/shablony-otvetov-na-otzyvy", "documents/tablica-kontrolya-lokalnogo-marketinga"):
+        with client.application.test_request_context("/" + path):
+            response = namespace["spa_fallback"](path)
+            assert response.status_code == 200
+            assert "X-Robots-Tag" not in response.headers
