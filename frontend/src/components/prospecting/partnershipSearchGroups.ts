@@ -2,9 +2,11 @@ import type { PartnershipLead } from './partnershipTypes';
 
 export type SearchTaskGroup = {
   id: string;
+  display_name?: string;
+  report?: { found?: number; imported?: number; eligible?: number };
   created_at?: string;
   config: { audience?: string; agency_country?: string; sold_destination?: string };
-  state?: { lead_ids?: string[]; history?: Array<{ action?: string; at?: string }> };
+  state?: { lead_ids?: string[]; workstream_ids?: string[]; verified_contact_workstream_ids?: string[]; qualifications?: Record<string, { status?: string; criteria?: Record<string, { status?: string; source_url?: string; quote?: string }> }>; history?: Array<{ action?: string; at?: string }> };
 };
 
 export type CandidateSearchGroup = { id: string; label: string; count: number };
@@ -15,7 +17,8 @@ const shortDate = (value?: string) => {
   return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 };
 
-const taskLabel = (task: SearchTaskGroup) => {
+export const taskLabel = (task: SearchTaskGroup) => {
+  if (task.display_name?.trim()) return task.display_name.trim();
   const country = String(task.config.agency_country || '').trim();
   const destination = String(task.config.sold_destination || '').trim();
   const audience = String(task.config.audience || '').trim();

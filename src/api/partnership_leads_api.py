@@ -137,14 +137,14 @@ def create_lead_workstream(lead_id):
 
 
 @partnership_leads_bp.route('/api/partnership/continuations', methods=['GET', 'POST'])
-@partnership_leads_bp.route('/api/partnership/continuations/<task_id>', methods=['POST'])
+@partnership_leads_bp.route('/api/partnership/continuations/<task_id>', methods=['GET', 'POST'])
 def partnership_continuations(task_id=None):
     from flask import request, jsonify
     from psycopg2.extras import RealDictCursor
     from api.prospecting.access_schema import _require_auth, _resolve_business_for_user
     from pg_db_utils import get_db_connection
     from services.partnership_leads_service import _partnership_write_access
-    from services.outreach_continuation import create_task, list_tasks, control_task, continuation_enabled, actor_can_write
+    from services.outreach_continuation import create_task, list_tasks, control_task, continuation_enabled, actor_can_write, prepare_new_task_approval, view, KIND
 
     user, error = _require_auth()
     if error:
@@ -169,12 +169,46 @@ def partnership_continuations(task_id=None):
         if denied:
             return denied
         user_id = str(user['user_id'])
-        if request.method == 'GET':
+        if request.method == 'GET' and task_id:
+            cursor.execute("SELECT * FROM operator_async_jobs WHERE id=%s AND business_id=%s AND kind=%s",
+                           (task_id, business_id, KIND))
+            row = cursor.fetchone()
+            if not row:
+                return jsonify({'error': 'task_not_found'}), 404
+            result = view(dict(row))
+        elif request.method == 'GET':
             from services.riderra_template_authorization_service import BUSINESS_ID
             result = {'enabled': True, 'supports_shortage_replenishment': business_id == BUSINESS_ID, 'items': list_tasks(cursor, business_id=business_id, user_id=user_id)}
+            from services.outreach_continuation import delivery_report
+            for task in result['items']:
+                task['report'].update(delivery_report(cursor, task))
+        elif str(data.get('operation') or '') == 'preview' and not task_id:
+            from services.operator_conversations import (
+                create_pending_operator_action, find_latest_operator_conversation,
+                get_or_create_operator_conversation,
+            )
+            preview = prepare_new_task_approval(data.get('config'), business_id=business_id,
+                                                request_id=str(data.get('request_id') or ''))
+            conversation = find_latest_operator_conversation(cursor, business_id=business_id,
+                                                              user_id=user_id, channel='web')
+            if not conversation:
+                conversation = get_or_create_operator_conversation(cursor, business_id=business_id,
+                                                                    user_id=user_id, channel='web')
+            action = create_pending_operator_action(cursor, conversation_id=str(conversation['id']),
+                business_id=business_id, user_id=user_id, capability='partnerships.continue_outreach',
+                envelope=preview['approval']['envelope'],
+                request_key=str(data.get('request_id') or ''))
+            cursor.execute("""UPDATE operatoractions SET status='rejected', updated_at=NOW()
+                WHERE conversation_id=%s AND business_id=%s AND user_id=%s
+                  AND capability='partnerships.continue_outreach'
+                  AND status IN ('pending','pending_approval') AND id<>%s""",
+                (str(conversation['id']), business_id, user_id, str(action['id'])))
+            preview['approval']['action_id'] = str(action['id'])
+            result = preview
         elif task_id:
             result = control_task(cursor, task_id=task_id, business_id=business_id, user_id=user_id,
-                action=str(data.get('action') or ''), revision=str(data.get('revision') or ''))
+                action=str(data.get('action') or ''), revision=str(data.get('revision') or ''),
+                display_name=str(data.get('display_name') or ''))
         else:
             result = create_task(cursor, business_id=business_id, user_id=user_id, config=data.get('config'), request_id=str(data.get('request_id') or ''))
         conn.commit()

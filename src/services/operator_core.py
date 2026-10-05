@@ -65,7 +65,7 @@ def operator_subscription_block(access, capability):
         'news': 'maps.news', 'competitors': 'maps.competitors',
         'social_post': 'social_content', 'content': 'social_content',
         'finance': 'finance', 'average_ticket': 'average_ticket',
-        'partnerships': 'partnerships', 'communications': 'partnerships',
+        'partnerships': 'partnerships', 'communications': 'partnerships', 'outreach':'partnerships',
         'agents': 'agents', 'crm': 'progress', 'network': 'progress',
         'appointments': 'management', 'settings': 'operator', 'support': 'operator',
     }.get(prefix, 'management')
@@ -143,9 +143,15 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("partnerships.read", "Партнёрские лиды", "available", "read_only", "none", "/dashboard/partnerships", ("Покажи партнёров в работе",)),
     OperatorCapability("partnerships.search", "Поиск партнёров в LocalOS", "available", "read_only", "none", "/dashboard/partnerships", ("Найди партнёров в нашем списке",)),
     OperatorCapability("partnerships.prepare_message", "Черновик партнёрского сообщения", "draft_only", "draft", "none", "/dashboard/partnerships", ("Подготовь сообщение партнёру",), "partnership.draft_offer"),
+    OperatorCapability("partnerships.continue_outreach", "Поиск партнёров", "approval_required", "paid_external", "separate_confirmation", "/dashboard/partnerships", ("Найди и проверь новых партнёров",)),
     OperatorCapability("network.manage", "Сеть и локации", "manual", "write_internal", "manual_handoff", "/dashboard/network", ("Покажи проблемные локации",)),
     OperatorCapability("network.read", "Состояние сети и локаций", "available", "read_only", "none", "/dashboard/network", ("Покажи проблемные локации",)),
-    OperatorCapability("agents.manage", "ИИ-сотрудники", "manual", "privileged", "manual_handoff", "/dashboard/agents", ("Покажи моих ИИ-сотрудников",)),
+    OperatorCapability("agents.manage", "Условия автоматизаций", "draft_only", "write_internal", "none", "/dashboard/agents", ("Покажи моих ИИ-сотрудников",)),
+    OperatorCapability("agents.create", "Создание ИИ-сотрудника", "approval_required", "paid_compute", "separate_confirmation", "/dashboard/agents", ("Создай автоматизацию, которая каждый день готовит сводку",)),
+    OperatorCapability("outreach.ai_rules", "Правила AI-писем Riderra", "approval_required", "internal_write", "separate_confirmation", "/dashboard/partnerships", ("Согласовать правила AI-писем", "Отозвать разрешение AI-аутрича")),
+    OperatorCapability("content.handoff", "Передача материалов сотруднику", "approval_required", "internal_write", "separate_confirmation", "/dashboard/content", ("За день до публикации отправляй Ирине материалы через подключённого бота",)),
+    OperatorCapability("agents.lifecycle", "Управление ИИ-сотрудником", "approval_required", "internal_write", "separate_confirmation", "/dashboard/agents", ("Поставь ИИ-сотрудника на паузу", "Возобнови автоматизацию")),
+    OperatorCapability("agents.run", "Разовый запуск автоматизации", "approval_required", "paid_compute", "separate_confirmation", "/dashboard/agents", ("Запусти эту автоматизацию один раз",)),
     OperatorCapability("agents.read", "Состояние ИИ-сотрудников", "available", "read_only", "none", "/dashboard/agents", ("Какие ИИ-сотрудники активны?",)),
     OperatorCapability("settings.manage", "Настройки и подключения", "manual", "identity_access", "manual_handoff", "/dashboard/settings", ("Проверь подключения",)),
     OperatorCapability("settings.read", "Состояние подключений", "available", "read_only", "none", "/dashboard/settings", ("Какие подключения работают?",)),
@@ -879,7 +885,7 @@ def _operator_tool_catalog(
     limit: Any,
     refresh_handler: Callable[..., dict[str, Any]],
     action_orchestrator: ActionOrchestrator | None = None,
-    work_request_key=None, work_message_id=None, work_saved=None,
+    work_request_key=None, work_message_id=None, work_saved=None, actor_context=None,
 ) -> list[dict[str, Any]]:
     query_tool = operator_query_tool_contract()
     query_tool["execute"] = lambda arguments: execute_operator_query(
@@ -1355,34 +1361,67 @@ def _operator_tool_catalog(
             ),
         },
         {
+            "name":"content.handoff", "capability":"content.handoff", "title":"Передача материалов через подключённого бота",
+            "description":"Показывает и меняет существующую передачу постов сотруднику: те же настройки и получатель, что в меню. Не создаёт нового бота или автоматизацию; публикации не выполняет. Изменения требуют подтверждения.",
+            "input_schema":{"type":"object","additionalProperties":False,"properties":{
+                "operation":{"type":"string","enum":["status","configure","pause","resume"]},"recipient_user_id":{"type":"string"},
+                "settings":{"type":"object","additionalProperties":False,"properties":{
+                    "lead_days":{"type":"integer","minimum":0,"maximum":7},"time":{"type":"string"},
+                    "platforms":{"type":"array","items":{"type":"string","enum":["vk","telegram","max"]},"minItems":1,"maxItems":3},"enabled":{"type":"boolean"}}}},"required":["operation"]},
+            "risk_class":"write_internal","approval_required":False,
+            "deterministic_response": True,
+            "execute":lambda arguments: __import__('services.operator_content_handoffs',fromlist=['operator_task']).operator_task(
+                cursor,business_id=business_id,user_id=user_id,arguments=arguments,actor_context=actor_context),
+        },
+        {
+            "name":"outreach.ai_rules","capability":"outreach.ai_rules","title":"Согласование правил AI-писем",
+            "description":"Отдельное разрешение Riderra на первые AI-письма, привязанное к точной задаче или версии автоматизации. Сначала покажи сохранённые условия задачи. Не используй шаблонное разрешение как AI-разрешение. Нужны проверенные утверждения с источниками, отправитель, аудитория и бюджеты. Сам инструмент ничего не разрешает до подтверждения пользователя.",
+            "input_schema":{"type":"object","additionalProperties":False,"properties":{
+                "enabled":{"type":"boolean"},"authorization_id":{"type":"string"},
+                "rules":{"type":"object","description":"Точные сохранённые условия mode=auto_send, business_id, sender_account_id, channels=[email], audience, agency_country, sold_destination, offer, language, target_count, daily_limit, max_qualification_calls, max_draft_attempts, max_search_calls, search_budget_cents, allowed_claims=[{text,source,valid_until?}], process={type:one_off|automation,id,revision}. Не придумывать идентификаторы и источники."}},"required":["enabled"]},
+            "risk_class":"write_internal","approval_required":False,
+            "deterministic_response": True,
+            "execute":lambda arguments: __import__('services.outreach_ai_authorization',fromlist=['operator_preview']).operator_preview(
+                cursor,business_id=business_id,user_id=user_id,arguments=arguments,actor_context=actor_context),
+        },
+        {
             "name": "partnerships.continue_outreach",
-            "capability": "partnerships.prepare_message",
+            "capability": "partnerships.continue_outreach",
             "title": "Продолжающийся поиск партнёров",
-            "description": "Создаёт сохраняемый план поиска новых компаний и подготовки обращений или показывает текущие задачи. Запуск после проверки в разделе Партнёрства; ничего не отправляет.",
+            "description": "Для нового поиска вызови operation=preview: покажи условия и одно подтверждение запуска. До подтверждения задача не создаётся. operation=create оставлен для старых клиентов. Режим find_only не готовит и не отправляет письма. Если указаны страна компаний и продаваемое направление, но нет городов, preview покажет широкий запрос по указанной стране. auto_send требует отдельного outreach.ai_rules.",
             "input_schema": {
                 "type": "object", "additionalProperties": False,
                 "properties": {
-                    "operation": {"type": "string", "enum": ["create", "list", "pause", "stop", "resume", "start", "retry_failed", "acknowledge_search"]},
+                    "operation": {"type": "string", "enum": ["preview", "create", "list", "pause", "stop", "resume", "start", "rename", "retry_failed", "acknowledge_search", "use_shared_balance"]},
                     "task_id": {"type": "string"}, "revision": {"type": "string"},
+                    "display_name": {"type": "string", "maxLength": 120},
                     "config": {"type": "object", "properties": {
                         "audience": {"type": "string", "maxLength": 500},
+                        "target_count": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Цель: новые подходящие компании с подтверждённым каналом, не сырые результаты поиска"},
+                        "agency_country": {"type": "string", "description": "Страна самих компаний"},
+                        "sold_destination": {"type": "string", "description": "Продаваемое направление, отдельно от страны поиска"},
+                        "mode": {"type": "string", "enum": ["find_only", "prepare_only", "auto_send"]},
+                        "max_qualification_calls": {"type": "integer", "minimum": 1, "maximum": 10000},
+                        "max_draft_attempts": {"type": "integer", "minimum": 1, "maximum": 10000},
                         "offer": {"type": "string", "maxLength": 2000},
                         "language": {"type": "string"},
                         "evidence_terms": {"type": "array", "maxItems": 5, "items": {"type": "string"}},
                         "riderra_shortage_only": {"type": "boolean", "description": "Для Riderra: запускать поиск только после подтверждённой нехватки готового пула"},
                         "search_budget_cents": {"type": "integer", "minimum": 1, "maximum": 1000},
+                        "billing_mode": {"type": "string", "enum": ["shared_balance_actual"], "description": "Поиск оплачивается после подтверждения фактической стоимости из общего баланса; указанная сумма является оценкой"},
+                        "search_call_cap_cents": {"type": "integer", "minimum": 50, "maximum": 1000, "description": "Внутренний предел стоимости одного вызова провайдера; по умолчанию 50 центов"},
                         "queries": {"type": "array", "maxItems": 20, "items": {
                             "type": "object", "properties": {"query": {"type": "string"}, "city": {"type": "string"}},
                             "required": ["query", "city"]}},
                         "max_search_calls": {"type": "integer", "minimum": 1, "maximum": 20},
-                        "max_candidates": {"type": "integer", "minimum": 1, "maximum": 100},
-                        "batch_size": {"type": "integer", "minimum": 1, "maximum": 10}
-                    }, "required": ["audience", "offer", "queries"]}
+                        "max_candidates": {"type": "integer", "minimum": 1, "maximum": 10000},
+                        "batch_size": {"type": "integer", "minimum": 1, "maximum": 100}
+                    }, "required": ["audience"]}
                 }, "required": ["operation"]
             },
             "risk_class": "draft_only", "approval_required": False,
             "execute": lambda arguments: __import__("services.outreach_continuation", fromlist=["operator_task"]).operator_task(
-                cursor, business_id=business_id, user_id=user_id, arguments=arguments),
+                cursor, business_id=business_id, user_id=user_id, arguments=arguments, actor_context=actor_context),
         },
         {
             "name": "partnerships.prepare_message",
@@ -1429,6 +1468,63 @@ def _operator_tool_catalog(
                 business_id=business_id,
                 limit=arguments.get("limit") or limit,
             ),
+        },
+        {
+            "name": "agents.run", "capability": "agents.run", "title": "Запустить автоматизацию один раз",
+            "description": "Разовый запуск существующей активной версии. Возвращает предварительный просмотр и требует подтверждения. Не создаёт новую автоматизацию.",
+            "input_schema": {"type": "object", "additionalProperties": False, "properties": {
+                "blueprint_id": {"type": "string"}, "inputs": {"type": "object"}, "input_snapshot_id": {"type": "string"},
+                "preview_mode": {"type": "boolean", "description": "Безопасная проверка кандидата перед активацией: без внешних действий"}, "version_id": {"type": "string"}}, "required": ["blueprint_id"]},
+            "risk_class": "paid_compute", "approval_required": True, "required_permission": "business.write",
+            "prepare_approval": lambda arguments: __import__("services.operator_agent_runs", fromlist=["prepare"]).prepare(
+                cursor, business_id=business_id, user_id=user_id, arguments=arguments, actor_context=actor_context),
+        },
+        {
+            "name": "agents.configure",
+            "capability": "agents.manage",
+            "title": "Условия и состояние автоматизации",
+            "description": "Показывает список, условия, запуски и preview ИИ-сотрудников или сохраняет расписание-кандидат. Назовите автоматизацию или опишите её цель.",
+            "input_schema": {"type": "object", "additionalProperties": False, "properties": {
+                "operation": {"type": "string", "enum": ["list", "status", "preview", "schedule", "conditions"]},
+                "blueprint_id": {"type": "string"}, "name": {"type": "string"}, "description": {"type": "string"},
+                "category": {"type": "string"}, "expected_version_id": {"type": "string"},
+                "outreach_config": {"type": "object", "description": "Изменяемые поля уже показанных условий: например target_count=50. Сначала status; изменение создаёт кандидата, не меняет активную версию."},
+                "schedule": {"type": "object", "properties": {
+                    "time": {"type": "string"}, "timezone": {"type": "string"},
+                    "trigger": {"type": "string", "enum": ["schedule.daily", "schedule.weekly"]},
+                    "weekday": {"type": "integer", "minimum": 0, "maximum": 6}}}
+            }, "required": ["operation"]},
+            "risk_class": "write_internal", "approval_required": False, "required_permission": "business.write",
+            "deterministic_response": True,
+            "execute": lambda arguments: __import__("services.operator_agent_management", fromlist=["configure"]).configure(
+                cursor, business_id=business_id, user_id=user_id, arguments=arguments, actor_context=actor_context),
+        },
+        {
+            "name": "agents.create", "capability": "agents.create", "title": "Подготовить нового ИИ-сотрудника",
+            "description": "Проверяет цель, подключения, допустимые provider routes и стоимость, затем просит отдельное подтверждение перед созданием черновика. Ничего не активирует и не запускает.",
+            "input_schema": {"type": "object", "additionalProperties": False, "properties": {
+                "name": {"type": "string", "maxLength": 160}, "description": {"type": "string", "minLength": 8, "maxLength": 4000},
+                "category": {"type": "string", "maxLength": 80}, "execution_mode": {"type": "string", "enum": ["one_off", "manual", "scheduled"]},
+                "schedule_time": {"type": "string"}, "schedule_timezone": {"type": "string"},
+                "schedule": {"type": "object", "properties": {"trigger": {"type": "string", "enum": ["schedule.daily", "schedule.weekly"]}, "time": {"type": "string"}, "timezone": {"type": "string"}, "weekday": {"type": "integer", "minimum": 0, "maximum": 6}}},
+                "outreach_config": {"type": "object", "description": "Для повторяющегося аутрича: audience, queries [{query,city}], target_count, agency_country, sold_destination, offer, language, mode find_only/prepare_only/auto_send, search_budget_cents, max_search_calls, max_candidates, max_qualification_calls, max_draft_attempts. Условия будут показаны до согласования. auto_send требует отдельного разрешения outreach.ai_rules на активную версию."},
+                "selected_connection_bindings": {"type": "object"}, "selected_provider_routes": {"type": "object"},
+                "accepted_provider_routes": {"type": "boolean"}, "clone_from_blueprint_id": {"type": "string"}},
+                "required": ["description"]},
+            "risk_class": "paid_compute", "approval_required": True, "required_permission": "business.write",
+            "prepare_approval": lambda arguments: __import__("services.agent_blueprint_creation", fromlist=["prepare_creation"]).prepare_creation(
+                cursor, business_id=business_id, user_id=user_id, actor_context=actor_context, payload=arguments),
+        },
+        {
+            "name": "agents.lifecycle", "capability": "agents.lifecycle", "title": "Включить, приостановить, остановить или возобновить автоматизацию",
+            "description": "Готовит подтверждение включения проверенной версии, паузы или возобновления выбранного ИИ-сотрудника. Перед подтверждением состояние и версия сверяются повторно.",
+            "input_schema": {"type": "object", "additionalProperties": False, "properties": {
+                "operation": {"type": "string", "enum": ["activate", "pause", "resume", "stop"]},
+                "blueprint_id": {"type": "string"}, "name": {"type": "string"}, "version_id": {"type": "string"}},
+                "required": ["operation"]},
+            "risk_class": "internal_write", "approval_required": True, "required_permission": "business.write",
+            "prepare_approval": lambda arguments: __import__("services.operator_agent_management", fromlist=["prepare_lifecycle"]).prepare_lifecycle(
+                cursor, business_id=business_id, user_id=user_id, arguments=arguments, actor_context=actor_context),
         },
         {
             "name": "maps.get_status",
@@ -1974,6 +2070,19 @@ def route_operator_message(
     setup = route_setup(cursor, business_id, user_id, channel, clean_message, pending, conversation_id, action_orchestrator)
     if setup:
         return setup
+    preview_config = pending.get('config') if pending.get('capability') == 'partnerships.continue_outreach' and pending.get('stage') == 'preview' else None
+    if not isinstance(preview_config, dict):
+        previous = next((item for item in reversed(conversation_history or []) if item.get('role') == 'operator'), {})
+        previous_result = previous.get('result_json') or {}
+        if (isinstance(previous_result, dict) and previous_result.get('capability') == 'partnerships.prepare_message'
+                and previous_result.get('search_started') is False):
+            preview_config = previous_result.get('config')
+    if isinstance(preview_config, dict):
+        if re.fullmatch(r'\s*(?:начни|начать|запусти|запустить|создай|создать|подтверждаю|да)(?:\s+(?:поиск|поручение|задачу))?\s*(?:по\s+(?:этим|показанным)\s+условиям)?[.!]?\s*', clean_message, re.I):
+            from services.outreach_continuation import operator_task
+            result = operator_task(cursor, business_id=business_id, user_id=user_id,
+                arguments={'operation': 'create', 'config': preview_config}, actor_context=actor_context)
+            return standardize_operator_result(result, 'partnerships.continue_outreach'), {}
     from services.operator_query import read_reviews_request
     if tool_planner is None and re.search(r'отзыв',clean_message,re.I):
         blocked=operator_subscription_block(subscription_access,'reviews.read')
@@ -2299,6 +2408,7 @@ def route_operator_message(
             limit=limit,
             refresh_handler=run_refresh,
             action_orchestrator=action_orchestrator,
+            actor_context=actor_context,
             work_request_key=str((action_payload or {}).get("request_id") or work_message_id or uuid.uuid4()),work_message_id=work_message_id,work_saved=work_saved,
         )
         tools = [tool for tool in tools if not operator_subscription_block(subscription_access, tool.get('capability') or tool['name'])]
@@ -2337,7 +2447,11 @@ def route_operator_message(
             tool_result.setdefault('ui_actions',[]).extend({'action':'open_journal','label':label,'href':'/dashboard/work-journal?entry='+work_saved[-1]['id']+'&mode='+mode+'&business_id='+business_id} for label,mode in [('Исправить запись','edit'),('Отменить запись','void')])
             pending_work={'capability':'work.journal','source_message':clean_message,'saved_entries':work_saved,'stage':'clarification'} if tool_result.get('status')=='clarification_required' else {}
             return standardize_operator_result(tool_result,capability),pending_work
-        return standardize_operator_result(tool_result, capability), {}
+        next_context = ({'capability': 'partnerships.continue_outreach', 'stage': 'preview',
+                         'config': tool_result['config']}
+                        if capability == 'partnerships.prepare_message' and tool_result.get('search_started') is False
+                        and isinstance(tool_result.get('config'), dict) else {})
+        return standardize_operator_result(tool_result, capability), next_context
 
     if should_use_ai_intent_router(clean_message):
         ai_router = run_ai_router(
@@ -2410,6 +2524,7 @@ def confirm_pending_operator_action(
     user_id: str,
     action_orchestrator: ActionOrchestrator | None = None,
     subscription_access: dict | None = None,
+    actor_context: dict | None = None,
 ) -> tuple[dict[str, Any], bool]:
     action = get_operator_action(cursor, action_id=action_id, business_id=business_id, user_id=user_id)
     if not action:
@@ -2437,6 +2552,51 @@ def confirm_pending_operator_action(
     if isinstance(envelope, str):
         envelope = json.loads(envelope)
     envelope = envelope if isinstance(envelope, dict) else {}
+    if capability == 'content.handoff':
+        from services.operator_content_handoffs import execute
+        result=standardize_operator_result(execute(cursor,business_id=business_id,user_id=user_id,envelope=envelope,actor_context=actor_context),capability)
+        if result.get('status')=='completed':finish_operator_action(cursor,action_id=action_id,result=result)
+        return result,False
+    if capability == 'outreach.ai_rules':
+        from services.outreach_ai_authorization import confirm
+        try:
+            grant=confirm(cursor,rules=envelope.get('rules'),rules_hash=envelope.get('rules_hash'),actor_id=user_id,
+                actor_context=actor_context,action_id=action_id,enabled=envelope.get('enabled'))
+            result={'status':'completed','authorization_id':str(grant['id']),
+                'chat_response':'Правила AI-писем сохранены.' if envelope['enabled'] else 'Разрешение AI-писем отозвано.',
+                'external_writes_performed':False}
+            finish_operator_action(cursor,action_id=action_id,result=result)
+            return result,False
+        except (ValueError,TypeError,PermissionError) as exc:
+            return {'status':'blocked','blocked_reasons':[str(exc)]},False
+    if capability == 'agents.run':
+        from services.operator_agent_runs import execute
+        result = standardize_operator_result(execute(cursor, business_id=business_id, user_id=user_id, envelope=envelope,
+            idempotency_key='operator:' + action_id, actor_context=actor_context), capability)
+        if result.get('status') == 'completed':
+            finish_operator_action(cursor, action_id=action_id, result=result)
+        return result, False
+    if capability == 'agents.lifecycle':
+        from services.operator_agent_management import execute_lifecycle
+        result = standardize_operator_result(execute_lifecycle(cursor, business_id=business_id, user_id=user_id,
+            envelope=envelope, actor_context=actor_context), capability)
+        if result.get('status') == 'completed':
+            finish_operator_action(cursor, action_id=action_id, result=result)
+        return result, False
+    if capability == 'agents.create':
+        from services.agent_blueprint_creation import create_draft
+        result = standardize_operator_result(create_draft(cursor, business_id=business_id, user_id=user_id,
+            actor_context={**(actor_context or {}), "operator_confirmation": True}, payload=envelope.get("payload") if isinstance(envelope.get("payload"), dict) else {},
+            idempotency_key=str(envelope.get("idempotency_key") or "")), capability)
+        if result.get('status') == 'completed':
+            finish_operator_action(cursor, action_id=action_id, result=result)
+        return result, False
+    if capability == 'partnerships.continue_outreach':
+        from services.outreach_continuation import confirm_task_start
+        result = standardize_operator_result(confirm_task_start(cursor, business_id=business_id, user_id=user_id, envelope=envelope, actor_context=actor_context), capability)
+        if result.get('status') == 'completed':
+            finish_operator_action(cursor, action_id=action_id, result=result)
+        return result, False
     if capability == 'work.schedule':
         from services import operator_workday
         result = standardize_operator_result(operator_workday.apply(cursor,business_id,user_id,envelope,action_id),capability)

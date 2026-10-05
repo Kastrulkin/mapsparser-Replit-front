@@ -40,6 +40,17 @@ type OperatorChatResult = {
   message_id?: string;
   input_type?: string;
   status: 'completed' | 'blocked' | 'unsupported' | string;
+  search_started?: boolean;
+  task?: {
+    id: string;
+    business_id?: string;
+    status: string;
+    display_name?: string;
+    stage?: string;
+    config?: { target_count?: number; max_candidates?: number; max_search_calls?: number };
+    state?: { search_calls?: number };
+    report?: { found?: number; imported?: number; awaiting_check?: number; checking?: number; verification_failed?: number; excluded?: number; duplicates?: number; eligible?: number; shortfall?: number; credit_limit?: number; credits_charged?: number };
+  };
   intent?: string;
   chat_response?: string;
   queue_id?: string;
@@ -76,7 +87,9 @@ type OperatorChatResult = {
     status?: string;
     action_id?: string;
     summary?: string;
+    capability?: string;
   };
+  credit_quote?: { total_max?: number };
   ai_router?: {
     status?: string;
     intent?: string;
@@ -270,6 +283,20 @@ export const OperatorPage = () => {
   const [historyRetry, setHistoryRetry] = useState(0);
   const [confirmingActionId, setConfirmingActionId] = useState<string | null>(null);
   const [rejectingActionId, setRejectingActionId] = useState<string | null>(null);
+  const [savedSearchTask, setSavedSearchTask] = useState<OperatorChatResult['task']>();
+  const activeSearchTask = [...messages].reverse().map((item) => item.result && 'task' in item.result ? item.result.task : undefined).find((task) => task?.id && (!task.business_id || task.business_id === currentBusinessId)) || (savedSearchTask?.business_id === currentBusinessId ? savedSearchTask : undefined);
+  useEffect(() => {
+    if (!currentBusinessId) { setSavedSearchTask(undefined); return; }
+    let live = true;
+    const refresh = async () => {
+      try {
+        const response = await api.get('/partnership/continuations', { params: { business_id: currentBusinessId } });
+        if (live) setSavedSearchTask((response.data?.items || []).find((task: OperatorChatResult['task']) => task?.id));
+      } catch { if (live) setSavedSearchTask(undefined); }
+    };
+    void refresh();
+    return () => { live = false; };
+  }, [currentBusinessId]);
   useEffect(() => {
     if (!currentBusinessId) {
       setConversationId(null);
@@ -674,7 +701,7 @@ export const OperatorPage = () => {
               </div>
             </div>
           ) : (
-            messages.map((message) => (
+            messages.map((message, index) => (
               <div key={message.id} className={cn('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
                 <div
                   className={cn(
@@ -684,11 +711,16 @@ export const OperatorPage = () => {
                       : 'border border-slate-200 bg-white text-slate-800',
                   )}
                 >
-                  <div className="whitespace-pre-wrap">{message.text}</div>
+                  <div className="whitespace-pre-wrap">{message.role === 'operator' && message.result && 'approval' in message.result && message.result.approval?.capability === 'partnerships.continue_outreach' && !('credit_quote' in message.result && message.result.credit_quote)
+                    ? 'Прежние условия поиска устарели. Откройте актуальную стоимость в кредитах LocalOS.'
+                    : message.role === 'operator' && message.result && 'capability' in message.result && message.result.capability === 'partnerships.prepare_message'
+                      ? message.text.replace(/DeepSeek/gi, 'ИИ') : message.text}</div>
                   {message.role === 'operator' && currentBusinessId && <OperatorSpeech key={`${currentBusinessId}:${message.id}`} businessId={currentBusinessId} messageId={message.result?.message_id || message.id} prepare={message.result?.input_type === 'voice'} />}
                   {message.role === 'operator' && message.result ? (
                     <OperatorResultActions
                       result={message.result}
+                      businessId={currentBusinessId}
+                      canStartPreview={index === messages.length - 1}
                       copiedKey={copiedKey}
                       loading={{
                         refreshCheckingQueueId,
@@ -707,6 +739,8 @@ export const OperatorPage = () => {
                       onMarkManualPublished={markManualPublished}
                       onConfirmOperatorAction={confirmOperatorAction}
                       onRejectOperatorAction={rejectOperatorAction}
+                      onSendCommand={sendOperatorChatMessage}
+                      onEditPreview={() => setChatMessage('Измени условия последнего поиска: ')}
                     />
                   ) : null}
                 </div>
@@ -715,6 +749,7 @@ export const OperatorPage = () => {
           )}
         </div>
 
+        {currentBusinessId && activeSearchTask?.id && <div className="border-t border-slate-200 bg-white px-4 py-3"><OutreachTaskStatus key={`${currentBusinessId}:${activeSearchTask.id}`} businessId={currentBusinessId} initialTask={activeSearchTask} /></div>}
         <div className="border-t border-slate-200 bg-white px-4 py-4">
           {currentBusinessId && <OperatorVoiceInput key={currentBusinessId} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onSubmit={sendOperatorChatMessage} />}
           {currentBusinessId && <OperatorWorkdayInput key={`inputs:${currentBusinessId}`} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onConversation={setConversationId} />}
@@ -760,8 +795,54 @@ export const OperatorPage = () => {
   );
 };
 
+type OutreachTask = NonNullable<OperatorChatResult['task']>;
+
+function OutreachTaskStatus({ businessId, initialTask }: { businessId: string; initialTask: OutreachTask }) {
+  const [task, setTask] = useState(initialTask);
+  const [refreshError, setRefreshError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const response = await api.get(`/partnership/continuations/${encodeURIComponent(initialTask.id)}`, { params: { business_id: businessId } });
+        if (!active) return;
+        const current = response.data as OutreachTask;
+        if (current) setTask(current);
+        setRefreshError(!current);
+      } catch {
+        if (active) setRefreshError(true);
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 15000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [businessId, initialTask.id]);
+  const target = task.config?.target_count || task.config?.max_candidates || 0;
+  const eligible = task.report?.eligible || 0;
+  const active = task.status === 'running' || task.status === 'queued';
+  const label = task.status === 'running' ? 'Поиск идёт'
+    : task.status === 'queued' ? 'Поиск в очереди'
+      : task.status === 'completed' ? 'Поиск завершён'
+        : task.status === 'cancelled' ? 'Поиск остановлен'
+          : task.status === 'failed' ? 'Поиск прерван'
+            : 'Ожидает подтверждения или проверки';
+  return <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-slate-800" role="status" aria-live="polite">
+    <div className="flex items-center gap-2 font-medium">
+      {active ? <Loader2 className="h-4 w-4 animate-spin text-sky-700" aria-hidden="true" /> : null}
+      {label}
+    </div>
+    {task.stage ? <p className="mt-1">{task.stage.replace(/DeepSeek/gi, 'ИИ')}</p> : null}
+    <p className="mt-1 tabular-nums">Сырых результатов: {task.report?.found ?? task.report?.imported ?? 0}. Новых записей: {task.report?.imported ?? 0}. Ждут проверки: {task.report?.awaiting_check ?? 0}. Проверяются: {task.report?.checking ?? 0}. Подходящих с подтверждённым контактом: {eligible}{target ? ` из ${target}` : ''}. Исключено: {task.report?.excluded ?? 0}. Не удалось проверить: {task.report?.verification_failed ?? 0}.</p>
+    {typeof task.report?.credit_limit === 'number' ? <p className="mt-1 tabular-nums">Списано: {task.report.credits_charged || 0} из лимита {task.report.credit_limit} кредитов.</p> : null}
+    {refreshError ? <p className="mt-1 text-amber-800">Не удалось обновить прогресс. Проверьте задачу в разделе «Партнёрства».</p> : null}
+    <Link className="mt-2 inline-block font-medium underline" to={`/dashboard/partnerships?search_task_id=${encodeURIComponent(task.id)}`}>Открыть этот поиск</Link>
+  </div>;
+}
+
 type OperatorResultActionsProps = {
   result: OperatorChatResult | RefreshResult;
+  businessId: string;
+  canStartPreview: boolean;
   copiedKey: string | null;
   loading: {
     refreshCheckingQueueId: string | null;
@@ -780,10 +861,14 @@ type OperatorResultActionsProps = {
   onMarkManualPublished: (draftId: string | undefined) => Promise<void>;
   onConfirmOperatorAction: (actionId: string | undefined) => Promise<void>;
   onRejectOperatorAction: (actionId: string | undefined) => Promise<void>;
+  onSendCommand: (text: string) => Promise<void>;
+  onEditPreview: () => void;
 };
 
 const OperatorResultActions = ({
   result,
+  businessId,
+  canStartPreview,
   copiedKey,
   loading,
   onCopy,
@@ -794,6 +879,8 @@ const OperatorResultActions = ({
   onMarkManualPublished,
   onConfirmOperatorAction,
   onRejectOperatorAction,
+  onSendCommand,
+  onEditPreview,
 }: OperatorResultActionsProps) => {
   const capabilityPanelId = useId();
   const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
@@ -808,12 +895,17 @@ const OperatorResultActions = ({
   const drafts = 'drafts' in result ? result.drafts || [] : [];
   const billingUrl = 'billing_url' in result ? result.billing_url : undefined;
   const resultRef = 'result_ref' in result ? result.result_ref : undefined;
+  const searchPreview = 'capability' in result && ['partnerships.prepare_message', 'partnerships.continue_outreach'].includes(result.capability || '')
+    && 'search_started' in result && result.search_started === false;
+  const searchTask = 'task' in result ? result.task : undefined;
   const approval = 'approval' in result ? result.approval : undefined;
+  const outdatedOutreachApproval = approval?.capability === 'partnerships.continue_outreach'
+    && !('credit_quote' in result && result.credit_quote?.total_max !== undefined);
   const capabilityCatalog = 'capability_catalog' in result ? result.capability_catalog || [] : [];
   const capabilityExamples = 'capabilities' in result ? result.capabilities || [] : [];
   const isOperatorHelp =
     ('intent' in result && result.intent === 'operator_help') || capabilityCatalog.length > 0 || capabilityExamples.length > 0;
-  const hasUsefulResultRef = Boolean(resultRef?.href && resultRef.href !== '/dashboard/operator');
+  const hasUsefulResultRef = !searchPreview && Boolean(resultRef?.href && resultRef.href !== '/dashboard/operator');
   const aiRouter = result.ai_router;
   const queueId = result.queue_id;
   const status = result.status || '';
@@ -837,7 +929,9 @@ const OperatorResultActions = ({
                 : 'bg-amber-50 text-amber-800 ring-amber-200',
           )}
         >
-          {status || 'operator'}
+          {searchPreview ? 'Ожидает запуска' : searchTask?.id
+            ? status === 'approval_required' ? 'Ожидает подтверждения запуска' : 'Поручение сохранено'
+            : status || 'operator'}
         </span>
         {'credit_charged' in result && result.credit_charged ? <span>Списано {result.charged_credits || 0} кредитов</span> : null}
         {'manual_publication_only' in result && result.manual_publication_only ? <span>Публикация вручную</span> : null}
@@ -848,6 +942,16 @@ const OperatorResultActions = ({
           </span>
         ) : null}
       </div>
+
+      {searchPreview && canStartPreview && !approval?.action_id ? (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-sky-950">
+          <p className="font-medium">Поиск ещё не начался</p>
+          <p className="mt-1">Условия и лимиты показаны выше. Подтвердите запуск.</p>
+          <Button type="button" size="sm" className="mt-2" onClick={() => void onSendCommand('Начни поиск по показанным условиям')}>
+            Начать поиск
+          </Button>
+        </div>
+      ) : null}
 
       {textToCopy ? (
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
@@ -978,7 +1082,15 @@ const OperatorResultActions = ({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        {approval?.action_id && approval.status === 'pending' ? (
+        {approval?.action_id && approval.status === 'pending' && outdatedOutreachApproval ? (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+            Условия этого подтверждения устарели. Стоимость поиска теперь указана в кредитах LocalOS.
+            <Button type="button" size="sm" variant="outline" className="mt-2 block" onClick={() => void onSendCommand('Покажи актуальные условия и стоимость в кредитах для последнего поручения по поиску компаний и подготовь новое подтверждение запуска')}>
+              Показать актуальные условия
+            </Button>
+          </div>
+        ) : null}
+        {approval?.action_id && approval.status === 'pending' && !outdatedOutreachApproval ? (
           <>
             <Button
               type="button"
@@ -987,17 +1099,17 @@ const OperatorResultActions = ({
               disabled={loading.confirmingActionId === approval.action_id || loading.rejectingActionId === approval.action_id}
             >
               {loading.confirmingActionId === approval.action_id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-              Подтвердить
+              {searchPreview ? 'Начать поиск' : 'Подтвердить'}
             </Button>
             <Button
               type="button"
               size="sm"
               variant="outline"
-              onClick={() => void onRejectOperatorAction(approval.action_id)}
+              onClick={() => { if (searchPreview) onEditPreview(); else void onRejectOperatorAction(approval.action_id); }}
               disabled={loading.confirmingActionId === approval.action_id || loading.rejectingActionId === approval.action_id}
             >
               {loading.rejectingActionId === approval.action_id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Отклонить
+              {searchPreview ? 'Изменить условия' : 'Отклонить'}
             </Button>
           </>
         ) : null}
