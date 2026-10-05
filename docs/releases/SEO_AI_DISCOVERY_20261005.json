@@ -1,0 +1,153 @@
+{
+  "release_date": "2026-10-05",
+  "implementation_commit": "9072e560ac5a13a35d18f96add78a2a6ef4c8a3f",
+  "production": "https://localos.pro",
+  "published": true,
+  "push": "blocked: GitHub HTTPS authentication unavailable",
+  "backup": "/opt/seo-app/backups/seo-content-20261005",
+  "private_index_sha256_unchanged": "eed3e5bcf93bef52533a484c05f385831a1059b8bc29dad781bf7d1b35ace4b6",
+  "checks": {
+    "public_manifest_routes": 31,
+    "frontend_tests": 26,
+    "server_route_tests": 12,
+    "workspace_typecheck": "passed",
+    "isolated_public_build": "passed",
+    "browser": "article, document, three solutions; mobile width; no JS errors observed",
+    "live": [
+      {
+        "path": "/",
+        "status": "200",
+        "h1": 1,
+        "title": [
+          "LocalOS — Яндекс Карты, 2ГИС и привлечение без рекламного бюджета"
+        ],
+        "generic": false
+      },
+      {
+        "path": "/articles",
+        "status": "200",
+        "h1": 1,
+        "title": [
+          "Статьи для владельцев локального бизнеса — LocalOS"
+        ],
+        "generic": false
+      },
+      {
+        "path": "/documents",
+        "status": "200",
+        "h1": 1,
+        "title": [
+          "Документы для локального маркетинга — LocalOS"
+        ],
+        "generic": false
+      },
+      {
+        "path": "/solutions/yandex-maps",
+        "status": "200",
+        "h1": 1,
+        "title": [
+          "Продвижение и ведение Яндекс Карт с LocalOS — LocalOS"
+        ],
+        "generic": false
+      },
+      {
+        "path": "/solutions/ai-review-replies",
+        "status": "200",
+        "h1": 1,
+        "title": [
+          "ИИ-ответы на отзывы: черновики под контролем владельца — LocalOS"
+        ],
+        "generic": false
+      },
+      {
+        "path": "/solutions/business-automation",
+        "status": "200",
+        "h1": 1,
+        "title": [
+          "Автоматизация бизнеса с ИИ: задачи и результат LocalOS — LocalOS"
+        ],
+        "generic": false
+      },
+      {
+        "path": "/articles/kak-uvelichit-sredniy-chek",
+        "status": "200",
+        "h1": 1,
+        "title": [
+          "Как увеличить средний чек в салоне красоты — LocalOS"
+        ],
+        "generic": false
+      },
+      {
+        "path": "/documents/shablony-otvetov-na-otzyvy",
+        "status": "200",
+        "h1": 1,
+        "title": [
+          "Шаблоны ответов на отзывы — LocalOS"
+        ],
+        "generic": false
+      },
+      {
+        "path": "/articles/kak-vesti-kartochku-biznesa-v-yandeks-kartah-i-2gis",
+        "status": "200",
+        "h1": 1,
+        "title": [
+          "Как вести Яндекс Карты и 2ГИС: простой порядок работы"
+        ],
+        "generic": false
+      },
+      {
+        "path": "/articles/missing-seo-check",
+        "status": "404",
+        "h1": 1,
+        "title": [
+          "LocalOS — меньше рутины для владельца локального бизнеса"
+        ],
+        "generic": true
+      },
+      {
+        "path": "/login",
+        "status": "200",
+        "h1": 1,
+        "title": [
+          "LocalOS — меньше рутины для владельца локального бизнеса"
+        ],
+        "generic": true
+      }
+    ]
+  },
+  "recrawl": {
+    "provider": "Yandex Webmaster",
+    "submitted_urls": 25,
+    "submitted_at": "2026-10-05T18:48:00+03:00",
+    "verified_status": "В очереди"
+  },
+  "baseline": {
+    "previous_indexing_observation": {
+      "loaded_pages": 64,
+      "indexed_pages": 29
+    },
+    "dashboard_query_localos": {
+      "impressions": 16,
+      "clicks": 11,
+      "period": "not displayed; not a comparable aggregate"
+    },
+    "dashboard_data_quality": "Aggregate clicks shows 0 and Invalid date despite query row 11; do not use as baseline total",
+    "aggregate_impressions": null,
+    "aggregate_clicks": null,
+    "leads": null,
+    "alice_visibility": null,
+    "note": "Missing values require dated provider reports at follow-up; do not treat unavailable as zero."
+  },
+  "followups": {
+    "dates": [
+      "2026-10-19",
+      "2026-11-02"
+    ],
+    "automation": "Anchored schedule suggestion rendered in Codex; activation requires user accepting card"
+  },
+  "limitations": [
+    "Article screenshots were not added; practical textual examples are present.",
+    "Live document download was not submitted; existing API retained and invalid-email disabling checked.",
+    "AI mentions and rankings remain observational outcomes."
+  ]
+}
