@@ -468,6 +468,77 @@ describe('Content page manual photo handoff', () => {
   });
 });
 
+describe('Content page calendar scheduling', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const renderScheduledPlan = (itemPosts: Array<Record<string, string>> = []) => {
+    vi.stubGlobal('fetch', vi.fn(async () => diskImportStatusResponse()));
+    vi.mocked(newAuth.makeRequest).mockClear();
+    window.localStorage.setItem('language', 'ru');
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path, options) => {
+      if (path.startsWith('/content-plans/context')) return { context: {} };
+      if (path.startsWith('/content-plans?')) return { plans: [plan] };
+      if (path === '/content-plans/plan-1') return { plan };
+      if (path === '/content-plans/plan-1/social-posts') return { posts: itemPosts, summary: {} };
+      if (path.startsWith('/media-intelligence/posts/')) return { recommendation: null };
+      if (path === '/content-plans/items/item-1' && options?.method === 'PUT') {
+        const payload = JSON.parse(String(options.body || '{}'));
+        const updatedPlan = { ...plan, items: [{ ...plan.items[0], ...payload }] };
+        return { success: true, plan: updatedPlan };
+      }
+      return {};
+    });
+    return renderContentPage();
+  };
+
+  it('saves a date change directly without requiring channel selection or variant preparation', async () => {
+    renderScheduledPlan();
+    fireEvent.click(await screen.findByRole('button', { name: /Тестовая тема публикации/ }));
+    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: updatedDate } });
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить изменения' }));
+
+    await waitFor(() => expect(newAuth.makeRequest).toHaveBeenCalledWith('/content-plans/items/item-1', {
+      method: 'PUT',
+      body: JSON.stringify({ scheduled_for: updatedDate }),
+    }));
+    expect(await screen.findAllByText('Изменения сохранены.')).not.toHaveLength(0);
+  });
+
+  it('moves a calendar item to another date and persists it through the item update API', async () => {
+    renderScheduledPlan();
+    const card = await screen.findByRole('button', { name: /Тестовая тема публикации/ });
+    const targetDay = document.querySelector(`[data-calendar-date="${updatedDate}"]`);
+    expect(targetDay).not.toBeNull();
+    const dataTransfer = {
+      effectAllowed: '',
+      dropEffect: '',
+      setData: vi.fn(),
+      getData: vi.fn(() => 'item-1'),
+    };
+
+    fireEvent.dragStart(card, { dataTransfer });
+    if (!targetDay) throw new Error('Calendar drop target was not rendered');
+    fireEvent.drop(targetDay, { dataTransfer });
+
+    await waitFor(() => expect(newAuth.makeRequest).toHaveBeenCalledWith('/content-plans/items/item-1', {
+      method: 'PUT', body: JSON.stringify({ scheduled_for: updatedDate }),
+    }));
+    expect(await screen.findByText(new RegExp(`Публикация перенесена на`))).toBeInTheDocument();
+  });
+
+  it('does not allow dragging an item whose channel post is already published', async () => {
+    renderScheduledPlan([{
+      id: 'post-published', content_plan_item_id: 'item-1', platform: 'telegram',
+      status: 'published', platform_text: 'Готовый текст публикации.',
+    }]);
+    const card = await screen.findByRole('button', { name: /Тестовая тема публикации/ });
+    expect(card).toHaveAttribute('draggable', 'false');
+
+    fireEvent.dragStart(card, { dataTransfer: { effectAllowed: '', setData: vi.fn() } });
+    expect(newAuth.makeRequest).not.toHaveBeenCalledWith('/content-plans/items/item-1', expect.objectContaining({ method: 'PUT' }));
+  });
+});
+
 describe('Content page publication settings', () => {
   afterEach(() => vi.unstubAllGlobals());
 

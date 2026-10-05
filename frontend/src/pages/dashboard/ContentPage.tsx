@@ -453,7 +453,7 @@ const normalizeIsoDate = (value?: string) => {
   return Number.isNaN(parsed.getTime()) ? '' : toIsoDate(parsed);
 };
 
-const DATE_LOCALES = { ru: 'ru-RU', en: 'en-US', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR' };
+const DATE_LOCALES = { ru: 'ru-RU', en: 'en-US', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR', hy: 'hy-AM' };
 
 const formatDate = (value: string | undefined, language: keyof typeof DATE_LOCALES = 'ru') => {
   if (!value) return '';
@@ -824,6 +824,8 @@ function ContentWorkspace() {
     return saved === 'media' || saved === 'audience' ? saved : 'calendar';
   });
   const [selectedItemId, setSelectedItemId] = useState('');
+  const [draggedItemId, setDraggedItemId] = useState('');
+  const [dropTargetDate, setDropTargetDate] = useState('');
   const [manualContentConfirmed, setManualContentConfirmed] = useState<Record<string, boolean>>({});
   const [channelDetailsOpen, setChannelDetailsOpen] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
@@ -840,6 +842,7 @@ function ContentWorkspace() {
   const [contentSetupStep, setContentSetupStep] = useState<ContentSetupStep>('business');
   const [voiceExampleInput, setVoiceExampleInput] = useState('');
   const [publicationChannels, setPublicationChannels] = useState<Record<string, boolean>>(() => buildChannelSelection());
+  const [publicationChannelsTouched, setPublicationChannelsTouched] = useState(false);
   const [platformTextEdits, setPlatformTextEdits] = useState<Record<string, string>>({});
   const [editingPlatformPostId, setEditingPlatformPostId] = useState('');
   const [mediaRecommendations, setMediaRecommendations] = useState<Record<string, MediaRecommendation>>({});
@@ -1137,6 +1140,7 @@ function ContentWorkspace() {
     const item = items.find((candidate) => candidate.id === selectedItemId) || null;
     const itemPosts = item ? postsByItem[item.id] || [] : [];
     setPublicationChannels(buildChannelSelection(resolveItemSelectedChannels(item, itemPosts, currentPlan)));
+    setPublicationChannelsTouched(false);
   }, [currentPlan, items, postsByItem, selectedItemId]);
 
 
@@ -1185,6 +1189,7 @@ function ContentWorkspace() {
     setThemeEdits((prev) => ({ ...prev, [item.id]: String(item.theme || item.goal || '') }));
     setDateEdits((prev) => ({ ...prev, [item.id]: getItemDateKey(item) }));
     setPublicationChannels(buildChannelSelection(resolveItemSelectedChannels(item, postsByItem[item.id] || [], currentPlan)));
+    setPublicationChannelsTouched(false);
   };
 
   const loadMediaRecommendation = useLatestCallback(async (itemId: string) => {
@@ -1490,23 +1495,30 @@ function ContentWorkspace() {
     setActionMessage('');
     try {
       const selectedPlatforms = selectedChannelKeys(publicationChannels);
-      if (selectedPlatforms.length === 0) {
+      const storedPlatforms = resolveItemSelectedChannels(selectedItem, selectedPosts, currentPlan);
+      const channelsChanged = publicationChannelsTouched && !sameSelectedChannels(selectedPlatforms, storedPlatforms);
+      if (channelsChanged && selectedPlatforms.length === 0) {
         setError('Выберите хотя бы один канал публикации.');
         return;
       }
-      const storedPlatforms = resolveItemSelectedChannels(selectedItem, selectedPosts, currentPlan);
-      const channelsChanged = !sameSelectedChannels(selectedPlatforms, storedPlatforms);
+      const currentTheme = String(themeEdits[selectedItem.id] ?? selectedItem.theme ?? selectedItem.goal ?? '');
+      const currentDate = String(dateEdits[selectedItem.id] ?? getItemDateKey(selectedItem));
+      const currentDraft = String(draftEdits[selectedItem.id] ?? selectedItem.draft_text ?? '');
+      const payload: Record<string, unknown> = {};
+      if (currentTheme !== String(selectedItem.theme ?? selectedItem.goal ?? '')) payload.theme = currentTheme;
+      if (normalizeIsoDate(currentDate) !== normalizeIsoDate(selectedItem.scheduled_for)) payload.scheduled_for = currentDate;
+      if (currentDraft !== String(selectedItem.draft_text ?? '')) payload.draft_text = currentDraft;
+      if (channelsChanged) payload.selected_channels = selectedPlatforms;
       const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}`, {
         method: 'PUT',
-        body: JSON.stringify({
-          theme: themeEdits[selectedItem.id],
-          scheduled_for: dateEdits[selectedItem.id],
-          draft_text: draftEdits[selectedItem.id],
-          selected_channels: selectedPlatforms,
-        }),
+        body: JSON.stringify(payload),
       });
       const plan = response.plan || null;
       setCurrentPlan(plan);
+      if (plan?.items) {
+        const savedItem = plan.items.find((entry: PlanItem) => entry.id === selectedItem.id);
+        if (savedItem) setDateEdits((previous) => ({ ...previous, [selectedItem.id]: getItemDateKey(savedItem) }));
+      }
       if (channelsChanged && selectedPosts.length > 0) {
         await newAuth.makeRequest('/content-plans/social-posts/bulk-prepare', {
           method: 'POST',
@@ -1523,6 +1535,35 @@ function ContentWorkspace() {
       setError(saveError instanceof Error ? saveError.message : 'Не удалось сохранить публикацию');
     } finally {
       setBusyAction('');
+    }
+  };
+
+  const moveCalendarItem = async (item: PlanItem, nextDate: string) => {
+    const currentDate = getItemDateKey(item);
+    if (!item.id || !nextDate || nextDate === currentDate || busyAction) return;
+    const itemPosts = postsByItem[item.id] || [];
+    if (itemPosts.some((post) => ['publishing', 'published'].includes(String(post.status || '').toLowerCase()))) {
+      setError('Уже опубликованную или размещаемую публикацию нельзя перенести из календаря.');
+      return;
+    }
+    setBusyAction(`move-${item.id}`);
+    setError('');
+    setActionMessage('');
+    try {
+      const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ scheduled_for: nextDate }),
+      });
+      if (!response.plan) throw new Error('Сервер не подтвердил перенос публикации.');
+      setCurrentPlan(response.plan);
+      await loadSocialPosts(response.plan.id);
+      setActionMessage(`Публикация перенесена на ${formatDate(nextDate, language)}.`);
+    } catch (moveError) {
+      setError(moveError instanceof Error ? moveError.message : 'Не удалось перенести публикацию');
+    } finally {
+      setBusyAction('');
+      setDraggedItemId('');
+      setDropTargetDate('');
     }
   };
 
@@ -1825,7 +1866,7 @@ function ContentWorkspace() {
         return;
       }
       const storedPlatforms = resolveItemSelectedChannels(selectedItem, selectedPosts, currentPlan);
-      const channelsChanged = !sameSelectedChannels(selectedPlatforms, storedPlatforms);
+      const channelsChanged = publicationChannelsTouched && !sameSelectedChannels(selectedPlatforms, storedPlatforms);
       const draftChanged = currentDraftText !== String(selectedItem.draft_text ?? '');
       const itemChanged = draftChanged
         || currentTheme !== String(selectedItem.theme ?? '')
@@ -2040,6 +2081,7 @@ function ContentWorkspace() {
 
   const togglePublicationChannel = (key: string) => {
     setPublicationChannels((previous) => ({ ...previous, [key]: !previous[key] }));
+    setPublicationChannelsTouched(true);
   };
 
   const renderPlanModal = () => (
@@ -2235,12 +2277,23 @@ function ContentWorkspace() {
     const posts = postsByItem[item.id] || [];
     const calendarState = getCalendarItemState(item, posts);
     const channels = posts.slice(0, 3).map(platformShortLabel);
+    const canDrag = !posts.some((post) => ['publishing', 'published'].includes(String(post.status || '').toLowerCase()));
     return (
       <button
         key={item.id}
         type="button"
+        draggable={canDrag && !busyAction}
+        onDragStart={(event) => {
+          if (!canDrag) { event.preventDefault(); return; }
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', item.id);
+          setDraggedItemId(item.id);
+        }}
+        onDragEnd={() => { setDraggedItemId(''); setDropTargetDate(''); }}
         onClick={(event) => openItem(item, event.currentTarget)}
-        className="w-full min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-left shadow-sm transition-[border-color,box-shadow] hover:border-slate-300 hover:shadow-md"
+        aria-label={`${item.theme || item.goal || calendarCopy.publication}, ${formatDate(item.scheduled_for, language)}${canDrag ? ', перетащите, чтобы изменить дату' : ''}`}
+        title={canDrag ? 'Перетащите публикацию на другую дату' : 'Эту публикацию нельзя перенести: размещение уже началось или завершено'}
+        className={cn('w-full min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-left shadow-sm transition-[border-color,box-shadow,opacity] hover:border-slate-300 hover:shadow-md', draggedItemId === item.id && 'opacity-50')}
       >
         <div className="line-clamp-2 break-words text-xs font-semibold leading-4 text-slate-950 [overflow-wrap:anywhere]">
           {item.theme || item.goal || calendarCopy.publication}
@@ -2280,9 +2333,28 @@ function ContentWorkspace() {
             return (
               <div
                 key={key}
+                data-calendar-date={key}
+                onDragOver={(event) => {
+                  if (!draggedItemId || busyAction) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'move';
+                  setDropTargetDate(key);
+                }}
+                onDragLeave={(event) => {
+                  if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropTargetDate('');
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const itemId = event.dataTransfer.getData('text/plain') || draggedItemId;
+                  const draggedItem = items.find((candidate) => candidate.id === itemId);
+                  setDraggedItemId('');
+                  setDropTargetDate('');
+                  if (draggedItem) void moveCalendarItem(draggedItem, key);
+                }}
                 className={cn(
-                  'min-w-0 overflow-hidden min-h-[150px] bg-white p-2',
+                  'min-w-0 overflow-hidden min-h-[150px] bg-white p-2 transition-colors',
                   !isCurrentMonth && view === 'month' ? 'bg-slate-50/70 text-slate-600' : '',
+                  dropTargetDate === key && 'bg-blue-50 ring-2 ring-inset ring-blue-400',
                 )}
               >
                 <div className="mb-2 text-xs font-semibold text-slate-600">
@@ -2663,7 +2735,7 @@ function ContentWorkspace() {
       hasUnsavedDraftChanges
       || String(themeEdits[item.id] ?? item.theme ?? '') !== String(item.theme ?? '')
       || normalizeIsoDate(dateEdits[item.id] ?? item.scheduled_for) !== normalizeIsoDate(item.scheduled_for)
-      || !sameSelectedChannels(currentItemChannels, storedItemChannels)
+      || publicationChannelsTouched && !sameSelectedChannels(currentItemChannels, storedItemChannels)
     );
     const hasFallbackDraft = itemGenerationSource(item) === 'fallback';
     const hasDraftText = Boolean(currentDraftText) && itemGenerationSource(item) !== 'fallback';
@@ -3278,6 +3350,11 @@ function ContentWorkspace() {
                   ) : null}
                 </div>
                 <div className="grid gap-2">
+                  {hasUnsavedItemChanges ? (
+                    <Button type="button" variant="outline" onClick={saveSelectedItem} disabled={Boolean(busyAction)} className="min-h-11 rounded-2xl active:scale-[0.96] transition-transform">
+                      {busyAction === 'save' ? 'Сохраняем...' : 'Сохранить изменения'}
+                    </Button>
+                  ) : null}
                   {needsPlatformPreparation ? (
                     <Button type="button" onClick={() => { void prepareSelectedItem(); }} disabled={Boolean(busyAction)} className="min-h-12 rounded-2xl bg-slate-950 text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-500 active:scale-[0.96] transition-transform">
                       {busyAction === 'prepare'
@@ -3285,10 +3362,6 @@ function ContentWorkspace() {
                         : hasPosts
                           ? 'Обновить версии для каналов'
                           : 'Подготовить версии для каналов'}
-                    </Button>
-                  ) : hasUnsavedItemChanges ? (
-                    <Button type="button" variant="outline" onClick={saveSelectedItem} disabled={Boolean(busyAction)} className="min-h-11 rounded-2xl active:scale-[0.96] transition-transform">
-                      {busyAction === 'save' ? 'Сохраняем...' : 'Сохранить изменения'}
                     </Button>
                   ) : null}
                   {canApproveSelectedItem && !needsContext ? (
