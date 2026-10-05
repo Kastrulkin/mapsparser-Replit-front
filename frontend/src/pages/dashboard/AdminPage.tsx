@@ -108,6 +108,25 @@ interface PaymentDialogState {
   paidCount: number;
   totalCount: number;
   endsAt: string;
+  tariffId: 'starter_monthly' | 'pro_monthly' | 'concierge_monthly';
+  amountRub: string;
+  paymentReference: string;
+  requestId: string;
+}
+
+interface ManualAccessGrant {
+  id: string;
+  target_name: string;
+  user_email?: string;
+  granted_by_email?: string;
+  tariff_id: string;
+  credit_amount: number;
+  balance_before: number;
+  balance_after: number;
+  payment_amount_rub: number;
+  payment_reference?: string;
+  period_end?: string;
+  created_at?: string;
 }
 
 interface AdminAgentBlueprint {
@@ -417,6 +436,11 @@ const PAYMENT_PERIODS = [
   { label: '6 месяцев', months: 6 },
   { label: '12 месяцев', months: 12 },
 ];
+const MANUAL_TARIFFS = [
+  { id: 'starter_monthly', label: 'Карты · 1 200 ₽/мес.', amount: '1200', credits: 240 },
+  { id: 'pro_monthly', label: 'Привлечение · 5 000 ₽/мес.', amount: '5000', credits: 1000 },
+  { id: 'concierge_monthly', label: 'Управление · 25 000 ₽/мес.', amount: '25000', credits: 0 },
+] as const;
 
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message.trim()) {
@@ -673,6 +697,7 @@ export const AdminPage: React.FC = () => {
   const [agentBlueprintLoading, setAgentBlueprintLoading] = useState(false);
   const [downloadingAgentRunId, setDownloadingAgentRunId] = useState('');
   const [subscriptionsOverview, setSubscriptionsOverview] = useState<AdminSubscriptionsOverview | null>(null);
+  const [manualAccessGrants, setManualAccessGrants] = useState<ManualAccessGrant[]>([]);
   const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
   const [selectedRadarBusinessId, setSelectedRadarBusinessId] = useState('');
   const [expandedNetworks, setExpandedNetworks] = useState<Set<string>>(new Set());
@@ -695,7 +720,12 @@ export const AdminPage: React.FC = () => {
     paidCount: 0,
     totalCount: 0,
     endsAt: addMonthsForInput(1),
+    tariffId: 'pro_monthly',
+    amountRub: '5000',
+    paymentReference: '',
+    requestId: '',
   });
+  const [manualGrantSubmitting, setManualGrantSubmitting] = useState(false);
 
   useEffect(() => {
     if (isAdminTabId(requestedTab) && requestedTab !== activeTab) {
@@ -783,7 +813,10 @@ export const AdminPage: React.FC = () => {
   const loadSubscriptionsOverview = useCallback(async () => {
     try {
       setSubscriptionsLoading(true);
-      const data = await newAuth.makeRequest('/admin/subscriptions/overview');
+      const [data, grantsData] = await Promise.all([
+        newAuth.makeRequest('/admin/subscriptions/overview'),
+        newAuth.makeRequest('/superadmin/manual-access-grants?limit=50'),
+      ]);
       if (data.success) {
         setSubscriptionsOverview({
           summary: data.summary,
@@ -792,6 +825,7 @@ export const AdminPage: React.FC = () => {
           credit_ledger: data.credit_ledger || [],
         });
       }
+      if (grantsData.success) setManualAccessGrants(grantsData.grants || []);
     } catch (error: unknown) {
       toast({
         title: 'Ошибка',
@@ -1050,6 +1084,10 @@ export const AdminPage: React.FC = () => {
       paidCount: isBusinessSubscriptionPaid(business) ? 1 : 0,
       totalCount: 1,
       endsAt: toDateInputValue(business.subscription_ends_at),
+      tariffId: 'pro_monthly',
+      amountRub: '5000',
+      paymentReference: '',
+      requestId: crypto.randomUUID(),
     });
   };
 
@@ -1065,6 +1103,10 @@ export const AdminPage: React.FC = () => {
       paidCount: paymentState.paidCount,
       totalCount: paymentState.totalCount,
       endsAt: toDateInputValue(firstPaidBusiness?.subscription_ends_at),
+      tariffId: 'pro_monthly',
+      amountRub: '5000',
+      paymentReference: '',
+      requestId: crypto.randomUUID(),
     });
   };
 
@@ -1080,7 +1122,56 @@ export const AdminPage: React.FC = () => {
     setPaymentDialog((previous) => ({ ...previous, endsAt }));
   };
 
+  const updateManualTariff = (tariffId: PaymentDialogState['tariffId']) => {
+    const tariff = MANUAL_TARIFFS.find((item) => item.id === tariffId);
+    if (!tariff) return;
+    setPaymentDialog((previous) => ({ ...previous, tariffId, amountRub: tariff.amount }));
+  };
+
+  const updateManualAmount = (amountRub: string) => {
+    setPaymentDialog((previous) => ({ ...previous, amountRub }));
+  };
+
+  const updatePaymentReference = (paymentReference: string) => {
+    setPaymentDialog((previous) => ({ ...previous, paymentReference }));
+  };
+
   const submitPaymentDialog = async (isPaid: boolean) => {
+    if (isPaid) {
+      const amount = Number(paymentDialog.amountRub);
+      if (!Number.isFinite(amount) || amount <= 0 || !paymentDialog.endsAt) {
+        toast({ title: 'Проверьте оплату', description: 'Укажите полученную сумму и дату окончания доступа.', variant: 'destructive' });
+        return;
+      }
+      setManualGrantSubmitting(true);
+      try {
+        const response = await newAuth.makeRequest('/superadmin/manual-access-grants', {
+          method: 'POST',
+          body: JSON.stringify({
+            target_type: paymentDialog.scope,
+            target_id: paymentDialog.targetId,
+            tariff_id: paymentDialog.tariffId,
+            period_end: paymentDialog.endsAt,
+            payment_amount_rub: amount,
+            payment_reference: paymentDialog.paymentReference.trim(),
+            request_id: paymentDialog.requestId,
+          }),
+        });
+        if (!response?.success || !response?.grant) throw new Error(response?.error || 'Не удалось записать оплату и выдать доступ.');
+        const grant = response.grant;
+        toast({
+          title: grant.status === 'already_applied' ? 'Начисление уже было выполнено' : 'Оплата записана, доступ открыт',
+          description: `Бизнес: ${paymentDialog.targetName}. Начислено ${Number(grant.credit_amount || 0)} кредитов. Баланс: ${Number(grant.balance_after || 0)}.`,
+        });
+        await Promise.all([loadUsers(), loadSubscriptionsOverview()]);
+        closePaymentDialog();
+      } catch (error: unknown) {
+        toast({ title: 'Не удалось выдать доступ', description: getErrorMessage(error, 'Проверьте подключение и повторите попытку.'), variant: 'destructive' });
+      } finally {
+        setManualGrantSubmitting(false);
+      }
+      return;
+    }
     const endpoint = paymentDialog.scope === 'network'
       ? `/admin/networks/${paymentDialog.targetId}/promo`
       : `/admin/businesses/${paymentDialog.targetId}/promo`;
@@ -1551,6 +1642,27 @@ export const AdminPage: React.FC = () => {
                     <div className="px-5 py-8 text-center text-sm text-slate-500">Движения кредитов пока нет.</div>
                   ) : null}
                 </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-100 px-5 py-4">
+                <h3 className="text-base font-semibold text-slate-950">Оплаты, полученные вне LocalOS</h3>
+                <p className="text-sm leading-6 text-slate-500">Журнал ручных отметок: получатель, сумма, тариф, срок, кредиты и администратор.</p>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {manualAccessGrants.map((grant) => (
+                  <div key={grant.id} className="grid gap-2 px-5 py-4 text-sm md:grid-cols-[minmax(180px,1fr)_minmax(160px,0.8fr)_minmax(160px,0.8fr)_minmax(180px,0.9fr)] md:items-center">
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold text-slate-950">{grant.target_name}</div>
+                      <div className="truncate text-xs text-slate-500">{grant.user_email || 'Аккаунт владельца'}</div>
+                    </div>
+                    <div className="text-slate-700 tabular-nums">{Number(grant.payment_amount_rub || 0).toLocaleString('ru-RU')} ₽ · {grant.tariff_id}</div>
+                    <div className="text-slate-700 tabular-nums">+{Number(grant.credit_amount || 0)} кредитов · баланс {Number(grant.balance_after || 0)}</div>
+                    <div className="text-xs leading-5 text-slate-500">До {formatAdminDateTime(grant.period_end)} · {formatAdminDateTime(grant.created_at)} · {grant.granted_by_email || 'администратор'}{grant.payment_reference ? ` · ${grant.payment_reference}` : ''}</div>
+                  </div>
+                ))}
+                {manualAccessGrants.length === 0 ? <div className="px-5 py-8 text-center text-sm text-slate-500">Ручных оплат пока не записывали.</div> : null}
               </div>
             </div>
           </DashboardSection>
@@ -2336,9 +2448,50 @@ export const AdminPage: React.FC = () => {
             <CardContent className="space-y-5 p-6">
               {paymentDialog.scope === 'network' && (
                 <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                  Сейчас оплачено {paymentDialog.paidCount} из {paymentDialog.totalCount} точек сети.
+                  Доступ откроется для активных клиентских точек сети, а кредиты начислятся один раз на общий аккаунт владельца. Сейчас отмечено {paymentDialog.paidCount} из {paymentDialog.totalCount} точек.
                 </div>
               )}
+
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700" htmlFor="manual-paid-tariff">Тариф, за который получена оплата</label>
+                <select
+                  id="manual-paid-tariff"
+                  value={paymentDialog.tariffId}
+                  onChange={(event) => updateManualTariff(event.target.value as PaymentDialogState['tariffId'])}
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                >
+                  {MANUAL_TARIFFS.map((tariff) => <option key={tariff.id} value={tariff.id}>{tariff.label} · {tariff.credits} кредитов</option>)}
+                </select>
+                <p className="text-xs leading-5 text-slate-500">Доступ будет открыт по выбранному тарифу до указанной даты. Кредиты начисляются на аккаунт владельца один раз.</p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700" htmlFor="manual-paid-amount">Получено, ₽</label>
+                  <input
+                    id="manual-paid-amount"
+                    type="number"
+                    min="1"
+                    step="0.01"
+                    value={paymentDialog.amountRub}
+                    onChange={(event) => updateManualAmount(event.target.value)}
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm tabular-nums outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700" htmlFor="manual-payment-reference">Примечание к оплате</label>
+                  <input
+                    id="manual-payment-reference"
+                    type="text"
+                    maxLength={500}
+                    value={paymentDialog.paymentReference}
+                    onChange={(event) => updatePaymentReference(event.target.value)}
+                    placeholder="Например: перевод 05.10"
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                  />
+                </div>
+              </div>
+              <p className="-mt-3 text-xs leading-5 text-slate-500">Отметка в LocalOS не принимает деньги и не проверяет банковский перевод. Заполняйте после того, как лично подтвердили получение оплаты; не вводите данные карты или банковского счёта.</p>
 
               <div className="space-y-3">
                 <label className="text-sm font-semibold text-slate-700">Период оплаты</label>
@@ -2377,16 +2530,17 @@ export const AdminPage: React.FC = () => {
                 <Button
                   variant="outline"
                   onClick={() => submitPaymentDialog(false)}
+                  disabled={manualGrantSubmitting}
                   className="rounded-xl text-rose-600 hover:bg-rose-50 hover:text-rose-700"
                 >
                   Отключить оплату
                 </Button>
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={closePaymentDialog} className="rounded-xl">
+                  <Button variant="outline" onClick={closePaymentDialog} disabled={manualGrantSubmitting} className="rounded-xl">
                     Отмена
                   </Button>
-                  <Button onClick={() => submitPaymentDialog(true)} className="rounded-xl">
-                    Отметить оплату
+                  <Button onClick={() => submitPaymentDialog(true)} disabled={manualGrantSubmitting} className="rounded-xl">
+                    {manualGrantSubmitting ? 'Записываем…' : 'Подтвердить оплату и открыть доступ'}
                   </Button>
                 </div>
               </div>

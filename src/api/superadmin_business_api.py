@@ -43,6 +43,91 @@ def _require_superadmin(db=None):
     return user_data, None
 
 
+@superadmin_business_bp.route("/api/superadmin/manual-access-grants", methods=["POST"])
+def create_manual_access_grant():
+    db = DatabaseManager()
+    actor, error_response = _require_superadmin(db)
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    try:
+        from services.manual_access_grants import create_manual_access_grant as grant_access
+
+        result = grant_access(
+            db.conn.cursor(),
+            actor_user_id=str(actor.get("user_id") or ""),
+            target_type=payload.get("target_type"),
+            target_id=payload.get("target_id"),
+            tariff_id=payload.get("tariff_id"),
+            period_end=payload.get("period_end"),
+            payment_amount_rub=payload.get("payment_amount_rub"),
+            payment_reference=payload.get("payment_reference") or "",
+            request_id=payload.get("request_id"),
+        )
+        db.conn.commit()
+        return jsonify({"success": True, "grant": result})
+    except ValueError as exc:
+        db.conn.rollback()
+        error = str(exc)
+        messages = {
+            "client_business_not_found": "Клиентский бизнес не найден или отключён.",
+            "business_owner_not_found": "У бизнеса не найден аккаунт владельца.",
+            "network_not_found": "Сеть не найдена.",
+            "network_owner_not_found": "У сети не найден аккаунт владельца.",
+            "network_has_no_client_businesses": "В сети нет активных клиентских точек.",
+            "period_end_must_not_be_past": "Дата окончания доступа уже прошла.",
+            "request_id_conflicts_with_existing_grant": "Этот запрос уже использован для другого начисления.",
+        }
+        return jsonify({"success": False, "error": messages.get(error, "Проверьте тариф, сумму оплаты и дату окончания доступа."), "error_code": error}), 400
+    except Exception:
+        db.conn.rollback()
+        print(f"❌ Ошибка ручного доступа после внешней оплаты: {sys.exc_info()[1]}")
+        return jsonify({"success": False, "error": "Не удалось записать оплату и выдать доступ. Изменения отменены."}), 500
+    finally:
+        db.close()
+
+
+@superadmin_business_bp.route("/api/superadmin/manual-access-grants", methods=["GET"])
+def list_manual_access_grants():
+    db = DatabaseManager()
+    _, error_response = _require_superadmin(db)
+    if error_response:
+        return error_response
+    try:
+        try:
+            limit = min(max(int(request.args.get("limit") or 50), 1), 100)
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "error": "Некорректный размер списка."}), 400
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """SELECT access_grant.id, access_grant.request_id, access_grant.target_type, access_grant.target_id,
+                      access_grant.business_ids, access_grant.user_id, owner.email AS user_email,
+                      access_grant.granted_by_user_id, admin.email AS granted_by_email,
+                      access_grant.tariff_id, access_grant.tier, access_grant.credit_amount,
+                      access_grant.balance_before, access_grant.balance_after, access_grant.payment_amount_rub,
+                      access_grant.currency, access_grant.payment_reference, access_grant.period_start,
+                      access_grant.period_end, access_grant.created_at,
+                      COALESCE(business.name, network.name, 'Удалённый бизнес') AS target_name
+               FROM manual_access_grants access_grant
+               JOIN users owner ON owner.id = access_grant.user_id
+               JOIN users admin ON admin.id = access_grant.granted_by_user_id
+               LEFT JOIN businesses business ON access_grant.target_type = 'business' AND business.id = access_grant.target_id
+               LEFT JOIN networks network ON access_grant.target_type = 'network' AND network.id = access_grant.target_id
+               ORDER BY access_grant.created_at DESC LIMIT %s""",
+            (limit,),
+        )
+        columns = [item[0] for item in (cursor.description or [])]
+        rows = []
+        for value in cursor.fetchall() or []:
+            rows.append(dict(value) if isinstance(value, dict) else {columns[index]: value[index] for index in range(min(len(columns), len(value)))})
+        return jsonify({"success": True, "grants": rows})
+    except Exception:
+        print(f"❌ Ошибка загрузки ручных начислений: {sys.exc_info()[1]}")
+        return jsonify({"success": False, "error": "Не удалось загрузить историю оплат вне LocalOS."}), 500
+    finally:
+        db.close()
+
+
 @superadmin_business_bp.route("/api/superadmin/businesses", methods=["GET"])
 def get_all_businesses():
     """Получить все бизнесы (только для суперадмина)."""
