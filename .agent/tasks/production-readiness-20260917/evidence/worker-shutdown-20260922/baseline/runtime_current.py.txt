@@ -1,0 +1,502 @@
+"""Current immutable image: disposable PG/Redis, migrations, HTTP and worker boot."""
+
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import time
+
+ROOT = Path('/private/tmp/localos-current-runtime-20260922.VHbXtf')
+SOURCE = Path('/private/tmp/localos-current-image-20260922.SJ9dlO/source')
+BUILD = Path('/private/tmp/localos-current-image-20260922.SJ9dlO/result.json')
+STAGING = SOURCE / 'docker-compose.staging.yml'
+STAGING_SHA = '18d1dc054cdc0b8741d9453d7a1dee8b7bea893df563a7c35604cdd9874eb413'
+IMAGE = 'sha256:f5f8970b270d7b74b96e2b188cbfd471477a5a5655d9eb57bf007d45c96f59d6'
+PG_IMAGE = 'sha256:4f26f01433671ee540195bff27f4890acca58cb49cf6d61ea12008d842ec0699'
+REDIS_IMAGE = 'sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2'
+PREFIX = 'localos-runtime-vhbxtf'
+OWNER = 'production-readiness-20260917-vhbxtf'
+NETWORK = PREFIX + '-internal'
+VOLUME = PREFIX + '-pgdata'
+DB = 'localos_test_vhbxtf'
+ROLES = ('parser', 'agent', 'operator', 'dispatcher', 'maintenance')
+DOCKER = ['/Applications/Docker.app/Contents/Resources/bin/docker', '--context', 'desktop-linux']
+ENV = {key: os.environ[key] for key in ('PATH', 'HOME', 'TMPDIR', 'LANG') if key in os.environ}
+GIB = 1024**3
+MAX_WALL = 900
+CREATED = []
+COMMANDS = []
+START = None
+
+DISABLED = '''OUTREACH_REPLY_SYNC_ENABLED OUTREACH_DISPATCH_ENABLED
+OUTREACH_EMAIL_THREAD_SYNC_ENABLED OUTREACH_TELEGRAM_THREAD_SYNC_ENABLED
+RIDERRA_SYSTEMATIC_OUTREACH_ENABLED CARD_AUTOMATION_ENABLED
+CREATOR_BOT_ENABLED CREATOR_OFFER_DISTRIBUTION_ENABLED FOUNDER_CONTENT_MORNING_ENABLED
+AGENT_SCHEDULE_DISPATCH_ENABLED AGENT_ASYNC_RUNS_ENABLED OPERATOR_ASYNC_JOBS_ENABLED
+SOCIAL_POST_DISPATCH_ENABLED SOCIAL_POST_METRICS_ENABLED INFLUENCER_ASYNC_SEARCH_ENABLED
+INFLUENCER_SOURCE_ENRICHMENT_ENABLED INFLUENCER_PROFILE_REVALIDATION_ENABLED
+PROSPECTING_CONTACT_INTELLIGENCE_ENABLED TELEGRAM_OPPORTUNITY_MONITOR_ENABLED
+KNOWLEDGE_LAYER_ENABLED KNOWLEDGE_TELEGRAM_MONITOR_ENABLED KNOWLEDGE_EMBEDDINGS_ENABLED
+OUTREACH_PAIN_LIBRARY_REFRESH_ENABLED OPENCLAW_CALLBACK_DISPATCH_ENABLED
+OPENCLAW_CALLBACK_ALERT_NOTIFY_ENABLED OPENCLAW_BILLING_RECONCILE_ENABLED
+OPENCLAW_BILLING_RECONCILE_ALERT_ENABLED YOOKASSA_RENEWALS_ENABLED
+WEB_TRACKING_MAINTENANCE_ENABLED JOURNEY_NOTIFICATIONS_ENABLED
+WORKER_ENABLE_AI_ANALYSIS LLM_ROUTER_ENABLED LLM_SHADOW_MODE'''.split()
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def write(path, value):
+    stream = path.open('x')
+    try:
+        json.dump(value, stream, indent=2, sort_keys=True)
+        stream.write('\n')
+    finally:
+        stream.close()
+
+
+def guard():
+    if shutil.disk_usage(ROOT).free < 2 * GIB:
+        raise RuntimeError('runtime_disk_floor')
+    if START is not None and time.monotonic() - START > MAX_WALL:
+        raise RuntimeError('runtime_deadline')
+
+
+def command(args, check=True, timeout=30, guarded=True):
+    if guarded:
+        guard()
+    began = time.monotonic()
+    safe_args = []
+    environment_value = False
+    for value in args:
+        if environment_value:
+            key, _, supplied = value.partition('=')
+            safe_args.append(key + '=' + ('<sha256:' + hashlib.sha256(supplied.encode()).hexdigest() + '>' if supplied else '<blank>'))
+        else:
+            safe_args.append(value)
+        environment_value = value == '--env'
+    item = {'arguments': safe_args, 'timeout': timeout}
+    COMMANDS.append(item)
+    try:
+        completed = subprocess.run(DOCKER + args, env=ENV, cwd=ROOT, capture_output=True,
+                                   text=True, timeout=timeout, check=False)
+    except Exception:
+        item.update({'error_type': type(sys.exception()).__name__,
+                     'seconds': round(time.monotonic() - began, 4)})
+        raise
+    item.update({'exit_code': completed.returncode, 'seconds': round(time.monotonic() - began, 4)})
+    if len(completed.stdout) + len(completed.stderr) > 4 * 1024**2:
+        raise RuntimeError('command_output_cap')
+    item['stdout_sha256'] = hashlib.sha256(completed.stdout.encode()).hexdigest()
+    item['stderr_sha256'] = hashlib.sha256(completed.stderr.encode()).hexdigest()
+    if check and completed.returncode:
+        raise RuntimeError('docker_command_failed')
+    return completed
+
+
+def inventory(guarded=True):
+    return {
+        'containers': sorted(command(['ps', '-a', '--no-trunc', '--format', '{{.ID}} {{.State}}'], guarded=guarded).stdout.splitlines()),
+        'volumes': sorted(command(['volume', 'ls', '--format', '{{.Name}}'], guarded=guarded).stdout.splitlines()),
+        'networks': sorted(command(['network', 'ls', '--no-trunc', '--format', '{{.ID}}'], guarded=guarded).stdout.splitlines()),
+    }
+
+
+def inspect(kind, identity, guarded=True):
+    output = command([kind, 'inspect', identity], check=False, guarded=guarded)
+    if output.returncode:
+        missing = {
+            'container': 'No such container: ' + identity,
+            'image': 'No such image: ' + identity,
+            'network': 'network ' + identity + ' not found',
+            'volume': 'get ' + identity + ': no such volume',
+        }[kind]
+        if output.returncode == 1 and output.stderr.strip() == 'Error response from daemon: ' + missing and output.stdout.strip() in ('', '[]'):
+            return None
+        raise RuntimeError('inspect_failed_not_proven_absent')
+    rows = json.loads(output.stdout)
+    if len(rows) != 1:
+        raise RuntimeError('inspect_cardinality')
+    return rows[0]
+
+
+def owned(item, guarded=True):
+    record = inspect(item['kind'], item.get('id') or item['name'], guarded)
+    if record is None:
+        raise RuntimeError('owned_resource_missing')
+    labels = record['Config']['Labels'] if item['kind'] == 'container' else record['Labels']
+    if not labels or labels.get('localos.audit.owner') != OWNER:
+        raise RuntimeError('foreign_resource_label')
+    name = record['Name'].lstrip('/')
+    identity = record['Name'] if item['kind'] == 'volume' else record['Id']
+    if name != item['name'] or (item.get('id') and item['id'] != identity):
+        raise RuntimeError('resource_identity_changed')
+    if item['kind'] == 'container' and record['Image'] != item['image']:
+        raise RuntimeError('container_image_changed')
+    item['id'] = identity
+    return record
+
+
+def create(kind, name, args, image=None):
+    if inspect(kind, name) is not None:
+        raise RuntimeError('resource_name_collision')
+    item = {'kind': kind, 'name': name, 'image': image, 'id': None}
+    CREATED.append(item)  # Recovery may inspect only this proven-absent exact name.
+    command(args)
+    owned(item)
+    return item
+
+
+def environment(mode, role=None):
+    # Names come only from the committed blank-credential YAML anchor; values stay empty.
+    if sha(STAGING) != STAGING_SHA:
+        raise RuntimeError('staging_source_changed')
+    lines = STAGING.read_text().split('services:', 1)[0].splitlines()
+    values = {}
+    for line in lines:
+        if line.startswith('  ') and line.strip().endswith(': ""'):
+            values[line.strip().split(':', 1)[0]] = ''
+    values.update(dict.fromkeys(DISABLED, 'false'))
+    values.update({
+        'APP_ENV': 'test', 'PYTHON_DOTENV_DISABLED': '1', 'PYTHONUNBUFFERED': '1',
+        'FLASK_APP': 'src.main:app', 'LOCALOS_MIGRATION_MODE': mode,
+        'DATABASE_URL': 'postgresql://audit_owner:synthetic_only@postgres:5432/' + DB,
+        'POSTGRES_HOST': 'postgres', 'POSTGRES_PORT': '5432', 'POSTGRES_USER': 'audit_owner',
+        'POSTGRES_PASSWORD': 'synthetic_only', 'POSTGRES_DB': DB,
+        'REDIS_URL': 'redis://redis:6379/0', 'RATE_LIMIT_STORAGE_URI': 'redis://redis:6379/1',
+        'RATE_LIMITING_ENABLED': 'true', 'DISK_IMPORT_BUSINESS_IDS': '',
+        'TELEGRAM_BOT_TOKEN': '', 'OPENAI_API_KEY': '', 'ANTHROPIC_API_KEY': '',
+        'SMTP_SERVER': '127.0.0.1', 'SMTP_PORT': '1', 'SMTP_USERNAME': '', 'SMTP_PASSWORD': '',
+        'EXTERNAL_AUTH_SECRET_KEY': 'synthetic-runtime-only-000000000001',
+        'OUTREACH_EMAIL_SECRET_KEY': 'synthetic-runtime-only-000000000002',
+        'FRONTEND_DIST_DIR': '/app/frontend/dist',
+    })
+    if role:
+        values['WORKER_ROLE'] = role
+    return values
+
+
+def container(name, image, args, values=None, pg=False, redis=False):
+    full = PREFIX + '-' + name
+    options = ['create', '--name', full, '--label', 'localos.audit.owner=' + OWNER,
+               '--network', NETWORK, '--network-alias', name, '--restart', 'no',
+               '--memory', '768m' if not redis else '128m', '--cpus', '1', '--pids-limit', '256',
+               '--log-driver', 'json-file', '--log-opt', 'max-size=2m', '--log-opt', 'max-file=1']
+    if pg:
+        options += ['--mount', 'type=volume,source=' + VOLUME + ',target=/var/lib/postgresql/data']
+    elif redis:
+        options += ['--tmpfs', '/data:rw,nosuid,nodev,size=67108864']
+    else:
+        options += ['--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true']
+    for key, value in sorted((values or {}).items()):
+        options += ['--env', key + '=' + value]
+    item = create('container', full, options + [image] + args, image)
+    record = owned(item)
+    host = record['HostConfig']
+    if (host['RestartPolicy']['Name'] != 'no' or host['Memory'] != (128 if redis else 768) * 1024**2
+        or host['NanoCpus'] != 1000000000 or host['PidsLimit'] != 256
+        or host['Privileged'] or host['NetworkMode'] != NETWORK
+        or host['LogConfig'] != {'Type': 'json-file', 'Config': {'max-size': '2m', 'max-file': '1'}}):
+        raise RuntimeError('container_runtime_limits')
+    if set(record['NetworkSettings']['Networks']) != {NETWORK} or record['HostConfig'].get('PortBindings'):
+        raise RuntimeError('container_network_boundary')
+    mounts = record['Mounts']
+    if pg:
+        if len(mounts) != 1 or mounts[0]['Type'] != 'volume' or mounts[0]['Name'] != VOLUME:
+            raise RuntimeError('pg_mount_boundary')
+    elif any(mount['Type'] != 'tmpfs' for mount in mounts):
+        raise RuntimeError('unexpected_container_mount')
+    if not pg and not redis:
+        if (record['Config']['User'] != 'localos:localos' or host['CapDrop'] != ['ALL']
+            or host['SecurityOpt'] != ['no-new-privileges:true']):
+            raise RuntimeError('application_privilege_boundary')
+    command(['start', item['id']])
+    return item
+
+
+def logs(item, label):
+    owned(item, guarded=False)
+    completed = command(['logs', '--tail', '800', item['id']], guarded=False)
+    text = completed.stdout + completed.stderr
+    target = ROOT / (label + '.log')
+    stream = target.open('x')
+    try:
+        stream.write(text)
+    finally:
+        stream.close()
+    return {'path': str(target), 'sha256': sha(target), 'bytes': target.stat().st_size,
+            'traceback': 'Traceback (most recent call last)' in text,
+            'critical_worker_error': 'Критическая ошибка worker loop' in text,
+            'worker_started': 'Worker запущен.' in text}
+
+
+def wait_worker(item, seconds=60):
+    began = time.monotonic()
+    deadline = began + seconds
+    while time.monotonic() < deadline:
+        state = owned(item)['State']
+        output = command(['logs', '--tail', '800', item['id']])
+        if not state['Running']:
+            return {'ready': False, 'reason': 'exited_before_ready', 'seconds': time.monotonic() - began}
+        if 'Worker запущен.' in output.stdout + output.stderr:
+            # Observe at least one actual ten-second loop interval after initialization.
+            for _ in range(12):
+                guard()
+                time.sleep(1)
+            return {'ready': True, 'seconds': time.monotonic() - began}
+        time.sleep(0.5)
+    return {'ready': False, 'reason': 'worker_ready_deadline', 'seconds': time.monotonic() - began}
+
+
+def wait_exit(item, seconds):
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        guard()
+        record = owned(item)
+        if not record['State']['Running']:
+            return record['State']
+        time.sleep(0.5)
+    raise RuntimeError('container_deadline')
+
+
+def wait_command(item, args, seconds=60):
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if not owned(item)['State']['Running']:
+            raise RuntimeError('unexpected_container_exit')
+        check = command(['exec', item['id']] + args, check=False, timeout=15)
+        if check.returncode == 0:
+            return check.stdout.strip()
+        time.sleep(0.5)
+    raise RuntimeError('service_readiness_deadline')
+
+
+def stop(item, seconds=15):
+    before = owned(item)['State']
+    if not before['Running']:
+        raise RuntimeError('service_stopped_before_signal')
+    began = time.monotonic()
+    command(['stop', '--time', str(seconds), item['id']], timeout=seconds + 15)
+    after = owned(item)['State']
+    return {'seconds': round(time.monotonic() - began, 3), 'before': before, 'after': after,
+            'clean_exit': not after['Running'] and after['ExitCode'] == 0 and not after['OOMKilled']}
+
+
+def cleanup():
+    results = []
+    for item in reversed(CREATED):
+        outcome = {'kind': item['kind'], 'name': item['name']}
+        try:
+            if inspect(item['kind'], item.get('id') or item['name'], guarded=False) is None:
+                outcome['status'] = 'absent'
+                results.append(outcome)
+                continue
+            record = owned(item, guarded=False)
+            if item['kind'] == 'container':
+                outcome['pre_cleanup_state'] = record['State']
+                try:
+                    outcome['log'] = logs(item, 'cleanup-' + item['name'])
+                except Exception:
+                    outcome['log_error'] = type(sys.exception()).__name__
+                if record['State']['Running']:
+                    command(['stop', '--time', '10', item['id']], timeout=25, guarded=False)
+                    stopped = owned(item, guarded=False)['State']
+                    outcome['stop_exit_code'] = stopped['ExitCode']
+                    if stopped['Running'] or stopped['OOMKilled'] or stopped['ExitCode'] == 137:
+                        outcome['abnormal_stop'] = True
+                command(['rm', item['id']], guarded=False)
+            elif item['kind'] == 'network':
+                if record.get('Containers'):
+                    raise RuntimeError('network_not_empty')
+                command(['network', 'rm', item['id']], guarded=False)
+            else:
+                command(['volume', 'rm', item['id']], guarded=False)
+            if inspect(item['kind'], item['id'], guarded=False) is not None:
+                raise RuntimeError('cleanup_resource_remains')
+            outcome['status'] = 'removed'
+        except Exception:
+            outcome['status'] = 'error_' + type(sys.exception()).__name__
+        results.append(outcome)
+    return results
+
+
+SCHEMA_PROBE = '''import json,os,psycopg2
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+conn=psycopg2.connect(os.environ['DATABASE_URL'],connect_timeout=5)
+try:
+ cursor=conn.cursor()
+ cursor.execute('SHOW server_version_num'); version=cursor.fetchone()[0]
+ cursor.execute('SELECT current_database()'); database=cursor.fetchone()[0]
+ cursor.execute('SELECT version_num FROM alembic_version'); actual=sorted(r[0] for r in cursor.fetchall())
+ expected=sorted(ScriptDirectory.from_config(Config('/app/alembic.ini')).get_heads())
+ cursor.execute('SELECT extname,extversion FROM pg_extension ORDER BY extname'); extensions=cursor.fetchall()
+ assert {'vector','pgcrypto'}.issubset({row[0] for row in extensions}),extensions
+ cursor.execute('SELECT COUNT(*) FROM users'); users=cursor.fetchone()[0]
+ cursor.execute('SELECT COUNT(*) FROM parsequeue'); queue=cursor.fetchone()[0]
+ cursor.execute('SELECT COUNT(*) FROM businesses'); businesses=cursor.fetchone()[0]
+ assert version.startswith('16'),version
+ assert database=='localos_test_vhbxtf',database
+ assert actual==expected,(actual,expected)
+ assert users==0 and queue==0 and businesses==0,(users,queue,businesses)
+ print(json.dumps(dict(version=version,database=database,actual=actual,expected=expected,extensions=extensions,users=users,parsequeue=queue,businesses=businesses)))
+finally:
+ conn.close()
+'''
+
+HTTP_PROBE = '''import json,os,urllib.request
+assert os.geteuid()==10001
+results=[]
+for route in ('/health','/ready','/','/about'):
+ response=urllib.request.urlopen('http://127.0.0.1:8000'+route,timeout=5)
+ try:
+  body=response.read(4096)
+  assert response.status==200,(route,response.status)
+  if route in ('/health','/ready'):
+   assert json.loads(body)['status']==('ok' if route=='/health' else 'ready'),route
+  else:
+   assert b'<html' in body.lower(),route
+  results.append(dict(route=route,status=response.status,bytes_read=len(body)))
+ finally:
+  response.close()
+print(json.dumps(results))
+'''
+
+HEALTH_PROBE = '''import json,sys,urllib.request,urllib.error
+expected_ready=int(sys.argv[1])
+results=[]
+for route in ('/health','/ready'):
+ try:
+  response=urllib.request.urlopen('http://127.0.0.1:8000'+route,timeout=8)
+ except urllib.error.HTTPError:
+  response=sys.exception()
+ try:
+  payload=json.loads(response.read(4096))
+  expected=200 if route=='/health' else expected_ready
+  assert response.status==expected,(route,response.status,expected)
+  expected_status='ok' if route=='/health' else ('ready' if expected_ready==200 else 'not_ready')
+  assert payload.get('status')==expected_status,(route,payload)
+  if route=='/ready':
+   assert payload=={'status':expected_status},(route,payload)
+  results.append(dict(route=route,status=response.status,payload=payload))
+ finally:
+  response.close()
+print(json.dumps(results))
+'''
+
+
+def main():
+    global START
+    if sys.argv[1:] != ['--execute'] or (ROOT / 'result.json').exists():
+        raise SystemExit('Fresh reviewed profile and --execute required')
+    if ROOT.is_symlink() or ROOT.resolve() != ROOT or shutil.disk_usage(ROOT).free < 5 * GIB:
+        raise SystemExit('Runtime root or 5GiB start guard failed')
+    if sha(STAGING) != STAGING_SHA:
+        raise SystemExit('Frozen staging source mismatch')
+    build = json.loads(BUILD.read_bytes())
+    if build['status'] != 'PASS' or build['image_identity']['id'] != IMAGE:
+        raise SystemExit('Bound current build required')
+    for image_id in (IMAGE, PG_IMAGE, REDIS_IMAGE):
+        image = inspect('image', image_id)
+        if image is None or image['Id'] != image_id or image['Architecture'] != 'arm64':
+            raise SystemExit('Required local image missing')
+        if image_id == IMAGE and (image['Config']['User'] != 'localos:localos'
+            or image['Config']['Labels']['org.opencontainers.image.revision'] != build['revision']
+            or image['Config']['Labels']['localos.audit.owner'] != build['image_identity']['owner']):
+            raise SystemExit('Current image label/user mismatch')
+    START = time.monotonic()
+    result = {'image_id': IMAGE, 'revision': build['revision'], 'owner': OWNER,
+              'controller_sha256': sha(Path(__file__)), 'build_result_sha256': sha(BUILD),
+              'staging_source_sha256': STAGING_SHA, 'environment_evidence': 'blank or sha256; supplied values synthetic only',
+              'environment_keys': sorted(environment('schema-check-only')),
+              'docker_before': inventory(), 'checks': {}, 'errors': []}
+    service_checks = []
+    result['checks']['workers'] = service_checks
+    try:
+        network = create('network', NETWORK, ['network', 'create', '--internal', '--label', 'localos.audit.owner=' + OWNER, NETWORK])
+        if not owned(network)['Internal']:
+            raise RuntimeError('external_network_rejected')
+        create('volume', VOLUME, ['volume', 'create', '--label', 'localos.audit.owner=' + OWNER, VOLUME])
+        pg = container('postgres', PG_IMAGE, [], {'POSTGRES_USER':'audit_owner', 'POSTGRES_PASSWORD':'synthetic_only', 'POSTGRES_DB':DB}, pg=True)
+        redis = container('redis', REDIS_IMAGE, ['redis-server', '--save', '', '--appendonly', 'no'], redis=True)
+        result['checks']['postgres_ready'] = wait_command(pg, ['pg_isready', '-U', 'audit_owner', '-d', DB])
+        result['checks']['redis_ready'] = wait_command(redis, ['redis-cli', 'ping'])
+        if result['checks']['redis_ready'] != 'PONG':
+            raise RuntimeError('redis_ping_failed')
+        migrator = container('migrate', IMAGE, ['true'], environment('migrate-only'))
+        migrated = wait_exit(migrator, 180)
+        result['checks']['migration'] = {'state': migrated, 'log': logs(migrator, 'migration')}
+        if migrated['ExitCode'] != 0 or migrated['OOMKilled']:
+            raise RuntimeError('migration_failed')
+        schema = container('schema', IMAGE, ['true'], environment('schema-check-only'))
+        checked = wait_exit(schema, 90)
+        result['checks']['schema'] = {'state': checked, 'log': logs(schema, 'schema')}
+        if checked['ExitCode'] != 0 or checked['OOMKilled']:
+            raise RuntimeError('schema_check_failed')
+        web = container('web', IMAGE, ['gunicorn', '--bind', '0.0.0.0:8000', '--workers', '1', '--threads', '1', '--timeout', '60', '--access-logfile', '-', '--error-logfile', '-', 'src.main:app'], environment('schema-check-only'))
+        result['checks']['http'] = json.loads(wait_command(web, ['python', '-c', HTTP_PROBE], 90))
+        result['checks']['schema_metadata'] = json.loads(command(['exec', web['id'], 'python', '-c', SCHEMA_PROBE]).stdout)
+        result['checks']['postgres_degradation_stop'] = stop(pg)
+        if not result['checks']['postgres_degradation_stop']['clean_exit']:
+            raise RuntimeError('postgres_degradation_unclean_stop')
+        result['checks']['database_down_http'] = json.loads(command(['exec', web['id'], 'python', '-c', HEALTH_PROBE, '503']).stdout)
+        owned(pg)
+        command(['start', pg['id']])
+        result['checks']['postgres_recovery'] = wait_command(pg, ['pg_isready', '-U', 'audit_owner', '-d', DB])
+        result['checks']['database_recovered_http'] = json.loads(wait_command(web, ['python', '-c', HEALTH_PROBE, '200']))
+        for role in ROLES:
+            worker = container('worker-' + role, IMAGE, ['python', 'src/worker.py'], environment('schema-check-only', role))
+            readiness = wait_worker(worker)
+            state = owned(worker)['State']
+            boot = logs(worker, 'worker-' + role + '-boot')
+            item = {'role': role, 'readiness': readiness, 'boot_state': state, 'boot_log': boot}
+            service_checks.append(item)
+            if state['Running']:
+                item['shutdown'] = stop(worker)
+            item['final_log'] = logs(worker, 'worker-' + role + '-final')
+            item['pass'] = (readiness['ready'] and state['Running'] and boot['worker_started']
+                            and not item['final_log']['traceback'] and not item['final_log']['critical_worker_error']
+                            and item.get('shutdown', {}).get('clean_exit', False))
+        result['checks']['schema_after_workers'] = json.loads(command(['exec', web['id'], 'python', '-c', SCHEMA_PROBE]).stdout)
+        result['checks']['web_log'] = logs(web, 'web-before-stop')
+        result['checks']['web_shutdown'] = stop(web)
+        result['checks']['web_final_log'] = logs(web, 'web-final')
+        if result['checks']['web_final_log']['traceback']:
+            raise RuntimeError('unexpected_web_traceback')
+    except Exception:
+        result['errors'].append({'type': type(sys.exception()).__name__, 'reason': str(sys.exception())})
+    finally:
+        result['cleanup'] = cleanup()
+        try:
+            result['staging_source_unchanged'] = sha(STAGING) == STAGING_SHA
+            if not result['staging_source_unchanged']:
+                raise RuntimeError('staging_source_changed')
+        except Exception:
+            result['errors'].append({'type': type(sys.exception()).__name__, 'reason': 'final_staging_source_failed'})
+        try:
+            result['docker_after'] = inventory(guarded=False)
+        except Exception:
+            result['docker_after'] = None
+            result['errors'].append({'type': type(sys.exception()).__name__, 'reason': 'final_inventory_failed'})
+        result['duration_seconds'] = round(time.monotonic() - START, 3)
+        result['free_end_bytes'] = shutil.disk_usage(ROOT).free
+        result['commands'] = COMMANDS
+        result['created_resources'] = CREATED
+        passed = (not result['errors'] and len(service_checks) == len(ROLES)
+                  and all(item.get('pass', False) for item in service_checks)
+                  and result['checks'].get('web_shutdown', {}).get('clean_exit', False)
+                  and all(item['status'] == 'removed' and not item.get('abnormal_stop') for item in result['cleanup'])
+                  and result['docker_before'] == result['docker_after'])
+        result['status'] = 'PASS' if passed else 'NONPASS'
+        write(ROOT / 'result.json', result)
+    print(json.dumps({key: result[key] for key in ('status','duration_seconds','errors','free_end_bytes')}))
+    raise SystemExit(0 if passed else 1)
+
+
+if __name__ == '__main__':
+    main()

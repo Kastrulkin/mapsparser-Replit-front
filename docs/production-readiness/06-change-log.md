@@ -1,5 +1,22 @@
 # Production-readiness change log
 
+## Worker main-polling shutdown — parent9c3fa1b3, 22 September
+
+Current canonical image testing reproduced forced stop137 for every ready idle
+worker role after15s. Add a lock-free boolean stop request for SIGTERM/SIGINT,
+bounded100ms idle polling, and checks between existing top-level callbacks.
+Preserve all30 callbacks' order and cycle-error isolation; finish the active
+callback instead of injecting exceptions into provider/database operations.
+No new dependency or runtime configuration. Background/per-job drain is outside
+this narrow correction and remains a risk to verify.
+
+Reviewed same-image worker-only overlay changes all five stops to exit0 in
+0.499–0.551s, with migration/schema/HTTP/database recovery and exact resource
+cleanup still passing. No full source sync, image rebuild or deployment.
+Add focused shutdown tests and adapt the existing cadence assertion to the
+extracted polling cycle without dropping the ordering requirement. Durable
+task evidence: `worker-shutdown-20260922/`; original failures retained.
+
 ## Synthetic stress/resource proof and source reconciliation — parentcb15cb0e
 
 No product or test-assertion changes. Add a private supervised runner for the

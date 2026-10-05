@@ -1,0 +1,47 @@
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+
+ROOT = Path("/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре")
+PROOF = Path("/private/tmp/localos-worker-shutdown-proof-20260922")
+PYTHON = Path("/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python")
+
+environment = {
+    "PATH": "/usr/local/bin:/usr/bin:/bin",
+    "HOME": str(PROOF / "home"),
+    "TMPDIR": str(PROOF / "tmp"),
+    "TMP": str(PROOF / "tmp"),
+    "TEMP": str(PROOF / "tmp"),
+    "PYTHONPATH": str(PROOF) + ":" + str(ROOT / "src"),
+    "PYTHONNOUSERSITE": "1",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+}
+arguments = [
+    "/usr/bin/sandbox-exec",
+    "-f",
+    str(PROOF / "worker-mocked.sb"),
+    "/usr/bin/arch",
+    "-arm64",
+    str(PYTHON),
+    "-B",
+    "-m",
+    "pytest",
+    "-p",
+    "no:cacheprovider",
+    "-q",
+    "tests/test_worker_shutdown.py",
+    "tests/test_worker_dispatch.py",
+    "tests/test_worker_apify_settlement.py",
+    "tests/test_worker_outreach_cadence.py",
+    "tests/test_worker_services_quality.py",
+    "tests/test_worker_apify_ipc_safety.py",
+    "tests/test_worker_failure_reason_safety.py",
+    "tests/test_worker_parser_artifact_safety.py",
+    "tests/test_worker_proxy_diagnostic_safety.py",
+    "tests/test_worker_parser_diagnostic_logs.py",
+    "tests/test_runtime_job_reliability.py",
+]
+raise SystemExit(subprocess.run(arguments, cwd=ROOT, env=environment, check=False).returncode)

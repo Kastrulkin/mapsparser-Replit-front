@@ -1,0 +1,33 @@
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import sys
+import time
+
+
+PROOF = Path("/private/tmp/localos-worker-shutdown-proof-20260922")
+RUNNER = PROOF / "run_mocked_regression.py"
+OUTPUT = PROOF / "mocked-regression-v5.json"
+started = time.monotonic()
+completed = subprocess.run(
+    [sys.executable, str(RUNNER)],
+    cwd=Path("/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре"),
+    capture_output=True,
+    check=False,
+    text=True,
+    timeout=180,
+)
+payload = {
+    "label": "worker-mocked-regression-v5",
+    "command": [str(RUNNER)],
+    "exit_code": completed.returncode,
+    "duration_ms": round((time.monotonic() - started) * 1000, 3),
+    "stdout": completed.stdout[:12000],
+    "stderr": completed.stderr[:12000],
+    "stdout_truncated": len(completed.stdout) > 12000,
+    "stderr_truncated": len(completed.stderr) > 12000,
+    "runner_sha256": hashlib.sha256(RUNNER.read_bytes()).hexdigest(),
+}
+OUTPUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+raise SystemExit(completed.returncode)

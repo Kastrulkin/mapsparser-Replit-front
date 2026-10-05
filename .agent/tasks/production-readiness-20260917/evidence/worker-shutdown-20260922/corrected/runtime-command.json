@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "label": "worker-shutdown-overlay-dw3jpl",
+  "captured_at": "2026-09-22T20:24:37.705184+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+    "-B",
+    "-I",
+    "/private/tmp/localos-worker-shutdown-20260922.dW3jpl/runtime_current.py",
+    "--execute",
+    "--worker-sha",
+    "11a13e9c5ae310d7089efb0144ad374a97429e12530fe76969077e027d6ec3ea"
+  ],
+  "cwd": "/private/tmp/localos-worker-shutdown-20260922.dW3jpl",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 96581.747,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"status\": \"PASS\", \"duration_seconds\": 96.323, \"errors\": [], \"free_end_bytes\": 7346204672}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

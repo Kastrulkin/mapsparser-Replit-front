@@ -1,5 +1,42 @@
 # Audit backlog — evidence, not a readiness claim
 
+## WORKER-SHUTDOWN-01 — P2, reliability, locally FIX_PROVEN — 22 September
+
+All five canonical worker roles start successfully but ignore the normal stop
+signal when idle as Docker PID1. On the clean immutable image f5f8970b, each
+`docker stop --time 15` takes 15.277–15.435 seconds and ends with exit137,
+OOMKilled=false. Gunicorn stops cleanly in the same isolated environment.
+Source: `src/worker.py` main loop has no SIGTERM/SIGINT shutdown request and uses
+an unconditional sleep/retry loop. High confidence, repeatable in all five roles.
+
+Impact: routine deployments/restarts forcibly terminate workers instead of
+allowing an orderly polling-loop exit. This empty-queue test does not prove
+lost data or safe cancellation of in-flight provider/database operations.
+Probability high on Docker stop; scope parser/agent/operator/dispatcher/
+maintenance; small fix effort and moderate lifecycle risk, before production.
+
+Proposed bounded fix: signal only requests stopping; finish the current top-level
+polling callback, do not start another, and wake idle waiting immediately. Preserve
+callback order and existing exception semantics. Do not inject exceptions into
+transactions or change job recovery/leases. Background threads and long-running
+callbacks require separate drain evidence, not an automatic graceful claim.
+
+Acceptance: original five-role Docker reproduction exits0 without OOM/forced
+kill, plus focused signal/idle/in-flight-callback/error regressions. Preserve
+health/readiness degradation recovery and exact existing Docker inventory.
+Baseline private profile: `/private/tmp/localos-current-runtime-20260922.VHbXtf/`,
+172.984048s capture/172.718s controller, exit1/NONPASS. All12 newly created
+resources were removed; no production, external provider or user data changed.
+
+The minimal polling-loop fix is now causally verified on that same base image
+with only the reviewed worker file overlaid: five clean exits0 in
+0.499/0.551/0.523/0.549/0.513s, noOOM/forced kill, preserved callback order and
+health/readiness gates. Correction capture96.581747s/exit0; all12 resources
+removed and prior inventory unchanged. Source SHA11a13e9c, independently
+reviewed. Durable evidence: `evidence/worker-shutdown-20260922/` in the task bundle.
+An updated canonical image and active-job/background drain remain unverified;
+this closes the demonstrated idle/main-polling defect only.
+
 ## Bounded load/resources and capability reconciliation — 22 September
 
 The small five-journey concurrency-two gap has fresh synthetic evidence:

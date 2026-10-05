@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "label": "worker-shutdown-pure-final",
+  "captured_at": "2026-09-22T20:22:25.225155+00:00",
+  "command": [
+    "zsh",
+    "-lc",
+    "python3 -m unittest -v test_runtime_controller.py && /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO\\ \u0441\\ \u0420\u0435\u043f\u043b\u0438\u0442\\ \u043d\u0430\\ \u041a\u0443\u0440\u0441\u043e\u0440\u0435/venv/bin/ruff check test_runtime_controller.py"
+  ],
+  "cwd": "/private/tmp/localos-worker-shutdown-20260922.dW3jpl",
+  "runtime": "Python 3.11.7 on Darwin x86_64",
+  "duration_ms": 9301.333,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "All checks passed!\n",
+  "stderr": "test_cleanup_refuses_foreign_owner_without_remove (test_runtime_controller.RuntimeControllerTests.test_cleanup_refuses_foreign_owner_without_remove) ... ok\ntest_command_journal_hashes_output_and_preserves_blank_environment (test_runtime_controller.RuntimeControllerTests.test_command_journal_hashes_output_and_preserves_blank_environment) ... ok\ntest_create_records_partial_resource_for_owned_recovery_before_command (test_runtime_controller.RuntimeControllerTests.test_create_records_partial_resource_for_owned_recovery_before_command) ... ok\ntest_final_status_requires_all_created_resources_be_removed (test_runtime_controller.RuntimeControllerTests.test_final_status_requires_all_created_resources_be_removed) ... ok\ntest_inspect_refuses_daemon_error_that_is_not_exact_absence (test_runtime_controller.RuntimeControllerTests.test_inspect_refuses_daemon_error_that_is_not_exact_absence) ... ok\ntest_inspect_refuses_malformed_or_multiple_result_cardinality (test_runtime_controller.RuntimeControllerTests.test_inspect_refuses_malformed_or_multiple_result_cardinality) ... ok\ntest_inspect_returns_none_only_for_exact_daemon_absence (test_runtime_controller.RuntimeControllerTests.test_inspect_returns_none_only_for_exact_daemon_absence) ... ok\ntest_patch_worker_is_noop_for_non_worker_name (test_runtime_controller.RuntimeControllerTests.test_patch_worker_is_noop_for_non_worker_name) ... ok\ntest_patch_worker_proves_original_and_applied_hashes_with_three_copies (test_runtime_controller.RuntimeControllerTests.test_patch_worker_proves_original_and_applied_hashes_with_three_copies) ... ok\ntest_patch_worker_refuses_overlay_hash_before_copy (test_runtime_controller.RuntimeControllerTests.test_patch_worker_refuses_overlay_hash_before_copy) ... ok\ntest_patch_worker_refuses_running_or_wrong_image_worker (test_runtime_controller.RuntimeControllerTests.test_patch_worker_refuses_running_or_wrong_image_worker) ... ok\ntest_wait_worker_reports_stopped_before_ready_without_sleeping (test_runtime_controller.RuntimeControllerTests.test_wait_worker_reports_stopped_before_ready_without_sleeping) ... ok\n\n----------------------------------------------------------------------\nRan 12 tests in 0.010s\n\nOK\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "label": "worker-mocked-regression-v3",
+  "captured_at": "2026-09-22T20:25:33.575287+00:00",
+  "command": [
+    "/usr/local/bin/python3",
+    "/private/tmp/localos-worker-shutdown-proof-20260922/run_mocked_regression.py"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin x86_64",
+  "duration_ms": 7581.625,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "..........................F............................................. [ 66%]\n.....................................                                [100%]\n=================================== FAILURES ===================================\n_____ test_outreach_due_check_precedes_card_automation_in_dispatcher_loop ______\n\n    def test_outreach_due_check_precedes_card_automation_in_dispatcher_loop():\n        source = Path(worker.__file__).read_text(encoding=\"utf-8\")\n        module = ast.parse(source)\n        main_guard = next(\n            node\n            for node in module.body\n            if isinstance(node, ast.If)\n            and isinstance(node.test, ast.Compare)\n            and isinstance(node.test.left, ast.Name)\n            and node.test.left.id == \"__name__\"\n        )\n>       loop = next(node for node in main_guard.body if isinstance(node, ast.While))\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE       StopIteration\n\ntests/test_worker_outreach_cadence.py:47: StopIteration\n=============================== warnings summary ===============================\n../../../../../private/tmp/localos-readiness-20260921.hfLYPi/native/venv/lib/python3.11/site-packages/_pytest/cacheprovider.py:469\n  /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/lib/python3.11/site-packages/_pytest/cacheprovider.py:469: PytestCacheWarning: cache could not write path /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/.pytest_cache/v/cache/nodeids: [Errno 1] Operation not permitted: '/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/.pytest_cache/v/cache/nodeids'\n    config.cache.set(\"cache/nodeids\", sorted(self.cached_nodeids))\n\n../../../../../private/tmp/localos-readiness-20260921.hfLYPi/native/venv/lib/python3.11/site-packages/_pytest/cacheprovider.py:423\n  /private/tmp/localos-readiness-20260921.hfLYPi/native/venv/lib/python3.11/site-packages/_pytest/cacheprovider.py:423: PytestCacheWarning: cache could not write path /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/.pytest_cache/v/cache/lastfailed: [Errno 1] Operation not permitted: '/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/.pytest_cache/v/cache/lastfailed'\n    config.cache.set(\"cache/lastfailed\", self.lastfailed)\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ============================\nFAILED tests/test_worker_outreach_cadence.py::test_outreach_due_check_precedes_card_automation_in_dispatcher_loop\n1 failed, 108 passed, 2 warnings, 4 subtests passed in 7.01s\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

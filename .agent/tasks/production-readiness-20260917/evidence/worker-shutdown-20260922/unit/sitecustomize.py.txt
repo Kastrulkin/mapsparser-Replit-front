@@ -1,0 +1,8 @@
+import dotenv
+
+
+def disabled_load_dotenv(*_args, **_kwargs):
+    return False
+
+
+dotenv.load_dotenv = disabled_load_dotenv

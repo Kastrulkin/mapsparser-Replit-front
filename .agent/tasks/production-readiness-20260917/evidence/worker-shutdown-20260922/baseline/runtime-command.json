@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "label": "current-image-runtime-vhbxtf",
+  "captured_at": "2026-09-22T20:14:36.230624+00:00",
+  "command": [
+    "/usr/bin/arch",
+    "-arm64",
+    "/private/tmp/localos-readiness-20260921.hfLYPi/native/venv/bin/python",
+    "-B",
+    "-I",
+    "/private/tmp/localos-current-runtime-20260922.VHbXtf/runtime_current.py",
+    "--execute"
+  ],
+  "cwd": "/private/tmp/localos-current-runtime-20260922.VHbXtf",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 172984.048,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "{\"status\": \"NONPASS\", \"duration_seconds\": 172.718, \"errors\": [], \"free_end_bytes\": 7371915264}\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

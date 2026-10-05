@@ -1,0 +1,13 @@
+{
+  "label": "worker-mocked-regression-v4",
+  "command": [
+    "/private/tmp/localos-worker-shutdown-proof-20260922/run_mocked_regression.py"
+  ],
+  "exit_code": 0,
+  "duration_ms": 7466.937,
+  "stdout": "........................................................................ [ 64%]\n.......................................                              [100%]\n111 passed, 4 subtests passed in 6.60s\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "runner_sha256": "b5e1c69b34c0eb2a0fe22eee9db43cae30fbc319c4084ff065f45e34381046ad"
+}

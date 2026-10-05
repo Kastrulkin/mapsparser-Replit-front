@@ -1,0 +1,33 @@
+test_cleanup_refuses_foreign_owner_without_remove (test_runtime_controller.RuntimeControllerTests.test_cleanup_refuses_foreign_owner_without_remove) ... ok
+test_create_records_partial_resource_for_owned_recovery_before_command (test_runtime_controller.RuntimeControllerTests.test_create_records_partial_resource_for_owned_recovery_before_command) ... ok
+test_final_status_requires_all_created_resources_be_removed (test_runtime_controller.RuntimeControllerTests.test_final_status_requires_all_created_resources_be_removed) ... ok
+test_inspect_refuses_daemon_error_that_is_not_exact_absence (test_runtime_controller.RuntimeControllerTests.test_inspect_refuses_daemon_error_that_is_not_exact_absence) ... ok
+test_inspect_refuses_malformed_or_multiple_result_cardinality (test_runtime_controller.RuntimeControllerTests.test_inspect_refuses_malformed_or_multiple_result_cardinality) ... ok
+test_inspect_returns_none_only_for_exact_daemon_absence (test_runtime_controller.RuntimeControllerTests.test_inspect_returns_none_only_for_exact_daemon_absence) ... ok
+test_wait_worker_reports_stopped_before_ready_without_sleeping (test_runtime_controller.RuntimeControllerTests.test_wait_worker_reports_stopped_before_ready_without_sleeping) ... ERROR
+
+======================================================================
+ERROR: test_wait_worker_reports_stopped_before_ready_without_sleeping (test_runtime_controller.RuntimeControllerTests.test_wait_worker_reports_stopped_before_ready_without_sleeping)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/localos-current-runtime-20260922.VHbXtf/test_runtime_controller.py", line 78, in test_wait_worker_reports_stopped_before_ready_without_sleeping
+    result = RUNTIME.wait_worker(item, seconds=60)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/localos-current-runtime-20260922.VHbXtf/runtime_current.py", line 232, in wait_worker
+    return {'ready': False, 'reason': 'exited_before_ready', 'seconds': time.monotonic() - began}
+                                                                        ^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/unittest/mock.py", line 1124, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/unittest/mock.py", line 1128, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/unittest/mock.py", line 1185, in _execute_mock_call
+    result = next(effect)
+             ^^^^^^^^^^^^
+StopIteration
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.010s
+
+FAILED (errors=1)

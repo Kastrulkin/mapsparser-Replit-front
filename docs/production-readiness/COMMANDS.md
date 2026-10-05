@@ -1,5 +1,38 @@
 # Verified commands and evidence
 
+## Current-image runtime baseline — 22 September
+
+Completed tmux `audit-current-runtime-vhbxtf` ran
+`/private/tmp/localos-current-runtime-20260922.VHbXtf/runtime_current.py --execute`
+with native ARM64 Python, outer capture1800s/controller900s, start5GiB/live2GiB.
+Controller SHA7f21f12c13d5048df68657d164a74f215af82abdda973a69c0f4ff4b817da253;
+staging18d1dc05 pinned against clean33c Git object. Execute-only env values are
+synthetic/blank; journal records hashes instead of raw environment values.
+Eight pure controls pass301.209ms; historical mock-clock failure retained.
+
+Actual runtime172984.048ms/exit1, controller172.718s/NONPASS: migration/schema,
+HTTP, DB-down/recovery and web shutdown pass; five worker shutdowns fail137,
+15.277–15.435s, noOOM. Exact Docker cleanup/inventory equality pass. Inspect
+the terminal `result.json` and `runtime-command.json`; do not rerun this profile.
+Completed `audit-worker-shutdown-dw3jpl` executes the same checks on fresh
+resources with one hash-pinned worker.py overlay (no host mounts/rebuild):
+`runtime_current.py --execute --worker-sha 11a13e9c5ae310d7089efb0144ad374a97429e12530fe76969077e027d6ec3ea`.
+Controller9a35a551,12purecontrols+Ruff pass9301.333ms. Actual correction runtime
+96581.747ms/exit0, controller96.323s/PASS. Five worker stops0 in0.499–0.551s;
+all original migration/HTTP/recovery/cleanup gates still pass. Independently
+verified originals/applied file hashes in each worker and exact Docker inventory.
+Both handles are terminal; do not rerun. This is not corrected-image build proof.
+
+Final11-module mocked worker regression uses the private explicit-env runner,
+network-denying sandbox and dotenv-disabling shim in
+`/private/tmp/localos-worker-shutdown-proof-20260922/`.
+Final `mocked-regression-v5.json`:111pass+4subtests6.61s,7195.864ms capture/exit0,
+no warnings or truncation. Earlier v1/v2 harness failures and v3 structural
+test failure remain archived. Final raw runner/capture/policy are in the task
+`evidence/worker-shutdown-20260922/unit/`; do not replay completed handles.
+Ruff comparison: identical64 old diagnostics, none in changed worker region;
+this does not claim whole-file lint passes.
+
 ## Current clean image and bounded cleanup — 22 September
 
 Completed local package commit `5a6bac9c23cd873abe18958025210e77f2c203de`:

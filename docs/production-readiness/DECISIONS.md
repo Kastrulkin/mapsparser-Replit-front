@@ -1,5 +1,19 @@
 # Readiness decisions
 
+## D-131 — Prove actual service lifecycle, do not relabel forced termination
+
+The current image must prove PostgreSQL migration/schema, Gunicorn HTTP,
+database-down readiness recovery and all five canonical worker roles. `general`
+is an idle legacy branch and is not a substitute. Keep external effects disabled,
+empty-data assertions, immutable image IDs and exact owned-resource cleanup.
+
+All five roles boot but exit137 only after the15s stop timeout, without OOM.
+Keep this as a real NONPASS. A minimal stop-request/interruptible-idle correction
+may close main polling-loop shutdown, but must not claim cancellation/drain of
+arbitrary in-flight jobs, maintenance daemon threads or disk imports. Any
+temporary source overlay has its own pinned provenance and is not a passing
+unmodified/rebuilt-image certification.
+
 ## D-130 — Reclaim proved disposable bytes, retain runtime and evidence boundaries
 
 Do not lower the10GiB Docker-build start floor merely because APFS clone sizes

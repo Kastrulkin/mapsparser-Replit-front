@@ -1,0 +1,182 @@
+"""Pure contract checks for runtime_current's resource-safety controller.
+
+The controller is imported only: every Docker-facing function is replaced before
+invocation, so these tests cannot create resources or contact a daemon.
+"""
+
+import importlib.util
+from pathlib import Path
+import subprocess
+import unittest
+from unittest import mock
+
+
+HERE = Path(__file__).resolve().parent
+SPEC = importlib.util.spec_from_file_location('runtime_current_under_test', HERE / 'runtime_current.py')
+RUNTIME = importlib.util.module_from_spec(SPEC)
+assert SPEC.loader is not None
+SPEC.loader.exec_module(RUNTIME)
+
+
+def completed(code=0, stdout='', stderr=''):
+    return subprocess.CompletedProcess(['docker'], code, stdout, stderr)
+
+
+class RuntimeControllerTests(unittest.TestCase):
+    def setUp(self):
+        RUNTIME.CREATED.clear()
+        RUNTIME.COMMANDS.clear()
+
+    def tearDown(self):
+        RUNTIME.CREATED.clear()
+        RUNTIME.COMMANDS.clear()
+
+    def test_inspect_returns_none_only_for_exact_daemon_absence(self):
+        missing = 'Error response from daemon: No such container: exact-name'
+        with mock.patch.object(RUNTIME, 'command', return_value=completed(1, '[]\n', missing + '\n')):
+            self.assertIsNone(RUNTIME.inspect('container', 'exact-name'))
+
+    def test_inspect_refuses_daemon_error_that_is_not_exact_absence(self):
+        with mock.patch.object(RUNTIME, 'command', return_value=completed(1, '', 'Error response from daemon: denied')):
+            with self.assertRaisesRegex(RuntimeError, 'inspect_failed_not_proven_absent'):
+                RUNTIME.inspect('container', 'exact-name')
+
+    def test_inspect_refuses_malformed_or_multiple_result_cardinality(self):
+        with mock.patch.object(RUNTIME, 'command', return_value=completed(0, '[]', '')):
+            with self.assertRaisesRegex(RuntimeError, 'inspect_cardinality'):
+                RUNTIME.inspect('container', 'exact-name')
+        with mock.patch.object(RUNTIME, 'command', return_value=completed(0, '[{}, {}]', '')):
+            with self.assertRaisesRegex(RuntimeError, 'inspect_cardinality'):
+                RUNTIME.inspect('container', 'exact-name')
+
+    def test_create_records_partial_resource_for_owned_recovery_before_command(self):
+        with mock.patch.object(RUNTIME, 'inspect', return_value=None), mock.patch.object(
+            RUNTIME, 'command', side_effect=RuntimeError('simulated_create_failure')
+        ):
+            with self.assertRaisesRegex(RuntimeError, 'simulated_create_failure'):
+                RUNTIME.create('network', 'exact-network', ['network', 'create', 'exact-network'])
+        self.assertEqual(
+            RUNTIME.CREATED,
+            [{'kind': 'network', 'name': 'exact-network', 'image': None, 'id': None}],
+        )
+
+    def test_cleanup_refuses_foreign_owner_without_remove(self):
+        item = {'kind': 'network', 'name': 'exact-network', 'image': None, 'id': 'exact-id'}
+        RUNTIME.CREATED.append(item)
+        command_mock = mock.Mock()
+        with mock.patch.object(RUNTIME, 'inspect', return_value={'Labels': {}}), mock.patch.object(
+            RUNTIME, 'owned', side_effect=RuntimeError('foreign_resource_label')
+        ), mock.patch.object(RUNTIME, 'command', command_mock):
+            result = RUNTIME.cleanup()
+        self.assertEqual(result, [{'kind': 'network', 'name': 'exact-network', 'status': 'error_RuntimeError'}])
+        command_mock.assert_not_called()
+
+    def test_wait_worker_reports_stopped_before_ready_without_sleeping(self):
+        item = {'kind': 'container', 'name': 'worker-parser', 'image': 'sha256:test', 'id': 'exact-id'}
+        command_mock = mock.Mock()
+        with mock.patch.object(RUNTIME, 'owned', return_value={'State': {'Running': False}}), mock.patch.object(
+            RUNTIME, 'command', command_mock
+        ), mock.patch.object(RUNTIME.time, 'monotonic', side_effect=[10.0, 10.0, 10.0]):
+            result = RUNTIME.wait_worker(item, seconds=60)
+        self.assertFalse(result['ready'])
+        self.assertEqual(result['reason'], 'exited_before_ready')
+        self.assertEqual(result['seconds'], 0.0)
+        command_mock.assert_called_once_with(['logs', '--tail', '800', 'exact-id'])
+
+    def test_command_journal_hashes_output_and_preserves_blank_environment(self):
+        original_env = RUNTIME.ENV
+        RUNTIME.ENV = {'EMPTY_VALUE': ''}
+        subprocess_mock = mock.Mock(return_value=completed(0, 'safe-output', ''))
+        try:
+            with mock.patch.object(RUNTIME, 'guard'), mock.patch.object(
+                RUNTIME.subprocess, 'run', subprocess_mock
+            ):
+                result = RUNTIME.command(['version'])
+        finally:
+            RUNTIME.ENV = original_env
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(subprocess_mock.call_args.kwargs['env'], {'EMPTY_VALUE': ''})
+        journal = RUNTIME.COMMANDS[-1]
+        self.assertEqual(journal['exit_code'], 0)
+        self.assertEqual(len(journal['stdout_sha256']), 64)
+        self.assertEqual(len(journal['stderr_sha256']), 64)
+
+    def test_patch_worker_is_noop_for_non_worker_name(self):
+        item = {'kind': 'container', 'name': 'schema', 'image': RUNTIME.IMAGE, 'id': 'exact-id'}
+        owned_mock = mock.Mock()
+        command_mock = mock.Mock()
+        with mock.patch.object(RUNTIME, 'owned', owned_mock), mock.patch.object(RUNTIME, 'command', command_mock):
+            self.assertIsNone(RUNTIME.patch_worker(item, 'schema'))
+        owned_mock.assert_not_called()
+        command_mock.assert_not_called()
+
+    def test_patch_worker_refuses_running_or_wrong_image_worker(self):
+        item = {'kind': 'container', 'name': 'worker-parser', 'image': RUNTIME.IMAGE, 'id': 'exact-id'}
+        running = {'State': {'Running': True}, 'Image': RUNTIME.IMAGE}
+        wrong_image = {'State': {'Running': False}, 'Image': 'sha256:wrong'}
+        for record in (running, wrong_image):
+            command_mock = mock.Mock()
+            with self.subTest(record=record), mock.patch.object(RUNTIME, 'owned', return_value=record), mock.patch.object(
+                RUNTIME, 'command', command_mock
+            ):
+                with self.assertRaisesRegex(RuntimeError, 'patch_requires_owned_stopped_worker'):
+                    RUNTIME.patch_worker(item, 'worker-parser')
+                command_mock.assert_not_called()
+
+    def test_patch_worker_refuses_overlay_hash_before_copy(self):
+        item = {'kind': 'container', 'name': 'worker-parser', 'image': RUNTIME.IMAGE, 'id': 'exact-id'}
+        record = {'State': {'Running': False}, 'Image': RUNTIME.IMAGE}
+        command_mock = mock.Mock()
+        with mock.patch.object(RUNTIME, 'PATCHED_WORKER_SHA', 'expected-overlay'), mock.patch.object(
+            RUNTIME, 'owned', return_value=record
+        ), mock.patch.object(RUNTIME, 'sha', return_value='changed-overlay'), mock.patch.object(
+            RUNTIME, 'command', command_mock
+        ):
+            with self.assertRaisesRegex(RuntimeError, 'worker_overlay_changed'):
+                RUNTIME.patch_worker(item, 'worker-parser')
+        command_mock.assert_not_called()
+
+    def test_patch_worker_proves_original_and_applied_hashes_with_three_copies(self):
+        item = {'kind': 'container', 'name': 'worker-parser', 'image': RUNTIME.IMAGE, 'id': 'exact-id'}
+        record = {'State': {'Running': False}, 'Image': RUNTIME.IMAGE}
+        overlay = 'overlay-hash'
+
+        def fake_sha(path):
+            if path == RUNTIME.PATCHED_WORKER:
+                return overlay
+            if path.name.endswith('-original.py'):
+                return RUNTIME.BASELINE_WORKER_SHA
+            if path.name.endswith('-applied.py'):
+                return overlay
+            raise AssertionError('unexpected_hash_target')
+
+        command_mock = mock.Mock()
+        with mock.patch.object(RUNTIME, 'PATCHED_WORKER_SHA', overlay), mock.patch.object(
+            RUNTIME, 'owned', return_value=record
+        ), mock.patch.object(RUNTIME, 'sha', side_effect=fake_sha), mock.patch.object(
+            Path, 'exists', return_value=False
+        ), mock.patch.object(RUNTIME, 'command', command_mock):
+            RUNTIME.patch_worker(item, 'worker-parser')
+        original = str(RUNTIME.ROOT / 'worker-parser-original.py')
+        applied = str(RUNTIME.ROOT / 'worker-parser-applied.py')
+        self.assertEqual(
+            command_mock.call_args_list,
+            [
+                mock.call(['cp', 'exact-id:/app/src/worker.py', original]),
+                mock.call(['cp', str(RUNTIME.PATCHED_WORKER), 'exact-id:/app/src/worker.py']),
+                mock.call(['cp', 'exact-id:/app/src/worker.py', applied]),
+            ],
+        )
+        self.assertEqual(
+            item['worker_overlay'],
+            {'original_sha256': RUNTIME.BASELINE_WORKER_SHA, 'applied_sha256': overlay},
+        )
+
+    def test_final_status_requires_all_created_resources_be_removed(self):
+        source = (HERE / 'runtime_current.py').read_text()
+        self.assertIn("all(item['status'] == 'removed' and not item.get('abnormal_stop') for item in result['cleanup'])", source)
+        self.assertIn("result['docker_before'] == result['docker_after']", source)
+
+
+if __name__ == '__main__':
+    unittest.main()

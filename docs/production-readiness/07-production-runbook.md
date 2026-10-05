@@ -7,6 +7,16 @@ must be observed afresh; the 17 September maintenance record is historical.
 
 ## Before any server action
 
+Local-only worker shutdown correction (22 September): the branch handles
+SIGTERM/SIGINT by requesting main-polling shutdown, preserving the current
+callback and preventing later top-level callbacks. Idle wait notices the request
+within100ms. Five empty-role Docker checks stop cleanly in0.499–0.551s with the
+source overlay; the unmodified tested image still requires forced termination.
+This is not deployed and the corrected canonical image has not been built.
+Do not shorten production stop grace periods based on the empty-queue result:
+long callbacks, per-job loops and operator/maintenance background drains still
+need separate verification. No schema/config migration is required by this fix.
+
 Local-only parser console correction (21 September): diagnostics retain event
 context, counts and presence/route categories, not raw URLs, provider content,
 arbitrary keys or exception messages. Do not reconstruct missing detail by

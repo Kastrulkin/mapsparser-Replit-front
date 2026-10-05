@@ -1,5 +1,34 @@
 # Production-readiness progress
 
+## Current runtime checkpoint — 22 September, worker shutdown reproduced
+
+- [x] Current immutable image f5f8970b ran against fresh synthetic PG16.10/Redis
+  on an internal network without host ports or host mounts; source pin, resource
+  limits and eight pure controller checks pass.
+- [x] Migration and schema-check exit0; exact Alembic head20260907_001,
+  pgcrypto1.3/vector0.8.0, zero users/businesses/parsequeue verified before/after.
+- [x] Gunicorn serves health/ready/root/about; stopping only the owned PG yields
+  health200/ready503 and restarting it restores ready200. Web shutdown exit0.
+- [x] All five workers initialize, but all require forced stop137 after15s,
+  OOM=false. WORKER-SHUTDOWN-01 is REPRODUCED, not a passing runtime gate.
+- [x] All12 generated resources removed; prior Docker inventory exactly restored.
+  Baseline capture172.984048s/exit1; controller172.718s. No production effects.
+- [x] Minimal polling-loop shutdown fix and causal repeat pass: same base image,
+  only worker.py SHA11a13e9c overlaid; five clean0 stops in0.499–0.551s, noOOM
+  or forced kill, all12 resources removed and original inventory unchanged.
+  Capture96.581747s/exit0, controller96.323s; independent code/runtime PASS.
+- [x] Final source-bound v5 sandboxed regression:111pass+4subtests,
+  6.61s/7.195864s capture,
+  no warnings; existing cadence test now executes actual callback order instead
+  of relying on the former AST layout. Independent test review PASS.
+- [ ] Final package/scan and local commit are pending. Whole-file worker Ruff
+  retains exactly64 pre-existing diagnostics, none in the changed region.
+  Private baseline `/private/tmp/localos-current-runtime-20260922.VHbXtf/` is
+  terminal and must not be rerun. New correction profile
+  `/private/tmp/localos-worker-shutdown-20260922.dW3jpl/` is also terminal PASS;
+  do not rerun either completed handle. An updated canonical image is not built.
+- [ ] Full CI/security/browser/demo/final-audit scope remains open.
+
 ## Current checkpoint — 22 September, safe space recovery and clean image
 
 - [x] Revalidated HEAD33c9c702 and foreign tracked diff SHA3c70e23b; unrelated

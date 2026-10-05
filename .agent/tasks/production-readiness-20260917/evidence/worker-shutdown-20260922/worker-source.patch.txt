@@ -1,0 +1,177 @@
+diff --git a/src/worker.py b/src/worker.py
+index 6e371e22..8f43cef9 100644
+--- a/src/worker.py
++++ b/src/worker.py
+@@ -7906,59 +7906,119 @@ def _process_sync_2gis_task(queue_dict):
+         _handle_worker_error(queue_dict["id"], str(e))
+ 
+ 
++class WorkerStopRequest:
++    def __init__(self):
++        self.requested = False
++
++    def is_set(self):
++        return self.requested
++
++    def set(self):
++        self.requested = True
++
++    def wait(self, seconds):
++        deadline = time.monotonic() + seconds
++        while not self.requested:
++            remaining = deadline - time.monotonic()
++            if remaining <= 0:
++                return False
++            time.sleep(min(remaining, 0.1))
++        return True
++
++
++def install_worker_shutdown_handlers(stop_event):
++    def request_shutdown(_signum, _frame):
++        stop_event.set()
++
++    signal.signal(signal.SIGTERM, request_shutdown)
++    signal.signal(signal.SIGINT, request_shutdown)
++
++
++def _run_worker_callbacks(stop_event, callbacks):
++    for callback in callbacks:
++        if stop_event.is_set():
++            return
++        callback()
++
++
++def _run_worker_polling_cycle(stop_event):
++    try:
++        if stop_event.is_set():
++            return
++        if _worker_role_enabled("parser"):
++            _run_worker_callbacks(stop_event, (process_queue,))
++        if stop_event.is_set():
++            return
++        if _worker_role_enabled("dispatcher"):
++            _run_worker_callbacks(stop_event, (
++                _prepare_riderra_systematic_outreach_if_due,
++                _dispatch_outreach_queue_if_due,
++                _run_card_automation_if_due,
++                _run_founder_content_if_due,
++                _dispatch_social_posts_if_due,
++                _collect_social_post_metrics_if_due,
++                _process_creator_offer_distribution_if_due,
++                _dispatch_creator_notifications_if_due,
++                _notify_superadmin_outreach_replies_if_due,
++                _notify_superadmin_community_sources_if_due,
++                _dispatch_openclaw_callback_outbox_if_due,
++                _check_openclaw_callback_alerts_if_due,
++            ))
++        if stop_event.is_set():
++            return
++        if _worker_role_enabled("maintenance"):
++            _run_worker_callbacks(stop_event, (
++                _enrich_creator_sources_if_due,
++                _revalidate_creator_profiles_if_due,
++                _process_creator_search_if_due,
++                _process_contact_intelligence_if_due,
++                _run_telegram_opportunity_monitor_if_due,
++                _run_knowledge_telegram_monitor_if_due,
++                _refresh_outreach_pain_library_if_due,
++                _run_knowledge_embeddings_if_due,
++                _reconcile_openclaw_billing_if_due,
++                _run_yookassa_renewals_if_due,
++                _run_web_tracking_maintenance_if_due,
++                _materialize_today_priority_proposals_if_due,
++                _purge_compiled_inputs_if_due,
++            ))
++        if stop_event.is_set():
++            return
++        if _worker_role_enabled("general"):
++            # Keep a slot for unclassified legacy work while individual
++            # workloads move into the five explicit roles above.
++            pass
++        if stop_event.is_set():
++            return
++        if _worker_role_enabled("agent"):
++            _run_worker_callbacks(stop_event, (
++                _dispatch_agent_schedules_if_due,
++                _process_agent_run_queue_if_due,
++                _process_sheet_provider_queue_if_due,
++            ))
++        if stop_event.is_set():
++            return
++        if _worker_role_enabled("operator"):
++            _run_worker_callbacks(stop_event, (_process_operator_async_job_if_due,))
++    except Exception:
++        error = sys.exception()
++        print(f"❌ Критическая ошибка worker loop: {error}", flush=True)
++        traceback.print_exc(file=sys.stdout)
++        sys.stdout.flush()
++
++
++def run_worker_polling_loop(stop_event, sleep_seconds=10):
++    while not stop_event.is_set():
++        _run_worker_polling_cycle(stop_event)
++        if stop_event.wait(sleep_seconds):
++            break
++
++
+ if __name__ == "__main__":
+-    if _worker_role_enabled("operator"):
++    worker_stop_event = WorkerStopRequest()
++    install_worker_shutdown_handlers(worker_stop_event)
++    if not worker_stop_event.is_set() and _worker_role_enabled("operator"):
+         from services.disk_import_worker import start
+         start()
+     print("Worker запущен. Проверка очереди каждые 5 минут...")
+-    while True:
+-        try:
+-            if _worker_role_enabled("parser"):
+-                process_queue()
+-            if _worker_role_enabled("dispatcher"):
+-                _prepare_riderra_systematic_outreach_if_due()
+-                _dispatch_outreach_queue_if_due()
+-                _run_card_automation_if_due()
+-                _run_founder_content_if_due()
+-                _dispatch_social_posts_if_due()
+-                _collect_social_post_metrics_if_due()
+-                _process_creator_offer_distribution_if_due()
+-                _dispatch_creator_notifications_if_due()
+-                _notify_superadmin_outreach_replies_if_due()
+-                _notify_superadmin_community_sources_if_due()
+-                _dispatch_openclaw_callback_outbox_if_due()
+-                _check_openclaw_callback_alerts_if_due()
+-            if _worker_role_enabled("maintenance"):
+-                _enrich_creator_sources_if_due()
+-                _revalidate_creator_profiles_if_due()
+-                _process_creator_search_if_due()
+-                _process_contact_intelligence_if_due()
+-                _run_telegram_opportunity_monitor_if_due()
+-                _run_knowledge_telegram_monitor_if_due()
+-                _refresh_outreach_pain_library_if_due()
+-                _run_knowledge_embeddings_if_due()
+-                _reconcile_openclaw_billing_if_due()
+-                _run_yookassa_renewals_if_due()
+-                _run_web_tracking_maintenance_if_due()
+-                _materialize_today_priority_proposals_if_due()
+-                _purge_compiled_inputs_if_due()
+-            if _worker_role_enabled("general"):
+-                # Keep a slot for unclassified legacy work while individual
+-                # workloads move into the five explicit roles above.
+-                pass
+-            if _worker_role_enabled("agent"):
+-                _dispatch_agent_schedules_if_due()
+-                _process_agent_run_queue_if_due()
+-                _process_sheet_provider_queue_if_due()
+-            if _worker_role_enabled("operator"):
+-                _process_operator_async_job_if_due()
+-        except Exception as e:
+-            print(f"❌ Критическая ошибка worker loop: {e}", flush=True)
+-            traceback.print_exc(file=sys.stdout)
+-            sys.stdout.flush()
+-        
+-        try:    
+-            time.sleep(10)  # 10 секунд
+-        except Exception as e:
+-             # Если sleep прерван сигналом или ошибкой, просто логируем и продолжаем
+-             print(f"⚠️ Sleep interrupted: {e}", flush=True)
++    run_worker_polling_loop(worker_stop_event)
+

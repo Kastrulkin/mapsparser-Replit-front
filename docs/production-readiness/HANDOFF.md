@@ -1,5 +1,42 @@
 # Readiness handoff
 
+## Active runtime correction — 22 September
+
+Entry HEAD9c3fa1b3, branch unchanged; foreign5 tracked SHA3c70e23b preserved.
+Current baseline `/private/tmp/localos-current-runtime-20260922.VHbXtf/` is
+terminal: runtime-command172984.048ms/exit1, result172.718s/NONPASS. Controller
+SHA7f21f12c, independently pre-exec reviewed;8pure checks pass301.209ms.
+Fresh PG16.10/head20260907_001/pgcrypto1.3/vector0.8.0, migrations/schema,
+HTTP and DB-down503→recovered200 pass. All five roles initialize but require
+15s forced stop137, OOM=false. All12 owned resources removed and original
+23containers/20volumes/23networks preserved. Do not rerun the completed handle.
+
+WORKER-SHUTDOWN-01 correction source11a13e9c is frozen and the causal overlay
+run `/private/tmp/localos-worker-shutdown-20260922.dW3jpl/` is terminal PASS:
+capture96581.747ms/controller96.323s, allfive exit0 in0.499–0.551s, noOOM,
+all12 resources removed and original inventory unchanged. Controller9a35a551,
+12purecontrols pass9301.333ms; independent code/pre-exec/runtime reviews PASS.
+Do not rerun either terminal handle. Source change is only worker main loop;
+new shutdown test plus existing outreach-cadence test adjustment are owned by
+content_performance_scope. Root owns docs and durable worker-shutdown evidence.
+Broader mocked regression v3 had108pass/1 structural-test failure/4subtests;
+the behavioral test adaptation now passes final source-bound v5:
+111pass+4subtests,6.61s/capture7195.864ms/exit0/no warnings. Network denied/
+dotenv disabled/explicit
+11modules; three PG worker flow modules are not part of this unit slice.
+Independent final tests PASS;64 existing worker Ruff diagnostics unchanged,
+zero changed-region diagnostics. Final package/scan/commit remain pending.
+Main polling shutdown is fixed, active/background drain is
+not proved. No current corrected canonical image build,
+push/deploy, production or restricted OAuth/native-picker work authorized here.
+Full original goal remains ACTIVE. The preceding explanation-only turn was
+NO_PROGRESS; this continuation has actual runtime evidence and a new finding.
+
+Next substantive checks after this local checkpoint: active-job/background
+worker stop boundaries, then updated canonical image/full CI integration.
+Current free space about6.8GiB; no new Docker build below the10GiB start floor.
+Security/image206, browser/demo and full original requirement review remain.
+
 ## Terminal image package checkpoint — 22 September
 
 The24-path evidence/docs package is committed locally as
