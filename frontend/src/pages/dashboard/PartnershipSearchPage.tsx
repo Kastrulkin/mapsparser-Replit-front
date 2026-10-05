@@ -1,5 +1,5 @@
 import { OutreachContinuation } from '@/components/prospecting/OutreachContinuation';
-import { buildCandidateSearchGroups, taskLabel, type SearchTaskGroup } from '@/components/prospecting/partnershipSearchGroups';
+import { buildCandidateSearchGroups, resolveSearchTask, taskLabel, type SearchTaskGroup } from '@/components/prospecting/partnershipSearchGroups';
 import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
 import { OutreachLearningInsights } from '@/components/prospecting/OutreachLearningInsights';
 import { PartnershipAnalyticsWorkspace } from '@/components/prospecting/PartnershipAnalyticsWorkspace';
@@ -517,7 +517,7 @@ const toPilotCohort = (value: string): PilotCohort => {
 };
 
 export const PartnershipSearchPage: React.FC = () => {
-  const { currentBusinessId, currentBusiness, businesses, user, controlScope, onControlScopeChange } = useOutletContext<DashboardOutletContext>();
+  const { currentBusinessId, currentBusiness, businesses, user, controlScope, onControlScopeChange, onBusinessChange } = useOutletContext<DashboardOutletContext>();
   const currentBusinessRef = useRef(currentBusinessId);
   const leadsRequestVersion = useRef(0);
   currentBusinessRef.current = currentBusinessId;
@@ -570,11 +570,25 @@ export const PartnershipSearchPage: React.FC = () => {
   useEffect(() => {
     if (!requestedSearchTaskId || !currentBusinessId) return;
     let active = true;
-    void newAuth.makeRequest(`/partnership/continuations/${encodeURIComponent(requestedSearchTaskId)}?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' })
-      .then((task: SearchTaskGroup) => { if (active) setSearchTasks((current) => [task, ...current.filter((item) => item.id !== task.id)]); })
-      .catch(() => { if (active) setError('Этот поиск недоступен или не найден для выбранного бизнеса.'); });
+    void resolveSearchTask(requestedSearchTaskId, currentBusinessId, businesses.map((business) => business.id),
+      (businessId) => newAuth.makeRequest(`/partnership/continuations/${encodeURIComponent(requestedSearchTaskId)}?business_id=${encodeURIComponent(businessId)}`, { method: 'GET' }))
+      .then((task) => {
+        if (!active) return;
+        if (!task) { setError('Этот поиск недоступен для ваших бизнесов или не найден.'); return; }
+        if (task.business_id !== currentBusinessId) {
+          setSearchParams((current) => {
+            const next = new URLSearchParams(current);
+            next.set('business_id', task.business_id);
+            return next;
+          }, { replace: true });
+          onBusinessChange(task.business_id);
+          return;
+        }
+        setError('');
+        setSearchTasks((current) => [task, ...current.filter((item) => item.id !== task.id)]);
+      });
     return () => { active = false; };
-  }, [requestedSearchTaskId, currentBusinessId]);
+  }, [requestedSearchTaskId, currentBusinessId, businesses, onBusinessChange, setSearchParams]);
   const [preferredSourceFilter, setPreferredSourceFilter] = useState<{ source_kind?: string; source_provider?: string } | null>(null);
   const [bulkStage, setBulkStage] = useState('');
   const [bulkChannel, setBulkChannel] = useState('');
