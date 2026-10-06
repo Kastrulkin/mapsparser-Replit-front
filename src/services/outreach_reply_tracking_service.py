@@ -83,19 +83,28 @@ def resolve_known_contact_binding(
     cursor.execute(
         """
         SELECT DISTINCT workstream.id AS workstream_id, workstream.lead_id,
-               workstream.client_business_id AS business_id
+               workstream.client_business_id AS business_id,
+               sender.scope_type AS sender_scope_type
         FROM lead_contact_points contact
         JOIN lead_workstreams workstream ON workstream.lead_id = contact.lead_id
         JOIN outreach_sender_accounts sender ON sender.id = %s
         WHERE contact.contact_type = %s
           AND LOWER(BTRIM(contact.normalized_value)) = ANY(%s)
           AND contact.verification_status = ANY(%s)
-          AND workstream.workstream_type = 'client_partnership'
+          AND workstream.workstream_type IN (
+              'client_partnership', 'creator_collaboration', 'localos_sales'
+          )
           AND (
               (sender.scope_type = 'business' AND workstream.client_business_id = sender.business_id)
               OR sender.scope_type = 'platform'
           )
-          AND workstream.client_business_id = ANY(%s)
+          AND (
+              workstream.client_business_id = ANY(%s)
+              OR (
+                  sender.scope_type = 'platform'
+                  AND workstream.workstream_type = 'localos_sales'
+              )
+          )
         """,
         (
             sender_account_id, channel, peer_variants, list(CONFIRMED_CONTACT_STATUSES),
@@ -106,7 +115,14 @@ def resolve_known_contact_binding(
     if len(candidates) != 1:
         return None
     candidate = candidates[0]
-    if not business_tracking_enabled(str(candidate.get("business_id") or ""), channel):
+    platform_tracking_enabled = (
+        candidate.get("sender_scope_type") == "platform"
+        and str(os.getenv(f"OUTREACH_{channel.upper()}_THREAD_SYNC_ENABLED", "false"))
+        .strip().lower() in {"1", "true", "yes", "on"}
+    )
+    if not platform_tracking_enabled and not business_tracking_enabled(
+        str(candidate.get("business_id") or ""), channel,
+    ):
         return None
     binding_id = str(uuid.uuid4())
     cursor.execute(
