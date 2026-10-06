@@ -7,7 +7,7 @@ import {
 	Sparkles,
 	Upload
 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -39,6 +39,12 @@ import type {
 	AgentConnectorIntelligence,
 	AgentExecutionMode
 } from './types';
+
+const DIALOG_BUILDER_PROGRESS_STAGES = [
+  'Передаю описание задачи в LocalOS',
+  'LocalOS разбирает запрос и проверяет доступные действия',
+  'Готовлю результат для проверки перед созданием',
+];
 
 import { BuilderCompilerPolicyReviewPanel, BuilderConnectionReadinessPanel, BuilderConnectionResolverPanel, BuilderConnectionSummaryPanel, BuilderRequiredConnectionsPanel, BuilderServiceIntelligencePanel, BuilderSetupFlowPanel } from './builder_setup';
 import { builderPreviewDataText } from './builder_setup.logic';
@@ -414,6 +420,7 @@ export const DialogAgentBuilder = ({
   reply,
   session,
   actionLoading,
+  compiling,
   error,
   onInputChange,
   onReplyChange,
@@ -441,6 +448,7 @@ export const DialogAgentBuilder = ({
   reply: string;
   session: AgentBuilderSession | null;
   actionLoading: boolean;
+  compiling: boolean;
   error?: string | null;
   onInputChange: (value: string) => void;
   onReplyChange: (value: string) => void;
@@ -464,6 +472,37 @@ export const DialogAgentBuilder = ({
   onSelectConnectionBinding: (bindingKey: string, integrationId: string) => void;
   onSelectProviderRoute: (bindingKey: string, routeProvider: string) => void;
 }) => {
+  const [progressStageIndex, setProgressStageIndex] = useState(0);
+  const [typedCharacters, setTypedCharacters] = useState(0);
+  useEffect(() => {
+    if (!compiling) {
+      setProgressStageIndex(0);
+      setTypedCharacters(0);
+      return undefined;
+    }
+
+    let activeStage = 0;
+    let characterCount = 0;
+    let pauseTicks = 0;
+    const interval = window.setInterval(() => {
+      const fullText = DIALOG_BUILDER_PROGRESS_STAGES[activeStage];
+      if (characterCount < fullText.length) {
+        characterCount += 1;
+        setTypedCharacters(characterCount);
+        return;
+      }
+      pauseTicks += 1;
+      if (pauseTicks >= 42 && activeStage < DIALOG_BUILDER_PROGRESS_STAGES.length - 1) {
+        activeStage += 1;
+        characterCount = 0;
+        pauseTicks = 0;
+        setProgressStageIndex(activeStage);
+        setTypedCharacters(0);
+      }
+    }, 35);
+
+    return () => window.clearInterval(interval);
+  }, [compiling]);
   const preview = session?.preview || null;
   const nextStepRef = useRef<HTMLDivElement | null>(null);
   const previousMessageCountRef = useRef(0);
@@ -600,10 +639,21 @@ export const DialogAgentBuilder = ({
           {session ? 'Обновить понимание' : 'Начать диалог'}
         </Button>
       </div>
-      {actionLoading ? (
-        <div role="status" aria-live="polite" className="flex items-center gap-2 rounded-xl bg-sky-50 px-3 py-2 text-sm text-sky-900">
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
-          <span>LocalOS разбирает задачу и проверяет, какие действия и подключения доступны. Результат появится здесь.</span>
+      {compiling ? (
+        <div className="rounded-xl bg-sky-50 p-3 text-sm text-sky-950">
+          <span className="sr-only" role="status" aria-live="polite">{DIALOG_BUILDER_PROGRESS_STAGES[progressStageIndex]}</span>
+          <ol className="grid gap-2 sm:grid-cols-3" aria-hidden="true">
+            {DIALOG_BUILDER_PROGRESS_STAGES.map((stage, index) => (
+              <li key={stage} className={cn('flex min-h-10 items-start gap-2 rounded-lg px-2 py-1.5', index === progressStageIndex ? 'bg-white text-sky-900 shadow-sm' : index < progressStageIndex ? 'text-sky-800' : 'text-slate-500')}>
+                <span className={cn('mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold', index === progressStageIndex ? 'bg-sky-700 text-white' : index < progressStageIndex ? 'bg-sky-100 text-sky-800' : 'bg-slate-100 text-slate-500')}>
+                  {index + 1}
+                </span>
+                <span className="min-w-0 leading-5">
+                  {index === progressStageIndex ? `${stage.slice(0, typedCharacters)}${typedCharacters < stage.length ? '▍' : ''}` : stage}
+                </span>
+              </li>
+            ))}
+          </ol>
         </div>
       ) : null}
 

@@ -9,6 +9,7 @@ const renderBuilder = (overrides: { actionLoading?: boolean; error?: string } = 
     reply=""
     session={null}
     actionLoading={overrides.actionLoading || false}
+    compiling={Boolean(overrides.actionLoading)}
     error={overrides.error}
     onInputChange={vi.fn()}
     onReplyChange={vi.fn()}
@@ -36,8 +37,9 @@ const renderBuilder = (overrides: { actionLoading?: boolean; error?: string } = 
 
 describe('DialogAgentBuilder feedback', () => {
   it('explains what LocalOS is doing while compiling a task', () => {
-    renderBuilder({ actionLoading: true });
-    expect(screen.getByRole('status')).toHaveTextContent('LocalOS разбирает задачу');
+    const { container } = renderBuilder({ actionLoading: true });
+    expect(screen.getByRole('status')).toHaveTextContent('Передаю описание задачи');
+    expect(container.querySelectorAll('ol li')).toHaveLength(3);
   });
 
   it('shows a failed compilation inside the builder', () => {

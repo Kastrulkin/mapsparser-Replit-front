@@ -147,6 +147,7 @@ export const AgentBlueprintsWorkspace = () => {
   const [builderInternalSource, setBuilderInternalSource] = useState('business_profile');
   const [dialogBuilderInput, setDialogBuilderInput] = useState('');
   const [dialogBuilderReply, setDialogBuilderReply] = useState('');
+  const [dialogBuilderStarting, setDialogBuilderStarting] = useState(false);
   const [dialogBuilderSession, setDialogBuilderSession] = useState<AgentBuilderSession | null>(null);
   const [selectedBuilderConnectionBindings, setSelectedBuilderConnectionBindings] = useState<Record<string, string>>({});
   const [selectedBuilderProviderRoutes, setSelectedBuilderProviderRoutes] = useState<Record<string, string>>({});
@@ -979,6 +980,7 @@ export const AgentBlueprintsWorkspace = () => {
       return;
     }
     setActionLoading(true);
+    setDialogBuilderStarting(true);
     setError(null);
     setDecisionNotice(null);
     try {
@@ -1024,6 +1026,7 @@ export const AgentBlueprintsWorkspace = () => {
       setError(getRequestErrorMessage(requestError, 'Не удалось начать диалог создания агента.'));
     } finally {
       setActionLoading(false);
+      setDialogBuilderStarting(false);
     }
   };
 
@@ -2010,7 +2013,7 @@ export const AgentBlueprintsWorkspace = () => {
       setMatonDailyCap, processRowValues, setProcessRowValues, processPreviewMessage, setProcessPreviewMessage, scheduleTime, setScheduleTime: setScheduleTimeWithDirtyState, scheduleTimezone, setScheduleTimezone: setScheduleTimezoneWithDirtyState, selectedExecutionMode,
       setSelectedExecutionMode: setSelectedExecutionModeWithDirtyState, feedbackText, setFeedbackText, feedbackTrigger, setFeedbackTrigger, feedbackVersionNotice, legacyMigrationPlan, legacyMigrationNotice, recentCreatedAgentName, setRecentCreatedAgentName,
       recentPostCreateHandoff, setRecentPostCreateHandoff, showAdvancedAgentTools, deleteCandidate, setDeleteCandidate, decisionNotice, setDecisionNotice, googleAccessJustConnected, selectedBlueprint, pendingApproval,
-      pendingApprovals, selectedPendingApproval, queuedButNotDispatched, selectedScenario, systemAgents, migrationStats, applyBuilderScenario, loadBlueprints, loadBlueprintDetails, loadRun, startDialogBuilderSession,
+      pendingApprovals, selectedPendingApproval, queuedButNotDispatched, selectedScenario, systemAgents, migrationStats, applyBuilderScenario, loadBlueprints, loadBlueprintDetails, loadRun, startDialogBuilderSession, dialogBuilderStarting,
       sendDialogBuilderReply, createAgentFromDialogSession, createAgentFromPrompt, startRun, executeRun, saveSchedule, saveExecutionMode, rebuildScenarioAndRun, rebuildScenario, activateVersion, deleteAgent,
       requestDeleteAgent, deleteSelectedAgent, decideApproval, saveAgentSetup, addTextSource, addInternalSource, addInternalSourceByKey, addFileSource, saveSheetIntegration, saveBrowserUseIntegration,
       saveTelegramIntegration, saveWhatsappIntegration, saveMatonIntegration, chooseProviderRoute, attachExistingAgentIntegration, saveCustomProcess, runCustomProcessPreview, applyLegacyMigration, sendRunFeedback, postCreateReadyForRun,

@@ -107,7 +107,7 @@ export const AgentBlueprintsView = ({ scope }) => {
   const deepCopy = getAgentDeepCopy(language);
   const {
     location, currentBusinessId, blueprints, agentTemplates, templatesLoading, usingTemplateKey, useAgentTemplate, selectedBlueprintId, setSelectedBlueprintId, blueprintDetails,
-    agentDetailsById, activeRun, setActiveRun, loading, actionLoading, error,
+    agentDetailsById, activeRun, setActiveRun, loading, actionLoading, error, dialogBuilderStarting,
     agentSearch, setAgentSearch, agentRegistryFilter, setAgentRegistryFilter, runAnimation, runStatusFilter,
     setRunStatusFilter, runSource, setRunSource, runCity, setRunCity, runCategory,
     setRunCategory, runLimit, setRunLimit, runParameters, setRunParameters, runParameterErrors,
@@ -235,6 +235,7 @@ export const AgentBlueprintsView = ({ scope }) => {
             reply={dialogBuilderReply}
             session={dialogBuilderSession}
             actionLoading={actionLoading}
+            compiling={dialogBuilderStarting}
             error={error}
             onInputChange={setDialogBuilderInput}
             onReplyChange={setDialogBuilderReply}
