@@ -2,7 +2,7 @@ from legacy_routes import shared as _shared
 from core.frontend_asset_compatibility import resolve_current_lazy_chunk
 from core.auth_helpers import verify_business_access
 from core.html_head import replace_or_insert_tag as _replace_or_insert_tag
-from core.public_page_html import is_known_spa_route, load_public_page, load_public_shell, replace_public_page_body
+from core.public_page_html import is_known_spa_route, should_noindex_spa_route, load_public_page, load_public_shell, replace_public_page_body
 from core.readiness import database_ready
 
 globals().update(_shared.runtime_namespace)
@@ -308,11 +308,19 @@ def _set_jsonld(html_text: str, schema: Any) -> str:
 
 def _render_spa_index(path: str = "", status_code: int = 200):
     route_path = _normalize_content_route(path)
+    if route_path == "/docs/overview":
+        route_path = "/docs"
+    if route_path == "/growth":
+        direction = request.args.get("direction", "")
+        candidate = f"/growth?direction={direction}"
+        if load_public_page(FRONTEND_DIST_DIR, candidate) is not None:
+            route_path = candidate
+    noindex = status_code == 404 or should_noindex_spa_route(route_path)
     index_html = _read_frontend_index_html()
     if index_html is None:
         response = send_from_directory(FRONTEND_DIST_DIR, "index.html")
         response.status_code = status_code
-        if status_code == 404:
+        if noindex:
             response.headers["X-Robots-Tag"] = "noindex"
         return response
 
@@ -345,11 +353,13 @@ def _render_spa_index(path: str = "", status_code: int = 200):
     index_html = _set_named_meta(index_html, "property", "og:url", canonical_url)
     index_html = _set_named_meta(index_html, "property", "og:image", image)
     index_html = _set_named_meta(index_html, "name", "twitter:image", image)
+    if noindex:
+        index_html = _set_named_meta(index_html, "name", "robots", "noindex, follow")
     index_html = _set_canonical(index_html, canonical_url)
     index_html = _set_jsonld(index_html, public_page.get("schema") if public_page is not None and public_page.get("schema") else _schema_for_route(route_path, route_seo))
 
     response = Response(index_html, status=status_code, mimetype="text/html")
-    if status_code == 404:
+    if noindex:
         response.headers["X-Robots-Tag"] = "noindex"
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"

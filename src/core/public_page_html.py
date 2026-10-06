@@ -32,8 +32,19 @@ def is_known_spa_route(route_path, seo_routes):
     if route_path == "/dashboard" or route_path.startswith("/dashboard/"):
         return True
     return bool(re.fullmatch(
-        r"/(?:docs/[^/]+|start/[^/]+|room/[^/]+|creator-room/[^/]+|"
+        r"/(?:start/[^/]+|room/[^/]+|creator-room/[^/]+|"
         r"creator/(?:join|verify-email|reset-password|offers)/[^/]+)", route_path
+    ))
+
+
+def should_noindex_spa_route(route_path):
+    path = route_path.split("?", 1)[0].rstrip("/")
+    return path in {
+        "/login", "/set-password", "/reset-password", "/verify-email",
+        "/checkout/return", "/wizard", "/sprint", "/phrases", "/card-recs",
+        "/dashboard-old", "/telegram/control", "/yclients/connect", "/web-analytics",
+    } or any(path == prefix or path.startswith(prefix + "/") for prefix in (
+        "/dashboard", "/start", "/room", "/creator-room", "/creator",
     ))
 
 

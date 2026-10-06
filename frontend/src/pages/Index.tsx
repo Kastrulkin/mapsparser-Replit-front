@@ -1,4 +1,3 @@
-import { publicHomeContent } from "@/content/publicHomeContent";
 import {
 	ArrowRight,
 	ArrowUpRight,

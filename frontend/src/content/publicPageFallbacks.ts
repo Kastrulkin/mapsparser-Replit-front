@@ -1,3 +1,6 @@
+import { ruSections, ruAgentQuickstart } from "./publicDocsContent";
+import { leadJourneyDirections } from "./growthDirections";
+import { publicGrowthCopy } from "./publicGrowthCopy";
 import { publicContentSchema } from "./publicContentSchema";
 import { publishedArticles } from "./articles";
 import { publishedDocuments } from "./documents";
@@ -118,6 +121,18 @@ export const buildPublicPageFallbacks = (): PublicPageFallbackManifest => {
   }
   for (const item of solutions) {
     routes[`/solutions/${item.slug}`] = { title: item.seoTitle, description: item.seoDescription, heading: item.title, intro: [item.excerpt], sections: [...sections(item.body), related(item.related)] };
+  }
+  routes["/growth"] = { title: publicGrowthCopy.seoTitle, description: publicGrowthCopy.seoDescription, heading: publicGrowthCopy.title, intro: [publicGrowthCopy.intro], sections: leadJourneyDirections.map((item) => ({ heading: item.title, paragraphs: [item.preview], links: [{ href: `/growth?direction=${item.key}`, label: item.choiceCta || publicGrowthCopy.defaultChoice }] })) };
+  for (const item of leadJourneyDirections) {
+    routes[`/growth?direction=${item.key}`] = { title: `${item.detailTitle} — LocalOS`, description: item.detail, heading: item.detailTitle, intro: [item.detail], sections: [
+      ...(item.detailSections ? item.detailSections.map((section) => ({ heading: section.title, items: section.items })) : item.steps.map((step) => ({ heading: step.title, paragraphs: [step.description] }))),
+      ...(item.detailSections ? [] : [{ heading: publicGrowthCopy.businessRoleTitle, paragraphs: [item.businessRole] }, { heading: publicGrowthCopy.localosRoleTitle, paragraphs: [item.localosRole] }]),
+      { heading: item.continueTitle || publicGrowthCopy.continueTitle, paragraphs: [item.continueText || publicGrowthCopy.continueText], links: [{ href: `/login?tab=register&source=lead_journey&journey=${item.key}`, label: publicGrowthCopy.continueButton }, { href: "/growth", label: publicGrowthCopy.allDirections }] },
+    ] };
+  }
+  for (const section of ruSections) {
+    const route = section.slug === "overview" ? "/docs" : `/docs/${section.slug}`;
+    routes[route] = { title: `${section.title} - Документация LocalOS`, description: section.summary, heading: section.title, intro: [section.summary], sections: [...section.items.map((item) => ({ heading: item.title, paragraphs: [item.text, ...(item.status ? [item.status] : [])] })), { heading: "Как подключить агента", paragraphs: [ruAgentQuickstart], links: [{ href: "/api/agent-api/openapi.json", label: "Контракт Agent API" }, { href: "/localos-agents-ru.txt", label: "Инструкция для агентов" }] }, { heading: "Разделы документации", links: ruSections.map((item) => ({ href: item.slug === "overview" ? "/docs" : `/docs/${item.slug}`, label: item.title })) }] };
   }
   return { version: 1, publicShell: "public-seo-index.html", routes };
 };

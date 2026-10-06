@@ -1,3 +1,5 @@
+import { ruSections } from "./publicDocsContent";
+import { leadJourneyDirections } from "./growthDirections";
 import { publishedArticles } from "./articles";
 import { publishedDocuments } from "./documents";
 import { solutions } from "./solutions";
@@ -9,7 +11,7 @@ import { buildPublicPageFallbacks } from "./publicPageFallbacks";
 describe("public page fallback manifest", () => {
   it("has the exact finite public route set and renderer contract", () => {
     const manifest = buildPublicPageFallbacks();
-    const expectedRoutes = ["/", "/about", "/pricing", "/cases", ...publishedCases.map((caseItem) => `/cases/${caseItem.slug}`), "/articles", "/documents", ...publishedArticles.map((item) => `/articles/${item.slug}`), ...publishedDocuments.map((item) => `/documents/${item.slug}`), ...solutions.map((item) => `/solutions/${item.slug}`)].sort();
+    const expectedRoutes = ["/growth", ...leadJourneyDirections.map((item) => `/growth?direction=${item.key}`), ...ruSections.map((item) => item.slug === "overview" ? "/docs" : `/docs/${item.slug}`), "/", "/about", "/pricing", "/cases", ...publishedCases.map((caseItem) => `/cases/${caseItem.slug}`), "/articles", "/documents", ...publishedArticles.map((item) => `/articles/${item.slug}`), ...publishedDocuments.map((item) => `/documents/${item.slug}`), ...solutions.map((item) => `/solutions/${item.slug}`)].sort();
 
     expect(manifest.version).toBe(1);
     expect(Object.keys(manifest.routes).sort()).toEqual(expectedRoutes);

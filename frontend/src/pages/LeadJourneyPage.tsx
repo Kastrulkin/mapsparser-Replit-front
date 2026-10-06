@@ -149,7 +149,7 @@ function LeadJourneyContent({ token }: { token: string }) {
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-[#f7f7f5] px-4 py-10 text-slate-950 sm:px-6 sm:py-16 lg:px-8">
       <PublicBrandBackdrop fullHeight />
-      <SeoMeta title={copy.seoTitle} description={copy.seoDescription} path={token ? `/start/${token}` : '/growth'} />
+      <SeoMeta title={selected && !token ? `${selected.detailTitle} — LocalOS` : copy.seoTitle} description={selected && !token ? selected.detail : copy.seoDescription} path={token ? `/start/${token}` : selected ? `/growth?direction=${selected.key}` : '/growth'} />
       <div className="mx-auto max-w-6xl">
         <div className="flex items-center justify-between gap-4">
           {selected && !journeySelectedKey ? <button type="button" onClick={goBack} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"><ArrowLeft className="h-4 w-4" />{copy.allDirections}</button> : <Link to="/" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950"><ArrowLeft className="h-4 w-4" />{copy.home}</Link>}

@@ -13,7 +13,7 @@ from flask import Flask, Response, jsonify, request, send_from_directory
 import pytest
 
 from core.html_head import replace_or_insert_tag
-from core.public_page_html import is_known_spa_route, load_public_page, load_public_shell, replace_public_page_body
+from core.public_page_html import is_known_spa_route, should_noindex_spa_route, load_public_page, load_public_shell, replace_public_page_body
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,6 +54,7 @@ def renderer(tmp_path):
             ("/pricing", "Тарифы LocalOS"),
             ("/cases", "Кейсы LocalOS"),
             ("/cases/example", "Результат работы с картами"),
+            ("/docs/api", "API LocalOS"),
         ]
     }
     (tmp_path / "public-page-fallbacks.json").write_text(json.dumps({"version": 1, "routes": routes}), encoding="utf-8")
@@ -75,7 +76,7 @@ def renderer(tmp_path):
         "_replace_or_insert_tag": replace_or_insert_tag,
         "load_public_page": load_public_page, "replace_public_page_body": replace_public_page_body,
         "load_public_shell": load_public_shell,
-        "is_known_spa_route": is_known_spa_route,
+        "is_known_spa_route": is_known_spa_route, "should_noindex_spa_route": should_noindex_spa_route, "request": request,
     }
     exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), "exec"), namespace)
     app = Flask(__name__)
@@ -219,4 +220,31 @@ def test_known_public_routes_do_not_query_offer_database(renderer):
         with client.application.test_request_context("/" + path):
             response = namespace["spa_fallback"](path)
             assert response.status_code == 200
-            assert "X-Robots-Tag" not in response.headers
+            assert ("X-Robots-Tag" in response.headers) == should_noindex_spa_route("/" + path)
+
+
+@pytest.mark.parametrize('route', ['/login', '/dashboard', '/dashboard/agents', '/reset-password', '/start/example'])
+def test_private_routes_keep_application_but_are_noindex(renderer, route):
+    client, _, _ = renderer
+    response = client.get(route)
+    assert response.status_code == 200
+    assert response.headers['X-Robots-Tag'] == 'noindex'
+    assert 'content="noindex, follow"' in response.get_data(as_text=True)
+    assert 'index-frozen.js' in response.get_data(as_text=True)
+
+
+def test_growth_direction_has_own_html_and_stable_query_canonical(renderer):
+    client, dist, _ = renderer
+    manifest_path = dist / 'public-page-fallbacks.json'
+    manifest = json.loads(manifest_path.read_text())
+    manifest['routes']['/growth'] = page_data('Выберите направление')
+    manifest['routes']['/growth?direction=maps'] = page_data('Карты для бизнеса')
+    manifest_path.write_text(json.dumps(manifest))
+    response = client.get('/growth?direction=maps&step=detail&__localos_reload=123')
+    source = response.get_data(as_text=True)
+    assert '>Карты для бизнеса</h1>' in source
+    assert 'href="https://localos.pro/growth?direction=maps"' in source
+    assert '__localos_reload' not in source
+    assert 'noindex' not in response.headers.get('X-Robots-Tag', '')
+    unknown = client.get('/growth?direction=unknown').get_data(as_text=True)
+    assert '>Выберите направление</h1>' in unknown
