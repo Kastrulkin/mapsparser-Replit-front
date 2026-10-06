@@ -1,4 +1,6 @@
+import type { LeadWorkstream } from './AdminLeadRegistry.logic';
 export type PartnershipLead = {
+  workstreams?: LeadWorkstream[];
   id: string;
   name?: string;
   address?: string;
@@ -78,6 +80,7 @@ export type PartnershipLead = {
 };
 
 export type PartnershipDraft = {
+  canonical_review?: { stale?: boolean; subject?: string; recipient?: string; sender?: string; text?: string; source_url?: string };
   id: string;
   lead_id: string;
   created_at?: string;
@@ -97,6 +100,7 @@ export type PartnershipDraft = {
   sender_name?: string;
   scheduled_at?: string;
   review_digest?: string;
+  learning_note_json?: { search_task_id?: string; manual_review_required?: boolean };
 };
 
 export type PartnershipBatch = {
@@ -120,7 +124,8 @@ export type PartnershipBatch = {
 
 export type PartnershipReaction = {
   id: string;
-  queue_id: string;
+  queue_id?: string;
+  source_type?: string;
   lead_id: string;
   lead_name?: string;
   batch_id?: string;

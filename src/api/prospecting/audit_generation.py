@@ -885,6 +885,19 @@ def _approve_send_batch(batch_id: str, user_id: str):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
+        cur.execute("SELECT id FROM outreachsendbatches WHERE id=%s AND status=%s FOR UPDATE", (batch_id, BATCH_DRAFT))
+        if not cur.fetchone():
+            return None, "Batch is not in draft status"
+        cur.execute("""SELECT q.id, touch.campaign_id, touch.generated_text, d.approved_text, d.lead_id, d.learning_note_json
+            FROM outreachsendqueue q JOIN outreach_campaign_touches touch ON touch.id=q.campaign_touch_id
+            JOIN outreachmessagedrafts d ON d.id=q.draft_id
+            WHERE q.batch_id=%s ORDER BY touch.campaign_id FOR UPDATE OF q, touch, d""", (batch_id,))
+        canonical_rows = [dict(row) for row in cur.fetchall()]
+        if canonical_rows:
+            from services.outreach_draft_review import approve_reviewed_campaigns
+            approve_error = approve_reviewed_campaigns(cur, batch_id, canonical_rows, user_id)
+            if approve_error:
+                return None, approve_error
         cur.execute(
             """
             UPDATE outreachsendbatches

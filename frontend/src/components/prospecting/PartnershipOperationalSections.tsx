@@ -18,6 +18,8 @@ type PartnershipDraftItem = {
   edited_text?: string;
   approved_text?: string;
   email?: string;
+  learning_note_json?: { search_task_id?: string; manual_review_required?: boolean; campaign_id?: string; evidence?: { source_url?: string; fact?: string; observed_fact?: string }[] };
+  canonical_review?: { stale?: boolean; subject?: string; recipient?: string; sender?: string; text?: string; source_url?: string };
 };
 
 type PartnershipQueueItem = {
@@ -40,6 +42,7 @@ type PartnershipBatchItem = {
 };
 
 type PartnershipReactionItem = {
+  source_type?: string;
   id: string;
   lead_id: string;
   lead_name?: string;
@@ -165,13 +168,16 @@ export function PartnershipDraftsSection({
 }: DraftsSectionProps) {
   const approvedCount = drafts.filter((draft) => String(draft.status || '').toLowerCase() === 'approved').length;
   const waitingApprovalCount = drafts.length - approvedCount;
+  const searchDraftCount = drafts.filter((draft) => draft.learning_note_json?.search_task_id && draft.learning_note_json.manual_review_required).length;
 
   return (
     <div className="space-y-4 rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-slate-950">Письма ({drafts.length})</h2>
-          <p className="mt-1 text-sm text-slate-500">Проверьте первое письмо или КП, поправьте текст и утвердите его для ручной отправки.</p>
+          <p className="mt-1 text-sm text-slate-500">{searchDraftCount === drafts.length && drafts.length > 0
+            ? 'Проверьте подготовленные тексты. Отправка станет доступна после проверки компаний и отдельного согласования.'
+            : 'Проверьте первое письмо или КП, поправьте текст и утвердите его для ручной отправки.'}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Select value={draftView} onValueChange={onDraftViewChange}>
@@ -216,7 +222,7 @@ export function PartnershipDraftsSection({
             <div className="text-xs text-muted-foreground">Выбрано писем: {selectedDraftIds.length}</div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={onBulkApprove} disabled={loading || selectedDraftIds.length === 0}>
-                Проверить выбранные
+                Утвердить выбранные
               </Button>
               <Button variant="outline" onClick={onBulkDelete} disabled={loading || selectedDraftIds.length === 0}>
                 Удалить выбранные
@@ -242,7 +248,8 @@ export function PartnershipDraftsSection({
           </label>
           {drafts.map((draft) => {
             const draftText = draft.approved_text || draft.edited_text || draft.generated_text || '';
-            const mailtoHref = buildMailtoHref(draft.email, draft.lead_name || draft.lead_id, draftText);
+            const searchDraftNeedsReview = Boolean(draft.canonical_review?.stale || (draft.learning_note_json?.search_task_id && draft.learning_note_json?.manual_review_required));
+            const mailtoHref = searchDraftNeedsReview ? '' : buildMailtoHref(draft.email, draft.lead_name || draft.lead_id, draftText);
             return (
               <div key={draft.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-start gap-3">
@@ -257,6 +264,9 @@ export function PartnershipDraftsSection({
                     <div className="mb-2 text-xs text-muted-foreground">
                       {statusLabel(draft.status)} · {channelLabel(draft.channel)}
                     </div>
+                    {draft.canonical_review && !draft.canonical_review.stale && <dl className="mb-2 space-y-1 text-xs text-muted-foreground"><div><dt className="inline">Получатель: </dt><dd className="inline">{draft.canonical_review.recipient || 'Контакт не выбран'}</dd></div><div><dt className="inline">Отправитель: </dt><dd className="inline">{draft.canonical_review.sender || 'Не подключён'}</dd></div><div><dt className="inline">Тема: </dt><dd className="inline">{draft.canonical_review.subject || 'Не подготовлена'}</dd></div></dl>}
+                    {!!draft.learning_note_json?.evidence?.length && <details className="mb-2 text-xs text-muted-foreground"><summary>На чём основано письмо</summary>{draft.learning_note_json.evidence.map((fact, index) => <p key={index}>{fact.fact || fact.observed_fact}{fact.source_url && <> · <a href={fact.source_url} target="_blank" rel="noreferrer" className="underline">Источник</a></>}</p>)}</details>}
+                    {searchDraftNeedsReview ? <p className="mb-2 text-xs text-amber-800">Черновик по поиску. Компания и контакт ещё не подтверждены; отправка недоступна.</p> : null}
                     <Textarea
                       rows={5}
                       value={draftText}
@@ -272,11 +282,11 @@ export function PartnershipDraftsSection({
                         ) : (
                           <>
                             <Mail className="mr-2 h-4 w-4" />
-                            Нет email
+                            {searchDraftNeedsReview ? 'После проверки' : 'Нет email'}
                           </>
                         )}
                       </Button>
-                      <Button size="sm" onClick={() => onApproveDraft(draft.id, draftText)} disabled={loading}>
+                      <Button size="sm" onClick={() => onApproveDraft(draft.id, draftText)} disabled={loading || searchDraftNeedsReview}>
                         Утвердить для отправки
                       </Button>
                     </div>
@@ -536,7 +546,7 @@ export function PartnershipSentSection({
               Предварительно: {outcomeLabel(reaction.classified_outcome)} · Подтверждено: {outcomeLabel(reaction.human_confirmed_outcome || reaction.classified_outcome)}
             </div>
             <div className="mt-2 flex flex-wrap gap-1">
-              {outcomeOptions.map((outcome) => (
+              {reaction.source_type !== 'native_inbound' && outcomeOptions.map((outcome) => (
                 <Button
                   key={`${reaction.id}-${outcome}`}
                   size="sm"

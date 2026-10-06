@@ -483,3 +483,19 @@ def test_rule_directive_read_then_model_error_is_not_success():
     result=run_operator_tool_loop(business_id='b',user_id='u',message='На этой неделе не предлагайте уход. Нужен результат по выбранному бизнесу.',tools=[_tool('work.context',lambda _: {'status':'completed','chat_response':'Доступный рабочий контекст.'})],planner=lambda _:next(choices))
     assert result['status']=='failed' and result['planner_failed']
     assert 'изменения не выполнялись' in result['chat_response']
+
+
+def test_saved_group_revision_preview_preserves_server_approval_response():
+    calls = []
+    tool = _tool('partnerships.continue_outreach', lambda args: calls.append(args) or {
+        'status': 'approval_required', 'chat_response': 'Проверить 3 компании и подготовить письма в той же группе',
+        'approval': {'status': 'pending'}, 'search_started': False})
+    tool['input_schema'] = {'type': 'object', 'properties': {'operation': {'type': 'string'}, 'task_id': {'type': 'string'}, 'config': {'type': 'object'}}}
+    result = run_operator_tool_loop(business_id='business-1', user_id='user-1',
+        message='Подготовь условия для трёх турагентств сохранённой группы', tools=[tool],
+        planner=lambda state: {'action': 'tool_call', 'tool': 'partnerships.continue_outreach',
+            'arguments': {'operation': 'revise_preview', 'task_id': 'group-1', 'config': {'target_count': 3, 'mode': 'prepare_only'}}})
+    assert result['status'] == 'approval_required'
+    assert result['chat_response'] == 'Проверить 3 компании и подготовить письма в той же группе'
+    assert result['search_started'] is False
+    assert len(calls) == 1

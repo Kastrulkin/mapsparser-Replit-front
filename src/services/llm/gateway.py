@@ -374,7 +374,13 @@ def _recovery_prompt(request, definition, result):
         "validation_errors": result.validation_errors,
         "response_schema": request.response_schema or definition.response_schema,
     }
+    parsed = parse_json_value(result.content)
+    missing_operator_action = request.task_key == "operator_tool_plan" and (
+        not isinstance(parsed, dict) or parsed.get("action") not in {"tool_call", "final", "clarification"}
+    )
     instruction = (
+        "Предыдущая попытка не дала решения текущей команды. Заново выбери действие для текущего message из исходного каталога инструментов. Не исправляй предыдущие сообщения чата и не проси пользователя повторить уже указанную задачу."
+        if missing_operator_action else
         "Исправь только формат ответа, сохранив смысл исходного задания."
         if result.content.strip() else
         "Предыдущая попытка не дала ответа. Выполни исходное задание заново."

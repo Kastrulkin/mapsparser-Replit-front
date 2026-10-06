@@ -396,6 +396,9 @@ def _record_reaction(
         normalized_provider_account_id = str(provider_account_id or "").strip()[:255] or None
         normalized_provider_message_id = _normalize_provider_message_id(provider_message_id)
         if normalized_provider_name and normalized_provider_message_id:
+            if normalized_provider_name == "native_email":
+                cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))",
+                    (f"email-inbound:{normalized_provider_account_id}:{normalized_provider_message_id.lower()}",))
             cur.execute(
                 """
                 SELECT id, queue_id, lead_id, raw_reply, classified_outcome,

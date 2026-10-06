@@ -123,6 +123,8 @@ def partnership_list_leads():
         pipeline_status_filter = str(request.args.get("pipeline_status") or "").strip().lower() or None
         pilot_cohort = str(request.args.get("pilot_cohort") or "").strip().lower() or None
         q = str(request.args.get("q") or "").strip().lower()
+        search_task_id = str(request.args.get("search_task_id") or "").strip()
+        company_filter = str(request.args.get("company_filter") or "all")
         limit = max(1, min(int(request.args.get("limit") or 100), 500))
         offset = max(0, int(request.args.get("offset") or 0))
 
@@ -143,6 +145,30 @@ def partnership_list_leads():
                 "active_ws.workstream_type = 'client_partnership'",
             ]
             params: list[Any] = [business_id]
+            task_state = {}
+            if search_task_id:
+                cur.execute("""SELECT result_json FROM operator_async_jobs
+                    WHERE id::text=%s AND business_id=%s AND kind='outreach_continue'""",
+                    (search_task_id, business_id))
+                search_task = cur.fetchone()
+                if not search_task:
+                    return jsonify({"error": "search_task_not_found"}), 404
+                task_state = (dict(search_task).get("result_json") or {}) if hasattr(search_task, "keys") else (search_task[0] or {})
+                where_sql.append("prospectingleads.id::text = ANY(%s::text[])")
+                params.append([str(value) for value in (task_state.get("lead_ids") or [])])
+            if company_filter not in {'all', 'suitable', 'needs_decision', 'excluded'}:
+                return jsonify({'error': 'invalid_company_filter'}), 400
+            from services.outreach_continuation import qualified_contact_ids
+            eligible_ids = qualified_contact_ids(task_state)
+            excluded_sql = "(COALESCE(active_ws.status,'') IN ('not_relevant','disqualified','closed_lost') OR COALESCE(partnership_stage,'') IN ('rejected','shortlist_rejected'))"
+            if company_filter == 'excluded':
+                where_sql.append(excluded_sql)
+            elif company_filter == 'suitable':
+                where_sql.extend(["NOT " + excluded_sql, "active_ws.id::text=ANY(%s::text[])"])
+                params.append(eligible_ids)
+            elif company_filter == 'needs_decision':
+                where_sql.extend(["NOT " + excluded_sql, "active_ws.id::text<>ALL(%s::text[])", "COALESCE(active_ws.status,'') NOT IN ('in_progress','contacted','replied','responded','waiting_reply','sent','delivered')"])
+                params.append(eligible_ids)
             if stage_filter:
                 where_sql.append("COALESCE(partnership_stage, 'imported') = %s")
                 params.append(stage_filter)

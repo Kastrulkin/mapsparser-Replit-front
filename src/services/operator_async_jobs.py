@@ -17,6 +17,7 @@ RETRYABLE_JOB_KINDS = {
     "finance_document_recognize",
     "finance_crm_sync",
     "diagnostics_retry",
+    "partner_search_drafts",
 }
 CANCELLABLE_JOB_KINDS = {
     "audio_transcription", "audio_speech", "voice_receive", "voice_execute",
@@ -24,6 +25,7 @@ CANCELLABLE_JOB_KINDS = {
     "content_draft_generate",
     "finance_document_recognize",
     "finance_crm_sync",
+    "partner_search_drafts",
 }
 OPERATOR_JOB_LEASE_SECONDS = max(30, int(os.getenv("OPERATOR_ASYNC_JOB_LEASE_SECONDS", "300")))
 OPERATOR_JOB_HEARTBEAT_SECONDS = max(5, int(os.getenv("OPERATOR_ASYNC_JOB_HEARTBEAT_SECONDS", "30")))
@@ -250,6 +252,7 @@ def retry_operator_async_job(
         UPDATE operator_async_jobs
         SET status = 'queued', progress = 0, stage = 'Повтор поставлен в очередь',
             error_text = NULL, next_attempt_at = NOW(), completed_at = NULL, lease_token = NULL,
+            result_json = CASE WHEN kind = 'partner_search_drafts' THEN '{}'::jsonb ELSE result_json END,
             updated_at = NOW()
         WHERE id = %s
         RETURNING *
@@ -358,10 +361,17 @@ def recover_stale_operator_async_jobs(cursor: Any, *, limit: int = 50) -> int:
             updated_at = NOW()
         FROM stale_jobs
         WHERE job.id = stale_jobs.id
+        RETURNING job.*
         """,
         (OPERATOR_JOB_LEASE_SECONDS, max(1, min(int(limit), 500))),
     )
-    return max(0, int(getattr(cursor, "rowcount", 0) or 0))
+    recovered = max(0, int(getattr(cursor, "rowcount", 0) or 0))
+    for item in (cursor.fetchall() if hasattr(cursor, "fetchall") else []) or []:
+        row = _row(cursor, item)
+        if row.get("kind") == "outreach_continue" and row.get("status") == "failed" and (row.get("result_json") or {}).get("agent_run_id"):
+            from services.agent_outreach_continuation import terminate
+            terminate(cursor, row, reason="outreach_worker_retry_limit")
+    return recovered
 
 
 def heartbeat_operator_async_job(cursor: Any, *, job_id: str, lease_token: str) -> bool:
@@ -493,7 +503,13 @@ def process_next_operator_async_job(*, background: bool = False, background_only
         if kind == "outreach_continue":
             from services.outreach_continuation import process_job
             return {"id": job_id, "kind": kind, **process_job(claimed)}
-        if kind in {"voice_receive", "voice_execute"}:
+        if kind == "partner_search_drafts":
+            from services.partner_search_drafts import process_job
+            result = process_job(claimed)
+            status = "waiting_for_review" if result.get("blocked") else "queued" if result.get("remaining") else "completed"
+            stage = f"Подготовлено {result.get('created', 0)} из {result.get('total', 0)}; требуют внимания {result.get('failed', 0)}"
+            progress = round(100 * (result.get("created", 0) + result.get("failed", 0)) / max(result.get("total", 1), 1))
+        elif kind in {"voice_receive", "voice_execute"}:
             from services.operator_voice_queue import process_job
             result = process_job(claimed)
             status, stage, progress = "completed", "Обработка завершена", 100
@@ -566,6 +582,15 @@ def process_next_operator_async_job(*, background: bool = False, background_only
     except Exception as exc:
         fail_db = DatabaseManager()
         try:
+            current = None
+            if kind == "outreach_continue":
+                fail_cur = fail_db.conn.cursor()
+                fail_cur.execute("SELECT * FROM operator_async_jobs WHERE id=%s AND lease_token=%s FOR UPDATE", (job_id, lease_token))
+                found = fail_cur.fetchone()
+                if found:
+                    current = dict(found)
+                    from services.agent_outreach_continuation import terminate
+                    terminate(fail_cur, {**current, "status": "failed"}, reason="outreach_worker_failed")
             failed_update = update_operator_async_job(
                 fail_db.conn.cursor(),
                 job_id=job_id,
@@ -573,6 +598,7 @@ def process_next_operator_async_job(*, background: bool = False, background_only
                 progress=100,
                 stage="Нужно внимание",
                 error=str(exc),
+                result=(current.get("result_json") if current else {}) if kind == "outreach_continue" else None,
                 lease_token=lease_token,
             )
             if failed_update and kind in {"disk_import_scan","disk_import_file"} and claimed.get('attempt_count',1) < claimed.get('max_attempts',5):

@@ -55,3 +55,10 @@ def test_finance_switch_does_not_retain_old_content_answers():
              {'role':'user','content':'Четыре'}, {'role':'user','content':'Запиши выручку'},
              {'role':'assistant','content':'В какой валюте?'}]
     assert PlannerContext('Расходы тоже запиши').history(history)==history[-2:]
+
+
+def test_outreach_revision_keeps_partnership_tools_with_credit_estimate():
+    tools = [{'name': 'partnerships.continue_outreach'}, {'name': 'partnerships.prepare_search_drafts'},
+             {'name': 'content.read'}, {'name': 'finance.read'}, {'name': 'operator.help'}]
+    message = 'Для сохранённой группы Индия → Пхукет подготовь изменение условий: получи 3 подходящих турагентства, собери email с источниками и подготовь индивидуальные письма. Покажи оценку в кредитах.'
+    assert PlannerContext(message).tools(tools) == [tools[0], tools[1], tools[4]]
