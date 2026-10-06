@@ -314,6 +314,34 @@ def _sync_known_email_threads(
         return {"bound": 0, "imported": 0, "duplicates": 0, "processed_event_ids": set()}
     sender_id = str(sender.get("id") or "")
     summary = {"bound": 0, "imported": 0, "duplicates": 0, "processed_event_ids": set()}
+    # Native campaign thread references take precedence over address-level bindings.
+    # This also retains campaign/touch linkage for a completed first-touch sequence.
+    native_candidates = _load_non_author_queue_candidates(sender_id)
+    remaining_inbox = []
+    for message in inbox_messages:
+        references = _reference_tokens(message)
+        native_match = next((candidate for candidate in native_candidates
+            if str(candidate.get("provider_message_id") or "").strip().lower() in references), None)
+        if native_match:
+            classification = classify_inbound_event({
+                "classification": message.get("dsn_classification"),
+                "subject": message.get("subject"), "body": message.get("body"),
+                "raw_reply": message.get("body"),
+                "auto_submitted": message.get("auto_submitted"), "precedence": message.get("precedence"),
+            })
+            if classification.get("is_human"):
+                status = _record_human_reply(native_match, sender, message, classification)
+            else:
+                status = _record_technical_event(native_match, sender, message, classification)
+            if status not in {"recorded", "duplicate"}:
+                raise RuntimeError("native_campaign_reply_import_failed")
+            summary["processed_event_ids"].add(str(message.get("provider_event_id") or ""))
+            if status == "recorded":
+                summary["imported"] += 1
+            elif status == "duplicate":
+                summary["duplicates"] += 1
+            continue
+        remaining_inbox.append(message)
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
@@ -335,7 +363,7 @@ def _sync_known_email_threads(
                     external_thread_id=str(message.get("message_id") or "") or None,
                 )
                 summary["bound"] += 1
-        for message in inbox_messages:
+        for message in remaining_inbox:
             provider_event_id = str(message.get("provider_event_id") or "")
             binding = resolve_known_contact_binding(
                 cursor,
@@ -591,19 +619,23 @@ def _record_human_reply(
         "system:email_reply_sync",
         provider_name="native_email",
         provider_account_id=str(sender.get("id") or ""),
-        provider_message_id=str(reply.get("provider_event_id") or ""),
+        provider_message_id=(str(reply.get("message_id") or "").strip().lower()
+                             or str(reply.get("provider_event_id") or "")),
         reply_created_at=reply.get("occurred_at"),
         prefer_ai=False,
         inbound_classification_override=classification["classification"],
         inbound_payload={
             "subject": reply.get("subject"),
+            "message_id": reply.get("message_id"),
+            "in_reply_to": reply.get("in_reply_to"),
+            "references": reply.get("references"),
             "auto_submitted": reply.get("auto_submitted"),
             "precedence": reply.get("precedence"),
         },
     )
-    if reaction:
-        return "recorded"
-    return "duplicate" if reaction_error == "Reaction already recorded" else "failed"
+    if reaction_error == "Reaction already recorded":
+        return "duplicate"
+    return "recorded" if reaction else "failed"
 
 
 def _sync_legacy_non_author_sender(

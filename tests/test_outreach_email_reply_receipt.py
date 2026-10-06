@@ -951,7 +951,7 @@ def test_riderra_complete_scope_records_v2_and_reconciles_human_reply(monkeypatc
     assert reactions[0]["user_id"] == "system:email_reply_sync"
     assert reactions[0]["provider_name"] == "native_email"
     assert reactions[0]["provider_account_id"] == SENDER_ACCOUNT_ID
-    assert reactions[0]["provider_message_id"] == inbound["provider_event_id"]
+    assert reactions[0]["provider_message_id"] == inbound["message_id"]
 
 
 def test_unmatched_exact_scoped_message_records_failure_and_does_not_advance_sync(monkeypatch):

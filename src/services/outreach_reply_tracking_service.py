@@ -308,6 +308,18 @@ def record_bound_inbound_event(
     body = str(raw_reply or "").strip()
     if not body or not provider_event_id:
         return "unmatched"
+    # A Gmail message can appear in multiple folders with different UIDs.
+    # Serialize by RFC Message-ID and sender, rather than folder-local identifiers.
+    message_id = str((raw_payload or {}).get("message_id") or "").strip().lower()
+    if channel == "email" and message_id:
+        cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))",
+                       (f"email-inbound:{sender_account_id}:{message_id}",))
+        cursor.execute("""SELECT id FROM outreach_inbound_events
+            WHERE sender_account_id=%s AND channel='email'
+              AND LOWER(BTRIM(raw_payload_json->>'message_id'))=%s LIMIT 1""",
+            (sender_account_id, message_id))
+        if cursor.fetchone():
+            return "duplicate"
     event_time = _normalize_event_time(occurred_at)
     event_id = str(uuid.uuid4())
     classification_name = str(classification.get("classification") or "human_unknown")
