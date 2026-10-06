@@ -312,6 +312,31 @@
   "backup": "/opt/seo-app/backups/seo-technical-20261006",
   "privateIndexSha256BeforeAndAfter": "3fc74910924311b1f2e6bae01f40c0b8b0a396bf9bf97eed6bfaca115e85d6f5",
   "push": "GitHub and GitVerse blocked: missing HTTPS credentials",
-  "reindex": "Updated sitemap deployed; manual Webmaster recrawl submission not yet verified",
+  "reindex": {
+    "engine": "Yandex Webmaster",
+    "submittedAt": "2026-10-06 14:15 Europe/Moscow",
+    "count": 17,
+    "status": "В очереди",
+    "remainingDailyQuota": 133,
+    "urls": [
+      "https://localos.pro/",
+      "https://localos.pro/growth",
+      "https://localos.pro/growth?direction=influencers",
+      "https://localos.pro/growth?direction=partnerships",
+      "https://localos.pro/growth?direction=maps",
+      "https://localos.pro/growth?direction=content",
+      "https://localos.pro/growth?direction=automation",
+      "https://localos.pro/growth?direction=average_ticket",
+      "https://localos.pro/docs",
+      "https://localos.pro/docs/capabilities",
+      "https://localos.pro/docs/approval-policy",
+      "https://localos.pro/docs/security-model",
+      "https://localos.pro/docs/api",
+      "https://localos.pro/docs/agent-use-cases",
+      "https://localos.pro/docs/gaps",
+      "https://localos.pro/login",
+      "https://localos.pro/dashboard"
+    ]
+  },
   "knownAdjacentHealth": "Telegram bot reported unhealthy; not touched by this SEO release."
 }
