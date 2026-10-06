@@ -205,6 +205,7 @@ def preparation_report(config: dict[str, Any], state: dict[str, Any]) -> dict[st
             "credits_charged": int(state.get("search_credits_charged") or 0) + int(state.get("check_credits_charged") or 0),
             "search_credits_charged": int(state.get("search_credits_charged") or 0),
             "check_credits_charged": int(state.get("check_credits_charged") or 0),
+            "search_credits_each": credits["search_each"] if credits else None,
             "ai_needs_review": sum(value.get('ai_review_status') == 'needs_review' for value in (state.get('campaign_results') or {}).values()),
             "blocker": state.get("blocker")}
 
@@ -227,7 +228,7 @@ def view(row: dict[str, Any]) -> dict[str, Any]:
         created = row.get("created_at")
         if hasattr(created, "strftime"):
             display_name = f"{display_name} · {created.strftime('%d.%m')}"
-    return {"id": str(row["id"]), "business_id": row.get("business_id"),
+    result = {"id": str(row["id"]), "business_id": row.get("business_id"),
             "display_name": display_name[:120], "created_at": str(row.get("created_at") or ""),
             "status": row["status"], "stage": stage, "config": config,
             "revision": config_hash(config), "state": state, "report": preparation_report(config, state),
@@ -235,6 +236,9 @@ def view(row: dict[str, Any]) -> dict[str, Any]:
             "updated_at": str(row.get("updated_at") or ""),
             "campaigns_url": f"/dashboard/partnerships?search_task_id={row['id']}",
             "external_dispatch_performed": False}
+    from services.partnership_group_view import presentation
+    result["presentation"] = presentation(result)
+    return result
 
 
 def create_task(cursor: Any, *, business_id: str, user_id: str, config: dict[str, Any], request_id: str = "") -> dict[str, Any]:
@@ -278,25 +282,36 @@ def list_tasks(cursor: Any, *, business_id: str, user_id: str) -> list[dict[str,
 def delivery_report(cursor, task):
     """Read native receipts; queue admission is never reported as a sent email."""
     ids = [str(value['campaign_id']) for value in (task.get('state', {}).get('campaign_results') or {}).values() if value.get('campaign_id')]
-    result = {'queued': 0, 'confirmed_sent': 0, 'delivery_uncertain': 0, 'replies': 0, 'interested_replies': [],
+    result = {'queued': 0, 'sending': 0, 'confirmed_sent': 0, 'delivery_uncertain': 0, 'replies': 0, 'interested_replies': [],
               'delivery_evidence': 'native_queue_and_inbound_events'}
-    if not ids:
+    lead_ids = list(task.get("state", {}).get("lead_ids") or [])
+    if not lead_ids and not ids:
         return result
     cursor.execute("""SELECT
         COUNT(*) FILTER (WHERE q.delivery_status IN ('queued','sending','retry','retry_wait')) AS queued,
+        COUNT(*) FILTER (WHERE q.delivery_status='sending') AS sending,
         COUNT(*) FILTER (WHERE q.delivery_status IN ('sent','delivered') AND NULLIF(q.provider_message_id,'') IS NOT NULL) AS confirmed_sent,
         COUNT(*) FILTER (WHERE q.delivery_status IN ('delivery_unknown','unknown','uncertain') OR lower(COALESCE(q.error_text,'')) LIKE '%%send_uncertain%%'
           OR (q.delivery_status IN ('sent','delivered') AND NULLIF(q.provider_message_id,'') IS NULL)) AS delivery_uncertain
-        FROM outreachsendqueue q JOIN outreach_campaign_touches t ON t.id=q.campaign_touch_id
-        JOIN outreach_campaigns c ON c.id=t.campaign_id
-        WHERE c.id::text=ANY(%s) AND c.business_id=%s""", (ids, task['business_id']))
+        FROM outreachsendqueue q JOIN prospectingleads l ON l.id=q.lead_id
+        WHERE l.id::text=ANY(%s::text[]) AND l.business_id=%s""", (lead_ids, task['business_id']))
     result.update(dict(cursor.fetchone() or {}))
     cursor.execute("""SELECT i.id,i.campaign_id,i.lead_id,i.classification,i.occurred_at
         FROM outreach_inbound_events i JOIN outreach_campaigns c ON c.id=i.campaign_id
-        WHERE c.id::text=ANY(%s) AND c.business_id=%s AND i.is_human=TRUE
+        WHERE (c.id::text=ANY(%s) OR i.lead_id::text=ANY(%s::text[])) AND c.business_id=%s AND i.is_human=TRUE
         ORDER BY CASE WHEN i.classification IN ('interested','positive','positive_reply') THEN 0 ELSE 1 END,
-                 i.occurred_at DESC""", (ids, task['business_id']))
+                 i.occurred_at DESC""", (ids, lead_ids, task['business_id']))
     replies = [dict(row) for row in cursor.fetchall()]
+    cursor.execute("""SELECT DISTINCT ON (r.lead_id) r.id, r.lead_id, r.created_at AS occurred_at,
+        COALESCE(r.human_confirmed_outcome,r.classified_outcome) AS classification
+        FROM outreachreactions r JOIN prospectingleads l ON l.id=r.lead_id
+        WHERE l.business_id=%s AND l.id::text=ANY(%s::text[])
+          AND NULLIF(TRIM(COALESCE(r.raw_reply,'')), '') IS NOT NULL
+        ORDER BY r.lead_id, r.created_at DESC""", (task['business_id'], lead_ids))
+    native_leads = {str(row['lead_id']) for row in replies}
+    replies.extend(dict(row) for row in cursor.fetchall() if str(row['lead_id']) not in native_leads)
+    replies.sort(key=lambda row: str(row.get('occurred_at') or ''), reverse=True)
+    replies.sort(key=lambda row: row.get('classification') not in {'interested','positive','positive_reply'})
     result['replies'] = len(replies)
     result['interested_replies'] = [row for row in replies if row['classification'] in {'interested','positive','positive_reply'}][:20]
     result['recent_replies'] = replies[:20]
@@ -305,7 +320,7 @@ def delivery_report(cursor, task):
 
 def control_task(cursor: Any, *, task_id: str, business_id: str, user_id: str,
                  action: str, revision: str, display_name: str = "") -> dict[str, Any]:
-    if action not in {"start", "pause", "resume", "stop", "acknowledge_search", "retry_failed", "use_shared_balance", "rename"}:
+    if action not in {"start", "pause", "resume", "stop", "acknowledge_search", "retry_failed", "use_shared_balance", "rename", "resume_letters"}:
         raise ValueError("invalid_action")
     cursor.execute("""SELECT * FROM operator_async_jobs WHERE id=%s AND kind=%s
         AND business_id=%s FOR UPDATE""", (task_id, KIND, business_id))
@@ -339,6 +354,10 @@ def control_task(cursor: Any, *, task_id: str, business_id: str, user_id: str,
         cursor.execute("UPDATE operator_async_jobs SET result_json=%s, updated_at=NOW() WHERE id=%s RETURNING *",
                        (Json(state), task_id))
         return view(dict(cursor.fetchone()))
+    if action == "resume_letters":
+        from services.partner_search_drafts import resume_group_job
+        resume_group_job(cursor, business_id=business_id, task_id=task_id)
+        return view(row)
     if action == "use_shared_balance":
         if row["status"] in {"running", "queued"} or state.get("search_calls") or state.get("lead_ids") or state.get("search_credit_reservation_id"):
             raise ValueError("pause_and_reconcile_before_changing_billing")
@@ -357,7 +376,7 @@ def control_task(cursor: Any, *, task_id: str, business_id: str, user_id: str,
         if row["status"] in {"running", "queued"}:
             raise ValueError("pause_before_retry")
         changed = False
-        for field, statuses in (("qualifications", {"checking", "failed"}), ("campaign_results", {"preparing", "failed"})):
+        for field, statuses in (("qualifications", {"failed"}), ("campaign_results", {"failed"})):
             values = dict(state.get(field) or {})
             for key, value in list(values.items()):
                 if value.get("status") in statuses:
@@ -417,6 +436,12 @@ def control_task(cursor: Any, *, task_id: str, business_id: str, user_id: str,
         completed_at=CASE WHEN %s='cancelled' THEN NOW() ELSE NULL END WHERE id=%s RETURNING *""",
         (status, stage, Json(state), status, task_id))
     saved = dict(cursor.fetchone())
+    if action in {"pause", "stop"}:
+        cursor.execute("""UPDATE operator_async_jobs SET status=%s, lease_token=NULL,
+            stage=%s, updated_at=NOW() WHERE business_id=%s AND kind='partner_search_drafts'
+            AND payload_json->>'search_task_id'=%s AND status IN ('running','queued','waiting_for_review')""",
+            ('cancelled' if action == 'stop' else 'waiting_for_review',
+             'Подготовка писем остановлена' if action == 'stop' else 'Подготовка писем на паузе', business_id, task_id))
     if status == 'cancelled' and state.get('agent_run_id'):
         from services.agent_outreach_continuation import terminate
         terminate(cursor,saved,reason='outreach_stopped')
@@ -1010,11 +1035,25 @@ def operator_task(cursor: Any, *, business_id: str, user_id: str, arguments: dic
                                              request_id=str(current_request_key.get() or ""))
         if arguments.get("operation") == "list":
             items = list_tasks(cursor, business_id=business_id, user_id=user_id)
+            from services.partnership_group_view import enrich_group
             for task in items:
                 task['report'].update(delivery_report(cursor, task))
+                enrich_group(cursor, task, viewer_id=user_id)
             return {"status": "completed", "items": items}
         operation = arguments.get("operation")
-        if operation in {"pause", "stop", "retry_failed", "acknowledge_search", "use_shared_balance", "rename"}:
+        if operation not in {'create', 'list'} and not str(arguments.get('task_id') or '').strip():
+            return {'status': 'clarification_required', 'chat_response': 'Выберите группу компаний над историей чата, затем повторите команду.', 'blocked_reasons': ['search_ambiguous'], 'items': list_tasks(cursor, business_id=business_id, user_id=user_id)}
+        if operation == 'status':
+            cursor.execute("SELECT * FROM operator_async_jobs WHERE id::text=%s AND business_id=%s AND kind=%s", (str(arguments.get('task_id') or ''), business_id, KIND))
+            row = cursor.fetchone()
+            if not row:
+                raise ValueError('task_not_found')
+            from services.partnership_group_view import enrich_group
+            task = view(dict(row))
+            task['report'].update(delivery_report(cursor, task))
+            enrich_group(cursor, task, viewer_id=user_id)
+            return {'status': 'completed', 'task': task, 'chat_response': task['presentation']['label'], 'external_dispatch_performed': False}
+        if operation in {"pause", "stop", "retry_failed", "acknowledge_search", "use_shared_balance", "rename", "resume_letters"}:
             task = control_task(cursor, task_id=str(arguments.get("task_id") or ""), business_id=business_id,
                 user_id=user_id, action=operation, revision=str(arguments.get("revision") or ""),
                 display_name=str(arguments.get("display_name") or ""))

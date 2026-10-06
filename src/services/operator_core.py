@@ -886,8 +886,13 @@ def _operator_tool_catalog(
     limit: Any,
     refresh_handler: Callable[..., dict[str, Any]],
     action_orchestrator: ActionOrchestrator | None = None,
-    work_request_key=None, work_message_id=None, work_saved=None, actor_context=None,
+    work_request_key=None, work_message_id=None, work_saved=None, actor_context=None, selected_search_task=None,
 ) -> list[dict[str, Any]]:
+    def group_arguments(arguments):
+        if not selected_search_task or arguments.get('task_id') or arguments.get('operation') in {'create', 'preview', 'list'} and arguments.get('config'):
+            return arguments
+        return {**arguments, 'task_id': selected_search_task['id'],
+                'revision': arguments.get('revision') or selected_search_task['revision']}
     query_tool = operator_query_tool_contract()
     query_tool["execute"] = lambda arguments: execute_operator_query(
         cursor,
@@ -1422,13 +1427,13 @@ def _operator_tool_catalog(
             },
             "risk_class": "draft_only", "approval_required": False,
             "execute": lambda arguments: __import__("services.outreach_continuation", fromlist=["operator_task"]).operator_task(
-                cursor, business_id=business_id, user_id=user_id, arguments=arguments, actor_context=actor_context),
+                cursor, business_id=business_id, user_id=user_id, arguments=group_arguments(arguments), actor_context=actor_context),
         },
         {
             "name": "partnerships.prepare_search_drafts",
             "capability": "partnerships.prepare_search_drafts",
             "title": "Черновики по компаниям поиска",
-            "description": "Для команды о нескольких письмах из поиска используй этот инструмент, а не partnerships.prepare_message. Сначала preview: покажи число уникальных компаний и цену, затем start только после подтверждения пользователя. По умолчанию бери отмеченных «В отбор»; scope=all_new только при явном запросе всех результатов. Непроверенные остаются только черновиками. Не отправляет письма, исключённые дубли не входят.",
+            "description": "Для команды о нескольких письмах из поиска используй этот инструмент, а не partnerships.prepare_message. Сначала preview: покажи число уникальных компаний и цену, затем start только после подтверждения пользователя. По умолчанию бери подходящих с подтверждённым контактом или отмеченных «Выбрана для работы»; scope=all_new только при явном запросе всех результатов. Непроверенные остаются только черновиками. Не отправляет письма, исключённые дубли не входят.",
             "input_schema": {"type": "object", "additionalProperties": False, "properties": {
                 "operation": {"type": "string", "enum": ["preview", "start", "status"]},
                 "task_id": {"type": "string"},
@@ -1440,7 +1445,7 @@ def _operator_tool_catalog(
             "risk_class": "draft_only", "approval_required": False,
             "deterministic_response": True,
             "execute": lambda arguments: __import__("services.partner_search_drafts", fromlist=["operator_task"]).operator_task(
-                cursor, business_id=business_id, user_id=user_id, arguments=arguments, actor_context=actor_context),
+                cursor, business_id=business_id, user_id=user_id, arguments=group_arguments(arguments), actor_context=actor_context),
         },
         {
             "name": "partnerships.prepare_message",
@@ -2089,6 +2094,30 @@ def route_operator_message(
     setup = route_setup(cursor, business_id, user_id, channel, clean_message, pending, conversation_id, action_orchestrator)
     if setup:
         return setup
+    selected_search_task = None
+    selected_id = str((action_payload or {}).get('search_task_id') or '').strip()
+    if selected_id:
+        from services.outreach_continuation import KIND, view
+        cursor.execute("SELECT * FROM operator_async_jobs WHERE id::text=%s AND business_id=%s AND kind=%s", (selected_id, business_id, KIND))
+        selected_row = cursor.fetchone()
+        if not selected_row:
+            return standardize_operator_result({'status': 'blocked', 'chat_response': 'Выбранный поиск недоступен для этого бизнеса. Выберите другую группу.', 'blocked_reasons': ['search_task_not_found']}, 'partnerships.continue_outreach'), {}
+        selected_search_task = view(dict(selected_row))
+        from services.outreach_continuation import delivery_report
+        from services.partnership_group_view import enrich_group
+        selected_search_task['report'].update(delivery_report(cursor, selected_search_task))
+        enrich_group(cursor, selected_search_task, viewer_id=user_id)
+        if pending.get('task_id') and str(pending['task_id']) != selected_id:
+            pending = {}
+        command = clean_message.strip().rstrip('.!').casefold()
+        operation = {'покажи этот поиск': 'status', 'покажи поиск': 'status', 'пауза': 'pause', 'приостанови': 'pause', 'останови': 'stop', 'останови поиск': 'stop', 'продолжи': 'resume', 'продолжи поиск': 'resume'}.get(command)
+        if operation:
+            from services.outreach_continuation import operator_task
+            if operation == 'resume' and selected_search_task.get('presentation', {}).get('phase') == 'letters':
+                operation = 'resume_letters'
+            result = operator_task(cursor, business_id=business_id, user_id=user_id,
+                arguments={'operation': operation, 'task_id': selected_id, 'revision': selected_search_task['revision']}, actor_context=actor_context)
+            return standardize_operator_result(result, 'partnerships.continue_outreach'), {}
     preview_config = pending.get('config') if pending.get('capability') == 'partnerships.continue_outreach' and pending.get('stage') == 'preview' else None
     if not isinstance(preview_config, dict):
         previous = next((item for item in reversed(conversation_history or []) if item.get('role') == 'operator'), {})
@@ -2435,7 +2464,7 @@ def route_operator_message(
             limit=limit,
             refresh_handler=run_refresh,
             action_orchestrator=action_orchestrator,
-            actor_context=actor_context,
+            actor_context=actor_context, selected_search_task=selected_search_task,
             work_request_key=str((action_payload or {}).get("request_id") or work_message_id or uuid.uuid4()),work_message_id=work_message_id,work_saved=work_saved,
         )
         tools = [tool for tool in tools if not operator_subscription_block(subscription_access, tool.get('capability') or tool['name'])]

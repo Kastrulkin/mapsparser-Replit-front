@@ -1,3 +1,4 @@
+import { OutreachGroupCard, type GroupPresentation } from '@/components/prospecting/OutreachGroupCard';
 import { OperatorRequestHistory } from '@/components/operator/OperatorRequestHistory';
 import { OperatorSpeech, OperatorVoiceInput, VoiceSubmission } from '@/components/operator/OperatorVoice';
 import { voiceHeaders, waitForOperatorResult } from '@/components/operator/OperatorVoice.logic';
@@ -14,7 +15,7 @@ import {
 	Send,
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 
 import { BetaFeedbackBanner } from '@/components/dashboard/BetaFeedbackBanner';
 import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
@@ -43,6 +44,8 @@ type OperatorChatResult = {
   search_started?: boolean;
   task?: {
     id: string;
+    presentation?: GroupPresentation;
+    revision?: string;
     business_id?: string;
     status: string;
     display_name?: string;
@@ -269,10 +272,11 @@ export const OperatorPage = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [pendingChatMessage, setPendingChatMessage] = useState<string | null>(null);
+  const [pendingChatPhase, setPendingChatPhase] = useState('Отправляем команду…');
   const chatWindowRef = useRef<HTMLDivElement>(null);
   const scrollToLatestRef = useRef(false);
   const chatSendInFlightRef = useRef(false);
-  const pendingRequest = useRef({ businessId: "", text: "", id: "" });
+  const pendingRequest = useRef({ businessId: "", text: "", groupId: "", id: "" });
   const [refreshCheckingQueueId, setRefreshCheckingQueueId] = useState<string | null>(null);
   const [bulkGeneratingKey, setBulkGeneratingKey] = useState<string | null>(null);
   const [applyingServiceJobId, setApplyingServiceJobId] = useState<string | null>(null);
@@ -286,15 +290,23 @@ export const OperatorPage = () => {
   const [historyRetry, setHistoryRetry] = useState(0);
   const [confirmingActionId, setConfirmingActionId] = useState<string | null>(null);
   const [rejectingActionId, setRejectingActionId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchTasks, setSearchTasks] = useState<NonNullable<OperatorChatResult['task']>[]>([]);
+  const requestedSearchId = searchParams.get('search_task_id') || '';
+  const [selectedSearchId, setSelectedSearchId] = useState(requestedSearchId);
+  useEffect(() => { setSelectedSearchId(requestedSearchId); }, [requestedSearchId]);
+  const suggestedCommand = searchParams.get('command');
+  useEffect(() => { if (suggestedCommand) setChatMessage(suggestedCommand); }, [suggestedCommand]);
   const [savedSearchTask, setSavedSearchTask] = useState<OperatorChatResult['task']>();
-  const activeSearchTask = [...messages].reverse().map((item) => item.result && 'task' in item.result ? item.result.task : undefined).find((task) => task?.id && (!task.business_id || task.business_id === currentBusinessId)) || (savedSearchTask?.business_id === currentBusinessId ? savedSearchTask : undefined);
+  const activeSearchTask = selectedSearchId ? searchTasks.find(task => task.id === selectedSearchId && task.business_id === currentBusinessId) || (savedSearchTask?.id === selectedSearchId && savedSearchTask?.business_id === currentBusinessId ? savedSearchTask : undefined) : undefined;
   useEffect(() => {
-    if (!currentBusinessId) { setSavedSearchTask(undefined); return; }
+    setSearchTasks([]); setSavedSearchTask(undefined);
+    if (!currentBusinessId) return;
     let live = true;
     const refresh = async () => {
       try {
         const response = await api.get('/partnership/continuations', { params: { business_id: currentBusinessId } });
-        if (live) setSavedSearchTask((response.data?.items || []).find((task: OperatorChatResult['task']) => task?.id));
+        if (live) setSearchTasks(response.data?.items || []);
       } catch { if (live) setSavedSearchTask(undefined); }
     };
     void refresh();
@@ -393,12 +405,13 @@ export const OperatorPage = () => {
   const sendOperatorChatMessage = async (overrideText?: string, source?: VoiceSubmission) => {
     const text = (overrideText || chatMessage).trim();
     if (!currentBusinessId || !text || chatSendInFlightRef.current) return;
-    if (pendingRequest.current.businessId !== currentBusinessId || pendingRequest.current.text !== text) pendingRequest.current = { businessId: currentBusinessId, text, id: crypto.randomUUID() };
+    if (pendingRequest.current.businessId !== currentBusinessId || pendingRequest.current.text !== text || pendingRequest.current.groupId !== selectedSearchId) pendingRequest.current = { businessId: currentBusinessId, text, groupId: selectedSearchId, id: crypto.randomUUID() };
     historyVersion.current++;
     setHistoryLoading(false);
     chatSendInFlightRef.current = true;
     scrollToLatestRef.current = true;
     setPendingChatMessage(text);
+    setPendingChatPhase('Отправляем команду…');
     setChatLoading(true);
     try {
       const response = await api.post('/operator/chat', {
@@ -406,6 +419,7 @@ export const OperatorPage = () => {
         message: text,
         conversation_id: conversationId,
         channel: 'web',
+        search_task_id: selectedSearchId || null,
         request_id: pendingRequest.current.id,
         ...source,
       });
@@ -414,11 +428,17 @@ export const OperatorPage = () => {
         status: 'blocked',
         chat_response: 'Не получил ответ Operator.',
       };
+      setPendingChatPhase('Команда принята. Подготавливаем ответ…');
       const result=await waitForOperatorResult(initialResult,currentBusinessId,voiceHeaders,()=>activeBusiness.current===currentBusinessId);
       if(activeBusiness.current!==currentBusinessId)return;
-      pendingRequest.current = { businessId: "", text: "", id: "" };
+      pendingRequest.current = { businessId: "", text: "", groupId: "", id: "" };
       scrollToLatestRef.current = true;
       appendPair(text, result);
+      if (result.task?.id && (!result.task.business_id || result.task.business_id === currentBusinessId)) {
+        setSavedSearchTask({...result.task, business_id: currentBusinessId});
+        setSelectedSearchId(result.task.id);
+        setSearchParams(current => { const next = new URLSearchParams(current); next.set('search_task_id', result.task.id); next.set('business_id', currentBusinessId); return next; }, { replace: true });
+      }
       const nextConversationId = response.data.conversation_id || result.conversation_id;
       if (nextConversationId) {
         setConversationId(nextConversationId);
@@ -678,6 +698,8 @@ export const OperatorPage = () => {
           </div>
         </div>
 
+        {currentBusinessId && searchTasks.length > 0 && <div className="border-t bg-background px-4 py-3"><label className="text-sm">Группа компаний<select aria-label="Группа компаний" className="ml-2 rounded-md border bg-background px-2 py-2" value={selectedSearchId} onChange={event => { setSelectedSearchId(event.target.value); const next = new URLSearchParams(searchParams); if (event.target.value) next.set('search_task_id', event.target.value); else next.delete('search_task_id'); next.set('business_id', currentBusinessId); setSearchParams(next, { replace: true }); }}><option value="">Выберите поиск</option>{searchTasks.map(task => <option key={task.id} value={task.id}>{task.display_name || task.id}</option>)}</select></label></div>}
+        {currentBusinessId && activeSearchTask?.id && <div className="border-t border-slate-200 bg-white px-4 py-3"><OutreachTaskStatus key={`${currentBusinessId}:${activeSearchTask.id}`} businessId={currentBusinessId} initialTask={activeSearchTask} /></div>}
         <div ref={chatWindowRef} data-testid="operator-message-list" className="max-h-[62vh] min-h-[480px] space-y-4 overflow-y-auto bg-slate-50/70 px-4 py-4">
           {historyError ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="status">
@@ -766,13 +788,13 @@ export const OperatorPage = () => {
             <div className="max-w-3xl rounded-2xl bg-slate-950 px-4 py-3 text-sm leading-6 text-white shadow-sm">
               <div className="whitespace-pre-wrap">{pendingChatMessage}</div>
               <div className="mt-2 flex items-center gap-2 text-xs text-slate-300" role="status">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />Отправляем сообщение…
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />{pendingChatPhase}
               </div>
             </div>
           </div>}
         </div>
 
-        {currentBusinessId && activeSearchTask?.id && <div className="border-t border-slate-200 bg-white px-4 py-3"><OutreachTaskStatus key={`${currentBusinessId}:${activeSearchTask.id}`} businessId={currentBusinessId} initialTask={activeSearchTask} /></div>}
+
         <div className="border-t border-slate-200 bg-white px-4 py-4">
           {currentBusinessId && <OperatorVoiceInput key={currentBusinessId} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onSubmit={sendOperatorChatMessage} />}
           {currentBusinessId && <OperatorWorkdayInput key={`inputs:${currentBusinessId}`} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onConversation={setConversationId} />}
@@ -823,6 +845,8 @@ type OutreachTask = NonNullable<OperatorChatResult['task']>;
 function OutreachTaskStatus({ businessId, initialTask }: { businessId: string; initialTask: OutreachTask }) {
   const [task, setTask] = useState(initialTask);
   const [refreshError, setRefreshError] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
+  const actionInFlight = useRef(false);
   useEffect(() => {
     let active = true;
     const refresh = async () => {
@@ -840,25 +864,18 @@ function OutreachTaskStatus({ businessId, initialTask }: { businessId: string; i
     const timer = window.setInterval(() => void refresh(), 15000);
     return () => { active = false; window.clearInterval(timer); };
   }, [businessId, initialTask.id]);
-  const target = task.config?.target_count || task.config?.max_candidates || 0;
-  const eligible = task.report?.eligible || 0;
-  const active = task.status === 'running' || task.status === 'queued';
-  const label = task.status === 'running' ? 'Поиск идёт'
-    : task.status === 'queued' ? 'Поиск в очереди'
-      : task.status === 'completed' ? 'Поиск завершён'
-        : task.status === 'cancelled' ? 'Поиск остановлен'
-          : task.status === 'failed' ? 'Поиск прерван'
-            : 'Ожидает подтверждения или проверки';
-  return <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-slate-800" role="status" aria-live="polite">
-    <div className="flex items-center gap-2 font-medium">
-      {active ? <Loader2 className="h-4 w-4 animate-spin text-sky-700" aria-hidden="true" /> : null}
-      {label}
-    </div>
-    {task.stage ? <p className="mt-1">{task.stage.replace(/DeepSeek/gi, 'ИИ')}</p> : null}
-    <p className="mt-1 tabular-nums">Сырых результатов: {task.report?.found ?? task.report?.imported ?? 0}. Новых записей: {task.report?.imported ?? 0}. Ждут проверки: {task.report?.awaiting_check ?? 0}. Проверяются: {task.report?.checking ?? 0}. Подходящих с подтверждённым контактом: {eligible}{target ? ` из ${target}` : ''}. Исключено: {task.report?.excluded ?? 0}. Не удалось проверить: {task.report?.verification_failed ?? 0}.</p>
-    {typeof task.report?.credit_limit === 'number' ? <p className="mt-1 tabular-nums">Списано: {task.report.credits_charged || 0} из лимита {task.report.credit_limit} кредитов.</p> : null}
-    {refreshError ? <p className="mt-1 text-amber-800">Не удалось обновить прогресс. Проверьте задачу в разделе «Партнёрства».</p> : null}
-    <Link className="mt-2 inline-block font-medium underline" to={`/dashboard/partnerships?search_task_id=${encodeURIComponent(task.id)}`}>Открыть этот поиск</Link>
+  return <div className="space-y-2">
+    <OutreachGroupCard name={task.display_name || 'Выбранный поиск'} presentation={task.presentation} busy={actionBusy} onAction={async action => {
+      if (actionInFlight.current) return;
+      actionInFlight.current = true; setActionBusy(true);
+      try {
+        await api.post(`/partnership/continuations/${task.id}`, { business_id: businessId, revision: task.revision, action: action.kind === 'draft_resume' ? 'resume_letters' : action.action });
+        const response = await api.get(`/partnership/continuations/${task.id}`, { params: { business_id: businessId } });
+        setTask(response.data); setRefreshError(false);
+      } catch { setRefreshError(true); }
+      finally { actionInFlight.current = false; setActionBusy(false); }
+    }} />
+    {refreshError && <p role="alert" className="text-sm text-destructive">Не удалось обновить состояние. Результаты сохранены; откройте поиск в «Партнёрствах».</p>}
   </div>;
 }
 

@@ -515,7 +515,7 @@ export const PartnershipLeadCard = ({
   const verifiedForSearch = !verification || (['verified', 'not_required'].includes(verification.country?.status || '')
     && ['verified', 'not_required'].includes(verification.destination?.status || '') && verification.contactVerified === true);
   const primaryActionLabel = mode === 'raw'
-    ? (isUnprocessed ? 'В отбор' : 'Открыть карточку')
+    ? (isUnprocessed ? 'Выбрать для работы' : 'Открыть компанию')
     : nextStage
       ? 'Дальше'
       : 'Открыть карточку';

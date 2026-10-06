@@ -174,7 +174,7 @@ const LEAD_VIEW_OPTIONS = [
 ] as const;
 const PARTNERSHIP_WORKSPACE_OPTIONS = [
   { value: 'overview', label: 'Обзор' },
-  { value: 'raw', label: 'Кандидаты' },
+  { value: 'raw', label: 'Компании' },
   { value: 'pipeline', label: 'Отбор' },
   { value: 'drafts', label: 'Письма' },
   { value: 'queue', label: 'Отправка' },
@@ -188,6 +188,8 @@ type WorkflowBadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive';
 type WorkflowTone = 'default' | 'success' | 'warning' | 'info' | 'danger';
 
 const toPartnershipWorkspaceView = (value: string): PartnershipWorkspaceView => {
+  if (value === 'companies' || value === 'pipeline' || value === 'candidates') return 'raw';
+  if (value === 'letters' || value === 'drafts') return 'drafts';
   const matched = PARTNERSHIP_WORKSPACE_OPTIONS.find((option) => option.value === value);
   return matched ? matched.value : 'overview';
 };
@@ -563,7 +565,17 @@ export const PartnershipSearchPage: React.FC = () => {
   const [leadBucket, setLeadBucket] = useState<'active' | 'deferred'>('active');
   const [lastGeoSearchLeadIds, setLastGeoSearchLeadIds] = useState<string[]>([]);
   useEffect(() => { setSearchTasks([]); setSelectedSearchGroup(requestedSearchTaskId ? `task:${requestedSearchTaskId}` : 'all'); }, [currentBusinessId, requestedSearchTaskId]);
-  useEffect(() => { if (requestedSearchTaskId) setWorkspaceView(requestedSection === 'drafts' ? 'drafts' : 'raw'); }, [requestedSearchTaskId, requestedSection]);
+  useEffect(() => { if (requestedSection) setWorkspaceView(toPartnershipWorkspaceView(requestedSection)); else if (requestedSearchTaskId) setWorkspaceView('raw'); }, [requestedSearchTaskId, requestedSection]);
+  const requestedCompanyFilter = searchParams.get('company_filter') || 'all';
+  const [companyFilter, setCompanyFilter] = useState(requestedCompanyFilter);
+  useEffect(() => { setCompanyFilter(requestedCompanyFilter); }, [requestedCompanyFilter]);
+  const changeWorkspace = (value: string) => {
+    setWorkspaceView(toPartnershipWorkspaceView(value));
+    const next = new URLSearchParams(searchParams);
+    next.set('section', value === 'raw' || value === 'pipeline' ? 'companies' : value);
+    if (currentBusinessId) next.set('business_id', currentBusinessId);
+    setSearchParams(next, { replace: true });
+  };
   const handleSearchTasksChange = useCallback((tasks: SearchTaskGroup[]) => {
     setSearchTasks((current) => [...tasks, ...current.filter((task) => task.id === requestedSearchTaskId && !tasks.some((item) => item.id === task.id))]);
   }, [requestedSearchTaskId]);
@@ -702,10 +714,10 @@ export const PartnershipSearchPage: React.FC = () => {
     outcomes,
   });
 
-  const candidateSearchGroups = useMemo(() => buildCandidateSearchGroups(rawLeads, searchTasks), [rawLeads, searchTasks]);
+  const candidateSearchGroups = useMemo(() => buildCandidateSearchGroups(items, searchTasks), [items, searchTasks]);
   const visibleRawLeads = useMemo(() => {
-    const scoped = selectedSearchGroup === 'all' || selectedSearchGroup.startsWith('task:') ? rawLeads
-      : rawLeads.filter((lead) => candidateSearchGroups.leadGroup.get(lead.id) === selectedSearchGroup);
+    const scoped = selectedSearchGroup === 'all' || selectedSearchGroup.startsWith('task:') ? items
+      : items.filter((lead) => candidateSearchGroups.leadGroup.get(lead.id) === selectedSearchGroup);
     const selected = searchTasks.find((task) => selectedSearchGroup === `task:${task.id}`);
     if (!selected) return scoped;
     const rank = (lead: PartnershipLead) => {
@@ -715,7 +727,7 @@ export const PartnershipSearchPage: React.FC = () => {
       return !status || status === 'checking' ? 0 : status === 'qualified' ? 1 : 2;
     };
     return [...scoped].sort((a, b) => rank(a) - rank(b));
-  }, [rawLeads, selectedSearchGroup, candidateSearchGroups, searchTasks]);
+  }, [items, selectedSearchGroup, candidateSearchGroups, searchTasks]);
   const searchTaskOptions = useMemo(() => searchTasks.map((task) => ({
     id: `task:${task.id}`, label: taskLabel(task), count: task.report?.imported || 0,
   })), [searchTasks]);
@@ -737,7 +749,7 @@ export const PartnershipSearchPage: React.FC = () => {
     if (!currentBusinessId || items.length >= leadTotalCount) return;
     const version = leadsRequestVersion.current;
     const data = await loadPartnershipLeads({ businessId: currentBusinessId, stage, pilotCohort, query,
-      searchTaskId: selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : undefined,
+      companyFilter, searchTaskId: selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : undefined,
       limit: 100, offset: items.length });
     if (version !== leadsRequestVersion.current || currentBusinessRef.current !== currentBusinessId) return;
     setItems((current) => [...current, ...(data.items || []).filter((lead: PartnershipLead) => !current.some((item) => item.id === lead.id))]);
@@ -854,7 +866,7 @@ export const PartnershipSearchPage: React.FC = () => {
         stage,
         pilotCohort,
         query: queryOverride ?? query,
-        searchTaskId: selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : undefined,
+        companyFilter, searchTaskId: selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : undefined,
         limit: 100,
       });
       if (version !== leadsRequestVersion.current || currentBusinessRef.current !== currentBusinessId) return;
@@ -917,14 +929,18 @@ export const PartnershipSearchPage: React.FC = () => {
 
   const loadDrafts = async () => {
     if (!currentBusinessId) return;
-    const data = await loadPartnershipDrafts(currentBusinessId);
+    const epoch = leadsRequestVersion.current;
+    const data = await loadPartnershipDrafts(currentBusinessId, selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : undefined);
+    if (epoch !== leadsRequestVersion.current || currentBusinessRef.current !== currentBusinessId) return;
     setDrafts(Array.isArray(data.drafts) ? data.drafts : []);
     setSelectedDraftIds((prev) => prev.filter((id) => (data.drafts || []).some((x: { id: string }) => x.id === id)));
   };
 
   const loadBatches = async () => {
     if (!currentBusinessId) return;
-    const data = await loadPartnershipBatches(currentBusinessId);
+    const epoch = leadsRequestVersion.current;
+    const data = await loadPartnershipBatches(currentBusinessId, selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : undefined);
+    if (epoch !== leadsRequestVersion.current || currentBusinessRef.current !== currentBusinessId) return;
     setBatches(Array.isArray(data.batches) ? data.batches : []);
     const queueIds = (Array.isArray(data.batches) ? data.batches : [])
       .flatMap((batch: PartnershipBatch) => (Array.isArray(batch.items) ? batch.items : []))
@@ -1062,7 +1078,7 @@ export const PartnershipSearchPage: React.FC = () => {
     }
     void refreshOperationalData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentBusinessId, stage, pilotCohort, selectedSearchGroup]);
+  }, [currentBusinessId, stage, pilotCohort, selectedSearchGroup, companyFilter]);
 
   useEffect(() => {
     if (workspaceView !== 'analytics') return;
@@ -2324,7 +2340,7 @@ export const PartnershipSearchPage: React.FC = () => {
           visibleDraftsCount={visibleDrafts.length}
           visibleBatchesCount={visibleBatches.length}
           visibleReactionsCount={visibleReactions.length}
-          onWorkspaceChange={(value) => setWorkspaceView(toPartnershipWorkspaceView(value))}
+          onWorkspaceChange={(value) => changeWorkspace(value)}
         />
         <section
           className="grid gap-5 rounded-lg border border-emerald-200 bg-white p-5 shadow-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
@@ -2365,7 +2381,7 @@ export const PartnershipSearchPage: React.FC = () => {
         visibleDraftsCount={visibleDrafts.length}
         visibleBatchesCount={visibleBatches.length}
         visibleReactionsCount={visibleReactions.length}
-        onWorkspaceChange={(value) => setWorkspaceView(toPartnershipWorkspaceView(value))}
+        onWorkspaceChange={(value) => changeWorkspace(value)}
       />
 
       {(searchTaskOptions.length > 0 || candidateSearchGroups.groups.length > 0) && <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3">
@@ -2380,7 +2396,7 @@ export const PartnershipSearchPage: React.FC = () => {
         {selectedSearchGroup.startsWith('task:') && items.length < leadTotalCount && <Button type="button" variant="outline" disabled={loading} onClick={() => void loadMoreSearchLeads()}>Загрузить ещё</Button>}
       </div>}
 
-      {currentBusinessId && <OutreachContinuation key={currentBusinessId} businessId={currentBusinessId} onTasksChange={handleSearchTasksChange} />}
+      {currentBusinessId && <OutreachContinuation key={currentBusinessId} businessId={currentBusinessId} selectedTaskId={requestedSearchTaskId || undefined} onTasksChange={handleSearchTasksChange} />}
 
       {currentBusinessId && journeyActions.length ? <section aria-label="Текущий шаг по партнёрствам" className="space-y-3">{journeyActions.slice(0, 2).map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={() => void loadPartnershipJourneyActions()} />)}</section> : null}
 
@@ -2522,7 +2538,7 @@ export const PartnershipSearchPage: React.FC = () => {
 
           {workspaceView === 'raw' ? (
           <>
-          <PartnershipRawIntakeControls
+          <details><summary className="min-h-10 cursor-pointer py-2 text-sm">Добавить компании вручную или из файла</summary><PartnershipRawIntakeControls
             loading={loading}
             linksText={linksText}
             onLinksTextChange={setLinksText}
@@ -2557,8 +2573,10 @@ export const PartnershipSearchPage: React.FC = () => {
               setGeoLimit('25');
             }}
           />
+          </details>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Фильтр компаний">{[{id: 'all', label: 'Все'}, {id: 'suitable', label: 'Подходящие'}, {id: 'needs_decision', label: 'Нужно решение'}, {id: 'excluded', label: 'Исключённые'}].map(filter => <Button key={filter.id} variant={companyFilter === filter.id ? 'default' : 'outline'} aria-pressed={companyFilter === filter.id} onClick={() => { setCompanyFilter(filter.id); const next = new URLSearchParams(searchParams); next.set('company_filter', filter.id); setSearchParams(next, { replace: true }); }}>{filter.label}</Button>)}</div>
           <ProspectingIntakePanel
-            title="Кандидаты"
+            title="Компании"
             description="Новые компании из поиска на картах и импорта. На этом шаге достаточно решить: подходит, отложить или убрать как неактуального."
             badges={[
               { label: 'Новые кандидаты', value: rawLeadCount },
@@ -2566,11 +2584,11 @@ export const PartnershipSearchPage: React.FC = () => {
               { label: 'Групп поиска', value: searchTaskOptions.length + candidateSearchGroups.groups.filter((group) => !group.id.startsWith('task:')).length },
             ]}
           >
-            {selectedTask && <p className="mb-3 text-sm">Сырых результатов: {selectedTask.report?.found ?? selectedTask.report?.imported ?? 0}. Новых записей: {selectedTask.report?.imported ?? 0}. Подтверждено с рабочим контактом: {selectedTask.report?.eligible ?? 0}. Откройте сайт или источник, затем нажмите «В отбор» у интересной компании. Это ручной выбор для дальнейшей проверки, без писем и без отметки «подтверждено».</p>}
-            {candidateSearchGroups.groups.length > 0 && <p className="mb-3 text-xs text-muted-foreground">Метка показывает, каким поиском найдена запись. Страна компании, продаваемое направление и контакт проверяются отдельно.</p>}
-            {rawLeads.length === 0 ? (
+            {selectedTask && <Button asChild className="mb-3"><Link to={`/dashboard/operator?business_id=${encodeURIComponent(currentBusinessId || '')}&search_task_id=${encodeURIComponent(selectedTask.id)}&command=${encodeURIComponent('Подготовь письма для подходящих или выбранных компаний этого поиска')}`}>Подготовить письма</Link></Button>}
+            <p className="mb-3 text-sm text-muted-foreground">Выберите компании для писем. «Выбрать для работы» сохраняет ваш выбор; проверенные сведения показаны отдельно.</p>
+            {visibleRawLeads.length === 0 ? (
               <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-muted-foreground">
-                Кандидатов пока нет. Запустите поиск по радиусу, импортируйте список или добавьте ссылки вручную.
+                В этом фильтре пока нет компаний. Выберите «Все» или запустите новый поиск.
               </div>
             ) : (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

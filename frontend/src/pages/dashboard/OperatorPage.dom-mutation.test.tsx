@@ -102,7 +102,7 @@ describe('OperatorPage DOM ownership', () => {
   });
 
   it('creates the reviewed search through chat and shows the confirmation state', async () => {
-    const task = { id: 'search-task', status: 'waiting_for_review', stage: 'Ожидает запуска',
+    const task = { id: 'search-task', business_id: 'demo-business', presentation: { phase: 'companies', status: 'running', label: 'Проверяем компании и контакты', active: true, next_action: { kind: 'link', href: '/dashboard/partnerships', label: 'Посмотреть компании' }, metrics: { found: 41, eligible: 2, target: 10, needs_decision: 39, prepared: 0, sent: 0, replies: 0 }, expenses: { charged: 5 } }, status: 'waiting_for_review', stage: 'Ожидает запуска',
       config: { target_count: 10, max_search_calls: 3 }, state: { search_calls: 1 }, report: { eligible: 2 } };
     vi.mocked(api.get).mockImplementation(async (url) => url === '/partnership/continuations/search-task'
       ? { data: task }
@@ -125,8 +125,8 @@ describe('OperatorPage DOM ownership', () => {
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/operator/chat', expect.objectContaining({
       message: 'Начни поиск по показанным условиям', conversation_id: 'conversation-1',
     })));
-    expect(await screen.findByText('Ожидает подтверждения или проверки')).toBeInTheDocument();
-    expect(document.body.textContent).toContain('Подходящих с подтверждённым контактом: 2 из 10');
+    expect(await screen.findByText('Проверяем компании и контакты')).toBeInTheDocument();
+    expect(screen.getByText('Подтверждены · цель').nextElementSibling).toHaveTextContent('2 / 10');
     expect(screen.getByRole('button', { name: 'Начать поиск' })).toBeInTheDocument();
   });
 
@@ -145,7 +145,7 @@ describe('OperatorPage DOM ownership', () => {
   });
 
   it('shows an active search indicator from a saved task', async () => {
-    const task = { id: 'search-task', status: 'running', stage: 'Проверка контактов',
+    const task = { id: 'search-task', business_id: 'demo-business', presentation: { phase: 'companies', status: 'running', label: 'Проверяем компании и контакты', active: true, next_action: { kind: 'link', href: '/dashboard/partnerships', label: 'Посмотреть компании' }, metrics: { found: 41, eligible: 2, target: 10, needs_decision: 39, prepared: 0, sent: 0, replies: 0 }, expenses: { charged: 5 } }, status: 'running', stage: 'Проверка контактов',
       config: { target_count: 10, max_search_calls: 3 }, state: { search_calls: 1 }, report: { eligible: 2 } };
     vi.mocked(api.get).mockImplementation(async (url) => url === '/partnership/continuations/search-task'
       ? { data: task }
@@ -154,14 +154,14 @@ describe('OperatorPage DOM ownership', () => {
       : { data: { conversation: null, messages: [{ id: 'search-1', role: 'operator', content: 'Поиск запущен.',
         result_json: { status: 'completed', capability: 'partnerships.continue_outreach', task } }] } });
     render(
-      <MemoryRouter initialEntries={['/dashboard/operator']}>
+      <MemoryRouter initialEntries={['/dashboard/operator?search_task_id=search-task']}>
         <LanguageProvider><ErrorBoundary><Routes><Route element={<ContextRoute />}>
           <Route path="/dashboard/operator" element={<OperatorPage />} />
         </Route></Routes></ErrorBoundary></LanguageProvider>
       </MemoryRouter>,
     );
-    expect(await screen.findByText('Поиск идёт')).toBeInTheDocument();
-    expect(document.body.textContent).toContain('Подходящих с подтверждённым контактом: 2 из 10');
+    expect(await screen.findByText('Проверяем компании и контакты')).toBeInTheDocument();
+    expect(screen.getByText('Подтверждены · цель').nextElementSibling).toHaveTextContent('2 / 10');
   });
 
   it('keeps a submitted message visible while waiting and shows its saved reply', async () => {
@@ -181,7 +181,7 @@ describe('OperatorPage DOM ownership', () => {
     fireEvent.change(input, { target: { value: 'Составь первые письма для поиска Индия — Пхукет' } });
     fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
 
-    expect(await screen.findByText('Отправляем сообщение…')).toBeInTheDocument();
+    expect(await screen.findByText('Отправляем команду…')).toBeInTheDocument();
     expect(screen.getAllByText('Составь первые письма для поиска Индия — Пхукет')).toHaveLength(2);
     await waitFor(() => expect(messageList.scrollTop).toBe(300));
 
@@ -196,7 +196,7 @@ describe('OperatorPage DOM ownership', () => {
 
     expect(screen.getAllByText('Составь первые письма для поиска Индия — Пхукет')).toHaveLength(1);
     expect(screen.getByText('Письма требуют отдельной подготовки.')).toBeInTheDocument();
-    expect(screen.queryByText('Отправляем сообщение…')).not.toBeInTheDocument();
+    expect(screen.queryByText('Отправляем команду…')).not.toBeInTheDocument();
     expect(input).toHaveValue('Следующая задача');
   });
 });

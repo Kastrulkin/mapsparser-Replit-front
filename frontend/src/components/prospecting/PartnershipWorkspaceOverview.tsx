@@ -45,35 +45,17 @@ export function PartnershipWorkspaceOverview({
       <DashboardPageHeader
         eyebrow="LocalOS"
         title={language === 'ru' ? 'Партнёрства' : copy.title}
-        description={language === 'ru' ? 'Договорённости с партнёрами и инструкции сотрудникам. Поиск и переговоры — в рабочих вкладках.' : copy.description}
+        description={language === 'ru' ? 'Найдите компании, подготовьте письма, согласуйте отправку и работайте с ответами.' : copy.description}
       />
-
-      {workspaceView !== 'overview' ? <DashboardCompactMetricsRow
-        items={[
-          { label: copy.candidates, value: rawLeadCount, hint: copy.candidatesHint },
-          { label: copy.pipeline, value: pipelineLeadCount, hint: copy.pipelineHint },
-          { label: copy.drafts, value: visibleDraftsCount, hint: copy.draftsHint },
-          { label: copy.queue, value: visibleBatchesCount, hint: copy.queueHint },
-          { label: copy.replies, value: visibleReactionsCount, hint: copy.repliesHint },
-        ]}
-      /> : null}
-
-      {workspaceView !== 'overview' ? <DashboardActionPanel
-        title={copy.nextStep}
-        description={copy.nextStepDescription}
-        status={!currentBusinessId ? copy.selectBusiness : `${copy.currentLayer}: ${workspaceLabelByValue[workspaceView] || copy.workspace}.`}
-        tone={!currentBusinessId ? 'amber' : 'default'}
-      /> : null}
 
       <div className="rounded-3xl border border-slate-200/80 bg-white/92 p-3 shadow-sm">
         <ProspectingWorkspaceTabs
-          activeWorkspace={workspaceView}
+          activeWorkspace={workspaceView === 'pipeline' ? 'raw' : workspaceView}
           onWorkspaceChange={onWorkspaceChange}
           workspaces={[
             { value: 'overview', label: copy.overview },
-            { value: 'raw', label: copy.candidates, count: rawLeadCount },
-            { value: 'pipeline', label: copy.pipeline, count: pipelineLeadCount },
-            { value: 'drafts', label: copy.drafts, count: visibleDraftsCount },
+            { value: 'raw', label: language === 'ru' ? 'Компании' : 'Companies', count: rawLeadCount + pipelineLeadCount },
+            { value: 'drafts', label: language === 'ru' ? 'Письма' : copy.drafts, count: visibleDraftsCount },
             { value: 'queue', label: copy.sending, count: visibleBatchesCount },
             { value: 'sent', label: copy.replies, count: visibleReactionsCount },
             { value: 'analytics', label: copy.report },

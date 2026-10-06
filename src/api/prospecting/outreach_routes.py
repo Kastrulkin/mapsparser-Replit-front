@@ -1959,6 +1959,17 @@ def partnership_list_drafts():
             """
             query += ACTIVE_PARTNERSHIP_LEAD_SQL
             params: list[Any] = [business_id]
+            task_id = str(request.args.get("search_task_id") or "").strip()
+            if task_id:
+                from services.partnership_group_view import load_group_scope, GroupNotFound
+                try:
+                    group = load_group_scope(cur, business_id, task_id)
+                except GroupNotFound:
+                    return jsonify({"error": "search_task_not_found"}), 404
+                query += " AND l.id::text=ANY(%s::text[])"
+                params.append(group['lead_ids'])
+            limit = max(1, min(int(request.args.get('limit') or 200), 500))
+            offset = max(0, int(request.args.get('offset') or 0))
             if status_filter:
                 query += " AND d.status = %s"
                 params.append(status_filter)
@@ -1978,17 +1989,18 @@ def partnership_list_drafts():
                     learning_note_json, created_at, updated_at,
                     lead_name, category, city, email,
                     selected_channel, lead_status,
-                    lead_pipeline_status, lead_partnership_stage
+                    lead_pipeline_status, lead_partnership_stage, COUNT(*) OVER() AS total_count
                 FROM ranked_drafts
                 WHERE draft_rank = 1
                 ORDER BY updated_at DESC, created_at DESC
-                LIMIT 200
+                LIMIT %s OFFSET %s
             """
+            params.extend([limit, offset])
             cur.execute(query, tuple(params))
             rows = [{**_serialize_draft(dict(row)), "review_digest": draft_review_digest(dict(row))} for row in cur.fetchall()]
         finally:
             conn.close()
-        return jsonify({"success": True, "drafts": rows, "count": len(rows)})
+        return jsonify({"success": True, "drafts": rows, "count": len(rows), "total_count": int(rows[0].get("total_count") or 0) if rows else 0})
     except Exception as e:
         print(f"Error listing partnership drafts: {e}")
         return jsonify({"error": str(e)}), 500

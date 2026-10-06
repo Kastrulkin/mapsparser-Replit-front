@@ -121,7 +121,8 @@ export type PartnershipBatch = {
 
 export type PartnershipReaction = {
   id: string;
-  queue_id: string;
+  queue_id?: string;
+  source_type?: string;
   lead_id: string;
   lead_name?: string;
   batch_id?: string;

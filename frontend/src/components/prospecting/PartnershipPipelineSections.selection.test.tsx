@@ -26,7 +26,7 @@ it('moves an older unverified search candidate into manual selection without req
 
   expect(screen.getByText(/Это не подтверждает соответствие поиску и не запускает письма/)).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Проверить карточку' })).not.toBeInTheDocument();
-  await userEvent.click(screen.getByRole('button', { name: 'В отбор' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Выбрать для работы' }));
   expect(moveToPipeline).toHaveBeenCalledOnce();
   expect(moveToPipeline).toHaveBeenCalledWith('lead-1');
   expect(openLead).not.toHaveBeenCalled();

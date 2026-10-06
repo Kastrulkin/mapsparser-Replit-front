@@ -41,6 +41,7 @@ type PartnershipBatchItem = {
 };
 
 type PartnershipReactionItem = {
+  source_type?: string;
   id: string;
   lead_id: string;
   lead_name?: string;
@@ -542,7 +543,7 @@ export function PartnershipSentSection({
               Предварительно: {outcomeLabel(reaction.classified_outcome)} · Подтверждено: {outcomeLabel(reaction.human_confirmed_outcome || reaction.classified_outcome)}
             </div>
             <div className="mt-2 flex flex-wrap gap-1">
-              {outcomeOptions.map((outcome) => (
+              {reaction.source_type !== 'native_inbound' && outcomeOptions.map((outcome) => (
                 <Button
                   key={`${reaction.id}-${outcome}`}
                   size="sm"

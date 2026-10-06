@@ -1,7 +1,9 @@
 import type { PartnershipLead } from './partnershipTypes';
+import type { GroupPresentation } from './OutreachGroupCard';
 
 export type SearchTaskGroup = {
   id: string;
+  presentation?: GroupPresentation;
   business_id?: string;
   display_name?: string;
   report?: { found?: number; imported?: number; eligible?: number };

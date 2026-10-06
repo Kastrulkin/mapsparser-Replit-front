@@ -80,9 +80,9 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
         digest=hashlib.sha256((digest+json.dumps([payload.get("work_entry_id"),payload.get("work_action_id")])).encode()).hexdigest()
     if payload.get("work_change_hash"):
         digest = hashlib.sha256((digest + str(payload["work_change_hash"])).encode()).hexdigest()
-    if any(key in payload for key in ('attachment_ids','selected_object','clear_input_context')):
+    if any(key in payload for key in ('attachment_ids','selected_object','clear_input_context','search_task_id')):
         digest = hashlib.sha256((digest + json.dumps({key:payload.get(key) for key in
-            ('attachment_ids','selected_object','clear_input_context')},sort_keys=True,ensure_ascii=False)).encode()).hexdigest()
+            ('attachment_ids','selected_object','clear_input_context','search_task_id')},sort_keys=True,ensure_ascii=False)).encode()).hexdigest()
     if request_id:
         cursor.execute("SELECT * FROM operator_chat_requests WHERE user_id=%s AND business_id=%s AND channel=%s AND request_id=%s FOR UPDATE",
                        (user_id, business_id, channel, request_id))

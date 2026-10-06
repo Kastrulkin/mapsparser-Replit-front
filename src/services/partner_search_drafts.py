@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 from psycopg2.extras import Json, RealDictCursor
 
 from services.operator_async_jobs import create_operator_async_job
-from services.outreach_continuation import actor_can_write
+from services.outreach_continuation import actor_can_write, qualified_contact_ids
 from services.outreach_language_routing import public_context, run_copy
 
 
@@ -57,6 +57,7 @@ def _candidates(cursor: Any, task: dict[str, Any], scope: str) -> list[dict[str,
         (task["business_id"], ids, task["business_id"]),
     )
     found = {str(row["id"]): dict(row) for row in cursor.fetchall()}
+    suitable = set(qualified_contact_ids(state))
     result = []
     seen_ids: set[str] = set()
     seen_names: set[str] = set()
@@ -67,7 +68,7 @@ def _candidates(cursor: Any, task: dict[str, Any], scope: str) -> list[dict[str,
             continue
         if str(lead.get("status") or "").lower() in {"not_relevant", "suppressed", "replied", "closed_lost"}:
             continue
-        if scope == "shortlist" and str(lead.get("pipeline_status") or "").lower() != "in_progress":
+        if scope == "shortlist" and str(lead.get("pipeline_status") or "").lower() != "in_progress" and str(lead.get("workstream_id")) not in suitable:
             continue
         name_key = re.sub(r"\s+", " ", str(lead.get("name") or "").casefold()).strip()
         city_key = re.sub(r"\s+", " ", str(lead.get("city") or "").casefold()).strip()
@@ -243,7 +244,7 @@ def process_job(claimed: dict[str, Any]) -> dict[str, Any]:
             )
             lead = cursor.fetchone()
             if (not lead or str(lead.get("status") or "").lower() in {"not_relevant", "suppressed", "replied", "closed_lost"}
-                    or (payload.get("scope") == "shortlist" and lead["pipeline_status"] != "in_progress")):
+                    or (payload.get("scope") == "shortlist" and lead["pipeline_status"] != "in_progress" and str(lead["workstream_id"]) not in set(qualified_contact_ids((_task(cursor, business_id, task_id) or {}).get("result_json") or {})))):
                 failed += 1
                 processed.add(lead_id)
                 errors.append({"lead_id": lead_id, "reason": "lead_no_longer_selected"})
@@ -327,3 +328,16 @@ def process_job(claimed: dict[str, Any]) -> dict[str, Any]:
             "blocked": blocked, "processed_ids": list(processed),
             "charged_credits": completed * DRAFT_CREDITS, "errors": errors[-20:],
             "search_task_id": task_id, "external_dispatch_performed": False}
+
+
+def resume_group_job(cursor, *, business_id, task_id):
+    """Resume the existing draft job only; deterministic draft IDs prevent replay."""
+    cursor.execute("""SELECT * FROM operator_async_jobs WHERE business_id=%s
+        AND kind=%s AND payload_json->>'search_task_id'=%s
+        ORDER BY created_at DESC LIMIT 1 FOR UPDATE""", (business_id, KIND, task_id))
+    job = cursor.fetchone()
+    if not job or job['status'] != 'waiting_for_review':
+        raise ValueError('draft_job_not_paused')
+    cursor.execute("""UPDATE operator_async_jobs SET status='queued', lease_token=NULL,
+        next_attempt_at=NOW(), attempt_count=0, updated_at=NOW(),
+        stage='Подготовка писем ожидает запуска' WHERE id=%s""", (job['id'],))

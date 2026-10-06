@@ -145,6 +145,7 @@ def partnership_continuations(task_id=None):
     from pg_db_utils import get_db_connection
     from services.partnership_leads_service import _partnership_write_access
     from services.outreach_continuation import create_task, list_tasks, control_task, continuation_enabled, actor_can_write, prepare_new_task_approval, view, KIND
+    from services.partnership_group_view import enrich_group
 
     user, error = _require_auth()
     if error:
@@ -176,12 +177,16 @@ def partnership_continuations(task_id=None):
             if not row:
                 return jsonify({'error': 'task_not_found'}), 404
             result = view(dict(row))
+            from services.outreach_continuation import delivery_report
+            result['report'].update(delivery_report(cursor, result))
+            enrich_group(cursor, result, viewer_id=user_id)
         elif request.method == 'GET':
             from services.riderra_template_authorization_service import BUSINESS_ID
             result = {'enabled': True, 'supports_shortage_replenishment': business_id == BUSINESS_ID, 'items': list_tasks(cursor, business_id=business_id, user_id=user_id)}
             from services.outreach_continuation import delivery_report
             for task in result['items']:
                 task['report'].update(delivery_report(cursor, task))
+                enrich_group(cursor, task, viewer_id=user_id)
         elif str(data.get('operation') or '') == 'preview' and not task_id:
             from services.operator_conversations import (
                 create_pending_operator_action, find_latest_operator_conversation,
@@ -209,6 +214,9 @@ def partnership_continuations(task_id=None):
             result = control_task(cursor, task_id=task_id, business_id=business_id, user_id=user_id,
                 action=str(data.get('action') or ''), revision=str(data.get('revision') or ''),
                 display_name=str(data.get('display_name') or ''))
+            from services.outreach_continuation import delivery_report
+            result['report'].update(delivery_report(cursor, result))
+            enrich_group(cursor, result, viewer_id=user_id)
         else:
             result = create_task(cursor, business_id=business_id, user_id=user_id, config=data.get('config'), request_id=str(data.get('request_id') or ''))
         conn.commit()

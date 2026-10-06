@@ -4,13 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertCircle, ArrowRight, BadgeCheck, Coins, FilterX, Loader2, Search, Users } from 'lucide-react';
+import { OutreachGroupCard, type GroupPresentation } from './OutreachGroupCard';
 import type { SearchTaskGroup } from './partnershipSearchGroups';
 
 type Config = { mode?: 'find_only' | 'prepare_only' | 'auto_send'; billing_mode?: 'fixed_per_call' | 'shared_balance_actual'; search_call_cap_cents?: number; target_count?: number; agency_country?: string; sold_destination?: string; max_qualification_calls?: number; max_draft_attempts?: number; riderra_shortage_only?: boolean; evidence_terms: string[]; language: string; audience: string; offer: string; queries: { query: string; city: string }[]; max_search_calls: number; max_candidates: number; batch_size: number; search_budget_cents: number };
-type Task = { id: string; display_name?: string; created_at?: string; updated_at?: string; report?: { found?: number; imported?: number; awaiting_check?: number; checking?: number; checked?: number; verification_failed?: number; excluded?: number; duplicates?: number; eligible: number; shortfall?: number; prepared: number; queued?: number; confirmed_sent?: number; replies?: number; delivery_uncertain?: number; ai_needs_review?: number; credit_limit?: number; credit_estimate_only?: boolean; credits_charged?: number }; revision: string; stage: string; status: string; config: Config; state: { started?: boolean; search_calls?: number; lead_ids?: string[]; blocker?: string; inflight_search?: boolean; search_credit_reservation_id?: string; qualifications?: Record<string, { status: string; reason?: string }>; campaign_results?: Record<string, { status: string; campaign_id?: string; lead_id?: string; reason_code?: string }> } };
+type Task = { presentation?: GroupPresentation; id: string; display_name?: string; created_at?: string; updated_at?: string; report?: { found?: number; imported?: number; awaiting_check?: number; checking?: number; checked?: number; verification_failed?: number; excluded?: number; duplicates?: number; eligible: number; shortfall?: number; prepared: number; queued?: number; confirmed_sent?: number; replies?: number; delivery_uncertain?: number; ai_needs_review?: number; credit_limit?: number; credit_estimate_only?: boolean; credits_charged?: number }; revision: string; stage: string; status: string; config: Config; state: { history?: { action: string; at?: string }[]; started?: boolean; search_calls?: number; lead_ids?: string[]; blocker?: string; inflight_search?: boolean; search_credit_reservation_id?: string; qualifications?: Record<string, { status: string; reason?: string }>; campaign_results?: Record<string, { status: string; campaign_id?: string; lead_id?: string; reason_code?: string }> } };
 
-export function OutreachContinuation({ businessId, onTasksChange }: { businessId: string; onTasksChange?: (tasks: SearchTaskGroup[]) => void }) {
+export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange }: { businessId: string; selectedTaskId?: string; onTasksChange?: (tasks: SearchTaskGroup[]) => void }) {
   const [enabled, setEnabled] = useState(false);
   const [supportsShortage, setSupportsShortage] = useState(false);
   const [shortageOnly, setShortageOnly] = useState(false);
@@ -90,35 +90,21 @@ export function OutreachContinuation({ businessId, onTasksChange }: { businessId
     <h2 id="outreach-continuation-title" className="text-lg font-semibold">Поиск компаний и обращения</h2>
     <p className="text-sm text-muted-foreground">Найдите компании, проверьте контакты и выберите подходящих. Письма отправляются только по отдельно согласованным правилам.</p>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-    {items.map(task => <div key={task.id} className="space-y-3 border-t pt-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <h3 className="text-base font-semibold">{task.display_name || task.config.audience}</h3>
-        <div role="status" aria-live="polite" className="flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-medium">
-          {['queued', 'running'].includes(task.status) && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          <span>{task.status === 'running' ? 'Идёт поиск' : task.status === 'queued' ? 'В очереди' : task.status === 'completed' ? (task.report?.eligible ?? 0) < (task.config.target_count ?? task.config.max_candidates) ? 'Завершён · недобор' : 'Поиск завершён' : task.status === 'cancelled' ? 'Поиск остановлен' : task.status === 'failed' ? 'Ошибка поиска' : task.state.started ? 'На паузе' : 'Ожидает запуска'}</span>
-        </div>
-      </div>
-      <p className={task.state.blocker ? 'flex items-start gap-2 text-sm text-amber-800' : 'text-sm text-muted-foreground'}>{task.state.blocker && <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />}{task.stage.replace(/DeepSeek/gi, 'ИИ')}</p>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" aria-label="Результаты поиска">
-        <div className="flex items-center gap-3 rounded-lg bg-muted/50 px-3 py-2"><Search className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" /><div><strong className="block text-lg leading-tight tabular-nums">{task.report?.found ?? task.report?.imported ?? 0}</strong><span className="text-xs text-muted-foreground">Найдено всего</span></div></div>
-        <div className="flex items-center gap-3 rounded-lg bg-muted/50 px-3 py-2"><Users className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" /><div><strong className="block text-lg leading-tight tabular-nums">{task.report?.imported ?? task.state.lead_ids?.length ?? 0}</strong><span className="text-xs text-muted-foreground">Новые кандидаты</span></div></div>
-        <div className="flex items-center gap-3 rounded-lg bg-muted/50 px-3 py-2"><BadgeCheck className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" /><div><strong className="block text-lg leading-tight tabular-nums">{task.report?.eligible ?? 0} / {task.config.target_count ?? task.config.max_candidates}</strong><span className="text-xs text-muted-foreground">Подтверждены · цель</span></div></div>
-      </div>
-      <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5"><FilterX className="h-4 w-4" aria-hidden="true" />Исключено {task.report?.excluded ?? 0} <span className="text-xs">(дубли {task.report?.duplicates ?? 0})</span></span>
-        <span className="inline-flex items-center gap-1.5"><Coins className="h-4 w-4" aria-hidden="true" />Списано {task.report?.credits_charged ?? 0} кр. {task.report?.credit_limit != null && <span className="text-xs">· {task.report.credit_estimate_only ? 'ориентир до' : 'лимит'} {task.report.credit_limit} кр.</span>}</span>
-      </div>
-      <details className="text-sm"><summary className="cursor-pointer text-muted-foreground">Ход проверки и расходы</summary>
-        <div className="mt-2 space-y-1 text-muted-foreground">
+    {items.filter(task => !selectedTaskId || task.id === selectedTaskId).map(task => <div key={task.id} className="space-y-3 border-t pt-4">
+      <OutreachGroupCard name={task.display_name || task.config.audience} presentation={task.presentation} busy={busy} onAction={(action) => {
+        if (action.kind === 'draft_resume') void mutate(`/partnership/continuations/${task.id}`, { action: 'resume_letters', revision: task.revision });
+        else void mutate(`/partnership/continuations/${task.id}`, { action: action.action, revision: task.revision });
+      }} />
+      <details><summary className="min-h-10 cursor-pointer py-2 text-sm">Подробности и история поиска</summary>
+        <div className="space-y-2 py-2 text-sm text-muted-foreground">
+          <p>{task.stage.replace(/DeepSeek/gi, 'ИИ')}</p>
+          <p>Новые записи: {task.report?.imported ?? 0} · Исключено: {task.report?.excluded ?? 0} · Дубли: {task.report?.duplicates ?? 0}</p>
           <p>Ждут проверки: {task.report?.awaiting_check ?? 0} · Проверяются: {task.report?.checking ?? 0} · Не удалось проверить: {task.report?.verification_failed ?? 0}</p>
+          {!!task.state.history?.length && <ol className="space-y-1">{task.state.history.map((entry, index) => <li key={index}>{({ start: 'Поиск запущен', resume: 'Работа продолжена', pause: 'На паузе', stop: 'Поиск остановлен', rename: 'Название изменено' }[entry.action] || 'Условия обновлены')}{entry.at ? ` · ${new Date(entry.at).toLocaleString('ru-RU')}` : ''}</li>)}</ol>}
           <p>Поисковых запросов: {task.state.search_calls || 0} из {task.config.max_search_calls}</p>
-          <p>{task.report?.credit_estimate_only ? 'Ориентир расходов, списание только за выполненные действия.' : 'Расходы в пределах согласованного лимита.'}</p>
         </div>
       </details>
-      {task.config.mode !== 'find_only' && <p className="text-sm tabular-nums">Подготовлено: {task.report?.prepared || 0}. В очереди: {task.report?.queued ?? '—'}. Подтверждённо отправлено: {task.report?.confirmed_sent ?? '—'}. Ответов: {task.report?.replies ?? '—'}.</p>}
-      {!!task.report?.delivery_uncertain && <p className="text-sm">Нужна сверка доставки: {task.report.delivery_uncertain}.</p>}
-      {!!task.report?.ai_needs_review && <p className="text-sm">Писем на рассмотрении: {task.report.ai_needs_review}. Остальные разрешённые письма продолжают обрабатываться.</p>}
-      <div className="flex flex-wrap items-center gap-3 text-sm"><a className="inline-flex min-h-10 items-center gap-1.5 font-medium underline" href={`/dashboard/partnerships?business_id=${encodeURIComponent(businessId)}&search_task_id=${encodeURIComponent(task.id)}`}>Посмотреть кандидатов <ArrowRight className="h-4 w-4" aria-hidden="true" /></a><button className="min-h-10 underline" type="button" onClick={() => { setRenamingId(task.id); setNewName(task.display_name || task.config.audience); }}>Переименовать</button></div>
+      <button className="min-h-10 text-sm underline" type="button" onClick={() => { setRenamingId(task.id); setNewName(task.display_name || task.config.audience); }}>Переименовать</button>
       {renamingId === task.id && <form className="flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); if (newName.trim()) { void mutate(`/partnership/continuations/${task.id}`, { action: 'rename', revision: task.revision, display_name: newName.trim() }); setRenamingId(''); } }}><Input aria-label="Название поиска" maxLength={120} value={newName} onChange={(event) => setNewName(event.target.value)} /><Button type="submit" disabled={busy || !newName.trim()}>Сохранить название</Button></form>}
       <details><summary className="cursor-pointer text-sm">Условия поиска</summary>
         <p className="text-sm">{task.config.mode === 'find_only' ? 'Только найти и проверить' : task.config.mode === 'auto_send' ? 'Аутрич по согласованным AI-правилам' : 'Найти и подготовить письма'}</p>
@@ -132,9 +118,7 @@ export function OutreachContinuation({ businessId, onTasksChange }: { businessId
         {task.status === 'waiting_for_review' && task.state.inflight_search && task.config.billing_mode !== 'shared_balance_actual' && <Button variant="outline" disabled={busy} onClick={() => void mutate(`/partnership/continuations/${task.id}`, { action: 'acknowledge_search', revision: task.revision })}>Учесть поиск и списать до {Math.ceil(task.config.search_budget_cents / task.config.max_search_calls / 10)} кредитов</Button>}
         {task.status === 'waiting_for_review' && task.state.inflight_search && task.config.billing_mode === 'shared_balance_actual' && <p className="text-sm">Проверяем результат вызова у провайдера. До подтверждения стоимости списания не будет.</p>}
         {task.status === 'waiting_for_review' && task.state.blocker === 'search_provider_minimum_exceeds_call_limit' && task.config.billing_mode !== 'shared_balance_actual' && <Button disabled={busy} onClick={() => void mutate(`/partnership/continuations/${task.id}`, { action: 'use_shared_balance', revision: task.revision })}>Показать новые условия оплаты с общего баланса</Button>}
-        {['waiting_for_review', 'failed'].includes(task.status) && !task.state.inflight_search && !['search_budget_exhausted', 'search_provider_minimum_exceeds_call_limit', 'audience_and_drafts_review_required', 'access_revoked', 'qualification_result_uncertain', 'campaign_result_uncertain', 'model_budget_exhausted', 'candidate_budget_exhausted', 'sources_or_budget_exhausted'].includes(task.state.blocker || '') && <Button disabled={busy} onClick={() => void mutate(`/partnership/continuations/${task.id}`, { action: task.state.started ? 'resume' : 'start', revision: task.revision })}>{task.state.started ? 'Продолжить поиск' : 'Начать поиск'}</Button>}
-        {['waiting_for_review', 'failed', 'completed'].includes(task.status) && [...Object.values(task.state.qualifications || {}), ...Object.values(task.state.campaign_results || {})].some(item => ['checking', 'preparing', 'failed'].includes(item.status)) && <Button variant="outline" disabled={busy} onClick={() => void mutate(`/partnership/continuations/${task.id}`, { action: 'retry_failed', revision: task.revision })}>Повторить неудавшиеся проверки</Button>}
-        {(task.status === 'queued'  || task.status === 'running') && <Button variant="outline" disabled={busy} onClick={() => void mutate(`/partnership/continuations/${task.id}`, { action: 'pause', revision: task.revision })}>Пауза</Button>}
+        {['waiting_for_review', 'failed', 'completed'].includes(task.status) && [...Object.values(task.state.qualifications || {}), ...Object.values(task.state.campaign_results || {})].some(item => ['failed'].includes(item.status)) && <Button variant="outline" disabled={busy} onClick={() => void mutate(`/partnership/continuations/${task.id}`, { action: 'retry_failed', revision: task.revision })}>Повторить неудавшиеся проверки</Button>}
         {task.status !== 'completed' && !task.state.search_credit_reservation_id && <Button variant="ghost" disabled={busy} onClick={() => void mutate(`/partnership/continuations/${task.id}`, { action: 'stop', revision: task.revision })}>Остановить поиск</Button>}
       </div>}
     </div>)}
