@@ -70,17 +70,17 @@ def test_reply_scope_query_keeps_author_guard_and_adds_only_canonical_riderra(mo
                 ]
             )
             if "JOIN outreachsendbatches batch" in self.query:
-                required = common_lane_guards and "campaign.policy_json->>'approval_mode' = %s" in self.query
+                required = common_lane_guards and "campaign.policy_json->>'approval_mode' IN (%s,'ai_rules')" in self.query
             elif "AND NOT" in self.query:
                 required = (
                     common_lane_guards
-                    and "COALESCE(campaign.policy_json->>'approval_mode', '') = %s" in self.query
+                    and "COALESCE(campaign.policy_json->>'approval_mode', '') IN (%s,'ai_rules')" in self.query
                     and "q.sent_at >= NOW() - INTERVAL '45 days'" in self.query
                 )
             else:
                 required = (
                     common_lane_guards
-                    and "campaign.policy_json->>'approval_mode' = %s" in self.query
+                    and "campaign.policy_json->>'approval_mode' IN (%s,'ai_rules')" in self.query
                     and "q.provider_name = 'native_email'" in self.query
                 )
             return [{

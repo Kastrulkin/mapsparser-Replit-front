@@ -117,7 +117,7 @@ def _load_queue_candidates(
                         AND campaign.business_id = %s
                         AND workstream.workstream_type = 'client_partnership'
                         AND campaign.sender_mode = 'partner_business'
-                        AND campaign.policy_json->>'approval_mode' = %s
+                        AND campaign.policy_json->>'approval_mode' IN (%s,'ai_rules')
                     )
               )
         """
@@ -170,7 +170,7 @@ def _load_email_reply_scope_candidates(
                         AND campaign.business_id = %s
                         AND workstream.workstream_type = 'client_partnership'
                         AND campaign.sender_mode = 'partner_business'
-                        AND campaign.policy_json->>'approval_mode' = %s
+                        AND campaign.policy_json->>'approval_mode' IN (%s,'ai_rules')
                     )
               )
               AND contact.contact_type = 'email'
@@ -242,7 +242,7 @@ def _load_non_author_queue_candidates(
                       AND campaign.business_id = %s
                       AND workstream.workstream_type = 'client_partnership'
                       AND campaign.sender_mode = 'partner_business'
-                      AND COALESCE(campaign.policy_json->>'approval_mode', '') = %s
+                      AND COALESCE(campaign.policy_json->>'approval_mode', '') IN (%s,'ai_rules')
                       AND q.sent_at >= NOW() - INTERVAL '45 days'
                   )
               )
