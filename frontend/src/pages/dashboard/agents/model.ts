@@ -577,7 +577,7 @@ export const metaLabels: Record<string, string> = {
   supplies: 'расходники',
   staff_schedule: 'расписание смен',
   customer_chats: 'чаты с клиентами',
-  staff_profiles: 'профили сотрудников',
+  staff_profiles: 'профили агентов',
   price_list: 'прайс',
   revenue: 'выручка',
   map_questions: 'вопросы в карточках',
@@ -1030,14 +1030,14 @@ export const buildEmployeeStatus = (
     return {
       label: 'Нужно проверить',
       tone: 'amber',
-      summary: 'Сотрудник не получил данные из источника. Нужно исправить доступ или запустить тест заново.',
+      summary: 'Агент не получил данные из источника. Нужно исправить доступ или запустить тест заново.',
     };
   }
   if (workspaceState === 'waiting_for_review') {
     return {
       label: 'Ждёт решения',
       tone: 'amber',
-      summary: 'Сотрудник подготовил результат и остановился, чтобы вы его проверили.',
+      summary: 'Агент подготовил результат и остановился, чтобы вы его проверили.',
     };
   }
   if (workspaceState === 'waiting_provider') {
@@ -1087,7 +1087,7 @@ export const buildEmployeeStatus = (
     return {
       label: 'Черновик',
       tone: 'slate',
-      summary: 'Сотрудник создан, но ещё не включён в работу.',
+      summary: 'Агент создан, но ещё не включён в работу.',
     };
   }
   if (workspaceState === 'ready_for_test' || workspaceState === 'needs_attention') {
@@ -1101,13 +1101,13 @@ export const buildEmployeeStatus = (
     return {
       label: 'Нужно проверить',
       tone: 'amber',
-      summary: 'Сотрудник выполняет тестовую проверку.',
+      summary: 'Агент выполняет тестовую проверку.',
     };
   }
   return {
     label: 'Работает',
     tone: 'emerald',
-    summary: 'Сотрудник готов работать по опубликованному сценарию.',
+    summary: 'Агент готов работать по опубликованному сценарию.',
   };
 };
 
@@ -1321,7 +1321,7 @@ export const buildEmployeePrimaryAction = ({
     return {
       kind: 'open_result',
       label: 'Разобрать результат',
-      description: 'Сотрудник остановился до готового результата. Откройте причину и исправьте следующий шаг.',
+      description: 'Агент остановился до готового результата. Откройте причину и исправьте следующий шаг.',
       targetMode: 'results',
     };
   }
@@ -1346,7 +1346,7 @@ export const buildEmployeePrimaryAction = ({
     return {
       kind: 'connect',
       label: `Подключить ${label}`,
-      description: 'Завершите одно недостающее подключение, чтобы сотрудник получил нужные данные.',
+      description: 'Завершите одно недостающее подключение, чтобы агент получил нужные данные.',
       targetMode: 'connections',
     };
   }
@@ -1371,7 +1371,7 @@ export const buildEmployeePrimaryAction = ({
       return {
         kind: 'open_result',
         label: 'Открыть последний результат',
-        description: 'Откройте последний подготовленный результат сотрудника.',
+        description: 'Откройте последний подготовленный результат агента.',
         targetMode: 'results',
       };
     }
@@ -1386,7 +1386,7 @@ export const buildEmployeePrimaryAction = ({
     return {
       kind: 'view_history',
       label: 'Проверка идёт',
-      description: 'Сотрудник выполняет тест. Дождитесь результата.',
+      description: 'Агент выполняет тест. Дождитесь результата.',
       targetMode: 'results',
     };
   }
@@ -1412,7 +1412,7 @@ export const buildEmployeePrimaryAction = ({
     return {
       kind: 'enable',
       label: userMode.mode === 'scheduled' ? 'Включить по расписанию' : 'Включить агента',
-      description: 'Включите сотрудника после успешной проверки результата.',
+      description: 'Включите агента после успешной проверки результата.',
       targetMode: 'overview',
       versionId: activationVersionId,
     };
@@ -1429,7 +1429,7 @@ export const buildEmployeePrimaryAction = ({
   return {
     kind: 'view_history',
     label: 'Открыть последний результат',
-    description: 'Сотрудник работает. Можно открыть последний сохранённый результат.',
+    description: 'Агент работает. Можно открыть последний сохранённый результат.',
     targetMode: 'results',
   };
 };
@@ -1549,14 +1549,14 @@ export const buildAgentUserMode = (
       mode,
       label: 'По расписанию',
       flow: 'Описание → тест → включение → расписание',
-      description: 'Сотрудник запускается в указанное время. Внешние действия по-прежнему требуют подтверждения.',
+      description: 'Агент запускается в указанное время. Внешние действия по-прежнему требуют подтверждения.',
     };
   }
   return {
     mode: 'manual',
     label: 'Запуск по кнопке',
     flow: 'Описание → тест → включение → запуск',
-    description: 'Сотрудник выполняет задачу только когда вы нажимаете кнопку запуска.',
+    description: 'Агент выполняет задачу только когда вы нажимаете кнопку запуска.',
   };
 };
 
@@ -1567,7 +1567,7 @@ export const buildReasonCard = (
   if (state === 'blocked_result') {
     return {
       title: 'Почему нельзя подтвердить результат',
-      description: 'Сотрудник не получил нужные данные, поэтому подтверждать нечего. Сначала исправьте доступ или запустите тест заново.',
+      description: 'Агент не получил нужные данные, поэтому подтверждать нечего. Сначала исправьте доступ или запустите тест заново.',
     };
   }
   if (state === 'waiting_for_review') {
@@ -1575,7 +1575,7 @@ export const buildReasonCard = (
       title: 'Почему сейчас требуется решение',
       description: pendingApproval
         ? explainApproval(pendingApproval)
-        : 'Сотрудник остановился, потому что следующий шаг требует решения владельца.',
+        : 'Агент остановился, потому что следующий шаг требует решения владельца.',
     };
   }
   if (state === 'waiting_provider') {
@@ -1593,12 +1593,12 @@ export const buildReasonCard = (
   if (state === 'running_test') {
     return {
       title: 'Что происходит сейчас',
-      description: 'Сотрудник выполняет проверку. Внешние отправки и публикации не выполняются без вашего разрешения.',
+      description: 'Агент выполняет проверку. Внешние отправки и публикации не выполняются без вашего разрешения.',
     };
   }
   if (state === 'error') {
     return {
-      title: 'Почему сотрудник остановился',
+      title: 'Почему агент остановился',
       description: 'Последняя проверка не дала готового результата. Посмотрите причину и запустите тест после исправления.',
     };
   }

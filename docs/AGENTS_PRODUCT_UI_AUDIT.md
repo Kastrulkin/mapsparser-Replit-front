@@ -192,3 +192,20 @@ parameters, schedule, history, overview milestones, scenario structure and the
 service-tools entry point in all ten languages. Business-authored names, goals
 and saved results remain in their original language by design; LocalOS does not
 silently rewrite customer data when the interface language changes.
+
+## Overview simplification — 2026-10-06
+
+Screen job: identify the selected agent’s state, latest result and next action.
+User terminology: «Агент», per the owner’s explicit instruction.
+
+- Retained list/detail layout and existing secondary navigation.
+- Removed duplicate status badge and permanent goal/readiness sections.
+- Kept a short purpose, next activity and one result summary; previous activity
+  remains visible when there is no saved result.
+- Problem states retain their explanation and attention items. Approval screens
+  and execution handlers are unchanged.
+- Full goal, rules and configuration remain in Scenario and Settings.
+
+Verification: frontend build, focused employee/model tests and product UI gate.
+Live authenticated browser verification remains pending; production redirected
+this session to login. No deployment was performed.

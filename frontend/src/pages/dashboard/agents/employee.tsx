@@ -525,7 +525,7 @@ export const AgentsTodaySection = ({
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
       <div>
         <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Сегодня</div>
-        <h2 className="mt-2 text-xl font-semibold leading-7 text-slate-950">Что сделали ИИ-сотрудники за последние 24 часа</h2>
+        <h2 className="mt-2 text-xl font-semibold leading-7 text-slate-950">Что сделали агенты за последние 24 часа</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
           {summary.empty
             ? 'За сегодня агенты ещё ничего не запускали.'
@@ -945,7 +945,7 @@ export const EmployeeAgentsList = ({
               type="button"
               onClick={() => onOpen(blueprint)}
               className={cn(
-                'mb-2 grid min-h-[7.5rem] w-full gap-3 rounded-xl px-3 py-3 text-left transition-[box-shadow,background-color,color] active:scale-[0.99]',
+                'mb-2 grid min-h-[6rem] w-full gap-3 rounded-xl px-3 py-3 text-left transition-[box-shadow,background-color,color] active:scale-[0.99]',
                 selected ? 'bg-slate-950 text-white shadow-[0_0_0_1px_rgba(15,23,42,1)]' : 'bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.08)] hover:shadow-[0_6px_18px_rgba(15,23,42,0.08),0_0_0_1px_rgba(15,23,42,0.12)]',
                 !selected && (state === 'waiting_for_review' || state === 'needs_connection' || state === 'needs_attention') ? 'bg-amber-50/60' : '',
                 !selected && state === 'error' ? 'bg-rose-50/70' : '',
@@ -1027,13 +1027,13 @@ export const EmployeeRunningPanel = ({
           </div>
           <h3 className="mt-2 text-xl font-semibold leading-7 text-slate-950 [text-wrap:balance]">{blueprint.name}</h3>
           <p className="mt-2 text-sm leading-6 text-slate-600 [text-wrap:pretty]">
-            {healthy ? 'Сотрудник работает. Когда всё спокойно, здесь остаётся только короткий статус.' : 'Есть вопросы, которые требуют вашего внимания.'}
+            {healthy ? 'Агент работает. Когда всё спокойно, здесь остаётся только короткий статус.' : 'Есть вопросы, которые требуют вашего внимания.'}
           </p>
         </div>
       </div>
 
       <div className={cn('mt-5 grid gap-3', healthy ? 'sm:grid-cols-2' : 'lg:grid-cols-3')}>
-        <EmployeeAnswerCard label="Следующий запуск" value={blueprint.active_version_number ? 'По расписанию сотрудника' : 'После включения'} tone="emerald" />
+        <EmployeeAnswerCard label="Следующий запуск" value={blueprint.active_version_number ? 'По расписанию агента' : 'После включения'} tone="emerald" />
         <EmployeeAnswerCard label="Последняя задача" value={buildEmployeeLastActivity(blueprint, details || undefined, pendingApproval)} />
         {!healthy ? (
           <EmployeeAnswerCard label="Требует внимания" value={`${attentionItems.length} ${attentionItems.length === 1 ? 'задача' : 'задачи'}`} tone="amber" />
@@ -1221,7 +1221,7 @@ export const EmployeeTestResultPanel = ({
           ) : null}
           {needsGoogleSheetsSetup && !needsScenarioRebuild ? (
             <div className="mt-3 rounded-xl bg-white px-3 py-3 text-sm leading-6 text-amber-950 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.18)]">
-              Нужно указать конкретную таблицу и лист со списком поездок. Нажмите “Указать Google-таблицу” — откроется раздел источников этого сотрудника.
+              Нужно указать конкретную таблицу и лист со списком поездок. Нажмите “Указать Google-таблицу” — откроется раздел источников этого агента.
             </div>
           ) : null}
           {needsGoogleAccessReconnect && !needsScenarioRebuild ? (
@@ -1312,7 +1312,7 @@ export const EmployeeHistoryPanel = ({
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">История</div>
-          <h2 className="mt-2 text-xl font-semibold leading-7 text-slate-950 [text-wrap:balance]">Что сотрудник делал раньше</h2>
+          <h2 className="mt-2 text-xl font-semibold leading-7 text-slate-950 [text-wrap:balance]">Что агент делал раньше</h2>
         </div>
         <span className="inline-flex min-h-8 items-center rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
           {events.length ? `${events.length} событий` : 'пусто'}
@@ -1603,21 +1603,6 @@ export const EmployeeAgentOverviewPanel = ({
   const actionDisabled = actionLoading || story.state === 'running_test';
   const userMode = buildAgentUserMode(blueprint, details);
   const actionCredits = action.kind === 'run_work' ? estimatedAgentRunCredits(details) : 0;
-  const goal = String(
-    details?.execution_contract?.original_request
-    || details?.execution_contract?.active?.goal
-    || details?.execution_contract?.candidate?.goal
-    || buildEmployeeDescription(blueprint, details),
-  );
-  const tested = Boolean(details?.execution_contract?.candidate?.validation?.tested);
-  const enabled = Boolean(details?.execution_contract?.active?.version_id && blueprint.status === 'active');
-  const hasWorkRun = Boolean((details?.runs || []).some((run) => isAgentWorkRun(run) && run.status === 'completed'));
-  const lifecycle = [
-    { label: deepCopy.described, done: true },
-    { label: deepCopy.tested, done: tested },
-    { label: deepCopy.enabled, done: enabled },
-    { label: deepCopy.working, done: hasWorkRun || story.state === 'working' },
-  ];
   return (
     <div className={cn('space-y-4', healthy ? 'max-w-4xl' : 'max-w-5xl')}>
       <section className={cn(
@@ -1628,15 +1613,13 @@ export const EmployeeAgentOverviewPanel = ({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <EmployeeStatusPill status={story.status} label={deepCopy.state[story.state]} />
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                {deepCopy.state[story.state]}
-              </span>
               <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700 ring-1 ring-sky-100">
                 {userMode.label}
               </span>
             </div>
             <h1 className="mt-3 text-3xl font-semibold leading-9 text-slate-950 [text-wrap:balance]">{blueprint.name}</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 [text-wrap:pretty]">{story.status.summary}</p>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 [text-wrap:pretty]">{buildEmployeeDescription(blueprint, details)}</p>
+            {problem ? <p className="mt-2 text-sm font-medium text-slate-800">{story.status.summary}</p> : null}
           </div>
           <div className="shrink-0">
             <Button
@@ -1676,29 +1659,9 @@ export const EmployeeAgentOverviewPanel = ({
         </details>
       </section>
 
-      <EmployeeWorkspaceSection title={deepCopy.goal}>
-        <p className="whitespace-pre-wrap text-base leading-7 text-slate-800 [text-wrap:pretty]">{goal}</p>
-      </EmployeeWorkspaceSection>
-
-      <EmployeeWorkspaceSection title={deepCopy.readiness} tone={problem ? 'attention' : 'quiet'}>
-        <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {lifecycle.map((item) => (
-            <li key={item.label} className={cn('flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-medium ring-1', item.done ? 'bg-emerald-50 text-emerald-900 ring-emerald-200' : 'bg-slate-50 text-slate-500 ring-slate-200')}>
-              {item.done ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <span className="h-2 w-2 shrink-0 rounded-full bg-slate-300" />}
-              {item.label}
-            </li>
-          ))}
-        </ol>
-        <div className="mt-3 text-sm leading-6 text-slate-600"><span className="font-semibold text-slate-800">{userMode.label}.</span> {userMode.description}</div>
-      </EmployeeWorkspaceSection>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <EmployeeWorkspaceSection title={deepCopy.lastWork} tone={healthy ? 'quiet' : 'default'}>
-          <div className="text-sm font-semibold leading-6 text-slate-950">{story.latestWork}</div>
-        </EmployeeWorkspaceSection>
-        <EmployeeWorkspaceSection title={deepCopy.nextWork} tone={healthy ? 'quiet' : 'default'}>
-          <div className="text-sm font-semibold leading-6 text-slate-950">{story.nextWork}</div>
-        </EmployeeWorkspaceSection>
+      <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
+        {!latestResult ? <span>{story.latestWork}</span> : null}
+        <span>{story.nextWork}</span>
       </div>
 
       {latestResult ? (
