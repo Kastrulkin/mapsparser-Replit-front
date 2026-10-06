@@ -987,9 +987,13 @@ export const AgentBlueprintsWorkspace = () => {
         message: dialogBuilderInput.trim(),
         use_ai_compiler: true,
       });
-      const preview = response.data?.session?.preview || null;
+      const nextSession = response.data?.session || null;
+      if (!nextSession?.id || !nextSession?.preview) {
+        throw new Error('LocalOS не вернул проверку задачи. Черновик агента не создан — попробуйте ещё раз.');
+      }
+      const preview = nextSession.preview;
       const autoProviderRoutes = autoSelectBuilderProviderRoutes(preview);
-      setDialogBuilderSession(response.data?.session || null);
+      setDialogBuilderSession(nextSession);
       setSelectedBuilderConnectionBindings(autoSelectBuilderConnectionBindings(preview));
       setSelectedBuilderProviderRoutes(autoProviderRoutes);
       setAcceptedBuilderCompilerPlan(false);

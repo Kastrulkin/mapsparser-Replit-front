@@ -129,6 +129,30 @@ describe('Content page DOM ownership', () => {
     expect(() => fireEvent.click(generateButton)).not.toThrow();
   });
 
+  it('shows a compact calendar title and selected channels as distinct linked icons', async () => {
+    const calendarPlan = {
+      ...plan,
+      items: [{ ...plan.items[0], metadata_json: { selected_channels: ['telegram', 'vk'] } }],
+    };
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/content-plans/context')) return { context: {} };
+      if (path.startsWith('/content-plans?')) return { plans: [calendarPlan] };
+      if (path === '/content-plans/plan-1') return { plan: calendarPlan };
+      if (path === '/content-plans/plan-1/social-posts') return {
+        posts: [{ id: 'telegram-post', content_plan_item_id: 'item-1', platform: 'telegram', external_account_id: 'telegram-account', status: 'needs_review' }],
+        summary: {},
+      };
+      if (path.startsWith('/media-intelligence/posts/')) return { recommendation: null };
+      return {};
+    });
+
+    renderContentPage();
+    const card = await screen.findByRole('button', { name: /Тестовая тема публикации/ });
+    expect(card.querySelector('.line-clamp-2')).toHaveAttribute('title', 'Тестовая тема публикации');
+    expect(card.querySelector('[aria-label="Telegram: подключён"]')).toHaveClass('text-sky-600');
+    expect(card.querySelector('[aria-label="VK: не подключён"]')).toHaveClass('text-slate-300');
+  });
+
   it.each(['calendar', 'list', 'nearest'])('restores the %s invoker focus when the publication sheet closes', async (source) => {
     renderContentPage();
     await screen.findByRole('button', { name: /Тестовая тема публикации/ });

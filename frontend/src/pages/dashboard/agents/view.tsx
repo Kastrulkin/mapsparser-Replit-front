@@ -235,6 +235,7 @@ export const AgentBlueprintsView = ({ scope }) => {
             reply={dialogBuilderReply}
             session={dialogBuilderSession}
             actionLoading={actionLoading}
+            error={error}
             onInputChange={setDialogBuilderInput}
             onReplyChange={setDialogBuilderReply}
             onStart={startDialogBuilderSession}

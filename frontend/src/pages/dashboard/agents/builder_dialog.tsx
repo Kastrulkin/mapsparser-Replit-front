@@ -414,6 +414,7 @@ export const DialogAgentBuilder = ({
   reply,
   session,
   actionLoading,
+  error,
   onInputChange,
   onReplyChange,
   onStart,
@@ -440,6 +441,7 @@ export const DialogAgentBuilder = ({
   reply: string;
   session: AgentBuilderSession | null;
   actionLoading: boolean;
+  error?: string | null;
   onInputChange: (value: string) => void;
   onReplyChange: (value: string) => void;
   onStart: () => void;
@@ -580,6 +582,12 @@ export const DialogAgentBuilder = ({
         readyForDraft={canCreateDraft}
         created={false}
       />
+      {error ? (
+        <div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>{error}</span>
+        </div>
+      ) : null}
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
         <textarea
           className="min-h-28 resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm leading-6 outline-none transition focus:border-slate-400"
@@ -592,6 +600,12 @@ export const DialogAgentBuilder = ({
           {session ? 'Обновить понимание' : 'Начать диалог'}
         </Button>
       </div>
+      {actionLoading ? (
+        <div role="status" aria-live="polite" className="flex items-center gap-2 rounded-xl bg-sky-50 px-3 py-2 text-sm text-sky-900">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
+          <span>LocalOS разбирает задачу и проверяет, какие действия и подключения доступны. Результат появится здесь.</span>
+        </div>
+      ) : null}
 
       {session ? (
         <div className="space-y-4">

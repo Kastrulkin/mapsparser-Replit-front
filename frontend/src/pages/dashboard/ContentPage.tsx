@@ -17,11 +17,16 @@ import {
 	Lightbulb,
 	Loader2,
 	MessageCircleQuestion,
+	MapPinned,
+	MessageCircle,
+	MessagesSquare,
 	Plus,
+	Send,
 	Sparkles,
 	Star,
 	Trash2,
 	Upload,
+	Users,
 	Wand2,
 } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -773,6 +778,16 @@ const groupPostsByItem = (posts: SocialPost[]) => {
 const platformShortLabel = (post: SocialPost) => {
   const label = String(post.platform_label || post.platform || '').trim();
   return formatPlatformLabel(label);
+};
+
+const CALENDAR_CHANNEL_ICONS = {
+  yandex_maps: { Icon: MapPinned, active: 'text-red-600' },
+  google_business: { Icon: MapPinned, active: 'text-blue-600' },
+  telegram: { Icon: Send, active: 'text-sky-600' },
+  vk: { Icon: Users, active: 'text-blue-700' },
+  max: { Icon: MessageCircle, active: 'text-violet-600' },
+  instagram: { Icon: MessagesSquare, active: 'text-pink-600' },
+  facebook: { Icon: MessagesSquare, active: 'text-blue-700' },
 };
 
 const placementTargetUrl = (post: SocialPost) => String(
@@ -2235,7 +2250,7 @@ function ContentWorkspace() {
   const renderCalendarCard = (item: PlanItem) => {
     const posts = postsByItem[item.id] || [];
     const calendarState = getCalendarItemState(item, posts);
-    const channels = posts.slice(0, 3).map(platformShortLabel);
+    const channels = resolveItemSelectedChannels(item, posts, currentPlan);
     return (
       <button
         key={item.id}
@@ -2243,22 +2258,30 @@ function ContentWorkspace() {
         onClick={(event) => openItem(item, event.currentTarget)}
         className="w-full min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-left shadow-sm transition-[border-color,box-shadow] hover:border-slate-300 hover:shadow-md"
       >
-        <div className="line-clamp-2 break-words text-xs font-semibold leading-4 text-slate-950 [overflow-wrap:anywhere]">
+        <div className="line-clamp-2 break-normal text-xs font-semibold leading-4 text-slate-950" title={item.theme || item.goal || calendarCopy.publication}>
           {item.theme || item.goal || calendarCopy.publication}
         </div>
-        <div className="mt-1 flex min-w-0 flex-wrap gap-1">
-          {(channels.length ? channels : [calendarCopy.content]).map((channel) => (
-            <span key={channel} className="inline-flex max-w-full min-w-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium leading-4 text-slate-600 [overflow-wrap:anywhere]">
-              {channel}
-            </span>
-          ))}
+        <div className="mt-2 flex min-h-6 min-w-0 flex-wrap items-center gap-1" aria-label="Каналы публикации">
+          {channels.map((channel) => {
+            const config = CALENDAR_CHANNEL_ICONS[channel];
+            if (!config) return null;
+            const channelPost = posts.find((post) => String(post.platform || '').trim() === channel);
+            const connected = Boolean(channelPost?.external_account_id);
+            const label = CHANNELS.find((entry) => entry.key === channel)?.label || channel;
+            const ChannelIcon = config.Icon;
+            return (
+              <span key={channel} role="img" title={`${label} · ${connected ? 'подключён' : 'нет активного подключения'}`} aria-label={`${label}: ${connected ? 'подключён' : 'не подключён'}`} className={cn('grid h-6 w-6 shrink-0 place-items-center rounded-md bg-slate-50', connected ? config.active : 'text-slate-300')}>
+                <ChannelIcon className="h-3.5 w-3.5" aria-hidden="true" />
+              </span>
+            );
+          })}
         </div>
-        <div className="mt-1.5 flex min-w-0 flex-wrap gap-1">
-          <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-4 ring-1 [overflow-wrap:anywhere]', getStatusClassName(calendarState.status))}>
-            {localizeContentCalendarStatus(calendarState.status, calendarCopy)}
+        <div className="mt-1.5 flex min-w-0 flex-col items-start gap-1">
+          <span title={localizeContentCalendarStatus(calendarState.status, calendarCopy)} className={cn('inline-flex max-w-full min-w-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold leading-4 ring-1', getStatusClassName(calendarState.status))}>
+            <span className="line-clamp-1">{localizeContentCalendarStatus(calendarState.status, calendarCopy)}</span>
           </span>
-          <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-4 ring-1 [overflow-wrap:anywhere]', getStatusClassName(calendarState.action))}>
-            {localizeContentCalendarStatus(calendarState.action, calendarCopy)}
+          <span title={localizeContentCalendarStatus(calendarState.action, calendarCopy)} className={cn('inline-flex max-w-full min-w-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold leading-4 ring-1', getStatusClassName(calendarState.action))}>
+            <span className="line-clamp-1">{localizeContentCalendarStatus(calendarState.action, calendarCopy)}</span>
           </span>
         </div>
       </button>
@@ -2268,7 +2291,7 @@ function ContentWorkspace() {
   const renderCalendar = () => (
     <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
       <div className="-mx-1 overflow-x-auto overscroll-x-contain px-1 pb-2">
-        <div className="grid min-w-[700px] grid-cols-7 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 sm:min-w-0">
+        <div className="grid min-w-[1120px] grid-cols-7 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200">
           {calendarCopy.weekdays.map((day) => (
             <div key={day} className="min-w-0 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
               {day}
