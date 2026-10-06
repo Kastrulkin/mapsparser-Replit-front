@@ -553,7 +553,6 @@ const Index = () => {
                 {copy.title}
               </h1>
               <p className="mt-7 max-w-2xl text-pretty text-lg leading-8 text-slate-600 sm:text-xl sm:leading-9">{language === "ru" ? publicHomeContent.intro[0] : copy.intro}</p>
-              {language === "ru" && <nav aria-label="Задачи владельца" className="mt-6 flex flex-wrap gap-4 text-sm font-semibold"><Link to="/solutions/yandex-maps">Клиенты из карт</Link><Link to="/solutions/ai-review-replies">Ответы на отзывы</Link><Link to="/articles/kak-uvelichit-sredniy-chek">Средний чек</Link><Link to="/solutions/business-automation">Меньше рутины</Link><Link to="/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus">Прибыль</Link><Link to="/pricing">Тарифы</Link></nav>}
               <div className="mt-9 grid w-full gap-3 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)]">
                 <Button asChild className="btn-iridescent h-auto min-h-20 w-full justify-between gap-4 whitespace-normal rounded-xl px-6 py-4 text-left text-base leading-6">
                   <Link to="/growth">{copy.freeAudit}<ArrowRight className="h-5 w-5 shrink-0" aria-hidden="true" /></Link>

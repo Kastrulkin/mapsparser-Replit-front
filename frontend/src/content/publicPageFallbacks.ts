@@ -119,6 +119,5 @@ export const buildPublicPageFallbacks = (): PublicPageFallbackManifest => {
   for (const item of solutions) {
     routes[`/solutions/${item.slug}`] = { title: item.seoTitle, description: item.seoDescription, heading: item.title, intro: [item.excerpt], sections: [...sections(item.body), related(item.related)] };
   }
-  routes["/"].sections.unshift({ heading: "Задачи владельца", links: [{ href: "/solutions/yandex-maps", label: "Привлечь клиентов через карты" }, { href: "/solutions/ai-review-replies", label: "Подготовить ответы на отзывы" }, { href: "/articles/kak-uvelichit-sredniy-chek", label: "Увеличить средний чек" }, { href: "/solutions/business-automation", label: "Передать регулярные задачи" }, { href: "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus", label: "Разобраться с прибылью" }] });
   return { version: 1, publicShell: "public-seo-index.html", routes };
 };
