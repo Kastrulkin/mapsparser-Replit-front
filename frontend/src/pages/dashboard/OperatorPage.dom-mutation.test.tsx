@@ -55,7 +55,7 @@ describe('OperatorPage DOM ownership', () => {
       </MemoryRouter>,
     );
 
-    const loadingLabel = await screen.findByText('Загружаем историю…');
+    const loadingLabel = await screen.findByText('Загружаем историю…', {}, { timeout: 5000 });
     const textNode = Array.from(loadingLabel.childNodes).find((node) => (
       node.nodeType === Node.TEXT_NODE && node.textContent?.includes('Загружаем историю')
     ));

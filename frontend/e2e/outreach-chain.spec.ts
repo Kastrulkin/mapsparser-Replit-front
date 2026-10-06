@@ -21,7 +21,7 @@ test.beforeEach(async ({ page }) => {
     if (url.pathname === '/api/businesses') return route.fulfill({ json: { businesses: [business] } });
     if (url.pathname === '/api/partnership/continuations') return route.fulfill({ json: { enabled: true, items: [group] } });
     if (url.pathname === `/api/partnership/continuations/${group.id}`) return route.fulfill({ json: group });
-    if (url.pathname === '/api/partnership/leads') return route.fulfill({ json: { items: url.searchParams.get('company_filter') === 'suitable' ? [] : [{ id: 'company-1', name: 'Компания для проверки', business_id: business.id, pipeline_status: 'unprocessed', partnership_stage: 'imported' }], count: 1, access: { allowed: true } } });
+    if (url.pathname === '/api/partnership/leads') return route.fulfill({ json: { items: url.searchParams.get('company_filter') === 'suitable' ? [] : [{ id: 'company-1', name: 'Компания для проверки', business_id: business.id, pipeline_status: 'unprocessed', partnership_stage: 'imported' }], count: url.searchParams.get('company_filter') === 'suitable' ? 0 : 1, access: { allowed: true } } });
     if (url.pathname.startsWith('/api/operator/conversations/')) return route.fulfill({ json: { conversation: null, messages: [] } });
     return route.fulfill({ json: { items: [], drafts: [], batches: [], reactions: [], access: { allowed: true }, summary: {}, counts: {} } });
   });
@@ -35,6 +35,10 @@ test('chat keeps selected group above history, separates goal and raw results, a
   await expect(page.getByRole('link', { name: 'Пополнить баланс' })).toHaveAttribute('href', group.presentation.next_action.href);
   await expect(page.getByText('Отправка', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByLabel('Группа компаний', { exact: true }).selectOption('');
+  await expect(page.getByText('Найдено кандидатов', { exact: true })).not.toBeVisible();
+  await page.getByLabel('Группа компаний', { exact: true }).selectOption(group.id);
+  await expect(page.getByText('Найдено кандидатов', { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('outreach-chat.png'), fullPage: true });
 });
 
