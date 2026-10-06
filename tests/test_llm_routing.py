@@ -710,3 +710,19 @@ def test_operator_truncation_has_one_bounded_recovery(monkeypatch):
 
 def test_social_post_generation_disables_reasoning_for_interactive_copy():
     assert get_task_definition('social_post_generation').thinking_enabled is False
+
+
+def test_operator_schema_placeholder_recovery_replans_current_request():
+    request = LLMTaskRequest(task_key="operator_tool_plan", prompt="CURRENT REQUEST: preview saved group")
+    result = LLMTaskResult(status="schema_invalid", content='{"type":"json_object"}', validation_errors=["$.action: required"])
+    prompt = gateway._recovery_prompt(request, get_task_definition(request.task_key), result)
+    assert "CURRENT REQUEST: preview saved group" in prompt
+    assert "Заново выбери действие для текущего message" in prompt
+    assert "Не исправляй предыдущие сообщения чата" in prompt
+
+
+def test_non_operator_recovery_preserves_format_repair():
+    request = LLMTaskRequest(task_key="operator_intent_classify", prompt="classify")
+    result = LLMTaskResult(status="schema_invalid", content='{"type":"json_object"}')
+    prompt = gateway._recovery_prompt(request, get_task_definition(request.task_key), result)
+    assert "Исправь только формат ответа" in prompt

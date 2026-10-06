@@ -76,6 +76,9 @@ def _planner_prompt(state: dict[str, Any]) -> str:
             "Ты управляющий Оператор LocalOS. Выбирай только инструменты из переданного каталога.",
             "Не придумывай данные и не утверждай, что действие выполнено, пока нет observation.",
             "Вызывай по одному инструменту за шаг. Для ответа используй только факты из контекста и observations.",
+            "Если пользователь просит найти новые компании и сначала показать условия, лимиты или стоимость без запуска, вызови partnerships.continue_outreach с operation=preview. Выбери find_only только для поиска без писем; при явном запросе писем используй prepare_only. Этот просмотр ничего не создаёт и не запускает. Не требуй согласия на запуск до показа условий.",
+            "Для изменения объёма или конечного этапа сохранённой группы вызови partnerships.continue_outreach с operation=revise_preview и указанным task_id. Передавай только изменяемые поля config (target_count, offer, mode); аудитория, язык и география наследуются из сохранённой группы. Не создавай второй поиск. Если действительно не хватает данных, верни clarification, а не final с предложением ещё раз согласовать показ условий.",
+            "История — предыдущие сообщения, а не актуальные ограничения. Предыдущая техническая ошибка или сообщение о балансе не отменяет новую команду: проверяй текущее состояние инструментом. Выполни текущий message, а не исправление текста прошлых ответов.",
             "Если инструмента нет, честно объясни ограничение. Не запрашивай и не раскрывай секреты.",
             "Ссылки @refN — точные серверные ссылки. Передавай их без изменений в параметры инструментов.",
             "Верни только JSON одного из видов:",
@@ -84,6 +87,7 @@ def _planner_prompt(state: dict[str, Any]) -> str:
             '{"action":"clarification","message":"один уточняющий вопрос"}',
             "",
             json.dumps(state, ensure_ascii=False, default=str),
+            "Текущая команда пользователя (её нужно выполнить): " + str(state.get("message") or ""),
         ]
     )
 
@@ -263,6 +267,7 @@ def run_operator_tool_loop(
     trace: list[dict[str, Any]] = []
     seen_calls: set[str] = set()
     empty_action_retried = False
+    search_preview_retried = False
     last_outcome: dict[str, Any] = {}
     plan = planner or plan_operator_step
     safe_max_steps = max(1, min(int(max_steps or MAX_OPERATOR_TOOL_STEPS), 8))
@@ -291,6 +296,27 @@ def run_operator_tool_loop(
         if not isinstance(decision, dict):
             decision = {"action": "error", "message": "Модель вернула неверный план."}
         action = str(decision.get("action") or "").strip().lower()
+        search_preview_requested = (
+            "partnerships.continue_outreach" in tool_map
+            and bool(re.search(r"\b(?:найди|найти|ищи|поиск|подбери)\b", message, re.I))
+            and bool(re.search(r"компан|турагент|агентств|туроператор|партнер|партнёр", message, re.I))
+            and bool(re.search(r"сначала|покажи|услов|лимит|стоимост|бюджет", message, re.I))
+        )
+        if action == "final" and search_preview_requested and not any(
+            item.get("tool") == "partnerships.continue_outreach" for item in trace
+        ):
+            if not search_preview_retried:
+                search_preview_retried = True
+                observations.append({
+                    "status": "rejected", "error_code": "search_preview_not_requested",
+                    "message": "В каталоге есть partnerships.continue_outreach: для сохранённой группы operation=revise_preview с task_id и изменёнными условиями, для нового поиска operation=preview. "
+                               "Он показывает условия и предел стоимости без создания и запуска. "
+                               "Вызови его для этого запроса или задай один вопрос о действительно недостающих условиях.",
+                })
+                continue
+            decision = {"action": "error", "error_code": "search_preview_planner_failed",
+                        "message": "Не удалось подготовить предварительные условия поиска. Задача не создана и поиск не запущен."}
+            action = "error"
         requires_write = bool(re.match(r'\s*(?:измени|перепиши|замени|сохрани|создай|добавь|переделай)\b', message, re.I)) or bool(re.match(r'\s*придумай\b', message, re.I) and re.search(r'пост|вместо', message, re.I))
         if re.search(r'не предлагайте|не предлагай|сначала предлагайте|сначала предлагай|запрети.{0,30}предлаг',message,re.I) and not re.search(r'\?|\b(?:если|например|допустим)\b',message,re.I):
             requires_write = True
@@ -553,7 +579,7 @@ def run_operator_tool_loop(
             "risk_class": str(tool.get("risk_class") or "read_only"),
         })
         outcome_status = str(outcome.get("status") or "completed").strip().lower()
-        if bool(tool.get("deterministic_response")) and outcome_status not in {
+        if (bool(tool.get("deterministic_response")) or (tool_name == "partnerships.continue_outreach" and arguments.get("operation") in {"preview", "revise_preview"})) and outcome_status not in {
             "blocked",
             "denied",
             "error",
