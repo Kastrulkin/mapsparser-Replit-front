@@ -1,0 +1,333 @@
+{
+  "date": "2026-10-06",
+  "method": "Browser first result pages; ads excluded. Google Russia/Volgograd IP, pws=0; Yandex lr=213 but UI displays St Petersburg; not a universal rank.",
+  "results": [
+    {
+      "engine": "Google",
+      "query": "LocalOS",
+      "region": "Россия, Волгоград по IP; pws=0",
+      "results": [
+        {
+          "title": "LocalOS — less routine work for local business owners",
+          "url": "https://localos.pro/",
+          "rank": 1
+        },
+        {
+          "title": "Local promotion for local business - LocalOS.pro",
+          "url": "https://localos.pro/login",
+          "rank": 2
+        },
+        {
+          "title": "Приложение «LocalOS by LocalVR - App Store - Apple",
+          "url": "https://apps.apple.com/us/app/localos-by-localvr/id6760833807?l=ru",
+          "rank": 3
+        },
+        {
+          "title": "Статьи о малом бизнесе и локальном маркетинге - LocalOS",
+          "url": "https://www.localos.pro/articles/",
+          "rank": 4
+        },
+        {
+          "title": "LocalOS Book | Book Premium Local Services in Minutes",
+          "url": "https://localos.app/",
+          "rank": 5
+        },
+        {
+          "title": "LocalOS — Consolidate Your Business Tools",
+          "url": "https://getlocalos.com/",
+          "rank": 6
+        },
+        {
+          "title": "LocalOS",
+          "url": "https://localos.co/",
+          "rank": 7
+        },
+        {
+          "title": "Как вести Яндекс Карты, 2ГИС: услуги, новости и карточка в ...",
+          "url": "https://www.youtube.com/watch?v=yE5yvdT_IhY",
+          "rank": 8
+        },
+        {
+          "title": "About The Local OS",
+          "url": "https://thelocalos.com/about",
+          "rank": 9
+        }
+      ],
+      "organicReviewed": 9,
+      "localosPositions": [
+        1,
+        2,
+        4
+      ]
+    },
+    {
+      "engine": "Яндекс",
+      "query": "LocalOS",
+      "region": "lr=213; интерфейс показывает Санкт-Петербург",
+      "results": [
+        {
+          "rank": 1,
+          "url": "https://localos.pro/"
+        },
+        {
+          "rank": 2,
+          "url": "https://localos.pro/login"
+        },
+        {
+          "rank": 3,
+          "url": "https://localos.pro/about"
+        }
+      ],
+      "organicReviewed": 10,
+      "localosPositions": [
+        1,
+        2,
+        3
+      ],
+      "note": "Recorded own-domain positions; other results shown in browser but not exported as a complete list."
+    },
+    {
+      "engine": "Google",
+      "query": "продвижение на яндекс картах",
+      "results": [
+        {
+          "title": "Продвижение в Картах",
+          "url": "https://yandex.ru/support/direct/ru/company-ads/maps",
+          "rank": 1
+        },
+        {
+          "title": "Как продвигать бизнес на Яндекс Картах",
+          "url": "http://secrets.tbank.ru/marketing/reklama-v-yandeks-kartah/",
+          "rank": 2
+        },
+        {
+          "title": "Продвижение на Яндекс Картах: как вывести бизнес в ...",
+          "url": "https://vc.ru/marketing/2316662-prodvizhenie-na-yandeks-kartakh",
+          "rank": 3
+        },
+        {
+          "title": "Перфоманс-продвижение в Картах",
+          "url": "https://b2b.yandex.ru/adv/products/geoperfomans",
+          "rank": 4
+        },
+        {
+          "title": "Как продвигаться на Яндекс-Картах",
+          "url": "https://ingate.ru/blog/kak-prodvigatsya-na-yandeks-kartakh/",
+          "rank": 5
+        },
+        {
+          "title": "Продвижение на Яндекс Картах: полный мега‑гайд",
+          "url": "https://www.sostav.ru/blogs/287210/78976",
+          "rank": 6
+        },
+        {
+          "title": "Продвижение в Яндекс Картах",
+          "url": "https://startsmileagency.ru/services/prodvizhenie-v-yandeks-kartakh/",
+          "rank": 7
+        },
+        {
+          "title": "Продвижение в Яндекс Картах",
+          "url": "https://www.advertpro.ru/uslugi/upravlenie-reputaciey/prodvizhenie-na-kartah/",
+          "rank": 8
+        },
+        {
+          "title": "Как продвигаться на Яндекс Картах: бесплатные и платные ...",
+          "url": "https://webolution.ru/blog/prodvizheniye-na-yandeks-kartakh/",
+          "rank": 9
+        }
+      ],
+      "found": false,
+      "organicReviewed": 9,
+      "localosPositions": []
+    },
+    {
+      "engine": "Яндекс",
+      "query": "продвижение на яндекс картах",
+      "organicReviewed": 11,
+      "found": false
+    },
+    {
+      "engine": "Google",
+      "query": "ии ответы на отзывы",
+      "results": [
+        {
+          "title": "AI-генератор ответов на отзывы",
+          "url": "https://myreviews.ru/otvet-na-otzyv",
+          "rank": 1
+        },
+        {
+          "title": "Ответ на отзыв нейросетью",
+          "url": "https://neuroproton.com/otvet-na-otzyv",
+          "rank": 2
+        },
+        {
+          "title": "Онлайн-генератор ответов на отзывы и вопросы",
+          "url": "https://otveto.ru/generator-otvetov/",
+          "rank": 3
+        },
+        {
+          "title": "ИИ-ответы на отзывы — автоматизация работы с ...",
+          "url": "https://pinbox.ru/ai-reviews/",
+          "rank": 4
+        },
+        {
+          "title": "Нейросеть для ответов на отзывы клиентов",
+          "url": "https://mobz.io/free-replies",
+          "rank": 5
+        },
+        {
+          "title": "Нейросеть для ответа на отзыв: спокойно и по делу",
+          "url": "https://librachat.ru/learn/neyroset-otvet-na-otzyv",
+          "rank": 6
+        },
+        {
+          "title": "ИИ-генерация ответов на отзывы: как автоматически ...",
+          "url": "https://pntr.io/1101-ii-generaciya-otvetov-na-otzyvy-kak-avtomaticheski-otvechat-na-100-otzyvov",
+          "rank": 7
+        },
+        {
+          "title": "Нейросеть для ответов на отзывы",
+          "url": "http://botprofi.ru/reply-to-rewiew",
+          "rank": 8
+        },
+        {
+          "title": "Отвечайте на отзывы быстрее с помощью нейросети",
+          "url": "https://seller.ozon.ru/media/news/otvechajte-na-otzyvy-bystree-s-pomoshyu-nejroseti/",
+          "rank": 9
+        }
+      ],
+      "found": false,
+      "organicReviewed": 9,
+      "localosPositions": []
+    },
+    {
+      "engine": "Яндекс",
+      "query": "ии ответы на отзывы",
+      "organicReviewed": 11,
+      "found": false,
+      "evidence": "Browser tab: 3, Title: \"ии ответы на отзывы — Яндекс: нашлось 978 тыс. результатов\", URL: \"https://yandex.ru/search/?text=%D0%B8%D0%B8+%D0%BE%D1%82%D0%B2%D0%B5%D1%82%D1%8B+%D0%BD%D0%B0+%D0%BE%D1%82%D0%B7%D1%8B%D0%B2%D1%8B&lr=213\".\nThe following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.\n+\t\t\t\t274 combo box (collapsed) Description: Запрос, Value: ии ответы на отзывы, Secondary Actions: Expand\n~\t\t\t18 link Description: Ты хорош!, Value: yabs.yandex.ru/count/WdSejI_zOoVX2LbX0aqJ06DYX2cUFSxeL8hxtFaJYYA5lK4091ph8aP8G3…\n~\t\t\t\t\t36 link Description: Ответы на отзывы с помощью ИИ — в отчёте для РОП, Value: yabs.yandex.ru/count/WiCejI_zOoVX2LcD0gqL06CdcNYE8Wg5dhXpgOshI77R6mH0mh4k4a9S4m…\n~\t\t\t\t\t37 link Description: pact.imОтветы на отзывы с помощью ИИ — в отчёте для РОП…, Value: yabs.yandex.ru/count/WiCejI_zOoVX2LcD0gqL06CdcNYE8Wg5dhXpgOshI77R6mH0mh4k4a9S4m…\n~\t\t\t\t\t41 link Description: Как работает ИИ-аналитика, Value: yabs.yandex.ru/count/Wi8ejI_zOoVX2LcD0gKL06Fdc7YE8Wg5dhXpgOshI77R6mH0mh4k4a9S4m…\n~\t\t\t\t\t43 link Description: 5 критериев оценки, Value: yabs.yandex.ru/count/WiCejI_zOoVX2LcD0gqL06CdcNYE8Wg5dhXpgOshI77R6mH0mh4k4a9S4m…\n~\t\t\t\t\t45 link Description: Отчёт и рекомендации, Value: yabs.yandex.ru/count/WiCejI_zOoVX2LcD0gqL06CdcNYE8Wg5dhXpgOshI77R6mH0mh4k4a9S4m…\n~\t\t\t\t\t47 link Description: Для руководителя отдела продаж, Value: yabs.yandex.ru/count/Wi8ejI_zOoVX2LcD0gKL06Fdc7YE8Wg5dhXpgOshI77R6mH0mh4k4a9S4m…\n~\t\t\t\t\t49 link Description: Контроль без ручной проверки, Value: yabs.yandex.ru/count/WiCejI_zOoVX2LcE0gqL07CdcNYE8Wg5dhXpgOshI77R6mH0mh4k4a9S4m…\n~\t\t\t\t\t51 link Description: Отраслевые сценарии, Value: yabs.yandex.ru/count/WiGejI_zOoVX2LcE0hKL07DdcNYE8Wg5dhXpgOshI77R6mH0mh4k4a9S4m…\n~\t\t\t\t\t53 link Description: Стоимость, Value: yabs.yandex.ru/count/WiCejI_zOoVX2LcE0gqL07CdcNYE8Wg5dhXpgOshI77R6mH0mh4k4a9S4m…\n~\t\t\t\t\t55 link Description: Посмотреть демо-отчёт, Value: yabs.yandex.ru/count/WiCejI_zOoVX2LcE0gqL07CdcNYE8Wg5dhXpgOshI77R6mH0mh4k4a9S4m…\n~\t\t\t\t\t58 link Description: нейросеть для ответов на отзывы - ReviewerBot, Value: yabs.yandex.ru/count/Wl8ejI_zOoVX2Lb80oKN0AEecrAez4OXVQOueGBtaTvsYWq28E5O5_6rje…\n~\t\t\t\t\t59 link Description: ozonreviewerbot.ruнейросеть для ответов на отзывы - ReviewerBot…, Value: yabs.yandex.ru/count/Wl8ejI_zOoVX2Lb80oKN0AEecrAez4OXVQOueGBtaTvsYWq28E5O5_6rje…\n~\t\t\t\t\t64 link Description: ИИ для ответов на отзывы — речевая аналитика, Value: yabs.yandex.ru/count/Wl4ejI_zOoVX2Ldi0XqN07FgeY0OsK74dbXgTH5VQxrP4d02vWIg-0IutZ…\n~\t\t\t\t\t65 link Description: analytics.iqcorp.ruИИ для ответов на отзывы — речевая аналитика…, Value: yabs.yandex.ru/count/Wl4ejI_zOoVX2Ldi0XqN07FgeY0OsK74dbXgTH5VQxrP4d02vWIg-0IutZ…\n~\t\t\t\t\t70 link Description: ИИ отвечает на вопросы, Value: yabs.yandex.ru/count/WjKejI_zOoVX2LdA0ZqM07Eec_Yqv-cSHb58LVYaSDvJvmO1a724IibnaT…\n~\t\t\t\t\t71 link Description: owwn.ruИИ отвечает на вопросы…, Value: yabs.yandex.ru/count/WjKejI_zOoVX2LdA0ZqM07Eec_Yqv-cSHb58LVYaSDvJvmO1a724IibnaT…\n~\t\t\t\t\t76 link Description: Ответы на отзывы с AI‐помощником, Value: yabs.yandex.ru/count/WhqejI_zOoVX2LbS0dqL0DCdchZzT4RjgGrzdb2XmhPxDWY0XEFJBQn7Gl…\n~\t\t\t\t\t77 link Description: anggroup.proОтветы на отзывы с AI‐помощником…, Value: yabs.yandex.ru/count/WhqejI_zOoVX2LbS0dqL0DCdchZzT4RjgGrzdb2XmhPxDWY0XEFJBQn7Gl…\n~\t\t\t\t\t88 link Description: Автоответы на отзывы Wildberries - AI отвечает за 30..., Value: yabs.yandex.ru/count/WhqejI_zOoVX2Lbu0dqL06EcbRIpCQeYHp4zSTluZI95ZuttR1002SUwYA…\n~\t\t\t\t\t89 link Description: mpmgr.ruГенератор ответов на отзывы WB и ИИ…, Value: yabs.yandex.ru/count/WhqejI_zOoVX2Lbu0dqL06EcbRIpCQeYHp4zSTluZI95ZuttR1002SUwYA…\n~\t\t\t\t\t94 link Description: Отзывы WB, Value: yabs.yandex.ru/count/Wf0ejI_zOoVX2LaH0XKK06DaZhIpCQeYHp4zSTluZI95ZuttR1002SUwYA…\n~\t\t\t\t\t95 link Description: Отзывы, Value: yabs.yandex.ru/count/WemejI_zOoVX2La50lKJ05CaZhIpCQeYHp4zSTluZI95ZuttR1002SUwYA…\n~\t\t\t\t\t96 link Description: Тарифы, Value: yabs.yandex.ru/count/WeGejI_zOoVX2Ldr0RKJ04FaZRIpCQeYHp4zSTluZI95ZuttR1002SUwYA…\n~\t\t\t\t\t97 link Description: 3 дня бесплатно, Value: yabs.yandex.ru/count/WeiejI_zOoVX2Ldz0UqJ09CaZxIpCQeYHp4zSTluZI95ZuttR1002SUwYA…\n~\t\t\t\t\t104 link Description: Ответы на отзывы с ИИ на Яндекс Картах, 2ГИС и Google, Value: yabs.yandex.ru/count/WimejI_zOoVX2LcZ0lKL0FEcbzxPcCBdn2t5UtoaKYaAVAeYka4091n7t1…\n~\t\t\t\t\t105 link Description: dailygrow.ruОтветьте на отзывы с помощью ИИ!, Value: yabs.yandex.ru/count/WimejI_zOoVX2LcZ0lKL0FEcbzxPcCBdn2t5UtoaKYaAVAeYka4091n7t1…\n~\t\t\t\t\t\t119 link Description: GigaStudio — разработка веб-приложения через чат с ИИ, Value: yandex.ru/an/count/WqyejI_zOoVX2Lcj0mqQ0EEihJuee52fCp_H8utcja_Uiq4091n7C4qG0PKT…\n~\t\t\t\t\t\t120 link Description: gitverse.ru, Value: yandex.ru/an/count/WqyejI_zOoVX2Lcj0mqQ0EEihJuee52fCp_H8utcja_Uiq4091n7C4qG0PKT…\n~\t\t\t\t\t\t123 link Description: ИИ-агенты, Value: yandex.ru/an/count/WqyejI_zOoVX2Lcj0mqQ0EEihJuee52fCp_H8utcja_Uiq4091n7C4qG0PKT…\n~\t\t\t\t\t\t124 link Description: Веб-версия, Value: yandex.ru/an/count/WqyejI_zOoVX2Lcj0mqQ0EEihJuee52fCp_H8utcja_Uiq4091n7C4qG0PKT…\n~\t\t\t\t\t\t125 link Description: Платформа GitVerse, Value: yandex.ru/an/count/WqyejI_zOoVX2Lcj0mqQ0EEihJuee52fCp_H8utcja_Uiq4091n7C4qG0PKT…\n~\t\t\t\t\t\t126 link Description: Создать, Value: yandex.ru/an/count/WqyejI_zOoVX2Lcj0mqQ0EEihJuee52fCp_H8utcja_Uiq4091n7C4qG0PKT…\n~\t\t\t\t\t\t128 link Description: Автоматический лендинг для продвижения в Яндекс Директе, Value: yandex.ru/an/count/WsqejI_zOoVX2LdB0_qQ00DkiZvIPpwrdoXyKjXJP_wCRX002SSHJ1D4G6M7…\n~\t\t\t\t\t\t129 link Description: direct.yandex.ru, Value: yandex.ru/an/count/WsqejI_zOoVX2LdB0_qQ00DkiZvIPpwrdoXyKjXJP_wCRX002SSHJ1D4G6M7…\n~\t\t\t\t\t\t132 link Description: Быстро и просто, Value: yandex.ru/an/count/WsmejI_zOoVX2LdA0_KQ0FCjiZvIPpwrdoXyKjXJP_wCRX002SSHJ1D4G6M7…\n~\t\t\t\t\t\t133 link Description: Начать продвижение, Value: yandex.ru/an/count/WsmejI_zOoVX2LdA0_KQ0FCjiZvIPpwrdoXyKjXJP_wCRX002SSHJ1D4G6M7…\n~\t\t\t\t\t\t134 link Description: Ваш сайт готов к продвижению, Value: yandex.ru/an/count/WsmejI_zOoVX2LdA0_KQ0FCjiZvIPpwrdoXyKjXJP_wCRX002SSHJ1D4G6M7…\n~\t\t\t\t\t\t135 link Description: Бонус для старта 5000 ₽, Value: yandex.ru/an/count/WsmejI_zOoVX2LdA0_KQ0FCjiZvIPpwrdoXyKjXJP_wCRX002SSHJ1D4G6M7…\n~\t\t\t\t\t181 link Description: Ответы на отзывы с помощью ИИ — в отчёте для РОП, Value: …\n~\t\t\t\t\t182 link Description: pact.imОтветы на отзывы с помощью ИИ — в отчёте для РОП…, Value: …\n~\t\t\t\t\t186 link Description: Как работает ИИ-аналитика, Value: …\n~\t\t\t\t\t187 link Description: 5 критериев оценки, Value: …\n~\t\t\t\t\t188 link Description: Отчёт и рекомендации, Value: …\n~\t\t\t\t\t189 link Description: Для руководителя отдела продаж, Value: …\n~\t\t\t\t\t191 link Description: Способы проверки отзывов, Value: …\n~\t\t\t\t\t192 link Description: rating.egoai.ruСпособы проверки отзывов…, Value: …\n~\t\t\t\t\t197 link Description: Яндекс Бизнес найдет вам новых клиентов, Value: …\n~\t\t\t\t\t198 link Description: business.yandex.ruЗапустить-рекламу…, Value: …\n~\t\t\t\t\t202 link Description: Автозапуск, Value: …\n~\t\t\t\t\t203 link Description: Несколько площадок, Value: …\n~\t\t\t\t\t204 link Description: Не тратит лишнего, Value: …\n~\t\t\t\t\t240 link Description: ии ответы на отзывы вб, Value: yandex.ru/search/\n~\t\t\t\t\t241 link Description: отвечать на отзывы вб работа, Value: yandex.ru/search/\n~\t\t\t\t\t242 link Description: отвечать на отзывы озон вакансии удаленно, Value: yandex.ru/search/\nThe focused UI element is 1 AXWebArea ии ответы на отзывы — Яндекс: нашлось 978 тыс. результатов, URL: yandex.ru/search/"
+    },
+    {
+      "engine": "Google",
+      "query": "автоматизация бизнеса с ии",
+      "results": [
+        {
+          "title": "Автоматизация бизнеса с помощью нейросетей",
+          "url": "https://veonix.ru/ai/",
+          "rank": 1
+        },
+        {
+          "title": "Автоматизация бизнеса с ИИ: где его стоит применять, ...",
+          "url": "https://habr.com/ru/articles/945802/",
+          "rank": 2
+        },
+        {
+          "title": "Кто-то добивается успеха в бизнесе по автоматизации ...",
+          "url": "https://www.reddit.com/r/automation/comments/1iuwnuh/anyone_having_success_with_an_ai_automation/?tl=ru",
+          "rank": 3
+        },
+        {
+          "title": "AI-автоматизация бизнеса в 2026 году - Digital Q - Диасофт",
+          "url": "https://q.diasoft.ru/mediacenter/knowledge/ai-avtomatizatsiya-biznesa-gayd-i-instrumenty-dlya-optimizatsii-protsessov/",
+          "rank": 4
+        },
+        {
+          "title": "Автоматизация бизнес процессов с помощью ИИ (AI)",
+          "url": "https://teamly.ru/blog/avtomatizacija_biznesa_ai/",
+          "rank": 5
+        },
+        {
+          "title": "​Внедрение ИИ в бизнес - подберём технологию и ...",
+          "url": "https://nfp2b.ru/directions/ai/?srsltid=AU7gw4U5uI2SIGk3mdzmACGHaNoNkQi38DHxKiSbS9Som94zg3qRjpGW",
+          "rank": 6
+        },
+        {
+          "title": "ИИ автоматизация: как это работает, этапы внедрения ...",
+          "url": "https://simpleone.ru/blog/ai-business-automation",
+          "rank": 7
+        },
+        {
+          "title": "Искусственный интеллект для вашего бизнеса ...",
+          "url": "https://insightai.ru/",
+          "rank": 8
+        },
+        {
+          "title": "Автоматизация бизнес-процессов с помощью AI и ...",
+          "url": "https://icerockdev.ru/blog/article/avtomatizatsiya-biznes-protsessov-s-pomoshchyu-ai/",
+          "rank": 9
+        }
+      ],
+      "found": false,
+      "organicReviewed": 9,
+      "localosPositions": []
+    },
+    {
+      "engine": "Яндекс",
+      "query": "автоматизация бизнеса с ии",
+      "organicReviewed": 11,
+      "found": false,
+      "evidence": "Browser tab: 3, Title: \"автоматизация бизнеса с ии — Яндекс: нашлось 804 тыс. результатов\", URL: \"https://yandex.ru/search/?text=%D0%B0%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82%D0%B8%D0%B7%D0%B0%D1%86%D0%B8%D1%8F+%D0%B1%D0%B8%D0%B7%D0%BD%D0%B5%D1%81%D0%B0+%D1%81+%D0%B8%D0%B8&lr=213\".\nThe following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.\nRemoved element IDs: 12-13\n+\t\t\t\t296 combo box (collapsed) Description: Запрос, Value: автоматизация бизнеса с ии, Secondary Actions: Expand\n+\t\t\t297 button Голосовой поиск\n+\t\t\t\t298 image\n+\t\t\t299 link Description: Погода, Value: yandex.ru/pogoda\nThe focused UI element is 1 AXWebArea автоматизация бизнеса с ии — Яндекс: нашлось 804 тыс. результатов, URL: yandex.ru/search/"
+    },
+    {
+      "engine": "Google",
+      "query": "как увеличить средний чек в салоне красоты",
+      "results": [
+        {
+          "title": "5 способов повысить средний чек салона",
+          "url": "https://www.arnica.pro/blog/5-sposobov-povysit-sredniy-chek-salona",
+          "rank": 1
+        },
+        {
+          "title": "4 способа увеличить средний чек в салоне красоты",
+          "url": "https://www.passteam.ru/blog/4-sposoba-uvelichit-sredniy-chek-v-salone-krasoty",
+          "rank": 2
+        },
+        {
+          "title": "Как увеличить средний чек в салоне красоты: простые и ...",
+          "url": "https://salon1c.ru/blog/kak-uvelichit-srednij-chek-v-salone-krasoty-prostye-i-effektivnye-metody/",
+          "rank": 3
+        },
+        {
+          "title": "Как увеличить средний чек в салоне красоты или ...",
+          "url": "https://yookassa.ru/recipes/start-biznesa/uvelichenie-srednego-cheka-salona-krasoty-ili-barbershopa/",
+          "rank": 4
+        },
+        {
+          "title": "Как увеличить средний чек в салоне красоты или ...",
+          "url": "https://kontur.ru/market/spravka/37635-uvelichit_sredniy_chek_v_salone_krasoty_ili_barbershope",
+          "rank": 5
+        },
+        {
+          "title": "Как повысить выручку салона красоты без новых клиентов",
+          "url": "https://svobodarussia.ru/articles/kak-uvelicit-srednij-cek-v-studii-ne-privlekaa-novyh-klientov",
+          "rank": 6
+        },
+        {
+          "title": "5 способов повысить средний чек на услуги салона красоты",
+          "url": "https://www.dirsalona.ru/article/1583-5-sposobov-povysit-sredniy-chek-na-uslugi-salona-krasoty",
+          "rank": 7
+        },
+        {
+          "title": "Как увеличить средний чек в салоне красоты: 6 способов",
+          "url": "https://krasivo.biz/kak-uvelichit-srednij-chek-v-salone-krasoty-6-effektivnyh-instrumentov/",
+          "rank": 8
+        },
+        {
+          "title": "Увеличение среднего чека салона красоты",
+          "url": "https://sales-generator.ru/blog/uvelichenie-srednego-cheka-salona-krasoty/",
+          "rank": 9
+        }
+      ],
+      "found": false,
+      "organicReviewed": 9,
+      "localosPositions": []
+    },
+    {
+      "engine": "Яндекс",
+      "query": "как увеличить средний чек в салоне красоты",
+      "organicReviewed": 11,
+      "found": false,
+      "evidence": "Browser tab: 3, Title: \"как увеличить средний чек в салоне красоты — Яндекс: нашлось 2 млн результатов\", URL: \"https://yandex.ru/search/?text=%D0%BA%D0%B0%D0%BA+%D1%83%D0%B2%D0%B5%D0%BB%D0%B8%D1%87%D0%B8%D1%82%D1%8C+%D1%81%D1%80%D0%B5%D0%B4%D0%BD%D0%B8%D0%B9+%D1%87%D0%B5%D0%BA+%D0%B2+%D1%81%D0%B0%D0%BB%D0%BE%D0%BD%D0%B5+%D0%BA%D1%80%D0%B0%D1%81%D0%BE%D1%82%D1%8B&lr=213\".\nThe following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.\nRemoved element IDs: 12-13, 18-19\n+\t\t\t\t451 combo box (collapsed) Description: Запрос, Value: как увеличить средний чек в салоне красоты, Secondary Actions: Expand\n+\t\t\t452 button Голосовой поиск\n+\t\t\t\t453 image\n+\t\t\t454 link Description: Погода, Value: yandex.ru/pogoda\n+\t\t\t455 link Description: Избранное, Value: yandex.ru/favs/products\n+\t\t\t456 link Description: Заказы, Value: yandex.ru/favs/orders\n~\t\t\t\t\t417 link Description: как увеличить средний чек в магазине, Value: …\nThe focused UI element is 1 AXWebArea как увеличить средний чек в салоне красоты — Яндекс: нашлось 2 млн результатов, URL: yandex.ru/search/"
+    }
+  ]
+}

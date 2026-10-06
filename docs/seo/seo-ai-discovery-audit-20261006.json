@@ -1,0 +1,2011 @@
+{
+  "date": "2026-10-06",
+  "scope": "Read-only follow-up SEO and AI discovery audit; no production changes",
+  "live_probe_count": 44,
+  "sitemap_urls_checked": 32,
+  "sitemap_http_200": 32,
+  "user_agent_probe": "YandexBot, Googlebot, OAI-SearchBot, ChatGPT-User, PerplexityBot return own solution HTML; UA spoofing does not prove access for actual crawler IPs",
+  "yandex_browser": {
+    "dashboard_duplicate_title_groups": 7,
+    "dashboard_duplicate_description_groups": 5,
+    "new_solutions_indexed": [
+      "/solutions/yandex-maps",
+      "/solutions/ai-review-replies",
+      "/solutions/business-automation"
+    ],
+    "new_article_indexed": "/articles/kak-uvelichit-sredniy-chek",
+    "reload_urls_observed": "Noncanonical reload URLs remain among indexed/processed samples",
+    "alice_report": {
+      "period": [
+        "2026-07-06",
+        "2026-10-04"
+      ],
+      "message": "Пока недостаточно данных",
+      "note": "Not zero visibility; report says low search impressions or few relevant AI answers; predates release"
+    }
+  },
+  "findings": [
+    {
+      "priority": 1,
+      "issue": "/growth, direction detail queries, /docs and agent documentation routes return generic homepage HTML before JS; duplicate metadata",
+      "action": "Provide own static HTML and consistent metadata for /growth and agent docs. Choose stable URLs for direction content; keep wizard query states as navigation."
+    },
+    {
+      "priority": 1,
+      "issue": "Live robots lacks local Yandex Clean-param for __localos_reload; reload URLs remain indexed",
+      "action": "Reconcile deployed robots, canonicalize technical reload parameters while retaining meaningful direction parameters."
+    },
+    {
+      "priority": 1,
+      "issue": "/login and /dashboard have no noindex in sampled raw response",
+      "action": "Add noindex for private/authentication routes without blocking necessary public assets."
+    },
+    {
+      "priority": 2,
+      "issue": "Main title and description still focus on Yandex and 2GIS after broadened visible positioning",
+      "action": "Align title, description, Organization/SoftwareApplication and public docs with verified maps, communications, bloggers, automation capabilities."
+    },
+    {
+      "priority": 2,
+      "issue": "Semantic dataset covers owner pain clusters but not expanded communication/supplier/blogger use cases",
+      "action": "Research new query clusters in Wordstat UI and SERPs, choose demand/intent and realistic competition before adding pages."
+    },
+    {
+      "priority": 2,
+      "issue": "Priority rewritten guides have roughly 1000-1500 visible characters including page headings/links; practical screenshots and detailed examples remain absent",
+      "action": "Expand only with actual task examples, steps and documented results, rather than word-count padding."
+    },
+    {
+      "priority": 2,
+      "issue": "llms.txt links agent docs that currently return generic HTML; does not list newly created solution pages",
+      "action": "Fix linked documentation first, then update machine-readable discovery files; do not treat llms.txt as a ranking requirement."
+    },
+    {
+      "priority": 2,
+      "issue": "Comparable aggregate search/lead baseline and Google Search Console coverage not verified",
+      "action": "Collect dated query/page reports, submit sitemap in verified properties, track conversions and repeat AI measurements on stable question set."
+    }
+  ],
+  "official_sources": [
+    "https://yandex.ru/support/webmaster/ru/alice",
+    "https://developers.google.com/search/docs/appearance/ai-features",
+    "https://developers.openai.com/api/docs/bots"
+  ],
+  "live_results": [
+    {
+      "url": "https://localos.pro/",
+      "status": 200,
+      "final": "https://localos.pro/",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "14272",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "LocalOS — Яндекс Карты, 2ГИС и привлечение без рекламного бюджета",
+      "h1": [
+        "Не держите весь бизнес в голове"
+      ],
+      "description": "LocalOS помогает локальному бизнесу работать с Яндекс Картами, 2ГИС, отзывами, контентом и органическими каналами привлечения без рекламного бюджета, сохраняя подтверждение владельца для важных действий.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/"
+      ],
+      "chars": 1432,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/pricing",
+        "/cases/rost-lidov-v-massazhnoi-studii",
+        "/cases/kak-salon-poluchil-novye-zapisi-iz-kart",
+        "/cases/kak-kafe-usililo-potok-gostei-v-budni",
+        "/pricing",
+        "/cases"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Organization\",\"@id\":\"https://localos.pro/#organization\",\"name\":\"LocalOS\",\"url\":\"https://localos.pro/\",\"logo\":\"https://localos.pro/assets/logo-BY03Vnee.png\",\"description\":\"LocalOS берёт на себя регулярную работу по привлечению клиентов, репутации, услугам и контролю бизнеса.\"},{\"@context\":\"https://schema.org\",\"@type\":\"WebSite\",\"@id\":\"https://localos.pro/#website\",\"name\":\"LocalOS.pro\",\"url\":\"https://localos.pro/\",\"publisher\":{\"@id\":\"https://localos.pro/#organization\"},\"inLanguage\":\"ru-RU\"},{\"@context\":\"https://schema.org\",\"@type\":\"SoftwareApplication\",\"@id\":\"https://localos.pro/#software\",\"name\":\"LocalOS\",\"applicationCategory\":\"BusinessApplication\",\"operatingSystem\":\"Web\",\"url\":\"https://localos.pro/\",\"description\":\"LocalOS проверяет карты и отзывы, готовит публикации, анализирует услуги и показатели и выполняет регулярные задачи. Владелец подключается только там, где нужно решение.\",\"publisher\":{\"@id\":\"https://localos.pro/#organization\"},\"offers\":{\"@type\":\"Offer\",\"availability\":\"https://schema.org/InStock\",\"url\":\"https://localos.pro/\"}}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/about",
+      "status": 200,
+      "final": "https://localos.pro/about",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "14540",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "О команде LocalOS — 15 лет автоматизации бизнеса",
+      "h1": [
+        "Мы начинали бизнес, чтобы стать свободнее"
+      ],
+      "description": "История команды LocalOS: 15 лет в бизнесе и автоматизации транспорта, ритейла, производства, логистики и услуг.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/about"
+      ],
+      "chars": 2018,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/pricing",
+        "/contact"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/pricing",
+      "status": 200,
+      "final": "https://localos.pro/pricing",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "13337",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Тарифы LocalOS для локального бизнеса",
+      "h1": [
+        "Тарифы LocalOS"
+      ],
+      "description": "Тарифы LocalOS: Карты — 1 200 ₽, Привлечение — 5 000 ₽, Управление — 25 000 ₽ в месяц. Публикации и отправки выполняются после подтверждения.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/pricing"
+      ],
+      "chars": 1382,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/contact"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/contact",
+      "status": 200,
+      "final": "https://localos.pro/contact",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "13709",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "LocalOS — меньше рутины для владельца локального бизнеса",
+      "h1": [
+        "\n            LocalOS снимает регулярную работу с владельца бизнеса\n          "
+      ],
+      "description": "LocalOS проверяет карты и отзывы, готовит публикации, анализирует услуги и показатели и выполняет регулярные задачи. Владелец подключается только там, где нужно решение.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/contact"
+      ],
+      "chars": 1137,
+      "links": [
+        "/",
+        "/about",
+        "/cases",
+        "/docs",
+        "/contact",
+        "/demo",
+        "/contact",
+        "/cases"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/articles",
+      "status": 200,
+      "final": "https://localos.pro/articles",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "19913",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Статьи для владельцев локального бизнеса — LocalOS",
+      "h1": [
+        "Статьи о бизнесе, клиентах и росте"
+      ],
+      "description": "Статьи LocalOS о картах, отзывах, клиентах, финансах и автоматизации регулярной работы локального бизнеса.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/articles"
+      ],
+      "chars": 3445,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/articles/kak-uvelichit-sredniy-chek",
+        "/articles/malyy-biznes-v-drevnem-novgorode",
+        "/articles/kak-vesti-kartochku-biznesa-v-yandeks-kartah-i-2gis",
+        "/articles/kult-mogu-pochemu-predprinimateli-ne-umeyut-otdyhat",
+        "/articles/pochemu-klienty-vybirayut-konkurentov-na-yandeks-kartah",
+        "/articles/pochemu-klient-vozvrashchaetsya-v-svoe-mesto",
+        "/articles/istoriya-ucheta-ot-glinyanyh-tablichek-do-ii",
+        "/articles/pochemu-sovety-ot-vygoraniya-ne-pomogayut-predprinimatelyu",
+        "/articles/compiled-ai-pochemu-ii-dolzhen-dumat-odin-raz",
+        "/articles/pochemu-predprinimateli-vygorayut",
+        "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus",
+        "/articles/onlain-karty-stali-kanalom-prodazh",
+        "/articles/pochemu-konkurent-vyshe-na-kartah",
+        "/articles/kak-oformit-kartochku-kompanii",
+        "/articles/kak-otzyvy-vliyayut-na-potok-klientov",
+        "/articles/kak-kafe-poluchat-gostei-iz-kart"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Статьи\",\"item\":\"https://localos.pro/articles\"}]}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/articles/malyy-biznes-v-drevnem-novgorode",
+      "status": 200,
+      "final": "https://localos.pro/articles/malyy-biznes-v-drevnem-novgorode",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "17670",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Малый бизнес в Древнем Новгороде: один день предпринимателя",
+      "h1": [
+        "Как работал малый бизнес в Древнем Новгороде"
+      ],
+      "description": "Как выглядело предпринимательство в Новгороде XIV века: сделки, перевозки, долги, споры и уроки, которые узнает современный владелец бизнеса.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/articles/malyy-biznes-v-drevnem-novgorode"
+      ],
+      "chars": 3282,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/articles/istoriya-ucheta-ot-glinyanyh-tablichek-do-ii",
+        "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Как работал малый бизнес в Древнем Новгороде\",\"description\":\"Долги, сорванные договорённости, суды и постоянные расходы существовали задолго до CRM. Разбираем один день новгородского предпринимателя XIV века.\",\"datePublished\":\"2026-08-13\",\"dateModified\":\"2026-08-13\",\"mainEntityOfPage\":\"https://localos.pro/articles/malyy-biznes-v-drevnem-novgorode\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Статьи\",\"item\":\"https://localos.pro/articles\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Как работал малый бизнес в Древнем Новгороде\",\"item\":\"https://localos.pro/articles/malyy-biznes-v-drevnem-novgorode\"}]},{\"@context\":\"https://schema.org\",\"@type\":\"VideoObject\",\"name\":\"Один день предпринимателя в Древнем Новгороде\",\"description\":\"Долги, сорванные договорённости, суды и постоянные расходы существовали задолго до CRM. Разбираем один день новгородского предпринимателя XIV века.\",\"embedUrl\":\"https://www.youtube-nocookie.com/embed/O10xMNs-HDw\",\"contentUrl\":\"https://www.youtube.com/watch?v=O10xMNs-HDw\",\"thumbnailUrl\":\"https://i.ytimg.com/vi/O10xMNs-HDw/hqdefault.jpg\"}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/articles/kak-vesti-kartochku-biznesa-v-yandeks-kartah-i-2gis",
+      "status": 200,
+      "final": "https://localos.pro/articles/kak-vesti-kartochku-biznesa-v-yandeks-kartah-i-2gis",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "13878",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Как вести Яндекс Карты и 2ГИС: простой порядок работы",
+      "h1": [
+        "Как вести карточку бизнеса в Яндекс Картах и 2ГИС"
+      ],
+      "description": "Как регулярно обновлять карточку бизнеса: услуги, новости, отзывы и контроль результата. Практический процесс для Яндекс Карт и 2ГИС.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/articles/kak-vesti-kartochku-biznesa-v-yandeks-kartah-i-2gis"
+      ],
+      "chars": 1378,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/solutions/yandex-maps",
+        "/documents/checklist-audita-kartochki-kompanii"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Как вести карточку бизнеса в Яндекс Картах и 2ГИС\",\"description\":\"Практический порядок работы с услугами, новостями и отзывами, чтобы карточка помогала клиенту выбрать вас, а не превращалась в ещё один бесконечный канал контента.\",\"datePublished\":\"2026-08-13\",\"dateModified\":\"2026-10-05\",\"mainEntityOfPage\":\"https://localos.pro/articles/kak-vesti-kartochku-biznesa-v-yandeks-kartah-i-2gis\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Статьи\",\"item\":\"https://localos.pro/articles\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Как вести карточку бизнеса в Яндекс Картах и 2ГИС\",\"item\":\"https://localos.pro/articles/kak-vesti-kartochku-biznesa-v-yandeks-kartah-i-2gis\"}]},{\"@context\":\"https://schema.org\",\"@type\":\"VideoObject\",\"name\":\"Как вести Яндекс Карты, 2ГИС: услуги, новости и карточка в LocalOS\",\"description\":\"Практический порядок работы с услугами, новостями и отзывами, чтобы карточка помогала клиенту выбрать вас, а не превращалась в ещё один бесконечный канал контента.\",\"embedUrl\":\"https://www.youtube-nocookie.com/embed/yE5yvdT_IhY\",\"contentUrl\":\"https://www.youtube.com/watch?v=yE5yvdT_IhY\",\"thumbnailUrl\":\"https://i.ytimg.com/vi/yE5yvdT_IhY/hqdefault.jpg\"}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/articles/kult-mogu-pochemu-predprinimateli-ne-umeyut-otdyhat",
+      "status": 200,
+      "final": "https://localos.pro/articles/kult-mogu-pochemu-predprinimateli-ne-umeyut-otdyhat",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "17339",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Культ «могу»: почему предприниматели не умеют отдыхать",
+      "h1": [
+        "Культ «могу»: почему предпринимателю трудно отдыхать"
+      ],
+      "description": "Почему свобода предпринимателя превращается в самоэксплуатацию, отдых вызывает вину, а продуктивность не заканчивается. Разбор идей Бён-Чхоля Хана.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/articles/kult-mogu-pochemu-predprinimateli-ne-umeyut-otdyhat"
+      ],
+      "chars": 2946,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/solutions/business-automation",
+        "/documents/checklist-audita-kartochki-kompanii"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Культ «могу»: почему предпринимателю трудно отдыхать\",\"description\":\"Нас редко заставляют работать силой — мы сами превращаем свободу в бесконечный список задач. Почему даже отдых стал проектом и как вернуть себе право остановиться.\",\"datePublished\":\"2026-08-13\",\"dateModified\":\"2026-10-05\",\"mainEntityOfPage\":\"https://localos.pro/articles/kult-mogu-pochemu-predprinimateli-ne-umeyut-otdyhat\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Статьи\",\"item\":\"https://localos.pro/articles\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Культ «могу»: почему предпринимателю трудно отдыхать\",\"item\":\"https://localos.pro/articles/kult-mogu-pochemu-predprinimateli-ne-umeyut-otdyhat\"}]},{\"@context\":\"https://schema.org\",\"@type\":\"VideoObject\",\"name\":\"Культ «Могу»: как мы разучились отдыхать\",\"description\":\"Нас редко заставляют работать силой — мы сами превращаем свободу в бесконечный список задач. Почему даже отдых стал проектом и как вернуть себе право остановиться.\",\"embedUrl\":\"https://www.youtube-nocookie.com/embed/HZdbh_NXbP4\",\"contentUrl\":\"https://www.youtube.com/watch?v=HZdbh_NXbP4\",\"thumbnailUrl\":\"https://i.ytimg.com/vi/HZdbh_NXbP4/hqdefault.jpg\"}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/articles/pochemu-klienty-vybirayut-konkurentov-na-yandeks-kartah",
+      "status": 200,
+      "final": "https://localos.pro/articles/pochemu-klienty-vybirayut-konkurentov-na-yandeks-kartah",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "13134",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Почему клиенты выбирают конкурентов на Яндекс Картах",
+      "h1": [
+        "Почему клиенты выбирают конкурентов на Яндекс Картах"
+      ],
+      "description": "Как клиенты сравнивают компании на Яндекс Картах и почему уходят к конкурентам: понятность, отзывы, фото, услуги, активность и доверие.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/articles/pochemu-klienty-vybirayut-konkurentov-na-yandeks-kartah"
+      ],
+      "chars": 1057,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/solutions/yandex-maps",
+        "/documents/checklist-audita-kartochki-kompanii"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Почему клиенты выбирают конкурентов на Яндекс Картах\",\"description\":\"Клиент сравнивает карточки за несколько минут. Разбираем сигналы, из-за которых хороший бизнес проигрывает ещё до звонка или построения маршрута.\",\"datePublished\":\"2026-08-13\",\"dateModified\":\"2026-10-05\",\"mainEntityOfPage\":\"https://localos.pro/articles/pochemu-klienty-vybirayut-konkurentov-na-yandeks-kartah\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Статьи\",\"item\":\"https://localos.pro/articles\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Почему клиенты выбирают конкурентов на Яндекс Картах\",\"item\":\"https://localos.pro/articles/pochemu-klienty-vybirayut-konkurentov-na-yandeks-kartah\"}]},{\"@context\":\"https://schema.org\",\"@type\":\"VideoObject\",\"name\":\"Клиенты выбирают ваших конкурентов на Яндекс Картах\",\"description\":\"Клиент сравнивает карточки за несколько минут. Разбираем сигналы, из-за которых хороший бизнес проигрывает ещё до звонка или построения маршрута.\",\"embedUrl\":\"https://www.youtube-nocookie.com/embed/r77B57K1et4\",\"contentUrl\":\"https://www.youtube.com/watch?v=r77B57K1et4\",\"thumbnailUrl\":\"https://i.ytimg.com/vi/r77B57K1et4/hqdefault.jpg\"}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/articles/pochemu-klient-vozvrashchaetsya-v-svoe-mesto",
+      "status": 200,
+      "final": "https://localos.pro/articles/pochemu-klient-vozvrashchaetsya-v-svoe-mesto",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "16965",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Почему клиент возвращается в своё место: сигналы сервиса",
+      "h1": [
+        "Почему клиент возвращается в «своё место»"
+      ],
+      "description": "Как атмосфера, речь, темп и уверенность бизнеса формируют лояльность. Идеи Пьера Бурдьё на примере салонов, кафе, студий и клиник.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/articles/pochemu-klient-vozvrashchaetsya-v-svoe-mesto"
+      ],
+      "chars": 2899,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/articles/kak-otzyvy-vliyayut-na-potok-klientov",
+        "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Почему клиент возвращается в «своё место»\",\"description\":\"Одной технически хорошей услуги мало. Клиент считывает пространство, темп, речь и отношение к цене — и решает, может ли здесь быть собой.\",\"datePublished\":\"2026-08-13\",\"dateModified\":\"2026-08-13\",\"mainEntityOfPage\":\"https://localos.pro/articles/pochemu-klient-vozvrashchaetsya-v-svoe-mesto\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Статьи\",\"item\":\"https://localos.pro/articles\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Почему клиент возвращается в «своё место»\",\"item\":\"https://localos.pro/articles/pochemu-klient-vozvrashchaetsya-v-svoe-mesto\"}]},{\"@context\":\"https://schema.org\",\"@type\":\"VideoObject\",\"name\":\"Почему к одним мастерам едут через весь город — а к другим не возвращаются?\",\"description\":\"Одной технически хорошей услуги мало. Клиент считывает пространство, темп, речь и отношение к цене — и решает, может ли здесь быть собой.\",\"embedUrl\":\"https://www.youtube-nocookie.com/embed/-yr91HhX0GU\",\"contentUrl\":\"https://www.youtube.com/watch?v=-yr91HhX0GU\",\"thumbnailUrl\":\"https://i.ytimg.com/vi/-yr91HhX0GU/hqdefault.jpg\"}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/articles/istoriya-ucheta-ot-glinyanyh-tablichek-do-ii",
+      "status": 200,
+      "final": "https://localos.pro/articles/istoriya-ucheta-ot-glinyanyh-tablichek-do-ii",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "17586",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "История учёта: от глиняных табличек и KPI до ИИ",
+      "h1": [
+        "История учёта: от глиняных табличек до ИИ"
+      ],
+      "description": "Как развивался учёт от первых хозяйственных записей до KPI, OKR и ИИ-аналитики. Почему цифры становятся внешней памятью бизнеса.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/articles/istoriya-ucheta-ot-glinyanyh-tablichek-do-ii"
+      ],
+      "chars": 3140,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus",
+        "/articles/malyy-biznes-v-drevnem-novgorode"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"История учёта: от глиняных табличек до ИИ\",\"description\":\"Когда хозяйство перестаёт помещаться в памяти одного человека, появляется учёт. Зачем бизнесу внешняя память и почему цифры — это способ удерживать реальность.\",\"datePublished\":\"2026-08-13\",\"dateModified\":\"2026-08-13\",\"mainEntityOfPage\":\"https://localos.pro/articles/istoriya-ucheta-ot-glinyanyh-tablichek-do-ii\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Статьи\",\"item\":\"https://localos.pro/articles\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"История учёта: от глиняных табличек до ИИ\",\"item\":\"https://localos.pro/articles/istoriya-ucheta-ot-glinyanyh-tablichek-do-ii\"}]},{\"@context\":\"https://schema.org\",\"@type\":\"VideoObject\",\"name\":\"KPI начались с глиняных табличек: история учёта от шумеров до ИИ\",\"description\":\"Когда хозяйство перестаёт помещаться в памяти одного человека, появляется учёт. Зачем бизнесу внешняя память и почему цифры — это способ удерживать реальность.\",\"embedUrl\":\"https://www.youtube-nocookie.com/embed/1LyGJRVcmoY\",\"contentUrl\":\"https://www.youtube.com/watch?v=1LyGJRVcmoY\",\"thumbnailUrl\":\"https://i.ytimg.com/vi/1LyGJRVcmoY/hqdefault.jpg\"}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/articles/pochemu-sovety-ot-vygoraniya-ne-pomogayut-predprinimatelyu",
+      "status": 200,
+      "final": "https://localos.pro/articles/pochemu-sovety-ot-vygoraniya-ne-pomogayut-predprinimatelyu",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "18913",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Почему советы от выгорания не помогают предпринимателю",
+      "h1": [
+        "Почему советы от выгорания перестают помогать предпринимателю"
+      ],
+      "description": "Почему предпринимательское выгорание не всегда лечится отдыхом и тайм-менеджментом: одиночество владельца, потеря смысла и перегрузка ответственностью.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/articles/pochemu-sovety-ot-vygoraniya-ne-pomogayut-predprinimatelyu"
+      ],
+      "chars": 3635,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/solutions/business-automation",
+        "/documents/checklist-audita-kartochki-kompanii"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Почему советы от выгорания перестают помогать предпринимателю\",\"description\":\"Сон, спорт и делегирование важны, но не отвечают на вопрос, ради чего продолжать. Разбираем одиночество владельца и кризис смысла без очередного списка полезных привычек.\",\"datePublished\":\"2026-08-13\",\"dateModified\":\"2026-10-05\",\"mainEntityOfPage\":\"https://localos.pro/articles/pochemu-sovety-ot-vygoraniya-ne-pomogayut-predprinimatelyu\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Статьи\",\"item\":\"https://localos.pro/articles\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Почему советы от выгорания перестают помогать предпринимателю\",\"item\":\"https://localos.pro/articles/pochemu-sovety-ot-vygoraniya-ne-pomogayut-predprinimatelyu\"}]},{\"@context\":\"https://schema.org\",\"@type\":\"VideoObject\",\"name\":\"Почему предприниматели выгорают, а советы не помогают\",\"description\":\"Сон, спорт и делегирование важны, но не отвечают на вопрос, ради чего продолжать. Разбираем одиночество владельца и кризис смысла без очередного списка полезных привычек.\",\"embedUrl\":\"https://www.youtube-nocookie.com/embed/s0mECDv_65o\",\"contentUrl\":\"https://www.youtube.com/watch?v=s0mECDv_65o\",\"thumbnailUrl\":\"https://i.ytimg.com/vi/s0mECDv_65o/hqdefault.jpg\"}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/articles/compiled-ai-pochemu-ii-dolzhen-dumat-odin-raz",
+      "status": 200,
+      "final": "https://localos.pro/articles/compiled-ai-pochemu-ii-dolzhen-dumat-odin-raz",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "31755",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Compiled AI: ИИ думает один раз, скрипт работает тысячи раз — LocalOS",
+      "h1": [
+        "Compiled AI: почему ИИ должен думать один раз, а работать тысячи раз"
+      ],
+      "description": "Что такое Compiled AI: как ИИ создаёт проверяемый сценарий, программа выполняет его без повторных вызовов модели, а владелец сохраняет контроль.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/articles/compiled-ai-pochemu-ii-dolzhen-dumat-odin-raz"
+      ],
+      "chars": 9335,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "https://arxiv.org/abs/2604.05150v2",
+        "https://arxiv.org/html/2604.05150v2",
+        "https://arxiv.org/abs/2604.05150v2",
+        "/articles/pochemu-predprinimateli-vygorayut",
+        "/about",
+        "/documents/tablica-kontrolya-lokalnogo-marketinga"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Compiled AI: почему ИИ должен думать один раз, а работать тысячи раз\",\"description\":\"ИИ проектирует и проверяет рабочий сценарий один раз. Затем задачу выполняет программа — быстро, предсказуемо и без нового обращения к модели на каждом шаге.\",\"datePublished\":\"2026-08-12\",\"dateModified\":\"2026-08-13\",\"mainEntityOfPage\":\"https://localos.pro/articles/compiled-ai-pochemu-ii-dolzhen-dumat-odin-raz\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Статьи\",\"item\":\"https://localos.pro/articles\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Compiled AI: почему ИИ должен думать один раз, а работать тысячи раз\",\"item\":\"https://localos.pro/articles/compiled-ai-pochemu-ii-dolzhen-dumat-odin-raz\"}]}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/articles/pochemu-predprinimateli-vygorayut",
+      "status": 200,
+      "final": "https://localos.pro/articles/pochemu-predprinimateli-vygorayut",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "22558",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Почему предприниматели выгорают — LocalOS",
+      "h1": [
+        "Почему предприниматели выгорают"
+      ],
+      "description": "Почему владельцы малого бизнеса выгорают: хроническая перегрузка, ручное управление, хаос, кассовые разрывы, рост без системы и отсутствие контроля.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/articles/pochemu-predprinimateli-vygorayut"
+      ],
+      "chars": 5389,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus",
+        "/solutions/business-automation",
+        "/documents/checklist-audita-kartochki-kompanii"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Почему предприниматели выгорают\",\"description\":\"Выгорание владельца часто начинается не там, где много работы, а там, где слишком много хаоса и нет управляемой системы.\",\"datePublished\":\"2026-05-18\",\"dateModified\":\"2026-10-05\",\"mainEntityOfPage\":\"https://localos.pro/articles/pochemu-predprinimateli-vygorayut\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Статьи\",\"item\":\"https://localos.pro/articles\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Почему предприниматели выгорают\",\"item\":\"https://localos.pro/articles/pochemu-predprinimateli-vygorayut\"}]}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus",
+      "status": 200,
+      "final": "https://localos.pro/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "13417",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Почему полная запись не равно прибыль — LocalOS",
+      "h1": [
+        "Почему полная запись не равно прибыль"
+      ],
+      "description": "Почему полная запись в салоне красоты не означает прибыль: экономика услуг, скидки, повторные визиты, выручка за час кресла и управленческие KPI.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus"
+      ],
+      "chars": 1540,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/articles/kak-uvelichit-sredniy-chek",
+        "/documents/checklist-audita-kartochki-kompanii"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Почему полная запись не равно прибыль\",\"description\":\"Полная запись не гарантирует прибыль. Разбираем, почему занятые мастера, скидки и поток клиентов могут скрывать слабую экономику салона.\",\"datePublished\":\"2026-05-18\",\"dateModified\":\"2026-10-05\",\"mainEntityOfPage\":\"https://localos.pro/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Статьи\",\"item\":\"https://localos.pro/articles\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Почему полная запись не равно прибыль\",\"item\":\"https://localos.pro/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus\"}]}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/articles/onlain-karty-stali-kanalom-prodazh",
+      "status": 200,
+      "final": "https://localos.pro/articles/onlain-karty-stali-kanalom-prodazh",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "25233",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Онлайн-карты стали каналом продаж — почему бизнесу мало просто быть на карте | LocalOS",
+      "h1": [
+        "Онлайн-карты стали каналом продаж: почему уже недостаточно просто быть на карте"
+      ],
+      "description": "Разбираем, почему Яндекс Карты, 2ГИС, Google и Apple уже работают как канал продаж для локального бизнеса и что именно влияет на заявки, звонки и визиты.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/articles/onlain-karty-stali-kanalom-prodazh"
+      ],
+      "chars": 6515,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/articles/kak-otzyvy-vliyayut-na-potok-klientov",
+        "/articles/kak-oformit-kartochku-kompanii",
+        "/articles/pochemu-predprinimateli-vygorayut",
+        "/documents/checklist-audita-kartochki-kompanii",
+        "/articles/pochemu-konkurent-vyshe-na-kartah",
+        "/cases/kak-salon-poluchil-novye-zapisi-iz-kart"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Онлайн-карты стали каналом продаж: почему уже недостаточно просто быть на карте\",\"description\":\"Почему карточка бизнеса в картах уже работает как нижняя часть воронки: влияет на звонки, маршруты, записи и выбор клиента прямо внутри платформы.\",\"datePublished\":\"2026-04-23\",\"dateModified\":\"2026-04-23\",\"mainEntityOfPage\":\"https://localos.pro/articles/onlain-karty-stali-kanalom-prodazh\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Статьи\",\"item\":\"https://localos.pro/articles\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Онлайн-карты стали каналом продаж: почему уже недостаточно просто быть на карте\",\"item\":\"https://localos.pro/articles/onlain-karty-stali-kanalom-prodazh\"}]}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/articles/pochemu-konkurent-vyshe-na-kartah",
+      "status": 200,
+      "final": "https://localos.pro/articles/pochemu-konkurent-vyshe-na-kartah",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "12547",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Почему конкурент выше на картах даже при таком же рейтинге — LocalOS",
+      "h1": [
+        "Почему конкурент выше вас на картах?"
+      ],
+      "description": "Почему рейтинг 5.0 не гарантирует высокие позиции в Яндекс Картах и Google Maps: свежие отзывы, ответы, фото, активность карточки и поведенческие сигналы.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/articles/pochemu-konkurent-vyshe-na-kartah"
+      ],
+      "chars": 1177,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/solutions/yandex-maps",
+        "/documents/checklist-audita-kartochki-kompanii"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Почему конкурент выше вас на картах?\",\"description\":\"Почему соседний бизнес может быть выше в Яндекс Картах и Google Maps, даже если ваш рейтинг такой же или выше.\",\"datePublished\":\"2026-04-20\",\"dateModified\":\"2026-10-05\",\"mainEntityOfPage\":\"https://localos.pro/articles/pochemu-konkurent-vyshe-na-kartah\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Статьи\",\"item\":\"https://localos.pro/articles\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Почему конкурент выше вас на картах?\",\"item\":\"https://localos.pro/articles/pochemu-konkurent-vyshe-na-kartah\"}]}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/articles/kak-oformit-kartochku-kompanii",
+      "status": 200,
+      "final": "https://localos.pro/articles/kak-oformit-kartochku-kompanii",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "12979",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Как оформить карточку компании — LocalOS",
+      "h1": [
+        "Как оформить карточку компании, чтобы она продавала"
+      ],
+      "description": "Как оформить карточку компании в Яндекс Картах, Google Maps и 2ГИС: категории, услуги, цены, фотографии, отзывы, активность и быстрые действия.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/articles/kak-oformit-kartochku-kompanii"
+      ],
+      "chars": 1328,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/solutions/yandex-maps",
+        "/documents/checklist-audita-kartochki-kompanii"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Как оформить карточку компании, чтобы она продавала\",\"description\":\"Почему карточка компании в картах стала мини-сайтом внутри платформы и что нужно показать, чтобы клиент быстрее выбрал именно вас.\",\"datePublished\":\"2026-04-18\",\"dateModified\":\"2026-10-05\",\"mainEntityOfPage\":\"https://localos.pro/articles/kak-oformit-kartochku-kompanii\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Статьи\",\"item\":\"https://localos.pro/articles\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Как оформить карточку компании, чтобы она продавала\",\"item\":\"https://localos.pro/articles/kak-oformit-kartochku-kompanii\"}]}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/articles/kak-otzyvy-vliyayut-na-potok-klientov",
+      "status": 200,
+      "final": "https://localos.pro/articles/kak-otzyvy-vliyayut-na-potok-klientov",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "12346",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Как отзывы влияют на поток клиентов — LocalOS",
+      "h1": [
+        "Как отзывы влияют на поток клиентов"
+      ],
+      "description": "Как отзывы влияют на поток клиентов локального бизнеса: доверие, свежесть, ответы на негатив, позиции в картах, конверсия и повторные визиты.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/articles/kak-otzyvy-vliyayut-na-potok-klientov"
+      ],
+      "chars": 1085,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/solutions/ai-review-replies",
+        "/documents/shablony-otvetov-na-otzyvy"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Как отзывы влияют на поток клиентов\",\"description\":\"Почему отзывы стали новой формой доверия и напрямую влияют на заявки, позиции в картах, конверсию и повторные визиты.\",\"datePublished\":\"2026-04-15\",\"dateModified\":\"2026-10-05\",\"mainEntityOfPage\":\"https://localos.pro/articles/kak-otzyvy-vliyayut-na-potok-klientov\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Статьи\",\"item\":\"https://localos.pro/articles\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Как отзывы влияют на поток клиентов\",\"item\":\"https://localos.pro/articles/kak-otzyvy-vliyayut-na-potok-klientov\"}]}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/articles/kak-kafe-poluchat-gostei-iz-kart",
+      "status": 200,
+      "final": "https://localos.pro/articles/kak-kafe-poluchat-gostei-iz-kart",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "25708",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Как кафе получать больше гостей из карт — LocalOS",
+      "h1": [
+        "Как кафе получать больше гостей из карт"
+      ],
+      "description": "Как кафе получать больше гостей из карт: карточка кафе как первое впечатление, витрина, источник доверия и главный вход в локальный бизнес.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/articles/kak-kafe-poluchat-gostei-iz-kart"
+      ],
+      "chars": 5841,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/articles/kak-oformit-kartochku-kompanii",
+        "/articles/kak-otzyvy-vliyayut-na-potok-klientov",
+        "/articles/onlain-karty-stali-kanalom-prodazh",
+        "/documents/tablica-kontrolya-lokalnogo-marketinga",
+        "/articles/kak-oformit-kartochku-kompanii"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Как кафе получать больше гостей из карт\",\"description\":\"Что важно показать в карточке кафе: меню, фото блюд, быстрые сценарии выбора и свежие отзывы гостей.\",\"datePublished\":\"2026-04-13\",\"dateModified\":\"2026-05-19\",\"mainEntityOfPage\":\"https://localos.pro/articles/kak-kafe-poluchat-gostei-iz-kart\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Статьи\",\"item\":\"https://localos.pro/articles\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Как кафе получать больше гостей из карт\",\"item\":\"https://localos.pro/articles/kak-kafe-poluchat-gostei-iz-kart\"}]}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/documents",
+      "status": 200,
+      "final": "https://localos.pro/documents",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "11829",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Документы для локального маркетинга — LocalOS",
+      "h1": [
+        "Документы для управления ростом локального бизнеса"
+      ],
+      "description": "Прикладные документы LocalOS: чек-листы, шаблоны, таблицы и инструкции для управления локальным маркетингом.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/documents"
+      ],
+      "chars": 675,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/documents/checklist-audita-kartochki-kompanii",
+        "/documents/shablony-otvetov-na-otzyvy",
+        "/documents/tablica-kontrolya-lokalnogo-marketinga"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/documents/checklist-audita-kartochki-kompanii",
+      "status": 200,
+      "final": "https://localos.pro/documents/checklist-audita-kartochki-kompanii",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "11292",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Чек-лист аудита карточки компании — LocalOS",
+      "h1": [
+        "Чек-лист аудита карточки компании"
+      ],
+      "description": "Прикладной чек-лист для проверки карточки локального бизнеса: категории, услуги, фото, отзывы, цены и действия клиента.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/documents/checklist-audita-kartochki-kompanii"
+      ],
+      "chars": 683,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/articles/pochemu-konkurent-vyshe-na-kartah",
+        "/#hero-form"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Чек-лист аудита карточки компании\",\"description\":\"Короткий список проверок, который помогает понять, почему карточка недополучает показы, звонки и записи.\",\"datePublished\":\"2026-04-19\",\"dateModified\":\"2026-04-19\",\"mainEntityOfPage\":\"https://localos.pro/documents/checklist-audita-kartochki-kompanii\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Документы\",\"item\":\"https://localos.pro/documents\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Чек-лист аудита карточки компании\",\"item\":\"https://localos.pro/documents/checklist-audita-kartochki-kompanii\"}]}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/documents/shablony-otvetov-na-otzyvy",
+      "status": 200,
+      "final": "https://localos.pro/documents/shablony-otvetov-na-otzyvy",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "13123",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Шаблоны ответов на отзывы — LocalOS",
+      "h1": [
+        "Шаблоны ответов на отзывы"
+      ],
+      "description": "Готовые структуры ответов на отзывы для локального бизнеса: благодарность, уточнение, повторная запись и работа с возражениями.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/documents/shablony-otvetov-na-otzyvy"
+      ],
+      "chars": 1382,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/articles/kak-otzyvy-vliyayut-na-potok-klientov",
+        "/#hero-form"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Шаблоны ответов на отзывы\",\"description\":\"Набор базовых сценариев для ответа на позитивные, нейтральные и сложные отзывы без канцелярита.\",\"datePublished\":\"2026-04-17\",\"dateModified\":\"2026-10-05\",\"mainEntityOfPage\":\"https://localos.pro/documents/shablony-otvetov-na-otzyvy\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Документы\",\"item\":\"https://localos.pro/documents\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Шаблоны ответов на отзывы\",\"item\":\"https://localos.pro/documents/shablony-otvetov-na-otzyvy\"}]}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/documents/tablica-kontrolya-lokalnogo-marketinga",
+      "status": 200,
+      "final": "https://localos.pro/documents/tablica-kontrolya-lokalnogo-marketinga",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "11319",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Таблица контроля локального маркетинга — LocalOS",
+      "h1": [
+        "Таблица контроля локального маркетинга"
+      ],
+      "description": "Шаблон таблицы для регулярного контроля локального маркетинга: карты, отзывы, новости, партнёрства и результаты.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/documents/tablica-kontrolya-lokalnogo-marketinga"
+      ],
+      "chars": 695,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/articles/kak-oformit-kartochku-kompanii",
+        "/#hero-form"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Таблица контроля локального маркетинга\",\"description\":\"Простая структура контроля: карточка, отзывы, новости, партнёрства и повторные касания.\",\"datePublished\":\"2026-04-14\",\"dateModified\":\"2026-04-14\",\"mainEntityOfPage\":\"https://localos.pro/documents/tablica-kontrolya-lokalnogo-marketinga\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Документы\",\"item\":\"https://localos.pro/documents\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Таблица контроля локального маркетинга\",\"item\":\"https://localos.pro/documents/tablica-kontrolya-lokalnogo-marketinga\"}]}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/cases",
+      "status": 200,
+      "final": "https://localos.pro/cases",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "12553",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Кейсы локального бизнеса — LocalOS",
+      "h1": [
+        "Кейсы: как локальный бизнес получает больше заявок"
+      ],
+      "description": "Кейсы LocalOS о росте заявок, отзывов, записей и повторных клиентов для салонов, кафе и локального бизнеса.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/cases"
+      ],
+      "chars": 941,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/cases/rost-lidov-v-massazhnoi-studii",
+        "/cases/kak-salon-poluchil-novye-zapisi-iz-kart",
+        "/cases/kak-kafe-usililo-potok-gostei-v-budni"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/cases/rost-lidov-v-massazhnoi-studii",
+      "status": 200,
+      "final": "https://localos.pro/cases/rost-lidov-v-massazhnoi-studii",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "12742",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Рост лидов в массажной студии — кейс LocalOS",
+      "h1": [
+        "Рост лидов в массажной студии"
+      ],
+      "description": "Кейс локального бизнеса: как массажная студия усилила карточку на картах, отзывы и контент, чтобы получать больше заявок.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/cases/rost-lidov-v-massazhnoi-studii"
+      ],
+      "chars": 985,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/articles/kak-oformit-kartochku-kompanii",
+        "/documents/checklist-audita-kartochki-kompanii"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/cases/kak-salon-poluchil-novye-zapisi-iz-kart",
+      "status": 200,
+      "final": "https://localos.pro/cases/kak-salon-poluchil-novye-zapisi-iz-kart",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "12705",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Как салон получил новые записи из карт — кейс LocalOS",
+      "h1": [
+        "Как салон получил новые записи из карт"
+      ],
+      "description": "Кейс салона красоты: как карточка на картах начала лучше приводить записи после перепаковки услуг, отзывов и фото.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/cases/kak-salon-poluchil-novye-zapisi-iz-kart"
+      ],
+      "chars": 967,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/articles/pochemu-konkurent-vyshe-na-kartah",
+        "/documents/shablony-otvetov-na-otzyvy"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/cases/kak-kafe-usililo-potok-gostei-v-budni",
+      "status": 200,
+      "final": "https://localos.pro/cases/kak-kafe-usililo-potok-gostei-v-budni",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "13322",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Кейс кафе: больше гостей в будни — LocalOS",
+      "h1": [
+        "Как небольшое кафе усилило поток гостей в будни"
+      ],
+      "description": "Кейс LocalOS для кафе: как обновление карточки, меню, фото и отзывов помогло усилить поток гостей в будние дни.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/cases/kak-kafe-usililo-potok-gostei-v-budni"
+      ],
+      "chars": 1225,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/articles/kak-kafe-poluchat-gostei-iz-kart",
+        "/documents/tablica-kontrolya-lokalnogo-marketinga"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/solutions/yandex-maps",
+      "status": 200,
+      "final": "https://localos.pro/solutions/yandex-maps",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "13811",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Продвижение и ведение Яндекс Карт с LocalOS — LocalOS",
+      "h1": [
+        "Продвижение и ведение Яндекс Карт с LocalOS"
+      ],
+      "description": "LocalOS помогает владельцам салонов, студий, кафе и других локальных компаний проверить карточку, привести услуги в порядок и регулярно работать с отзывами и новостями.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/solutions/yandex-maps"
+      ],
+      "chars": 1490,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/articles/kak-vesti-kartochku-biznesa-v-yandeks-kartah-i-2gis",
+        "/documents/checklist-audita-kartochki-kompanii",
+        "/cases/kak-salon-poluchil-novye-zapisi-iz-kart",
+        "/pricing"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/solutions/ai-review-replies",
+      "status": 200,
+      "final": "https://localos.pro/solutions/ai-review-replies",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "14443",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "ИИ-ответы на отзывы: черновики под контролем владельца — LocalOS",
+      "h1": [
+        "ИИ-ответы на отзывы: черновики под контролем владельца"
+      ],
+      "description": "LocalOS помогает подготовить ответ на отзыв с учётом ситуации. Владелец проверяет факты, тон и обещания, затем вручную публикует ответ на карте.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/solutions/ai-review-replies"
+      ],
+      "chars": 1865,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/documents/shablony-otvetov-na-otzyvy",
+        "/articles/kak-otzyvy-vliyayut-na-potok-klientov",
+        "/pricing"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/solutions/business-automation",
+      "status": 200,
+      "final": "https://localos.pro/solutions/business-automation",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "14607",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Автоматизация бизнеса с ИИ: задачи и результат LocalOS — LocalOS",
+      "h1": [
+        "Автоматизация бизнеса с ИИ: задачи и результат LocalOS"
+      ],
+      "description": "LocalOS помогает владельцу локального бизнеса готовить работу с картами, отзывами, контентом, финансами и партнёрами. Важные действия проходят проверку и подтверждение.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/solutions/business-automation"
+      ],
+      "chars": 1821,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/articles/kak-uvelichit-sredniy-chek",
+        "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus",
+        "/documents/tablica-kontrolya-lokalnogo-marketinga",
+        "/pricing"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/articles/kak-uvelichit-sredniy-chek",
+      "status": 200,
+      "final": "https://localos.pro/articles/kak-uvelichit-sredniy-chek",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "14980",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "Как увеличить средний чек в салоне красоты — LocalOS",
+      "h1": [
+        "Как увеличить средний чек: услуги, пакеты и допродажи"
+      ],
+      "description": "Формула среднего чека, учебный расчёт, пакеты услуг и допродажи: как оценить результат без потери прибыли.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/articles/kak-uvelichit-sredniy-chek"
+      ],
+      "chars": 2239,
+      "links": [
+        "/",
+        "/about",
+        "/pricing",
+        "/cases",
+        "/contact",
+        "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus",
+        "/solutions/business-automation",
+        "/pricing"
+      ],
+      "schema": [
+        "[{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"Как увеличить средний чек: услуги, пакеты и допродажи\",\"description\":\"Средний чек растёт, когда клиент выбирает полезный для него состав услуг. Начните с расчёта текущего чека и маржи, затем проверьте пакеты и допродажи без навязывания.\",\"datePublished\":\"2026-10-05\",\"dateModified\":\"2026-10-05\",\"mainEntityOfPage\":\"https://localos.pro/articles/kak-uvelichit-sredniy-chek\",\"author\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"LocalOS\"}},{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"LocalOS\",\"item\":\"https://localos.pro/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Статьи\",\"item\":\"https://localos.pro/articles\"},{\"@type\":\"ListItem\",\"position\":3,\"name\":\"Как увеличить средний чек: услуги, пакеты и допродажи\",\"item\":\"https://localos.pro/articles/kak-uvelichit-sredniy-chek\"}]}]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/robots.txt",
+      "status": 200,
+      "final": "https://localos.pro/robots.txt",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Length": "202",
+        "Connection": "close",
+        "Content-Disposition": "inline; filename=robots.txt",
+        "Last-Modified": "Mon, 05 Oct 2026 15:02:01 GMT",
+        "Cache-Control": "no-cache",
+        "ETag": "\"1791212521.0-202-2748910393\"",
+        "Accept-Ranges": "bytes",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "",
+      "h1": [],
+      "description": null,
+      "robots": null,
+      "canonical": [],
+      "chars": 201,
+      "links": [],
+      "schema": [],
+      "body": "User-agent: Googlebot\nAllow: /\n\nUser-agent: Bingbot\nAllow: /\n\nUser-agent: Twitterbot\nAllow: /\n\nUser-agent: facebookexternalhit\nAllow: /\n\nUser-agent: *\nAllow: /\n\nSitemap: https://localos.pro/sitemap.xml\n"
+    },
+    {
+      "url": "https://localos.pro/llms.txt",
+      "status": 200,
+      "final": "https://localos.pro/llms.txt",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Length": "2968",
+        "Connection": "close",
+        "Content-Disposition": "inline; filename=llms.txt",
+        "Last-Modified": "Mon, 05 Oct 2026 15:02:01 GMT",
+        "Cache-Control": "no-cache",
+        "ETag": "\"1791212521.0-2968-2372602456\"",
+        "Accept-Ranges": "bytes",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "",
+      "h1": [],
+      "description": null,
+      "robots": null,
+      "canonical": [],
+      "chars": 2967,
+      "links": [],
+      "schema": [],
+      "body": "# LocalOS\n\nLocalOS is a platform for local businesses, agencies and operators who want to make local businesses more profitable through customer acquisition, higher average ticket, repeat sales, better occupancy, financial tracking and routine execution.\n\nCore business goal:\n- attract more customers from maps, search, reviews, posts and local partnerships;\n- increase average ticket through better service structure, add-ons and adjacent offers;\n- improve repeat visits through review work, communication and rebooking;\n- track revenue, expenses, occupancy, margins and weak spots;\n- turn diagnostics into a practical path to profit: today, 7 days, then regular work.\n\nCanonical human and agent documentation:\n- https://localos.pro/docs\n- https://localos.pro/docs/capabilities\n- https://localos.pro/docs/approval-policy\n- https://localos.pro/docs/api\n- https://localos.pro/docs/agent-use-cases\n- https://localos.pro/localos-agents.txt\n- https://localos.pro/localos-agent-policy.json\n- https://localos.pro/localos-agent-tools.json\n- https://localos.pro/api/agent-api/openapi.json\n- https://localos.pro/localos-agent-openapi.json\n\nCore capabilities:\n- Map listing audits and improvement plans: available.\n- Service optimization with SEO keys, guardrails and industry patterns: available.\n- Review reply drafting: available. Publishing or messaging requires human approval.\n- News and post drafts: beta. Publishing requires human approval.\n- Finance dashboard, manual input, imports, KPI and recommendations: beta.\n- Telegram summaries and approval control surface: available/internal depending on scenario.\n- Partnership search and supervised outreach: internal.\n- Public stable MCP/API contract for third-party agents: gap.\n\nHuman approval is required for:\n- publishing posts or replies;\n- mass edits;\n- sending messages to clients or partners;\n- payments;\n- destructive actions;\n- actions performed in external systems on behalf of a business.\n\nAgent API security:\n- new integrations should start in sandbox;\n- use scoped access, never broad admin access;\n- direct publish, delete, payment and external-system actions must be blocked;\n- suspicious behavior should trigger rate limits, cooldown, manual review or suspension;\n- every agent action should leave an audit trail.\n- current foundation includes agent_clients, scoped keys, approval request ledger and superadmin ledger view.\n- minimal Agent API OpenAPI contract is available at https://localos.pro/api/agent-api/openapi.json, with a root-level alias at https://localos.pro/localos-agent-openapi.json.\n- sandbox onboarding self-test is available at POST https://localos.pro/api/agent-api/self-test.\n\nAgents should:\n- use LocalOS docs as a capability map;\n- avoid claiming unavailable integrations or guarantees;\n- prepare drafts, summaries, options and risk notes before asking for approval;\n- label planned or gap capabilities clearly;\n- preserve source facts from business listings and user-provided data.\n"
+    },
+    {
+      "url": "https://localos.pro/growth",
+      "status": 200,
+      "final": "https://localos.pro/growth",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "13707",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "LocalOS — меньше рутины для владельца локального бизнеса",
+      "h1": [
+        "\n            LocalOS снимает регулярную работу с владельца бизнеса\n          "
+      ],
+      "description": "LocalOS проверяет карты и отзывы, готовит публикации, анализирует услуги и показатели и выполняет регулярные задачи. Владелец подключается только там, где нужно решение.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/growth"
+      ],
+      "chars": 1137,
+      "links": [
+        "/",
+        "/about",
+        "/cases",
+        "/docs",
+        "/contact",
+        "/demo",
+        "/contact",
+        "/cases"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/growth?direction=maps&step=detail",
+      "status": 200,
+      "final": "https://localos.pro/growth?direction=maps&step=detail",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "13707",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "LocalOS — меньше рутины для владельца локального бизнеса",
+      "h1": [
+        "\n            LocalOS снимает регулярную работу с владельца бизнеса\n          "
+      ],
+      "description": "LocalOS проверяет карты и отзывы, готовит публикации, анализирует услуги и показатели и выполняет регулярные задачи. Владелец подключается только там, где нужно решение.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/growth"
+      ],
+      "chars": 1137,
+      "links": [
+        "/",
+        "/about",
+        "/cases",
+        "/docs",
+        "/contact",
+        "/demo",
+        "/contact",
+        "/cases"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/growth?direction=partnerships&step=detail",
+      "status": 200,
+      "final": "https://localos.pro/growth?direction=partnerships&step=detail",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "13707",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "LocalOS — меньше рутины для владельца локального бизнеса",
+      "h1": [
+        "\n            LocalOS снимает регулярную работу с владельца бизнеса\n          "
+      ],
+      "description": "LocalOS проверяет карты и отзывы, готовит публикации, анализирует услуги и показатели и выполняет регулярные задачи. Владелец подключается только там, где нужно решение.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/growth"
+      ],
+      "chars": 1137,
+      "links": [
+        "/",
+        "/about",
+        "/cases",
+        "/docs",
+        "/contact",
+        "/demo",
+        "/contact",
+        "/cases"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/docs",
+      "status": 200,
+      "final": "https://localos.pro/docs",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "13703",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "LocalOS — меньше рутины для владельца локального бизнеса",
+      "h1": [
+        "\n            LocalOS снимает регулярную работу с владельца бизнеса\n          "
+      ],
+      "description": "LocalOS проверяет карты и отзывы, готовит публикации, анализирует услуги и показатели и выполняет регулярные задачи. Владелец подключается только там, где нужно решение.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/docs"
+      ],
+      "chars": 1137,
+      "links": [
+        "/",
+        "/about",
+        "/cases",
+        "/docs",
+        "/contact",
+        "/demo",
+        "/contact",
+        "/cases"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/docs/agents",
+      "status": 200,
+      "final": "https://localos.pro/docs/agents",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "13717",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "LocalOS — меньше рутины для владельца локального бизнеса",
+      "h1": [
+        "\n            LocalOS снимает регулярную работу с владельца бизнеса\n          "
+      ],
+      "description": "LocalOS проверяет карты и отзывы, готовит публикации, анализирует услуги и показатели и выполняет регулярные задачи. Владелец подключается только там, где нужно решение.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/docs/agents"
+      ],
+      "chars": 1137,
+      "links": [
+        "/",
+        "/about",
+        "/cases",
+        "/docs",
+        "/contact",
+        "/demo",
+        "/contact",
+        "/cases"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/login",
+      "status": 200,
+      "final": "https://localos.pro/login",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "13705",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "LocalOS — меньше рутины для владельца локального бизнеса",
+      "h1": [
+        "\n            LocalOS снимает регулярную работу с владельца бизнеса\n          "
+      ],
+      "description": "LocalOS проверяет карты и отзывы, готовит публикации, анализирует услуги и показатели и выполняет регулярные задачи. Владелец подключается только там, где нужно решение.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/login"
+      ],
+      "chars": 1137,
+      "links": [
+        "/",
+        "/about",
+        "/cases",
+        "/docs",
+        "/contact",
+        "/demo",
+        "/contact",
+        "/cases"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/dashboard",
+      "status": 200,
+      "final": "https://localos.pro/dashboard",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "13713",
+        "Connection": "close",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "LocalOS — меньше рутины для владельца локального бизнеса",
+      "h1": [
+        "\n            LocalOS снимает регулярную работу с владельца бизнеса\n          "
+      ],
+      "description": "LocalOS проверяет карты и отзывы, готовит публикации, анализирует услуги и показатели и выполняет регулярные задачи. Владелец подключается только там, где нужно решение.",
+      "robots": null,
+      "canonical": [
+        "https://localos.pro/dashboard"
+      ],
+      "chars": 1137,
+      "links": [
+        "/",
+        "/about",
+        "/cases",
+        "/docs",
+        "/contact",
+        "/demo",
+        "/contact",
+        "/cases"
+      ],
+      "schema": [
+        "[\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"Organization\",\n      \"@id\": \"https://localos.pro/#organization\",\n      \"name\": \"LocalOS\",\n      \"url\": \"https://localos.pro/\",\n      \"logo\": \"https://localos.pro/assets/logo-BY03Vnee.png\",\n      \"description\": \"LocalOS берёт на себя регулярную работу по картам, отзывам, контенту, услугам, финансам и партнёрствам. Владелец принимает важные решения.\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"WebSite\",\n      \"@id\": \"https://localos.pro/#website\",\n      \"name\": \"LocalOS.pro\",\n      \"url\": \"https://localos.pro/\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"inLanguage\": \"ru-RU\"\n    },\n    {\n      \"@context\": \"https://schema.org\",\n      \"@type\": \"SoftwareApplication\",\n      \"@id\": \"https://localos.pro/#software\",\n      \"name\": \"LocalOS\",\n      \"applicationCategory\": \"BusinessApplication\",\n      \"operatingSystem\": \"Web\",\n      \"url\": \"https://localos.pro/\",\n      \"description\": \"LocalOS выполняет регулярную работу локального бизнеса по понятным правилам и оставляет важные внешние действия под контролем владельца.\",\n      \"publisher\": {\n        \"@id\": \"https://localos.pro/#organization\"\n      },\n      \"offers\": {\n        \"@type\": \"Offer\",\n        \"availability\": \"https://schema.org/InStock\",\n        \"url\": \"https://localos.pro/\"\n      }\n    }\n  ]"
+      ],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/seo-audit-missing",
+      "error": "HTTP Error 404: NOT FOUND"
+    },
+    {
+      "url": "https://localos.pro/localos-agent-openapi.json",
+      "status": 200,
+      "final": "https://localos.pro/localos-agent-openapi.json",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "application/json",
+        "Content-Length": "43627",
+        "Connection": "close",
+        "Content-Disposition": "inline; filename=localos-agent-openapi.json",
+        "Last-Modified": "Mon, 05 Oct 2026 15:02:01 GMT",
+        "Cache-Control": "no-cache",
+        "ETag": "\"1791212521.0-43627-2269778236\"",
+        "Accept-Ranges": "bytes",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "",
+      "h1": [],
+      "description": null,
+      "robots": null,
+      "canonical": [],
+      "chars": 43576,
+      "links": [],
+      "schema": [],
+      "body": null
+    },
+    {
+      "url": "https://localos.pro/api/agent-api/openapi.json",
+      "status": 200,
+      "final": "https://localos.pro/api/agent-api/openapi.json",
+      "headers": {
+        "Server": "nginx/1.24.0 (Ubuntu)",
+        "Date": "Tue, 06 Oct 2026 10:53:36 GMT",
+        "Content-Type": "application/json",
+        "Content-Length": "43627",
+        "Connection": "close",
+        "Content-Disposition": "inline; filename=localos-agent-openapi.json",
+        "Last-Modified": "Mon, 05 Oct 2026 15:02:01 GMT",
+        "Cache-Control": "no-cache",
+        "ETag": "\"1791212521.0-43627-2269778236\"",
+        "Accept-Ranges": "bytes",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()",
+        "Content-Security-Policy-Report-Only": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; form-action 'self' https:",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      },
+      "title": "",
+      "h1": [],
+      "description": null,
+      "robots": null,
+      "canonical": [],
+      "chars": 43576,
+      "links": [],
+      "schema": [],
+      "body": null
+    }
+  ],
+  "linked_agent_docs_and_policy": [
+    {
+      "path": "/docs/capabilities",
+      "status": 200,
+      "title": [
+        "LocalOS — меньше рутины для владельца локального бизнеса"
+      ],
+      "h1": []
+    },
+    {
+      "path": "/docs/approval-policy",
+      "status": 200,
+      "title": [
+        "LocalOS — меньше рутины для владельца локального бизнеса"
+      ],
+      "h1": []
+    },
+    {
+      "path": "/docs/api",
+      "status": 200,
+      "title": [
+        "LocalOS — меньше рутины для владельца локального бизнеса"
+      ],
+      "h1": []
+    },
+    {
+      "path": "/docs/agent-use-cases",
+      "status": 200,
+      "title": [
+        "LocalOS — меньше рутины для владельца локального бизнеса"
+      ],
+      "h1": []
+    },
+    {
+      "path": "/policy",
+      "status": 200,
+      "title": [
+        "LocalOS — меньше рутины для владельца локального бизнеса"
+      ],
+      "h1": []
+    }
+  ]
+}

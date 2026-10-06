@@ -1,0 +1,317 @@
+{
+  "pages": [
+    {
+      "path": "/",
+      "status": 200,
+      "heading": "Не держите весь бизнес в голове",
+      "canonical": "https://localos.pro/"
+    },
+    {
+      "path": "/about",
+      "status": 200,
+      "heading": "Мы начинали бизнес, чтобы стать свободнее",
+      "canonical": "https://localos.pro/about"
+    },
+    {
+      "path": "/pricing",
+      "status": 200,
+      "heading": "Тарифы LocalOS",
+      "canonical": "https://localos.pro/pricing"
+    },
+    {
+      "path": "/cases",
+      "status": 200,
+      "heading": "Кейсы: как локальный бизнес получает больше заявок",
+      "canonical": "https://localos.pro/cases"
+    },
+    {
+      "path": "/cases/rost-lidov-v-massazhnoi-studii",
+      "status": 200,
+      "heading": "Рост лидов в массажной студии",
+      "canonical": "https://localos.pro/cases/rost-lidov-v-massazhnoi-studii"
+    },
+    {
+      "path": "/cases/kak-salon-poluchil-novye-zapisi-iz-kart",
+      "status": 200,
+      "heading": "Как салон получил новые записи из карт",
+      "canonical": "https://localos.pro/cases/kak-salon-poluchil-novye-zapisi-iz-kart"
+    },
+    {
+      "path": "/cases/kak-kafe-usililo-potok-gostei-v-budni",
+      "status": 200,
+      "heading": "Как небольшое кафе усилило поток гостей в будни",
+      "canonical": "https://localos.pro/cases/kak-kafe-usililo-potok-gostei-v-budni"
+    },
+    {
+      "path": "/articles",
+      "status": 200,
+      "heading": "Статьи о бизнесе, клиентах и росте",
+      "canonical": "https://localos.pro/articles"
+    },
+    {
+      "path": "/documents",
+      "status": 200,
+      "heading": "Документы для управления ростом локального бизнеса",
+      "canonical": "https://localos.pro/documents"
+    },
+    {
+      "path": "/articles/kak-uvelichit-sredniy-chek",
+      "status": 200,
+      "heading": "Как увеличить средний чек: услуги, пакеты и допродажи",
+      "canonical": "https://localos.pro/articles/kak-uvelichit-sredniy-chek"
+    },
+    {
+      "path": "/articles/malyy-biznes-v-drevnem-novgorode",
+      "status": 200,
+      "heading": "Как работал малый бизнес в Древнем Новгороде",
+      "canonical": "https://localos.pro/articles/malyy-biznes-v-drevnem-novgorode"
+    },
+    {
+      "path": "/articles/kak-vesti-kartochku-biznesa-v-yandeks-kartah-i-2gis",
+      "status": 200,
+      "heading": "Как вести карточку бизнеса в Яндекс Картах и 2ГИС",
+      "canonical": "https://localos.pro/articles/kak-vesti-kartochku-biznesa-v-yandeks-kartah-i-2gis"
+    },
+    {
+      "path": "/articles/kult-mogu-pochemu-predprinimateli-ne-umeyut-otdyhat",
+      "status": 200,
+      "heading": "Культ «могу»: почему предпринимателю трудно отдыхать",
+      "canonical": "https://localos.pro/articles/kult-mogu-pochemu-predprinimateli-ne-umeyut-otdyhat"
+    },
+    {
+      "path": "/articles/pochemu-klienty-vybirayut-konkurentov-na-yandeks-kartah",
+      "status": 200,
+      "heading": "Почему клиенты выбирают конкурентов на Яндекс Картах",
+      "canonical": "https://localos.pro/articles/pochemu-klienty-vybirayut-konkurentov-na-yandeks-kartah"
+    },
+    {
+      "path": "/articles/pochemu-klient-vozvrashchaetsya-v-svoe-mesto",
+      "status": 200,
+      "heading": "Почему клиент возвращается в «своё место»",
+      "canonical": "https://localos.pro/articles/pochemu-klient-vozvrashchaetsya-v-svoe-mesto"
+    },
+    {
+      "path": "/articles/istoriya-ucheta-ot-glinyanyh-tablichek-do-ii",
+      "status": 200,
+      "heading": "История учёта: от глиняных табличек до ИИ",
+      "canonical": "https://localos.pro/articles/istoriya-ucheta-ot-glinyanyh-tablichek-do-ii"
+    },
+    {
+      "path": "/articles/pochemu-sovety-ot-vygoraniya-ne-pomogayut-predprinimatelyu",
+      "status": 200,
+      "heading": "Почему советы от выгорания перестают помогать предпринимателю",
+      "canonical": "https://localos.pro/articles/pochemu-sovety-ot-vygoraniya-ne-pomogayut-predprinimatelyu"
+    },
+    {
+      "path": "/articles/compiled-ai-pochemu-ii-dolzhen-dumat-odin-raz",
+      "status": 200,
+      "heading": "Compiled AI: почему ИИ должен думать один раз, а работать тысячи раз",
+      "canonical": "https://localos.pro/articles/compiled-ai-pochemu-ii-dolzhen-dumat-odin-raz"
+    },
+    {
+      "path": "/articles/pochemu-predprinimateli-vygorayut",
+      "status": 200,
+      "heading": "Почему предприниматели выгорают",
+      "canonical": "https://localos.pro/articles/pochemu-predprinimateli-vygorayut"
+    },
+    {
+      "path": "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus",
+      "status": 200,
+      "heading": "Почему полная запись не равно прибыль",
+      "canonical": "https://localos.pro/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus"
+    },
+    {
+      "path": "/articles/onlain-karty-stali-kanalom-prodazh",
+      "status": 200,
+      "heading": "Онлайн-карты стали каналом продаж: почему уже недостаточно просто быть на карте",
+      "canonical": "https://localos.pro/articles/onlain-karty-stali-kanalom-prodazh"
+    },
+    {
+      "path": "/articles/pochemu-konkurent-vyshe-na-kartah",
+      "status": 200,
+      "heading": "Почему конкурент выше вас на картах?",
+      "canonical": "https://localos.pro/articles/pochemu-konkurent-vyshe-na-kartah"
+    },
+    {
+      "path": "/articles/kak-oformit-kartochku-kompanii",
+      "status": 200,
+      "heading": "Как оформить карточку компании, чтобы она продавала",
+      "canonical": "https://localos.pro/articles/kak-oformit-kartochku-kompanii"
+    },
+    {
+      "path": "/articles/kak-otzyvy-vliyayut-na-potok-klientov",
+      "status": 200,
+      "heading": "Как отзывы влияют на поток клиентов",
+      "canonical": "https://localos.pro/articles/kak-otzyvy-vliyayut-na-potok-klientov"
+    },
+    {
+      "path": "/articles/kak-kafe-poluchat-gostei-iz-kart",
+      "status": 200,
+      "heading": "Как кафе получать больше гостей из карт",
+      "canonical": "https://localos.pro/articles/kak-kafe-poluchat-gostei-iz-kart"
+    },
+    {
+      "path": "/documents/checklist-audita-kartochki-kompanii",
+      "status": 200,
+      "heading": "Чек-лист аудита карточки компании",
+      "canonical": "https://localos.pro/documents/checklist-audita-kartochki-kompanii"
+    },
+    {
+      "path": "/documents/shablony-otvetov-na-otzyvy",
+      "status": 200,
+      "heading": "Шаблоны ответов на отзывы",
+      "canonical": "https://localos.pro/documents/shablony-otvetov-na-otzyvy"
+    },
+    {
+      "path": "/documents/tablica-kontrolya-lokalnogo-marketinga",
+      "status": 200,
+      "heading": "Таблица контроля локального маркетинга",
+      "canonical": "https://localos.pro/documents/tablica-kontrolya-lokalnogo-marketinga"
+    },
+    {
+      "path": "/solutions/yandex-maps",
+      "status": 200,
+      "heading": "Продвижение и ведение Яндекс Карт с LocalOS",
+      "canonical": "https://localos.pro/solutions/yandex-maps"
+    },
+    {
+      "path": "/solutions/ai-review-replies",
+      "status": 200,
+      "heading": "ИИ-ответы на отзывы: черновики под контролем владельца",
+      "canonical": "https://localos.pro/solutions/ai-review-replies"
+    },
+    {
+      "path": "/solutions/business-automation",
+      "status": 200,
+      "heading": "Автоматизация бизнеса с ИИ: задачи и результат LocalOS",
+      "canonical": "https://localos.pro/solutions/business-automation"
+    },
+    {
+      "path": "/growth",
+      "status": 200,
+      "heading": "Выберите направление",
+      "canonical": "https://localos.pro/growth"
+    },
+    {
+      "path": "/growth?direction=influencers",
+      "status": 200,
+      "heading": "Продвижение через местных авторов",
+      "canonical": "https://localos.pro/growth?direction=influencers"
+    },
+    {
+      "path": "/growth?direction=partnerships",
+      "status": 200,
+      "heading": "Предложение, полезное обеим сторонам",
+      "canonical": "https://localos.pro/growth?direction=partnerships"
+    },
+    {
+      "path": "/growth?direction=maps",
+      "status": 200,
+      "heading": "Что видит клиент в Яндексе и 2ГИС",
+      "canonical": "https://localos.pro/growth?direction=maps"
+    },
+    {
+      "path": "/growth?direction=content",
+      "status": 200,
+      "heading": "Тема с понятной целью и следующим шагом",
+      "canonical": "https://localos.pro/growth?direction=content"
+    },
+    {
+      "path": "/growth?direction=average_ticket",
+      "status": 200,
+      "heading": "Рост среднего чека без давления на клиента",
+      "canonical": "https://localos.pro/growth?direction=average_ticket"
+    },
+    {
+      "path": "/growth?direction=automation",
+      "status": 200,
+      "heading": "Одна регулярная задача под контролем",
+      "canonical": "https://localos.pro/growth?direction=automation"
+    },
+    {
+      "path": "/docs",
+      "status": 200,
+      "heading": "LocalOS для людей и ИИ-агентов",
+      "canonical": "https://localos.pro/docs"
+    },
+    {
+      "path": "/docs/capabilities",
+      "status": 200,
+      "heading": "Возможности",
+      "canonical": "https://localos.pro/docs/capabilities"
+    },
+    {
+      "path": "/docs/approval-policy",
+      "status": 200,
+      "heading": "Подтверждение человеком",
+      "canonical": "https://localos.pro/docs/approval-policy"
+    },
+    {
+      "path": "/docs/security-model",
+      "status": 200,
+      "heading": "Модель безопасности",
+      "canonical": "https://localos.pro/docs/security-model"
+    },
+    {
+      "path": "/docs/api",
+      "status": 200,
+      "heading": "API и интеграции",
+      "canonical": "https://localos.pro/docs/api"
+    },
+    {
+      "path": "/docs/agent-use-cases",
+      "status": 200,
+      "heading": "10 сценариев для ИИ-агентов",
+      "canonical": "https://localos.pro/docs/agent-use-cases"
+    },
+    {
+      "path": "/docs/gaps",
+      "status": 200,
+      "heading": "Что нужно доработать для полноценного Agent API",
+      "canonical": "https://localos.pro/docs/gaps"
+    },
+    {
+      "path": "/login",
+      "status": 200,
+      "robots": "noindex"
+    },
+    {
+      "path": "/dashboard",
+      "status": 200,
+      "robots": "noindex"
+    },
+    {
+      "path": "/dashboard/operator",
+      "status": 200,
+      "robots": "noindex"
+    },
+    {
+      "path": "/start/example",
+      "status": 200,
+      "robots": "noindex"
+    },
+    {
+      "path": "/docs/not-a-section",
+      "status": 404,
+      "robots": "noindex"
+    },
+    {
+      "path": "/articles/not-a-material",
+      "status": 404,
+      "robots": "noindex"
+    }
+  ],
+  "robots": "User-agent: Googlebot\nAllow: /\n\nUser-agent: Yandex\nAllow: /\n# Chunk recovery changes the URL, not the page content.\nClean-param: __localos_reload\n\nUser-agent: Bingbot\nAllow: /\n\nUser-agent: Twitterbot\nAllow: /\n\nUser-agent: facebookexternalhit\nAllow: /\n\nUser-agent: *\nAllow: /\n\nSitemap: https://localos.pro/sitemap.xml\n",
+  "date": "2026-10-06",
+  "implementationCommit": "2c22b888",
+  "backendTests": "22 passed",
+  "fallbackTests": "5 passed",
+  "frontendTypecheck": "Working tree app and node typechecks passed; isolated release full typecheck has unrelated preexisting operatorPageCopy Language/hy mismatch",
+  "build": "Isolated scoped Vite production build passed",
+  "browser": "maps detail → all directions → partnerships detail; docs/api; one H1, matching canonical, no console errors",
+  "backup": "/opt/seo-app/backups/seo-technical-20261006",
+  "privateIndexSha256BeforeAndAfter": "3fc74910924311b1f2e6bae01f40c0b8b0a396bf9bf97eed6bfaca115e85d6f5",
+  "push": "GitHub and GitVerse blocked: missing HTTPS credentials",
+  "reindex": "Updated sitemap deployed; manual Webmaster recrawl submission not yet verified",
+  "knownAdjacentHealth": "Telegram bot reported unhealthy; not touched by this SEO release."
+}
