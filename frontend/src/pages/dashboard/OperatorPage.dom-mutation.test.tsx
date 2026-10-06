@@ -195,6 +195,7 @@ describe('OperatorPage DOM ownership', () => {
     });
 
     expect(screen.getAllByText('Составь первые письма для поиска Индия — Пхукет')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Показать сразу' }));
     expect(screen.getByText('Письма требуют отдельной подготовки.')).toBeInTheDocument();
     expect(screen.queryByText('Отправляем команду…')).not.toBeInTheDocument();
     expect(input).toHaveValue('Следующая задача');

@@ -116,3 +116,14 @@ def test_queued_work_is_identified_as_waiting_not_running():
     result = presentation(task(status="queued"))
     assert result["status"] == "queued"
     assert result["label"] == "Ожидает запуска"
+
+
+def test_achievements_only_show_produced_outputs():
+    from services.partnership_group_view import achievements
+    t = task(state={'substeps': [{'id': 'enrichment', 'processed': 12}]},
+             report={'found': 41, 'eligible': 2, 'prepared': 1, 'queued': 3, 'confirmed_sent': 0})
+    outputs = achievements(t)
+    assert [x['id'] for x in outputs] == ['letters', 'qualified', 'enriched']
+    assert [x['count'] for x in outputs] == [1, 2, 12]
+    assert not any(x['id'] == 'sent' for x in outputs)
+    assert achievements(task(report={}, state={})) == []

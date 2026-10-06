@@ -270,3 +270,9 @@ what has already been produced. Use durable job states and real counters for
 search, contacts/research, qualification, letters, sending, and replies. Collection
 completion never implies audience qualification. Show queue waiting, pauses,
 errors, and the last successful refresh explicitly; never simulate progress.
+
+Chat motion supports visible delegated work: acknowledge server acceptance, then
+show the real queue/execution state and durable results. Never advance stages on
+an animation timer. Fresh answers may reveal text briefly (at most 1.2 seconds),
+with a skip control; history never replays. Expose the complete answer to assistive
+technology, respect reduced motion, and keep review controls available immediately.

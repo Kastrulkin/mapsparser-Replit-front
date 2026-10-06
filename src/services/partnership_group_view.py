@@ -98,6 +98,7 @@ def presentation(task, *, draft_job=None, available_credits=None):
         reason = "Уточняем результат выполненного действия. Повтор не запустит новое действие до сверки."
     return {"phase": phase, "status": status, "label": label, "reason": reason, "blocker": blocker,
             "next_action": action, "active": running, "substeps": state.get("substeps") or [],
+            "achievements": achievements(task),
             "updated_at": task.get("updated_at"), "reply_sync": task.get("reply_sync"), "available_credits": available_credits,
             "required_credits": required, "send_mode": "automatic_authorized" if report.get("automatic_send_authorized") else "manual",
             "metrics": {"found": report.get("found", report.get("imported", 0)), "eligible": report.get("eligible", 0),
@@ -107,6 +108,23 @@ def presentation(task, *, draft_job=None, available_credits=None):
             "expenses": {"charged": report.get("group_credits_charged", report.get("credits_charged")),
                          "estimate": report.get("credit_limit"), "estimate_only": report.get("credit_estimate_only", False)}}
 
+
+
+def achievements(task):
+    """Completed outputs from durable data, not a timer or inferred provider state."""
+    report, state = task.get("report") or {}, task.get("state") or {}
+    enrichment = next((step for step in state.get("substeps") or [] if step.get("id") == "enrichment"), {})
+    values = [
+        ("replies", report.get("replies"), "Получено ответов"),
+        ("sent", report.get("confirmed_sent"), "Отправлено писем · подтверждено провайдером"),
+        ("letters", report.get("prepared"), "Письма готовы"),
+        ("qualified", report.get("eligible"), "Подходят с подтверждённым контактом"),
+        ("enriched", enrichment.get("processed"), "Собраны сведения о компаниях"),
+        ("found", report.get("found", report.get("imported")), "Найдено кандидатов"),
+        ("duplicates", report.get("duplicates"), "Исключено дублей"),
+    ]
+    return [{"id": key, "label": label, "count": int(count)}
+            for key, count, label in values if count and int(count) > 0][:3]
 
 def company_substeps(task, jobs):
     """Completed collection is separate from suitability and letter readiness."""

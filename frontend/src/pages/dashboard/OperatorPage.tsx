@@ -1,3 +1,4 @@
+import { OperatorActivity, OperatorReply } from '@/components/operator/OperatorActivity';
 import { OutreachGroupCard, type GroupPresentation } from '@/components/prospecting/OutreachGroupCard';
 import { OperatorRequestHistory } from '@/components/operator/OperatorRequestHistory';
 import { OperatorSpeech, OperatorVoiceInput, VoiceSubmission } from '@/components/operator/OperatorVoice';
@@ -224,6 +225,7 @@ type ChatMessage = {
   id: string;
   role: 'user' | 'operator';
   text: string;
+  fresh?: boolean;
   result?: OperatorChatResult | RefreshResult;
 };
 
@@ -273,6 +275,8 @@ export const OperatorPage = () => {
   const [chatLoading, setChatLoading] = useState(false);
   const [pendingChatMessage, setPendingChatMessage] = useState<string | null>(null);
   const [pendingChatPhase, setPendingChatPhase] = useState('Отправляем команду…');
+  const [commandWaiting, setCommandWaiting] = useState(false);
+  const [commandAccepted, setCommandAccepted] = useState(false);
   const chatWindowRef = useRef<HTMLDivElement>(null);
   const scrollToLatestRef = useRef(false);
   const chatSendInFlightRef = useRef(false);
@@ -386,7 +390,7 @@ export const OperatorPage = () => {
     setMessages((current) => [
       ...current,
       { id: `${stamp}-user`, role: 'user', text: userText },
-      { id: `${stamp}-operator`, role: 'operator', text: resultText(result), result },
+      { id: `${stamp}-operator`, role: 'operator', text: resultText(result), fresh: true, result },
     ]);
   };
 
@@ -397,6 +401,7 @@ export const OperatorPage = () => {
         id: `${Date.now()}-${suffix}`,
         role: 'operator',
         text: resultText(result),
+        fresh: true,
         result,
       },
     ]);
@@ -412,6 +417,8 @@ export const OperatorPage = () => {
     scrollToLatestRef.current = true;
     setPendingChatMessage(text);
     setPendingChatPhase('Отправляем команду…');
+    setCommandAccepted(false);
+    setCommandWaiting(false);
     setChatLoading(true);
     try {
       const response = await api.post('/operator/chat', {
@@ -428,8 +435,14 @@ export const OperatorPage = () => {
         status: 'blocked',
         chat_response: 'Не получил ответ Operator.',
       };
-      setPendingChatPhase('Команда принята. Подготавливаем ответ…');
-      const result=await waitForOperatorResult(initialResult,currentBusinessId,voiceHeaders,()=>activeBusiness.current===currentBusinessId);
+      setCommandAccepted(true);
+      setPendingChatPhase('Готовим ответ…');
+      const result=await waitForOperatorResult(initialResult,currentBusinessId,voiceHeaders,()=>activeBusiness.current===currentBusinessId, job => {
+        setCommandWaiting(job.status === 'queued' || job.status === 'waiting_for_review');
+        if (job.status === 'queued') setPendingChatPhase('Команда в очереди · ждёт запуска');
+        else if (job.status === 'running') setPendingChatPhase(job.stage || 'Выполняем команду…');
+        else if (job.status === 'waiting_for_review') setPendingChatPhase('Нужно ваше подтверждение');
+      });
       if(activeBusiness.current!==currentBusinessId)return;
       pendingRequest.current = { businessId: "", text: "", groupId: "", id: "" };
       scrollToLatestRef.current = true;
@@ -748,10 +761,9 @@ export const OperatorPage = () => {
                       : 'border border-slate-200 bg-white text-slate-800',
                   )}
                 >
-                  <div className="whitespace-pre-wrap">{message.role === 'operator' && message.result && 'approval' in message.result && message.result.approval?.capability === 'partnerships.continue_outreach' && !('credit_quote' in message.result && message.result.credit_quote)
+                  {message.role === 'operator' ? <OperatorReply animate={message.fresh} text={message.result && 'approval' in message.result && message.result.approval?.capability === 'partnerships.continue_outreach' && !('credit_quote' in message.result && message.result.credit_quote)
                     ? 'Прежние условия поиска устарели. Откройте актуальную стоимость в кредитах LocalOS.'
-                    : message.role === 'operator' && message.result && 'capability' in message.result && message.result.capability === 'partnerships.prepare_message'
-                      ? message.text.replace(/DeepSeek/gi, 'ИИ') : message.text}</div>
+                    : message.text.replace(/DeepSeek/gi, 'ИИ')} /> : <div className="whitespace-pre-wrap">{message.text}</div>}
                   {message.role === 'operator' && currentBusinessId && <OperatorSpeech key={`${currentBusinessId}:${message.id}`} businessId={currentBusinessId} messageId={message.result?.message_id || message.id} prepare={message.result?.input_type === 'voice'} />}
                   {message.role === 'operator' && message.result ? (
                     <OperatorResultActions
@@ -787,11 +799,10 @@ export const OperatorPage = () => {
           {pendingChatMessage && <div className="flex justify-end">
             <div className="max-w-3xl rounded-2xl bg-slate-950 px-4 py-3 text-sm leading-6 text-white shadow-sm">
               <div className="whitespace-pre-wrap">{pendingChatMessage}</div>
-              <div className="mt-2 flex items-center gap-2 text-xs text-slate-300" role="status">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />{pendingChatPhase}
-              </div>
+
             </div>
           </div>}
+          {pendingChatMessage && <OperatorActivity phase={pendingChatPhase} accepted={commandAccepted} waiting={commandWaiting} />}
         </div>
 
 
