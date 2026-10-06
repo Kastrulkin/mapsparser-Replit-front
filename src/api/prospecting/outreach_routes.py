@@ -62,7 +62,7 @@ from services.outreach_sender_profile_service import evaluate_sender_profile_com
 from services.lead_preparation_progress_service import record_lead_preparation_step
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.prospecting_service import ProspectingService
-from services.outreach_draft_review import draft_review_digest
+from services.outreach_draft_review import draft_review_digest, canonical_review
 from services.sales_room_helpers import (
     append_sales_room_link_to_outreach_text as _append_sales_room_link_to_outreach_text,
     make_sales_room_url as _make_sales_room_url,
@@ -102,6 +102,7 @@ from services.sales_room_audit_offer_service import (
     serialize_public_audit_offer as _serialize_public_audit_offer,
     serialize_sales_room_participant as _serialize_sales_room_participant,
 )
+from api.prospecting.public_offer_reader import load_public_offer_row
 
 from api.prospecting.shared import admin_prospecting_bp
 
@@ -1447,32 +1448,8 @@ def partnership_public_offer_page(slug):
         normalized_slug = _slugify_company_name(slug)
         conn = get_db_connection()
         try:
-            _ensure_partnership_public_offers_table(conn)
-            _ensure_admin_prospecting_public_offers_table(conn)
             cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT slug, page_json, updated_at
-                FROM partnershippublicoffers
-                WHERE slug = %s
-                  AND is_active = TRUE
-                LIMIT 1
-                """,
-                (normalized_slug,),
-            )
-            row = cur.fetchone()
-            if not row:
-                cur.execute(
-                    """
-                    SELECT slug, page_json, generated_json, published_json, updated_at
-                    FROM adminprospectingleadpublicoffers
-                    WHERE slug = %s
-                      AND is_active = TRUE
-                    LIMIT 1
-                    """,
-                    (normalized_slug,),
-                )
-                row = cur.fetchone()
+            row = load_public_offer_row(cur, normalized_slug)
             if not row:
                 return jsonify({"error": "Offer page not found"}), 404
             row_dict = dict(row) if row and hasattr(row, "keys") else {}
@@ -1997,7 +1974,17 @@ def partnership_list_drafts():
             """
             params.extend([limit, offset])
             cur.execute(query, tuple(params))
-            rows = [{**_serialize_draft(dict(row)), "review_digest": draft_review_digest(dict(row))} for row in cur.fetchall()]
+            rows = [_serialize_draft(dict(row)) for row in cur.fetchall()]
+            for row in rows:
+                try:
+                    row["canonical_review"] = canonical_review(cur, row)
+                    if row["canonical_review"]:
+                        row["generated_text"] = row["canonical_review"]["text"]
+                        row["edited_text"] = row["canonical_review"]["text"]
+                        row["approved_text"] = row["canonical_review"]["text"] if row.get("status") == DRAFT_APPROVED else None
+                except ValueError:
+                    row["canonical_review"] = {"stale": True}
+                row["review_digest"] = draft_review_digest(row)
         finally:
             conn.close()
         return jsonify({"success": True, "drafts": rows, "count": len(rows), "total_count": int(rows[0].get("total_count") or 0) if rows else 0})
@@ -2055,9 +2042,25 @@ def partnership_approve_draft(draft_id):
                 conn.rollback()
                 return jsonify({"error": "Это черновик по поиску. Сначала подтвердите соответствие компании и контакт, затем отдельно согласуйте отправку.",
                                 "code": "search_draft_not_send_ready"}), 409
+            draft_row["canonical_review"] = canonical_review(cur, draft_row)
             if expected_review_digest != draft_review_digest(draft_row):
                 conn.rollback()
                 return jsonify({"error": "Черновик или контакт изменился. Обновите список и проверьте письмо ещё раз.", "code": "draft_review_stale"}), 409
+
+            if isinstance(draft_origin, dict) and draft_origin.get("campaign_id"):
+                from services.outreach_campaign_service import update_draft_campaign_touch
+                cur.execute("""SELECT touch.generated_text FROM outreach_campaign_touches touch
+                    JOIN outreach_campaigns campaign ON campaign.id=touch.campaign_id
+                    WHERE touch.id=%s AND campaign.id=%s AND campaign.business_id=%s
+                      AND campaign.status='draft' FOR UPDATE OF touch, campaign""",
+                    (draft_origin.get("campaign_touch_id"), draft_origin["campaign_id"], business_id))
+                canonical = cur.fetchone()
+                if not canonical:
+                    return jsonify({"error": "Письмо уже изменено или отправка согласована. Обновите группу.", "code": "campaign_review_stale"}), 409
+                if canonical["generated_text"] != approved_text:
+                    update_draft_campaign_touch(cur, campaign_id=draft_origin["campaign_id"],
+                        touch_id=draft_origin["campaign_touch_id"], subject=draft_origin.get("subject"),
+                        generated_text=approved_text, user_id=user_data["user_id"])
 
             edited_text = str(draft_row.get("edited_text") or "")
             generated_text = str(draft_row.get("generated_text") or "")
@@ -2071,8 +2074,10 @@ def partnership_approve_draft(draft_id):
             learning_note = draft_row.get("learning_note_json")
             if not isinstance(learning_note, dict):
                 learning_note = {}
+            reviewed = canonical_review(cur, draft_row)
             accepted_learning_note = {
                 **learning_note,
+                "reviewed_campaign_hash": (reviewed or {}).get("hash"),
                 "intent": "partnership_outreach",
                 "accepted": True,
                 "edited_before_accept": edited_before_accept,

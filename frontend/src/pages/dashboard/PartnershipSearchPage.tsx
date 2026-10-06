@@ -1981,9 +1981,9 @@ export const PartnershipSearchPage: React.FC = () => {
         businessId: currentBusinessId,
         digest: draft.review_digest || '',
         leadName: String(draft.lead_name || draft.lead_id || 'Партнёр'),
-        recipient: String(draft.recipient || draft.email || 'Не указан'),
+        recipient: String(draft.canonical_review?.recipient || draft.recipient || draft.email || 'Не указан'),
         channel: String(draft.channel || 'Не выбран'),
-        sender: String(draft.sender_name || 'Выбирается при ручной отправке'),
+        sender: String(draft.canonical_review?.sender || draft.sender_name || 'Выбирается при ручной отправке'),
         schedule: String(draft.scheduled_at || 'Не назначено'),
         text: String(draft.approved_text || draft.edited_text || draft.generated_text || '').trim(),
       };

@@ -55,7 +55,7 @@ def presentation(task, *, draft_job=None, available_credits=None):
     phase = "letters" if draft_active or draft_blocked or letters_phase else "companies"
     if not search_active and not draft_active and not draft_blocked:
         phase = "replies" if report.get("replies") or report.get("confirmed_sent") else "sending" if report.get("queued") else "letters" if report.get("prepared") else phase
-    blocker = "insufficient_credits" if draft_blocked and any(item.get("reason") == "insufficient_credits" for item in draft_state.get("errors") or []) else None if draft_blocked else state.get("blocker")
+    blocker = (draft_state.get("blocker") or ("insufficient_credits" if any(item.get("reason") == "insufficient_credits" for item in draft_state.get("errors") or []) else None)) if draft_blocked else state.get("blocker")
     unsettled = bool(state.get("inflight_search") or report.get("delivery_uncertain"))
     labels = {"companies": "Проверяем компании и контакты" if state.get("phase") == "prepare" else "Ищем компании",
               "letters": "Готовим письма", "sending": "Отправляем", "replies": "Ожидаем ответы"}
@@ -63,9 +63,9 @@ def presentation(task, *, draft_job=None, available_credits=None):
     if stopped:
         blocker = None
     running = (search_active or draft_active) and not stopped
-    status = "running" if running else "stopped" if task["status"] == "cancelled" else "completed" if task["status"] == "completed" and not draft_blocked else "needs_attention" if blocker or drafts.get("status") == "failed" else "paused" if state.get("started") else "ready"
+    status = "queued" if task["status"] == "queued" or drafts.get("status") == "queued" else "running" if running else "stopped" if task["status"] == "cancelled" else "completed" if task["status"] == "completed" and not draft_blocked else "needs_attention" if blocker or drafts.get("status") == "failed" else "paused" if state.get("started") else "ready"
     label = labels[phase] if running else "Результаты готовы" if status == "completed" else "Требуется действие" if status == "needs_attention" else "Поиск остановлен" if status == "stopped" else "Результаты готовы" if status == "completed" else "На паузе" if status == "paused" else "Ожидает запуска"
-    if task["status"] == "queued" and not draft_active:
+    if status == "queued":
         label = "Ожидает запуска"
     if not running and not stopped and not draft_blocked and phase == 'replies':
         label = 'Ожидаем ответы' if not report.get('replies') else 'Есть ответы'
@@ -97,7 +97,8 @@ def presentation(task, *, draft_job=None, available_credits=None):
     if unsettled:
         reason = "Уточняем результат выполненного действия. Повтор не запустит новое действие до сверки."
     return {"phase": phase, "status": status, "label": label, "reason": reason, "blocker": blocker,
-            "next_action": action, "active": running, "available_credits": available_credits,
+            "next_action": action, "active": running, "substeps": state.get("substeps") or [],
+            "updated_at": task.get("updated_at"), "reply_sync": task.get("reply_sync"), "available_credits": available_credits,
             "required_credits": required, "send_mode": "automatic_authorized" if report.get("automatic_send_authorized") else "manual",
             "metrics": {"found": report.get("found", report.get("imported", 0)), "eligible": report.get("eligible", 0),
                         "target": config.get("target_count"), "needs_decision": report.get("needs_decision", report.get("verification_failed", 0)),
@@ -105,6 +106,31 @@ def presentation(task, *, draft_job=None, available_credits=None):
                         "queued": report.get("queued", 0), "sent": report.get("confirmed_sent", 0), "replies": report.get("replies", 0)},
             "expenses": {"charged": report.get("group_credits_charged", report.get("credits_charged")),
                          "estimate": report.get("credit_limit"), "estimate_only": report.get("credit_estimate_only", False)}}
+
+
+def company_substeps(task, jobs):
+    """Completed collection is separate from suitability and letter readiness."""
+    report, state = task.get("report") or {}, task.get("state") or {}
+    total = len(set(str(value) for value in state.get("lead_ids") or []))
+    collected = sum(bool(job.get("completed_at")) for job in jobs)
+    collecting = sum(job.get("status") in {"collecting", "verifying", "researching"} for job in jobs)
+    queued = sum(job.get("status") in {"queued", "retry_wait"} for job in jobs)
+    contacts = sum(bool((job.get("result_json") or {}).get("selected_contact_point_id")) for job in jobs)
+    checked = int(report.get("checked") or 0)
+    paused = task.get("status") not in {"running", "queued"}
+    def step(key, label, processed, active, waiting, detail):
+        status = "running" if active else "completed" if total and processed >= total else "queued" if waiting else "paused" if paused else "pending"
+        return {"id": key, "label": label, "status": status, "processed": processed,
+                "remaining": max(0, total-processed), "total": total, "detail": detail}
+    return [
+        {"id": "search", "label": "Поиск", "status": "running" if state.get("phase") == "search" and task.get("status") == "running" else "completed" if report.get("found") else "queued" if task.get("status") == "queued" else "pending",
+         "processed": int(report.get("found") or 0), "detail": "Найденные кандидаты"},
+        step("enrichment", "Контакты и сведения", collected, collecting, queued,
+             f"Сведения собраны: {collected}; контакт выбран: {contacts}"),
+        step("qualification", "Проверка соответствия", checked,
+             bool(report.get("checking")), False,
+             f"Подходят с подтверждённым контактом: {report.get('eligible', 0)}"),
+    ]
 
 
 def enrich_group(cursor, task, *, viewer_id=None):
@@ -142,6 +168,22 @@ def enrich_group(cursor, task, *, viewer_id=None):
         cursor.execute("SELECT * FROM operator_async_jobs WHERE id=%s AND business_id=%s", (task["id"], task["business_id"]))
         row = cursor.fetchone()
         task["report"]["automatic_send_authorized"] = bool(row and for_job(cursor, dict(row), require_running=False))
+    cursor.execute("""SELECT DISTINCT ON (job.workstream_id) job.status, job.completed_at,
+        job.result_json, job.updated_at FROM lead_enrichment_jobs job
+        JOIN lead_workstreams ws ON ws.id=job.workstream_id
+        WHERE ws.client_business_id=%s AND ws.workstream_type='client_partnership'
+          AND ws.lead_id::text=ANY(%s::text[])
+        ORDER BY job.workstream_id, job.created_at DESC""", (task["business_id"], ids))
+    task["state"]["substeps"] = company_substeps(task, [dict(row) for row in cursor.fetchall()])
+    cursor.execute("""SELECT sender.id, sender.status, sender.last_reply_sync_at, sender.reply_sync_error
+        FROM outreach_sender_accounts sender
+        WHERE sender.business_id=%s AND sender.channel='email' AND sender.outreach_enabled=TRUE
+          AND COALESCE((sender.capabilities_json->>'reply_sync')::boolean,FALSE)=TRUE
+        ORDER BY sender.updated_at DESC""", (task["business_id"],))
+    senders = [dict(row) for row in cursor.fetchall()]
+    task["reply_sync"] = {"configured": bool(senders),
+        "needs_attention": any(row.get("reply_sync_error") or row.get("status") != "connected" for row in senders),
+        "last_checked_at": str(max((row["last_reply_sync_at"] for row in senders if row.get("last_reply_sync_at")), default="")) or None}
     task["presentation"] = presentation(task, draft_job=draft_job, available_credits=available)
     task["draft_job"] = {key: draft_job.get(key) for key in ("id", "status", "result_json")} if draft_job else None
     return task

@@ -17,6 +17,7 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [items, setItems] = useState<Task[]>([]);
   const [editing, setEditing] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [audience, setAudience] = useState('');
   const [offer, setOffer] = useState('');
   const [mode, setMode] = useState<'find_only' | 'prepare_only' | 'auto_send'>('prepare_only');
@@ -40,15 +41,29 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
   }, [businessId]);
   useEffect(() => {
     let active = true;
+    let working = false;
+    let hasData = false;
+    let inFlight = false;
     scope.current += 1;
-    setItems([]); setEnabled(false); setSupportsShortage(false); setShortageOnly(false); setError(''); setEditing(false); setBusy(false); setReview(null); setRenamingId(''); setMode('prepare_only'); setAudience(''); setOffer(''); setQuery(''); setCity(''); setAgencyCountry(''); setSoldDestination('');
+    setItems([]); setEnabled(false); setSupportsShortage(false); setShortageOnly(false); setError(''); setEditing(false); setEditingTask(null); setBusy(false); setReview(null); setRenamingId(''); setMode('prepare_only'); setAudience(''); setOffer(''); setQuery(''); setCity(''); setAgencyCountry(''); setSoldDestination('');
     const refresh = async () => {
-      try { const result = await load(); if (active) { setItems(result.items || []); onTasksChange?.(result.items || []); setEnabled(result.enabled === true); setSupportsShortage(result.supports_shortage_replenishment === true); setError(''); } }
-      catch { if (active) setError('Не удалось загрузить задачи. Повторите попытку.'); }
+      if (inFlight) return;
+      inFlight = true;
+      try { const result = await load(); if (active) { hasData = true; working = (result.items || []).some((item: Task) => item.presentation?.active); setItems(result.items || []); onTasksChange?.(result.items || []); setEnabled(result.enabled === true); setSupportsShortage(result.supports_shortage_replenishment === true); setError(''); } }
+      catch { if (active) setError(hasData ? 'Не удалось обновить состояние. Сохранённые данные показаны ниже.' : 'Не удалось загрузить задачи. Повторите попытку.'); }
+      finally { inFlight = false; }
     };
     void refresh();
-    const timer = window.setInterval(() => void refresh(), 15000);
-    return () => { scope.current += 1; active = false; window.clearInterval(timer); };
+    let lastRefresh = Date.now();
+    const tick = () => {
+      const interval = working && !document.hidden ? 3000 : 15000;
+      if (Date.now() - lastRefresh >= interval) { lastRefresh = Date.now(); void refresh(); }
+    };
+    const focusRefresh = () => { if (!document.hidden) { lastRefresh = Date.now(); void refresh(); } };
+    const timer = window.setInterval(tick, 1000);
+    document.addEventListener('visibilitychange', focusRefresh);
+    window.addEventListener('focus', focusRefresh);
+    return () => { scope.current += 1; active = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', focusRefresh); window.removeEventListener('focus', focusRefresh); };
   }, [load, onTasksChange]);
   const mutate = async (path: string, body: object) => {
     const epoch = scope.current;
@@ -63,7 +78,7 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
   const preview = async (config: Config) => {
     setBusy(true); setError('');
     try {
-      const result = await newAuth.makeRequest('/partnership/continuations', {
+      const result = await newAuth.makeRequest(editingTask ? `/partnership/continuations/${editingTask.id}` : '/partnership/continuations', {
         method: 'POST', body: JSON.stringify({ business_id: businessId, operation: 'preview', request_id: requestId, config }),
       });
       if (!result.approval?.action_id) throw new Error('approval_missing');
@@ -81,7 +96,7 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
       if (result.operator_result?.status !== 'completed') throw new Error('start_blocked');
       const refreshed = await load();
       setItems(refreshed.items || []); onTasksChange?.(refreshed.items || []);
-      setReview(null); setEditing(false);
+      setReview(null); setEditing(false); setEditingTask(null);
     } catch { setError('Поиск не запущен. Обновите условия или проверьте доступный баланс.'); }
     finally { setBusy(false); }
   };
@@ -104,6 +119,15 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
           <p>Поисковых запросов: {task.state.search_calls || 0} из {task.config.max_search_calls}</p>
         </div>
       </details>
+      {!['running', 'queued', 'cancelled'].includes(task.status) && <Button variant="outline" disabled={busy} onClick={() => {
+        setEditingTask(task); setEditing(true); setReview(null); setRequestId(crypto.randomUUID());
+        setAudience(task.config.audience); setAgencyCountry(task.config.agency_country || ''); setSoldDestination(task.config.sold_destination || '');
+        setOffer(task.config.offer || ''); setLanguage(task.config.language); setMode(task.config.mode || 'find_only');
+        setTargetCount(task.config.target_count || 10); setMaxSearchCalls(task.config.max_search_calls);
+        setSearchCreditsPerCall(Math.ceil((task.config.search_call_cap_cents || 50) / 10));
+        setQuery(task.config.queries[0]?.query || ''); setCity(task.config.queries.map(value => value.city).join('\n'));
+        setEvidenceTerms((task.config.evidence_terms || []).join(','));
+      }}>Изменить условия поиска</Button>}
       <button className="min-h-10 text-sm underline" type="button" onClick={() => { setRenamingId(task.id); setNewName(task.display_name || task.config.audience); }}>Переименовать</button>
       {renamingId === task.id && <form className="flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); if (newName.trim()) { void mutate(`/partnership/continuations/${task.id}`, { action: 'rename', revision: task.revision, display_name: newName.trim() }); setRenamingId(''); } }}><Input aria-label="Название поиска" maxLength={120} value={newName} onChange={(event) => setNewName(event.target.value)} /><Button type="submit" disabled={busy || !newName.trim()}>Сохранить название</Button></form>}
       <details><summary className="cursor-pointer text-sm">Условия поиска</summary>
@@ -122,7 +146,7 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
         {task.status !== 'completed' && !task.state.search_credit_reservation_id && <Button variant="ghost" disabled={busy} onClick={() => void mutate(`/partnership/continuations/${task.id}`, { action: 'stop', revision: task.revision })}>Остановить поиск</Button>}
       </div>}
     </div>)}
-    {!editing ? <Button variant={items.length ? 'outline' : 'default'} onClick={() => { setRequestId(crypto.randomUUID()); setReview(null); setEditing(true); }}>Новый поиск</Button> : review ? <div className="space-y-3 rounded-lg border bg-muted/30 p-4"><h3 className="font-medium">Проверьте условия поиска</h3><p>Ищем {review.config.target_count} новых подходящих компаний: {review.config.agency_country} → {review.config.sold_destination}. {review.config.mode === 'find_only' ? 'Только поиск и проверка, без писем.' : 'Подготовка обращений по заданным условиям.'}</p><p>Ориентир расходов — до {review.creditLimit} кредитов с общего баланса; списание только по выполненным действиям.</p><p>До подтверждения поиск не запущен.</p><div className="flex gap-2"><Button disabled={busy} onClick={() => void confirmReview()}>Начать поиск</Button><Button variant="outline" disabled={busy} onClick={() => { setReview(null); setRequestId(crypto.randomUUID()); }}>Изменить условия</Button></div></div> : <form className="space-y-3" onSubmit={event => { event.preventDefault(); void preview({ mode, billing_mode: 'shared_balance_actual', search_call_cap_cents: searchCreditsPerCall * 10, audience, offer, language, target_count: targetCount, agency_country: agencyCountry, sold_destination: soldDestination, riderra_shortage_only: supportsShortage && shortageOnly, evidence_terms: evidenceTerms.split(',').map(value => value.trim()).filter(Boolean), queries: city.split("\n").map(value => value.trim()).filter(Boolean).map(value => ({ query, city: value })), max_search_calls: maxSearchCalls, max_candidates: targetCount * 5, max_qualification_calls: targetCount * 5, max_draft_attempts: targetCount, batch_size: 50, search_budget_cents: searchCreditsPerCall * 10 * maxSearchCalls }); }}>
+    {!editing ? <Button variant={items.length ? 'outline' : 'default'} onClick={() => { setRequestId(crypto.randomUUID()); setReview(null); setEditingTask(null); setEditing(true); }}>Новый поиск</Button> : review ? <div className="space-y-3 rounded-lg border bg-muted/30 p-4"><h3 className="font-medium">Проверьте условия поиска</h3><p>Ищем {review.config.target_count} новых подходящих компаний: {review.config.agency_country} → {review.config.sold_destination}. {review.config.mode === 'find_only' ? 'Только поиск и проверка, без писем.' : 'Подготовка обращений по заданным условиям.'}</p><p>Ориентир расходов — до {review.creditLimit} кредитов с общего баланса; списание только по выполненным действиям.</p><p>До подтверждения поиск не запущен.</p><div className="flex gap-2"><Button disabled={busy} onClick={() => void confirmReview()}>{editingTask ? 'Согласовать и продолжить' : 'Начать поиск'}</Button><Button variant="outline" disabled={busy} onClick={() => { setReview(null); setRequestId(crypto.randomUUID()); }}>Изменить условия</Button></div></div> : <form className="space-y-3" onSubmit={event => { event.preventDefault(); void preview({ mode, billing_mode: 'shared_balance_actual', search_call_cap_cents: searchCreditsPerCall * 10, audience, offer, language, target_count: targetCount, agency_country: agencyCountry, sold_destination: soldDestination, riderra_shortage_only: supportsShortage && shortageOnly, evidence_terms: evidenceTerms.split(',').map(value => value.trim()).filter(Boolean), queries: editingTask ? editingTask.config.queries : city.split("\n").map(value => value.trim()).filter(Boolean).map(value => ({ query, city: value })), max_search_calls: maxSearchCalls, max_candidates: Math.max(targetCount * 5, editingTask?.config.max_candidates || 0), max_qualification_calls: Math.max(targetCount * 5, editingTask?.config.max_qualification_calls || 0), max_draft_attempts: targetCount, batch_size: 50, search_budget_cents: searchCreditsPerCall * 10 * maxSearchCalls }); }}>
       <fieldset className="space-y-2"><legend className="mb-2 font-medium">Что выполнить</legend>
         {([{ value: 'find_only', label: 'Только найти и проверить компании' }, { value: 'prepare_only', label: 'Найти и подготовить письма' }, ...(supportsShortage ? [{ value: 'auto_send', label: 'Полный аутрич по отдельно согласованным правилам' }] : [])] as const).map(option => <label key={option.value} className="flex items-start gap-2 text-sm"><input type="radio" name="continuation-mode" checked={mode === option.value} onChange={() => setMode(option.value as typeof mode)} />{option.label}</label>)}
         {mode === 'auto_send' && <p className="text-sm text-muted-foreground">Сначала сохраните поиск. Затем согласуйте в чате правила писем: допустимые утверждения, отправителя и лимиты. До этого отправка заблокирована.</p>}

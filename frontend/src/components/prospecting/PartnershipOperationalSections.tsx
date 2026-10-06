@@ -18,7 +18,8 @@ type PartnershipDraftItem = {
   edited_text?: string;
   approved_text?: string;
   email?: string;
-  learning_note_json?: { search_task_id?: string; manual_review_required?: boolean };
+  learning_note_json?: { search_task_id?: string; manual_review_required?: boolean; campaign_id?: string; evidence?: { source_url?: string; fact?: string; observed_fact?: string }[] };
+  canonical_review?: { stale?: boolean; subject?: string; recipient?: string; sender?: string; text?: string; source_url?: string };
 };
 
 type PartnershipQueueItem = {
@@ -247,7 +248,7 @@ export function PartnershipDraftsSection({
           </label>
           {drafts.map((draft) => {
             const draftText = draft.approved_text || draft.edited_text || draft.generated_text || '';
-            const searchDraftNeedsReview = Boolean(draft.learning_note_json?.search_task_id && draft.learning_note_json?.manual_review_required);
+            const searchDraftNeedsReview = Boolean(draft.canonical_review?.stale || (draft.learning_note_json?.search_task_id && draft.learning_note_json?.manual_review_required));
             const mailtoHref = searchDraftNeedsReview ? '' : buildMailtoHref(draft.email, draft.lead_name || draft.lead_id, draftText);
             return (
               <div key={draft.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -263,6 +264,8 @@ export function PartnershipDraftsSection({
                     <div className="mb-2 text-xs text-muted-foreground">
                       {statusLabel(draft.status)} · {channelLabel(draft.channel)}
                     </div>
+                    {draft.canonical_review && !draft.canonical_review.stale && <dl className="mb-2 space-y-1 text-xs text-muted-foreground"><div><dt className="inline">Получатель: </dt><dd className="inline">{draft.canonical_review.recipient || 'Контакт не выбран'}</dd></div><div><dt className="inline">Отправитель: </dt><dd className="inline">{draft.canonical_review.sender || 'Не подключён'}</dd></div><div><dt className="inline">Тема: </dt><dd className="inline">{draft.canonical_review.subject || 'Не подготовлена'}</dd></div></dl>}
+                    {!!draft.learning_note_json?.evidence?.length && <details className="mb-2 text-xs text-muted-foreground"><summary>На чём основано письмо</summary>{draft.learning_note_json.evidence.map((fact, index) => <p key={index}>{fact.fact || fact.observed_fact}{fact.source_url && <> · <a href={fact.source_url} target="_blank" rel="noreferrer" className="underline">Источник</a></>}</p>)}</details>}
                     {searchDraftNeedsReview ? <p className="mb-2 text-xs text-amber-800">Черновик по поиску. Компания и контакт ещё не подтверждены; отправка недоступна.</p> : null}
                     <Textarea
                       rows={5}

@@ -16,7 +16,6 @@ from psycopg2.extras import Json, RealDictCursor
 
 from services.operator_async_jobs import create_operator_async_job
 from services.outreach_continuation import actor_can_write, qualified_contact_ids
-from services.outreach_language_routing import public_context, run_copy
 
 
 KIND = "partner_search_drafts"
@@ -88,8 +87,6 @@ def _candidates(cursor: Any, task: dict[str, Any], scope: str) -> list[dict[str,
 
 def _offer(task: dict[str, Any], supplied: str) -> str:
     value = supplied.strip() or str((task.get("payload_json") or {}).get("offer") or "").strip()
-    if not value and str(task["business_id"]) == "edbd961a-273f-4f15-836e-33aacc0aa0e3":
-        value = "Riderra offers pre-booked airport and city transfers for travel agencies in Phuket."
     if not 20 <= len(value) <= 1000:
         raise ValueError("offer_required")
     return value
@@ -142,7 +139,10 @@ def operator_task(cursor: Any, *, business_id: str, user_id: str,
                 "result_ref": {"entity_id": task_id, "href": f"/dashboard/partnerships?search_task_id={task_id}&section=drafts", "label": "Открыть черновики"},
                 "external_dispatch_performed": False}
     candidates = _candidates(cursor, task, scope)
-    offer = _offer(task, str(arguments.get("offer") or ""))
+    try:
+        offer = _offer(task, str(arguments.get("offer") or ""))
+    except ValueError:
+        return {"status": "clarification_required", "chat_response": "Какое предложение включить в письма? Укажите услуги и допустимые обещания. Отправки пока не будет.", "blocked_reasons": ["offer_required"]}
     ids = [str(item["id"]) for item in candidates]
     revision = _revision(task_id, scope, ids, offer)
     if not ids:
@@ -188,6 +188,23 @@ def operator_task(cursor: Any, *, business_id: str, user_id: str,
             "result_ref": {"entity_id": task_id, "href": link + "&section=drafts", "label": "Открыть черновики"}, "external_dispatch_performed": False}
 
 
+def load_preparation_contract(cursor: Any, job_id: str, workstream_id: str) -> dict[str, Any] | None:
+    """A durable confirmed preparation job grants drafting only, never sending."""
+    cursor.execute("""SELECT job.payload_json FROM operator_async_jobs job
+        JOIN lead_workstreams ws ON ws.client_business_id=job.business_id
+        JOIN prospectingleads lead ON lead.id=ws.lead_id AND lead.business_id=job.business_id
+        JOIN operator_async_jobs search ON search.id::text=job.payload_json->>'search_task_id'
+          AND search.business_id=job.business_id AND search.kind='outreach_continue'
+        WHERE job.id=%s AND job.kind=%s AND job.status='running'
+          AND ws.id=%s AND ws.workstream_type='client_partnership'
+          AND job.payload_json->'lead_ids' @> jsonb_build_array(lead.id)
+          AND search.result_json->'lead_ids' @> jsonb_build_array(lead.id)
+          AND search.status <> 'cancelled'""", (job_id, KIND, workstream_id))
+    row = cursor.fetchone()
+    payload = (row or {}).get("payload_json") or {}
+    return payload if payload.get("revision") and payload.get("offer") else None
+
+
 def _draft_id(task_id: str, lead_id: str, revision: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"partner-search-draft:{task_id}:{lead_id}:{revision}"))
 
@@ -212,6 +229,7 @@ def process_job(claimed: dict[str, Any]) -> dict[str, Any]:
     errors: list[dict[str, str]] = list(prior.get("errors") or [])
     processed = {str(value) for value in prior.get("processed_ids") or []}
     blocked = False
+    blocker_reason = None
     for lead_id in [value for value in ids if value not in processed][:5]:
         conn = get_db_connection()
         reservation_id: str | None = None
@@ -221,6 +239,8 @@ def process_job(claimed: dict[str, Any]) -> dict[str, Any]:
             if not cursor.fetchone():
                 conn.rollback()
                 return {"status": "stopped", "created": completed, "failed": failed, "total": len(ids)}
+            from services.outreach_continuation import _require_current_actor
+            _require_current_actor(cursor, claimed)
             draft_id = _draft_id(task_id, lead_id, revision)
             cursor.execute("SELECT id FROM outreachmessagedrafts WHERE id=%s", (draft_id,))
             if cursor.fetchone():
@@ -254,28 +274,31 @@ def process_job(claimed: dict[str, Any]) -> dict[str, Any]:
                 action_key="partnership_draft_generate", estimated_credits=DRAFT_CREDITS,
                 idempotency_key=f"{job_id}:{lead_id}", metadata={"search_task_id": task_id, "lead_id": lead_id})
             if reservation.get("blocked_reasons"):
-                failed += 1
                 errors.append({"lead_id": lead_id, "reason": "insufficient_credits"})
                 blocked = True
+                blocker_reason = "insufficient_credits"
                 conn.rollback()
                 break
             reservation_id = str(reservation["reservation_id"])
             conn.commit()
-            context = public_context({"identity": {"company_name": lead["name"]},
-                "sender": {"business": "Riderra" if business_id == "edbd961a-273f-4f15-836e-33aacc0aa0e3" else "our company"},
-                "offer": offer, "evidence": []})
-            prompt = ("Write one concise English first-contact B2B email draft. Return only the email body, 80-130 words. "
-                      "Use only the company name and offer in DATA. Do not claim that the recipient sells Phuket, "
-                      "has a working contact, or has any specific product unless the data explicitly proves it. "
-                      "Do not invent prices, performance claims, personal names, or public facts. "
-                      "Ask one simple question. This is a draft for human review; never send. DATA: "
-                      + json.dumps(context.record, ensure_ascii=False))
-            body = context.restore(run_copy(prompt, business_id=business_id, user_id=user_id, language=language).strip())
-            if not 80 <= len(body) <= 2000:
-                raise ValueError("draft_length_invalid")
+            from services.outreach_campaign_service import build_preview, persist_preview
+            preview = build_preview(cursor, str(lead["workstream_id"]),
+                sender_mode="partner_business", generate_ai=True,
+                preparation_job_id=job_id,
+                sequence=[{"sequence_index": 0, "day_offset": 0,
+                           "channel": "email", "angle": "business_reputation"}])
+            if not preview.get("touches"):
+                raise ValueError(str(preview.get("reason_code") or "personalization_evidence_required"))
+            campaign = persist_preview(cursor, preview, user_id=user_id)
+            cursor.execute("SELECT id FROM outreach_campaign_touches WHERE campaign_id=%s AND sequence_index=0",
+                           (campaign["id"],))
+            touch_id = str(cursor.fetchone()["id"])
+            touch = preview["touches"][0]
+            body = touch["text"]
             cursor.execute("SELECT id FROM operator_async_jobs WHERE id=%s AND status='running' AND lease_token=%s", (job_id, lease))
             if not cursor.fetchone():
                 raise RuntimeError("draft_job_stopped")
+            _require_current_actor(cursor, claimed)
             cursor.execute(
                 """INSERT INTO outreachmessagedrafts
                    (id, lead_id, workstream_id, channel, angle_type, tone, status,
@@ -284,7 +307,12 @@ def process_job(claimed: dict[str, Any]) -> dict[str, Any]:
                            %s,%s,%s,%s,NOW(),NOW()) ON CONFLICT (id) DO NOTHING""",
                 (draft_id, lead_id, lead["workstream_id"], body, body,
                  Json({"search_task_id": task_id, "draft_batch_job_id": job_id,
-                       "qualification": "not_verified", "manual_review_required": True,
+                       "qualification": "qualified" if (preview.get("continuation_qualification") or {}).get("status") == "qualified" else "not_verified",
+                       "campaign_id": campaign["id"], "campaign_touch_id": touch_id,
+                       "campaign_version": campaign["version"],
+                       "subject": touch.get("subject"), "source_url": touch.get("source_url"),
+                       "evidence": preview.get("evidence") or [],
+                       "manual_review_required": (preview.get("continuation_qualification") or {}).get("status") != "qualified" or preview.get("status") != "ready",
                        "external_dispatch_performed": False}), user_id),
             )
             charge = finalize_reserved_action_credits(cursor, reservation_id=reservation_id,
@@ -306,9 +334,14 @@ def process_job(claimed: dict[str, Any]) -> dict[str, Any]:
                     conn.commit()
                 except Exception:
                     conn.rollback()
-            failed += 1
-            processed.add(lead_id)
-            errors.append({"lead_id": lead_id, "reason": type(exc).__name__})
+            if isinstance(exc, PermissionError):
+                blocked = True
+                blocker_reason = "access_revoked"
+                errors.append({"lead_id": lead_id, "reason": "access_revoked"})
+            else:
+                failed += 1
+                processed.add(lead_id)
+                errors.append({"lead_id": lead_id, "reason": str(exc) if isinstance(exc, ValueError) else type(exc).__name__})
         finally:
             conn.close()
             progress_db = get_db_connection()
@@ -324,8 +357,10 @@ def process_job(claimed: dict[str, Any]) -> dict[str, Any]:
                 progress_db.commit()
             finally:
                 progress_db.close()
+        if blocked:
+            break
     return {"created": completed, "failed": failed, "total": len(ids), "remaining": max(0, len(ids) - len(processed)),
-            "blocked": blocked, "processed_ids": list(processed),
+            "blocked": blocked, "blocker": blocker_reason, "processed_ids": list(processed),
             "charged_credits": completed * DRAFT_CREDITS, "errors": errors[-20:],
             "search_task_id": task_id, "external_dispatch_performed": False}
 

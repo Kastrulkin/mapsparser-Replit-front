@@ -4,7 +4,7 @@ from services import partner_search_drafts as drafts
 TASK = {
     "id": "search-1",
     "business_id": "edbd961a-273f-4f15-836e-33aacc0aa0e3",
-    "payload_json": {"mode": "find_only", "language": "en"},
+    "payload_json": {"mode": "find_only", "language": "en", "offer": "Pre-booked airport transfers for travel agencies."},
     "result_json": {"lead_ids": ["lead-1", "lead-2", "lead-1"]},
 }
 
@@ -91,3 +91,41 @@ def test_empty_shortlist_asks_whether_to_draft_all_unverified(monkeypatch):
     assert result["eligible_count"] == 2
     assert result["preview_ready"] is True
     assert "без дублей" in result["chat_response"]
+
+
+def test_preparation_contract_requires_server_job_and_membership():
+    class PreparationCursor:
+        def execute(self, query, params):
+            assert "job.status='running'" in query
+            assert "search.business_id=job.business_id" in query
+            assert "search.result_json->'lead_ids'" in query
+            assert params == ("draft-job", drafts.KIND, "ws-1")
+        def fetchone(self):
+            return {"payload_json": {"revision": "approved", "offer": "Reviewed offer"}}
+    assert drafts.load_preparation_contract(PreparationCursor(), "draft-job", "ws-1")["offer"] == "Reviewed offer"
+
+
+def test_preparation_contract_rejects_missing_reviewed_offer():
+    class PreparationCursor:
+        def execute(self, query, params): pass
+        def fetchone(self): return {"payload_json": {"revision": "approved"}}
+    assert drafts.load_preparation_contract(PreparationCursor(), "draft-job", "ws-1") is None
+
+
+def test_missing_offer_is_a_question_not_an_invented_promise(monkeypatch):
+    monkeypatch.setattr(drafts, "actor_can_write", lambda *args: True)
+    monkeypatch.setitem(TASK, "payload_json", {"mode": "find_only", "language": "en"})
+    result = drafts.operator_task(Cursor(), business_id=TASK["business_id"], user_id="user-1",
+        arguments={"operation": "preview", "task_id": "search-1"})
+    assert result["status"] == "clarification_required"
+    assert result["blocked_reasons"] == ["offer_required"]
+
+
+def test_canonical_preview_rejects_inactive_preparation_before_generation(monkeypatch):
+    from services import outreach_campaign_service as campaigns
+    monkeypatch.setattr(campaigns, "_load_context", lambda *args: {"continuation_managed": True})
+    monkeypatch.setattr(campaigns, "_apply_sender_mode", lambda value, *args: value)
+    monkeypatch.setattr(drafts, "load_preparation_contract", lambda *args: None)
+    preview = campaigns.build_preview(None, "workstream", preparation_job_id="stopped-job", generate_ai=True)
+    assert preview["touches"] == []
+    assert preview["reason_code"] == "draft_preparation_not_authorized"

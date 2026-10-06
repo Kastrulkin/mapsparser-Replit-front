@@ -447,3 +447,32 @@ def test_partial_search_cost_is_not_reported_as_zero_total():
     assert report['model_cost'] is None
     report=preparation_report({}, {'search_calls':2,'search_cost_receipts':{'r1':0.12,'r2':0.08}})
     assert report['search_cost_usd']==0.2 and report['search_cost_status']=='confirmed'
+
+
+def test_saved_group_revision_requires_review_and_keeps_original_id():
+    from services.outreach_continuation import prepare_revision_approval
+    original = normalize_config({**config(), "mode": "find_only", "target_count": 10})
+    class Cursor:
+        def execute(self, sql, params):
+            assert params == ("saved-group", "business", "outreach_continue")
+        def fetchone(self):
+            return {"status": "waiting_for_review", "payload_json": original,
+                    "result_json": {"lead_ids": ["lead"], "search_credits_charged": 5}}
+    preview = prepare_revision_approval(Cursor(), business_id="business", task_id="saved-group",
+        raw={"target_count": 3, "mode": "prepare_only", "offer": "Reviewed airport transfer offer"})
+    envelope = preview["approval"]["envelope"]
+    assert envelope["operation"] == "revise_and_start"
+    assert envelope["task_id"] == "saved-group"
+    assert envelope["previous_revision"] == config_hash(original)
+    assert preview["config"]["target_count"] == 3
+    assert original["mode"] == "find_only"
+
+
+def test_saved_group_revision_does_not_change_audience_silently():
+    from services.outreach_continuation import prepare_revision_approval
+    original = normalize_config(config())
+    class Cursor:
+        def execute(self, *args): pass
+        def fetchone(self): return {"status": "completed", "payload_json": original, "result_json": {}}
+    with pytest.raises(ValueError, match="new_audience"):
+        prepare_revision_approval(Cursor(), business_id="business", task_id="saved-group", raw={"audience": "different audience"})

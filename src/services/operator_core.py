@@ -1394,11 +1394,11 @@ def _operator_tool_catalog(
             "name": "partnerships.continue_outreach",
             "capability": "partnerships.continue_outreach",
             "title": "Продолжающийся поиск партнёров",
-            "description": "Для нового поиска вызови operation=preview: покажи условия и одно подтверждение запуска. До подтверждения задача не создаётся. operation=create оставлен для старых клиентов. Режим find_only не готовит и не отправляет письма. Если указаны страна компаний и продаваемое направление, но нет городов, preview покажет широкий запрос по указанной стране. auto_send требует отдельного outreach.ai_rules.",
+            "description": "Если пользователь сказал только «найди лидов» без конечного этапа, сначала уточни: найти и проверить или также подготовить письма. Явное «только поиск» сохраняй как find_only. Для нового поиска вызови operation=preview: покажи условия и одно подтверждение запуска. До подтверждения задача не создаётся. Чтобы изменить объём, предложение или конечный этап выбранного поиска, используй revise_preview с task_id: одно подтверждение обновит условия и продолжит в той же группе. operation=create оставлен для старых клиентов. Режим find_only не готовит и не отправляет письма. Если указаны страна компаний и продаваемое направление, но нет городов, preview покажет широкий запрос по указанной стране. auto_send требует отдельного outreach.ai_rules.",
             "input_schema": {
                 "type": "object", "additionalProperties": False,
                 "properties": {
-                    "operation": {"type": "string", "enum": ["preview", "create", "list", "pause", "stop", "resume", "start", "rename", "retry_failed", "acknowledge_search", "use_shared_balance"]},
+                    "operation": {"type": "string", "enum": ["preview", "revise_preview", "create", "list", "pause", "stop", "resume", "start", "rename", "retry_failed", "acknowledge_search", "use_shared_balance"]},
                     "task_id": {"type": "string"}, "revision": {"type": "string"},
                     "display_name": {"type": "string", "maxLength": 120},
                     "config": {"type": "object", "properties": {

@@ -262,3 +262,11 @@ Use these labels only as secondary navigation inside the employee model:
 - `Настройки`
 
 Advanced/debug surfaces must be gated or visually secondary.
+
+## Visible delegated work
+
+A user must see that their command was received, what is actually running, and
+what has already been produced. Use durable job states and real counters for
+search, contacts/research, qualification, letters, sending, and replies. Collection
+completion never implies audience qualification. Show queue waiting, pauses,
+errors, and the last successful refresh explicitly; never simulate progress.

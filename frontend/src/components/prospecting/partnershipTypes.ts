@@ -1,4 +1,6 @@
+import type { LeadWorkstream } from './AdminLeadRegistry.logic';
 export type PartnershipLead = {
+  workstreams?: LeadWorkstream[];
   id: string;
   name?: string;
   address?: string;
@@ -78,6 +80,7 @@ export type PartnershipLead = {
 };
 
 export type PartnershipDraft = {
+  canonical_review?: { stale?: boolean; subject?: string; recipient?: string; sender?: string; text?: string; source_url?: string };
   id: string;
   lead_id: string;
   created_at?: string;

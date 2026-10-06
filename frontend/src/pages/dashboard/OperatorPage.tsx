@@ -849,20 +849,30 @@ function OutreachTaskStatus({ businessId, initialTask }: { businessId: string; i
   const actionInFlight = useRef(false);
   useEffect(() => {
     let active = true;
+    let working = !!initialTask.presentation?.active;
+    let inFlight = false;
     const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const response = await api.get(`/partnership/continuations/${encodeURIComponent(initialTask.id)}`, { params: { business_id: businessId } });
         if (!active) return;
         const current = response.data as OutreachTask;
-        if (current) setTask(current);
+        if (current) { working = !!current.presentation?.active; setTask(current); }
         setRefreshError(!current);
       } catch {
         if (active) setRefreshError(true);
-      }
+      } finally { inFlight = false; }
     };
     void refresh();
-    const timer = window.setInterval(() => void refresh(), 15000);
-    return () => { active = false; window.clearInterval(timer); };
+    let lastRefresh = Date.now();
+    const timer = window.setInterval(() => {
+      if (Date.now() - lastRefresh >= (working && !document.hidden ? 3000 : 15000)) { lastRefresh = Date.now(); void refresh(); }
+    }, 1000);
+    const focusRefresh = () => { if (!document.hidden) { lastRefresh = Date.now(); void refresh(); } };
+    document.addEventListener('visibilitychange', focusRefresh);
+    window.addEventListener('focus', focusRefresh);
+    return () => { active = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', focusRefresh); window.removeEventListener('focus', focusRefresh); };
   }, [businessId, initialTask.id]);
   return <div className="space-y-2">
     <OutreachGroupCard name={task.display_name || 'Выбранный поиск'} presentation={task.presentation} busy={actionBusy} onAction={async action => {

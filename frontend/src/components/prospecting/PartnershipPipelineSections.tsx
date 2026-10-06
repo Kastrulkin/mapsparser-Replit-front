@@ -1,3 +1,4 @@
+import type { LeadWorkstream } from './AdminLeadRegistry.logic';
 import { ContactPresenceBadges, WorkflowActionRow } from '@/components/prospecting/LeadWorkflowBlocks';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,7 @@ type WorkflowBadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive';
 type WorkflowTone = 'default' | 'success' | 'warning' | 'info' | 'danger';
 
 type PipelineLead = {
+  workstreams?: LeadWorkstream[];
   id: string;
   name?: string;
   address?: string;
@@ -508,6 +510,9 @@ export const PartnershipLeadCard = ({
   onOpenLead,
   onDeferLead,
 }: PartnershipLeadCardProps) => {
+  const intelligence = lead.workstreams?.find(workstream => workstream.workstream_type === 'client_partnership');
+  const collecting = ['collecting', 'verifying', 'researching', 'drafting'].includes(intelligence?.enrichment_state?.status || '');
+  const recipient = intelligence?.selected_recipient;
   const stageValue = String(lead.partnership_stage || '').toLowerCase();
   const pipelineStatus = String(lead.pipeline_status || '').toLowerCase();
   const isUnprocessed = !pipelineStatus || pipelineStatus === 'unprocessed' || pipelineStatus === 'qualified' || (!stageValue || stageValue === 'imported');
@@ -555,6 +560,10 @@ export const PartnershipLeadCard = ({
           {lead.rating ? <Badge variant="secondary">★ {lead.rating}{lead.reviews_count ? ` (${lead.reviews_count})` : ''}</Badge> : null}
         </div>
       </div>
+      {intelligence && <details className="mt-3 rounded-md border p-2 text-xs text-muted-foreground">
+        <summary className="cursor-pointer">{collecting ? 'Получаем контакты и сведения…' : intelligence.research ? 'Сведения собраны' : 'Контакты и сведения'} · Контактов: {intelligence.contact_summary?.found ?? 0}</summary>
+        <div className="mt-2 space-y-1"><p>Контакт: {recipient?.value || 'Пока не выбран'}{recipient?.source_url && /^https?:\/\//i.test(recipient.source_url) && <> · <a href={recipient.source_url} target="_blank" rel="noreferrer" className="underline">Источник контакта</a></>}</p><p>Пригодность для поиска подтверждается отдельно.</p>{intelligence.enrichment_state?.error && <p>Получение сведений требует внимания.</p>}</div>
+      </details>}
       {verification && <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-700">
         <div className="font-medium">Проверка для этого поиска</div>
         {([['Страна компании', verification.country], ['Продаваемое направление', verification.destination]] as const).map(([label, criterion]) => (

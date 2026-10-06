@@ -506,7 +506,7 @@ def process_next_operator_async_job(*, background: bool = False, background_only
         if kind == "partner_search_drafts":
             from services.partner_search_drafts import process_job
             result = process_job(claimed)
-            status = "failed" if result.get("blocked") or (not result.get("remaining") and result.get("failed")) else "queued" if result.get("remaining") else "completed"
+            status = "waiting_for_review" if result.get("blocked") else "queued" if result.get("remaining") else "completed"
             stage = f"Подготовлено {result.get('created', 0)} из {result.get('total', 0)}; требуют внимания {result.get('failed', 0)}"
             progress = round(100 * (result.get("created", 0) + result.get("failed", 0)) / max(result.get("total", 1), 1))
         elif kind in {"voice_receive", "voice_execute"}:

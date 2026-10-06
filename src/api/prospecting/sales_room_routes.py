@@ -461,7 +461,7 @@ def partnership_create_send_batch():
 
             query = """
                 WITH draft_scope AS (
-                    SELECT d.id, d.lead_id, d.workstream_id, d.channel, d.created_at, d.updated_at
+                    SELECT d.id, d.lead_id, d.workstream_id, d.channel, d.created_at, d.updated_at, d.learning_note_json, d.approved_text
                     FROM outreachmessagedrafts d
                     JOIN prospectingleads l ON l.id = d.lead_id
                     JOIN lead_workstreams ws ON ws.id = d.workstream_id
@@ -485,7 +485,7 @@ def partnership_create_send_batch():
                            ) AS draft_rank
                     FROM draft_scope
                 )
-                SELECT id, lead_id, workstream_id, channel
+                SELECT id, lead_id, workstream_id, channel, learning_note_json, approved_text
                 FROM ranked_drafts
                 WHERE draft_rank = 1
             """
@@ -534,11 +534,31 @@ def partnership_create_send_batch():
                 (batch_id, MAX_DAILY_OUTREACH_BATCH, BATCH_DRAFT, user_data["user_id"]),
             )
             for row in rows:
+                origin = row.get("learning_note_json") or {}
+                sender_id = touch_id = None
+                if origin.get("campaign_id"):
+                    from services.outreach_draft_review import canonical_review
+                    reviewed = canonical_review(cur, {"lead_id": row["lead_id"], "learning_note_json": origin})
+                    if not reviewed or reviewed["hash"] != origin.get("reviewed_campaign_hash"):
+                        return jsonify({"error": "Получатель, отправитель или письмо изменились. Проверьте новую версию.", "code": "campaign_review_stale"}), 409
+                    cur.execute("""SELECT touch.id, touch.sender_account_id, touch.generated_text
+                        FROM outreach_campaign_touches touch
+                        JOIN outreach_campaigns campaign ON campaign.id=touch.campaign_id
+                        WHERE touch.id=%s AND campaign.id=%s AND campaign.business_id=%s
+                          AND campaign.status='draft' AND campaign.version=%s
+                        FOR UPDATE OF touch, campaign""",
+                        (origin.get("campaign_touch_id"), origin["campaign_id"], business_id, origin.get("campaign_version")))
+                    canonical = cur.fetchone()
+                    if not canonical or canonical["generated_text"] != row["approved_text"]:
+                        return jsonify({"error": "Письмо изменилось. Проверьте текущую версию перед отправкой.", "code": "campaign_review_stale"}), 409
+                    sender_id, touch_id = canonical["sender_account_id"], canonical["id"]
+                elif origin.get("search_task_id"):
+                    return jsonify({"error": "Старый черновик требует новой подготовки по собранным сведениям.", "code": "canonical_campaign_required"}), 409
                 cur.execute(
                     """
                     INSERT INTO outreachsendqueue (
-                        id, batch_id, lead_id, workstream_id, draft_id, channel, delivery_status
-                    ) VALUES (%s, %s, %s, NULLIF(%s, '')::uuid, %s, %s, %s)
+                        id, batch_id, lead_id, workstream_id, draft_id, channel, delivery_status, sender_account_id, campaign_touch_id
+                    ) VALUES (%s, %s, %s, NULLIF(%s, '')::uuid, %s, %s, %s, %s, %s)
                     """,
                     (
                         str(uuid.uuid4()),
@@ -548,6 +568,7 @@ def partnership_create_send_batch():
                         row["id"],
                         row["channel"],
                         QUEUE_STATUS_QUEUED,
+                        sender_id, touch_id,
                     ),
                 )
                 cur.execute(

@@ -144,7 +144,7 @@ def partnership_continuations(task_id=None):
     from api.prospecting.access_schema import _require_auth, _resolve_business_for_user
     from pg_db_utils import get_db_connection
     from services.partnership_leads_service import _partnership_write_access
-    from services.outreach_continuation import create_task, list_tasks, control_task, continuation_enabled, actor_can_write, prepare_new_task_approval, view, KIND
+    from services.outreach_continuation import create_task, list_tasks, control_task, continuation_enabled, actor_can_write, prepare_new_task_approval, prepare_revision_approval, view, KIND
     from services.partnership_group_view import enrich_group
 
     user, error = _require_auth()
@@ -187,13 +187,15 @@ def partnership_continuations(task_id=None):
             for task in result['items']:
                 task['report'].update(delivery_report(cursor, task))
                 enrich_group(cursor, task, viewer_id=user_id)
-        elif str(data.get('operation') or '') == 'preview' and not task_id:
+        elif str(data.get('operation') or '') == 'preview':
             from services.operator_conversations import (
                 create_pending_operator_action, find_latest_operator_conversation,
                 get_or_create_operator_conversation,
             )
-            preview = prepare_new_task_approval(data.get('config'), business_id=business_id,
-                                                request_id=str(data.get('request_id') or ''))
+            preview = (prepare_revision_approval(cursor, business_id=business_id, task_id=task_id,
+                       raw=data.get('config'), request_id=str(data.get('request_id') or '')) if task_id else
+                       prepare_new_task_approval(data.get('config'), business_id=business_id,
+                                                request_id=str(data.get('request_id') or '')))
             conversation = find_latest_operator_conversation(cursor, business_id=business_id,
                                                               user_id=user_id, channel='web')
             if not conversation:

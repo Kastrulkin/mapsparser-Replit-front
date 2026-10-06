@@ -165,6 +165,28 @@ def prepare_new_task_approval(raw: dict[str, Any], *, business_id: str, request_
             "chat_response": summary, "result_ref": None}
 
 
+def prepare_revision_approval(cursor, *, business_id, task_id, raw, request_id=""):
+    cursor.execute("SELECT * FROM operator_async_jobs WHERE id=%s AND business_id=%s AND kind=%s",
+                   (task_id, business_id, KIND))
+    row = cursor.fetchone()
+    if not row:
+        raise ValueError("task_not_found")
+    if row["status"] in {"running", "queued", "cancelled"} or (row.get("result_json") or {}).get("inflight_search"):
+        raise ValueError("pause_and_reconcile_before_revision")
+    previous = row.get("payload_json") or {}
+    config = normalize_config({**previous, **(raw or {})})
+    # A saved group cannot silently become a different audience or an auto-send grant.
+    identity = ("audience", "agency_country", "sold_destination", "language", "queries")
+    if any(config.get(key) != previous.get(key) for key in identity) or config["mode"] == "auto_send":
+        raise ValueError("new_audience_or_send_rules_require_separate_review")
+    preview = prepare_new_task_approval(config, business_id=business_id, request_id=request_id)
+    preview["approval"]["envelope"].update(operation="revise_and_start", task_id=str(task_id),
+                                           previous_revision=config_hash(previous))
+    preview["chat_response"] += " Сохранённые компании и расходы остаются в этой группе; сначала обрабатываем их."
+    preview["approval"]["summary"] = preview["chat_response"]
+    return preview
+
+
 def qualified_contact_ids(state: dict[str, Any]) -> list[str]:
     contacts = set(state.get("verified_contact_workstream_ids") or [])
     return [key for key, value in (state.get("qualifications") or {}).items()
@@ -1029,6 +1051,9 @@ def operator_task(cursor: Any, *, business_id: str, user_id: str, arguments: dic
     if not get_capability_access(business_id, "partnerships", bool(actor.get("is_superadmin"))).get("allowed"):
         return {"status": "denied", "reason_code": "payment_required"}
     try:
+        if arguments.get("operation") == "revise_preview":
+            return prepare_revision_approval(cursor, business_id=business_id,
+                task_id=str(arguments.get("task_id") or ""), raw=arguments.get("config"))
         if arguments.get("operation") == "preview":
             from services.operator_chat_service import current_request_key
             return prepare_new_task_approval(arguments.get("config"), business_id=business_id,
@@ -1194,12 +1219,43 @@ def confirm_task_start(cursor: Any, *, business_id: str, user_id: str, envelope:
             or not actor_can_write(cursor, business_id, actor)
             or not get_capability_access(business_id, "partnerships", bool(actor.get("is_superadmin"))).get("allowed")):
         return {"status": "blocked", "blocked_reasons": ["access_revoked"]}
-    if envelope.get("operation") not in {"start", "resume", "create_and_start"}:
+    if envelope.get("operation") not in {"start", "resume", "create_and_start", "revise_and_start"}:
         return {"status": "blocked", "blocked_reasons": ["invalid_operation"]}
     expected_terms = 2 if (envelope.get('config') or {}).get('billing_mode') == 'shared_balance_actual' else 1
     if envelope.get("credit_terms_version") != expected_terms:
         return {"status": "blocked", "chat_response": "Условия в кредитах обновились. Попросите показать их заново перед запуском.",
                 "blocked_reasons": ["credit_terms_changed"]}
+    if envelope.get("operation") == "revise_and_start":
+        cursor.execute("SAVEPOINT outreach_revision_start")
+        try:
+            task_id = str(envelope.get("task_id") or "")
+            cursor.execute("SELECT * FROM operator_async_jobs WHERE id=%s AND business_id=%s AND kind=%s FOR UPDATE",
+                           (task_id, business_id, KIND))
+            row = cursor.fetchone()
+            if not row or config_hash(row.get("payload_json") or {}) != envelope.get("previous_revision"):
+                raise ValueError("stale_review")
+            reviewed = prepare_revision_approval(cursor, business_id=business_id, task_id=task_id,
+                                                 raw=envelope.get("config"))
+            config = reviewed["config"]
+            if config_hash(config) != envelope.get("revision"):
+                raise ValueError("stale_review")
+            state = dict(row.get("result_json") or {})
+            state.setdefault("config_versions", []).append({"config": row["payload_json"], "at": datetime.now(timezone.utc).isoformat()})
+            state.setdefault("history", []).append({"action": "conditions_changed", "at": datetime.now(timezone.utc).isoformat()})
+            state.update(phase="prepare" if state.get("lead_ids") else "search", blocker=None)
+            if config["mode"] != row["payload_json"].get("mode"):
+                state["verified_contact_workstream_ids"] = []
+            cursor.execute("UPDATE operator_async_jobs SET payload_json=%s, result_json=%s, status='waiting_for_review', updated_at=NOW() WHERE id=%s",
+                           (Json(config), Json(state), task_id))
+            task = control_task(cursor, task_id=task_id, business_id=business_id, user_id=user_id,
+                                action="resume", revision=config_hash(config))
+            cursor.execute("RELEASE SAVEPOINT outreach_revision_start")
+            return {"status": "completed", "task": task, "job_id": task_id, "job_kind": KIND,
+                    "chat_response": "Условия согласованы. Продолжаем с сохранёнными компаниями; письма не отправляются.",
+                    "external_dispatch_performed": False}
+        except ValueError as exc:
+            cursor.execute("ROLLBACK TO SAVEPOINT outreach_revision_start")
+            return {"status": "blocked", "blocked_reasons": [str(exc)]}
     if envelope.get("operation") == "create_and_start":
         supplied = envelope.get("config")
         if not isinstance(supplied, dict) or envelope.get("revision") != config_hash(supplied):

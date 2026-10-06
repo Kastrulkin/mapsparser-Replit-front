@@ -4087,13 +4087,21 @@ def build_preview(
     generate_ai: bool | None = None,
     manual_reviewer_role: str | None = None,
     manual_review_context: str | None = None,
+    preparation_job_id: str | None = None,
 ) -> dict[str, Any]:
     context = _apply_sender_mode(_load_context(cursor, workstream_id), sender_mode)
     continuation = None
+    preparation = None
+    if preparation_job_id:
+        from services.partner_search_drafts import load_preparation_contract
+        preparation = load_preparation_contract(cursor, preparation_job_id, workstream_id)
+        if not preparation:
+            return {"workstream_id": workstream_id, "status": "needs_evidence", "touches": [],
+                    "reason_code": "draft_preparation_not_authorized"}
     if context.get("continuation_managed") or (context.get("search_payload_json") or {}).get("continuation_id"):
         from services.outreach_continuation import load_workstream_contract
         continuation = load_workstream_contract(cursor, workstream_id)
-        if (not continuation or not continuation.get("enabled")
+        if not preparation and (not continuation or not continuation.get("enabled")
                 or continuation.get("status") not in {"running", "queued"}
                 or continuation.get("blocker")
                 or (continuation.get("qualification") or {}).get("status") != "qualified"):
@@ -4124,14 +4132,19 @@ def build_preview(
     reviewer_role = _text(manual_reviewer_role) or "authorized_user"
     review_context = _text(manual_review_context)
     ledger = build_evidence_ledger(context)
-    if continuation:
+    if continuation and (continuation.get("qualification") or {}).get("status") == "qualified":
         qualification = continuation["qualification"]
         evidence = qualification.get("evidence") or {}
         if not evidence.get("fact") or not evidence.get("source_url"):
             return {"workstream_id": workstream_id, "status": "needs_evidence", "touches": [], "reason_code": "continuation_evidence_missing"}
         # Use the actual qualified public fact, not an unrelated map-rating opener.
-        ledger = [{**evidence, "kind": "public_signal", "status": "observed", "relevance": continuation["config"]["offer"],
-                   "observed_at": evidence.get("observed_at"), "freshness": "current_snapshot", "confidence": 0.8}]
+        qualified_evidence = {**evidence, "id": "qualified-audience-fact", "kind": "public_signal",
+                              "status": "observed", "relevance": (preparation or {}).get("offer") or continuation["config"].get("offer"),
+                              "observed_at": evidence.get("observed_at"), "freshness": "current_snapshot", "confidence": 0.8}
+        ledger = [qualified_evidence] + [item for item in ledger
+            if item.get("source_url") and item.get("fact")
+            and not str(item.get("kind") or "").startswith("map")
+            and item.get("fact") != evidence.get("fact")]
     pain_playbook = None
     localos_sales = context.get("workstream_type") == "localos_sales"
     beauty_sales = bool(
@@ -4195,6 +4208,9 @@ def build_preview(
     offers = offer_candidates(context, _text(context.get("sender_mode")))
     trusts = trust_candidates(context, _text(context.get("sender_mode")))
     selected_offer = select_offer(offers, offer_id)
+    if preparation:
+        selected_offer = {"id": "reviewed_search_offer", "text": preparation["offer"],
+                          "source": "confirmed_draft_job"}
     selected_trust = select_trust(trusts, trust_strategy)
     candidates = build_personalization_candidates(
         context,
@@ -4203,6 +4219,7 @@ def build_preview(
         selected_trust=selected_trust,
     )
     base_payload = {
+        "continuation_qualification": (continuation or {}).get("qualification"),
         "workstream_id": workstream_id,
         "workstream_type": context.get("workstream_type"),
         "lead_id": str(context.get("lead_id")),
@@ -4623,7 +4640,9 @@ def build_preview(
             "forbidden_claims": [],
         }
 
-        if continuation:
+        if preparation:
+            generation_story = {**generation_story, "offer": preparation["offer"]}
+        elif continuation:
             generation_story = {**generation_story, "offer": continuation["config"]["offer"]}
 
         def voice_example_text(item: Any) -> str:
@@ -4643,7 +4662,7 @@ def build_preview(
                 "contact_name": _text(primary_candidate.get("contact_name")),
                 "contact_role": _text(primary_candidate.get("contact_role")),
             },
-            candidate={**primary_candidate, "language": ((continuation or {}).get("config") or {}).get("language") or context.get("preferred_language") or "ru"},
+            candidate={**primary_candidate, "language": (preparation or {}).get("language") or ((continuation or {}).get("config") or {}).get("language") or context.get("preferred_language") or "ru"},
             founder_story=generation_story,
             sequence=touches,
             voice_examples=voice_examples,
@@ -4811,6 +4830,7 @@ def build_preview(
         generated_at=start,
     )
     return {
+        "continuation_qualification": (continuation or {}).get("qualification"),
         "status": preview_status,
         "workstream_id": workstream_id,
         "workstream_type": context.get("workstream_type"),
@@ -5257,8 +5277,10 @@ def approve_campaign(
     cursor: Any, campaign_id: str, *, user_id: str | None,
     template_authorization: dict[str, Any] | None = None,
     riderra_template_authorization: dict[str, Any] | None = None,
+    reviewed_batch_id: str | None = None,
+    ai_authorization: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    if not user_id and not template_authorization and not riderra_template_authorization:
+    if not user_id and not template_authorization and not riderra_template_authorization and not ai_authorization:
         raise ValueError("campaign_approval_authority_required")
     cursor.execute(
         """
@@ -5282,6 +5304,8 @@ def approve_campaign(
     if ((campaign.get("policy_json") or {}).get("approval_mode") == "riderra_template"
             and not riderra_template_authorization):
         raise ValueError("riderra_template_authorization_required")
+    if (campaign.get("policy_json") or {}).get("approval_mode") == "ai_rules" and not ai_authorization:
+        raise ValueError("ai_rules_authorization_required")
     if template_authorization:
         policy = campaign.get("policy_json") or {}
         current_grant = load_author_template_authorization(
@@ -5359,6 +5383,14 @@ def approve_campaign(
     )
     if not channels_ready:
         raise ValueError("Campaign preflight failed")
+    if ai_authorization:
+        from services.outreach_ai_campaigns import validate
+        policy = campaign.get("policy_json") or {}
+        current_grant = validate(cursor, campaign=campaign, touches=approval_touches,
+            authorization_id=str(ai_authorization.get("id") or ""), job_id=policy.get("continuation_job_id"))
+        if (policy.get("approval_mode") != "ai_rules" or not current_grant
+                or str(current_grant["id"]) != policy.get("ai_authorization_id")):
+            raise ValueError("ai_rules_authorization_changed")
     author_template_approval = bool(
         template_authorization
         and is_localos_author_lane(campaign)
@@ -5369,7 +5401,7 @@ def approve_campaign(
         generation_contract_current(
             touch.get("message_brief_json"),
             touch.get("quality_gate_json"),
-            require_ai=False if deterministic_template_approval else None,
+            require_ai=True if ai_authorization else False if deterministic_template_approval else None,
         )
         for touch in approval_touches
     ):
@@ -5447,15 +5479,17 @@ def approve_campaign(
         "UPDATE outreach_campaign_touches SET status = 'approved', approved_text = generated_text, updated_at = NOW() WHERE campaign_id = %s",
         (campaign_id,),
     )
-    batch_id = str(uuid.uuid4())
-    cursor.execute(
-        """
-        INSERT INTO outreachsendbatches (
-            id, batch_date, daily_limit, status, created_by, approved_by, created_at, updated_at
-        ) VALUES (%s, (NOW() AT TIME ZONE 'Europe/Moscow')::date, %s, 'approved', %s, %s, NOW(), NOW())
-        """,
-        (batch_id, int((campaign.get("policy_json") or {}).get("daily_limit") or 10), user_id, user_id),
-    )
+    batch_id = reviewed_batch_id or str(uuid.uuid4())
+    if reviewed_batch_id:
+        cursor.execute("SELECT id FROM outreachsendbatches WHERE id=%s AND status='draft' FOR UPDATE", (batch_id,))
+        if not cursor.fetchone():
+            raise ValueError("reviewed_batch_not_draft")
+    else:
+        cursor.execute(
+            """INSERT INTO outreachsendbatches (
+                id, batch_date, daily_limit, status, created_by, approved_by, created_at, updated_at
+            ) VALUES (%s, (NOW() AT TIME ZONE 'Europe/Moscow')::date, %s, 'approved', %s, %s, NOW(), NOW())""",
+            (batch_id, int((campaign.get("policy_json") or {}).get("daily_limit") or 10), user_id, user_id))
     cursor.execute(
         """
         SELECT t.*, c.lead_id, c.workstream_id, c.sender_profile_id
@@ -5519,13 +5553,16 @@ def approve_campaign(
         payload={
             "version": int(result.get("version") or 0), "batch_id": batch_id,
             "approval_mode": (
+                "ai_rules" if ai_authorization else
                 "author_template" if template_authorization else
                 "riderra_template" if riderra_template_authorization else "manual"
             ),
             "template_authorization_id": (template_authorization or riderra_template_authorization or {}).get("id"),
+            "ai_authorization_id": str((ai_authorization or {}).get("id") or "") or None,
         },
     )
     result["approval_mode"] = (
+        "ai_rules" if ai_authorization else
         "author_template" if template_authorization else
         "riderra_template" if riderra_template_authorization else "manual"
     )

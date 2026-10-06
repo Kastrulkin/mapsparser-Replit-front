@@ -5,6 +5,11 @@ import { test, expect } from '@playwright/test';
 const business = { id: 'edbd961a-273f-4f15-836e-33aacc0aa0e3', name: 'Riderra (Tallinn)', subscription_tier: 'concierge', subscription_status: 'active' };
 const group = { id: 'e2252eb8-14f5-47bf-8256-f41c0ae10491', business_id: business.id, display_name: 'Индия → Пхукет · 02.10', revision: 'fixture-revision', status: 'waiting_for_review', stage: 'Недостаточно кредитов', config: { mode: 'find_only', audience: 'Турагентства Индии', queries: [], max_search_calls: 3, language: 'en', max_candidates: 50, target_count: 10 }, state: { started: true, lead_ids: ['company-1'], workstream_ids: ['ws-1'], blocker: 'insufficient_credits' }, report: { found: 42, imported: 41, eligible: 0 }, presentation: {
   phase: 'companies', status: 'needs_attention', label: 'Требуется действие', active: false,
+  substeps: [
+    { id: 'search', label: 'Поиск', status: 'completed', processed: 42, detail: 'Найденные кандидаты' },
+    { id: 'enrichment', label: 'Контакты и сведения', status: 'completed', processed: 41, total: 41, detail: 'Сведения собраны: 41; контакт выбран: 40' },
+    { id: 'qualification', label: 'Проверка соответствия', status: 'paused', processed: 0, total: 41, detail: 'Подходят с подтверждённым контактом: 0' },
+  ],
   reason: 'Не хватает кредитов для следующего действия. Прогресс сохранён.',
   next_action: { kind: 'link', label: 'Пополнить баланс', href: `/dashboard/profile?business_id=${business.id}&focus=subscription#subscription` },
   metrics: { found: 42, eligible: 0, target: 10, needs_decision: 41, awaiting_check: 41, prepared: 0, queued: 0, sent: 0, replies: 0 }, expenses: { charged: 5, estimate: 65, estimate_only: true },
@@ -58,3 +63,11 @@ test('companies filters and group survive navigation and reload', async ({ page 
 });
 
  test.afterEach(() => { expect(runtimeErrors).toEqual([]); });
+
+test('shows collected intelligence separately from paused suitability checks', async ({ page }) => {
+  await page.goto(`/dashboard/operator?business_id=${business.id}&search_task_id=${group.id}`);
+  await expect(page.getByRole('list', { name: 'Работа с компаниями' }).first()).toBeVisible();
+  await expect(page.getByText('Сведения собраны: 41; контакт выбран: 40').first()).toBeVisible();
+  await expect(page.getByText('На паузе · 0 из 41').first()).toBeVisible();
+  expect(runtimeErrors).toEqual([]);
+});

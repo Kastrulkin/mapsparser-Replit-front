@@ -81,3 +81,38 @@ def test_failed_letters_never_restarts_search():
     p = presentation(task(status='waiting_for_review'), draft_job={'status': 'failed', 'result_json': {}})
     assert p['next_action']['kind'] == 'link'
     assert p['phase'] == 'letters'
+
+
+def test_collected_evidence_is_not_qualification():
+    from services.partnership_group_view import company_substeps
+    t = task(state={"lead_ids": ["one", "two"], "phase": "prepare"},
+             report={"found": 2, "checked": 0, "eligible": 0})
+    jobs = [{"status": "needs_evidence", "completed_at": "today",
+             "readiness_json": {"missing": ["continuation_campaign_preparation"]},
+             "result_json": {"selected_contact_point_id": "contact"}} for _ in range(2)]
+    steps = company_substeps(t, jobs)
+    assert steps[1]["status"] == "completed"
+    assert steps[1]["processed"] == 2
+    assert steps[2]["processed"] == 0
+    assert steps[2]["status"] != "completed"
+
+
+def test_enrichment_queue_is_not_running_spinner():
+    from services.partnership_group_view import company_substeps
+    t = task(status="queued", state={"lead_ids": ["one"], "phase": "prepare"})
+    steps = company_substeps(t, [{"status": "queued", "result_json": {}}])
+    assert steps[1]["status"] == "queued"
+    assert steps[1]["remaining"] == 1
+
+
+def test_access_revoked_draft_is_not_resumed_after_topup():
+    draft = {"id": "letters", "status": "waiting_for_review", "result_json": {"blocker": "access_revoked"}}
+    result = presentation(task(), draft_job=draft, available_credits=100)
+    assert result["blocker"] == "access_revoked"
+    assert result["next_action"]["kind"] == "link"
+
+
+def test_queued_work_is_identified_as_waiting_not_running():
+    result = presentation(task(status="queued"))
+    assert result["status"] == "queued"
+    assert result["label"] == "Ожидает запуска"
