@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-06",
+  "surface": "alice.yandex.ru, fresh chats, intelligence Auto, same authenticated profile",
+  "checks": [
+    {
+      "prompt": "Что за сервис LocalOS на сайте https://localos.pro/? Найди информацию в интернете и укажи источники.",
+      "result": "Correctly described our business software and cited /docs and /pricing; also mentioned other similarly named products. Claimed rendering error on homepage.",
+      "sources": [
+        "https://localos.pro/docs",
+        "https://localos.pro/pricing",
+        "https://vk.ru/localospro"
+      ],
+      "chatUrl": "https://alice.yandex.ru/chat/01a110f3-b007-4000-bf33-782f1c415511/"
+    },
+    {
+      "prompt": "Что ты знаешь о localos.pro?",
+      "result": "Incorrect attribution to an unrelated local-services marketplace/mobile app. Mentioned G10 Info.Tech and APKPure, rather than our platform. No actual source links in visible answer.",
+      "chatUrl": "https://alice.yandex.ru/chat/01a110f4-f9bf-473e-bf33-78392bf981e4/"
+    }
+  ],
+  "independentHomepageCheck": {
+    "browser": "Own homepage rendered correct H1; no captured console errors",
+    "webFetch": "External web fetch tool reported timeout; does not establish crawler-wide failure"
+  },
+  "conclusion": "Plain-domain recognition is unreliable; normal SERP rank #1 did not establish Alice recognition. Explicit internet-search wording produced correct source-based answer in this sample.",
+  "unprovenCauses": [
+    "Search invocation/routing or cached knowledge differs between prompts",
+    "Confusion with similarly named products",
+    "Residual cached render error or fetch reliability for external clients"
+  ],
+  "nextWork": [
+    "Diagnose actual external homepage retrieval rather than treating spoofed User-Agent as proof",
+    "Align consistent product/entity descriptions in metadata, schema and public discovery documents",
+    "Strengthen independent correct brand references and repeat fresh-chat prompt checks"
+  ]
+}
