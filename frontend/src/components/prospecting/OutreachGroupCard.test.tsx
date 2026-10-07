@@ -24,3 +24,11 @@ it('shows the real running substep without expanding technical detail', () => {
   expect(screen.getAllByRole('status').some(item => item.textContent?.includes('Проверяем соответствие'))).toBe(true);
   expect(container.querySelector('details')).not.toHaveAttribute('open');
 });
+it('compact workspace summary retains real progress without a duplicate stage menu', () => {
+  render(<OutreachGroupCard compact name="Индия → Пхукет" presentation={presentation} />);
+  expect(screen.queryByRole('list', { name: 'Этапы аутрича' })).not.toBeInTheDocument();
+  expect(screen.getByText('0 / 3')).toBeVisible();
+  expect(screen.getByText('Списано: 46 кр.')).toBeVisible();
+  expect(screen.getByText('Подробности работы').closest('details')).not.toHaveAttribute('open');
+  expect(screen.getByText('Контакты и сведения: завершено · 41 из 41')).not.toBeVisible();
+});

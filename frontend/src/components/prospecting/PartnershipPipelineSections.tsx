@@ -474,6 +474,7 @@ const EditableLeadBasics = ({
 type PartnershipLeadCardProps = {
   lead: PipelineLead;
   mode: 'raw' | 'pipeline';
+  compact?: boolean;
   searchLabel?: string;
   verification?: { country?: { status?: string; source_url?: string; quote?: string }; destination?: { status?: string; source_url?: string; quote?: string }; contactVerified?: boolean };
   dragging: boolean;
@@ -494,6 +495,7 @@ type PartnershipLeadCardProps = {
 export const PartnershipLeadCard = ({
   lead,
   mode,
+  compact = false,
   searchLabel,
   verification,
   dragging,
@@ -533,6 +535,23 @@ export const PartnershipLeadCard = ({
     deferredReason: deferredReasonInput.trim() || lead.deferred_reason || '',
     deferredUntil: deferredUntilInput || String(lead.deferred_until || '').slice(0, 10) || '',
   };
+
+  if (compact && mode === 'raw') return <article className="grid gap-3 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-start" aria-label={lead.name || 'Компания'}>
+    <div className="min-w-0"><h3 className="break-words text-base font-medium text-foreground">{lead.name || 'Без названия'}</h3><p className="text-sm text-muted-foreground">{lead.category || 'Без категории'} · {lead.city || '—'}</p><span className="text-xs text-muted-foreground">{stagePresentation.label}</span></div>
+    <div className="min-w-0 text-sm"><p>{verification ? verifiedForSearch ? 'Соответствие подтверждено' : 'Соответствие не подтверждено' : 'Соответствие не проверено'}</p><p className="break-all text-xs text-muted-foreground">{recipient?.value || lead.email || lead.phone || 'Контакт не найден'} · {verification?.contactVerified ? 'контакт подтверждён' : 'контакт не проверен'}</p>
+      <details className="mt-2"><summary className="min-h-10 cursor-pointer py-2 text-xs text-muted-foreground">Сведения и источники</summary><div className="space-y-2 py-2 text-xs text-muted-foreground">
+        {verification && <>{[{ label: 'Страна', criterion: verification.country }, { label: 'Направление', criterion: verification.destination }].map(({ label, criterion }) => <p key={label}>{label}: {criterion?.status === 'verified' ? 'подтверждено' : criterion?.status === 'not_required' ? 'не требуется' : 'не проверено'}{criterion?.source_url && /^https?:\/\//i.test(criterion.source_url) && <a href={criterion.source_url} target="_blank" rel="noreferrer" className="ml-2 underline">Источник</a>}</p>)}</>}
+        <p>{collecting ? 'Получаем контакты и сведения…' : intelligence?.research ? 'Сведения собраны' : 'Сведения ещё не собраны'}</p>
+        {recipient?.source_url && /^https?:\/\//i.test(recipient.source_url) && <a href={recipient.source_url} target="_blank" rel="noreferrer" className="block underline">Источник контакта</a>}
+        {lead.source_url && <a href={lead.source_url} target="_blank" rel="noreferrer" className="block underline">Источник компании</a>}
+        <Button size="sm" variant="ghost" onClick={() => onMoveToStage(lead.id, 'not_relevant', { deferredReason: '', deferredUntil: '' })} disabled={loading}>Исключить</Button>
+      </div></details>
+    </div>
+    <div className="flex flex-wrap gap-2 md:justify-end">
+      {isUnprocessed && <Button size="sm" variant="outline" disabled={loading} onClick={() => onMoveToPipeline(lead.id)}>Выбрать для работы</Button>}
+      <Button size="sm" variant="ghost" onClick={() => onOpenLead(lead.id)}>Открыть</Button>
+    </div>
+  </article>;
 
   return (
     <div

@@ -10,7 +10,7 @@ import type { SearchTaskGroup } from './partnershipSearchGroups';
 type Config = { mode?: 'find_only' | 'prepare_only' | 'auto_send'; billing_mode?: 'fixed_per_call' | 'shared_balance_actual'; search_call_cap_cents?: number; target_count?: number; agency_country?: string; sold_destination?: string; max_qualification_calls?: number; max_draft_attempts?: number; riderra_shortage_only?: boolean; evidence_terms: string[]; language: string; audience: string; offer: string; queries: { query: string; city: string }[]; max_search_calls: number; max_candidates: number; batch_size: number; search_budget_cents: number };
 type Task = { presentation?: GroupPresentation; id: string; display_name?: string; created_at?: string; updated_at?: string; report?: { found?: number; imported?: number; awaiting_check?: number; checking?: number; checked?: number; verification_failed?: number; excluded?: number; duplicates?: number; eligible: number; shortfall?: number; prepared: number; queued?: number; confirmed_sent?: number; replies?: number; delivery_uncertain?: number; ai_needs_review?: number; credit_limit?: number; credit_estimate_only?: boolean; credits_charged?: number }; revision: string; stage: string; status: string; config: Config; state: { history?: { action: string; at?: string }[]; started?: boolean; search_calls?: number; lead_ids?: string[]; blocker?: string; inflight_search?: boolean; search_credit_reservation_id?: string; qualifications?: Record<string, { status: string; reason?: string }>; campaign_results?: Record<string, { status: string; campaign_id?: string; lead_id?: string; reason_code?: string }> } };
 
-export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange }: { businessId: string; selectedTaskId?: string; onTasksChange?: (tasks: SearchTaskGroup[]) => void }) {
+export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange, compact = false }: { businessId: string; selectedTaskId?: string; compact?: boolean; onTasksChange?: (tasks: SearchTaskGroup[]) => void }) {
   const [enabled, setEnabled] = useState(false);
   const [supportsShortage, setSupportsShortage] = useState(false);
   const [shortageOnly, setShortageOnly] = useState(false);
@@ -102,15 +102,16 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
   };
   if (!enabled) return error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null;
   return <section aria-labelledby="outreach-continuation-title" className="space-y-3 rounded-lg border p-4">
-    <h2 id="outreach-continuation-title" className="text-lg font-semibold">Поиск компаний и обращения</h2>
-    <p className="text-sm text-muted-foreground">Найдите компании, проверьте контакты и выберите подходящих. Письма отправляются только по отдельно согласованным правилам.</p>
+    <h2 hidden={compact} id="outreach-continuation-title" className="text-lg font-semibold">Поиск компаний и обращения</h2>
+    <p hidden={compact} className="text-sm text-muted-foreground">Найдите компании, проверьте контакты и выберите подходящих. Письма отправляются только по отдельно согласованным правилам.</p>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-    {items.filter(task => !selectedTaskId || task.id === selectedTaskId).map(task => <div key={task.id} className="space-y-3 border-t pt-4">
-      <OutreachGroupCard name={task.display_name || task.config.audience} presentation={task.presentation} busy={busy} onAction={(action) => {
+    {items.filter(task => selectedTaskId ? task.id === selectedTaskId : !compact).map(task => <div key={task.id} className={compact ? "space-y-3" : "space-y-3 border-t pt-4"}>
+      <OutreachGroupCard compact={compact} name={task.display_name || task.config.audience} presentation={task.presentation} busy={busy} onAction={(action) => {
         if (action.kind === 'draft_resume') void mutate(`/partnership/continuations/${task.id}`, { action: 'resume_letters', revision: task.revision });
         else void mutate(`/partnership/continuations/${task.id}`, { action: action.action, revision: task.revision });
       }} />
-      <details><summary className="min-h-10 cursor-pointer py-2 text-sm">Подробности и история поиска</summary>
+      <details open={!compact}><summary className="min-h-10 cursor-pointer py-2 text-sm">История и настройки поиска</summary><div className="space-y-3">
+      <details><summary className="min-h-10 cursor-pointer py-2 text-sm">История поиска</summary>
         <div className="space-y-2 py-2 text-sm text-muted-foreground">
           <p>{task.stage.replace(/DeepSeek/gi, 'ИИ')}</p>
           <p>Новые записи: {task.report?.imported ?? 0} · Исключено: {task.report?.excluded ?? 0} · Дубли: {task.report?.duplicates ?? 0}</p>
@@ -145,6 +146,7 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
         {['waiting_for_review', 'failed', 'completed'].includes(task.status) && [...Object.values(task.state.qualifications || {}), ...Object.values(task.state.campaign_results || {})].some(item => ['failed'].includes(item.status)) && <Button variant="outline" disabled={busy} onClick={() => void mutate(`/partnership/continuations/${task.id}`, { action: 'retry_failed', revision: task.revision })}>Повторить неудавшиеся проверки</Button>}
         {task.status !== 'completed' && !task.state.search_credit_reservation_id && <Button variant="ghost" disabled={busy} onClick={() => void mutate(`/partnership/continuations/${task.id}`, { action: 'stop', revision: task.revision })}>Остановить поиск</Button>}
       </div>}
+      </div></details>
     </div>)}
     {!editing ? <Button variant={items.length ? 'outline' : 'default'} onClick={() => { setRequestId(crypto.randomUUID()); setReview(null); setEditingTask(null); setEditing(true); }}>Новый поиск</Button> : review ? <div className="space-y-3 rounded-lg border bg-muted/30 p-4"><h3 className="font-medium">Проверьте условия поиска</h3><p>Ищем {review.config.target_count} новых подходящих компаний: {review.config.agency_country} → {review.config.sold_destination}. {review.config.mode === 'find_only' ? 'Только поиск и проверка, без писем.' : 'Подготовка обращений по заданным условиям.'}</p><p>Ориентир расходов — до {review.creditLimit} кредитов с общего баланса; списание только по выполненным действиям.</p><p>До подтверждения поиск не запущен.</p><div className="flex gap-2"><Button disabled={busy} onClick={() => void confirmReview()}>{editingTask ? 'Согласовать и продолжить' : 'Начать поиск'}</Button><Button variant="outline" disabled={busy} onClick={() => { setReview(null); setRequestId(crypto.randomUUID()); }}>Изменить условия</Button></div></div> : <form className="space-y-3" onSubmit={event => { event.preventDefault(); void preview({ mode, billing_mode: 'shared_balance_actual', search_call_cap_cents: searchCreditsPerCall * 10, audience, offer, language, target_count: targetCount, agency_country: agencyCountry, sold_destination: soldDestination, riderra_shortage_only: supportsShortage && shortageOnly, evidence_terms: evidenceTerms.split(',').map(value => value.trim()).filter(Boolean), queries: editingTask ? editingTask.config.queries : city.split("\n").map(value => value.trim()).filter(Boolean).map(value => ({ query, city: value })), max_search_calls: maxSearchCalls, max_candidates: Math.max(targetCount * 5, editingTask?.config.max_candidates || 0), max_qualification_calls: Math.max(targetCount * 5, editingTask?.config.max_qualification_calls || 0), max_draft_attempts: targetCount, batch_size: 50, search_budget_cents: searchCreditsPerCall * 10 * maxSearchCalls }); }}>
       <fieldset className="space-y-2"><legend className="mb-2 font-medium">Что выполнить</legend>

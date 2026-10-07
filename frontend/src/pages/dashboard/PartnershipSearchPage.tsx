@@ -554,7 +554,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [stage, setStage] = useState('all');
   const [pilotCohort, setPilotCohort] = useState<PilotCohort>('all');
   const [query, setQuery] = useState(showDemoPartner ? 'Ромашка' : '');
-  const [workspaceView, setWorkspaceView] = useState<PartnershipWorkspaceView>(showDemoPartner ? 'pipeline' : 'overview');
+  const [workspaceView, setWorkspaceView] = useState<PartnershipWorkspaceView>(showDemoPartner ? 'pipeline' : 'raw');
   const [items, setItems] = useState<PartnershipLead[]>([]);
   const [leadTotalCount, setLeadTotalCount] = useState(0);
   const [searchTasks, setSearchTasks] = useState<SearchTaskGroup[]>([]);
@@ -2373,7 +2373,7 @@ export const PartnershipSearchPage: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-24" data-tour-target="partnership-workspace">
-      <PartnershipWorkspaceOverview
+      <PartnershipWorkspaceOverview part="header"
         workspaceView={workspaceView}
         currentBusinessId={currentBusinessId}
         rawLeadCount={rawLeadCount}
@@ -2385,9 +2385,9 @@ export const PartnershipSearchPage: React.FC = () => {
       />
 
       {(searchTaskOptions.length > 0 || candidateSearchGroups.groups.length > 0) && <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3">
-        <label className="text-sm font-medium text-slate-700">Поиск
+        <label className="text-sm font-medium text-slate-700">Группа компаний
           <select aria-label="Выбранный поиск партнёров" className="mt-1 block min-h-10 max-w-full rounded-md border border-input bg-background px-3 text-sm" value={selectedSearchGroup} onChange={(event) => changeSearchGroup(event.target.value)}>
-            <option value="all">Все поиски</option>
+            <option value="all">Все группы</option>
             {searchTaskOptions.map((group) => <option key={group.id} value={group.id}>{group.label} ({group.count})</option>)}
             {candidateSearchGroups.groups.filter((group) => !group.id.startsWith('task:')).map((group) => <option key={group.id} value={group.id}>{group.label} ({group.count})</option>)}
           </select>
@@ -2396,9 +2396,21 @@ export const PartnershipSearchPage: React.FC = () => {
         {selectedSearchGroup.startsWith('task:') && items.length < leadTotalCount && <Button type="button" variant="outline" disabled={loading} onClick={() => void loadMoreSearchLeads()}>Загрузить ещё</Button>}
       </div>}
 
-      {currentBusinessId && <OutreachContinuation key={currentBusinessId} businessId={currentBusinessId} selectedTaskId={requestedSearchTaskId || undefined} onTasksChange={handleSearchTasksChange} />}
+      {currentBusinessId && <OutreachContinuation key={currentBusinessId} businessId={currentBusinessId} compact selectedTaskId={selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : undefined} onTasksChange={handleSearchTasksChange} />}
 
-      {currentBusinessId && journeyActions.length ? <section aria-label="Текущий шаг по партнёрствам" className="space-y-3">{journeyActions.slice(0, 2).map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={() => void loadPartnershipJourneyActions()} />)}</section> : null}
+      {currentBusinessId && journeyActions.length ? <details><summary className="min-h-10 cursor-pointer py-2 text-sm text-muted-foreground">Требуют внимания · {journeyActions.length}</summary><section aria-label="Текущий шаг по партнёрствам" className="space-y-3">{journeyActions.slice(0, 2).map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={() => void loadPartnershipJourneyActions()} />)}</section></details> : null}
+
+      <PartnershipWorkspaceOverview part="navigation"
+        workspaceView={workspaceView}
+        currentBusinessId={currentBusinessId}
+        rawLeadCount={rawLeadCount}
+        pipelineLeadCount={pipelineLeadCount}
+        visibleDraftsCount={visibleDrafts.length}
+        visibleBatchesCount={visibleBatches.length}
+        visibleReactionsCount={visibleReactions.length}
+        onWorkspaceChange={(value) => changeWorkspace(value)}
+      />
+
 
       {!currentBusinessId ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -2577,26 +2589,23 @@ export const PartnershipSearchPage: React.FC = () => {
           <div className="flex flex-wrap gap-2" role="group" aria-label="Фильтр компаний">{[{id: 'all', label: 'Все'}, {id: 'suitable', label: 'Подходящие'}, {id: 'needs_decision', label: 'Нужно решение'}, {id: 'excluded', label: 'Исключённые'}].map(filter => <Button key={filter.id} variant={companyFilter === filter.id ? 'default' : 'outline'} aria-pressed={companyFilter === filter.id} onClick={() => { setCompanyFilter(filter.id); const next = new URLSearchParams(searchParams); next.set('company_filter', filter.id); setSearchParams(next, { replace: true }); }}>{filter.label}</Button>)}</div>
           <ProspectingIntakePanel
             title="Компании"
-            description="Новые компании из поиска на картах и импорта. На этом шаге достаточно решить: подходит, отложить или убрать как неактуального."
-            badges={[
-              { label: 'Новые кандидаты', value: rawLeadCount },
-              { label: 'В работе', value: pipelineLeadCount },
-              { label: 'Групп поиска', value: searchTaskOptions.length + candidateSearchGroups.groups.filter((group) => !group.id.startsWith('task:')).length },
-            ]}
+            description=""
+            badges={[]}
           >
             {selectedTask && <Button asChild className="mb-3"><Link to={`/dashboard/operator?business_id=${encodeURIComponent(currentBusinessId || '')}&search_task_id=${encodeURIComponent(selectedTask.id)}&command=${encodeURIComponent('Подготовь письма для подходящих или выбранных компаний этого поиска')}`}>Подготовить письма</Link></Button>}
-            <p className="mb-3 text-sm text-muted-foreground">Выберите компании для писем. «Выбрать для работы» сохраняет ваш выбор; проверенные сведения показаны отдельно.</p>
+            <p className="mb-3 text-sm text-muted-foreground">Выбор для работы не заменяет проверку сведений.</p>
             {visibleRawLeads.length === 0 ? (
               <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-muted-foreground">
                 В этом фильтре пока нет компаний. Выберите «Все» или запустите новый поиск.
               </div>
             ) : (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="divide-y divide-border">
                 {visibleRawLeads.map((item) => (
                   <PartnershipLeadCard
                     key={item.id}
                     lead={item}
                     mode="raw"
+                    compact
                     searchLabel={selectedTask ? taskLabel(selectedTask) : candidateSearchGroups.labels.get(candidateSearchGroups.leadGroup.get(item.id) || '')}
                     verification={selectedTask ? (() => {
                       const taskPosition = selectedTask.state?.lead_ids?.indexOf(item.id) ?? -1;

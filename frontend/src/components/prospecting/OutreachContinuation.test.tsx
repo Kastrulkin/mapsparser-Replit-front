@@ -159,3 +159,13 @@ it('find-only does not require an offer and retains the qualified target in the 
   expect(payload.config.search_call_cap_cents).toBe(50);
   vi.restoreAllMocks();
 });
+it('compact overview keeps reading all groups but never silently chooses one', async () => {
+  const onTasksChange = vi.fn();
+  const request = vi.spyOn(newAuth, 'makeRequest').mockResolvedValue({ enabled: true, items: [task] });
+  render(<OutreachContinuation compact businessId="b" onTasksChange={onTasksChange} />);
+  await screen.findByRole('button', { name: 'Новый поиск' });
+  expect(screen.queryByText('Agencies')).not.toBeInTheDocument();
+  expect(onTasksChange).toHaveBeenCalledWith([task]);
+  expect(request).toHaveBeenCalledTimes(1);
+  vi.restoreAllMocks();
+});

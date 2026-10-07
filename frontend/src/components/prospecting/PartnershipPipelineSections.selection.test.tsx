@@ -31,3 +31,14 @@ it('moves an older unverified search candidate into manual selection without req
   expect(moveToPipeline).toHaveBeenCalledWith('lead-1');
   expect(openLead).not.toHaveBeenCalled();
 });
+
+it('compact list keeps manual selection separate from proof and allows opening the company', async () => {
+  const move = vi.fn(); const open = vi.fn();
+  render(<PartnershipLeadCard compact lead={{ id: 'compact-1', name: 'Compact India Tours', email: 'hello@example.org', pipeline_status: 'unprocessed' }} mode="raw" verification={{ country: { status: 'not_verified' }, destination: { status: 'not_verified' }, contactVerified: false }} dragging={false} loading={false} nextStage="" deferredReasonInput="" deferredUntilInput="" stagePresentation={{ label: 'Кандидат', helper: '', variant: 'outline', tone: 'default' }} auditPresentation={{ label: '', primary: '', secondary: '', variant: 'outline', tone: 'default' }} onMoveToPipeline={move} onMoveToStage={vi.fn()} onOpenLead={open} onDeferLead={vi.fn()} />);
+  expect(screen.getByText('Соответствие не подтверждено')).toBeVisible();
+  expect(screen.getByText(/hello@example.org · контакт не проверен/)).toBeVisible();
+  await userEvent.click(screen.getAllByRole('button', { name: 'Выбрать для работы' }).at(-1)!);
+  expect(move).toHaveBeenCalledWith('compact-1');
+  await userEvent.click(screen.getByRole('button', { name: /^Открыть$/ }));
+  expect(open).toHaveBeenCalledWith('compact-1');
+});
