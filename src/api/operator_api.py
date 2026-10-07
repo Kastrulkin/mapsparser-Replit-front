@@ -5,6 +5,7 @@ import sys
 import base64
 import hashlib
 import json
+import logging
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -12,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from flask import Blueprint, jsonify, request
 
 from auth_system import create_session
-from core.auth_helpers import require_auth_from_request, verify_business_access
+from core.auth_helpers import require_auth_from_request, verify_business_access, verify_business_write_access
 from database_manager import DatabaseManager
 from services.operator_audit import list_operator_events, record_operator_event
 from services.operator_capabilities import (
@@ -48,7 +49,7 @@ from services.operator_async_jobs import (
     retry_operator_async_job,
 )
 from services.operator_mobile_modules import list_operator_mobile_module
-from services.operator_mobile_today import build_mobile_progress, build_mobile_today
+from services.operator_mobile_today import build_mobile_feed, build_mobile_progress, build_mobile_today
 from services.operator_mobile_jobs import load_mobile_job
 from services.operator_mobile_deep_links import resolve_mobile_deep_link
 from services.product_telemetry_service import record_product_event, validate_product_event
@@ -67,13 +68,19 @@ from services.operator_services_optimization import (
     optimize_services_from_operator,
 )
 from services.operator_social_post_generation import classify_social_post_generate_intent, generate_social_post_draft_from_operator
-from services.operator_core import confirm_pending_operator_action, operator_capability_catalog, route_operator_message
+from services.operator_core import (
+    confirm_pending_operator_action,
+    operator_capability_catalog,
+    reject_pending_operator_action,
+    route_operator_message,
+)
 from services.operator_conversations import (
     append_operator_message,
     conversation_pending_context,
     create_pending_operator_action,
     find_latest_operator_conversation,
     get_or_create_operator_conversation,
+    list_pending_operator_actions,
     list_operator_messages,
     set_operator_pending_context,
 )
@@ -86,28 +93,222 @@ from services.llm import analyze_text_with_gigachat
 from services.operator_map_refresh import DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS, enqueue_paid_operator_map_refresh
 from services.operator_review_canonicalization import CANONICAL_REVIEWS_CTE
 from services.operator_services_optimization import SERVICES_OPTIMIZE_CREDITS_PER_SERVICE
-from subscription_manager import get_allowed_content_plan_horizons
+from subscription_manager import build_subscription_capabilities, capability_access_payload, get_allowed_content_plan_horizons
 
 
 operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
+logger = logging.getLogger(__name__)
 
 
-def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
+MOBILE_NAVIGATION_CAPABILITIES = {
+    "feed": "telegram_radar",
+    "reviews": "maps.reviews",
+    "operator": "operator",
+    "progress": "progress",
+    "cards": "maps",
+    "content": "social_content",
+    "services": "maps.services",
+    "work_journal": "operator",
+    "finance": "finance",
+    "partnerships": "partnerships",
+    "influencers": "influencers",
+    "agents": "agents",
+    "community_sources": "telegram_radar",
+}
+MOBILE_MODULE_CAPABILITIES = {
+    "cards": "maps",
+    "content": "social_content",
+    "services": "maps.services",
+    "finance": "finance",
+    "analytics": "finance",
+    "partnerships": "partnerships",
+    "agents": "agents",
+}
+MOBILE_ACTION_CAPABILITIES = {
+    "cards.": "maps",
+    "content.": "social_content",
+    "finance.": "finance",
+    "partnerships.": "partnerships",
+    "agents.": "agents",
+    "reviews.": "maps.reviews",
+    "services.": "maps.services",
+    "community_sources.": "telegram_radar",
+}
+JOURNEY_FLOW_CAPABILITIES = {
+    "maps": "maps",
+    "content": "social_content",
+    "influencer": "influencers",
+    "partnership": "partnerships",
+    "automation": "automation",
+    "average_ticket": "average_ticket",
+}
+
+
+def _inline_scope_subscription_access(scope: dict) -> dict | None:
+    if "subscription_tier" not in scope and "subscription_status" not in scope:
+        return None
+    return build_subscription_capabilities(
+        tier=str(scope.get("subscription_tier") or ""),
+        status=str(scope.get("subscription_status") or ""),
+        subscription_ends_at=scope.get("subscription_ends_at"),
+    )
+
+
+def _scope_subscription_access(cursor, scope: dict, is_superadmin: bool = False) -> dict:
+    if is_superadmin or scope.get("kind") == "platform":
+        return build_subscription_capabilities(tier="concierge", status="active", is_superadmin=True)
+    business_ids = [str(item) for item in scope.get("business_ids") or [] if str(item)]
+    if not business_ids and scope.get("kind") == "business" and scope.get("id"):
+        business_ids = [str(scope.get("id"))]
+    if not business_ids:
+        return build_subscription_capabilities(tier="none", status="inactive")
+    cursor.execute(
+        """
+        SELECT id, subscription_tier, subscription_status, subscription_ends_at
+        FROM businesses
+        WHERE id = ANY(%s)
+          AND COALESCE(is_active, TRUE) = TRUE
+        """,
+        (business_ids,),
+    )
+    rows = [dict(row) for row in (cursor.fetchall() or [])]
+    if len(rows) != len(business_ids):
+        return build_subscription_capabilities(tier="none", status="inactive")
+    row_access = [
+        build_subscription_capabilities(
+            tier=str(row.get("subscription_tier") or ""),
+            status=str(row.get("subscription_status") or ""),
+            subscription_ends_at=row.get("subscription_ends_at"),
+        )
+        for row in rows
+    ]
+    shared_capabilities = set(row_access[0].get("capabilities") or []) if row_access else set()
+    for access in row_access[1:]:
+        shared_capabilities.intersection_update(access.get("capabilities") or [])
+    return {
+        "tier": str(row_access[0].get("tier") or "none") if len(row_access) == 1 else "network",
+        "tier_name": str(row_access[0].get("tier_name") or "Без тарифа") if len(row_access) == 1 else "Сеть",
+        "status": str(row_access[0].get("status") or "inactive") if len(row_access) == 1 else "mixed",
+        "active": bool(shared_capabilities),
+        "capabilities": sorted(shared_capabilities),
+    }
+
+
+def _scope_capability_access(cursor, scope: dict, capability: str, is_superadmin: bool = False) -> dict:
+    return capability_access_payload(_scope_subscription_access(cursor, scope, is_superadmin), capability)
+
+
+def _mobile_payment_required_response(access: dict):
+    return jsonify({
+        "success": False,
+        "error": "payment_required",
+        "payment_required": True,
+        **access,
+        "billing_url": str((access.get("cta_target") or {}).get("url") or "/dashboard/profile?focus=subscription#subscription"),
+        "return_to": request.full_path.rstrip("?"),
+    }), 402
+
+
+def _mobile_capability_for_action(action: str) -> str | None:
+    normalized = str(action or "").strip().lower()
+    for prefix, capability in MOBILE_ACTION_CAPABILITIES.items():
+        if normalized.startswith(prefix):
+            return capability
+    return None
+
+
+def _mobile_payload_item_capability(item: dict) -> str | None:
+    cta = item.get("cta") if isinstance(item.get("cta"), dict) else {}
+    route_text = " ".join(str(value or "").lower() for value in (
+        item.get("screen"), item.get("target_screen"), item.get("category"),
+        item.get("kind"), item.get("key"), item.get("capability"), cta.get("href"),
+    ))
+    route_markers = (
+        (("average_ticket", "finance", "revenue", "sale"), "finance"),
+        (("partnership", "partner"), "partnerships"),
+        (("influencer", "creator"), "influencers"),
+        (("agent",), "agents"),
+        (("operator",), "operator"),
+        (("social", "content", "post"), "social_content"),
+        (("community", "feed", "radar"), "telegram_radar"),
+        (("review",), "maps.reviews"),
+        (("service",), "maps.services"),
+        (("progress", "growth_step"), "progress"),
+        (("card", "map"), "maps"),
+    )
+    for markers, capability in route_markers:
+        if any(marker in route_text for marker in markers):
+            return capability
+    return None
+
+
+def _mobile_filter_payload_items(value, subscription_access: dict):
+    allowed_capabilities = set(subscription_access.get("capabilities") or [])
+    if isinstance(value, list):
+        return [
+            _mobile_filter_payload_items(item, subscription_access)
+            for item in value
+            if not isinstance(item, dict)
+            or not _mobile_payload_item_capability(item)
+            or _mobile_payload_item_capability(item) in allowed_capabilities
+        ]
+    if isinstance(value, dict):
+        return {key: _mobile_filter_payload_items(item, subscription_access) for key, item in value.items()}
+    return value
+
+
+def _decorate_mobile_journey_actions(payload: dict, subscription_access: dict) -> dict:
+    actions = payload.get("journey_actions") if isinstance(payload.get("journey_actions"), list) else []
+    decorated = []
+    for raw_action in actions:
+        if not isinstance(raw_action, dict):
+            continue
+        action = dict(raw_action)
+        capability = JOURNEY_FLOW_CAPABILITIES.get(str(action.get("flow_type") or ""), "management")
+        access = capability_access_payload(subscription_access, capability)
+        action["access"] = access
+        if not access.get("allowed"):
+            safe_commands = []
+            if action.get("action_type") == "configure_automation" and "save_configuration" in (action.get("allowed_commands") or []):
+                safe_commands.append("save_configuration")
+            safe_commands.append("open_upgrade")
+            action["allowed_commands"] = safe_commands
+            action["cta_label"] = access.get("cta_label")
+        decorated.append(action)
+    payload["journey_actions"] = decorated
+    if decorated and str((payload.get("focus_action") or {}).get("source") or "") == "lead_journey":
+        focus = dict(payload.get("focus_action") or {})
+        focus["cta_label"] = decorated[0].get("cta_label")
+        focus["access"] = decorated[0].get("access")
+        payload["focus_action"] = focus
+    return payload
+
+
+def _mobile_navigation(
+    scope: dict,
+    is_superadmin: bool = False,
+    subscription_access: dict | None = None,
+) -> list[dict]:
     kind = str(scope.get("kind") or "business")
+    if subscription_access is None:
+        subscription_access = _inline_scope_subscription_access(scope)
+    enforce_capabilities = subscription_access is not None
     agent_runs_available = str(os.getenv("AGENT_ASYNC_RUNS_ENABLED", "false")).lower() in {"1", "true", "yes", "on"}
     items = [
         {"key": "today", "label": "Сегодня", "group": "primary", "status": "available", "available_actions": ["open_focus", "delegate"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["today"], "version": 2},
         {"key": "tasks", "label": "В работе", "group": "primary", "status": "available", "available_actions": ["open"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["task", "job", "approval"], "version": 3},
+        {"key": "feed", "label": "Лента", "group": "primary", "status": "available", "available_actions": ["open_message"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["feed"], "version": 1},
         {"key": "reviews", "label": "Отзывы", "group": "more", "status": "available", "available_actions": ["generate_reply", "edit_draft", "mark_manual_published"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["review", "review_draft"], "version": 3},
-        {"key": "operator", "label": "Оператор", "group": "primary", "status": "available", "available_actions": ["send_message", "open_result"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["operator_message", "operator_result"], "version": 2},
+        {"key": "operator", "label": "Управление через чат", "group": "primary", "status": "available", "available_actions": ["send_message", "open_result"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["operator_message", "operator_result"], "version": 2},
         {"key": "progress", "label": "Прогресс", "group": "primary", "status": "hidden" if kind == "platform" else "available", "reason": "Выберите бизнес или сеть" if kind == "platform" else "", "available_actions": ["open_next_step"], "supported_scopes": ["business", "network"], "deep_link_targets": ["progress", "growth_step"], "version": 3},
         {"key": "cards", "label": "Карточки", "group": "more", "status": "available", "available_actions": ["schedule_update", "refresh"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["card", "parse_job", "integration_error"], "version": 2},
         {"key": "content", "label": "Контент", "group": "more", "status": "available", "available_actions": ["plan_generate", "item_update", "draft_generate"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["content_plan", "content_item", "post"], "version": 2},
         {"key": "services", "label": "Услуги", "group": "more", "status": "available", "available_actions": ["update", "archive", "restore", "optimize", "compress"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["service", "service_suggestion"], "version": 2},
         {"key": "finance", "label": "Финансы", "group": "more", "status": "available", "available_actions": ["sales_import", "operation_update", "analytics_open", "crm_file_import", "crm_connection_request"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["finance", "sale", "finance_warning", "finance_import"], "version": 4},
         {"key": "partnerships", "label": "Партнёрства", "group": "more", "status": "available", "available_actions": ["search", "draft", "send_preview"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["partner", "partnership_reply", "outreach_touch"], "version": 2},
+        {"key": "influencers", "label": "Инфлюенсеры", "group": "more", "status": "available", "available_actions": ["search", "prepare_offer", "open_workspace"], "supported_scopes": ["business"], "deep_link_targets": ["creator", "creator_candidate", "creator_collaboration"], "version": 1},
         {"key": "agents", "label": "ИИ-сотрудники", "group": "more", "status": "available" if agent_runs_available else "read_only", "reason": "Запуски пока не включены для этого бизнеса" if not agent_runs_available else "", "available_actions": ["run", "open_result"] if agent_runs_available else [], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["agent", "agent_run", "agent_result"], "version": 2},
-        {"key": "settings", "label": "Настройки", "group": "more", "status": "read_only", "reason": "Сейчас доступны настройки уведомлений; подключения и тариф ещё переносятся", "available_actions": ["notifications_update"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["settings"], "version": 1},
+        {"key": "settings", "label": "Профиль и бизнес" if kind == "business" else "Настройки", "group": "more", "status": "available" if kind == "business" else "read_only", "reason": "Город, валюта и уведомления" if kind == "business" else "Выберите бизнес для настройки города и валюты", "available_actions": ["notifications_update", "input_settings_preview"] if kind == "business" else ["notifications_update"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["settings"], "version": 1},
     ]
     company_registry_miniapp_enabled = str(os.getenv("COMPANY_REGISTRY_MINIAPP_ENABLED", "false")).lower() in {"1", "true", "yes", "on"}
     if kind == "business":
@@ -118,6 +319,30 @@ def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
         if company_registry_miniapp_enabled:
             items.append({"key": "companies", "label": "Компании", "group": "more", "status": "available", "available_actions": ["search", "open_profile", "add_to_work"], "supported_scopes": ["platform"], "deep_link_targets": ["company"], "version": 2})
         items.append({"key": "diagnostics", "label": "Диагностика", "group": "more", "status": "available", "reason": "", "available_actions": ["retry_one"], "supported_scopes": ["platform"], "deep_link_targets": ["diagnostic_job", "integration_error"], "version": 2})
+    if kind == 'business':
+        items.append({'key':'work_journal','label':'Рабочий журнал','group':'more','status':'available','supported_scopes':['business'],'available_actions':['open'],'version':1})
+    if enforce_capabilities:
+        for item in items:
+            capability = MOBILE_NAVIGATION_CAPABILITIES.get(str(item.get("key") or ""))
+            if not capability or item.get("status") == "hidden":
+                continue
+            access = capability_access_payload(subscription_access or {}, capability)
+            item["capability"] = capability
+            item["required_tier"] = access.get("required_tier")
+            item["required_tier_name"] = access.get("required_tier_name")
+            item["billing_url"] = str((access.get("cta_target") or {}).get("url") or "")
+            item["preview_available"] = not bool(access.get("allowed"))
+            if not access.get("allowed"):
+                if item.get("key") in {"influencers", "partnerships"}:
+                    item["status"] = "available"
+                    item["reason"] = "Каталог и shortlist доступны. Сообщения и отправка требуют тариф «Привлечение»."
+                    item["available_actions"] = ["browse", "shortlist"]
+                    item["operations_access"] = access
+                    item["preview_available"] = False
+                    continue
+                item["status"] = "read_only"
+                item["reason"] = access.get("reason")
+                item["available_actions"] = []
     return items
 
 
@@ -435,7 +660,11 @@ def operator_telegram_bootstrap():
                 user_agent="localos-telegram-mini-app",
                 expires_days=1,
             )
-        navigation = _mobile_navigation(selected or {}, bool(user.get("is_superadmin")))
+        navigation = _mobile_navigation(
+            selected or {},
+            bool(user.get("is_superadmin")),
+            _scope_subscription_access(cursor, selected or {}, bool(user.get("is_superadmin"))),
+        )
         deep_link = resolve_mobile_deep_link(
             cursor,
             scope=selected or {},
@@ -681,7 +910,58 @@ def operator_inbox():
         return jsonify({"success": True, "inbox": inbox})
     except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        error_id = str(uuid.uuid4())
+        logger.exception("Operator inbox failed error_id=%s business_id=%s", error_id, business_id)
+        return jsonify({
+            "success": False,
+            "error": "Не удалось загрузить входящие задачи. Повторите позже или сообщите код ошибки поддержке.",
+            "error_code": "operator_inbox_failed",
+            "error_id": error_id,
+        }), 500
+    finally:
+        db.close()
+
+
+@operator_bp.route("/actions/<action_id>/reject", methods=["POST"])
+def reject_operator_action_request(action_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get("business_id") or "").strip()
+    if not business_id:
+        return jsonify({"success": False, "error": "business_id обязателен"}), 400
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
+            return jsonify({"success": False, "error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        result, idempotent = reject_pending_operator_action(
+            cursor,
+            action_id=action_id,
+            business_id=business_id,
+            user_id=user_id,
+        )
+        if "action_not_found" in list(result.get("blocked_reasons") or []):
+            return jsonify({"success": False, "error": "Действие не найдено"}), 404
+        db.conn.commit()
+        return jsonify({
+            "success": str(result.get("status") or "") == "rejected",
+            "idempotent": idempotent,
+            "operator_result": result,
+        })
+    except Exception:
+        db.conn.rollback()
+        error_id = str(uuid.uuid4())
+        logger.exception("Operator action rejection failed error_id=%s action_id=%s", error_id, action_id)
+        return jsonify({
+            "success": False,
+            "error": "Не удалось отклонить действие.",
+            "error_code": "operator_action_rejection_failed",
+            "error_id": error_id,
+        }), 500
     finally:
         db.close()
 
@@ -932,6 +1212,9 @@ def operator_conversation_messages(conversation_id: str):
         has_access, owner_id = verify_business_access(cursor, business_id, user_data)
         if not has_access:
             return jsonify({"success": False, "error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
+        cursor.execute("SELECT id FROM operatorconversations WHERE id=%s AND business_id=%s AND user_id=%s", (conversation_id,business_id,str(user_data.get('user_id') or user_data.get('id'))))
+        if not cursor.fetchone():
+            return jsonify({"success": False, "error": "Диалог недоступен"}), 403
         items = list_operator_messages(
             cursor,
             conversation_id=conversation_id,
@@ -977,6 +1260,41 @@ def current_operator_conversation():
         db.close()
 
 
+@operator_bp.route('/requests', methods=['GET'])
+@operator_bp.route('/requests/<receipt_id>', methods=['GET'])
+@operator_bp.route('/requests/<receipt_id>/feedback', methods=['POST'])
+def operator_request_history(receipt_id=None):
+    from services import operator_request_history
+    user = require_auth_from_request()
+    if not user:
+        return jsonify({'error': 'Требуется авторизация'}), 401
+    payload = request.get_json(silent=True) or {}
+    business_id = request.args.get('business_id') or payload.get('business_id')
+    if not business_id:
+        return jsonify({'error': 'Выберите бизнес'}), 400
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        # Preserve session restrictions (including a demo session's business).
+        if not verify_business_access(cursor, business_id, user)[0]:
+            raise PermissionError('Нет доступа к бизнесу')
+        user_id = user.get('user_id') or user.get('id')
+        if request.method == 'POST':
+            result = operator_request_history.feedback(cursor, business_id, user_id, receipt_id, payload.get('comment'))
+            db.conn.commit()
+        elif receipt_id:
+            result = operator_request_history.detail(cursor, business_id, user_id, receipt_id)
+        else:
+            result = operator_request_history.list_requests(cursor, business_id, user_id, request.args)
+        return jsonify(result)
+    except PermissionError:
+        return jsonify({'error': str(sys.exception())}), 403
+    except ValueError:
+        return jsonify({'error': str(sys.exception())}), 400
+    finally:
+        db.close()
+
+
 @operator_bp.route("/chat", methods=["POST"])
 def operator_chat():
     user_data = require_auth_from_request()
@@ -999,6 +1317,10 @@ def operator_chat():
             status_code = 403 if owner_id else 404
             message_text = "Нет доступа" if owner_id else "Бизнес не найден"
             return jsonify({"success": False, "error": message_text}), status_code
+        business_scope = {"kind": "business", "id": business_id, "business_ids": [business_id]}
+        access = _scope_capability_access(cursor, business_scope, "operator", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
 
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         record_operator_event(
@@ -1010,73 +1332,21 @@ def operator_chat():
             input_summary={"message": message[:500]},
             output_summary={"channel": "web"},
         )
-        conversation = get_or_create_operator_conversation(
-            cursor,
-            business_id=business_id,
-            user_id=user_id,
-            channel=str(payload.get("channel") or "web").strip() or "web",
-            conversation_id=payload.get("conversation_id"),
-            transport_key=payload.get("transport_key"),
-        )
-        conversation_id = str(conversation.get("id") or "")
-        append_operator_message(
-            cursor,
-            conversation_id=conversation_id,
-            business_id=business_id,
-            user_id=user_id,
-            role="user",
-            content=message,
-        )
-        result, next_pending_context = route_operator_message(
-            cursor,
-            business_id=business_id,
-            user_id=user_id,
-            message=message,
-            channel=str(payload.get("channel") or "web").strip() or "web",
-            limit=payload.get("limit") or 5,
-            explicit_url=payload.get("url"),
-            pending_context=conversation_pending_context(conversation),
-            action_payload=payload,
-            refresh_handler=refresh_reviews_from_operator,
-            ai_router_handler=classify_operator_intent_with_ai,
+        from services.operator_chat_service import process_chat
+        result = process_chat(
+            cursor, business_id=business_id, user_id=user_id,
+            channel=str(payload.get("channel") or "web"), message=message, payload=payload,
+            router=route_operator_message,
+            subscription_access=_scope_subscription_access(cursor, business_scope, bool(user_data.get("is_superadmin"))),
+            actor_context={"role": "business_owner" if owner_id == user_id else "business_user", "is_superadmin": bool(user_data.get("is_superadmin")), "permissions": ["business.access"], "session_kind": user_data.get("session_kind", "standard"), "impersonating": bool(user_data.get("impersonating") or user_data.get("impersonated_by"))},
+            refresh_handler=refresh_reviews_from_operator, ai_router_handler=classify_operator_intent_with_ai,
             manual_review_handler=process_operator_chat_message,
         )
-        result["conversation_id"] = conversation_id
+        conversation_id = result["conversation_id"]
         result["mobile_route"] = _operator_mobile_route(result)
-        approval = result.get("approval") if isinstance(result.get("approval"), dict) else {}
-        approval_envelope = approval.get("envelope") if isinstance(approval.get("envelope"), dict) else {}
-        if result.get("status") == "approval_required" and approval_envelope:
-            pending_action = create_pending_operator_action(
-                cursor,
-                conversation_id=conversation_id,
-                business_id=business_id,
-                user_id=user_id,
-                capability=str(result.get("capability") or result.get("intent") or "unknown"),
-                envelope=approval_envelope,
-            )
-            action_id = str(pending_action.get("id") or "")
-            approval["action_id"] = action_id
-            result["approval"] = approval
-            result["ui_actions"] = list(result.get("ui_actions") or []) + [
-                {
-                    "action": "confirm_operator_action",
-                    "label": "Подтвердить",
-                    "href": "",
-                    "payload": {"action_id": action_id},
-                }
-            ]
-        set_operator_pending_context(cursor, conversation_id, next_pending_context)
-        append_operator_message(
-            cursor,
-            conversation_id=conversation_id,
-            business_id=business_id,
-            user_id=user_id,
-            role="operator",
-            content=result.get("chat_response") or result.get("summary"),
-            capability=result.get("capability"),
-            status=result.get("status"),
-            result=result,
-        )
+        cursor.execute("UPDATE operatormessages SET result_json=%s::jsonb WHERE id=%s AND user_id=%s", (json.dumps(result,ensure_ascii=False,default=str),result.get('message_id'),user_id))
+        if payload.get('request_id'):
+            cursor.execute("UPDATE operator_chat_requests SET result_json=%s::jsonb WHERE user_id=%s AND business_id=%s AND channel=%s AND request_id=%s", (json.dumps(result,ensure_ascii=False,default=str),user_id,business_id,str(payload.get('channel') or 'web'),str(payload['request_id'])))
         status = str(result.get("status") or "blocked")
         review = result.get("review") if isinstance(result.get("review"), dict) else {}
         draft = result.get("draft") if isinstance(result.get("draft"), dict) else {}
@@ -1085,12 +1355,36 @@ def operator_chat():
         optimization_job = result.get("optimization_job") if isinstance(result.get("optimization_job"), dict) else {}
         drafts = result.get("drafts") if isinstance(result.get("drafts"), list) else []
         finalization = result.get("finalization_result") if isinstance(result.get("finalization_result"), dict) else {}
+        tool_plan_finalization = (
+            result.get("tool_plan_finalization_result")
+            if isinstance(result.get("tool_plan_finalization_result"), dict)
+            else {}
+        )
         ai_router = result.get("ai_router") if isinstance(result.get("ai_router"), dict) else {}
         ai_router_finalization = (
             ai_router.get("finalization_result")
             if isinstance(ai_router.get("finalization_result"), dict)
             else {}
         )
+        tool_trace = result.get("tool_trace") if isinstance(result.get("tool_trace"), list) else []
+        for tool_step in tool_trace:
+            if not isinstance(tool_step, dict):
+                continue
+            record_operator_event(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                event_type="operator_tool_executed",
+                action_key=str(tool_step.get("tool") or "operator_tool"),
+                status=str(tool_step.get("status") or "completed"),
+                input_summary={"step": tool_step.get("step")},
+                output_summary={"risk_class": tool_step.get("risk_class")},
+                metadata={
+                    "conversation_id": conversation_id,
+                    "tool": tool_step.get("tool"),
+                    "external_writes_performed": bool(result.get("external_writes_performed")),
+                },
+            )
         if ai_router_finalization:
             record_operator_event(
                 cursor,
@@ -1108,6 +1402,26 @@ def operator_chat():
                 metadata={
                     "credit_charged": bool(ai_router_finalization.get("side_effects", {}).get("credit_charged")),
                     "paid_actions_performed": bool(ai_router_finalization.get("side_effects", {}).get("credit_charged")),
+                    "external_writes_performed": False,
+                },
+            )
+        if tool_plan_finalization:
+            record_operator_event(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                event_type="operator_usage_charged",
+                action_key="operator_tool_plan",
+                status=str(tool_plan_finalization.get("status") or "completed"),
+                input_summary={"action_key": "operator_tool_plan"},
+                output_summary={
+                    "charge_credits": tool_plan_finalization.get("charge_credits"),
+                    "release_credits": tool_plan_finalization.get("release_credits"),
+                    "planner_steps": result.get("planner_steps"),
+                },
+                metadata={
+                    "credit_charged": bool(tool_plan_finalization.get("side_effects", {}).get("credit_charged")),
+                    "paid_actions_performed": bool(tool_plan_finalization.get("side_effects", {}).get("credit_charged")),
                     "external_writes_performed": False,
                 },
             )
@@ -1202,9 +1516,9 @@ def operator_chat():
                 business_id=business_id,
                 user_id=user_id,
                 event_type="operator_usage_charged",
-                action_key=str(result.get("intent") or "review_replies_generate"),
+                action_key=str(result.get("executed_intent") or result.get("intent") or "review_replies_generate"),
                 status=str(finalization.get("status") or status),
-                input_summary={"action_key": str(result.get("intent") or "review_replies_generate")},
+                input_summary={"action_key": str(result.get("executed_intent") or result.get("intent") or "review_replies_generate")},
                 output_summary={
                     "charge_credits": finalization.get("charge_credits"),
                     "release_credits": finalization.get("release_credits"),
@@ -1221,9 +1535,19 @@ def operator_chat():
             "conversation_id": result.get("conversation_id"),
             "operator_result": result,
         })
+    except (ValueError, PermissionError):
+        db.conn.rollback()
+        return jsonify({"success": False, "error": "Запрос или диалог недоступен. Обновите чат и повторите."}), 400
     except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        error_id = str(uuid.uuid4())
+        logger.exception("Operator chat failed error_id=%s business_id=%s", error_id, business_id)
+        return jsonify({
+            "success": False,
+            "error": "Оператор временно недоступен. Повторите запрос или сообщите код ошибки поддержке.",
+            "error_code": "operator_chat_failed",
+            "error_id": error_id,
+        }), 500
     finally:
         db.close()
 
@@ -1246,6 +1570,8 @@ def confirm_operator_action(action_id: str):
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         result, idempotent = confirm_pending_operator_action(
             cursor,
+            subscription_access=_scope_subscription_access(cursor, {'kind': 'business', 'id': business_id, 'business_ids': [business_id]}, bool(user_data.get('is_superadmin'))),
+            actor_context=user_data,
             action_id=action_id,
             business_id=business_id,
             user_id=user_id,
@@ -2010,13 +2336,16 @@ def operator_mobile_workspace():
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        subscription_access = _scope_subscription_access(cursor, scope, bool(user_data.get("is_superadmin")))
         summary = build_operator_scope_summary(cursor, scope=scope, user_id=user_id)
+        summary = _mobile_filter_payload_items(summary, subscription_access)
         items = list(summary.get("attention_items") or [])
         if scope.get("kind") == "business":
             inbox = build_operator_inbox(cursor, business_id=str(scope.get("id") or ""), user_id=user_id)
             items = list(inbox.get("items") or [])
         items.extend(_mobile_background_tasks(cursor, scope))
         items = [_mobile_task_item(item) for item in items]
+        items = _mobile_filter_payload_items(items, subscription_access)
         attention_count = len([item for item in items if item.get("status") == "needs_attention"])
         working_count = len([item for item in items if item.get("status") == "in_progress"])
         completed_count = len([item for item in items if item.get("status") == "completed"])
@@ -2037,7 +2366,11 @@ def operator_mobile_workspace():
             "filters": {"statuses": ["needs_attention", "in_progress", "completed"]},
             "freshness": summary.get("freshness") or {"status": "live"},
             "summary": summary,
-            "navigation": _mobile_navigation(scope, bool(user_data.get("is_superadmin"))),
+            "navigation": _mobile_navigation(
+                scope,
+                bool(user_data.get("is_superadmin")),
+                subscription_access,
+            ),
         })
     finally:
         db.close()
@@ -2058,6 +2391,65 @@ def operator_mobile_today():
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         payload = build_mobile_today(cursor, scope=scope, user_id=user_id)
+        subscription_access = _scope_subscription_access(cursor, scope, bool(user_data.get("is_superadmin")))
+        payload = _mobile_filter_payload_items(payload, subscription_access)
+        payload = _decorate_mobile_journey_actions(payload, subscription_access)
+        return jsonify({"success": True, **payload})
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/feed", methods=["GET"])
+def operator_mobile_feed():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    try:
+        limit = min(max(int(request.args.get("limit") or 20), 1), 50)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Некорректный размер страницы"}), 400
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        access = _scope_capability_access(cursor, scope, "telegram_radar", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
+        payload = build_mobile_feed(
+            cursor,
+            scope=scope,
+            limit=limit,
+            page_cursor=str(request.args.get("cursor") or "") or None,
+        )
+        return jsonify({"success": True, **payload})
+    finally:
+        db.close()
+
+
+@operator_bp.route("/feed", methods=["GET"])
+def operator_feed():
+    """Return the canonical community feed for authenticated product surfaces."""
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    try:
+        limit = min(max(int(request.args.get("limit") or 20), 1), 50)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Некорректный размер страницы"}), 400
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        payload = build_mobile_feed(
+            cursor,
+            scope=scope,
+            limit=limit,
+            page_cursor=str(request.args.get("cursor") or "") or None,
+        )
         return jsonify({"success": True, **payload})
     finally:
         db.close()
@@ -2089,6 +2481,51 @@ def operator_today():
         db.close()
 
 
+@operator_bp.route("/today/preference", methods=["GET", "POST"])
+def operator_today_preference():
+    from core.auth_context import AuthContext
+    from services.today_preferences_service import (
+        PreferenceError, change_preferences, enabled, read_preferences, schema_available,
+    )
+    from services.today_workspace import allowed_priority_flows
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    auth = AuthContext.from_session(user_data)
+    if not enabled():
+        return jsonify({"success": False, "error": "personalization_disabled"}), 404
+    if request.method == "POST" and (auth.session_kind == "demo" or auth.impersonating):
+        return jsonify({"success": False, "error": "read_only_session"}), 403
+    command = request.get_json(silent=True) if request.method == "POST" else {}
+    if not isinstance(command, dict):
+        return jsonify({"success": False, "error": "invalid_command"}), 400
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        scope = _resolve_operator_read_scope(cursor, user_data)
+        if not scope or scope.get("kind") not in {"business", "network"}:
+            return jsonify({"success": False, "error": "scope_unavailable"}), 403
+        if not schema_available(cursor):
+            return jsonify({"success": False, "error": "personalization_unavailable"}), 503
+        allowed = allowed_priority_flows(cursor, scope=scope, is_superadmin=auth.is_superadmin)
+        if request.method == "GET":
+            result = read_preferences(cursor, user_id=auth.user_id, scope=scope, allowed_flows=allowed)
+        else:
+            result = change_preferences(cursor, user_id=auth.user_id, scope=scope, command=command, allowed_flows=allowed)
+            db.conn.commit()
+        result["preference"]["available_flows"] = allowed
+        return jsonify({"success": True, **result})
+    except PreferenceError:
+        db.conn.rollback()
+        error = sys.exc_info()[1]
+        return jsonify({"success": False, "error": error.code, "code": error.code}), error.status
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
 @operator_bp.route("/progress", methods=["GET"])
 def operator_progress():
     """Return the canonical scope-aware progress payload for web clients."""
@@ -2103,6 +2540,9 @@ def operator_progress():
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
         if scope.get("kind") == "platform":
             return jsonify({"success": False, "error": "Выберите бизнес или сеть"}), 409
+        access = _scope_capability_access(cursor, scope, "progress", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         payload = build_mobile_progress(cursor, scope=scope, user_id=user_id)
         return jsonify({"success": True, **payload})
@@ -2121,6 +2561,9 @@ def operator_mobile_progress():
         scope = _resolve_mobile_scope(cursor, user_data)
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        access = _scope_capability_access(cursor, scope, "progress", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         payload = build_mobile_progress(cursor, scope=scope, user_id=user_id)
         if payload.get("status") == "hidden":
@@ -2198,6 +2641,28 @@ def operator_mobile_module(module: str):
         scope = _resolve_mobile_scope(cursor, user_data)
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        capability = MOBILE_MODULE_CAPABILITIES.get(module)
+        if capability:
+            access = _scope_capability_access(cursor, scope, capability, bool(user_data.get("is_superadmin")))
+            if not access.get("allowed"):
+                return jsonify({
+                    "success": True,
+                    "status": "payment_required",
+                    "scope": scope,
+                    "access": access,
+                    "items": [],
+                    "counts": {"total": 0},
+                    "cursor": None,
+                    "as_of": datetime.now(timezone.utc).isoformat(),
+                    "data_warnings": [],
+                    "available_actions": [],
+                    "filters": {},
+                    "preview": {
+                        "title": "Посмотрите, как работает раздел",
+                        "summary": access.get("reason"),
+                        "skeleton_count": 3,
+                    },
+                })
         if module == "settings":
             user_id = str(user_data.get("user_id") or user_data.get("id") or "")
             preferences = load_control_preferences(cursor, user_id)
@@ -2236,7 +2701,12 @@ def _mobile_scope_allows_business(scope: dict, business_id: str) -> bool:
     return business_id in {str(item) for item in scope.get("business_ids") or []}
 
 
-def _mobile_business_from_payload(cursor, user_data: dict, payload: dict) -> tuple[dict | None, str, tuple | None]:
+def _mobile_business_from_payload(
+    cursor,
+    user_data: dict,
+    payload: dict,
+    required_capability: str | None = None,
+) -> tuple[dict | None, str, tuple | None]:
     user_id = str(user_data.get("user_id") or user_data.get("id") or "")
     kind, scope_id = _scope_request_values(payload)
     scope = resolve_control_scope(cursor, user_id=user_id, requested_kind=kind, requested_id=scope_id)
@@ -2250,6 +2720,11 @@ def _mobile_business_from_payload(cursor, user_data: dict, payload: dict) -> tup
     has_access, _owner_id = verify_business_access(cursor, business_id, user_data)
     if not has_access:
         return scope, business_id, (jsonify({"success": False, "error": "Точка недоступна"}), 403)
+    if required_capability:
+        business_scope = {"kind": "business", "id": business_id, "business_ids": [business_id]}
+        access = _scope_capability_access(cursor, business_scope, required_capability, bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return scope, business_id, _mobile_payment_required_response(access)
     return scope, business_id, None
 
 
@@ -2262,7 +2737,7 @@ def operator_mobile_card_schedule_update():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload)
+        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload, "maps")
         if error_response:
             return error_response
         current = get_card_automation_snapshot(db.conn, business_id).get("settings") or {}
@@ -2302,7 +2777,7 @@ def operator_mobile_content_plan_generate():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload)
+        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload, "social_content")
         if error_response:
             return error_response
     finally:
@@ -2331,7 +2806,7 @@ def operator_mobile_content_plan_delete(plan_id: str):
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload)
+        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload, "social_content")
         if error_response:
             return error_response
         cursor.execute("SELECT business_id FROM contentplans WHERE id = %s", (plan_id,))
@@ -2360,7 +2835,7 @@ def operator_mobile_services_analyze():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload)
+        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload, "maps.services")
         if error_response:
             return error_response
         cursor.execute(
@@ -2571,7 +3046,7 @@ def operator_mobile_finance_recognize():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload)
+        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload, "finance")
         if error_response:
             return error_response
     finally:
@@ -2635,6 +3110,9 @@ def operator_mobile_service_update(service_id: str):
             return jsonify({"success": False, "error": "Услуга не найдена"}), 404
         if not scope or not _mobile_scope_allows_business(scope, business_id):
             return jsonify({"success": False, "error": "Услуга недоступна"}), 403
+        access = _scope_capability_access(cursor, scope, "maps.services", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
         updates = []
         params = []
         for field in ("name", "description", "price", "category"):
@@ -2678,6 +3156,9 @@ def _mobile_content_item_scope(cursor, user_data: dict, item_id: str):
         return scope, business_id, (jsonify({"success": False, "error": "Элемент плана не найден"}), 404)
     if not scope or not _mobile_scope_allows_business(scope, business_id):
         return scope, business_id, (jsonify({"success": False, "error": "Элемент плана недоступен"}), 403)
+    access = _scope_capability_access(cursor, scope, "social_content", bool(user_data.get("is_superadmin")))
+    if not access.get("allowed"):
+        return scope, business_id, _mobile_payment_required_response(access)
     return scope, business_id, None
 
 
@@ -2776,6 +3257,9 @@ def operator_mobile_reviews():
         scope = _resolve_mobile_scope(cursor, user_data)
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        access = _scope_capability_access(cursor, scope, "maps.reviews", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
         status = str(request.args.get("status") or "unanswered").strip().lower()
         source = str(request.args.get("source") or "").strip().lower()
         location_id = str(request.args.get("location_id") or "").strip()
@@ -2914,6 +3398,11 @@ def operator_mobile_action_preview():
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
         capability = str(payload.get("capability") or payload.get("action_key") or "").strip()
         input_payload = payload.get("input") if isinstance(payload.get("input"), dict) else payload
+        required_capability = _mobile_capability_for_action(capability)
+        if required_capability:
+            access = _scope_capability_access(cursor, scope, required_capability, bool(user_data.get("is_superadmin")))
+            if not access.get("allowed"):
+                return _mobile_payment_required_response(access)
         preview = create_mobile_action_preview(
             cursor,
             user_id=user_id,
@@ -2967,8 +3456,37 @@ def operator_mobile_action_confirm(action_id: str):
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
+        cursor.execute(
+            "SELECT capability, scope_type, scope_id FROM operatoractions WHERE id = %s AND user_id = %s",
+            (action_id, user_id),
+        )
+        stored_action = dict(cursor.fetchone() or {})
+        if not stored_action:
+            return jsonify({"success": False, "error": "Действие не найдено"}), 404
+        stored_scope = resolve_control_scope(
+            cursor,
+            user_id=user_id,
+            requested_kind=str(stored_action.get("scope_type") or "business"),
+            requested_id=str(stored_action.get("scope_id") or "") or None,
+        )
+        if not stored_scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        required_capability = _mobile_capability_for_action(str(stored_action.get("capability") or ""))
+        if required_capability:
+            access = _scope_capability_access(cursor, stored_scope, required_capability, bool(user_data.get("is_superadmin")))
+            if not access.get("allowed"):
+                return _mobile_payment_required_response(access)
+
         def scope_resolver(kind: str, scope_id: str | None):
             return resolve_control_scope(cursor, user_id=user_id, requested_kind=kind, requested_id=scope_id)
+
+        def target_authorizer(targets: list[str]):
+            for business_id in targets:
+                has_access, _owner_id = verify_business_write_access(cursor, business_id, user_data)
+                if not has_access:
+                    return False
+            return True
+
 
         def generate_executor(envelope: dict, targets: list[str], _scope: dict):
             review_ids = [str(item) for item in envelope.get("review_ids") or []]
@@ -3474,44 +3992,26 @@ def operator_mobile_action_confirm(action_id: str):
 
         def agent_run_executor(envelope: dict, targets: list[str], _scope: dict):
             business_id = str(envelope.get("business_id") or "")
-            blueprint_id = str(envelope.get("blueprint_id") or "")
-            active_version_id = str(envelope.get("active_version_id") or "")
-            if len(targets) != 1 or targets[0] != business_id or not blueprint_id or not active_version_id:
+            if targets != [business_id]:
                 return {"status": "blocked", "blocked_reasons": ["agent_preview_changed"]}
-            if not async_agent_runs_enabled(business_id):
-                return {"status": "blocked", "blocked_reasons": ["agent_async_runs_disabled"]}
-            cursor.execute("SELECT * FROM agent_blueprints WHERE id = %s AND business_id = %s", (blueprint_id, business_id))
-            blueprint_row = cursor.fetchone()
-            cursor.execute("SELECT * FROM agent_blueprint_versions WHERE id = %s AND blueprint_id = %s", (active_version_id, blueprint_id))
-            version_row = cursor.fetchone()
-            if not blueprint_row or not version_row:
-                return {"status": "blocked", "blocked_reasons": ["agent_version_changed"]}
-            action_key = str(envelope.get("_idempotency_key") or envelope.get("_action_id") or "")
-            result = enqueue_agent_run(
-                cursor,
-                blueprint=dict(blueprint_row),
-                version=dict(version_row),
-                input_payload=envelope.get("inputs") if isinstance(envelope.get("inputs"), dict) else {},
-                user_data={"id": user_id, "user_id": user_id},
-                idempotency_key=f"mobile:{action_key}",
-            )
-            if not result.get("success"):
-                return {"status": "blocked", "blocked_reasons": [str(result.get("code") or "agent_run_failed")], "agent_result": result}
-            run = result.get("run") if isinstance(result.get("run"), dict) else {}
-            return {
-                "status": "completed",
-                "capability": "agents.run",
-                "job_id": str(run.get("id") or ""),
-                "job_kind": "agent_run",
-                "run": run,
-                "external_writes_performed": False,
-            }
+            from services.operator_agent_runs import execute_mobile
+            return execute_mobile(cursor, business_id=business_id, user_id=user_id, envelope=envelope,
+                actor_context=user_data)
+
+        def agent_lifecycle_executor(envelope: dict, targets: list[str], _scope: dict):
+            business_id = str(envelope.get("business_id") or "")
+            if targets != [business_id]:
+                return {"status": "blocked", "blocked_reasons": ["agent_preview_changed"]}
+            from services.operator_agent_management import execute_lifecycle
+            return execute_lifecycle(cursor, business_id=business_id, user_id=user_id,
+                                     envelope=envelope, actor_context=user_data)
 
         result, idempotent = confirm_mobile_action(
             cursor,
             action_id=action_id,
             user_id=user_id,
             scope_resolver=scope_resolver,
+            target_authorizer=target_authorizer,
             executors={
                 "review_replies.generate": generate_executor,
                 "finance.sales_import": finance_sales_executor,
@@ -3532,6 +4032,7 @@ def operator_mobile_action_confirm(action_id: str):
                 "services.optimize": services_optimize_executor,
                 "services.compress": services_compress_executor,
                 "agents.run": agent_run_executor,
+                "agents.lifecycle": agent_lifecycle_executor,
             },
         )
         if result.get("status") == "blocked":
@@ -3693,6 +4194,9 @@ def operator_mobile_review_draft_update(draft_id: str):
         has_access, owner_id = verify_business_access(cursor, business_id, user_data)
         if not has_access:
             return jsonify({"success": False, "error": "Нет доступа" if owner_id else "Черновик не найден"}), 403 if owner_id else 404
+        access = _scope_capability_access(cursor, scope, "maps.reviews", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
         cursor.execute(
             """
             UPDATE reviewreplydrafts
@@ -3736,6 +4240,9 @@ def operator_mobile_review_draft_manual_publish(draft_id: str):
         has_access, _owner_id = verify_business_access(cursor, business_id, user_data)
         if not has_access:
             return jsonify({"success": False, "error": "Черновик недоступен"}), 403
+        access = _scope_capability_access(cursor, scope, "maps.reviews", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
         result = mark_review_reply_draft_manual_published(
             cursor,
             business_id=business_id,
@@ -3765,6 +4272,9 @@ def operator_mobile_history():
         scope = _resolve_mobile_scope(cursor, user_data)
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        access = _scope_capability_access(cursor, scope, "operator", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         if scope.get("kind") != "business":
             limit = max(1, min(int(request.args.get("limit") or 100), 200))
@@ -3849,6 +4359,9 @@ def operator_mobile_review_reply_generate(review_id: str):
         )
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        access = _scope_capability_access(cursor, scope, "maps.reviews", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
         cursor.execute("SELECT business_id FROM externalbusinessreviews WHERE id = %s", (review_id,))
         row = cursor.fetchone()
         business_id = str((dict(row) if row else {}).get("business_id") or "")
@@ -3911,3 +4424,12 @@ def operator_events():
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
     finally:
         db.close()
+
+# Voice extends the same Operator API and authentication surface.
+from api.operator_audio_api import register_audio_routes
+register_audio_routes(operator_bp)
+from api.operator_workday_api import register_workday_routes
+register_workday_routes(operator_bp)
+
+from api.operator_input_settings_api import register_input_settings_routes
+register_input_settings_routes(operator_bp)

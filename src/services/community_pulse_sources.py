@@ -90,6 +90,14 @@ def is_default_industry_source(source: dict[str, Any], industry_keys: set[str]) 
         for value in (raw_categories if isinstance(raw_categories, list) else [])
         if str(value or "").strip()
     }
+    audience = str(metadata.get("audience") or metadata.get("audience_type") or "").strip().lower()
+    corpus_tag = str(metadata.get("corpus_tag") or "").strip().lower()
+    owner_type = str(metadata.get("source_owner_type") or "").strip().lower()
+    discovery_origin = str(metadata.get("discovery_origin") or "").strip().lower()
+    if audience in {"b2c", "consumer", "customers", "customer"}:
+        return False
+    if "b2c" in corpus_tag or owner_type == "owned_business_channel" or discovery_origin == "map_parse":
+        return False
     if "для клиентов" in categories:
         return False
     if metadata.get("community_default") is False:

@@ -1,15 +1,27 @@
 import logging
 import os
-import sys
+import uuid
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, request
 
 from auth_system import logout_session, verify_session
+from core.browser_session import browser_cookie_auth_enabled, clear_browser_session
 from database_manager import DatabaseManager
+from subscription_manager import build_subscription_capabilities
 
 
 logger = logging.getLogger(__name__)
 auth_user_bp = Blueprint("auth_user_api", __name__)
+
+
+def _internal_error(message):
+    request_id = str(getattr(g, "request_id", "") or request.headers.get("X-Request-ID") or uuid.uuid4())
+    logger.exception("Auth API request failed request_id=%s", request_id)
+    return jsonify({
+        "code": "internal_error",
+        "message": message,
+        "request_id": request_id,
+    }), 500
 
 
 def _safe_get(data, key, default=None):
@@ -50,6 +62,50 @@ def _filter_demo_businesses(businesses, scope_business_id):
     ]
 
 
+def _web_tracking_available_for_business(business_id):
+    enabled = os.getenv("WEB_TRACKING_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+    if not enabled:
+        return False
+    configured = {
+        item.strip()
+        for item in os.getenv("WEB_TRACKING_BUSINESS_IDS", "").split(",")
+        if item.strip()
+    }
+    return not configured or str(business_id or "") in configured
+
+
+def _creator_promotion_available_for_business(business_id):
+    enabled = os.getenv("PROMOTION_HUB_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+    if not enabled:
+        return False
+    configured = {
+        item.strip()
+        for item in os.getenv("INFLUENCER_BUSINESS_IDS", "").split(",")
+        if item.strip()
+    }
+    return not configured or str(business_id or "") in configured
+
+
+def _attach_business_capabilities(businesses, *, is_superadmin=False):
+    result = []
+    for business in businesses:
+        business_payload = dict(business)
+        business_payload["web_tracking_available"] = _web_tracking_available_for_business(
+            _safe_get(business, "id")
+        )
+        business_payload["creator_promotion_available"] = _creator_promotion_available_for_business(
+            _safe_get(business, "id")
+        )
+        business_payload["subscription_access"] = build_subscription_capabilities(
+            tier=str(_safe_get(business, "subscription_tier", "") or ""),
+            status=str(_safe_get(business, "subscription_status", "") or ""),
+            subscription_ends_at=_safe_get(business, "subscription_ends_at"),
+            is_superadmin=bool(is_superadmin),
+        )
+        result.append(business_payload)
+    return result
+
+
 @auth_user_bp.route("/api/auth/me", methods=["GET"])
 def get_user_info():
     """Получить информацию о текущем пользователе."""
@@ -84,6 +140,8 @@ def get_user_info():
         if session_kind == "demo":
             businesses = _filter_demo_businesses(businesses, scope_business_id)
 
+        businesses = _attach_business_capabilities(businesses, is_superadmin=is_superadmin)
+
         if not is_superadmin and len(businesses) == 0:
             db.close()
             return jsonify({"error": "Все ваши бизнесы заблокированы. Обратитесь к администратору."}), 403
@@ -111,12 +169,7 @@ def get_user_info():
         )
 
     except Exception:
-        exc = sys.exc_info()[1]
-        logger.warning("User info endpoint failed: %s", type(exc).__name__)
-        payload = {"error": "Ошибка получения информации о пользователе"}
-        if current_app.debug:
-            payload["details"] = str(exc)
-        return jsonify(payload), 500
+        return _internal_error("Не удалось получить информацию о пользователе")
 
 
 @auth_user_bp.route("/api/auth/logout", methods=["POST"])
@@ -129,13 +182,14 @@ def logout():
 
         success = logout_session(token)
         if success:
-            return jsonify({"success": True, "message": "Выход выполнен успешно"})
+            response = jsonify({"success": True, "message": "Выход выполнен успешно"})
+            if browser_cookie_auth_enabled():
+                clear_browser_session(response)
+            return response
         return jsonify({"error": "Ошибка выхода"}), 500
 
     except Exception:
-        exc = sys.exc_info()[1]
-        print(f"❌ Ошибка выхода: {exc}")
-        return jsonify({"error": str(exc)}), 500
+        return _internal_error("Не удалось завершить сессию")
 
 
 @auth_user_bp.route("/api/users/profile", methods=["PUT"])
@@ -176,6 +230,4 @@ def update_user_profile():
         return jsonify({"success": True, "user": updated_user})
 
     except Exception:
-        exc = sys.exc_info()[1]
-        print(f"❌ Ошибка обновления профиля: {exc}")
-        return jsonify({"error": str(exc)}), 500
+        return _internal_error("Не удалось обновить профиль")

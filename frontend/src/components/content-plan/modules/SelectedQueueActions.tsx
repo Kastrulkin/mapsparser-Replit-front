@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { CheckSquare, Globe, Sparkles } from 'lucide-react';
 
 export const SelectedQueueActions = ({ scope }) => {
+  const [manualContentConfirmed, setManualContentConfirmed] = React.useState(false);
   const {
     isRu, bulkBusyAction, socialBulkPublishRehearsal, selectedItems, selectedDraftCandidates, selectedNewsCandidates, selectedSocialPosts, selectedSocialNeedsReview,
     selectedSocialDirtyReviewPosts, selectedSocialCanQueue, selectedSocialCanMarkPublished, selectedSocialCanRecordResults, selectedSocialQueueApiWarnings, clearSelectedItems, rehearseSelectedSocialPosts, prepareSelectedSocialPosts,
@@ -190,13 +191,29 @@ export const SelectedQueueActions = ({ scope }) => {
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => { void markSelectedSocialPostsPublished(); }}
-                    disabled={Boolean(bulkBusyAction) || selectedSocialCanMarkPublished.length === 0}
+                    onClick={() => { void markSelectedSocialPostsPublished(manualContentConfirmed); }}
+                    disabled={Boolean(bulkBusyAction) || selectedSocialCanMarkPublished.length === 0 || !manualContentConfirmed}
                   >
                     {bulkBusyAction === 'selected-social-manual'
                       ? (isRu ? 'Отмечаем...' : 'Marking...')
                       : `${isRu ? 'Отметить размещёнными' : 'Mark published'} · ${selectedSocialCanMarkPublished.length}`}
                   </Button>
+                  {selectedSocialCanMarkPublished.length > 0 ? (
+                    <label className="flex w-full cursor-pointer items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={manualContentConfirmed}
+                        onChange={(event) => setManualContentConfirmed(event.target.checked)}
+                        disabled={Boolean(bulkBusyAction)}
+                        className="mt-0.5 h-4 w-4 shrink-0"
+                      />
+                      <span>
+                        {isRu
+                          ? 'Проверил на площадках: тексты и выбранные фото отображаются правильно.'
+                          : 'Checked on the platforms: copy and selected photos display correctly.'}
+                      </span>
+                    </label>
+                  ) : null}
                   {selectedSocialCanRecordResults.length > 0 ? (
                     <div
                       data-testid="social-bulk-attribution-actions"

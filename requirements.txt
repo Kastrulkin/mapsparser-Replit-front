@@ -2,6 +2,7 @@ psycopg2-binary
 flask
 flask-cors
 flask-limiter
+redis>=5.0,<6.0
 flask-sqlalchemy
 flask-migrate
 gunicorn
@@ -11,6 +12,7 @@ requests
 stripe
 beautifulsoup4
 dnspython
+defusedxml
 phonenumbers
 playwright
 openai
@@ -25,5 +27,10 @@ telethon
 pysocks
 python-socks[asyncio]
 pypdf
+PyMuPDF>=1.24,<2
+Pillow>=10.4,<13
 openpyxl
+reportlab>=4.0,<5
 boto3
+
+pillow-heif>=0.22,<2

@@ -179,6 +179,11 @@ type SocialPost = {
     manually_edited?: boolean;
     platform_rules_version?: string;
     adaptation_error?: string;
+    quality_passed?: boolean;
+    quality_issues?: string[];
+    quality_issue_codes?: string[];
+    quality_rules_version?: string;
+    quality_text_hash?: string;
     platform_rule_readiness?: {
       label?: string;
       message?: string;
@@ -278,6 +283,7 @@ const CHANNELS = [
   { key: 'google_business', label: 'Google', mode: 'api' },
   { key: 'telegram', label: 'Telegram', mode: 'api' },
   { key: 'vk', label: 'VK', mode: 'api' },
+  { key: 'max', label: 'MAX', mode: 'controlled' },
   { key: 'instagram', label: 'Instagram', mode: 'api' },
   { key: 'facebook', label: 'Facebook', mode: 'api' },
 ];
@@ -313,6 +319,7 @@ const DEFAULT_CREATE_DRAFT: CreatePlanDraft = {
     google_business: true,
     telegram: true,
     vk: true,
+    max: false,
     instagram: true,
     facebook: true,
   },
@@ -332,7 +339,7 @@ const plannedPublicationCount = (periodDays: number, frequency: string) => {
 const buildChannelSelection = (selectedChannels?: string[]) => {
   const selected = new Set((selectedChannels || []).map((value) => String(value || '').trim()).filter(Boolean));
   return CHANNELS.reduce<Record<string, boolean>>((result, channel) => {
-    result[channel.key] = selected.size === 0 || selected.has(channel.key);
+    result[channel.key] = selected.size === 0 ? channel.key !== 'max' : selected.has(channel.key);
     return result;
   }, {});
 };
@@ -458,9 +465,21 @@ const getChannelStatusLabel = (status?: string) => {
   return getPostStatusLabel(status);
 };
 
+const postNeedsEditorialRewrite = (post: SocialPost) => (
+  String(post.metadata_json?.variant_status || '').toLowerCase() === 'failed'
+  || post.metadata_json?.quality_passed === false
+);
+
+const getPostQualityIssueText = (post: SocialPost) => (
+  (post.metadata_json?.quality_issues || []).filter(Boolean).join(' · ')
+);
+
 const getChannelNextAction = (post: SocialPost) => {
   const variantStatus = String(post.metadata_json?.variant_status || '').toLowerCase();
   const variantSource = String(post.metadata_json?.variant_source || '').toLowerCase();
+  if (postNeedsEditorialRewrite(post)) {
+    return getPostQualityIssueText(post) || 'Текст не прошёл редакционную проверку. Исправьте его вручную или подготовьте заново.';
+  }
   if (variantStatus === 'stale') return 'Общий текст изменился. Проверьте сохранённую версию этого канала.';
   const readiness = getPostPlatformReadiness(post);
   if (readiness?.message) return readiness.message;
@@ -492,6 +511,7 @@ const getPostPlatformReadiness = (post: SocialPost) => {
 const getChannelStatusDisplay = (post: SocialPost) => {
   const variantStatus = String(post.metadata_json?.variant_status || '').toLowerCase();
   const variantSource = String(post.metadata_json?.variant_source || '').toLowerCase();
+  if (postNeedsEditorialRewrite(post)) return 'Нужно переписать';
   if (variantStatus === 'stale') return 'Версия устарела';
   const readiness = getPostPlatformReadiness(post);
   const normalized = String(post.status || '').toLowerCase();
@@ -596,6 +616,7 @@ const PLATFORM_LABELS: Record<string, string> = {
   google_business: 'Google',
   instagram: 'Instagram',
   telegram: 'Telegram',
+  max: 'MAX',
   two_gis: '2ГИС',
   vk: 'VK',
   yandex_maps: 'Яндекс',
@@ -728,6 +749,7 @@ export function ContentPage() {
     return saved === 'media' || saved === 'audience' ? saved : 'calendar';
   });
   const [selectedItemId, setSelectedItemId] = useState('');
+  const [manualContentConfirmed, setManualContentConfirmed] = useState<Record<string, boolean>>({});
   const [channelDetailsOpen, setChannelDetailsOpen] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
   const [themeEdits, setThemeEdits] = useState<Record<string, string>>({});
@@ -1546,7 +1568,10 @@ export function ContentPage() {
     try {
       await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/mark-manual-published`, {
         method: 'POST',
-        body: JSON.stringify({ provider_post_url: providerPostUrl.trim() }),
+        body: JSON.stringify({
+          provider_post_url: providerPostUrl.trim(),
+          content_confirmed: Boolean(manualContentConfirmed[post.id]),
+        }),
       });
       await loadSocialPosts(currentPlan.id);
       setActionMessage(`${platformShortLabel(post)}: публикация отмечена размещённой.`);
@@ -2439,19 +2464,21 @@ export function ContentPage() {
     const generationAlternatives = (generation.alternatives || storedAlternatives).filter((variant) => variant.quality_passed !== false);
     const selectedChannelCount = getSelectedCount(publicationChannels);
     const channelCount = hasPosts ? selectedPosts.length : selectedChannelCount;
-    const needsReviewChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Нужно проверить').length;
-    const readyTextChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Текст готов').length;
+    const needsRewriteChannelCount = selectedPosts.filter(postNeedsEditorialRewrite).length;
+    const needsReviewChannelCount = selectedPosts.filter((post) => !postNeedsEditorialRewrite(post) && getChannelStatusLabel(post.status) === 'Нужно проверить').length;
+    const readyTextChannelCount = selectedPosts.filter((post) => !postNeedsEditorialRewrite(post) && getChannelStatusLabel(post.status) === 'Текст готов').length;
     const approvedPostCount = selectedPosts.filter((post) => String(post.status || '').toLowerCase() === 'approved').length;
     const scheduledPostCount = selectedPosts.filter((post) => isQueuedOrHandledStatus(post.status)).length;
     const blockedChannelCount = selectedPosts.filter((post) => isAutomaticSendBlockedStatus(post.status)).length;
     const scheduleAlreadyHandled = scheduledPostCount > 0 && approvedPostCount === 0 && needsReviewChannelCount === 0;
-    const canQueueSelectedItem = approvedPostCount > 0 && needsReviewChannelCount === 0;
+    const canQueueSelectedItem = approvedPostCount > 0 && needsReviewChannelCount === 0 && needsRewriteChannelCount === 0;
     const queueNeedsAttention = hasPosts && !canQueueSelectedItem && !scheduleAlreadyHandled;
     const needsPlatformPreparation = hasDraftText && (!hasPosts || hasUnsavedItemChanges);
     const canApproveSelectedItem = hasDraftText
       && hasPosts
       && !hasUnsavedItemChanges
-      && needsReviewChannelCount > 0;
+      && needsReviewChannelCount > 0
+      && needsRewriteChannelCount === 0;
     const approveButtonLabel = busyAction === 'approve'
       ? 'Утверждаем...'
       : hasUnsavedDraftChanges && canApproveSelectedItem
@@ -2469,6 +2496,8 @@ export function ContentPage() {
       ? 'Если выбранные каналы не подключены, LocalOS покажет, что нужно настроить перед отправкой.'
       : !hasPosts
         ? 'Сначала подготовьте версии для каналов, чтобы проверить тексты для каждой площадки.'
+        : needsRewriteChannelCount > 0
+          ? 'Часть версий не прошла редакционную проверку. Откройте канал и исправьте указанные фразы.'
         : needsReviewChannelCount > 0
           ? 'Следующий шаг: проверьте текст и нажмите «Утвердить». После этого появится расписание.'
           : blockedChannelCount > 0
@@ -2477,7 +2506,9 @@ export function ContentPage() {
               ? 'Публикация уже стоит в расписании или ждёт контролируемого размещения.'
               : 'Сейчас нет каналов, готовых к отправке. Подготовьте каналы или проверьте их состояние.';
     const channelSummary = hasPosts
-      ? needsReviewChannelCount > 0
+      ? needsRewriteChannelCount > 0
+        ? `Нужно переписать: ${needsRewriteChannelCount}`
+      : needsReviewChannelCount > 0
         ? `Нужно проверить: ${needsReviewChannelCount}`
         : readyTextChannelCount > 0
           ? `Текст готов: ${readyTextChannelCount}`
@@ -2848,6 +2879,19 @@ export function ContentPage() {
                                   ) : null}
                                   {['needs_manual_publish', 'needs_supervised_publish'].includes(String(post.status || '').toLowerCase()) ? (
                                     <div className="mt-3 flex flex-wrap gap-2">
+                                      <label className="flex w-full cursor-pointer items-start gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-700">
+                                        <input
+                                          type="checkbox"
+                                          checked={Boolean(manualContentConfirmed[post.id])}
+                                          onChange={(event) => setManualContentConfirmed((prev) => ({
+                                            ...prev,
+                                            [post.id]: event.target.checked,
+                                          }))}
+                                          disabled={Boolean(busyAction)}
+                                          className="mt-0.5 h-4 w-4 shrink-0"
+                                        />
+                                        <span>Проверил на площадке: текст и выбранные фото отображаются правильно.</span>
+                                      </label>
                                       {placementTargetUrl(post) ? (
                                         <a href={placementTargetUrl(post)} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-xl bg-white px-3 text-xs font-semibold text-sky-700 ring-1 ring-slate-200 hover:bg-sky-50">
                                           Открыть размещение
@@ -2868,7 +2912,7 @@ export function ContentPage() {
                                           </Button>
                                         </>
                                       ) : null}
-                                      <Button type="button" variant="outline" size="sm" onClick={() => { void markPlacementPublished(post); }} disabled={Boolean(busyAction)} className="min-h-10 rounded-xl bg-white px-3 text-xs active:scale-[0.96] transition-transform">
+                                      <Button type="button" variant="outline" size="sm" onClick={() => { void markPlacementPublished(post); }} disabled={Boolean(busyAction) || !manualContentConfirmed[post.id]} className="min-h-10 rounded-xl bg-white px-3 text-xs active:scale-[0.96] transition-transform">
                                         Отметить размещённым
                                       </Button>
                                     </div>

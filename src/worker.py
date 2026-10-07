@@ -4,14 +4,17 @@ import json
 import re
 import os
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import signal
 import sys
 import multiprocessing
 import asyncio
 import random
-from typing import Dict, List, Any, Optional
+import threading
+import requests
+from typing import Callable, Dict, List, Any, Optional
 from urllib import request as urllib_request, error as urllib_error
+from urllib.parse import quote
 from dotenv import load_dotenv
 from psycopg2.extras import Json, RealDictCursor
 
@@ -43,6 +46,7 @@ from core.action_orchestrator import ActionOrchestrator
 from core.parsing_runtime_config import get_use_apify_map_parsing, resolve_map_source_for_queue
 from core.map_url_normalizer import is_google_map_url
 from core.review_response_utils import extract_review_response_text
+from core.sensitive_text import redact_sensitive_text
 from yookassa_integration import run_due_renewals
 from services.outreach_dispatch_service import dispatch_due_outreach_queue
 from services.outreach_campaign_service import expire_manual_touches, finalize_no_reply_campaigns
@@ -59,10 +63,26 @@ from services.operator_apify_settlement import settle_apify_actual_cost
 from services.operator_refresh_recovery import release_failed_refresh_reservation
 from services.operator_refresh_telegram_followup import dispatch_operator_refresh_telegram_followup
 from services.growth_rhythm_notifications import collect_due_growth_rhythm_reminders, mark_growth_rhythm_reminder_sent
+from services.journey_action_notifications import collect_due_journey_action_notifications, mark_journey_action_notification_sent, reconcile_completed_map_refreshes
+from services.content_publish_notifications import (
+    collect_due_content_publish_handoffs,
+    format_content_publish_handoff,
+    mark_content_publish_handoff_sent,
+    deliver_content_publish_handoff,
+    queue_handoff_alert,
+    collect_exhausted_content_plan_alerts,
+    dispatch_handoff_alerts,
+)
 from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
-from services.agent_run_queue import claim_next_agent_run, execute_claimed_agent_run
+from services.agent_run_queue import claim_next_agent_run, execute_claimed_agent_run, execute_claimed_compiled_agent_run
+from services.agent_sheet_provider_executor import process_next_sheet_provider_request
+from services.worker_ownership import worker_role_enabled
 from services.operator_async_jobs import process_next_operator_async_job
-from services.social_post_service import collect_due_social_post_metrics, dispatch_due_social_posts
+from services.social_post_service import (
+    collect_due_social_post_metrics,
+    dispatch_due_social_posts,
+    send_telegram_photo_message,
+)
 from services.telegram_opportunity_monitor import run_telegram_opportunity_monitor
 from services.knowledge_public_telegram import run_public_telegram_monitor
 from services.telegram_research_service import purge_expired_private_telegram_content, run_userbot_market_sync
@@ -80,16 +100,54 @@ from services.contact_intelligence_service import (
     recover_interrupted_enrichment_jobs,
 )
 from services.superadmin_telegram_notifications import (
+    collect_pending_community_source_notifications,
     collect_pending_outreach_reply_notifications,
+    format_community_source_notification,
     format_outreach_reply_notification,
     load_superadmin_telegram_recipients,
+    mark_community_source_notification_sent,
     mark_outreach_reply_notification_sent,
+)
+from services.riderra_systematic_outreach_service import (
+    DAILY_LIMIT as RIDERRA_DAILY_LIMIT,
+    format_run_notification,
+    mark_run_notified,
+    prepare_systematic_batch,
 )
 from services.founder_content_editorial import (
     format_founder_content_telegram_message,
     mark_founder_content_delivered,
     prepare_due_founder_content_drafts,
 )
+from services.web_tracking_maintenance import run_web_tracking_maintenance
+from services.creator_promotion_service import process_next_creator_search_job
+from services.creator_portal_service import (
+    dispatch_notifications as dispatch_creator_notifications,
+    queue_due_measurement_reminders,
+)
+from services.creator_offer_distribution_service import (
+    expire_creator_offers,
+    process_next_distribution_run,
+)
+from services.creator_profile_revalidation_service import process_creator_profile_revalidation_batch
+from services.creator_source_enrichment_service import process_creator_source_enrichment_batch
+from services.yandex_full_reviews_sync import apply_complete_review_snapshot, fetch_complete_yandex_reviews
+from services.yandex_review_delta_sync import (
+    apply_yandex_review_delta,
+    load_expected_yandex_reviews_total,
+    load_known_yandex_review_ids,
+    native_delta_completeness,
+    normalize_native_review,
+)
+
+
+def _worker_role_enabled(role: str) -> bool:
+    """Keep the legacy all-in-one worker as the default during the split.
+
+    ``all`` remains the backward-compatible default. Dedicated parser, agent,
+    operator, dispatcher, and maintenance roles run only their owned loops.
+    """
+    return worker_role_enabled(role)
 
 # Реестр активных Playwright-сессий для human-in-the-loop
 ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession] = {}
@@ -105,7 +163,14 @@ _LAST_YOOKASSA_RENEWALS_AT = 0.0
 _LAST_KNOWLEDGE_EMBEDDINGS_AT = 0.0
 _LAST_KNOWLEDGE_SEMANTIC_INGEST_AT = 0.0
 _LAST_KNOWLEDGE_EMBEDDING_MAINTENANCE_AT = 0.0
+_LAST_WEB_TRACKING_MAINTENANCE_AT = 0.0
 _LAST_FOUNDER_CONTENT_AT = 0.0
+_LAST_CREATOR_SEARCH_AT = 0.0
+_LAST_CREATOR_SOURCE_ENRICHMENT_AT = 0.0
+_LAST_CREATOR_PROFILE_REVALIDATION_AT = 0.0
+_LAST_CREATOR_NOTIFICATION_AT = 0.0
+_LAST_CREATOR_OFFER_DISTRIBUTION_AT = 0.0
+_CREATOR_PROFILE_REVALIDATION_THREAD: threading.Thread | None = None
 
 
 def _record_external_card_change_if_enabled(
@@ -133,12 +198,20 @@ def _record_external_card_change_if_enabled(
         print(f"[KNOWLEDGE] Failed to record external card change for {business_id}: {exc}")
 _LAST_OUTREACH_DISPATCH_AT = 0.0
 _LAST_OUTREACH_REPLY_SYNC_AT = 0.0
-_OUTREACH_REPLY_SYNC_HEALTHY = True
+_OUTREACH_REPLY_SYNC_STATE = {
+    "healthy": True,
+    "global_block": False,
+    "blocked_sender_ids": [],
+}
 _LAST_OUTREACH_REPLY_NOTIFICATION_AT = 0.0
+_LAST_RIDERRA_SYSTEMATIC_OUTREACH_AT = 0.0
+_LAST_COMMUNITY_SOURCE_NOTIFICATION_AT = 0.0
 _LAST_CARD_AUTOMATION_AT = 0.0
 _LAST_AGENT_SCHEDULE_DISPATCH_AT = 0.0
 _LAST_AGENT_RUN_QUEUE_AT = 0.0
 _LAST_OPERATOR_ASYNC_JOB_AT = 0.0
+_LAST_TODAY_PRIORITY_PROPOSALS_AT = 0.0
+_LAST_COMPILED_INPUT_PURGE_AT = 0.0
 _LAST_SOCIAL_POST_DISPATCH_AT = 0.0
 _LAST_SOCIAL_POST_METRICS_AT = 0.0
 _LAST_TELEGRAM_OPPORTUNITY_MONITOR_AT = 0.0
@@ -439,47 +512,7 @@ def _get_next_proxy_for_playwright() -> Optional[Dict[str, Any]]:
         )
         row = cursor.fetchone()
         if not row:
-            # Self-healing fallback: если нет "рабочих", пробуем активный прокси
-            # (часто помогает при ротируемых residential зонах).
-            cursor.execute(
-                """
-                SELECT id, proxy_type, host, port, username, password
-                FROM proxyservers
-                WHERE is_active = TRUE
-                  AND (
-                        (COALESCE(success_count, 0) + COALESCE(failure_count, 0)) < 8
-                     OR ((COALESCE(success_count, 0) + 1.0) / (COALESCE(success_count, 0) + COALESCE(failure_count, 0) + 2.0)) >= %s
-                  )
-                ORDER BY
-                    ((COALESCE(success_count, 0) + 1.0) / (COALESCE(success_count, 0) + COALESCE(failure_count, 0) + 2.0)) DESC,
-                    COALESCE(success_count, 0) DESC,
-                    CASE WHEN last_checked_at IS NULL THEN 1 ELSE 0 END,
-                    last_checked_at DESC,
-                    CASE WHEN last_used_at IS NULL THEN 0 ELSE 1 END,
-                    last_used_at ASC,
-                    RANDOM()
-                LIMIT 1
-                """,
-                (min_health_score,),
-            )
-            row = cursor.fetchone()
-        if not row:
-            # Последний fallback: если health-gate отфильтровал всех,
-            # берём любой активный прокси, чтобы не останавливать пайплайн.
-            cursor.execute(
-                """
-                SELECT id, proxy_type, host, port, username, password
-                FROM proxyservers
-                WHERE is_active = TRUE
-                ORDER BY
-                    CASE WHEN last_used_at IS NULL THEN 0 ELSE 1 END,
-                    last_used_at ASC,
-                    RANDOM()
-                LIMIT 1
-                """
-            )
-            row = cursor.fetchone()
-        if not row:
+            print("⚠️ Нет прокси, прошедших health-gate; небезопасный fallback отключён", flush=True)
             return None
 
         if isinstance(row, dict):
@@ -588,21 +621,35 @@ def _mark_proxy_result(proxy_id: Optional[str], *, success: bool, reason: str = 
                     "err_timed_out",
                     "407",
                     "forbidden",
+                    "rate_limited",
+                    "limited",
+                    "captcha",
+                    "empty_body",
+                    "org_id_missing",
                 )
             )
+            min_samples = max(2, int(os.getenv("PROXY_CIRCUIT_BREAKER_MIN_SAMPLES", "8") or 8))
+            try:
+                min_score = float(os.getenv("PROXY_MIN_HEALTH_SCORE", "0.25") or 0.25)
+            except (TypeError, ValueError):
+                min_score = 0.25
             cursor.execute(
                 """
                 UPDATE proxyservers
                 SET failure_count = COALESCE(failure_count, 0) + 1,
                     is_working = CASE
                         WHEN %s THEN FALSE
+                        WHEN (COALESCE(success_count, 0) + COALESCE(failure_count, 0) + 1) >= %s
+                         AND ((COALESCE(success_count, 0) + 1.0) /
+                              (COALESCE(success_count, 0) + COALESCE(failure_count, 0) + 3.0)) < %s
+                        THEN FALSE
                         ELSE is_working
                     END,
                     last_checked_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
                 """,
-                (fatal_proxy_reason, proxy_id),
+                (fatal_proxy_reason, min_samples, min_score, proxy_id),
             )
         conn.commit()
     except Exception as e:
@@ -618,6 +665,65 @@ def _mark_proxy_result(proxy_id: Optional[str], *, success: bool, reason: str = 
                 conn.close()
         except Exception:
             pass
+
+
+def _preflight_yandex_proxy(url: str, active_proxy: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Verify a proxy against the exact organization page before launching Chromium."""
+    started_at = time.monotonic()
+    if not active_proxy:
+        return {"ok": False, "reason": "proxy_unavailable", "elapsed_ms": 0}
+    proxy_payload = active_proxy.get("proxy") if isinstance(active_proxy.get("proxy"), dict) else {}
+    server = str(proxy_payload.get("server") or "").strip()
+    if not server:
+        return {"ok": False, "reason": "proxy_server_missing", "elapsed_ms": 0}
+    username = str(proxy_payload.get("username") or "").strip()
+    password = str(proxy_payload.get("password") or "").strip()
+    if username and password and "://" in server:
+        scheme, host = server.split("://", 1)
+        proxy_url = f"{scheme}://{quote(username, safe='')}:{quote(password, safe='')}@{host}"
+    else:
+        proxy_url = server
+    connect_timeout = max(2, int(os.getenv("PROXY_PREFLIGHT_CONNECT_TIMEOUT_SEC", "4") or 4))
+    read_timeout = max(3, int(os.getenv("PROXY_PREFLIGHT_READ_TIMEOUT_SEC", "8") or 8))
+    try:
+        response = requests.get(
+            url,
+            headers={"User-Agent": random.choice(_HUMAN_USER_AGENTS), "Accept-Language": "ru-RU,ru;q=0.9"},
+            proxies={"http": proxy_url, "https": proxy_url},
+            timeout=(connect_timeout, read_timeout),
+            allow_redirects=True,
+        )
+        body = str(response.text or "")[:100000]
+        body_lc = body.strip().lower()
+        final_url = str(response.url or "")
+        org_match = re.search(r"/org/(?:[^/]+/)?(\d+)", url)
+        org_id = str(org_match.group(1) if org_match else "")
+        if response.status_code in {403, 429}:
+            reason = "forbidden" if response.status_code == 403 else "rate_limited"
+        elif body_lc in {"limited", "forbidden"}:
+            reason = body_lc
+        elif "showcaptcha" in final_url.lower() or "smart-captcha" in body_lc:
+            reason = "captcha"
+        elif len(body) < 1000:
+            reason = "empty_body"
+        elif org_id and org_id not in body and org_id not in final_url:
+            reason = "org_id_missing"
+        elif response.status_code >= 400:
+            reason = f"http_{response.status_code}"
+        else:
+            reason = "ok"
+        return {
+            "ok": reason == "ok",
+            "reason": reason,
+            "status": int(response.status_code),
+            "elapsed_ms": round((time.monotonic() - started_at) * 1000),
+        }
+    except requests.RequestException as exc:
+        return {
+            "ok": False,
+            "reason": redact_sensitive_text(exc.__class__.__name__ + ":" + str(exc), limit=240),
+            "elapsed_ms": round((time.monotonic() - started_at) * 1000),
+        }
 
 
 def _parse_retry_after(value: Any) -> Optional[datetime]:
@@ -891,8 +997,8 @@ def _parse_yandex_card_subprocess_entry(result_queue: Any, url: str, kwargs: Dic
         result_queue.put(
             {
                 "error": "parser_subprocess_exception",
-                "message": str(exc),
-                "traceback": traceback.format_exc(),
+                "message": redact_sensitive_text(exc, limit=1200),
+                "traceback": redact_sensitive_text(traceback.format_exc(), limit=8000),
                 "url": url,
             }
         )
@@ -1145,7 +1251,7 @@ def _parse_card_via_apify_subprocess_entry(
     except Exception as exc:
         error_payload = {
             "error": "apify_parser_subprocess_exception",
-            "message": str(exc),
+            "message": redact_sensitive_text(exc, limit=1200),
             "url": url,
         }
         if result_file_path:
@@ -1261,6 +1367,7 @@ def _parse_yandex_card_with_playwright_fallback(
     session_registry: Optional[Dict[str, BrowserSession]] = None,
     session_id: Optional[str] = None,
     timeout_sec: int = 600,
+    force_subprocess: bool = False,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """
@@ -1269,7 +1376,6 @@ def _parse_yandex_card_with_playwright_fallback(
     Если sync Playwright падает из-за активного asyncio loop, повторяем парсинг
     в отдельном процессе. Для subprocess fallback не паркуем живую CAPTCHA-сессию.
     """
-    force_subprocess = False
     # По умолчанию сначала пробуем обычный sync путь.
     # Subprocess fallback используем только при реальной ошибке sync-in-async
     # (или при явном флаге окружения).
@@ -1293,7 +1399,7 @@ def _parse_yandex_card_with_playwright_fallback(
         )
     except Exception as exc:
         msg = str(exc)
-        if not _is_playwright_sync_in_async_error(msg):
+        if not force_subprocess and not _is_playwright_sync_in_async_error(msg):
             raise
 
         if session_id:
@@ -1401,6 +1507,31 @@ def _env_bool(name: str, default: bool) -> bool:
     return str(raw).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _run_web_tracking_maintenance_if_due() -> None:
+    global _LAST_WEB_TRACKING_MAINTENANCE_AT
+    if not _env_bool("WEB_TRACKING_MAINTENANCE_ENABLED", False):
+        return
+    now = time.time()
+    interval_sec = max(300, int(os.getenv("WEB_TRACKING_MAINTENANCE_INTERVAL_SEC", "3600")))
+    if now - _LAST_WEB_TRACKING_MAINTENANCE_AT < interval_sec:
+        return
+    _LAST_WEB_TRACKING_MAINTENANCE_AT = now
+    database = DatabaseManager()
+    try:
+        result = run_web_tracking_maintenance(
+            database.conn.cursor(),
+            dry_run=_env_bool("WEB_TRACKING_MAINTENANCE_DRY_RUN", True),
+            batch_size=max(100, min(int(os.getenv("WEB_TRACKING_RETENTION_BATCH_SIZE", "10000")), 50000)),
+        )
+        database.conn.commit()
+        print(f"[WEB_TRACKING_MAINTENANCE] {json.dumps(result, sort_keys=True)}", flush=True)
+    except Exception as error:
+        database.conn.rollback()
+        print(f"[WEB_TRACKING_MAINTENANCE] failed={type(error).__name__}", flush=True)
+    finally:
+        database.close()
+
+
 def _run_yookassa_renewals_if_due() -> None:
     global _LAST_YOOKASSA_RENEWALS_AT
     if not _env_bool("YOOKASSA_RENEWALS_ENABLED", False):
@@ -1434,37 +1565,110 @@ def _run_yookassa_renewals_if_due() -> None:
         print(f"[YOOKASSA_RENEWALS] unexpected error: {e}", flush=True)
 
 
-def _sync_outreach_replies_if_due() -> bool:
-    global _LAST_OUTREACH_REPLY_SYNC_AT, _OUTREACH_REPLY_SYNC_HEALTHY
+def _classify_reply_sync_failures(sync_results: tuple[dict[str, Any], ...]) -> dict[str, Any]:
+    failed = 0
+    blocked_sender_ids: set[str] = set()
+    has_unscoped_failures = False
+    for result in sync_results:
+        if not isinstance(result, dict):
+            has_unscoped_failures = True
+            continue
+        raw_failed = result.get("failed")
+        if isinstance(raw_failed, bool) or not isinstance(raw_failed, int):
+            has_unscoped_failures = True
+            continue
+        reported_failed = raw_failed
+        if reported_failed < 0:
+            has_unscoped_failures = True
+            continue
+        failed += reported_failed
+
+        raw_sender_results = result.get("sender_results")
+        if raw_sender_results is None:
+            sender_results = []
+        elif isinstance(raw_sender_results, list):
+            sender_results = raw_sender_results
+        else:
+            has_unscoped_failures = True
+            sender_results = []
+
+        failed_records: list[dict[str, Any]] = []
+        malformed_record = False
+        for item in sender_results:
+            if not isinstance(item, dict):
+                malformed_record = True
+                continue
+            if str(item.get("status") or "").strip().lower() == "failed":
+                failed_records.append(item)
+
+        scoped_sender_ids = [
+            str(item.get("sender_account_id") or "").strip()
+            for item in failed_records
+        ]
+        blocked_sender_ids.update(value for value in scoped_sender_ids if value)
+        if (
+            malformed_record
+            or len(failed_records) != reported_failed
+            or any(not value for value in scoped_sender_ids)
+        ):
+            has_unscoped_failures = True
+
+    return {
+        "failed": failed,
+        "blocked_sender_ids": sorted(blocked_sender_ids),
+        "has_unscoped_failures": has_unscoped_failures,
+    }
+
+
+def _sync_outreach_replies_if_due() -> dict[str, Any]:
+    global _LAST_OUTREACH_REPLY_SYNC_AT, _OUTREACH_REPLY_SYNC_STATE
     if not _env_bool("OUTREACH_REPLY_SYNC_ENABLED", True):
-        return True
+        return {
+            "healthy": False,
+            "global_block": False,
+            "blocked_sender_ids": [],
+            "cycle_started_at": None,
+        }
 
     now = time.time()
     interval_sec = max(10, int(os.getenv("OUTREACH_REPLY_SYNC_INTERVAL_SEC", "60")))
     if now - _LAST_OUTREACH_REPLY_SYNC_AT < interval_sec:
-        return _OUTREACH_REPLY_SYNC_HEALTHY
+        return {**_OUTREACH_REPLY_SYNC_STATE, "cycle_started_at": None}
     _LAST_OUTREACH_REPLY_SYNC_AT = now
+    cycle_started_at = datetime.now(timezone.utc)
 
     try:
         from api.admin_prospecting import _sync_telegram_app_replies
         from services.outreach_email_reply_service import sync_email_replies
         from services.outreach_vk_reply_service import sync_vk_replies
+        from services.outreach_yougile_sync_service import process_yougile_outbox
 
         reply_sync_limit = max(1, min(int(os.getenv("OUTREACH_REPLY_SYNC_BATCH_SIZE", "50")), 200))
         telegram_reply_sync = _sync_telegram_app_replies(limit=reply_sync_limit)
-        email_reply_sync = sync_email_replies(
-            sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_SENDER_LIMIT", "25")), 200)),
-            per_sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_MESSAGE_LIMIT", "100")), 500)),
-        )
         vk_reply_sync = sync_vk_replies(
             sender_limit=max(1, min(int(os.getenv("OUTREACH_VK_SYNC_SENDER_LIMIT", "25")), 200)),
             per_conversation_limit=max(1, min(int(os.getenv("OUTREACH_VK_SYNC_MESSAGE_LIMIT", "50")), 200)),
         )
-        reply_sync_failed = (
-            int(telegram_reply_sync.get("failed") or 0)
-            + int(email_reply_sync.get("failed") or 0)
-            + int(vk_reply_sync.get("failed") or 0)
+        # Keep the email receipt closest to dispatch. Telegram/VK sync can take
+        # several minutes, while email preflight deliberately accepts only a
+        # very fresh complete-mailbox receipt.
+        email_reply_sync = sync_email_replies(
+            sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_SENDER_LIMIT", "25")), 200)),
+            per_sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_MESSAGE_LIMIT", "100")), 500)),
         )
+        yougile_sync = (
+            process_yougile_outbox(
+                limit=max(1, min(int(os.getenv("OUTREACH_YOUGILE_SYNC_BATCH_SIZE", "20")), 100)),
+            )
+            if _env_bool("OUTREACH_YOUGILE_SYNC_ENABLED", False)
+            else {"picked": 0, "delivered": 0, "retried": 0}
+        )
+        failure_scope = _classify_reply_sync_failures((
+            telegram_reply_sync,
+            email_reply_sync,
+            vk_reply_sync,
+        ))
+        reply_sync_failed = failure_scope["failed"]
         imported = (
             int(telegram_reply_sync.get("imported") or 0)
             + int(email_reply_sync.get("imported") or 0)
@@ -1479,17 +1683,77 @@ def _sync_outreach_replies_if_due() -> bool:
                 f"email_imported={int(email_reply_sync.get('imported') or 0)} "
                 f"vk_picked={int(vk_reply_sync.get('picked') or 0)} "
                 f"vk_imported={int(vk_reply_sync.get('imported') or 0)} "
+                f"yougile_delivered={int(yougile_sync.get('delivered') or 0)} "
+                f"yougile_retry={int(yougile_sync.get('retried') or 0)} "
                 f"failed={reply_sync_failed}",
                 flush=True,
             )
-        _OUTREACH_REPLY_SYNC_HEALTHY = (
-            reply_sync_failed <= 0 or not _env_bool("OUTREACH_REPLY_SYNC_FAIL_CLOSED", True)
-        )
-        return _OUTREACH_REPLY_SYNC_HEALTHY
+        fail_closed = _env_bool("OUTREACH_REPLY_SYNC_FAIL_CLOSED", True)
+        _OUTREACH_REPLY_SYNC_STATE = {
+            "healthy": reply_sync_failed <= 0 and not failure_scope["has_unscoped_failures"],
+            "global_block": bool(fail_closed and failure_scope["has_unscoped_failures"]),
+            "blocked_sender_ids": failure_scope["blocked_sender_ids"] if fail_closed else [],
+            "cycle_started_at": cycle_started_at,
+        }
+        return dict(_OUTREACH_REPLY_SYNC_STATE)
     except Exception as e:
         print(f"[OUTREACH_REPLY_SYNC] error: {e}", flush=True)
-        _OUTREACH_REPLY_SYNC_HEALTHY = not _env_bool("OUTREACH_REPLY_SYNC_FAIL_CLOSED", True)
-        return _OUTREACH_REPLY_SYNC_HEALTHY
+        fail_closed = _env_bool("OUTREACH_REPLY_SYNC_FAIL_CLOSED", True)
+        _OUTREACH_REPLY_SYNC_STATE = {
+            "healthy": False,
+            "global_block": fail_closed,
+            "blocked_sender_ids": [],
+            "cycle_started_at": None,
+        }
+        return dict(_OUTREACH_REPLY_SYNC_STATE)
+
+
+def _prepare_riderra_systematic_outreach_if_due() -> None:
+    global _LAST_RIDERRA_SYSTEMATIC_OUTREACH_AT
+    if not _env_bool("RIDERRA_SYSTEMATIC_OUTREACH_ENABLED", False):
+        return
+    now = time.time()
+    interval_sec = max(300, int(os.getenv("RIDERRA_SYSTEMATIC_OUTREACH_INTERVAL_SEC", "3600")))
+    if now - _LAST_RIDERRA_SYSTEMATIC_OUTREACH_AT < interval_sec:
+        return
+    _LAST_RIDERRA_SYSTEMATIC_OUTREACH_AT = now
+    db = None
+    try:
+        db = DatabaseManager()
+        cursor = db.conn.cursor(cursor_factory=RealDictCursor)
+        result = prepare_systematic_batch(
+            cursor,
+            target_count=max(1, min(int(os.getenv("RIDERRA_SYSTEMATIC_OUTREACH_TARGET", str(RIDERRA_DAILY_LIMIT))), RIDERRA_DAILY_LIMIT)),
+        )
+        db.conn.commit()
+        print(
+            "[RIDERRA_SYSTEMATIC_OUTREACH] "
+            f"status={result.get('status')} eligible={result.get('eligible_count')} "
+            f"selected={result.get('selected_count')} queued={result.get('queued_count')} "
+            f"capacity={result.get('remaining_daily_capacity')}",
+            flush=True,
+        )
+        if not result.get("should_notify"):
+            return
+        recipients = load_superadmin_telegram_recipients(db.conn)
+        message = format_run_notification(result)
+        sent_to = [telegram_id for telegram_id in recipients if _send_telegram_plain_message(telegram_id, message)]
+        if recipients and len(sent_to) == len(recipients):
+            mark_run_notified(cursor, str(result.get("run_id") or ""))
+            db.conn.commit()
+    except Exception as exc:
+        if db:
+            try:
+                db.conn.rollback()
+            except Exception:
+                pass
+        print(f"[RIDERRA_SYSTEMATIC_OUTREACH] error: {exc}", flush=True)
+    finally:
+        if db:
+            try:
+                db.close()
+            except Exception:
+                pass
 
 
 def _dispatch_outreach_queue_if_due() -> None:
@@ -1497,7 +1761,7 @@ def _dispatch_outreach_queue_if_due() -> None:
     reply_sync_ready = _sync_outreach_replies_if_due()
     if not _env_bool("OUTREACH_DISPATCH_ENABLED", False):
         return
-    if not reply_sync_ready:
+    if reply_sync_ready.get("global_block"):
         print("[OUTREACH_DISPATCH] skipped: reply_sync_failed", flush=True)
         return
 
@@ -1544,6 +1808,8 @@ def _dispatch_outreach_queue_if_due() -> None:
             campaign_only=True,
             allowed_business_ids=allowed_business_ids,
             allow_platform=allow_platform,
+            blocked_sender_ids=list(reply_sync_ready.get("blocked_sender_ids") or []),
+            author_reply_sync_started_at=reply_sync_ready.get("cycle_started_at"),
         )
         picked = int(result.get("picked") or 0)
         if picked > 0:
@@ -1557,6 +1823,61 @@ def _dispatch_outreach_queue_if_due() -> None:
             )
     except Exception as e:
         print(f"[OUTREACH_DISPATCH] error: {e}", flush=True)
+
+
+def _dispatch_creator_notifications_if_due() -> None:
+    global _LAST_CREATOR_NOTIFICATION_AT
+    if not _env_bool("CREATOR_BOT_ENABLED", False):
+        return
+    now = time.time()
+    interval_sec = max(10, int(os.getenv("CREATOR_NOTIFICATION_INTERVAL_SEC", "30")))
+    if now - _LAST_CREATOR_NOTIFICATION_AT < interval_sec:
+        return
+    _LAST_CREATOR_NOTIFICATION_AT = now
+    db = DatabaseManager()
+    try:
+        reminders_queued = queue_due_measurement_reminders(
+            db.conn.cursor(cursor_factory=RealDictCursor),
+            limit=max(1, min(int(os.getenv("CREATOR_MEASUREMENT_REMINDER_BATCH_SIZE", "100")), 500)),
+        )
+        result = dispatch_creator_notifications(
+            db.conn.cursor(cursor_factory=RealDictCursor),
+            limit=max(1, min(int(os.getenv("CREATOR_NOTIFICATION_BATCH_SIZE", "25")), 100)),
+        )
+        db.conn.commit()
+        if result.get("processed") or reminders_queued:
+            print(f"[CREATOR_NOTIFICATIONS] reminders_queued={reminders_queued} result={result}", flush=True)
+    except Exception as exc:
+        db.conn.rollback()
+        print(f"[CREATOR_NOTIFICATIONS] error: {exc}", flush=True)
+    finally:
+        db.close()
+
+
+def _process_creator_offer_distribution_if_due() -> None:
+    global _LAST_CREATOR_OFFER_DISTRIBUTION_AT
+    if not _env_bool("CREATOR_OFFER_DISTRIBUTION_ENABLED", False):
+        return
+    now = time.time()
+    interval_sec = max(5, int(os.getenv("CREATOR_OFFER_DISTRIBUTION_INTERVAL_SEC", "10")))
+    if now - _LAST_CREATOR_OFFER_DISTRIBUTION_AT < interval_sec:
+        return
+    _LAST_CREATOR_OFFER_DISTRIBUTION_AT = now
+    db = DatabaseManager()
+    try:
+        result = process_next_distribution_run(
+            db.conn.cursor(cursor_factory=RealDictCursor),
+            batch_size=max(10, min(int(os.getenv("CREATOR_OFFER_DISTRIBUTION_BATCH_SIZE", "500")), 1000)),
+        )
+        expired = expire_creator_offers(db.conn.cursor(cursor_factory=RealDictCursor))
+        db.conn.commit()
+        if result.get("processed") or result.get("status") == "failed" or expired:
+            print(f"[CREATOR_OFFER_DISTRIBUTION] result={result} expired={expired}", flush=True)
+    except Exception as exc:
+        db.conn.rollback()
+        print(f"[CREATOR_OFFER_DISTRIBUTION] error: {exc}", flush=True)
+    finally:
+        db.close()
 
 
 def _notify_superadmin_outreach_replies_if_due() -> None:
@@ -1611,6 +1932,66 @@ def _notify_superadmin_outreach_replies_if_due() -> None:
                 pass
 
 
+def _notify_superadmin_community_sources_if_due() -> None:
+    global _LAST_COMMUNITY_SOURCE_NOTIFICATION_AT
+    now = time.time()
+    interval_sec = max(10, int(os.getenv("COMMUNITY_SOURCE_NOTIFICATION_INTERVAL_SEC", "30")))
+    if now - _LAST_COMMUNITY_SOURCE_NOTIFICATION_AT < interval_sec:
+        return
+    _LAST_COMMUNITY_SOURCE_NOTIFICATION_AT = now
+
+    db = None
+    try:
+        db = DatabaseManager()
+        recipients = load_superadmin_telegram_recipients(db.conn)
+        if not recipients:
+            return
+        items = collect_pending_community_source_notifications(db.conn, limit=20)
+        for item in items:
+            message = format_community_source_notification(item)
+            sent_to = [telegram_id for telegram_id in recipients if _send_telegram_plain_message(telegram_id, message)]
+            if len(sent_to) != len(recipients):
+                print(
+                    f"[COMMUNITY_SOURCE_NOTIFICATION] partial send source_id={item.get('source_id')} "
+                    f"sent={len(sent_to)} expected={len(recipients)}",
+                    flush=True,
+                )
+                continue
+            mark_community_source_notification_sent(
+                db.conn,
+                business_id=str(item.get("business_id") or ""),
+                source_id=str(item.get("source_id") or ""),
+                telegram_ids=sent_to,
+            )
+            db.conn.commit()
+    except Exception as error:
+        if db:
+            try:
+                db.conn.rollback()
+            except Exception:
+                pass
+        print(f"[COMMUNITY_SOURCE_NOTIFICATION] error: {error}", flush=True)
+    finally:
+        if db:
+            try:
+                db.close()
+            except Exception:
+                pass
+
+
+def _card_automation_batch_size() -> int:
+    configured_batch_size = max(
+        1,
+        min(int(os.getenv("CARD_AUTOMATION_BATCH_SIZE", "20")), 100),
+    )
+    if (
+        _env_bool("OUTREACH_DISPATCH_ENABLED", False)
+        and _worker_role_enabled("dispatcher")
+    ):
+        return min(configured_batch_size, 1)
+    return configured_batch_size
+
+
 def _run_card_automation_if_due() -> None:
     global _LAST_CARD_AUTOMATION_AT
     if not _env_bool("CARD_AUTOMATION_ENABLED", True):
@@ -1626,7 +2007,7 @@ def _run_card_automation_if_due() -> None:
     try:
         db = DatabaseManager()
         ensure_card_automation_tables(db.conn)
-        batch_size = max(1, min(int(os.getenv("CARD_AUTOMATION_BATCH_SIZE", "20")), 100))
+        batch_size = _card_automation_batch_size()
         result = run_due_card_automation(db.conn, batch_size=batch_size)
         if int(result.get("processed") or 0) > 0:
             print(
@@ -1676,8 +2057,48 @@ def _run_card_automation_if_due() -> None:
             else:
                 db.conn.rollback()
                 print(f"[GROWTH_RHYTHM_REMINDER] failed to send telegram reminder to {telegram_id}", flush=True)
-    except Exception as e:
-        print(f"[CARD_AUTOMATION] error: {e}", flush=True)
+        reconcile_completed_map_refreshes(db.conn)
+        journey_reminders = collect_due_journey_action_notifications(db.conn)
+        for reminder in journey_reminders:
+            telegram_id = str(reminder.get("telegram_id") or "").strip()
+            dedupe_key = str(reminder.get("dedupe_key") or "").strip()
+            message = str(reminder.get("message") or "").strip()
+            if not telegram_id or not dedupe_key or not message:
+                continue
+            if _send_telegram_plain_message(telegram_id, message, reply_markup=reminder.get("reply_markup")):
+                mark_journey_action_notification_sent(db.conn, dedupe_key)
+            else:
+                db.conn.rollback()
+                print(f"[JOURNEY_ACTION_REMINDER] failed to send reminder to {telegram_id}", flush=True)
+        content_handoffs = collect_due_content_publish_handoffs(db.conn)
+        for handoff in content_handoffs:
+            try:
+                from services.social_post_service import _media_asset_file
+                outcome = deliver_content_publish_handoff(
+                    db.conn, handoff, validate_media=_media_asset_file,
+                    send_photo=lambda item: send_telegram_photo_message(
+                        bot_token=(os.getenv("TELEGRAM_BOT_TOKEN") or "").strip(),
+                        chat_id=item["telegram_id"], media_asset=item["selected_photo"],
+                        caption="Обновлённое фото для публикации" if item.get("is_update") else "Фото для публикации",
+                    ),
+                    send_text=lambda chat_id, text, **kwargs: _send_telegram_message_result(chat_id, text, include_outcome=True, **kwargs),
+                )
+                if outcome in {"incomplete", "uncertain", "needs_reconciliation", "needs_attention"}:
+                    queue_handoff_alert(db.conn, business_id=handoff["business_id"],
+                        event_key=f"post:{handoff['id']}:{handoff['revision']}:{outcome}",
+                        message=f"{handoff.get('business_name') or 'Бизнес'}: материалы для {handoff.get('platform')} требуют проверки ({outcome}). Передача не подтверждена полностью.")
+                    db.conn.commit()
+                print(f"[CONTENT_PUBLISH_HANDOFF] {outcome} post_id={handoff.get('id')}", flush=True)
+            except Exception:
+                db.conn.rollback()
+                print(f"[CONTENT_PUBLISH_HANDOFF] needs_reconciliation post_id={handoff.get('id')}", flush=True)
+
+        collect_exhausted_content_plan_alerts(db.conn)
+        db.conn.commit()
+        dispatch_handoff_alerts(db.conn, send_text=_send_telegram_message_result)
+
+    except Exception:
+        print("[CARD_AUTOMATION] card_automation_failed", flush=True)
     finally:
         try:
             if db:
@@ -1747,8 +2168,10 @@ def _run_founder_content_if_due() -> None:
                 pass
 
 
-def _dispatch_agent_schedules_if_due() -> None:
+def _dispatch_agent_schedules_if_due(should_stop: Callable[[], bool] | None = None) -> None:
     global _LAST_AGENT_SCHEDULE_DISPATCH_AT
+    if should_stop and should_stop():
+        return
     if not _env_bool("AGENT_SCHEDULE_DISPATCH_ENABLED", False):
         return
 
@@ -1762,10 +2185,26 @@ def _dispatch_agent_schedules_if_due() -> None:
     try:
         db = DatabaseManager()
         batch_size = max(1, min(int(os.getenv("AGENT_SCHEDULE_DISPATCH_BUSINESS_LIMIT", "50")), 500))
-        result = dispatch_due_scheduled_agent_blueprints(db.conn.cursor(), business_limit=batch_size)
+        results = []
+        for trigger in ("schedule.daily", "schedule.weekly"):
+            if should_stop and should_stop():
+                break
+            results.append(
+                dispatch_due_scheduled_agent_blueprints(
+                    db.conn.cursor(),
+                    business_limit=batch_size,
+                    trigger=trigger,
+                    should_stop=should_stop,
+                )
+            )
         db.conn.commit()
-        dispatched_count = int(result.get("dispatched_count") or 0)
-        skipped_count = int(result.get("skipped_count") or 0)
+        result = {
+            "checked_businesses": max((int(item.get("checked_businesses") or 0) for item in results), default=0),
+            "dispatched_count": sum(int(item.get("dispatched_count") or 0) for item in results),
+            "skipped_count": sum(int(item.get("skipped_count") or 0) for item in results),
+        }
+        dispatched_count = int(result["dispatched_count"])
+        skipped_count = int(result["skipped_count"])
         if dispatched_count > 0 or skipped_count > 0:
             print(
                 "[AGENT_SCHEDULE_DISPATCH] "
@@ -1801,6 +2240,7 @@ def _process_agent_run_queue_if_due() -> None:
     _LAST_AGENT_RUN_QUEUE_AT = now
 
     db = None
+    execution_db = None
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
@@ -1808,8 +2248,20 @@ def _process_agent_run_queue_if_due() -> None:
         db.conn.commit()
         if not run:
             return
-        result = execute_claimed_agent_run(cursor, run)
-        db.conn.commit()
+        # Claim and execution intentionally use separate connections.  The
+        # claim transaction is short and visible to competing workers before
+        # any provider/sandbox work starts.  The runner still has legacy
+        # provider paths that need checkpoint extraction before they can be
+        # considered fully short-transaction; its lease is nevertheless
+        # verified before execution begins.
+        db.close()
+        db = None
+        result = execute_claimed_compiled_agent_run(run)
+        if result is None:
+            execution_db = DatabaseManager()
+            execution_cursor = execution_db.conn.cursor()
+            result = execute_claimed_agent_run(execution_cursor, run)
+            execution_db.conn.commit()
         print(
             "[AGENT_RUN_QUEUE] "
             f"run_id={run.get('id')} status={str((result.get('run') or {}).get('status') or 'retry_wait')}",
@@ -1817,7 +2269,9 @@ def _process_agent_run_queue_if_due() -> None:
         )
     except Exception:
         try:
-            if db:
+            if execution_db:
+                execution_db.conn.rollback()
+            elif db:
                 db.conn.rollback()
         except Exception:
             pass
@@ -1828,8 +2282,23 @@ def _process_agent_run_queue_if_due() -> None:
         try:
             if db:
                 db.close()
+            if execution_db:
+                execution_db.close()
         except Exception:
             pass
+
+
+def _process_sheet_provider_queue_if_due() -> None:
+    if not _env_bool("AGENT_ASYNC_RUNS_ENABLED", False):
+        return
+    try:
+        result = process_next_sheet_provider_request()
+        if result:
+            print("[AGENT_SHEET_PROVIDER] request_id=%s state=%s" % (result.get("request_id"), result.get("apply_state")), flush=True)
+    except Exception:
+        print("[AGENT_SHEET_PROVIDER] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
 
 
 def _process_operator_async_job_if_due() -> None:
@@ -1842,7 +2311,9 @@ def _process_operator_async_job_if_due() -> None:
         return
     _LAST_OPERATOR_ASYNC_JOB_AT = now
     try:
-        result = process_next_operator_async_job()
+        from services.disk_import import schedule_due
+        schedule_due()
+        result = process_next_operator_async_job(background=True)
         if result:
             print(
                 "[OPERATOR_ASYNC_JOB] "
@@ -1853,6 +2324,119 @@ def _process_operator_async_job_if_due() -> None:
         print("[OPERATOR_ASYNC_JOB] error", flush=True)
         traceback.print_exc(file=sys.stdout)
         sys.stdout.flush()
+
+
+def _purge_compiled_inputs_if_due() -> None:
+    global _LAST_COMPILED_INPUT_PURGE_AT
+    now = time.time()
+    if now - _LAST_COMPILED_INPUT_PURGE_AT < 3600:
+        return
+    _LAST_COMPILED_INPUT_PURGE_AT = now
+    from services.compiled_input_snapshots import purge_expired_snapshots
+    database = DatabaseManager()
+    try:
+        cursor = database.conn.cursor()
+        cursor.execute("SELECT to_regclass('compiled_input_snapshots') table_ref")
+        if not (cursor.fetchone() or {}).get("table_ref"):
+            database.conn.rollback()
+            return
+        result = purge_expired_snapshots(cursor)
+        database.conn.commit()
+        if result["purged_snapshots"]:
+            print(f"[COMPILED_INPUT_RETENTION] purged={result['purged_snapshots']} expired_runs={result['expired_runs']}", flush=True)
+    except Exception:
+        database.conn.rollback()
+        print("[COMPILED_INPUT_RETENTION] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+    finally:
+        database.close()
+
+
+def _materialize_today_priority_proposals_if_due() -> None:
+    global _LAST_TODAY_PRIORITY_PROPOSALS_AT
+    interval_sec = max(60, int(os.getenv("TODAY_PRIORITY_PROPOSAL_INTERVAL_SEC", "3600")))
+    now = time.time()
+    if now - _LAST_TODAY_PRIORITY_PROPOSALS_AT < interval_sec:
+        return
+    _LAST_TODAY_PRIORITY_PROPOSALS_AT = now
+    try:
+        from services.today_preferences_service import materialize_priority_proposals
+
+        created = materialize_priority_proposals(DatabaseManager)
+        if created:
+            print(f"[TODAY_PRIORITY_PROPOSALS] created={created}", flush=True)
+    except Exception:
+        print("[TODAY_PRIORITY_PROPOSALS] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+
+
+def _process_creator_search_if_due() -> None:
+    global _LAST_CREATOR_SEARCH_AT
+    if not _env_bool("INFLUENCER_ASYNC_SEARCH_ENABLED", True):
+        return
+    now = time.time()
+    interval_sec = max(1, int(os.getenv("INFLUENCER_SEARCH_INTERVAL_SEC", "2")))
+    if now - _LAST_CREATOR_SEARCH_AT < interval_sec:
+        return
+    _LAST_CREATOR_SEARCH_AT = now
+    try:
+        result = process_next_creator_search_job()
+        if result:
+            print(f"[CREATOR_SEARCH] job_id={result.get('id')} status={result.get('status')}", flush=True)
+    except Exception:
+        print("[CREATOR_SEARCH] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+
+
+def _enrich_creator_sources_if_due() -> None:
+    global _LAST_CREATOR_SOURCE_ENRICHMENT_AT
+    if not _env_bool("INFLUENCER_SOURCE_ENRICHMENT_ENABLED", False):
+        return
+    now = time.time()
+    interval_sec = max(300, int(os.getenv("INFLUENCER_SOURCE_ENRICHMENT_INTERVAL_SEC", "21600")))
+    if now - _LAST_CREATOR_SOURCE_ENRICHMENT_AT < interval_sec:
+        return
+    _LAST_CREATOR_SOURCE_ENRICHMENT_AT = now
+    try:
+        result = process_creator_source_enrichment_batch()
+        if result and result.get("selected"):
+            print(f"[CREATOR_SOURCE_ENRICHMENT] {json.dumps(result, sort_keys=True)}", flush=True)
+    except Exception:
+        print("[CREATOR_SOURCE_ENRICHMENT] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+
+
+def _run_creator_profile_revalidation() -> None:
+    try:
+        result = process_creator_profile_revalidation_batch()
+        if result and result.get("selected"):
+            print(f"[CREATOR_PROFILE_REVALIDATION] {json.dumps(result, sort_keys=True)}", flush=True)
+    except Exception:
+        print("[CREATOR_PROFILE_REVALIDATION] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+
+
+def _revalidate_creator_profiles_if_due() -> None:
+    global _LAST_CREATOR_PROFILE_REVALIDATION_AT, _CREATOR_PROFILE_REVALIDATION_THREAD
+    if not _env_bool("INFLUENCER_PROFILE_REVALIDATION_ENABLED", False):
+        return
+    if _CREATOR_PROFILE_REVALIDATION_THREAD and _CREATOR_PROFILE_REVALIDATION_THREAD.is_alive():
+        return
+    now = time.time()
+    interval_sec = max(900, int(os.getenv("INFLUENCER_PROFILE_REVALIDATION_INTERVAL_SEC", "21600")))
+    if now - _LAST_CREATOR_PROFILE_REVALIDATION_AT < interval_sec:
+        return
+    _LAST_CREATOR_PROFILE_REVALIDATION_AT = now
+    _CREATOR_PROFILE_REVALIDATION_THREAD = threading.Thread(
+        target=_run_creator_profile_revalidation,
+        name="creator-profile-revalidation",
+        daemon=True,
+    )
+    _CREATOR_PROFILE_REVALIDATION_THREAD.start()
 
 
 def _process_contact_intelligence_if_due() -> None:
@@ -2333,11 +2917,13 @@ def _dispatch_openclaw_callback_outbox_if_due() -> None:
         print(f"[CALLBACK_DISPATCH] error: {e}", flush=True)
 
 
-def _send_telegram_message_result(chat_id: str, text: str, reply_markup: dict | None = None) -> dict[str, Any]:
+def _send_telegram_message_result(chat_id: str, text: str, reply_markup: dict | None = None, *, include_outcome: bool = False) -> dict[str, Any]:
+    def classified(result, outcome):
+        return {**result, "publish_outcome": outcome} if include_outcome else result
     token = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
     chat_id = str(chat_id or "").strip()
     if not token or not chat_id:
-        return {"success": False, "message_id": 0, "reason_code": "telegram_not_configured"}
+        return classified({"success": False, "message_id": 0, "reason_code": "telegram_not_configured"}, "not_attempted")
     try:
         payload_dict = {
             "chat_id": chat_id,
@@ -2359,17 +2945,18 @@ def _send_telegram_message_result(chat_id: str, text: str, reply_markup: dict | 
             data = json.loads(raw.decode("utf-8")) if raw else {}
             result = data.get("result") if isinstance(data, dict) else {}
             message_id = int(result.get("message_id") or 0) if isinstance(result, dict) else 0
-            return {
+            return classified({
                 "success": 200 <= status < 300 and bool(data.get("ok")),
                 "message_id": message_id,
                 "reason_code": "",
-            }
+            }, "confirmed" if 200 <= status < 300 and bool(data.get("ok")) and message_id else (
+                "rejected" if 400 <= status < 500 or (200 <= status < 300 and data.get("ok") is False) else "uncertain"))
     except (urllib_error.URLError, urllib_error.HTTPError, TimeoutError) as e:
-        print(f"[BILLING_RECONCILE] telegram send failed chat_id={chat_id}: {e}", flush=True)
-        return {"success": False, "message_id": 0, "reason_code": type(e).__name__}
+        print("[BILLING_RECONCILE] telegram_send_failed", flush=True)
+        return classified({"success": False, "message_id": 0, "reason_code": type(e).__name__}, "rejected" if isinstance(e, urllib_error.HTTPError) and 400 <= e.code < 500 else "uncertain")
     except Exception as e:
-        print(f"[BILLING_RECONCILE] telegram unexpected error chat_id={chat_id}: {e}", flush=True)
-        return {"success": False, "message_id": 0, "reason_code": type(e).__name__}
+        print("[BILLING_RECONCILE] telegram_send_unexpected_error", flush=True)
+        return classified({"success": False, "message_id": 0, "reason_code": type(e).__name__}, "rejected" if isinstance(e, urllib_error.HTTPError) and 400 <= e.code < 500 else "uncertain")
 
 
 def _send_telegram_plain_message(chat_id: str, text: str, reply_markup: dict | None = None) -> bool:
@@ -3162,7 +3749,10 @@ def _public_post_identity(business_id: str, source: str, item: dict[str, Any]) -
 def _handle_worker_error(queue_id: str, error_msg: str):
     """Обновить статус задачи на error с сообщением"""
     try:
-        normalized_error = with_reason_code_prefix(STATUS_ERROR, error_msg)
+        normalized_error = with_reason_code_prefix(
+            STATUS_ERROR,
+            redact_sensitive_text(error_msg, limit=4000),
+        )
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -3603,6 +4193,39 @@ def _validate_parsing_result(card_data: dict, source: str = SOURCE_YANDEX_BUSINE
     source_lc = str(source or "").strip().lower()
     business_status = str(card_data.get("business_status") or card_data.get("status") or "").strip().lower()
 
+    if source_lc == "yandex_maps":
+        reported_reviews_count = _normalize_reviews_count(card_data.get("reviews_count"))
+        raw_reviews = card_data.get("reviews")
+        if isinstance(raw_reviews, dict):
+            raw_reviews = raw_reviews.get("items") or raw_reviews.get("reviews") or []
+        if not isinstance(raw_reviews, list):
+            raw_reviews = []
+
+        distinct_reviews = set()
+        for review in raw_reviews:
+            if not isinstance(review, dict):
+                continue
+            review_id = str(review.get("id") or review.get("review_id") or "").strip()
+            author = str(review.get("author") or review.get("author_name") or "").strip()
+            text = str(review.get("text") or review.get("body") or "").strip()
+            if review_id:
+                distinct_reviews.add(("id", review_id))
+            elif author or text:
+                distinct_reviews.add(("content", author, text))
+
+        if reported_reviews_count > 0:
+            tolerance = max(2, (reported_reviews_count + 19) // 20)
+            required_reviews_count = max(1, reported_reviews_count - tolerance)
+            parsed_reviews_count = len(distinct_reviews)
+            if parsed_reviews_count < required_reviews_count:
+                return (
+                    False,
+                    "incomplete_reviews:"
+                    f"parsed={parsed_reviews_count} reported={reported_reviews_count} "
+                    f"required={required_reviews_count}",
+                    validation,
+                )
+
     if source_lc == "apify_yandex" and business_status == "permanent-closed":
         return False, "business_closed:permanent_closed", validation
 
@@ -3664,6 +4287,54 @@ def _validate_parsing_result(card_data: dict, source: str = SOURCE_YANDEX_BUSINE
             return False, "low_quality_payload:apify_yandex_sparse_payload missing=categories,products", validation
 
     return True, "success", validation
+
+
+def _parse_yandex_native_first_with_fallback(native_parser: Any, apify_parser: Any) -> tuple:
+    """Run a bounded native Yandex attempt and use Apify only when it is unusable."""
+    try:
+        native_card_data = native_parser()
+    except Exception as exc:
+        native_card_data = {
+            "error": "native_parser_exception",
+            "message": str(exc),
+        }
+
+    if not isinstance(native_card_data, dict):
+        native_card_data = {
+            "error": f"parser_returned_{type(native_card_data).__name__}",
+        }
+    elif not native_card_data.get("error"):
+        native_card_data = _promote_nested_card_payload(native_card_data)
+
+    native_success, native_reason, _native_validation = _validate_parsing_result(
+        native_card_data,
+        source="yandex_maps",
+    )
+    if native_success:
+        native_card_data["_parser_route"] = "native_yandex"
+        return native_card_data, False, "success"
+
+    try:
+        apify_card_data = apify_parser()
+    except Exception as exc:
+        apify_card_data = {
+            "error": "apify_fallback_exception",
+            "message": str(exc),
+        }
+    if not isinstance(apify_card_data, dict):
+        apify_card_data = {
+            "error": f"parser_returned_{type(apify_card_data).__name__}",
+        }
+    apify_card_data["_parser_route"] = "apify_yandex_fallback"
+    apify_card_data["_native_failure_reason"] = native_reason
+    return apify_card_data, True, native_reason
+
+
+def _should_try_native_yandex(source_hint: Any, parsed_source: Any) -> bool:
+    return (
+        str(source_hint or "").strip().lower() == "apify_yandex"
+        and str(parsed_source or "").strip().lower() == "yandex_maps"
+    )
 
 
 def _parse_transient_retry_attempt(error_message: Any) -> int:
@@ -3886,7 +4557,7 @@ def _queue_transient_parse_retry(queue_dict: dict, reason: str, card_data: Optio
 
     retry_delay = _transient_retry_delay_for_task(queue_dict, attempt_no)
     retry_after = datetime.now() + retry_delay
-    detail = str(reason or "")[:220]
+    detail = redact_sensitive_text(reason, limit=220)
     timeout_profile = ""
     if is_apify_timeout:
         timeout_profile = "slow_lane" if attempt_no >= max(int(os.getenv("APIFY_TIMEOUT_SLOW_LANE_AFTER_ATTEMPT", "1") or 1), 1) else "default"
@@ -4024,28 +4695,208 @@ def _has_cabinet_account(business_id: str) -> tuple:
         cursor.close()
         conn.close()
 
-def _ensure_column_exists(cursor, conn, table_name, column_name, column_type="TEXT"):
-    """Проверяет и добавляет колонку если её нет"""
-    # Эта функция использовалась только для SQLite (PRAGMA, ALTER TABLE on the fly).
-    # В PostgreSQL схема управляется через миграции (schema_postgres.sql),
-    # поэтому в worker'е при DB_TYPE='postgres' просто выходим.
-    if DB_TYPE == "postgres":
+def _process_yandex_reviews_delta_task(queue_dict: Dict[str, Any]) -> None:
+    queue_id = str(queue_dict.get("id") or "").strip()
+    business_id = str(queue_dict.get("business_id") or "").strip()
+    url = str(queue_dict.get("url") or "").strip()
+    if not queue_id or not business_id or not url:
+        _handle_worker_error(queue_id, "reviews_delta_missing_queue_business_or_url")
         return
 
+    requested_task_type = str(queue_dict.get("task_type") or "reviews_delta").strip().lower()
+    native_parse_mode = "reviews_full" if requested_task_type == "reviews_full" else "reviews_delta"
+    metrics: Dict[str, Any] = {
+        "task_type": requested_task_type,
+        "route": "not_started",
+        "fallback_reason": "",
+        "proxy_preflight_ms": 0,
+        "native_ms": 0,
+        "reviews_received": 0,
+    }
     try:
-        # PRAGMA не поддерживает параметризованные запросы, используем f-string с проверкой
-        ALLOWED_TABLES = {"parsequeue", "cards"}
-        if table_name not in ALLOWED_TABLES:
-            raise ValueError(f"Неразрешенная таблица: {table_name}")
-        cursor.execute(f"PRAGMA table_info({table_name})")
-        columns = [row[1] for row in cursor.fetchall()]
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            known_review_ids = load_known_yandex_review_ids(cursor, business_id, limit=100)
+            expected_total = load_expected_yandex_reviews_total(cursor, business_id)
+            use_apify_fallback = bool(get_use_apify_map_parsing(conn))
+        finally:
+            cursor.close()
+            conn.close()
 
-        if column_name not in columns:
-            print(f"📝 Добавляю поле {column_name} в {table_name}...")
-            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+        active_proxy = _get_next_proxy_for_playwright()
+        proxy_id = str((active_proxy or {}).get("id") or "").strip()
+        if active_proxy:
+            preflight = _preflight_yandex_proxy(url, active_proxy)
+        elif not use_apify_fallback:
+            preflight = {"ok": True, "reason": "direct_native", "elapsed_ms": 0}
+        else:
+            preflight = _preflight_yandex_proxy(url, active_proxy)
+        metrics["proxy_preflight_ms"] = int(preflight.get("elapsed_ms") or 0)
+        metrics["proxy_preflight_reason"] = str(preflight.get("reason") or "")
+        native_data: Dict[str, Any] = {"error": "proxy_preflight_failed"}
+
+        if bool(preflight.get("ok")):
+            browser_profile = _build_human_browser_profile()
+            native_timeout_sec = max(
+                30,
+                int(os.getenv("NATIVE_YANDEX_REVIEWS_DELTA_TIMEOUT_SEC", "90") or 90),
+            )
+            native_started_at = time.monotonic()
+            native_data = _parse_yandex_card_with_playwright_fallback(
+                url,
+                keep_open_on_captcha=False,
+                timeout_sec=native_timeout_sec,
+                force_subprocess=True,
+                parse_mode=native_parse_mode,
+                known_review_ids=known_review_ids if native_parse_mode == "reviews_delta" else [],
+                cookies=get_yandex_cookies(),
+                user_agent=browser_profile["user_agent"],
+                viewport=browser_profile["viewport"],
+                launch_args=browser_profile["launch_args"],
+                init_scripts=browser_profile["init_scripts"],
+                locale="ru-RU",
+                timezone_id="Europe/Moscow",
+                proxy=(active_proxy or {}).get("proxy"),
+                headless=True,
+                block_service_workers=True,
+            )
+            metrics["native_ms"] = round((time.monotonic() - native_started_at) * 1000)
+            complete, completeness_reason = native_delta_completeness(
+                native_data,
+                known_review_ids=known_review_ids if native_parse_mode == "reviews_delta" else [],
+                expected_total=expected_total,
+            )
+            run_meta = native_data.get("_parser_run") if isinstance(native_data.get("_parser_run"), dict) else {}
+            metrics.update(
+                {
+                    "native_stop_reason": str(run_meta.get("review_stop_reason") or completeness_reason),
+                    "native_review_pages": int(run_meta.get("review_api_responses") or 0),
+                    "native_review_scrolls": int(run_meta.get("review_scrolls") or 0),
+                }
+            )
+            if complete:
+                native_reviews = native_data.get("reviews") if isinstance(native_data.get("reviews"), list) else []
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                try:
+                    if native_parse_mode == "reviews_full":
+                        normalized_reviews = [
+                            normalized
+                            for item in native_reviews
+                            if isinstance(item, dict)
+                            for normalized in [normalize_native_review(item)]
+                            if normalized
+                        ]
+                        apply_result = apply_complete_review_snapshot(
+                            cursor,
+                            business_id=business_id,
+                            reviews=normalized_reviews,
+                            expected_total=expected_total,
+                        )
+                        metrics["route"] = "native_reviews_full"
+                        metrics["reviews_received"] = int(apply_result.get("total") or 0)
+                    else:
+                        apply_result = apply_yandex_review_delta(
+                            cursor,
+                            business_id=business_id,
+                            reviews=native_reviews,
+                        )
+                        metrics["route"] = "native_reviews_delta"
+                        metrics["reviews_received"] = int(apply_result.get("normalized") or 0)
+                    warning_text = (
+                        f"review_sync route={metrics['route']}; reviews={metrics['reviews_received']}; "
+                        f"native_ms={metrics['native_ms']}; stop={metrics['native_stop_reason']}"
+                    )
+                    cursor.execute(
+                        """
+                        UPDATE parsequeue
+                        SET status = %s, error_message = NULL, warnings = %s, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = %s
+                        """,
+                        (STATUS_COMPLETED, warning_text, queue_id),
+                    )
+                    conn.commit()
+                    handle_review_sync_completion(conn, business_id, triggered_by="reviews_delta")
+                    conn.commit()
+                finally:
+                    cursor.close()
+                    conn.close()
+                _mark_proxy_result(proxy_id, success=True, reason="reviews_delta_complete")
+                print("[PARSER_METRICS] " + json.dumps(metrics, ensure_ascii=False, default=str), flush=True)
+                return
+            metrics["fallback_reason"] = completeness_reason
+            _mark_proxy_result(proxy_id, success=False, reason=completeness_reason)
+        else:
+            metrics["fallback_reason"] = str(preflight.get("reason") or "proxy_preflight_failed")
+            _mark_proxy_result(proxy_id, success=False, reason=metrics["fallback_reason"])
+
+        if not use_apify_fallback:
+            metrics["route"] = "native_only_failed"
+            safe_reason = redact_sensitive_text(metrics["fallback_reason"] or "native_incomplete", limit=240)
+            print("[PARSER_METRICS] " + json.dumps(metrics, ensure_ascii=False, default=str), flush=True)
+            _handle_worker_error(queue_id, f"reviews_delta_native_only_failed:{safe_reason}")
+            return
+
+        fallback_started_at = time.monotonic()
+        fallback_max_reviews = 0
+        if native_parse_mode == "reviews_delta":
+            fallback_max_reviews = max(
+                1,
+                min(50, int(os.getenv("APIFY_YANDEX_REVIEWS_DELTA_MAX_REVIEWS", "50") or 50)),
+            )
+        complete_reviews = fetch_complete_yandex_reviews(
+            url,
+            max_reviews=fallback_max_reviews,
+            timeout_sec=max(60, int(os.getenv("APIFY_YANDEX_REVIEWS_TIMEOUT_SEC", "240") or 240)),
+        )
+        metrics["fallback_ms"] = round((time.monotonic() - fallback_started_at) * 1000)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            if native_parse_mode == "reviews_full":
+                apply_result = apply_complete_review_snapshot(
+                    cursor,
+                    business_id=business_id,
+                    reviews=complete_reviews,
+                    expected_total=expected_total,
+                )
+                metrics["route"] = "apify_reviews_full"
+                metrics["reviews_received"] = int(apply_result.get("total") or 0)
+            else:
+                apply_result = apply_yandex_review_delta(
+                    cursor,
+                    business_id=business_id,
+                    reviews=complete_reviews,
+                )
+                metrics["route"] = "apify_reviews_delta"
+                metrics["reviews_received"] = int(apply_result.get("normalized") or 0)
+            warning_text = (
+                f"review_sync route={metrics['route']}; reviews={metrics['reviews_received']}; "
+                f"fallback_ms={metrics.get('fallback_ms', 0)}; max_reviews={fallback_max_reviews}; "
+                f"reason={metrics['fallback_reason']}"
+            )
+            cursor.execute(
+                """
+                UPDATE parsequeue
+                SET status = %s, error_message = NULL, warnings = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (STATUS_COMPLETED, warning_text, queue_id),
+            )
             conn.commit()
-    except Exception as e:
-        print(f"⚠️ Ошибка проверки колонки {column_name} в {table_name}: {e}")
+            handle_review_sync_completion(conn, business_id, triggered_by="reviews_fallback")
+            conn.commit()
+        finally:
+            cursor.close()
+            conn.close()
+        print("[PARSER_METRICS] " + json.dumps(metrics, ensure_ascii=False, default=str), flush=True)
+    except Exception as exc:
+        metrics["route"] = "failed"
+        metrics["error_type"] = exc.__class__.__name__
+        safe_error = redact_sensitive_text(exc, limit=1200)
+        print("[PARSER_METRICS] " + json.dumps(metrics, ensure_ascii=False, default=str), flush=True)
+        _handle_worker_error(queue_id, f"reviews_delta_failed:{safe_error}")
 
 # Используем parser_config для автоматического выбора парсера (interception или legacy)
 from parser_config import parse_yandex_card
@@ -4056,8 +4907,33 @@ except ModuleNotFoundError:
     from src.two_gis_maps_scraper import parse_2gis_card
 from gigachat_analyzer import analyze_business_data
 
-def process_queue():
-    """Обрабатывает очередь парсинга из SQLite базы данных"""
+
+def _special_queue_handlers() -> Dict[str, Any]:
+    """Return handlers for queue tasks that bypass map-card parsing."""
+    return {
+        "reviews_delta": _process_yandex_reviews_delta_task,
+        "reviews_full": _process_yandex_reviews_delta_task,
+        "sync_yandex_business": _process_sync_yandex_business_task,
+        "parse_cabinet_fallback": _process_cabinet_fallback_task,
+        "sync_2gis": _process_sync_2gis_task,
+    }
+
+
+def _dispatch_special_queue_task(queue_dict: Dict[str, Any]) -> bool:
+    """Dispatch a non-map task and report whether it was handled."""
+    task_type = str(queue_dict.get("task_type") or "parse_card")
+    handler = _special_queue_handlers().get(task_type)
+    if handler is not None:
+        handler(queue_dict)
+        return True
+    if task_type == "sync_google_business":
+        print(f"⚠️ Тип задачи {task_type} пока не реализован")
+        _handle_worker_error(queue_dict["id"], f"Тип задачи {task_type} пока не реализован")
+        return True
+    return False
+
+def _claim_next_queue_task() -> Optional[Dict[str, Any]]:
+    """Maintain queue guardrails and atomically claim the next runnable task."""
     queue_dict = None
     
     # ШАГ 1: Получаем задачу из очереди и обновляем статус (закрываем соединение сразу)
@@ -4328,9 +5204,13 @@ def process_queue():
         cursor.close()
         conn.close()
     
-    if not queue_dict:
-        return
-    
+    return queue_dict
+
+
+def _prepare_queue_task(
+    queue_dict: Dict[str, Any],
+) -> tuple[bool, Optional[Dict[str, Any]]]:
+    """Apply TTL and CAPTCHA retry policy before task dispatch."""
     status = queue_dict.get("status") or "pending"
     task_type = queue_dict.get("task_type") or "parse_card"
     preparsed_card_data: Optional[Dict[str, Any]] = None
@@ -4356,8 +5236,7 @@ def process_queue():
             f"task_age_hours={task_age_h:.2f}; ttl_hours={task_ttl_h}",
             clear_captcha_fields=True,
         )
-        return
-    
+        return False, None
     print(f"Обрабатываю заявку: {queue_dict.get('id')}, тип: {task_type}, статус: {status}")
     
     # Если задача в статусе captcha — обрабатываем HITL-flow (resume/expired)
@@ -4408,8 +5287,7 @@ def process_queue():
             finally:
                 cursor.close()
                 conn.close()
-            return
-
+            return False, None
         # 2) Resume по запросу оператора
         if resume_requested and url:
             print(f"▶️ RESUME CAPTCHA для задачи {task_id}, session_id={captcha_session_id}")
@@ -4459,8 +5337,7 @@ def process_queue():
                     cursor.close()
                     conn.close()
                 ACTIVE_CAPTCHA_SESSIONS.pop(str(captcha_session_id), None)
-                return
-
+                return False, None
             if card_data.get("error") == "captcha_detected":
                 # Капча не решена или появилась заново — остаёмся в waiting с новым session_id (если есть)
                 new_session_id = card_data.get("captcha_session_id") or captcha_session_id
@@ -4492,8 +5369,7 @@ def process_queue():
                     conn.close()
                 if _is_mass_network_task(queue_dict):
                     _pause_network_batch_for_captcha(task_id, captcha_comment, timedelta(minutes=max(5, CAPTCHA_TTL_MINUTES)))
-                return
-
+                return False, None
             # Иначе — капча решена, продолжаем как обычный успешный парсинг
             print(f"✅ CAPTCHA решена для задачи {task_id}, продолжаем обработку")
             queue_dict["status"] = "processing"
@@ -4533,8 +5409,7 @@ def process_queue():
             auto_retry_enabled = _env_bool("CAPTCHA_AUTO_RETRY_ENABLED", True)
             if not auto_retry_enabled or not url:
                 print(f"⏳ Задача {queue_dict.get('id')} в статусе CAPTCHA/waiting, действий не требуется")
-                return
-
+                return False, None
             retry_after_dt = _parse_retry_after(queue_dict.get("retry_after"))
             now_dt = datetime.now()
             if retry_after_dt and retry_after_dt > now_dt:
@@ -4542,8 +5417,7 @@ def process_queue():
                     f"⏳ CAPTCHA auto-retry ещё не наступил для {task_id}: "
                     f"retry_after={retry_after_dt.isoformat()}"
                 )
-                return
-
+                return False, None
             attempt_no = _captcha_retry_attempt_from_error(queue_dict.get("error_message")) + 1
             max_captcha_attempts = max(1, int(os.getenv("CAPTCHA_AUTO_RETRY_MAX_ATTEMPTS", "4")))
             if attempt_no > max_captcha_attempts:
@@ -4558,7 +5432,7 @@ def process_queue():
                     f"attempt={attempt_no}; max_attempts={max_captcha_attempts}; source=captcha_status",
                     clear_captcha_fields=True,
                 )
-                return
+                return False, None
             print(f"🔁 CAPTCHA auto-retry attempt={attempt_no} task_id={task_id}")
             retry_source = _detect_map_source(queue_dict, url)
             if retry_source == "2gis":
@@ -4623,12 +5497,10 @@ def process_queue():
                 )
                 if _is_mass_network_task(queue_dict):
                     _pause_network_batch_for_captcha(task_id, captcha_comment, retry_delay)
-                return
-
+                return False, None
             if card_data.get("error"):
                 _handle_worker_error(task_id, f"captcha_auto_retry_failed:{card_data.get('error')}")
-                return
-
+                return False, None
             print(f"✅ CAPTCHA auto-retry succeeded for task_id={task_id}")
             queue_dict["status"] = "processing"
             queue_dict["resume_requested"] = 0
@@ -4658,25 +5530,14 @@ def process_queue():
                 cursor.close()
                 conn.close()
 
-    # Обрабатываем в зависимости от типа задачи
-    if task_type == "sync_yandex_business":
-        # Синхронизация Яндекс.Бизнес
-        _process_sync_yandex_business_task(queue_dict)
-        return
-    elif task_type == "parse_cabinet_fallback":
-        # Fallback парсинг через кабинет
-        _process_cabinet_fallback_task(queue_dict)
-        return
-    elif task_type == "sync_2gis":
-        # Синхронизация 2ГИС API
-        _process_sync_2gis_task(queue_dict)
-        return
-    elif task_type == "sync_google_business":
-        # Другие источники (будущее)
-        print(f"⚠️ Тип задачи {task_type} пока не реализован")
-        _handle_worker_error(queue_dict["id"], f"Тип задачи {task_type} пока не реализован")
-        return
-    
+    return True, preparsed_card_data
+
+
+def _execute_map_card_task(
+    queue_dict: Dict[str, Any],
+    preparsed_card_data: Optional[Dict[str, Any]],
+) -> None:
+    """Execute and settle the map-card parsing path."""
     # Обычный парсинг карт (task_type = 'parse_card' или NULL)
     # ШАГ 2: Парсим данные (БЕЗ открытого соединения с БД)
     # Устанавливаем таймаут 10 минут
@@ -4733,7 +5594,7 @@ def process_queue():
         # Генерируем debug_bundle_id и bundle_dir для этого прогона (привязан к бизнесу и задаче)
         debug_bundle_id = None
         bundle_dir = None
-        if business_id:
+        if business_id and _env_bool("PARSER_DEBUG_BUNDLES_ENABLED", False):
             ts_dbg = datetime.now().strftime("%Y%m%d_%H%M%S")
             debug_prefix = "yandex" if parsed_source == "yandex_maps" else "2gis"
             debug_bundle_id = f"{debug_prefix}_{business_id}_{queue_dict['id']}_{ts_dbg}"
@@ -4770,10 +5631,25 @@ def process_queue():
 
         # Основной вызов парсера с защитой от Playwright Sync-in-async краша
         use_apify_parser = source_hint in {"apify_yandex", "apify_2gis", "apify_google", "apify_apple"}
-        active_proxy = None if use_apify_parser else _get_next_proxy_for_playwright()
+        hybrid_yandex_parser = _should_try_native_yandex(source_hint, parsed_source)
+        active_proxy = None if use_apify_parser and not hybrid_yandex_parser else _get_next_proxy_for_playwright()
         if parsed_source == "2gis":
             active_proxy = None
+        used_apify_parser = False
+        native_failure_reason = ""
         proxy_id = str((active_proxy or {}).get("id") or "").strip()
+        if parsed_source == "yandex_maps" and active_proxy:
+            proxy_preflight = _preflight_yandex_proxy(url, active_proxy)
+            print(
+                f"🌐 Proxy preflight id={proxy_id} ok={bool(proxy_preflight.get('ok'))} "
+                f"reason={proxy_preflight.get('reason')} elapsed_ms={proxy_preflight.get('elapsed_ms')}",
+                flush=True,
+            )
+            if not bool(proxy_preflight.get("ok")):
+                native_failure_reason = f"proxy_preflight:{proxy_preflight.get('reason') or 'failed'}"
+                _mark_proxy_result(proxy_id, success=False, reason=native_failure_reason)
+                active_proxy = None
+                proxy_id = ""
         if active_proxy:
             proxy_country = str((active_proxy or {}).get("country_code") or "base")
             print(
@@ -4787,7 +5663,6 @@ def process_queue():
                 card_data = preparsed_card_data
                 print("♻️ Используем уже полученные данные из CAPTCHA flow", flush=True)
             elif use_apify_parser:
-                print(f"🌐 Парсинг через Apify source={source_hint or 'apify_yandex'}", flush=True)
                 business_city = ""
                 if business_id:
                     try:
@@ -4805,28 +5680,89 @@ def process_queue():
                         print(f"⚠️ Не удалось загрузить city для business_id={business_id}: {e}")
                 apify_timeout_profile = _apify_business_timeout_profile(queue_dict)
                 apify_timeout_sec = _effective_apify_business_timeout_sec(queue_dict)
-                print(
-                    f"🕒 Apify timeout profile={apify_timeout_profile} timeout_sec={apify_timeout_sec} "
-                    f"queue_id={queue_dict.get('id')}",
-                    flush=True,
-                )
-                card_data = _parse_card_via_apify_with_timeout(
-                    url,
-                    parsed_source=parsed_source,
-                    source_hint=source_hint,
-                    city=business_city,
-                    timeout_sec=apify_timeout_sec,
-                    debug_bundle_dir=bundle_dir,
-                    debug_context={
-                        "queue_id": queue_dict.get("id"),
-                        "business_id": business_id,
-                        "source_hint": source_hint,
-                        "parsed_source": parsed_source,
-                        "city": business_city,
-                        "timeout_profile": apify_timeout_profile,
-                        "timeout_sec": apify_timeout_sec,
-                    },
-                )
+
+                def _run_apify_parser() -> Dict[str, Any]:
+                    print(f"🌐 Парсинг через Apify source={source_hint or 'apify_yandex'}", flush=True)
+                    print(
+                        f"🕒 Apify timeout profile={apify_timeout_profile} timeout_sec={apify_timeout_sec} "
+                        f"queue_id={queue_dict.get('id')}",
+                        flush=True,
+                    )
+                    return _parse_card_via_apify_with_timeout(
+                        url,
+                        parsed_source=parsed_source,
+                        source_hint=source_hint,
+                        city=business_city,
+                        timeout_sec=apify_timeout_sec,
+                        debug_bundle_dir=bundle_dir,
+                        debug_context={
+                            "queue_id": queue_dict.get("id"),
+                            "business_id": business_id,
+                            "source_hint": source_hint,
+                            "parsed_source": parsed_source,
+                            "city": business_city,
+                            "timeout_profile": apify_timeout_profile,
+                            "timeout_sec": apify_timeout_sec,
+                        },
+                    )
+
+                allow_direct_native = _env_bool("NATIVE_YANDEX_ALLOW_DIRECT", False)
+                if hybrid_yandex_parser and (active_proxy or allow_direct_native):
+                    browser_profile = _build_human_browser_profile()
+                    native_timeout_sec = max(
+                        30,
+                        int(os.getenv("NATIVE_YANDEX_ATTEMPT_TIMEOUT_SEC", "90") or 90),
+                    )
+
+                    def _run_native_yandex_parser() -> Dict[str, Any]:
+                        print(
+                            f"🌐 Нативный Yandex first timeout_sec={native_timeout_sec} "
+                            f"queue_id={queue_dict.get('id')}",
+                            flush=True,
+                        )
+                        return _parse_yandex_card_with_playwright_fallback(
+                            url,
+                            keep_open_on_captcha=False,
+                            timeout_sec=native_timeout_sec,
+                            force_subprocess=True,
+                            cookies=cookies,
+                            user_agent=browser_profile["user_agent"],
+                            viewport=browser_profile["viewport"],
+                            launch_args=browser_profile["launch_args"],
+                            init_scripts=browser_profile["init_scripts"],
+                            locale="ru-RU",
+                            timezone_id="Europe/Moscow",
+                            proxy=(active_proxy or {}).get("proxy"),
+                            headless=True,
+                            debug_bundle_id=debug_bundle_id,
+                            block_service_workers=True,
+                            **geolocation_kwarg,
+                        )
+
+                    card_data, used_apify_parser, native_failure_reason = (
+                        _parse_yandex_native_first_with_fallback(
+                            _run_native_yandex_parser,
+                            _run_apify_parser,
+                        )
+                    )
+                    if used_apify_parser:
+                        print(
+                            f"↪️ Native Yandex rejected ({native_failure_reason}); fallback to Apify completed",
+                            flush=True,
+                        )
+                    else:
+                        print("✅ Native Yandex result accepted; Apify skipped", flush=True)
+                elif hybrid_yandex_parser:
+                    native_failure_reason = native_failure_reason or "no_healthy_proxy"
+                    print(
+                        f"↪️ Native Yandex skipped ({native_failure_reason}); fallback to Apify",
+                        flush=True,
+                    )
+                    card_data = _run_apify_parser()
+                    used_apify_parser = True
+                else:
+                    card_data = _run_apify_parser()
+                    used_apify_parser = True
             else:
                 browser_profile = _build_human_browser_profile()
                 if parsed_source == "2gis":
@@ -5007,7 +5943,9 @@ def process_queue():
                             print(f"❌ Retry without proxy returned error: {retry_err[:140]}", flush=True)
                     except Exception as retry_exc:
                         print(f"❌ Retry without proxy failed: {str(retry_exc)[:180]}", flush=True)
-            if not card_error:
+            if hybrid_yandex_parser and used_apify_parser:
+                _mark_proxy_result(proxy_id, success=False, reason=native_failure_reason[:120])
+            elif not card_error:
                 _mark_proxy_result(proxy_id, success=True, reason="parse_ok")
             elif "captcha" in card_error.lower():
                 _mark_proxy_result(proxy_id, success=False, reason=f"captcha:{card_error[:80]}")
@@ -5016,8 +5954,10 @@ def process_queue():
         
         # Проверяем успешность парсинга (валидация только по данным Яндекса, без fallback из БД)
         validation_source = SOURCE_YANDEX_BUSINESS
-        if source_hint == "apify_yandex":
+        if used_apify_parser and source_hint == "apify_yandex":
             validation_source = "apify_yandex"
+        elif parsed_source == "yandex_maps":
+            validation_source = "yandex_maps"
         elif parsed_source == "2gis":
             validation_source = "2gis"
         elif parsed_source == "google_maps":
@@ -5299,7 +6239,7 @@ def process_queue():
                     _photos = card_data.get("photos") or []
                     if isinstance(_photos, int):
                         _photos = []
-                    sparse_apify_snapshot = bool(use_apify_parser) and (
+                    sparse_apify_snapshot = bool(used_apify_parser) and (
                         not products
                         and not news_list
                         and not _photos
@@ -5886,8 +6826,18 @@ def process_queue():
 
             if use_apify_parser:
                 try:
+                    settlement_payload = apify_debug_payload
+                    if hybrid_yandex_parser and not used_apify_parser:
+                        settlement_payload = {
+                            "cost": 0,
+                            "run_id": f"native-yandex:{queue_dict.get('id')}",
+                        }
                     cursor.execute("SAVEPOINT operator_apify_settlement")
-                    settlement_result = _settle_operator_apify_cost_if_present(cursor, queue_dict, apify_debug_payload)
+                    settlement_result = _settle_operator_apify_cost_if_present(
+                        cursor,
+                        queue_dict,
+                        settlement_payload,
+                    )
                     cursor.execute("RELEASE SAVEPOINT operator_apify_settlement")
                     settlement_status = str(settlement_result.get("status") or "").strip()
                     settlement_reason = str(settlement_result.get("reason") or "").strip()
@@ -6015,6 +6965,22 @@ def process_queue():
             )
         except Exception as email_error:
             print(f"⚠️ Не удалось отправить email: {email_error}")
+
+
+def process_queue() -> None:
+    """Claim, prepare, dispatch, execute, and settle one runnable task."""
+    queue_dict = _claim_next_queue_task()
+    if not queue_dict:
+        return
+
+    should_execute, preparsed_card_data = _prepare_queue_task(queue_dict)
+    if not should_execute:
+        return
+
+    if _dispatch_special_queue_task(queue_dict):
+        return
+
+    _execute_map_card_task(queue_dict, preparsed_card_data)
 
 def map_card_services(
     card_data: Dict[str, Any],
@@ -6362,120 +7328,6 @@ def _service_rows_to_grouped_products(service_rows: List[Dict[str, Any]]) -> Lis
     return [{"category": category, "items": items} for category, items in grouped.items() if items]
 
 
-def _sync_parsed_services_to_db(business_id: str, products: list, conn, owner_id: str):
-    """
-    Синхронизирует распаршенные услуги в таблицу UserServices.
-    Добавляет новые, обновляет цены существующих.
-    """
-    if not products:
-        return
-
-    # STRICT CHECK: owner_id required
-    if not owner_id:
-        print(f"⚠️ Service sync skipped: owner_id is missing for business {business_id}")
-        # Raising error to fail fast as per plan, but let's confirm logic
-        raise ValueError(f"owner_id (str) is required for service sync for business {business_id}")
-
-    cursor = conn.cursor()
-    
-    # Старый путь синхронизации в таблицу UserServices использует SQLite-специфичные конструкции.
-    # В PostgreSQL основной источник правды по услугам — YandexBusinessSyncWorker и связанные таблицы,
-    # поэтому здесь просто выходим, чтобы не ломать worker.
-    if DB_TYPE == "postgres":
-        print(f"⚠️ Service sync via _sync_parsed_services_to_db пропущен для Postgres (business_id={business_id})")
-        return
-
-    # 1. Проверяем наличие таблицы UserServices и нужных колонок (SQLite)
-    cursor.execute("SELECT to_regclass('public.userservices')")
-    if not cursor.fetchone():
-        # Если таблицы нет, создаём (должна быть, но на всякий случай)
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS UserServices (
-                id TEXT PRIMARY KEY,
-                business_id TEXT NOT NULL,
-                name TEXT NOT NULL,
-                description TEXT,
-                category TEXT,
-                price INTEGER, -- цена в копейках
-                duration INTEGER DEFAULT 60,
-                is_active INTEGER DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                user_id TEXT,
-                FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
-            )
-        """
-        )
-    
-    count_new = 0
-    count_updated = 0
-    
-    print(f"👤 Syncing services for owner_id: {owner_id}")
-    
-    for category_data in products:
-
-
-        category_name = category_data.get('category', 'Разное')
-        items = category_data.get('items', [])
-        
-        for item in items:
-            name = item.get('name')
-            if not name:
-                continue
-                
-            raw_price = item.get('price', '')
-            description = item.get('description', '')
-            
-            # Парсинг цены
-            price_cents = None
-            if raw_price:
-                # Удаляем все нецифровые символы кроме разделителей
-                try:
-                    # Ищем числа в строке
-                    import re
-                    # "от 1 500 ₽" -> "1500"
-                    digits = re.sub(r'[^0-9]', '', str(raw_price))
-                    if digits:
-                        price_cents = int(digits) * 100 # В копейки
-                except:
-                    pass
-            
-            # Ищем существующую услугу по имени и business_id
-            cursor.execute(
-                """
-                SELECT id FROM userservices
-                WHERE business_id = %s AND name = %s
-                """,
-                (business_id, name),
-            )
-            row = cursor.fetchone()
-            service_id = (row[0] if isinstance(row, (list, tuple)) else row.get("id")) if row else None
-
-            if service_id:
-                cursor.execute(
-                    """
-                    UPDATE userservices
-                    SET price = %s, description = %s, category = %s, updated_at = CURRENT_TIMESTAMP, is_active = TRUE
-                    WHERE id = %s
-                    """,
-                    (price_cents, description, category_name, service_id),
-                )
-                count_updated += 1
-            else:
-                service_id = str(uuid.uuid4())
-                cursor.execute(
-                    """
-                    INSERT INTO userservices (id, business_id, user_id, name, description, category, price, is_active)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE)
-                    """,
-                    (service_id, business_id, owner_id, name, description, category_name, price_cents),
-                )
-                count_new += 1
-                
-    conn.commit()
-    print(f"📊 Синхронизация услуг завершена: {count_new} новых, {count_updated} обновлено.")
-
 def _process_sync_yandex_business_task(queue_dict):
     """Обработка синхронизации Яндекс.Бизнес через кабинет"""
     import signal
@@ -6710,19 +7562,12 @@ def _process_sync_yandex_business_task(queue_dict):
             except Exception:
                 pass
             
-            # The cursor and conn here refer to the ones created within the try block
-            # associated with the DatabaseManager instance.
             try:
                 if 'cursor' in locals() and cursor and not cursor.closed:
                     cursor.close()
             except Exception:
                 pass
-            try:
-                if 'conn' in locals() and conn and not conn.closed:
-                    conn.close()
-            except Exception:
-                pass
-            
+
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute("""
@@ -6962,28 +7807,51 @@ def _process_sync_2gis_task(queue_dict):
 
 
 if __name__ == "__main__":
+    if _worker_role_enabled("operator"):
+        from services.disk_import_worker import start
+        start()
     print("Worker запущен. Проверка очереди каждые 5 минут...")
     while True:
         try:
-            process_queue()
-            _run_card_automation_if_due()
-            _run_founder_content_if_due()
-            _dispatch_agent_schedules_if_due()
-            _process_agent_run_queue_if_due()
-            _process_operator_async_job_if_due()
-            _process_contact_intelligence_if_due()
-            _dispatch_social_posts_if_due()
-            _collect_social_post_metrics_if_due()
-            _run_telegram_opportunity_monitor_if_due()
-            _run_knowledge_telegram_monitor_if_due()
-            _refresh_outreach_pain_library_if_due()
-            _run_knowledge_embeddings_if_due()
-            _dispatch_outreach_queue_if_due()
-            _notify_superadmin_outreach_replies_if_due()
-            _dispatch_openclaw_callback_outbox_if_due()
-            _check_openclaw_callback_alerts_if_due()
-            _reconcile_openclaw_billing_if_due()
-            _run_yookassa_renewals_if_due()
+            if _worker_role_enabled("parser"):
+                process_queue()
+            if _worker_role_enabled("dispatcher"):
+                _prepare_riderra_systematic_outreach_if_due()
+                _dispatch_outreach_queue_if_due()
+                _run_card_automation_if_due()
+                _run_founder_content_if_due()
+                _dispatch_social_posts_if_due()
+                _collect_social_post_metrics_if_due()
+                _process_creator_offer_distribution_if_due()
+                _dispatch_creator_notifications_if_due()
+                _notify_superadmin_outreach_replies_if_due()
+                _notify_superadmin_community_sources_if_due()
+                _dispatch_openclaw_callback_outbox_if_due()
+                _check_openclaw_callback_alerts_if_due()
+            if _worker_role_enabled("maintenance"):
+                _enrich_creator_sources_if_due()
+                _revalidate_creator_profiles_if_due()
+                _process_creator_search_if_due()
+                _process_contact_intelligence_if_due()
+                _run_telegram_opportunity_monitor_if_due()
+                _run_knowledge_telegram_monitor_if_due()
+                _refresh_outreach_pain_library_if_due()
+                _run_knowledge_embeddings_if_due()
+                _reconcile_openclaw_billing_if_due()
+                _run_yookassa_renewals_if_due()
+                _run_web_tracking_maintenance_if_due()
+                _materialize_today_priority_proposals_if_due()
+                _purge_compiled_inputs_if_due()
+            if _worker_role_enabled("general"):
+                # Keep a slot for unclassified legacy work while individual
+                # workloads move into the five explicit roles above.
+                pass
+            if _worker_role_enabled("agent"):
+                _dispatch_agent_schedules_if_due()
+                _process_agent_run_queue_if_due()
+                _process_sheet_provider_queue_if_due()
+            if _worker_role_enabled("operator"):
+                _process_operator_async_job_if_due()
         except Exception as e:
             print(f"❌ Критическая ошибка worker loop: {e}", flush=True)
             traceback.print_exc(file=sys.stdout)

@@ -325,9 +325,8 @@ export default function PublicSalesRoomPage() {
     if (!roomSlug) return;
     const params = new URLSearchParams(window.location.search);
     const verifyToken = params.get('verify_token') || '';
-    const urlParticipantToken = params.get('participant_token') || '';
     if (!verifyToken) return;
-    void verifyParticipantFromUrl(verifyToken, urlParticipantToken);
+    void verifyParticipantFromUrl(verifyToken, '');
   }, [roomSlug]);
 
   useEffect(() => {
@@ -597,6 +596,7 @@ export default function PublicSalesRoomPage() {
       localStorage.setItem(roomAuthorCompanyKey, cleanCompany);
       await newAuth.makeRequest(`/sales-rooms/public/${encodeURIComponent(roomSlug)}/proposal/suggestions`, {
         method: 'POST',
+        headers: participantHeaders(),
         body: JSON.stringify({
           author_name: cleanName,
           author_contact: cleanCompany,
@@ -659,6 +659,10 @@ export default function PublicSalesRoomPage() {
         form.append('file', file);
         const response = await fetch(`/api/sales-rooms/public/${encodeURIComponent(roomSlug)}/files`, {
           method: 'POST',
+          headers: {
+            ...participantHeaders(),
+            'Idempotency-Key': crypto.randomUUID(),
+          },
           body: form,
         });
         const data = await response.json();
@@ -701,6 +705,10 @@ export default function PublicSalesRoomPage() {
       localStorage.setItem(roomAuthorCompanyKey, cleanCompany);
       const response = await newAuth.makeRequest(`/sales-rooms/public/${encodeURIComponent(roomSlug)}/messages`, {
         method: 'POST',
+        headers: {
+          ...participantHeaders(),
+          'Idempotency-Key': crypto.randomUUID(),
+        },
         body: JSON.stringify({
           author_name: cleanName,
           author_contact: cleanCompany,
@@ -752,6 +760,7 @@ export default function PublicSalesRoomPage() {
   const canEditWelcome = Boolean(room.permissions?.can_edit_welcome);
   const auditOffer = room.audit_offer || null;
   const participantVerified = Boolean(room.participant?.verified);
+  const canCommunicate = participantVerified || canEditWelcome;
   const hasAudit = Boolean(!auditOffer && room.audit?.available && room.audit?.public_url);
   const auditOfferReady = Boolean(auditOffer?.audit_url && (auditOffer.status === 'ready' || auditOffer.status === 'opened'));
   const auditOfferProcessing = auditOffer?.status === 'processing' || auditOffer?.status === 'requested';
@@ -1178,7 +1187,14 @@ export default function PublicSalesRoomPage() {
             onChange={(event) => setMessageText(event.currentTarget.value)}
             placeholder={copy.messagePlaceholder}
             className="mt-4 min-h-28 resize-none"
+            disabled={!canCommunicate}
           />
+
+          {!canCommunicate ? (
+            <div className="mt-3 rounded-xl border border-orange-100 bg-orange-50 px-4 py-3 text-sm text-orange-900">
+              Подтвердите email участника выше, чтобы писать сообщения и видеть переписку.
+            </div>
+          ) : null}
 
           {pendingAttachments.length > 0 ? (
             <div className="mt-3 flex flex-wrap gap-2">
@@ -1209,13 +1225,13 @@ export default function PublicSalesRoomPage() {
                   multiple
                   accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.webp"
                   onChange={handleUpload}
-                  disabled={uploading || sending}
+                  disabled={uploading || sending || !canCommunicate}
                 />
               </label>
             ) : (
               <span />
             )}
-            <Button type="submit" className="gap-2 bg-slate-950 text-white hover:bg-slate-800" disabled={sending || (fileUploadsVisible && uploading)}>
+            <Button type="submit" className="gap-2 bg-slate-950 text-white hover:bg-slate-800" disabled={!canCommunicate || sending || (fileUploadsVisible && uploading)}>
               {sending ? copy.sending : copy.send}
               <Send className="h-4 w-4" />
             </Button>
@@ -1244,17 +1260,27 @@ export default function PublicSalesRoomPage() {
                   {Array.isArray(message.attachments) && message.attachments.length > 0 ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {message.attachments.map((attachment) => (
-                        <a
+                        <button
                           key={attachment.id}
-                          href={attachment.public_url}
-                          target="_blank"
-                          rel="noreferrer"
+                          type="button"
+                          onClick={async () => {
+                            if (!attachment.public_url) return;
+                            try {
+                              const response = await fetch(attachment.public_url, { headers: participantHeaders() });
+                              if (!response.ok) throw new Error('Файл недоступен');
+                              const objectUrl = URL.createObjectURL(await response.blob());
+                              window.open(objectUrl, '_blank', 'noopener,noreferrer');
+                              window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+                            } catch (downloadError) {
+                              setComposerError(downloadError instanceof Error ? downloadError.message : 'Файл недоступен');
+                            }
+                          }}
                           className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-orange-200 hover:text-orange-600"
                         >
                           <FileText className="h-3.5 w-3.5" />
                           {attachment.original_name}
                           {formatFileSize(attachment.size_bytes) ? <span className="text-slate-400">{formatFileSize(attachment.size_bytes)}</span> : null}
-                        </a>
+                        </button>
                       ))}
                     </div>
                   ) : null}

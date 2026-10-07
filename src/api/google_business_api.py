@@ -11,16 +11,52 @@ from database_manager import DatabaseManager
 from auth_system import verify_session
 from google_business_auth import GoogleBusinessAuth
 from google_sheets_auth import GOOGLE_SHEETS_SCOPE, GoogleSheetsAuth
-from google_business_api import GoogleBusinessAPIError
+from google_business_api import GoogleBusinessAPI, GoogleBusinessAPIError
 from google_business_sync_worker import GoogleBusinessSyncWorker
 from auth_encryption import encrypt_auth_data, decrypt_auth_data
 from core.helpers import get_business_owner_id
+from subscription_manager import get_capability_access
 
 google_business_bp = Blueprint('google_business', __name__)
 
 DEFAULT_GOOGLE_RETURN_PATH = "/dashboard/settings/integrations?focus=google_business"
 DEFAULT_GOOGLE_SHEETS_RETURN_PATH = "/dashboard/settings/integrations?focus=google_sheets"
 GOOGLE_OAUTH_STATE_MAX_AGE_SECONDS = 600
+
+
+@google_business_bp.before_request
+def require_google_business_capability():
+    if request.method == "OPTIONS" or request.path.endswith("/callback"):
+        return None
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    user_data = verify_session(auth_header.split(" ", 1)[1])
+    if not user_data:
+        return None
+    payload = request.get_json(silent=True) if request.method in {"POST", "PUT", "PATCH"} else {}
+    payload = payload if isinstance(payload, dict) else {}
+    route_values = request.view_args or {}
+    business_id = str(route_values.get("business_id") or payload.get("business_id") or request.args.get("business_id") or "").strip()
+    if not business_id:
+        return None
+    if "/google-sheets/" in request.path or request.path.startswith("/api/google/sheets/"):
+        capability = "automation"
+    elif request.path.endswith("/publish-post"):
+        capability = "maps.news"
+    elif request.path.endswith("/publish-review-reply"):
+        capability = "maps.reviews"
+    else:
+        capability = "maps"
+    access = get_capability_access(business_id, capability, bool(user_data.get("is_superadmin")))
+    if access.get("allowed"):
+        return None
+    return jsonify({
+        "success": False,
+        "error": "payment_required",
+        **access,
+        "return_to": request.full_path.rstrip("?"),
+    }), 402
 
 def _row_value(row, key: str, index: int = 0):
     if row is None:
@@ -48,12 +84,17 @@ def _auth_data_column(cursor) -> str:
 def _google_business_error_response(error: Exception):
     message = str(error)
     if "SERVICE_DISABLED" in message or "mybusinessaccountmanagement.googleapis.com" in message:
+        project_id = os.getenv("GOOGLE_CLOUD_PROJECT_ID", "localos-gbp")
+        activation_url = (
+            "https://console.developers.google.com/apis/api/"
+            f"mybusinessaccountmanagement.googleapis.com/overview?project={project_id}"
+        )
         return jsonify({
             "success": False,
             "status": "google_business_api_disabled",
             "error": "В Google Cloud project LocalOS не включён или не одобрен My Business Account Management API. Карточки в Google аккаунте есть, но LocalOS пока не может прочитать их через API.",
-            "next_action": "Откройте Google Cloud Console project totemic-union-440908-s8 и проверьте My Business Account Management API / quota.",
-            "activation_url": "https://console.developers.google.com/apis/api/mybusinessaccountmanagement.googleapis.com/overview?project=totemic-union-440908-s8",
+            "next_action": f"Откройте Google Cloud Console project {project_id} и проверьте My Business Account Management API / quota.",
+            "activation_url": activation_url,
         }), 502
     return jsonify({
         "success": False,
@@ -132,6 +173,9 @@ def _public_location(location: dict) -> dict:
     address = location.get("storefrontAddress") if isinstance(location.get("storefrontAddress"), dict) else {}
     lines = address.get("addressLines") if isinstance(address.get("addressLines"), list) else []
     category = location.get("primaryCategory") if isinstance(location.get("primaryCategory"), dict) else {}
+    categories = location.get("categories") if isinstance(location.get("categories"), dict) else {}
+    if not category:
+        category = categories.get("primaryCategory") if isinstance(categories.get("primaryCategory"), dict) else {}
     metadata = location.get("metadata") if isinstance(location.get("metadata"), dict) else {}
     title = location.get("title") or location.get("locationName") or location.get("name")
     account_name = str(location.get("accountName") or "").strip()
@@ -221,6 +265,53 @@ def _credentials_payload(cursor, account: dict) -> dict:
     except Exception:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _google_auth_needs_reconnect(account: dict | None) -> bool:
+    if not account:
+        return True
+    error = str(account.get("last_error") or "").lower()
+    return any(
+        marker in error
+        for marker in (
+            "invalid_grant",
+            "expired or revoked",
+            "доступ google истёк",
+            "подключите google business заново",
+        )
+    )
+
+
+def _refresh_matching_google_accounts(
+    cursor,
+    auth_column: str,
+    encrypted_creds: str,
+    account_names: list[str],
+    user_id: str,
+) -> int:
+    normalized_names = sorted({str(name or "").strip() for name in account_names if str(name or "").strip()})
+    if not normalized_names:
+        return 0
+    cursor.execute(
+        """
+        UPDATE externalbusinessaccounts
+        SET """ + auth_column + """ = %s,
+            is_active = TRUE,
+            last_error = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE source = 'google_business'
+          AND split_part(COALESCE(external_id, ''), '/locations/', 1) = ANY(%s)
+          AND EXISTS (
+              SELECT 1
+              FROM businesses business
+              JOIN users actor ON actor.id = %s
+              WHERE business.id = externalbusinessaccounts.business_id
+                AND (business.owner_id = %s OR actor.is_superadmin = TRUE)
+          )
+        """,
+        (encrypted_creds, normalized_names, user_id, user_id),
+    )
+    return int(getattr(cursor, "rowcount", 0) or 0)
 
 
 def _get_legacy_sheets_account(cursor, business_id: str) -> dict | None:
@@ -363,6 +454,16 @@ def google_oauth_callback():
         
         # Шифруем credentials
         encrypted_creds = encrypt_auth_data(creds_json)
+
+        accessible_account_names: list[str] = []
+        try:
+            accessible_account_names = [
+                str(item.get("name") or "").strip()
+                for item in GoogleBusinessAPI(credentials).list_accounts()
+                if isinstance(item, dict) and str(item.get("name") or "").strip()
+            ]
+        except Exception as discovery_error:
+            print(f"⚠️ Не удалось определить связанные Google Business аккаунты: {discovery_error}")
         
         # Сохраняем или обновляем аккаунт в ExternalBusinessAccounts
         db = DatabaseManager()
@@ -392,6 +493,13 @@ def google_oauth_callback():
                 (id, business_id, source, external_id, display_name, """ + auth_column + """, is_active, created_at, updated_at)
                 VALUES (%s, %s, 'google_business', %s, %s, %s, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """, (account_id, business_id, None, 'Google Business', encrypted_creds))
+        _refresh_matching_google_accounts(
+            cursor,
+            auth_column,
+            encrypted_creds,
+            accessible_account_names,
+            user_id,
+        )
         db.conn.commit()
         db.close()
         
@@ -559,9 +667,10 @@ def google_status(business_id):
                 "needs_auth": True,
                 "approval_required_for_writes": True,
             })
+        needs_auth = _google_auth_needs_reconnect(account)
         return jsonify({
             "success": True,
-            "connected": True,
+            "connected": not needs_auth,
             "account": {
                 "id": account.get("id"),
                 "external_id": account.get("external_id"),
@@ -569,6 +678,7 @@ def google_status(business_id):
                 "last_sync_at": account.get("last_sync_at"),
                 "last_error": account.get("last_error"),
             },
+            "needs_auth": needs_auth,
             "needs_location_binding": not bool(account.get("external_id")),
             "approval_required_for_writes": True,
         })

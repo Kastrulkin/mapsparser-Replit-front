@@ -19,6 +19,7 @@ from typing import List, Dict, Any, Optional
 import datetime
 
 from core.map_url_normalizer import normalize_map_url
+from core.sensitive_text import redact_sensitive_text
 
 APIFY_SEARCH_TIMEOUT_SEC = int(os.environ.get("APIFY_SEARCH_TIMEOUT_SEC", "180"))
 APIFY_SEARCH_MAX_CHARGE_USD = Decimal(os.environ.get("APIFY_SEARCH_MAX_CHARGE_USD", "1.0"))
@@ -71,7 +72,16 @@ class ProspectingService:
             print("Warning: APIFY_TOKEN is not set. Prospecting service will not work.")
             self.client = None
         else:
-            self.client = ApifyClient(self.api_token)
+            client_retries = max(0, int(os.environ.get("APIFY_CLIENT_MAX_RETRIES", "2") or 2))
+            try:
+                self.client = ApifyClient(
+                    self.api_token,
+                    max_retries=client_retries,
+                    timeout_secs=max(10, int(os.environ.get("APIFY_START_TIMEOUT_SEC", "30") or 30)),
+                )
+            except TypeError:
+                # apify-client v3+ uses named timeout tiers instead of timeout_secs.
+                self.client = ApifyClient(self.api_token, max_retries=client_retries)
 
     @staticmethod
     def _apify_actor_proxy_config() -> Dict[str, Any]:
@@ -1110,46 +1120,32 @@ class ProspectingService:
         if not self.api_token:
             raise ValueError("APIFY_TOKEN is not set")
 
-        # Use raw REST start instead of apify_client.start() because the client
-        # library uses a shorter default HTTP timeout and can still block before
-        # returning a run id on slow API responses.
-        actor_path_id = self._actor_path_id()
-        if not actor_path_id:
+        if self.client is None:
+            raise RuntimeError("Apify client is unavailable")
+        actor_client_id = str(self.actor_id or "").strip().replace("~", "/", 1)
+        if not actor_client_id:
             raise ValueError("APIFY actor id is not set")
-        last_exc = None
-        response = None
-        for timeout_seconds in (30, 120):
-            try:
-                response = self._apify_request(
-                    "POST",
-                    f"https://api.apify.com/v2/acts/{actor_path_id}/runs",
-                    params={"token": self.api_token, "waitForFinish": 0},
-                    json=run_input,
-                    timeout=timeout_seconds,
-                )
-                break
-            except requests.exceptions.Timeout as exc:
-                last_exc = exc
-        if response is None:
-            if last_exc:
-                raise last_exc
-            raise RuntimeError("Apify run start request failed without response")
-        if response.status_code >= 400:
-            try:
-                print(
-                    f"❌ Apify start error status={response.status_code} body={response.text}",
-                    flush=True,
-                )
-            except Exception:
-                pass
-        response.raise_for_status()
-        payload = response.json().get("data") or {}
-        if not payload.get("id"):
+        # Official ActorClient.start returns immediately with a run ID and owns
+        # transport retries. Do not repeat an ambiguous POST at application level:
+        # the first request may have created a paid run even if its response timed out.
+        run = self.client.actor(actor_client_id).start(
+            run_input=run_input,
+            wait_for_finish=0,
+        )
+        if isinstance(run, dict):
+            run_id = run.get("id")
+            dataset_id = run.get("defaultDatasetId")
+            run_status = run.get("status")
+        else:
+            run_id = getattr(run, "id", None)
+            dataset_id = getattr(run, "default_dataset_id", None)
+            run_status = getattr(run, "status", None)
+        if not run_id:
             raise RuntimeError("Apify run did not return an id")
         return {
-            "run_id": payload.get("id"),
-            "dataset_id": payload.get("defaultDatasetId"),
-            "status": payload.get("status"),
+            "run_id": run_id,
+            "dataset_id": dataset_id,
+            "status": str(run_status or ""),
             "run_input": run_input,
         }
 
@@ -1311,7 +1307,7 @@ class ProspectingService:
                     "run_start_failed",
                     {
                         "candidate": candidate,
-                        "error": str(exc),
+                        "error": redact_sensitive_text(exc, limit=1000),
                     },
                 )
                 break
@@ -1595,7 +1591,7 @@ class ProspectingService:
         try:
             run = self.run_search(query, location, limit=limit, timeout_sec=APIFY_SEARCH_TIMEOUT_SEC)
         except Exception as e:
-            print(f"Error running Apify actor: {e}")
+            print(f"Error running Apify actor: {redact_sensitive_text(e, limit=1000)}")
             raise
 
         if not run:

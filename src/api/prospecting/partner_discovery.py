@@ -150,7 +150,7 @@ TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS = max(1, int(os.environ.get("TELEGRAM_REPLY_SY
 TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT = max(1, min(int(os.environ.get("TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT", "12")), 50))
 TELEGRAM_REPLY_SYNC_TIMEOUT_SEC = max(5, int(os.environ.get("TELEGRAM_REPLY_SYNC_TIMEOUT_SEC", "12")))
 LEAD_OUTREACH_MODERATION_STATUS = "lead_outreach"
-PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr")
+PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr", "hy", "kk")
 PIPELINE_UNPROCESSED = "unprocessed"
 PIPELINE_IN_PROGRESS = "in_progress"
 PIPELINE_POSTPONED = "postponed"
@@ -296,7 +296,7 @@ def _partnership_parse_status_select_sql(lead_alias: str = "l") -> str:
             SELECT pq.status
             FROM parsequeue pq
             WHERE (
-                    ({lead_alias}.parse_business_id IS NOT NULL AND pq.business_id = {lead_alias}.parse_business_id)
+                    ({lead_alias}.parse_business_id IS NOT NULL AND pq.business_id = {lead_alias}.parse_business_id::text)
                     OR (
                         {lead_alias}.parse_business_id IS NULL
                         AND {lead_alias}.source_url IS NOT NULL

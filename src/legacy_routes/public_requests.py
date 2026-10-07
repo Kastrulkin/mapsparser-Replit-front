@@ -1,4 +1,7 @@
 from legacy_routes import shared as _shared
+from core.api_errors import internal_error_response
+from core.auth_helpers import verify_business_access
+from core.browser_session import browser_cookie_auth_enabled, issue_browser_session
 
 globals().update(_shared.runtime_namespace)
 
@@ -1299,9 +1302,8 @@ LocalOS
             "message": "Инструкции по восстановлению пароля отправлены на email"
         })
 
-    except Exception as e:
-        print(f"❌ Ошибка восстановления пароля: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось обработать запрос на восстановление пароля")
 
 @app.route('/api/auth/set-password', methods=['POST'])
 @rate_limit_if_available("10 per hour")
@@ -1404,19 +1406,18 @@ def auth_set_password():
             ip_address=request.headers.get('X-Forwarded-For') or request.remote_addr,
             user_agent=request.headers.get('User-Agent'),
         )
-        return jsonify(
-            {
-                "success": True,
-                "id": str(user_id),
-                "email": str(user_email or ''),
-                "name": str(user_name or ''),
-                "phone": str(user_phone or ''),
-                "token": session_token,
-            }
-        )
-    except Exception as e:
-        print(f"❌ Ошибка установки пароля: {e}")
-        return jsonify({"error": str(e)}), 500
+        payload = {
+            "success": True,
+            "id": str(user_id),
+            "email": str(user_email or ''),
+            "name": str(user_name or ''),
+            "phone": str(user_phone or ''),
+        }
+        if not browser_cookie_auth_enabled():
+            payload["token"] = session_token
+        return issue_browser_session(jsonify(payload), session_token)
+    except Exception:
+        return internal_error_response("Не удалось установить пароль")
 
 @app.route('/api/auth/confirm-reset', methods=['POST'])
 @rate_limit_if_available("5 per hour")
@@ -1467,9 +1468,8 @@ def confirm_reset():
 
         return jsonify({"success": True, "message": "Пароль успешно изменен"})
 
-    except Exception as e:
-        print(f"❌ Ошибка подтверждения сброса: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось подтвердить сброс пароля")
 
 @app.route('/api/public/request-report', methods=['POST', 'OPTIONS'])
 @rate_limit_if_available("10 per hour")
@@ -1557,9 +1557,8 @@ def public_request_report():
             "public_url": public_url,
         }), 200
 
-    except Exception as e:
-        print(f"❌ Ошибка обработки заявки: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось принять заявку на отчёт")
 
 @app.route('/api/public/request-registration', methods=['POST', 'OPTIONS'])
 @rate_limit_if_available("10 per hour")
@@ -1614,9 +1613,8 @@ Email: {email}
             "message": "Заявка на регистрацию принята. Мы свяжемся с вами в ближайшее время."
         }), 200
 
-    except Exception as e:
-        print(f"❌ Ошибка обработки заявки на регистрацию: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось принять заявку на регистрацию")
 
 @app.route('/api/telegram/bind', methods=['POST'])
 def generate_telegram_bind_token():
@@ -1639,14 +1637,14 @@ def generate_telegram_bind_token():
         if not business_id:
             return jsonify({"error": "business_id обязателен"}), 400
 
-        # Проверяем, что бизнес принадлежит пользователю
+        # Ссылка привязывает Telegram к текущему LocalOS-аккаунту.
+        # Активные сотрудники бизнеса или сети имеют тот же доступ, что и владелец.
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        cursor.execute("SELECT id FROM businesses WHERE id = %s AND owner_id = %s", (business_id, user_data['user_id']))
-        business_row = cursor.fetchone()
-        if not business_row:
+        has_access, _owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
             db.close()
-            return jsonify({"error": "Бизнес не найден или не принадлежит вам"}), 403
+            return jsonify({"error": "Бизнес не найден или нет доступа"}), 403
 
         # Генерируем токен привязки
         import secrets
@@ -1713,12 +1711,10 @@ def get_telegram_bind_status():
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        # Проверяем, что бизнес принадлежит пользователю
-        cursor.execute("SELECT id FROM businesses WHERE id = %s AND owner_id = %s", (business_id, user_data['user_id']))
-        business_row = cursor.fetchone()
-        if not business_row:
+        has_access, _owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
             db.close()
-            return jsonify({"error": "Бизнес не найден или не принадлежит вам"}), 403
+            return jsonify({"error": "Бизнес не найден или нет доступа"}), 403
 
         # Проверяем, привязан ли Telegram для этого бизнеса
         cursor.execute(

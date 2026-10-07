@@ -5,6 +5,7 @@ import json
 import uuid
 from typing import Any, Callable
 
+from core.db_helpers import assert_schema_columns
 from services.llm import analyze_text_with_gigachat
 from services.knowledge_retrieval import semantic_context_for_cursor
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
@@ -138,25 +139,15 @@ def _load_business_context(cursor: Any, business_id: str) -> dict[str, Any]:
 
 
 def _ensure_usernews_table(cursor: Any) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS usernews (
-            id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            service_id TEXT,
-            source_text TEXT,
-            generated_text TEXT NOT NULL,
-            approved INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
+    assert_schema_columns(
+        cursor,
+        "usernews",
+        (
+            "id", "user_id", "business_id", "source_text", "generated_text",
+            "original_generated_text", "edited_before_approve", "prompt_key",
+            "prompt_version", "approved", "created_at", "updated_at",
+        ),
     )
-    cursor.execute("ALTER TABLE usernews ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP")
-    cursor.execute("ALTER TABLE usernews ADD COLUMN IF NOT EXISTS business_id TEXT")
-    cursor.execute("ALTER TABLE usernews ADD COLUMN IF NOT EXISTS original_generated_text TEXT")
-    cursor.execute("ALTER TABLE usernews ADD COLUMN IF NOT EXISTS edited_before_approve BOOLEAN DEFAULT FALSE")
-    cursor.execute("ALTER TABLE usernews ADD COLUMN IF NOT EXISTS prompt_key TEXT")
-    cursor.execute("ALTER TABLE usernews ADD COLUMN IF NOT EXISTS prompt_version TEXT")
 
 
 def _build_news_prompt(*, source_text: str, business: dict[str, Any]) -> str:
@@ -317,6 +308,8 @@ def generate_news_draft_from_operator(
         pipeline_id=idempotency_key,
     )
     news_prompt = _build_news_prompt(source_text=source_text, business=business)
+    from services.operator_editorial import editorial_prompt
+    news_prompt += '\n\n' + editorial_prompt(cursor,business_id)
     if knowledge_context:
         news_prompt += (
             "\n\nПодтверждённый контекст LocalOS. Используй только подходящие факты, "
@@ -330,6 +323,8 @@ def generate_news_draft_from_operator(
             user_id=user_id,
         )
         news_text = _normalize_news_text(generated)
+        from services.content_rules import enforce
+        news_text = enforce(cursor,business_id,user_id,news_text,generator,source_text)
     except Exception:
         release = finalize_reserved_action_credits(
             cursor,

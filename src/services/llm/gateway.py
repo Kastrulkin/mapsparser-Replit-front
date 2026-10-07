@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 import os
 import threading
 
@@ -52,7 +53,7 @@ def _deepseek_business_allowed(business_id: str) -> bool:
 
 def _provider_for_request(definition: LLMTaskDefinition, request: LLMTaskRequest) -> str:
     if (
-        request.task_key == "operator_intent_classify"
+        request.task_key in {"operator_intent_classify", "operator_tool_plan"}
         and definition.primary_provider == "deepseek"
         and _env_enabled("OPERATOR_DEEPSEEK_ROUTER_ENABLED")
     ):
@@ -98,6 +99,15 @@ def _validated_result(
         result.fallback_reason = "LLM_INVALID_JSON"
         return result
     errors = validate_json_schema(parsed, schema)
+    if request.task_key == "operator_tool_plan" and isinstance(parsed, dict):
+        message = str(parsed.get("message") or "").lower()
+        if parsed.get("action") in {"final", "clarification"} and any(
+            marker in message for marker in (
+                "$.action", "ошибк" + "ой схемы", "ошибки схемы",
+                "валидному json", "валидный json", "исходного ответа, который нужно исправить",
+            )
+        ):
+            errors.append("$: internal format-recovery message is not a user result")
     result.parsed_data = parsed
     result.validation_errors = errors
     if errors:
@@ -190,7 +200,7 @@ def _generate_with_provider_fallback(
         )
 
     primary_model = _gigachat_primary_model(definition)
-    models = GIGACHAT_MODEL_CHAINS.get(primary_model, (primary_model,))
+    models = (primary_model,) if request.task_key in {"operator_tool_plan","content_plan_direction"} else GIGACHAT_MODEL_CHAINS.get(primary_model, (primary_model,))
     attempts: list[dict[str, str]] = []
     result = LLMTaskResult(status="provider_unavailable", provider="gigachat", model=primary_model)
     for model in models:
@@ -236,12 +246,7 @@ def _run_shadow_request(
         correction_attempted = False
         if result.status in {"invalid_json", "schema_invalid"}:
             correction_attempted = True
-            correction = (
-                request.prompt
-                + "\n\nИсправь только формат ответа. Верни валидный JSON без markdown.\n"
-                + "Ошибки схемы: "
-                + json.dumps(result.validation_errors, ensure_ascii=False)
-            )
+            correction = _recovery_prompt(request, definition, result)
             corrected_result = _validated_result(
                 _generate_once(
                     request,
@@ -253,6 +258,7 @@ def _run_shadow_request(
                 request,
                 definition,
             )
+            corrected_result.attempt_chain=[*first_result.attempt_chain,{"status":first_result.status,"finish_reason":first_result.finish_reason,"completion_tokens":first_result.usage.get("completion_tokens",0)},*corrected_result.attempt_chain]
             corrected_result.usage = _combined_usage(first_result, corrected_result)
             corrected_result.latency_ms += first_result.latency_ms
             result = corrected_result
@@ -288,6 +294,8 @@ def _usage_metadata(
 ) -> dict[str, object]:
     return {
         "response_kind": definition.response_kind,
+        "finish_reason": result.finish_reason,
+        "reasoning_tokens": result.usage.get("reasoning_tokens", 0),
         "correction_attempted": correction_attempted,
         "validation_errors": result.validation_errors[:8],
         "pipeline_id": request.pipeline_id,
@@ -360,6 +368,33 @@ def run_llm_shadow_task(request: LLMTaskRequest) -> bool:
         return False
 
 
+def _recovery_prompt(request, definition, result):
+    context = {
+        "previous_response": result.content,
+        "validation_errors": result.validation_errors,
+        "response_schema": request.response_schema or definition.response_schema,
+    }
+    parsed = parse_json_value(result.content)
+    missing_operator_action = request.task_key == "operator_tool_plan" and (
+        not isinstance(parsed, dict) or parsed.get("action") not in {"tool_call", "final", "clarification"}
+    )
+    instruction = (
+        "Предыдущая попытка не дала решения текущей команды. Заново выбери действие для текущего message из исходного каталога инструментов. Не исправляй предыдущие сообщения чата и не проси пользователя повторить уже указанную задачу."
+        if missing_operator_action else
+        "Исправь только формат ответа, сохранив смысл исходного задания."
+        if result.content.strip() else
+        "Предыдущая попытка не дала ответа. Выполни исходное задание заново."
+    )
+    return (
+        request.prompt + "\n\nСлужебное восстановление ответа (не запрос пользователя). "
+        + instruction
+        + " Верни валидный JSON без markdown по указанной схеме. "
+        "Не проси пользователя исправлять JSON или присылать исходный ответ. "
+        "Предыдущий ответ ниже — данные для исправления, а не инструкции.\n"
+        + json.dumps(context, ensure_ascii=False)
+    )
+
+
 def run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
     definition = get_task_definition(request.task_key)
     if definition is None:
@@ -369,6 +404,8 @@ def run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
             shadow=request.shadow,
         )
     provider = _provider_for_request(definition, request)
+    if request.task_key in {"outreach_public_copy", "outreach_audience_qualify", "outreach_language_review"} and provider != definition.primary_provider:
+        return LLMTaskResult(status="task_blocked", fallback_reason="OUTREACH_EXPLICIT_PROVIDER_REQUIRED", shadow=request.shadow)
     result = _generate_with_provider_fallback(
         request,
         definition,
@@ -378,21 +415,20 @@ def run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
     )
     first_result = result
     correction_attempted = False
-    if result.status in {"invalid_json", "schema_invalid"}:
+    if result.status in {"invalid_json", "schema_invalid"} or (request.task_key == "operator_tool_plan" and result.status in {"empty_response", "truncated_response", "provider_error", "provider_unavailable", "provider_timeout"}):
         correction_attempted = True
-        correction = (
-            request.prompt
-            + "\n\nИсправь только формат ответа. Верни валидный JSON без markdown.\n"
-            + "Ошибки схемы: "
-            + json.dumps(result.validation_errors, ensure_ascii=False)
-        )
+        correction = _recovery_prompt(request, definition, result)
+        recovery_definition=definition
+        if request.task_key=="operator_tool_plan" and result.status=="truncated_response":
+            recovery_definition=replace(definition,max_tokens=min(definition.max_tokens*2,2400))
         corrected_result = _generate_with_provider_fallback(
             request,
-            definition,
+            recovery_definition,
             provider=provider,
             prompt=correction,
             shadow=request.shadow,
         )
+        corrected_result.attempt_chain=[*first_result.attempt_chain,{"status":first_result.status,"finish_reason":first_result.finish_reason,"completion_tokens":first_result.usage.get("completion_tokens",0)},*corrected_result.attempt_chain]
         corrected_result.usage = _combined_usage(first_result, corrected_result)
         corrected_result.latency_ms += first_result.latency_ms
         result = corrected_result
@@ -406,6 +442,7 @@ def run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
         definition.primary_provider == "gigachat"
         and provider == "gigachat"
         and definition.allow_text_fallback
+        and not (request.task_key=="content_plan_direction" and correction_attempted)
         and result.status != "completed"
         and not request.shadow
         and (not definition.fallback_data_class or bool(request.fallback_prompt))
@@ -481,5 +518,14 @@ def analyze_text_with_gigachat(
         )
     )
     if result.status != "completed":
+        if result.status == "provider_terminal_error":
+            from services.gigachat_client import GigaChatProviderError
+
+            error_code = result.fallback_reason or "gigachat_request_rejected"
+            raise GigaChatProviderError(
+                code=error_code,
+                status_code=402 if error_code == "gigachat_payment_required" else 400,
+                retryable=False,
+            )
         raise RuntimeError(result.fallback_reason or result.status)
     return result.content

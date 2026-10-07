@@ -10,6 +10,8 @@ from typing import Any, Callable
 
 from psycopg2.extras import Json, RealDictCursor
 
+from services.community_pulse_sources import load_default_industry_sources
+
 from core.knowledge_policy import redact_text
 from core.telegram_userbot import fetch_message_page, fetch_recent_messages, load_userbot_account
 from services.knowledge_graph_service import add_evidence, upsert_assertion, upsert_concept, upsert_document
@@ -17,7 +19,7 @@ from services.knowledge_graph_service import add_evidence, upsert_assertion, ups
 
 ANALYSIS_VERSION = "telegram-audience-v1"
 DEFAULT_BACKFILL_DAYS = 90
-SYNC_INTERVAL_MINUTES = 24 * 60
+SYNC_INTERVAL_MINUTES = 30
 RETRY_INTERVAL_MINUTES = 60
 
 TRAVEL_SIGNAL_RULES: tuple[tuple[str, str, int, tuple[str, ...]], ...] = (
@@ -43,7 +45,15 @@ TRAVEL_SIGNAL_RULES: tuple[tuple[str, str, int, tuple[str, ...]], ...] = (
         "pain",
         "Изменение рейса ломает организацию трансфера",
         72,
-        ("перенесли рейс", "задержка рейса", "изменился рейс", "рейс отменили", "номер рейса"),
+        (
+            "перенесли рейс",
+            "рейс перенесли",
+            "задержка рейса",
+            "изменился рейс",
+            "рейс отменили",
+            "изменить трансфер",
+            "номер рейса",
+        ),
     ),
     (
         "pain",
@@ -98,6 +108,86 @@ GENERIC_SIGNAL_RULES: tuple[tuple[str, str, int, tuple[str, ...]], ...] = (
     ),
 )
 
+NON_ACTIONABLE_SIGNAL_LABELS = (
+    "Клиенты описывают повторяющуюся проблему",
+    "Аудитория задаёт практический вопрос",
+    "Аудитория сомневается перед решением",
+    "Участники делятся рабочей практикой",
+    "Рабочая ситуация турагента требует внимания",
+)
+
+TRAVEL_CONTENT_ANGLES = {
+    "Турагент рискует отношениями с клиентом": (
+        "Показать, как Riderra помогает турагенту сохранить доверие клиента, "
+        "когда поездка идёт не по плану."
+    ),
+    "Турагент уточняет условия трансфера": (
+        "Объяснить, какие данные нужны для расчёта и заказа трансфера и когда агент получает подтверждение."
+    ),
+    "Непонятно, кто отвечает за проблему в поездке": (
+        "Рассказать, кто остаётся на связи с турагентом и туристом, если во время поездки возникла проблема."
+    ),
+    "Изменение рейса ломает организацию трансфера": (
+        "Разобрать по шагам, что происходит с трансфером при переносе или отмене рейса."
+    ),
+    "Трансфер не подтверждён вовремя": (
+        "Объяснить, как Riderra подтверждает машину и что делать турагенту, если до поездки осталось мало времени."
+    ),
+    "Риск опоздания или неявки водителя": (
+        "Показать, как Riderra контролирует подачу машины и помогает, если водитель задерживается."
+    ),
+    "Нужен понятный порядок работы с групповыми поездками": (
+        "Показать порядок организации группового или MICE-трансфера: машины, встреча, координатор и изменения."
+    ),
+}
+
+BEAUTY_INSIGHT_PRESENTATIONS = {
+    "команда и управление": (
+        "Как выстроить работу команды",
+        "Показать на конкретной ситуации, как мастера и администраторы поддерживают единый стандарт сервиса.",
+    ),
+    "новое правило": (
+        "Какие правила меняют работу салонов",
+        "Объяснить одно актуальное изменение и что оно означает для клиента или команды.",
+    ),
+    "обучать команду": (
+        "Как обучать мастеров и администраторов",
+        "Рассказать об одном навыке команды и показать, как он влияет на впечатление клиента.",
+    ),
+    "регулярно измерять": (
+        "Какие показатели важно отслеживать",
+        "Показать один измеримый признак хорошего сервиса: возвраты, ожидание, отзывы или повторную запись.",
+    ),
+    "изменение спроса": (
+        "Как меняется спрос на услуги",
+        "Связать сезонный запрос клиентов с одной подходящей услугой без искусственного ажиотажа.",
+    ),
+    "работать с базой клиентов": (
+        "Как возвращать клиентов",
+        "Подготовить полезное напоминание для тех, кому уже пора повторить услугу или обновить образ.",
+    ),
+    "нестабильная запись": (
+        "Почему запись бывает нестабильной",
+        "Ответить на частое сомнение перед записью и дать один понятный следующий шаг.",
+    ),
+    "деньги и прибыль": (
+        "Как объяснять ценность услуги",
+        "Показать, из чего складывается услуга: время мастера, консультация, материалы и сопровождение.",
+    ),
+    "ручная рутина": (
+        "Что упрощает запись для клиента",
+        "Рассказать, как клиент может выбрать услугу и удобное время без лишних звонков и переписки.",
+    ),
+    "дорого": (
+        "Почему клиент может считать услугу дорогой",
+        "Разобрать стоимость через конкретный результат и состав услуги, не оправдываясь и не обещая лишнего.",
+    ),
+    "рост издержек": (
+        "Что меняется при росте расходов",
+        "Объяснить одно изменение в услуге или цене через качество материалов и работу специалиста.",
+    ),
+}
+
 
 def _row_dict(row: Any) -> dict[str, Any]:
     if isinstance(row, dict):
@@ -148,7 +238,7 @@ def classify_travel_signal(text: str) -> dict[str, Any] | None:
 
 
 def classify_market_signal(text: str, industry_key: str) -> dict[str, Any] | None:
-    if str(industry_key or "") == "travel":
+    if _canonical_industry_key(industry_key) == "travel":
         travel_signal = classify_travel_signal(text)
         if travel_signal:
             return travel_signal
@@ -170,6 +260,40 @@ def classify_market_signal(text: str, industry_key: str) -> dict[str, Any] | Non
         if best is None or score > int(best.get("relevance_score") or 0):
             best = candidate
     return best
+
+
+def _canonical_industry_key(value: Any) -> str:
+    industry_key = str(value or "local_business").strip().lower() or "local_business"
+    if industry_key in {"transport", "tourism", "transfers", "travel"}:
+        return "travel"
+    return industry_key
+
+
+def audience_content_angle(label: Any, industry: Any) -> str:
+    clean_label = str(label or "").strip()
+    if _canonical_industry_key(industry) == "travel" and clean_label in TRAVEL_CONTENT_ANGLES:
+        return TRAVEL_CONTENT_ANGLES[clean_label]
+    if _canonical_industry_key(industry) == "beauty" and clean_label in BEAUTY_INSIGHT_PRESENTATIONS:
+        return BEAUTY_INSIGHT_PRESENTATIONS[clean_label][1]
+    return f"Раскрыть тему «{clean_label}» на конкретном примере бизнеса."
+
+
+def audience_display_label(label: Any, industry: Any) -> str:
+    clean_label = str(label or "").strip()
+    if _canonical_industry_key(industry) == "beauty" and clean_label in BEAUTY_INSIGHT_PRESENTATIONS:
+        return BEAUTY_INSIGHT_PRESENTATIONS[clean_label][0]
+    return clean_label
+
+
+def default_audience_source_ids(cursor: Any, industry: Any) -> list[str]:
+    industry_key = _canonical_industry_key(industry)
+    if industry_key == "local_business":
+        return []
+    return [
+        str(source.get("id"))
+        for source in load_default_industry_sources(cursor, {industry_key})
+        if source.get("id")
+    ]
 
 
 def raw_engagement(message: dict[str, Any]) -> int:
@@ -223,7 +347,7 @@ def _ingest_message(conn, source: dict[str, Any], message: dict[str, Any]) -> di
         except Exception:
             published_at = None
     source_metadata = _json_dict(source.get("metadata_json"))
-    industry_key = str(source_metadata.get("industry_key") or "local_business").strip() or "local_business"
+    industry_key = _canonical_industry_key(source_metadata.get("industry_key"))
     audience = str(source_metadata.get("audience") or "customers").strip() or "customers"
     signal = classify_market_signal(text, industry_key)
     relevance = int(signal.get("relevance_score") or 0) if signal else 0
@@ -739,6 +863,7 @@ def _finish_source(
 def list_audience_insights(conn, *, business_id: str, industry: str, limit: int = 50) -> list[dict[str, Any]]:
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     try:
+        default_source_ids = default_audience_source_ids(cursor, industry)
         cursor.execute(
             """
             SELECT c.id, c.concept_type, c.label, c.industry,
@@ -759,22 +884,38 @@ def list_audience_insights(conn, *, business_id: str, industry: str, limit: int 
               ON bd.concept_id = c.id AND bd.business_id = %s
             WHERE (c.business_id IS NULL OR c.business_id = %s)
               AND (s.business_id IS NULL OR s.business_id = %s OR s.visibility = 'public')
-              AND EXISTS (
-                  SELECT 1
-                  FROM knowledge_source_subscriptions subscription
-                  WHERE subscription.business_id = %s
-                    AND subscription.source_id = s.id
-                    AND subscription.is_active = TRUE
-                    AND subscription.purposes_json @> '["community_pulse"]'::jsonb
+              AND (
+                  s.id = ANY(%s::uuid[])
+                  OR EXISTS (
+                      SELECT 1
+                      FROM knowledge_source_subscriptions subscription
+                      WHERE subscription.business_id = %s
+                        AND subscription.source_id = s.id
+                        AND subscription.is_active = TRUE
+                        AND subscription.purposes_json @> '["community_pulse"]'::jsonb
+                  )
               )
               AND c.concept_type IN ('pain', 'question', 'objection', 'practice', 'market_signal')
+              AND NOT (c.label = ANY(%s))
             GROUP BY c.id, bd.decision
             ORDER BY priority_score DESC, messages_count DESC, last_seen_at DESC NULLS LAST
             LIMIT %s
             """,
-            (business_id, business_id, business_id, business_id, max(1, min(int(limit or 50), 100))),
+            (
+                business_id,
+                business_id,
+                business_id,
+                default_source_ids,
+                business_id,
+                list(NON_ACTIONABLE_SIGNAL_LABELS),
+                max(1, min(int(limit or 50), 100)),
+            ),
         )
-        return [dict(row) for row in cursor.fetchall()]
+        items = [dict(row) for row in cursor.fetchall()]
+        for item in items:
+            item["display_label"] = audience_display_label(item.get("label"), item.get("industry") or industry)
+            item["content_angle"] = audience_content_angle(item.get("label"), item.get("industry") or industry)
+        return items
     finally:
         cursor.close()
 
@@ -819,6 +960,8 @@ def decide_audience_insight(
         decision_row = dict(cursor.fetchone())
         updated = dict(concept)
         updated.update(decision_row)
+        updated["display_label"] = audience_display_label(updated.get("label"), updated.get("industry"))
+        updated["content_angle"] = audience_content_angle(updated.get("label"), updated.get("industry"))
         if decision == "use_in_plan":
             updated["content_plan_item"] = _add_insight_to_latest_plan(cursor, business_id, updated)
         elif decision == "save_as_rule":
@@ -832,9 +975,7 @@ def _add_insight_to_latest_plan(cursor: Any, business_id: str, concept: dict[str
     metadata = _json_dict(concept.get("metadata_json"))
     industry_key = str(concept.get("industry") or "local_business")
     audience = str(metadata.get("audience") or "customers")
-    audience_goal = "Ответить на реальный вопрос или проблему аудитории"
-    if industry_key == "travel":
-        audience_goal = "Ответить на реальную боль турагентов"
+    audience_goal = audience_content_angle(concept.get("label"), industry_key)
     cursor.execute(
         """
         SELECT id FROM contentplans
@@ -884,6 +1025,7 @@ def _add_insight_to_latest_plan(cursor: Any, business_id: str, concept: dict[str
                 "knowledge_scope": f"business_or_public_{industry_key}",
                 "industry_key": industry_key,
                 "audience": audience,
+                "content_angle": audience_goal,
                 "topic_reason": "Тема основана на повторяющихся вопросах и обсуждениях аудитории",
             }),
         ),

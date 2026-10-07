@@ -37,6 +37,7 @@ SAFE_INTERNAL_DRAFT_CAPABILITIES = {"content_plan.item.create_draft"}
 
 def build_workflow_dsl_document(version_payload: Dict[str, Any], metadata: Dict[str, Any]) -> Dict[str, Any]:
     compiled_process = metadata.get("compiled_process") if isinstance(metadata.get("compiled_process"), dict) else {}
+    compiler_contract = metadata.get("compiler_contract") if isinstance(metadata.get("compiler_contract"), dict) else {}
     snapshot_dsl = _snapshot_dsl(metadata)
     required_bindings = (
         version_payload.get("required_integration_bindings")
@@ -74,7 +75,12 @@ def build_workflow_dsl_document(version_payload: Dict[str, Any], metadata: Dict[
         "output_schema": version_payload.get("output_schema") if isinstance(version_payload.get("output_schema"), dict) else {},
         "runtime": {
             "truth": str(compiled_process.get("runtime_truth") or "agent_blueprint_versions.steps_json"),
-            "llm_required": bool((metadata.get("compiler_contract") or {}).get("runtime_llm_required")) if isinstance(metadata.get("compiler_contract"), dict) else False,
+            "planner_required": bool(
+                compiler_contract.get("runtime_planner_required")
+                if "runtime_planner_required" in compiler_contract
+                else compiler_contract.get("runtime_llm_required")
+            ),
+            "model_steps": _runtime_model_steps(version_payload, compiler_contract),
         },
     }
 
@@ -170,7 +176,7 @@ def validate_workflow_dsl_document(document: Dict[str, Any]) -> Dict[str, Any]:
             payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
             category = str(payload.get("category") or "").strip().lower()
             output_format = str(payload.get("format") or "").strip().lower()
-            if category == "reviews" or "reply_draft" in output_format:
+            if (category == "reviews" or "reply_draft" in output_format) and not _goal_asks_for_review_replies(goal):
                 errors.append(
                     _issue(
                         f"steps[{index}].payload.format",
@@ -235,6 +241,49 @@ def _clean_string_list(value: Any) -> List[str]:
     return result
 
 
+def _runtime_model_steps(version_payload: Dict[str, Any], compiler_contract: Dict[str, Any]) -> List[Dict[str, str]]:
+    result = []
+    steps = version_payload.get("steps") if isinstance(version_payload.get("steps"), list) else []
+    for step in steps:
+        if not isinstance(step, dict) or step.get("bounded_model_call") is not True:
+            continue
+        key = str(step.get("key") or "").strip()
+        if not key:
+            continue
+        result.append(
+            {
+                "key": key,
+                "purpose": str(step.get("purpose") or step.get("model_purpose") or step.get("title") or "semantic transformation").strip(),
+                "input_schema": str(step.get("input_schema") or step.get("model_input_schema") or "fixed").strip(),
+                "output_schema": str(step.get("output_schema") or step.get("model_output_schema") or "fixed").strip(),
+                "fallback": str(step.get("fallback") or step.get("model_fallback") or "human_review").strip(),
+            }
+        )
+    if result:
+        return result
+    configured = compiler_contract.get("runtime_model_steps")
+    if isinstance(configured, list):
+        result: List[Dict[str, str]] = []
+        for item in configured:
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("key") or "").strip()
+            if not key:
+                continue
+            result.append(
+                {
+                    "key": key,
+                    "purpose": str(item.get("purpose") or "semantic transformation").strip(),
+                    "input_schema": str(item.get("input_schema") or "fixed").strip(),
+                    "output_schema": str(item.get("output_schema") or "fixed").strip(),
+                    "fallback": str(item.get("fallback") or "human_review").strip(),
+                }
+            )
+        return result
+
+    return []
+
+
 def _looks_like_write_capability(capability: str) -> bool:
     return any(marker in capability for marker in WRITE_CAPABILITY_MARKERS)
 
@@ -258,6 +307,14 @@ def _goal_requires_internal_summary(goal: str) -> bool:
     ]
     reply_markers = ["ответ на отзыв", "ответы на отзывы", "черновик ответа", "черновики ответов"]
     return any(marker in lowered for marker in summary_markers) and not any(marker in lowered for marker in reply_markers)
+
+
+def _goal_asks_for_review_replies(goal: str) -> bool:
+    lowered = goal.lower()
+    return any(
+        marker in lowered
+        for marker in ["ответ на отзыв", "ответы на отзывы", "черновик ответа", "черновики ответов"]
+    )
 
 
 def _goal_requires_internal_content_draft(goal: str) -> bool:

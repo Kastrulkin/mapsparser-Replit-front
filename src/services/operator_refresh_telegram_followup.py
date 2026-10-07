@@ -67,6 +67,23 @@ def _load_refresh_reservation(cursor: Any, *, business_id: str, user_id: str, qu
     return _row_to_dict(cursor, cursor.fetchone())
 
 
+def _load_scheduled_refresh_event(cursor: Any, *, business_id: str, queue_id: str) -> dict[str, Any] | None:
+    cursor.execute(
+        """
+        SELECT id, payload_json
+        FROM businesscardautomationevents
+        WHERE business_id = %s
+          AND action_type = 'review_sync'
+          AND triggered_by = 'scheduler'
+          AND payload_json ->> 'task_id' = %s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (business_id, queue_id),
+    )
+    return _row_to_dict(cursor, cursor.fetchone())
+
+
 def _load_owner_contact(cursor: Any, *, business_id: str, user_id: str) -> dict[str, Any]:
     cursor.execute(
         """
@@ -82,6 +99,21 @@ def _load_owner_contact(cursor: Any, *, business_id: str, user_id: str) -> dict[
     return _row_to_dict(cursor, cursor.fetchone()) or {}
 
 
+def _load_superadmin_contact(cursor: Any) -> dict[str, Any]:
+    cursor.execute(
+        """
+        SELECT telegram_id
+        FROM users
+        WHERE COALESCE(is_superadmin, FALSE) = TRUE
+          AND COALESCE(is_active, TRUE) = TRUE
+          AND COALESCE(TRIM(telegram_id), '') <> ''
+        ORDER BY created_at, id
+        LIMIT 1
+        """
+    )
+    return _row_to_dict(cursor, cursor.fetchone()) or {}
+
+
 def _store_followup_metadata(cursor: Any, *, reservation_id: str, patch: dict[str, Any]) -> None:
     cursor.execute(
         """
@@ -91,6 +123,17 @@ def _store_followup_metadata(cursor: Any, *, reservation_id: str, patch: dict[st
         WHERE id = %s
         """,
         (json.dumps(patch, ensure_ascii=False), reservation_id),
+    )
+
+
+def _store_scheduled_followup_metadata(cursor: Any, *, event_id: str, patch: dict[str, Any]) -> None:
+    cursor.execute(
+        """
+        UPDATE businesscardautomationevents
+        SET payload_json = COALESCE(payload_json, '{}'::jsonb) || %s::jsonb
+        WHERE id = %s
+        """,
+        (json.dumps(patch, ensure_ascii=False), event_id),
     )
 
 
@@ -177,25 +220,43 @@ def dispatch_operator_refresh_telegram_followup(
         user_id=clean_user_id,
         queue_id=clean_queue_id,
     )
+    scheduled_event = None
     if not reservation:
+        scheduled_event = _load_scheduled_refresh_event(
+            cursor,
+            business_id=clean_business_id,
+            queue_id=clean_queue_id,
+        )
+    if not reservation and not scheduled_event:
         return {"status": "skipped", "reason": "operator_reservation_not_found", "sent": False}
 
-    metadata = _json_dict(reservation.get("metadata"))
+    metadata = _json_dict(
+        reservation.get("metadata") if reservation else scheduled_event.get("payload_json")
+    )
+    source_id = _clean_text(reservation.get("id") if reservation else scheduled_event.get("id"))
+    source_kind = "reservation" if reservation else "scheduled_event"
     if metadata.get(FOLLOWUP_ATTEMPTED_AT_KEY) or metadata.get(FOLLOWUP_DELIVERED_AT_KEY):
         return {
             "status": "skipped",
             "reason": "telegram_refresh_followup_already_attempted",
-            "reservation_id": reservation.get("id"),
+            "reservation_id": reservation.get("id") if reservation else None,
+            "scheduled_event_id": scheduled_event.get("id") if scheduled_event else None,
             "sent": False,
         }
 
     contact = _load_owner_contact(cursor, business_id=clean_business_id, user_id=clean_user_id)
     telegram_id = _clean_text(contact.get("telegram_id"))
+    recipient_kind = "owner"
+    if not telegram_id:
+        superadmin_contact = _load_superadmin_contact(cursor)
+        telegram_id = _clean_text(superadmin_contact.get("telegram_id"))
+        recipient_kind = "superadmin"
     if not telegram_id:
         return {
             "status": "skipped",
-            "reason": "owner_telegram_id_missing",
-            "reservation_id": reservation.get("id"),
+            "reason": "telegram_recipient_missing",
+            "reservation_id": reservation.get("id") if reservation else None,
+            "scheduled_event_id": scheduled_event.get("id") if scheduled_event else None,
             "sent": False,
         }
 
@@ -210,41 +271,43 @@ def dispatch_operator_refresh_telegram_followup(
         return {
             "status": "skipped",
             "reason": "refresh_still_processing",
-            "reservation_id": reservation.get("id"),
+            "reservation_id": reservation.get("id") if reservation else None,
+            "scheduled_event_id": scheduled_event.get("id") if scheduled_event else None,
             "sent": False,
         }
 
     attempted_at = _utc_now_iso()
-    reservation_id = _clean_text(reservation.get("id"))
-    _store_followup_metadata(
-        cursor,
-        reservation_id=reservation_id,
-        patch={
-            FOLLOWUP_ATTEMPTED_AT_KEY: attempted_at,
-            FOLLOWUP_STATUS_KEY: "attempted",
-        },
-    )
+    attempted_patch = {
+        FOLLOWUP_ATTEMPTED_AT_KEY: attempted_at,
+        FOLLOWUP_STATUS_KEY: "attempted",
+    }
+    if source_kind == "reservation":
+        _store_followup_metadata(cursor, reservation_id=source_id, patch=attempted_patch)
+    else:
+        _store_scheduled_followup_metadata(cursor, event_id=source_id, patch=attempted_patch)
     if commit_func:
         commit_func()
 
     text = format_refresh_followup_text(result, business_name=_clean_text(contact.get("business_name")))
     delivered = bool(send_func(telegram_id, text))
     delivered_at = _utc_now_iso() if delivered else ""
-    _store_followup_metadata(
-        cursor,
-        reservation_id=reservation_id,
-        patch={
-            FOLLOWUP_STATUS_KEY: "delivered" if delivered else "failed",
-            FOLLOWUP_DELIVERED_AT_KEY: delivered_at,
-        },
-    )
+    delivered_patch = {
+        FOLLOWUP_STATUS_KEY: "delivered" if delivered else "failed",
+        FOLLOWUP_DELIVERED_AT_KEY: delivered_at,
+    }
+    if source_kind == "reservation":
+        _store_followup_metadata(cursor, reservation_id=source_id, patch=delivered_patch)
+    else:
+        _store_scheduled_followup_metadata(cursor, event_id=source_id, patch=delivered_patch)
     if commit_func:
         commit_func()
     return {
         "status": "sent" if delivered else "failed",
         "reason": "" if delivered else "telegram_send_failed",
-        "reservation_id": reservation_id,
+        "reservation_id": source_id if source_kind == "reservation" else None,
+        "scheduled_event_id": source_id if source_kind == "scheduled_event" else None,
         "telegram_id": telegram_id,
+        "recipient_kind": recipient_kind,
         "sent": delivered,
         "result_status": result_status,
     }

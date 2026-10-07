@@ -35,9 +35,12 @@ from services.telegram_account_permissions_service import (
     sync_sender_binding,
     update_permissions,
 )
+from subscription_manager import get_capability_access
 
 
 telegram_research_bp = Blueprint("telegram_research", __name__)
+COMMUNITY_SOURCE_INTERVALS = {0.5, 6.0, 12.0, 24.0, 72.0, 168.0}
+DEFAULT_COMMUNITY_SOURCE_INTERVAL_HOURS = 0.5
 
 
 def _user_id(user_data: dict[str, Any]) -> str:
@@ -78,7 +81,7 @@ def _sync_requested_sender_binding(
     return sender_account_id
 
 
-def _require_business(business_id: str):
+def _require_business(business_id: str, required_capability: str | None = None):
     user_data = require_auth_from_request()
     if not user_data:
         return None, None, None, (jsonify({"success": False, "error": "Требуется авторизация"}), 401)
@@ -89,6 +92,17 @@ def _require_business(business_id: str):
         db.close()
         status = 403 if owner_id else 404
         return None, None, None, (jsonify({"success": False, "error": "Нет доступа к бизнесу"}), status)
+    if required_capability:
+        access = get_capability_access(business_id, required_capability, bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            db.close()
+            return None, None, None, (jsonify({
+                "success": False,
+                "error": "payment_required",
+                "payment_required": True,
+                **access,
+                "return_to": request.full_path.rstrip("?"),
+            }), 402)
     return db, cursor, user_data, None
 
 
@@ -201,8 +215,33 @@ def _subscribe_public_source(
     source_id: str,
     industry_key: str,
     topics: list[str] | None = None,
-    interval_hours: int = 24,
-) -> None:
+    interval_hours: float = DEFAULT_COMMUNITY_SOURCE_INTERVAL_HOURS,
+    submitted_by_user_id: str = "",
+) -> bool:
+    cursor.execute(
+        """
+        SELECT is_active
+        FROM knowledge_source_subscriptions
+        WHERE business_id = %s AND source_id = %s
+        LIMIT 1
+        """,
+        (business_id, source_id),
+    )
+    existing = cursor.fetchone()
+    was_active = bool(
+        (existing.get("is_active") if hasattr(existing, "get") else existing[0])
+        if existing else False
+    )
+    schedule = {
+        "interval_hours": interval_hours
+        if interval_hours in COMMUNITY_SOURCE_INTERVALS
+        else DEFAULT_COMMUNITY_SOURCE_INTERVAL_HOURS
+    }
+    if not was_active:
+        schedule.update({
+            "superadmin_notification_status": "pending",
+            "submitted_by_user_id": submitted_by_user_id,
+        })
     cursor.execute(
         """
         INSERT INTO knowledge_source_subscriptions (
@@ -211,7 +250,7 @@ def _subscribe_public_source(
         ON CONFLICT (business_id, source_id) DO UPDATE SET
             purposes_json = EXCLUDED.purposes_json,
             topics_json = EXCLUDED.topics_json,
-            schedule_json = EXCLUDED.schedule_json,
+            schedule_json = knowledge_source_subscriptions.schedule_json || EXCLUDED.schedule_json,
             is_active = TRUE,
             updated_at = NOW()
         """,
@@ -220,9 +259,10 @@ def _subscribe_public_source(
             source_id,
             Json(["community_pulse", "content_ideas"]),
             Json(topics or [industry_key]),
-            Json({"interval_hours": interval_hours if interval_hours in {6, 12, 24, 72, 168} else 24}),
+            Json(schedule),
         ),
     )
+    return not was_active
 
 
 def _save_account(cursor: Any, business_id: str, auth_data: dict[str, Any]) -> str:
@@ -426,7 +466,7 @@ def research_dialogs(business_id: str):
 
 @telegram_research_bp.get("/api/business/<business_id>/community-sources")
 def community_sources(business_id: str):
-    db, cursor, _user_data, error = _require_business(business_id)
+    db, cursor, _user_data, error = _require_business(business_id, "telegram_radar")
     if error:
         return error
     try:
@@ -482,9 +522,148 @@ def community_sources(business_id: str):
         db.close()
 
 
+@telegram_research_bp.get("/api/business/<business_id>/community-sources/catalog")
+def community_source_catalog(business_id: str):
+    db, cursor, _user_data, error = _require_business(business_id, "telegram_radar")
+    if error:
+        return error
+    query = str(request.args.get("q") or "").strip()[:120]
+    try:
+        limit = min(max(int(request.args.get("limit") or 40), 1), 100)
+        offset = max(int(request.args.get("offset") or 0), 0)
+    except (TypeError, ValueError):
+        db.close()
+        return jsonify({"success": False, "error": "Не удалось открыть каталог источников"}), 400
+    search_pattern = f"%{query}%"
+    try:
+        cursor.execute(
+            """
+            SELECT source.id, source.title, source.canonical_url, source.source_role,
+                   source.last_collected_at, source.sync_status,
+                   COALESCE(source.metadata_json->'categories', '[]'::jsonb) AS categories,
+                   COALESCE(source.metadata_json->>'telegram_username', '') AS telegram_username,
+                   (SELECT COUNT(*) FROM knowledge_documents document
+                    WHERE document.source_id = source.id AND document.invalidated_at IS NULL) AS documents_count,
+                   EXISTS (
+                       SELECT 1 FROM knowledge_source_subscriptions subscription
+                       WHERE subscription.business_id = %s
+                         AND subscription.source_id = source.id
+                         AND subscription.is_active = TRUE
+                   ) AS subscribed
+            FROM knowledge_sources source
+            WHERE source.source_type = 'telegram'
+              AND source.visibility = 'public'
+              AND source.sensitivity_class = 'public'
+              AND source.status = 'active'
+              AND source.business_id IS NULL
+              AND source.canonical_url LIKE 'https://t.me/%%'
+              AND (
+                    %s = ''
+                    OR source.title ILIKE %s
+                    OR source.canonical_url ILIKE %s
+                    OR source.metadata_json::text ILIKE %s
+                  )
+            ORDER BY subscribed DESC, documents_count DESC, source.last_collected_at DESC NULLS LAST, source.title
+            LIMIT %s OFFSET %s
+            """,
+            (business_id, query, search_pattern, search_pattern, search_pattern, limit, offset),
+        )
+        columns = [item[0] for item in (cursor.description or [])]
+        items = [dict(row) if hasattr(row, "keys") else dict(zip(columns, row)) for row in (cursor.fetchall() or [])]
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM knowledge_sources source
+            WHERE source.source_type = 'telegram'
+              AND source.visibility = 'public'
+              AND source.sensitivity_class = 'public'
+              AND source.status = 'active'
+              AND source.business_id IS NULL
+              AND source.canonical_url LIKE 'https://t.me/%%'
+              AND (
+                    %s = ''
+                    OR source.title ILIKE %s
+                    OR source.canonical_url ILIKE %s
+                    OR source.metadata_json::text ILIKE %s
+                  )
+            """,
+            (query, search_pattern, search_pattern, search_pattern),
+        )
+        count_row = cursor.fetchone()
+        total = int((count_row.get("count") if hasattr(count_row, "get") else count_row[0]) or 0) if count_row else 0
+        return jsonify({
+            "success": True,
+            "items": items,
+            "count": len(items),
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        })
+    finally:
+        db.close()
+
+
+@telegram_research_bp.post("/api/business/<business_id>/community-sources/<source_id>/subscribe")
+def subscribe_community_catalog_source(business_id: str, source_id: str):
+    db, cursor, user_data, error = _require_business(business_id, "telegram_radar")
+    if error:
+        return error
+    try:
+        cursor.execute(
+            """
+            SELECT id, title, canonical_url
+            FROM knowledge_sources
+            WHERE id = %s
+              AND source_type = 'telegram'
+              AND visibility = 'public'
+              AND sensitivity_class = 'public'
+              AND status = 'active'
+              AND business_id IS NULL
+              AND canonical_url LIKE 'https://t.me/%%'
+            """,
+            (source_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "Публичный канал не найден"}), 404
+        source = dict(row) if hasattr(row, "keys") else {
+            "id": row[0],
+            "title": row[1],
+            "canonical_url": row[2],
+        }
+        context = _business_knowledge_context(cursor, business_id)
+        _subscribe_public_source(
+            cursor,
+            business_id=business_id,
+            source_id=str(source["id"]),
+            industry_key=context["industry_key"],
+            interval_hours=DEFAULT_COMMUNITY_SOURCE_INTERVAL_HOURS,
+            submitted_by_user_id=_user_id(user_data),
+        )
+        cursor.execute(
+            """
+            UPDATE knowledge_sources
+            SET next_sync_at = LEAST(COALESCE(next_sync_at, NOW()), NOW()), updated_at = NOW()
+            WHERE id = %s
+            """,
+            (source["id"],),
+        )
+        db.conn.commit()
+        return jsonify({
+            "success": True,
+            "source": {**source, "subscribed": True},
+            "message": "Канал добавлен. Его материалы будут учитываться в темах и публикациях этого бизнеса.",
+        })
+    except Exception:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": "Не удалось добавить канал из каталога"}), 400
+    finally:
+        db.close()
+
+
 @telegram_research_bp.post("/api/business/<business_id>/community-sources")
 def add_community_source(business_id: str):
-    db, cursor, _user_data, error = _require_business(business_id)
+    db, cursor, user_data, error = _require_business(business_id, "telegram_radar")
     if error:
         return error
     payload = request.get_json(silent=True) or {}
@@ -540,14 +719,15 @@ def add_community_source(business_id: str):
             backfill_days=90,
         )
         topics = [str(item).strip() for item in payload.get("topics", []) if str(item).strip()][:20] if isinstance(payload.get("topics"), list) else []
-        interval_hours = int(payload.get("interval_hours") or 24)
-        _subscribe_public_source(
+        interval_hours = float(payload.get("interval_hours") or DEFAULT_COMMUNITY_SOURCE_INTERVAL_HOURS)
+        notify_superadmin = _subscribe_public_source(
             cursor,
             business_id=business_id,
             source_id=str(source["id"]),
             industry_key=context["industry_key"],
             topics=topics or None,
             interval_hours=interval_hours,
+            submitted_by_user_id=_user_id(user_data),
         )
         cursor.execute("UPDATE knowledge_sources SET status = 'active', sync_status = 'queued', next_sync_at = NOW(), updated_at = NOW() WHERE id = %s", (source["id"],))
         db.conn.commit()
@@ -556,7 +736,11 @@ def add_community_source(business_id: str):
             "source": {"id": str(source["id"]), "title": source.get("title"), "canonical_url": canonical_url, "status": "active", "sync_status": "queued"},
             "reused": str(source.get("created_at") or "") != str(source.get("updated_at") or ""),
             "collection_cost_credits": 0,
-            "message": "Источник добавлен. Публичные сообщения собираются один раз и пополняют общую базу ЛокалОС.",
+            "radar_enabled": True,
+            "content_ideas_enabled": True,
+            "superadmin_notification": "queued" if notify_superadmin else "already_sent",
+            "destinations": ["radar", "community_pulse", "content_ideas"],
+            "message": "Источник подключён. ЛокалОС следит за новыми сообщениями, добавляет важное в «Сегодня» и учитывает темы при подготовке публикаций.",
         })
     except (TypeError, ValueError):
         db.conn.rollback()
@@ -570,7 +754,7 @@ def add_community_source(business_id: str):
 
 @telegram_research_bp.delete("/api/business/<business_id>/community-sources/<source_id>")
 def remove_community_source(business_id: str, source_id: str):
-    db, cursor, _user_data, error = _require_business(business_id)
+    db, cursor, _user_data, error = _require_business(business_id, "telegram_radar")
     if error:
         return error
     try:
@@ -589,20 +773,20 @@ def remove_community_source(business_id: str, source_id: str):
 
 @telegram_research_bp.patch("/api/business/<business_id>/community-sources/<source_id>")
 def update_community_source_subscription(business_id: str, source_id: str):
-    db, cursor, _user_data, error = _require_business(business_id)
+    db, cursor, _user_data, error = _require_business(business_id, "telegram_radar")
     if error:
         return error
     payload = request.get_json(silent=True) or {}
     topics = [str(item).strip() for item in payload.get("topics", []) if str(item).strip()][:20] if isinstance(payload.get("topics"), list) else []
     try:
-        interval_hours = int(payload.get("interval_hours") or 24)
-        if interval_hours not in {6, 12, 24, 72, 168}:
+        interval_hours = float(payload.get("interval_hours") or DEFAULT_COMMUNITY_SOURCE_INTERVAL_HOURS)
+        if interval_hours not in COMMUNITY_SOURCE_INTERVALS:
             return jsonify({"success": False, "error": "Выберите доступную частоту обновления"}), 400
         cursor.execute(
             """
             UPDATE knowledge_source_subscriptions
             SET topics_json = %s,
-                schedule_json = %s,
+                schedule_json = COALESCE(schedule_json, '{}'::jsonb) || %s,
                 updated_at = NOW()
             WHERE business_id = %s AND source_id = %s AND is_active = TRUE
             RETURNING source_id, topics_json, schedule_json
@@ -731,9 +915,16 @@ def save_research_sources(business_id: str):
             WHERE source.id = subscription.source_id
               AND subscription.business_id = %s
               AND source.source_type = 'telegram'
+              AND EXISTS (
+                  SELECT 1
+                  FROM telegram_opportunity_sources managed_source
+                  WHERE managed_source.business_id = subscription.business_id
+                    AND managed_source.account_id = %s
+                    AND managed_source.knowledge_source_id = subscription.source_id
+              )
               AND NOT (subscription.source_id = ANY(%s::uuid[]))
             """,
-            (business_id, selected_source_ids or ["00000000-0000-0000-0000-000000000000"]),
+            (business_id, auth_data["account_id"], selected_source_ids or ["00000000-0000-0000-0000-000000000000"]),
         )
         cursor.execute(
             """

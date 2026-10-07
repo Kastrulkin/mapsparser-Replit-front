@@ -1,19 +1,27 @@
 import json
+import os
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from core.action_orchestrator import ActionOrchestrator
-from core.channel_router import dispatch_with_routing, load_business_channel_context
-from services.agent_capability_handlers import build_capability_handlers
+from core.action_policy import evaluate_risk_policy
+from services.agent_capability_handlers import CANONICAL_CAPABILITIES, build_capability_handlers, normalize_capability_name
 from services.agent_run_billing import finalize_agent_run_credits
 from services.agent_domain_request_executors import execute_approved_domain_requests
-from services.agent_sheet_provider_executor import execute_queued_sheet_provider_requests
-from services.agent_blueprint_workspace import build_generic_artifact_payload
+from services.agent_blueprint_workspace import (
+    build_bounded_model_artifact_payload,
+    build_generic_artifact_payload,
+    build_registered_workflow_check_payload,
+)
 from services.agent_integration_preflight import (
     build_agent_integration_preflight,
     resolve_agent_binding_runtime_config,
 )
 from services.agent_run_contract import RESERVED_AGENT_INPUT_FIELDS, effective_agent_input_schema
+from services.compiled_script_artifact import validate_artifact as validate_compiled_script_artifact
+from services.compiled_script_runtime import CompiledRuntimeUnavailable, execute_in_attested_sandbox
 
 
 RUNNING_STATUSES = {"running", "waiting_approval"}
@@ -26,6 +34,12 @@ DRAFT_APPROVED = "approved"
 DRAFT_READY = "draft_ready"
 PIPELINE_IN_PROGRESS = "in_progress"
 SUPPORTED_BLUEPRINT_CHANNELS = ("telegram", "whatsapp", "email", "manual")
+
+
+def _domain_request_display_state(item: Dict[str, Any]) -> str:
+    if item.get("kind") == "sheet_operation_request":
+        return str(item.get("apply_state") or item.get("approval_state") or item.get("status") or "")
+    return str(item.get("approval_state") or item.get("apply_state") or item.get("status") or "")
 
 
 def parse_json_field(value: Any, fallback: Any) -> Any:
@@ -147,6 +161,8 @@ class AgentBlueprintRunner:
         version = self._load_version(blueprint_version_id)
         if not version:
             return {"success": False, "error": "blueprint_version_not_found"}
+        if str(version.get("compiled_state") or "legacy") != "legacy":
+            return {"success": False, "error": "compiled_script_requires_dedicated_runtime"}
         blueprint = self._load_blueprint(str(version.get("blueprint_id") or ""))
         if not blueprint:
             return {"success": False, "error": "blueprint_not_found"}
@@ -156,6 +172,7 @@ class AgentBlueprintRunner:
             self.cursor,
             business_id=str(blueprint.get("business_id") or ""),
             metadata=metadata,
+            required_bindings=self._version_required_bindings(version),
             input_payload=input_payload or {},
         )
         if not preflight.get("ready"):
@@ -166,7 +183,26 @@ class AgentBlueprintRunner:
                 "preflight": preflight,
             }
 
-        self._supersede_pending_runs(str(version.get("blueprint_id") or ""))
+        blueprint_id = str(version.get("blueprint_id") or "")
+        self.cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"agent-start:{blueprint_id}",))
+        self.cursor.execute(
+            """
+            SELECT id FROM agent_runs
+            WHERE blueprint_id = %s AND status = 'waiting_provider'
+            FOR UPDATE
+            LIMIT 1
+            """,
+            (blueprint_id,),
+        )
+        waiting_provider = self.cursor.fetchone()
+        if waiting_provider:
+            return {
+                "success": False,
+                "code": "AGENT_RUN_ALREADY_IN_PROGRESS",
+                "error": "an approved external provider request is still unresolved",
+                "run_id": str(waiting_provider.get("id") if isinstance(waiting_provider, dict) else waiting_provider[0]),
+            }
+        self._supersede_pending_runs(blueprint_id)
         run_id = str(uuid.uuid4())
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         self.cursor.execute(
@@ -210,9 +246,25 @@ class AgentBlueprintRunner:
             """,
             (run_id,),
         )
+        version = self._load_version(str(run.get("blueprint_version_id") or ""))
+        if not version or str(version.get("blueprint_id") or "") != str(run.get("blueprint_id") or ""):
+            self._fail_run(run_id, "pinned blueprint version is unavailable or belongs to another blueprint")
+            return {"success": False, "error": "pinned_version_invalid", "run": self.load_run(run_id, user_data)}
+        if str((version or {}).get("compiled_state") or "legacy") != "legacy":
+            return self._execute_queued_compiled_script(run_id, version or {})
         self._create_openclaw_preview_observations(run_id, parse_json_field(run.get("input_json"), {}), idempotent=True)
         self._advance_run(run_id, user_data)
         return {"success": True, "run": self.load_run(run_id, user_data)}
+
+    def _execute_queued_compiled_script(self, run_id: str, version: Dict[str, Any]) -> Dict[str, Any]:
+        if str(os.getenv("COMPILED_SCRIPT_EXECUTE_ENABLED", "false")).lower() not in {"1", "true", "yes", "on"}:
+            self._fail_run(run_id, "compiled script execution is disabled")
+            return {"success": False, "error": "compiled_execution_disabled", "run": self.load_run(run_id)}
+        # Compiled execution is intentionally owned by the fenced queue
+        # executor. Running it here would retain this runner transaction while
+        # the sandbox request is in flight and could bypass the lease fence.
+        self._fail_run(run_id, "compiled_run_requires_fenced_queue_executor")
+        return {"success": False, "error": "compiled_run_requires_fenced_queue_executor", "run": self.load_run(run_id)}
 
     def approve(self, run_id: str, approval_id: str, user_data: Dict[str, Any], decision_reason: str = "") -> Dict[str, Any]:
         approval = self._load_approval(run_id, approval_id)
@@ -220,6 +272,13 @@ class AgentBlueprintRunner:
             return {"success": False, "error": "approval_not_found"}
         if approval.get("status") != "pending":
             return {"success": False, "error": "approval_already_decided"}
+        approval_type = str(approval.get("approval_type") or "").strip()
+        reviewed_drafts = None
+        if approval_type == "drafts":
+            run = self._load_run_header(run_id)
+            reviewed_drafts = self._validated_draft_snapshot(run or {}, approval, for_update=True)
+            if not reviewed_drafts:
+                return {"success": False, "error": "approval_payload_stale"}
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         self.cursor.execute(
             """
@@ -245,11 +304,10 @@ class AgentBlueprintRunner:
                 approval.get("step_id"),
             ),
         )
-        approval_type = str(approval.get("approval_type") or "").strip()
         if approval_type == "shortlist":
             self._apply_shortlist_approval(run_id, user_id)
         if approval_type == "drafts":
-            self._apply_drafts_approval(run_id, user_id)
+            self._apply_drafts_approval(run_id, user_id, reviewed_drafts)
         self.cursor.execute(
             "UPDATE agent_runs SET status = 'running', updated_at = NOW() WHERE id = %s",
             (run_id,),
@@ -305,6 +363,15 @@ class AgentBlueprintRunner:
     def _advance_run(self, run_id: str, user_data: Dict[str, Any]) -> None:
         run = self._load_run_header(run_id)
         if not run or run.get("status") not in RUNNING_STATUSES:
+            return
+        blueprint = self._load_blueprint(str(run.get("blueprint_id") or ""))
+        run_input = self._run_input(run)
+        if blueprint and str(blueprint.get("status") or "") == "paused" and run_input.get("preview_mode") is not True:
+            self.cursor.execute(
+                """UPDATE agent_runs SET status='queued', lease_token=NULL, heartbeat_at=NULL,
+                   error_text='automation_paused', updated_at=NOW() WHERE id=%s AND status IN ('running','waiting_approval')""",
+                (run_id,),
+            )
             return
         version = self._load_version(str(run.get("blueprint_version_id") or ""))
         if not version:
@@ -444,6 +511,10 @@ class AgentBlueprintRunner:
     def _build_artifact_payload(self, run: Dict[str, Any], step: Dict[str, Any]) -> Dict[str, Any]:
         base_payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
         artifact_type = str(step.get("artifact_type") or "").strip()
+        if step.get("bounded_model_call") is True:
+            return build_bounded_model_artifact_payload(self.cursor, run, step)
+        if artifact_type == "registered_workflow_check":
+            return build_registered_workflow_check_payload(self.cursor, run, step)
         if artifact_type == "sheet_row_draft":
             run_input = self._run_input(run)
             return {
@@ -700,9 +771,10 @@ class AgentBlueprintRunner:
             "items": rows,
         }
 
-    def _load_message_draft_rows(self, run: Dict[str, Any], draft_ids: List[str], limit: int) -> List[Dict[str, Any]]:
+    def _load_message_draft_rows(self, run: Dict[str, Any], draft_ids: List[str], limit: int, *, for_update: bool = False) -> List[Dict[str, Any]]:
         query = """
-            SELECT d.id, d.lead_id, d.channel, d.status, d.generated_text, d.approved_text, l.name AS lead_name
+            SELECT d.id, d.lead_id, d.channel, d.status, d.generated_text, d.edited_text,
+                   d.approved_text, l.name AS lead_name, l.email, l.telegram_url, l.whatsapp_url
             FROM outreachmessagedrafts d
             JOIN prospectingleads l ON l.id = d.lead_id
             WHERE l.business_id = %s
@@ -713,12 +785,21 @@ class AgentBlueprintRunner:
             params.append(draft_ids)
         else:
             query += " AND d.status IN ('generated', 'edited', 'approved')"
-        query += " ORDER BY d.updated_at DESC, d.created_at DESC LIMIT %s"
+        query += " ORDER BY d.id LIMIT %s" if for_update else " ORDER BY d.updated_at DESC, d.created_at DESC LIMIT %s"
         params.append(limit)
+        if for_update:
+            query += " FOR UPDATE OF d, l"
         try:
             self.cursor.execute(query, tuple(params))
-            return [dict(row) for row in (self.cursor.fetchall() or [])]
+            rows = [dict(row) for row in (self.cursor.fetchall() or [])]
+            for row in rows:
+                row["review_text"] = row.get("edited_text") or row.get("generated_text") or ""
+                contact_key = {"email": "email", "telegram": "telegram_url", "whatsapp": "whatsapp_url"}.get(row.get("channel"))
+                row["review_recipient"] = str(row.get(contact_key) or "") if contact_key else ""
+            return rows
         except Exception:
+            if for_update:
+                raise
             return []
 
     def _create_message_drafts_for_approved_shortlist(self, run: Dict[str, Any], limit: int) -> None:
@@ -999,8 +1080,24 @@ class AgentBlueprintRunner:
             step_id = self._insert_step(run, step, step_index, "failed", {}, {"error": "capability_not_allowlisted"})
             self._fail_run(str(run.get("id")), f"capability not allowlisted: {capability}", step_id)
             return False
-        if self._capability_requires_approval(capability, step) and not self._has_required_approval(str(run.get("id")), step):
-            required_type = str(step.get("required_approval_type") or "").strip()
+        payload = self._build_capability_payload(run, step)
+        canonical_capability = normalize_capability_name(capability)
+        run_input = self._run_input(run)
+        if canonical_capability in {"sheets.append_row_request", "google_sheets.update_cells"} and (
+            run_input.get("preview_mode") is True or run_input.get("external_side_effects_allowed") is False
+        ):
+            step_id = self._insert_step(run, step, step_index, "running", {}, {})
+            self.cursor.execute(
+                "UPDATE agent_run_steps SET status='completed', completed_at=NOW(), output_json=%s::jsonb WHERE id=%s",
+                (json.dumps({"capability": capability, "status": "preview_only", "provider_write_performed": False,
+                             "summary": "Проверка завершена. Запись в таблицу не выполнялась."}, ensure_ascii=False), step_id),
+            )
+            return True
+        required_type = str(step.get("required_approval_type") or "").strip()
+        # A previous unrelated decision is not approval for this step. Legacy
+        # writers must explicitly declare the decision type they depend on.
+        approval_verified = bool(required_type) and self._has_required_approval(str(run.get("id")), step)
+        if self._capability_requires_approval(capability, step, payload) and not approval_verified:
             error_text = f"approval required before capability: {capability}"
             if required_type:
                 error_text = f"approval required before capability: {capability} ({required_type})"
@@ -1008,12 +1105,45 @@ class AgentBlueprintRunner:
             self._fail_run(str(run.get("id")), error_text, step_id)
             return False
 
+        preview_only = run_input.get("preview_mode") is True or run_input.get("external_side_effects_allowed") is False
+        fence_key = f"agent-pause-fence:{run.get('blueprint_id')}"
+        if canonical_capability == "outreach.send_batch":
+            reviewed_drafts = self._approved_draft_snapshot(run)
+            if not reviewed_drafts:
+                step_id = self._insert_step(run, step, step_index, "blocked", {}, {"error": "approval_payload_stale"})
+                self._fail_run(str(run.get("id")), "draft approval snapshot is missing or stale", step_id)
+                return False
+            # Neither mutable public input nor a newer artifact may widen the
+            # reviewed batch. Provider dispatch remains outside this runner.
+            payload["draft_ids"] = [item["id"] for item in reviewed_drafts]
         step_id = self._insert_step(run, step, step_index, "running", {}, {})
-        payload = self._build_capability_payload(run, step)
-        if capability == "outreach.send_batch" and not payload.get("draft_ids"):
-            payload["draft_ids"] = self._latest_artifact_item_ids(str(run.get("id") or ""), "message_drafts", "id")
+        if not preview_only:
+            # Keep the fence through provider requests AND durable child binding.
+            # Transaction scope cannot leak a session lock after a failed query.
+            self.cursor.execute("SELECT pg_try_advisory_xact_lock(hashtext(%s)) AS acquired", (fence_key,))
+            acquired = bool((self.cursor.fetchone() or {}).get("acquired"))
+            self.cursor.execute("SELECT status FROM agent_blueprints WHERE id=%s", (run.get("blueprint_id"),))
+            raw_blueprint = self.cursor.fetchone()
+            current_blueprint = dict(raw_blueprint) if raw_blueprint else {}
+            permitted_status = current_blueprint.get("status") == "active" or (
+                current_blueprint.get("status") == "draft" and version.get("execution_mode") == "one_off")
+            if not acquired or not permitted_status:
+                self.cursor.execute("DELETE FROM agent_run_steps WHERE id=%s AND status='running'", (step_id,))
+                if not acquired:
+                    self.cursor.execute(
+                        """UPDATE agent_runs SET status='retry_wait', lease_token=NULL, heartbeat_at=NULL,
+                           next_attempt_at=NOW()+INTERVAL '30 seconds', attempt_count=GREATEST(0,attempt_count-1),
+                           error_text='automation_lifecycle_busy', updated_at=NOW()
+                           WHERE id=%s AND status IN ('running','waiting_approval')""", (run.get('id'),))
+                    return False
+                self.cursor.execute(
+                    """UPDATE agent_runs SET status='queued', lease_token=NULL, heartbeat_at=NULL,
+                       error_text='automation_paused', updated_at=NOW() WHERE id=%s AND status IN ('running','waiting_approval')""",
+                    (run.get("id"),),
+                )
+                return False
         if self._is_maton_delivery_step(run, capability):
-            return self._execute_maton_delivery_step(run, step, step_id, capability, payload)
+            return self._execute_maton_delivery_step(run, step, step_id, capability, payload, approval_verified=approval_verified)
         envelope = {
             "tenant_id": str(run.get("business_id") or ""),
             "actor": {
@@ -1028,7 +1158,7 @@ class AgentBlueprintRunner:
             "approval": {"source": "agent_blueprint", "run_id": run.get("id")},
             "billing": {"source": "agent_blueprint"},
         }
-        orchestrator_result = self.orchestrator.execute(envelope, user_data, allow_execute_when_approved=True)
+        orchestrator_result = self.orchestrator.execute(envelope, user_data, allow_execute_when_approved=approval_verified)
         if not orchestrator_result.get("success"):
             validation_error = str(orchestrator_result.get("error") or "orchestrator rejected capability")
             runtime_contract = self._production_action_runtime_contract(
@@ -1038,6 +1168,7 @@ class AgentBlueprintRunner:
                 orchestrator_result,
                 preflight_status="failed",
                 recovery_state="error",
+                payload=payload,
             )
             self.cursor.execute(
                 """
@@ -1090,6 +1221,7 @@ class AgentBlueprintRunner:
                 orchestrator_result,
                 preflight_status="passed",
                 recovery_state="blocked",
+                payload=payload,
             )
             self.cursor.execute(
                 """
@@ -1115,25 +1247,65 @@ class AgentBlueprintRunner:
             )
             self._fail_run(str(run.get("id")), reason_code, step_id)
             return False
-        approved_executor = execute_approved_domain_requests(
-            self.cursor,
-            run=run,
-            step=step,
-            orchestrator_result=orchestrator_result,
-            user_data=user_data,
-            apply_finance=capability != "finance.transaction.create",
-        )
-        if capability in {"sheets.append_row_request", "google_sheets.append_row", "google_sheets.update_cells"}:
-            provider_executor = execute_queued_sheet_provider_requests(
+        if canonical_capability == 'outreach.continue':
+            if preview_only:
+                self.cursor.execute("UPDATE agent_run_steps SET status='completed',completed_at=NOW(),output_json=%s::jsonb WHERE id=%s",
+                    (json.dumps({'status':'preview_only','external_dispatch_performed':False}),step_id))
+                return True
+            from services.agent_outreach_continuation import bind
+            self.cursor.execute('SAVEPOINT outreach_step_binding')
+            try:
+                bind(self.cursor,run=run,version=version,step_id=step_id)
+                self.cursor.execute('RELEASE SAVEPOINT outreach_step_binding')
+            except (ValueError, PermissionError) as exc:
+                self.cursor.execute('ROLLBACK TO SAVEPOINT outreach_step_binding')
+                self._fail_run(str(run['id']), str(exc), step_id)
+            return False
+        approved_executor = {
+            "executor": "agent_domain_request_executor_v1", "executed": 0, "items": [],
+            "external_dispatch_performed": False, "localos_writes_performed": False,
+            "provider_writes_performed": False, "reason_code": "NO_VERIFIED_STEP_APPROVAL",
+        }
+        if approval_verified:
+            approved_executor = execute_approved_domain_requests(
                 self.cursor,
-                business_id=str(run.get("business_id") or ""),
-                user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
+                run=run,
+                step=step,
+                step_id=step_id,
+                orchestrator_result=orchestrator_result,
+                user_data=user_data,
+                apply_finance=canonical_capability != "finance.transaction.create",
             )
-            approved_executor = {
-                **approved_executor,
-                "provider_executor": provider_executor,
-                "provider_writes_performed": bool(provider_executor.get("provider_writes_performed")),
-            }
+        if canonical_capability in {"sheets.append_row_request", "google_sheets.update_cells"}:
+            queued_items = [item for item in approved_executor.get("items", []) if isinstance(item, dict) and item.get("apply_state") == "provider_request_queued"]
+            if not queued_items:
+                error_text = "approved Google Sheets request was not durably bound to this run"
+                self.cursor.execute("UPDATE agent_run_steps SET status = 'failed', error_text = %s, completed_at = NOW() WHERE id = %s", (error_text, step_id))
+                self._fail_run(str(run.get("id") or ""), error_text, step_id)
+                return False
+            # The durable provider handoff is the checkpoint.  A separate
+            # worker claims it after this runner transaction commits, so no
+            # HTTP request can retain the run transaction or row lock.
+            self.cursor.execute(
+                "UPDATE agent_run_steps SET status = 'waiting_provider', output_json = %s::jsonb WHERE id = %s",
+                (
+                    json.dumps(
+                        {
+                            "capability": capability,
+                            "orchestrator": orchestrator_result,
+                            "approved_executor": approved_executor,
+                            "provider_state": "provider_request_queued",
+                        },
+                        ensure_ascii=False,
+                    ),
+                    step_id,
+                ),
+            )
+            self.cursor.execute(
+                "UPDATE agent_runs SET status = 'waiting_provider', updated_at = NOW() WHERE id = %s",
+                (run.get("id"),),
+            )
+            return False
         runtime_contract = self._production_action_runtime_contract(
             run,
             step,
@@ -1142,6 +1314,7 @@ class AgentBlueprintRunner:
             approved_executor=approved_executor,
             preflight_status="passed",
             recovery_state="ready",
+            payload=payload,
         )
         self.cursor.execute(
             """
@@ -1176,9 +1349,10 @@ class AgentBlueprintRunner:
         approved_executor: Dict[str, Any] | None = None,
         preflight_status: str = "passed",
         recovery_state: str = "ready",
+        payload: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         result = orchestrator_result.get("result") if isinstance(orchestrator_result.get("result"), dict) else {}
-        approval_required = self._capability_requires_approval(capability, step)
+        approval_required = self._capability_requires_approval(capability, step, payload)
         required_approval_type = str(step.get("required_approval_type") or step.get("approval_type") or "").strip()
         action_id = str(orchestrator_result.get("action_id") or result.get("action_id") or "").strip()
         request_id = str(result.get("request_id") or result.get("draft_id") or result.get("review_id") or "").strip()
@@ -1312,6 +1486,8 @@ class AgentBlueprintRunner:
         step_id: str,
         capability: str,
         payload: Dict[str, Any],
+        *,
+        approval_verified: bool,
     ) -> bool:
         contract = self._maton_delivery_contract(run)
         message = self._maton_delivery_message(payload)
@@ -1343,16 +1519,34 @@ class AgentBlueprintRunner:
         status = "draft_created"
         external_dispatch_performed = False
         if dispatch_requested:
-            ctx = load_business_channel_context(self.cursor, str(run.get("business_id") or ""))
-            router_result = dispatch_with_routing(
-                ctx,
-                message,
-                preferred_provider="maton",
-                force_channel_id="maton_bridge",
+            # The registered communications capability writes an internal,
+            # approval-audited request only.  It has no provider-send handler,
+            # so an ambiguous worker failure cannot cause an automatic resend.
+            recipient = self._maton_delivery_recipient(payload)
+            router_result = self.orchestrator.execute(
+                {
+                    "tenant_id": str(run.get("business_id") or ""),
+                    "actor": {"type": "user", "id": str(run.get("created_by_user_id") or "")},
+                    "trace_id": f"agent-run:{run.get('id')}:{step.get('key')}:maton",
+                    "idempotency_key": f"agent-run:{run.get('id')}:{step.get('key')}:maton-request",
+                    "capability": capability,
+                    "payload": {
+                        "message": message,
+                        "recipient": recipient.get("target"),
+                        "channel": recipient.get("channel"),
+                        "provider_route": "maton",
+                        "bound_external_account_id": str(contract.get("external_account_id") or ""),
+                        "agent_run_id": str(run.get("id") or ""),
+                    },
+                    "approval": {"source": "agent_blueprint", "run_id": run.get("id"), "approved": approval_verified},
+                    "billing": {"source": "agent_blueprint"},
+                },
+                {"user_id": str(run.get("created_by_user_id") or "")},
+                allow_execute_when_approved=approval_verified,
             )
-            external_dispatch_performed = bool(router_result.get("success"))
-            delivery_state = "sent" if external_dispatch_performed else "dispatch_failed"
-            status = "sent" if external_dispatch_performed else "dispatch_failed"
+            request_created = bool(router_result.get("success"))
+            delivery_state = "request_queued" if request_created else "request_blocked"
+            status = "request_created" if request_created else "blocked"
         elif safe_preview:
             delivery_state = "preview_draft_only"
             status = "preview_draft_created"
@@ -1375,6 +1569,10 @@ class AgentBlueprintRunner:
             },
         )
         return True
+
+    def _version_required_bindings(self, version: Dict[str, Any]) -> List[Dict[str, Any]] | None:
+        required = parse_json_field(version.get("required_integration_bindings_json"), None)
+        return required if isinstance(required, list) else None
 
     def _maton_delivery_message(self, payload: Dict[str, Any]) -> str:
         for key in ("message", "text", "draft_text", "post_text", "message_template"):
@@ -1510,6 +1708,18 @@ class AgentBlueprintRunner:
             and preview_rows
         ):
             payload["rows"] = [dict(item) for item in preview_rows if isinstance(item, dict)]
+        if capability == "appointments.read" and str(payload.get("date_range") or "") == "tomorrow":
+            schedule = parse_json_field(version.get("schedule_json"), {})
+            timezone_name = str(schedule.get("timezone") or "UTC").strip()
+            if not timezone_name or timezone_name == "business_timezone":
+                timezone_name = "UTC"
+            try:
+                local_now = datetime.now(timezone.utc).astimezone(ZoneInfo(timezone_name))
+            except (ValueError, ZoneInfoNotFoundError):
+                local_now = datetime.now(timezone.utc)
+            tomorrow = (local_now + timedelta(days=1)).date().isoformat()
+            payload["from"] = tomorrow
+            payload["to"] = tomorrow
         payload["run_id"] = str(run.get("id") or "")
         if str(payload.get("source_run_id") or "").startswith("{{"):
             payload["source_run_id"] = str(run.get("id") or "")
@@ -1525,7 +1735,8 @@ class AgentBlueprintRunner:
         metadata = parse_json_field((blueprint or {}).get("metadata_json"), {})
         if not isinstance(metadata, dict):
             return
-        provider = self._binding_provider(metadata, binding_key, str(step.get("capability") or ""))
+        version = self._load_version(str(run.get("blueprint_version_id") or ""))
+        provider = self._binding_provider(metadata, binding_key, str(step.get("capability") or ""), version)
         if not provider:
             return
         # Root-cause category: preflight could resolve a runnable binding from metadata,
@@ -1579,12 +1790,20 @@ class AgentBlueprintRunner:
             result["auth_ref"] = auth_ref
         return result
 
-    def _binding_provider(self, metadata: Dict[str, Any], binding_key: str, capability: str) -> str:
-        required = (
-            metadata.get("required_integration_bindings")
-            if isinstance(metadata.get("required_integration_bindings"), list)
-            else []
-        )
+    def _binding_provider(
+        self,
+        metadata: Dict[str, Any],
+        binding_key: str,
+        capability: str,
+        version: Dict[str, Any] | None = None,
+    ) -> str:
+        required = parse_json_field((version or {}).get("required_integration_bindings_json"), None)
+        if not isinstance(required, list):
+            required = (
+                metadata.get("required_integration_bindings")
+                if isinstance(metadata.get("required_integration_bindings"), list)
+                else []
+            )
         for item in required:
             if not isinstance(item, dict):
                 continue
@@ -1831,7 +2050,7 @@ class AgentBlueprintRunner:
         completed_statuses = {"completed", "succeeded", "skipped"}
         completed_steps = sum(1 for step in steps if str(step.get("status") or "").lower() in completed_statuses)
         current_step = next(
-            (step for step in steps if str(step.get("status") or "").lower() in {"running", "waiting_approval", "retry_wait", "failed"}),
+            (step for step in steps if str(step.get("status") or "").lower() in {"running", "waiting_approval", "waiting_provider", "retry_wait", "failed"}),
             None,
         )
         status = str(run.get("status") or "queued").lower()
@@ -2041,7 +2260,7 @@ class AgentBlueprintRunner:
                     [
                         item
                         for item in domain_requests
-                        if str(item.get("approval_state") or item.get("apply_state") or item.get("status") or "")
+                        if _domain_request_display_state(item)
                         in {
                             "pending",
                             "pending_human",
@@ -2049,6 +2268,11 @@ class AgentBlueprintRunner:
                             "publish_requested",
                             "request_created",
                             "provider_request_queued",
+                            "provider_executing",
+                            "provider_reconciliation_required",
+                            "provider_unavailable",
+                            "provider_failed",
+                            "approval_invalid",
                         }
                     ]
                 ),
@@ -2198,8 +2422,8 @@ class AgentBlueprintRunner:
         ]
         waiting_actions = []
         for item in domain_requests:
-            state = str(item.get("approval_state") or item.get("apply_state") or item.get("status") or "")
-            if state in {"pending", "pending_human", "not_applied", "publish_requested", "request_created", "provider_request_queued"}:
+            state = _domain_request_display_state(item)
+            if state in {"pending", "pending_human", "not_applied", "publish_requested", "request_created", "provider_request_queued", "provider_executing", "provider_reconciliation_required", "provider_unavailable", "provider_failed", "approval_invalid"}:
                 waiting_actions.append(
                     {
                         "kind": str(item.get("kind") or ""),
@@ -2332,6 +2556,10 @@ class AgentBlueprintRunner:
         pending_approvals: List[Dict[str, Any]],
         waiting_actions: List[Dict[str, Any]],
     ) -> str:
+        if str(run.get("status") or "") == "waiting_provider":
+            if any(item.get("state") == "provider_reconciliation_required" for item in waiting_actions):
+                return "Результат записи неизвестен. Сверьте таблицу перед следующими действиями."
+            return "Запуск ожидает результата записи в таблицу. Работа ещё не завершена."
         if not integration_preflight.get("ready"):
             return "Preview не готов: сначала подключите обязательные сервисы."
         if str(run.get("status") or "") in {"failed", "blocked"}:
@@ -2398,10 +2626,12 @@ class AgentBlueprintRunner:
         blueprint = self._load_blueprint(str(run.get("blueprint_id") or ""))
         metadata = parse_json_field((blueprint or {}).get("metadata_json"), {})
         metadata = metadata if isinstance(metadata, dict) else {}
+        version = self._load_version(str(run.get("blueprint_version_id") or "")) or {}
         return build_agent_integration_preflight(
             self.cursor,
             business_id=str(run.get("business_id") or ""),
             metadata=metadata,
+            required_bindings=self._version_required_bindings(version),
             input_payload=self._run_input(run),
         )
 
@@ -2525,7 +2755,7 @@ class AgentBlueprintRunner:
             """
             SELECT id, action_id, integration_id, spreadsheet_id, sheet_name, operation,
                    status, approval_state, apply_state, row_values_json, mapping_json,
-                   limits_json, provider_write_performed, error_text, created_at
+                   limits_json, provider_write_performed, provider_state, provider_result_json, error_text, created_at
             FROM agent_sheet_operation_requests
             WHERE business_id = %s AND (id = ANY(%s) OR action_id = ANY(%s))
             ORDER BY created_at DESC
@@ -2539,10 +2769,16 @@ class AgentBlueprintRunner:
             approval_state = str(row.get("approval_state") or "").strip()
             apply_state = str(row.get("apply_state") or "").strip()
             waiting_reason = "External spreadsheet write requires human approval before provider write."
-            if approval_state == "approved":
+            if approval_state == "approved" and str(row.get("status") or "") == "provider_pending":
                 waiting_reason = "Human approved; controlled Google Sheets provider request is queued. No spreadsheet write has run yet."
-            if apply_state in {"provider_unavailable", "provider_failed"}:
+            if apply_state == "provider_executing":
+                waiting_reason = "The approved Google Sheets request is being processed. The external result has not been confirmed yet."
+            if apply_state in {"provider_unavailable", "provider_failed", "provider_reconciliation_required", "approval_invalid"}:
                 waiting_reason = "Human approved; Google Sheets provider executor needs attention before external write can complete."
+            if apply_state == "provider_reconciliation_required":
+                waiting_reason = "The write may have completed. Reconcile the spreadsheet before any further action; it will not be sent again automatically."
+            if apply_state == "approval_invalid":
+                waiting_reason = "The approval no longer authorizes this exact request. No provider write was started by this attempt."
             if apply_state == "applied":
                 waiting_reason = "Google Sheets provider executor applied the approved request."
             provider_handoff = {
@@ -2571,7 +2807,9 @@ class AgentBlueprintRunner:
                     "limits": parse_json_field(row.get("limits_json"), {}),
                     "provider_handoff": provider_handoff,
                     "error": row.get("error_text"),
+                    "provider_state": row.get("provider_state"),
                     "provider_write_performed": bool(row.get("provider_write_performed")),
+                    "provider_result": parse_json_field(row.get("provider_result_json"), {}),
                     "created_at": row.get("created_at"),
                 }
             )
@@ -3154,7 +3392,7 @@ class AgentBlueprintRunner:
         return dict(row) if row else None
 
     def _load_approval(self, run_id: str, approval_id: str) -> Optional[Dict[str, Any]]:
-        self.cursor.execute("SELECT * FROM agent_approvals WHERE id = %s AND run_id = %s", (approval_id, run_id))
+        self.cursor.execute("SELECT * FROM agent_approvals WHERE id = %s AND run_id = %s FOR UPDATE", (approval_id, run_id))
         row = self.cursor.fetchone()
         return dict(row) if row else None
 
@@ -3193,13 +3431,14 @@ class AgentBlueprintRunner:
         )
         return bool(self.cursor.fetchone())
 
-    def _capability_requires_approval(self, capability: str, step: Dict[str, Any]) -> bool:
+    def _capability_requires_approval(self, capability: str, step: Dict[str, Any], payload: Dict[str, Any] | None = None) -> bool:
         if bool(step.get("requires_approval")):
             return True
-        if capability in {"sheets.append_row_request", "google_sheets.append_row", "google_sheets.update_cells"}:
-            return True
-        lowered = capability.lower()
-        return any(word in lowered for word in DANGEROUS_CAPABILITY_WORDS)
+        canonical = normalize_capability_name(capability)
+        metadata = CANONICAL_CAPABILITIES.get(canonical, {})
+        effective_payload = payload if isinstance(payload, dict) else step.get("payload")
+        risk = evaluate_risk_policy(canonical, effective_payload if isinstance(effective_payload, dict) else {}, {})
+        return bool(metadata.get("approval_required") or risk.get("requires_human"))
 
     def _build_approval_payload(self, run: Dict[str, Any], step: Dict[str, Any]) -> Dict[str, Any]:
         payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
@@ -3215,11 +3454,16 @@ class AgentBlueprintRunner:
             artifact_type = "telegram_post_draft"
         if approval_type == "sheet_update":
             artifact_type = "sheet_row_draft"
+            snapshot = self._build_sheet_write_snapshot(run, step)
+            if snapshot:
+                payload = {**payload, "sheet_write_snapshot": snapshot}
         if not artifact_type:
             return dict(payload)
         artifact_payload = self._latest_artifact_payload(str(run.get("id") or ""), artifact_type)
         if not artifact_payload:
             return dict(payload)
+        if approval_type == "drafts":
+            payload = {**payload, "snapshot_version": 1, "business_id": str(run.get("business_id") or "")}
         return {
             **payload,
             "artifact_type": artifact_type,
@@ -3227,6 +3471,44 @@ class AgentBlueprintRunner:
             "count": artifact_payload.get("count", 0),
             "items": artifact_payload.get("items", []),
         }
+
+    def _build_sheet_write_snapshot(self, run: Dict[str, Any], approval_step: Dict[str, Any]) -> Dict[str, Any]:
+        version = self._load_version(str(run.get("blueprint_version_id") or "")) or {}
+        steps = normalize_steps(version.get("steps_json"))
+        approval_key = str(approval_step.get("key") or "")
+        found = False
+        for candidate in steps:
+            if str(candidate.get("key") or "") == approval_key:
+                found = True
+                continue
+            if not found or str(candidate.get("type") or "") != "capability":
+                continue
+            capability = str(candidate.get("capability") or "")
+            if capability not in {"sheets.append_row_request", "google_sheets.append_row", "google_sheets.update_cells"}:
+                continue
+            from services.agent_sheet_provider_executor import sheet_snapshot_hash
+            from services.agent_capability_handlers import _resolve_sheet_mapping, _resolve_sheet_row_values
+            values = self._build_capability_payload(run, candidate)
+            mapping = _resolve_sheet_mapping(values)
+            range_value = str(values.get("range") or values.get("range_name") or "").strip()
+            cell_values = values.get("values") if isinstance(values.get("values"), list) else []
+            expected_values = values.get("expected_values") if isinstance(values.get("expected_values"), list) else []
+            source_event = values.get("source_event") if isinstance(values.get("source_event"), dict) else {}
+            if not source_event and values.get("trigger_event_id"):
+                source_event = {"trigger_event_id": str(values.get("trigger_event_id") or "")}
+            canonical = {
+                "business_id": str(run.get("business_id") or ""),
+                "integration_id": str(values.get("integration_id") or values.get("google_sheets_integration_id") or "").strip() or None,
+                "spreadsheet_id": str(values.get("spreadsheet_id") or values.get("google_spreadsheet_id") or "").strip() or None,
+                "sheet_name": str(values.get("sheet_name") or values.get("tab") or "Sheet1").strip(),
+                "operation": "update_cells" if capability == "google_sheets.update_cells" else "append_row",
+                "row_values": _resolve_sheet_row_values(values),
+                "mapping": {**mapping, "range": range_value, "values": cell_values, "expected_values": expected_values},
+                "source_event": source_event,
+                "limits": {"approval_required": True, "daily_append_cap": max(1, min(int(values.get("daily_append_cap") or 50), 500))},
+            }
+            return {**canonical, "hash": sheet_snapshot_hash(canonical)}
+        return {}
 
     def _latest_artifact_payload(self, run_id: str, artifact_type: str) -> Dict[str, Any]:
         self.cursor.execute(
@@ -3283,11 +3565,50 @@ class AgentBlueprintRunner:
             (SELECTED_FOR_OUTREACH, PIPELINE_IN_PROGRESS, user_id or None, str(run.get("business_id") or ""), lead_ids),
         )
 
-    def _apply_drafts_approval(self, run_id: str, user_id: str) -> None:
+    def _approved_draft_snapshot(self, run: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
+        self.cursor.execute(
+            "SELECT * FROM agent_approvals WHERE run_id = %s AND approval_type = 'drafts' AND status = 'approved' ORDER BY decided_at DESC, id DESC LIMIT 1",
+            (run.get("id"),),
+        )
+        approval = self.cursor.fetchone()
+        return self._validated_draft_snapshot(run, dict(approval)) if approval else None
+
+
+    def _validated_draft_snapshot(self, run: Dict[str, Any], approval: Dict[str, Any], *, for_update: bool = False) -> Optional[List[Dict[str, Any]]]:
+        payload = parse_json_field(approval.get("payload_json"), {})
+        business_id = str(run.get("business_id") or "")
+        if not isinstance(payload, dict) or payload.get("snapshot_version") != 1 or not business_id or payload.get("business_id") != business_id:
+            return None
+        items = payload.get("items")
+        if not isinstance(items, list) or not items or len(items) > 100 or payload.get("count") != len(items):
+            return None
+        ids = []
+        for item in items:
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"] or item["id"] in ids:
+                return None
+            if not isinstance(item.get("review_text"), str) or not item["review_text"].strip() or not isinstance(item.get("review_recipient"), str):
+                return None
+            ids.append(item["id"])
+        current = self._load_message_draft_rows(run, ids, len(ids), for_update=for_update)
+        by_id = {str(row.get("id") or ""): row for row in current}
+        if len(by_id) != len(items):
+            return None
+        for item in items:
+            row = by_id.get(item["id"])
+            if not row or row.get("status") not in {"generated", "edited", "approved"}:
+                return None
+            if any(item.get(key) != row.get(key) for key in ("lead_id", "channel", "review_text", "review_recipient")):
+                return None
+            if approval.get("status") == "approved" and (row.get("status") != "approved" or row.get("approved_text") != item["review_text"]):
+                return None
+        return items
+
+
+    def _apply_drafts_approval(self, run_id: str, user_id: str, reviewed_drafts: List[Dict[str, Any]]) -> None:
         run = self._load_run_header(run_id)
         if not run:
             return
-        draft_ids = self._latest_artifact_item_ids(run_id, "message_drafts", "id")
+        draft_ids = [item["id"] for item in reviewed_drafts]
         if not draft_ids:
             return
         self.cursor.execute(

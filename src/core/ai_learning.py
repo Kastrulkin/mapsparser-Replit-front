@@ -11,47 +11,11 @@ from pg_db_utils import get_db_connection
 
 def ensure_ai_learning_events_table(conn) -> None:
     cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS ailearningevents (
-            id UUID PRIMARY KEY,
-            intent TEXT NOT NULL DEFAULT 'operations',
-            capability TEXT NOT NULL,
-            event_type TEXT NOT NULL,
-            accepted BOOLEAN,
-            rejected BOOLEAN,
-            edited_before_accept BOOLEAN,
-            outcome TEXT,
-            user_id UUID,
-            business_id UUID,
-            action_id UUID,
-            prompt_key TEXT,
-            prompt_version TEXT,
-            draft_text TEXT,
-            final_text TEXT,
-            metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_ailearningevents_created_at
-        ON ailearningevents (created_at DESC)
-        """
-    )
-    cur.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_ailearningevents_capability_intent
-        ON ailearningevents (capability, intent)
-        """
-    )
-    cur.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_ailearningevents_user_business
-        ON ailearningevents (user_id, business_id)
-        """
-    )
+    cur.execute("SELECT to_regclass('ailearningevents')")
+    row = cur.fetchone()
+    exists = row.get("to_regclass") if hasattr(row, "keys") else row[0]
+    if not exists:
+        raise RuntimeError("ailearningevents schema is missing; run Alembic migrations before starting the application")
 
 
 def record_ai_learning_event(

@@ -11,6 +11,10 @@ from core.telegram_userbot import inspect_telegram_entity, load_userbot_account
 from services.knowledge_graph_service import upsert_document
 
 
+DEFAULT_MONITOR_INTERVAL_SECONDS = 1800
+MIN_MONITOR_INTERVAL_SECONDS = 1800
+
+
 def _monitor_enabled() -> bool:
     return str(os.getenv("KNOWLEDGE_TELEGRAM_MONITOR_ENABLED") or "").strip().lower() in {
         "1",
@@ -112,6 +116,7 @@ def _inspect_source_entity(conn: Any, source: dict[str, Any]) -> dict[str, Any]:
     account_business_id = str(account.get("business_id") or "").strip()
     if source_business_id != account_business_id:
         raise RuntimeError("telegram_account_scope_mismatch")
+    conn.commit()
     inspection = inspect_telegram_entity(account, str(source.get("canonical_url") or ""))
     if inspection.get("status") != "ok":
         raise RuntimeError(f"telegram_entity_{inspection.get('status') or 'failed'}")
@@ -121,21 +126,24 @@ def _inspect_source_entity(conn: Any, source: dict[str, Any]) -> dict[str, Any]:
 def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, Any]:
     if not _monitor_enabled():
         return {"status": "disabled", "sources_checked": 0, "documents_seen": 0}
-    default_interval_seconds = max(21600, int(os.getenv("KNOWLEDGE_TELEGRAM_MONITOR_INTERVAL_SEC", "86400")))
+    default_interval_seconds = max(
+        MIN_MONITOR_INTERVAL_SECONDS,
+        int(os.getenv("KNOWLEDGE_TELEGRAM_MONITOR_INTERVAL_SEC", str(DEFAULT_MONITOR_INTERVAL_SECONDS))),
+    )
     run_id = str(uuid.uuid4())
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     cursor.execute(
         """
         SELECT source.*,
                GREATEST(
-                   21600,
+                   1800,
                    COALESCE(
                        (
                            SELECT MIN(
                                CASE
-                                   WHEN subscription.schedule_json->>'interval_hours' IN ('6', '12', '24', '72', '168')
-                                   THEN (subscription.schedule_json->>'interval_hours')::INTEGER * 3600
-                                   ELSE 86400
+                                   WHEN subscription.schedule_json->>'interval_hours' IN ('0.5', '6', '12', '24', '72', '168')
+                                   THEN (subscription.schedule_json->>'interval_hours')::NUMERIC * 3600
+                                   ELSE 1800
                                END
                            )
                            FROM knowledge_source_subscriptions subscription
@@ -163,14 +171,14 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
               source.last_collected_at IS NULL
               OR source.last_collected_at < NOW() - (
                   GREATEST(
-                      21600,
+                      1800,
                       COALESCE(
                           (
                               SELECT MIN(
                                   CASE
-                                      WHEN subscription.schedule_json->>'interval_hours' IN ('6', '12', '24', '72', '168')
-                                      THEN (subscription.schedule_json->>'interval_hours')::INTEGER * 3600
-                                      ELSE 86400
+                                      WHEN subscription.schedule_json->>'interval_hours' IN ('0.5', '6', '12', '24', '72', '168')
+                                      THEN (subscription.schedule_json->>'interval_hours')::NUMERIC * 3600
+                                      ELSE 1800
                                   END
                               )
                               FROM knowledge_source_subscriptions subscription
@@ -202,12 +210,16 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
         (run_id, Json({"sources_selected": len(sources)})),
     )
     cursor.close()
+    conn.commit()
 
     documents_seen = 0
     documents_imported = 0
     errors: list[dict[str, str]] = []
     for source in sources:
-        interval_seconds = max(21600, int(source.get("effective_interval_seconds") or default_interval_seconds))
+        interval_seconds = max(
+            MIN_MONITOR_INTERVAL_SECONDS,
+            int(source.get("effective_interval_seconds") or default_interval_seconds),
+        )
         try:
             auto_discovered = bool((source.get("metadata_json") or {}).get("auto_discovered"))
             workstream_ids: list[str] = []
@@ -239,8 +251,10 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
                         reason="telegram_entity_api",
                     )
                     if not entity_inspection.get("signal_source_eligible"):
+                        conn.commit()
                         continue
 
+            conn.commit()
             inspection = inspect_public_channel(str(source.get("canonical_url") or ""))
             if auto_discovered and entity_inspection is None and metadata.get("classification_method") != "telegram_entity_api":
                 if not inspection.get("is_public_channel"):
@@ -326,6 +340,7 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
                 for workstream_id in workstream_ids:
                     enqueue_enrichment_job(cursor, workstream_id, force=True)
                 cursor.close()
+            conn.commit()
         except Exception as error:
             errors.append({"source_id": str(source.get("id") or ""), "message": str(error)[:300]})
             cursor = conn.cursor()
@@ -340,6 +355,7 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
                 (str(error)[:300], interval_seconds, source.get("id")),
             )
             cursor.close()
+            conn.commit()
 
     status = "completed" if not errors else "partial"
     cursor = conn.cursor()
@@ -353,6 +369,7 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
         (status, documents_seen, documents_seen, len(errors), Json({"items": errors}), run_id),
     )
     cursor.close()
+    conn.commit()
     return {
         "run_id": run_id,
         "status": status,

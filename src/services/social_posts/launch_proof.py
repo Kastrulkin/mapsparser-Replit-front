@@ -19,6 +19,7 @@ from core.telegram_token_store import decode_telegram_bot_token
 from core.helpers import get_business_owner_id
 from services.media_file_storage import load_media_file
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
+from services.content_editorial_quality import review_content_text
 from services.social_posts.platform_variants import platform_variant_base_hash
 from core.ai_learning import record_ai_learning_event
 
@@ -29,12 +30,13 @@ SOCIAL_POST_PLATFORMS = [
     "google_business",
     "telegram",
     "vk",
+    "max",
     "instagram",
     "facebook",
 ]
 
 API_PLATFORMS = {"google_business", "telegram", "vk", "instagram", "facebook"}
-BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis"}
+BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis", "max"}
 FIRST_API_PROOF_PLATFORMS = ("telegram", "vk")
 
 SOCIAL_POST_STATUSES = {
@@ -969,6 +971,17 @@ def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             raise ValueError("Публикация уже опубликована")
         if not _social_post_has_text(post):
             raise ValueError("Перед подтверждением нужно заполнить текст публикации")
+        quality_review = review_content_text(
+            str(post.get("platform_text") or post.get("base_text") or ""),
+            source_text=str(post.get("base_text") or ""),
+            platform=str(post.get("platform") or ""),
+        )
+        if not bool(quality_review.get("quality_passed")):
+            issues = "; ".join(str(value) for value in quality_review.get("quality_issues") or [] if str(value))
+            raise ValueError(f"Текст нужно переписать: {issues}")
+        metadata = _json_dict(post.get("metadata_json"))
+        metadata.update(quality_review)
+        metadata["variant_status"] = "current"
         now = datetime.now(timezone.utc)
         cursor.execute(
             """
@@ -976,12 +989,13 @@ def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             SET status = 'approved',
                 approved_at = COALESCE(approved_at, %s),
                 approval_id = COALESCE(NULLIF(approval_id, ''), %s),
+                metadata_json = %s,
                 last_error = NULL,
                 updated_at = NOW()
             WHERE id = %s
             RETURNING *
             """,
-            (now, _new_id(), post_id),
+            (now, _new_id(), _json_dumps(metadata), post_id),
         )
         updated = _serialize_social_post(cursor, cursor.fetchone())
         metadata = _json_dict(updated.get("metadata_json"))
@@ -1050,10 +1064,16 @@ def update_social_post_text(
             "approval_reset": current_status == "approved",
         }
         metadata["variant_source"] = "manual"
-        metadata["variant_status"] = "current"
         metadata["manually_edited"] = True
         metadata["base_text_hash"] = platform_variant_base_hash(next_base_text)
-        next_status = _status_after_social_text_edit(current_status, next_text)
+        quality_review = review_content_text(
+            next_text,
+            source_text=next_base_text,
+            platform=str(post.get("platform") or ""),
+        )
+        metadata.update(quality_review)
+        metadata["variant_status"] = "current" if bool(quality_review.get("quality_passed")) else "failed"
+        next_status = _status_after_social_text_edit(current_status, next_text) if bool(quality_review.get("quality_passed")) else "draft"
         cursor.execute(
             """
             UPDATE social_posts
@@ -1096,6 +1116,18 @@ def queue_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             raise ValueError("Публикация уже опубликована")
         if status not in {"approved", "queued"} or not post.get("approved_at"):
             raise PermissionError("Перед постановкой в расписание нужно подтверждение человека")
+        quality_review = review_content_text(
+            str(post.get("platform_text") or post.get("base_text") or ""),
+            source_text=str(post.get("base_text") or ""),
+            platform=str(post.get("platform") or ""),
+        )
+        if not bool(quality_review.get("quality_passed")):
+            issues = "; ".join(str(value) for value in quality_review.get("quality_issues") or [] if str(value))
+            raise ValueError(f"Текст нужно переписать перед отправкой: {issues}")
+        metadata = _json_dict(post.get("metadata_json"))
+        metadata.update(quality_review)
+        metadata["variant_status"] = "current"
+        post["metadata_json"] = metadata
         platform = str(post.get("platform") or "").strip()
         if platform in BROWSER_OR_MANUAL_PLATFORMS:
             updated = _create_supervised_publish_task(cursor, post)
@@ -1177,6 +1209,8 @@ def create_supervised_publish_task(user_id: str, post_id: str, approved: bool = 
         db.close()
 
 def _create_supervised_publish_task(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
+    from services.social_posts.publish_guard import assert_supervised_publish_supported
+    assert_supervised_publish_supported(cursor, post)
     post_id = str(post.get("id") or "").strip()
     platform = str(post.get("platform") or "").strip()
     status = str(post.get("status") or "").strip()
@@ -1328,6 +1362,14 @@ def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             updated = _serialize_social_post(cursor, cursor.fetchone())
             db.conn.commit()
             return updated
+        from services.social_posts.publish_guard import DISK_MANUAL_PUBLISH_MESSAGE, disk_video_requires_manual_publish, validate_content_rules
+        if disk_video_requires_manual_publish(cursor, post):
+            cursor.execute("UPDATE social_posts SET status='needs_manual_publish',last_error=%s,updated_at=NOW() WHERE id=%s RETURNING *",
+                (DISK_MANUAL_PUBLISH_MESSAGE,post_id))
+            updated = _serialize_social_post(cursor, cursor.fetchone())
+            db.conn.commit()
+            return updated
+        validate_content_rules(cursor, post, user_id)
         platform = str(post.get("platform") or "").strip()
         publish_mode = str(post.get("publish_mode") or "").strip()
         metadata = _json_dict(post.get("metadata_json"))
@@ -1454,7 +1496,13 @@ def rehearse_social_posts_publish(user_id: str, post_ids: list[str]) -> dict[str
     finally:
         db.close()
 
-def mark_manual_published(user_id: str, post_id: str, provider_post_url: str = "", provider_post_id: str = "") -> dict[str, Any]:
+def mark_manual_published(
+    user_id: str,
+    post_id: str,
+    provider_post_url: str = "",
+    provider_post_id: str = "",
+    content_confirmed: bool = False,
+) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
@@ -1463,8 +1511,16 @@ def mark_manual_published(user_id: str, post_id: str, provider_post_url: str = "
         status = str(post.get("status") or "").strip()
         if status not in {"needs_supervised_publish", "needs_manual_publish"}:
             raise ValueError("Ручная отметка публикации доступна только для ручного или контролируемого размещения")
+        if not content_confirmed:
+            raise ValueError("Проверьте, что текст и медиа отображаются на площадке, и подтвердите размещение")
+        confirmed_at = datetime.now(timezone.utc)
         metadata = _json_dict(post.get("metadata_json"))
         metadata["published_source"] = "manual_confirmation"
+        metadata["manual_confirmation"] = {
+            "content_confirmed": True,
+            "confirmed_at": confirmed_at.isoformat(),
+            "confirmed_by": str(user_id or "").strip(),
+        }
         cursor.execute(
             """
             UPDATE social_posts
@@ -1478,7 +1534,7 @@ def mark_manual_published(user_id: str, post_id: str, provider_post_url: str = "
             WHERE id = %s
             RETURNING *
             """,
-            (datetime.now(timezone.utc), provider_post_url, provider_post_id, _json_dumps(metadata), post_id),
+            (confirmed_at, provider_post_url, provider_post_id, _json_dumps(metadata), post_id),
         )
         updated = _serialize_social_post(cursor, cursor.fetchone())
         _record_knowledge_publish_event(cursor, updated, user_id, "manual_confirmation")
@@ -1599,12 +1655,21 @@ def mark_manual_published_posts(
     post_ids: list[str],
     provider_post_url: str = "",
     provider_post_id: str = "",
+    content_confirmed: bool = False,
 ) -> dict[str, Any]:
     posts: list[dict[str, Any]] = []
     failed: list[dict[str, str]] = []
     for post_id in _normalize_ids(post_ids):
         try:
-            posts.append(mark_manual_published(user_id, post_id, provider_post_url, provider_post_id))
+            posts.append(
+                mark_manual_published(
+                    user_id,
+                    post_id,
+                    provider_post_url,
+                    provider_post_id,
+                    content_confirmed,
+                )
+            )
         except Exception:
             failed.append({"id": post_id, "error": str(sys.exc_info()[1])})
     return {

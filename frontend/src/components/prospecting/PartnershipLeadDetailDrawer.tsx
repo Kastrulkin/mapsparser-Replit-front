@@ -49,6 +49,15 @@ type PartnershipLead = {
   sales_room_status?: string;
   sales_room_data_mode?: string;
   sales_room_url?: string;
+  contact_guard?: {
+    blocked?: boolean;
+    reason?: string | null;
+    display_status?: string;
+    warning?: string | null;
+    last_contact_at?: string | null;
+    last_contact_channel?: string | null;
+    last_message_excerpt?: string | null;
+  };
 };
 
 type LeadEditState = {
@@ -197,6 +206,18 @@ function formatChannelLabel(value?: string) {
   return value || 'Канал ещё не выбран';
 }
 
+function formatContactGuardDate(value?: string | null) {
+  const date = new Date(String(value || ''));
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('ru-RU');
+}
+
+function formatContactGuardChannel(value?: string | null) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'digital_room' || normalized === 'room') return 'Цифровая комната';
+  return formatChannelLabel(normalized || undefined);
+}
+
 export default function PartnershipLeadDetailDrawer({
   selectedLead,
   selectedLeadFlowStatus,
@@ -231,6 +252,9 @@ export default function PartnershipLeadDetailDrawer({
   const [manualContactBusy, setManualContactBusy] = useState(false);
   const [manualContactNotice, setManualContactNotice] = useState('');
   const [manualContactError, setManualContactError] = useState('');
+  const contactGuard = selectedLead.contact_guard;
+  const contactGuardDate = formatContactGuardDate(contactGuard?.last_contact_at);
+  const contactGuardChannel = formatContactGuardChannel(contactGuard?.last_contact_channel);
   const flowPrimaryText = `Этап: ${stagePresentation.label} · Канал: ${formatChannelLabel(selectedLead.selected_channel)}`;
   const flowSecondaryText = `Писем: ${selectedLeadFlowStatus?.draftsTotal ?? 0} · утверждено: ${selectedLeadFlowStatus?.draftsApproved ?? 0} · отправлено: ${selectedLeadFlowStatus?.sentTotal ?? 0} · результат: ${selectedLeadFlowStatus?.outcomeFinal || 'пока нет'}`;
   const matchNeedsSenderProfile = matchData?.readiness_code === 'needs_sender_profile'
@@ -319,6 +343,37 @@ export default function PartnershipLeadDetailDrawer({
         </div>
 
         <DrawerSection>
+          {contactGuard?.blocked ? (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950" role="alert">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 rounded-full bg-amber-100 p-1.5" aria-hidden="true">
+                  <span className="block h-2 w-2 rounded-full bg-amber-600" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold">
+                    {contactGuard.warning || 'С партнёром уже был контакт — не начинайте знакомство заново'}
+                  </div>
+                  <p className="mt-1 text-sm leading-6 text-amber-900">
+                    {[contactGuardDate, contactGuardChannel].filter(Boolean).join(' · ')}
+                  </p>
+                  {contactGuard.last_message_excerpt ? (
+                    <p className="mt-2 text-sm leading-6 text-amber-900">{contactGuard.last_message_excerpt}</p>
+                  ) : null}
+                  {selectedLead.sales_room_url ? (
+                    <a
+                      className="mt-3 inline-flex min-h-10 items-center rounded-md border border-amber-300 bg-white px-3 text-sm font-semibold text-amber-950 transition-colors hover:bg-amber-100"
+                      href={selectedLead.sales_room_url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Продолжить диалог
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {selectedLead.next_best_action ? (
             <StatusSummaryCard
               title="Следующий шаг"

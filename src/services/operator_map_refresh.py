@@ -8,10 +8,16 @@ from services.operator_credit_reservation import finalize_reserved_action_credit
 from services.operator_paid_preflight import build_paid_action_preflight
 
 
-OPERATOR_APIFY_REFRESH_ENABLED = False
-OPERATOR_MAP_REFRESH_SOURCE = "apify_yandex"
+OPERATOR_APIFY_REFRESH_ENABLED = str(os.getenv("OPERATOR_APIFY_REFRESH_ENABLED") or "false").strip().lower() in {
+    "1", "true", "yes", "on",
+}
 MAP_REVIEWS_REFRESH_ACTION_KEY = "map_reviews_refresh"
 DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS = int(os.getenv("OPERATOR_MAP_REFRESH_ESTIMATED_CREDITS", "10") or "10")
+
+
+def _map_refresh_source() -> str:
+    configured = str(os.getenv("OPERATOR_MAP_REFRESH_SOURCE") or "apify_yandex").strip().lower()
+    return configured if configured in {"apify_yandex", "yandex_maps"} else "apify_yandex"
 
 
 def _row_to_dict(cursor: Any, row: Any) -> dict[str, Any] | None:
@@ -57,13 +63,17 @@ def build_operator_map_refresh_plan(
     business_id: str,
     user_id: str,
     explicit_url: Any = None,
+    source_override: Any = None,
     require_runtime_flag: bool = True,
 ) -> dict[str, Any]:
     blocked: list[str] = []
     url = _clean_text(explicit_url) or _load_latest_map_url(cursor, business_id=business_id)
     if not url:
         blocked.append("map_link_required")
-    if require_runtime_flag and not OPERATOR_APIFY_REFRESH_ENABLED:
+    source = _clean_text(source_override).lower() or _map_refresh_source()
+    if source not in {"apify_yandex", "yandex_maps"}:
+        source = _map_refresh_source()
+    if require_runtime_flag and source == "apify_yandex" and not OPERATOR_APIFY_REFRESH_ENABLED:
         blocked.append("operator_apify_refresh_disabled")
 
     return {
@@ -71,7 +81,7 @@ def build_operator_map_refresh_plan(
         "business_id": business_id,
         "user_id": user_id,
         "url": url,
-        "source": OPERATOR_MAP_REFRESH_SOURCE,
+        "source": source,
         "task_type": "parse_card",
         "blocked_reasons": blocked,
         "side_effects": {
@@ -89,6 +99,7 @@ def enqueue_operator_map_refresh(
     business_id: str,
     user_id: str,
     explicit_url: Any = None,
+    source_override: Any = None,
     queue_id: str | None = None,
     require_runtime_flag: bool = True,
 ) -> dict[str, Any]:
@@ -97,6 +108,7 @@ def enqueue_operator_map_refresh(
         business_id=business_id,
         user_id=user_id,
         explicit_url=explicit_url,
+        source_override=source_override,
         require_runtime_flag=require_runtime_flag,
     )
     if plan["status"] != "ready":

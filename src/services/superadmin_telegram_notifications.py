@@ -10,6 +10,7 @@ from psycopg2.extras import Json
 
 CONTENT_URL = "https://localos.pro/dashboard/content"
 OUTREACH_URL = "https://localos.pro/dashboard/bazich?tab=prospecting"
+TELEGRAM_RADAR_URL = "https://localos.pro/dashboard/telegram-radar"
 AUTOMATIC_OUTREACH_CHANNELS = {"telegram", "email", "vk"}
 TERMINAL_CAMPAIGN_STATUSES = {"cancelled", "completed", "stopped", "lost"}
 
@@ -79,6 +80,18 @@ def _compact_text(value: Any, limit: int) -> str:
 def _platform_label(value: Any) -> str:
     key = str(value or "").strip().lower()
     return PLATFORM_LABELS.get(key, key or "канал")
+
+
+def _plural_ru(number: int, one: str, few: str, many: str) -> str:
+    modulo_100 = number % 100
+    modulo_10 = number % 10
+    if 11 <= modulo_100 <= 14:
+        return many
+    if modulo_10 == 1:
+        return one
+    if 2 <= modulo_10 <= 4:
+        return few
+    return many
 
 
 def _content_action(item: dict[str, Any]) -> str:
@@ -158,18 +171,33 @@ def _format_content_items(items: list[dict[str, Any]], *, automatic: bool, limit
 
 def _format_outreach_items(items: list[dict[str, Any]], *, automatic: bool, limit: int = 8) -> list[str]:
     filtered = [item for item in items if _is_automatic_outreach(item) == automatic]
-    lines: list[str] = []
-    for item in filtered[:limit]:
-        lead_name = _compact_text(item.get("lead_name") or "Лид", 60)
-        business_name = _compact_text(item.get("business_name") or "LocalOS", 42)
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for item in filtered:
         channel = _platform_label(item.get("channel"))
-        time_text = str(item.get("local_time") or "").strip()
-        timing = f" в {time_text}" if time_text else ""
-        action = "уйдёт автоматически" if automatic else _outreach_action(item)
-        lines.append(f"• {business_name} → {lead_name} · {channel}{timing}: {action}")
-    remaining = max(0, len(filtered) - limit)
+        action = "уйдут автоматически" if automatic else _outreach_action(item)
+        grouped.setdefault((channel, action), []).append(item)
+
+    lines: list[str] = []
+    for (channel, action), group in list(grouped.items())[:limit]:
+        count = len(group)
+        times = sorted({str(item.get("local_time") or "").strip() for item in group if str(item.get("local_time") or "").strip()})
+        if len(times) > 1:
+            timing = f" · по расписанию {times[0]}–{times[-1]}"
+        elif times:
+            timing = f" · по расписанию на {times[0]}"
+        else:
+            timing = ""
+        if action == "автоматическая отправка выключена — проверить кампанию":
+            action_text = "не будут отправлены — автоматическая отправка выключена"
+        elif action == "отправить вручную":
+            action_text = "нужно отправить вручную"
+        else:
+            action_text = action
+        touch_word = _plural_ru(count, "касание", "касания", "касаний")
+        lines.append(f"• {count} {touch_word} · {channel}{timing}: {action_text}")
+    remaining = max(0, len(grouped) - limit)
     if remaining:
-        lines.append(f"• Ещё {remaining} касаний — в разделе «Аутрич»")
+        lines.append(f"• Ещё {remaining} групп касаний")
     return lines
 
 
@@ -182,21 +210,92 @@ def format_superadmin_morning_operations(
     automatic_outreach = _format_outreach_items(outreach_items, automatic=True)
     manual_outreach = _format_outreach_items(outreach_items, automatic=False)
 
-    content_lines = ["📝 Публикации"]
-    content_lines.append("Автоматически:")
-    content_lines.extend(automatic_content or ["• Ничего не готово к автоматической публикации"])
-    content_lines.append("Нужно зайти и сделать:")
-    content_lines.extend(manual_content or ["• Ручных действий на сегодня нет"])
-    content_lines.append(f"Открыть: {CONTENT_URL}")
+    sections: list[str] = []
+    if automatic_content or manual_content:
+        content_lines = ["📝 Публикации на сегодня"]
+        if automatic_content:
+            content_lines.extend(["Выйдут автоматически:", *automatic_content])
+        if manual_content:
+            content_lines.extend(["Требуют решения:", *manual_content])
+        sections.append("\n".join(content_lines))
 
-    outreach_lines = ["📨 Аутрич"]
-    outreach_lines.append("Автоматически:")
-    outreach_lines.extend(automatic_outreach or ["• Автоматических касаний на сегодня нет"])
-    outreach_lines.append("Нужно зайти и сделать:")
-    outreach_lines.extend(manual_outreach or ["• Ручных действий на сегодня нет"])
-    outreach_lines.append(f"Открыть: {OUTREACH_URL}")
+    if automatic_outreach or manual_outreach:
+        outreach_lines = ["📨 Аутрич на сегодня"]
+        if automatic_outreach:
+            outreach_lines.extend(["Уйдут автоматически:", *automatic_outreach])
+        if manual_outreach:
+            outreach_lines.extend(["Требуют решения:", *manual_outreach])
+        sections.append("\n".join(outreach_lines))
 
-    return "\n".join(content_lines) + "\n\n" + "\n".join(outreach_lines)
+    return "\n\n".join(sections)
+
+
+def format_superadmin_platform_attention(summary: dict[str, Any]) -> str:
+    attention_items = [item for item in (summary.get("attention_items") or []) if int(item.get("count") or 0) > 0]
+    by_key = {str(item.get("id") or ""): item for item in attention_items}
+    ordered = [
+        by_key[key]
+        for key in ("outreach_replies", "reviews_unanswered", "pending_approvals", "failed_jobs", "outreach_attention", "pending_posts")
+        if key in by_key
+    ]
+    ordered.extend(item for item in attention_items if item not in ordered)
+    if not ordered:
+        return "Сегодня всё под контролем\nПо операционным очередям срочных сигналов нет."
+
+    lines = ["Сейчас важнее всего"]
+    for index, item in enumerate(ordered[:4]):
+        key = str(item.get("id") or "")
+        count = int(item.get("count") or 0)
+        rendered_count = f"{count:,}".replace(",", " ")
+        if key == "outreach_replies":
+            reply_word = _plural_ru(count, "новый ответ", "новых ответа", "новых ответов")
+            title = "Новый ответ в аутриче" if count == 1 else f"{rendered_count} {reply_word} в аутриче"
+            description = "Следующие касания остановлены. Нужно прочитать ответ и выбрать дальнейшее действие."
+            icon = "💬"
+        elif key == "reviews_unanswered":
+            review_word = _plural_ru(count, "отзыв", "отзыва", "отзывов")
+            title = f"{rendered_count} {review_word} без ответа"
+            affected = int(item.get("affected_businesses") or 0)
+            business_word = _plural_ru(affected, "бизнеса", "бизнесов", "бизнесов")
+            affected_text = f" у {affected:,} {business_word}".replace(",", " ") if affected else ""
+            description = f"Нужно подготовить ответы{affected_text} и проверить их перед публикацией."
+            icon = "⭐"
+        elif key == "pending_approvals":
+            action_word = _plural_ru(count, "действие", "действия", "действий")
+            title = f"{rendered_count} {action_word} ждут подтверждения"
+            description = "LocalOS подготовил изменения, но не выполнит их без вашего решения."
+            icon = "🟠"
+        elif key == "failed_jobs":
+            job_word = _plural_ru(count, "задание", "задания", "заданий")
+            title = f"{rendered_count} {job_word} обновления завершились с ошибкой"
+            affected = int(item.get("affected_businesses") or 0)
+            business_word = _plural_ru(affected, "бизнес", "бизнеса", "бизнесов")
+            affected_text = f" Затронуто {affected:,} {business_word}.".replace(",", " ") if affected else ""
+            description = f"Причины — ошибки получения данных и captcha.{affected_text}"
+            icon = "🔴"
+        elif key == "pending_posts":
+            publication_word = _plural_ru(count, "публикация", "публикации", "публикаций")
+            title = f"{rendered_count} {publication_word} требуют проверки"
+            description = "Проверьте черновики и ошибки перед размещением."
+            icon = "📝"
+        elif key == "outreach_attention":
+            touch_word = _plural_ru(count, "касание", "касания", "касаний")
+            title = f"{rendered_count} {touch_word} в аутриче требуют разбора"
+            description = "Это ошибки доставки или истёкшие ручные действия, а не ответы клиентов."
+            icon = "⚠️"
+        else:
+            title = str(item.get("title") or "Требуется внимание")
+            description = str(item.get("description") or "").strip()
+            icon = "🟠"
+        if index == 1:
+            lines.extend(["", "Ещё требуют внимания"])
+        lines.extend([f"{icon} {title}", description])
+
+    metrics = {str(item.get("key") or ""): item.get("value") for item in (summary.get("metrics") or [])}
+    businesses = int(metrics.get("businesses_total") or 0)
+    networks = int(metrics.get("networks_total") or 0)
+    lines.extend(["", "Под контролем", f"{businesses:,} клиентских аккаунтов · {networks:,} сетей".replace(",", " ")])
+    return "\n".join(lines)
 
 
 def collect_superadmin_morning_operations(conn: Any, local_today: date) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -328,6 +427,85 @@ def load_superadmin_telegram_recipients(conn: Any) -> list[str]:
     return recipients
 
 
+def collect_pending_community_source_notifications(conn: Any, limit: int = 20) -> list[dict[str, Any]]:
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT
+            subscription.business_id,
+            subscription.source_id,
+            subscription.topics_json,
+            subscription.schedule_json,
+            source.title AS source_title,
+            source.canonical_url,
+            business.name AS business_name,
+            COALESCE(NULLIF(BTRIM(actor.name), ''), NULLIF(BTRIM(actor.email), ''), 'Пользователь') AS submitted_by
+        FROM knowledge_source_subscriptions subscription
+        JOIN knowledge_sources source ON source.id = subscription.source_id
+        JOIN businesses business ON business.id = subscription.business_id
+        LEFT JOIN users actor
+          ON actor.id = NULLIF(subscription.schedule_json->>'submitted_by_user_id', '')
+        WHERE subscription.is_active IS TRUE
+          AND source.source_type = 'telegram'
+          AND source.visibility = 'public'
+          AND subscription.schedule_json->>'superadmin_notification_status' = 'pending'
+        ORDER BY subscription.updated_at
+        LIMIT %s
+        """,
+        (max(1, min(int(limit), 100)),),
+    )
+    return [_row_to_dict(cursor, row) for row in (cursor.fetchall() or [])]
+
+
+def format_community_source_notification(item: dict[str, Any]) -> str:
+    topics_value = item.get("topics_json")
+    if isinstance(topics_value, str):
+        try:
+            topics_value = json.loads(topics_value)
+        except Exception:
+            topics_value = []
+    topics = [str(value).strip() for value in (topics_value or []) if str(value).strip()]
+    topic_line = f"Темы: {', '.join(topics[:6])}\n" if topics else ""
+    return (
+        "📡 Пользователь добавил источник в Telegram-радар\n\n"
+        f"Бизнес: {_compact_text(item.get('business_name') or 'Без названия', 100)}\n"
+        f"Добавил: {_compact_text(item.get('submitted_by') or 'Пользователь', 100)}\n"
+        f"Источник: {_compact_text(item.get('source_title') or 'Telegram', 120)}\n"
+        f"Ссылка: {str(item.get('canonical_url') or '').strip()}\n"
+        f"{topic_line}\n"
+        "Источник уже подключён к личному Пульсу и подборке тем. Проверьте, подходит ли он для общей отраслевой базы.\n"
+        f"Открыть Telegram-радар: {TELEGRAM_RADAR_URL}"
+    )
+
+
+def mark_community_source_notification_sent(
+    conn: Any,
+    *,
+    business_id: str,
+    source_id: str,
+    telegram_ids: list[str],
+) -> None:
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE knowledge_source_subscriptions
+        SET schedule_json = COALESCE(schedule_json, '{}'::jsonb) || %s,
+            updated_at = NOW()
+        WHERE business_id = %s AND source_id = %s
+          AND schedule_json->>'superadmin_notification_status' = 'pending'
+        """,
+        (
+            Json({
+                "superadmin_notification_status": "sent",
+                "superadmin_notified_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "superadmin_notified_telegram_ids": telegram_ids,
+            }),
+            business_id,
+            source_id,
+        ),
+    )
+
+
 def collect_pending_outreach_reply_notifications(conn: Any, limit: int = 20) -> list[dict[str, Any]]:
     cursor = conn.cursor()
     cursor.execute(
@@ -341,12 +519,25 @@ def collect_pending_outreach_reply_notifications(conn: Any, limit: int = 20) -> 
             inbound.occurred_at,
             lead.name AS lead_name,
             COALESCE(business.name, 'LocalOS') AS business_name,
-            COALESCE(NULLIF(BTRIM(touch.approved_text), ''), touch.generated_text, '') AS outbound_text
+            COALESCE(
+                NULLIF(BTRIM(touch.approved_text), ''),
+                NULLIF(BTRIM(touch.generated_text), ''),
+                NULLIF(BTRIM(inbound.raw_payload_json->>'outbound_text'), ''),
+                ''
+            ) AS outbound_text,
+            room.slug AS room_slug,
+            external_task.external_url AS yougile_task_url
         FROM outreach_inbound_events inbound
-        JOIN outreach_campaigns campaign ON campaign.id = inbound.campaign_id
+        LEFT JOIN outreach_campaigns campaign ON campaign.id = inbound.campaign_id
+        LEFT JOIN lead_workstreams workstream ON workstream.id = inbound.workstream_id
         JOIN prospectingleads lead ON lead.id = inbound.lead_id
         LEFT JOIN outreach_campaign_touches touch ON touch.id = inbound.touch_id
-        LEFT JOIN businesses business ON business.id = campaign.business_id
+        LEFT JOIN businesses business
+          ON business.id = COALESCE(campaign.business_id, workstream.client_business_id)
+        LEFT JOIN sales_rooms room ON room.workstream_id = inbound.workstream_id
+        LEFT JOIN outreach_external_task_bindings external_task
+          ON external_task.workstream_id = inbound.workstream_id
+         AND external_task.provider = 'yougile' AND external_task.status = 'active'
         WHERE inbound.event_type = 'reply'
           AND inbound.is_human IS TRUE
           AND inbound.created_at >= NOW() - INTERVAL '24 hours'
@@ -377,13 +568,20 @@ def format_outreach_reply_notification(item: dict[str, Any]) -> str:
         if stopped
         else "Кампания требует проверки: автоматическая остановка не применена."
     )
+    room_slug = str(item.get("room_slug") or "").strip()
+    links = []
+    if room_slug:
+        links.append(f"Комната: https://localos.pro/room/{room_slug}")
+    if item.get("yougile_task_url"):
+        links.append(f"YouGile: {item.get('yougile_task_url')}")
+    link_block = "\n" + "\n".join(links) if links else f"\nОткрыть лид: {OUTREACH_URL}"
     return (
         "💬 Пришёл ответ на аутрич\n\n"
         f"{business_name} → {lead_name} · {channel}\n"
         f"На сообщение: «{outbound_text}»\n\n"
         f"Ответ: «{raw_reply}»\n\n"
-        f"Классификация: {classification}. {stop_line}\n"
-        f"Открыть лид: {OUTREACH_URL}"
+        f"Классификация: {classification}. {stop_line}"
+        f"{link_block}"
     )
 
 

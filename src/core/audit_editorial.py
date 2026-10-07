@@ -10,6 +10,11 @@ SUMMARY_WHATSAPP_MAX = 220
 
 
 AUDIT_FORBIDDEN_MARKERS = (
+    "точка роста",
+    "точки роста",
+    "инновационн",
+    "комплексное решение",
+    "уверен, что",
     "за чем сюда идти",
     "слабый визуальный слой режет доверие",
     "зоны роста",
@@ -82,6 +87,19 @@ PROFILE_ACTOR_DATIVE = {
 def _business_name_after_u(business_name: str) -> str:
     """Return a grammatical Russian subject after «у» without guessing complex brands."""
     words = re.split(r"\s+", str(business_name or "").strip())
+    if len(words) == 1 and re.fullmatch(r"[А-Яа-яЁё-]+", words[0]):
+        noun = words[0]
+        noun_lower = noun.lower()
+        if noun_lower.endswith("ия"):
+            noun = noun[:-2] + "ии"
+        elif noun_lower.endswith("я"):
+            noun = noun[:-1] + "и"
+        elif noun_lower.endswith("а"):
+            ending = "и" if noun_lower[-2:-1] in "гкхжчшщц" else "ы"
+            noun = noun[:-1] + ending
+        else:
+            return f"«{business_name}»"
+        return f"«{noun}»"
     if len(words) == 2 and all(re.fullmatch(r"[А-Яа-яЁё-]+", word) for word in words):
         adjective, noun = words
         if adjective.lower().endswith("ая"):
@@ -112,7 +130,27 @@ def normalize_audit_text(value: Any, *, audit_profile: str = "") -> str:
     if not text:
         return text
 
+    text = re.sub(
+        r"Проверить категории и разделить направления так, чтобы клиент быстро находил (.+?) без лишнего поиска\.",
+        r"Проверить категории и разделить направления так, чтобы клиент быстро находил нужный раздел: \1.",
+        text,
+    )
+    text = re.sub(
+        r"\bдобавить короткий блок про ([^:.;]+)(?=:)",
+        r"добавить короткий блок о направлениях - \1",
+        text,
+        flags=re.IGNORECASE,
+    )
+
     replacements = (
+        ("Есть точки роста", "Нужно исправить"),
+        ("точки роста", "места для улучшения"),
+        ("точка роста", "место для улучшения"),
+        ("Инновационный", "Новый"),
+        ("инновационный", "новый"),
+        ("комплексное решение", "набор изменений"),
+        ("Уверен, что", "Проверьте, можно ли"),
+        ("уверен, что", "проверьте, можно ли"),
         (
             "Новый трафик, если в карточке нет свежих фактов и понятного сценария обращения",
             "Новые клиенты могут открыть карточку и уйти, если не увидят актуальную информацию и не поймут, как с вами связаться.",
@@ -216,6 +254,13 @@ def normalize_audit_text(value: Any, *, audit_profile: str = "") -> str:
     result = text
     for source, target in replacements:
         result = result.replace(source, target)
+    result = re.sub(
+        r"\bуверен\w*\s*,?\s+что\b",
+        "проверьте, можно ли",
+        result,
+        flags=re.IGNORECASE,
+    )
+    result = result.replace("—", "-").replace("–", "-")
 
     if audit_profile not in {"medical", "hospitality"}:
         result = result.replace("Пациент", "Клиент").replace("пациент", "клиент")
@@ -551,7 +596,7 @@ def _pattern_hint(audit: dict[str, Any]) -> str:
 def _summary_variant_index(audit: dict[str, Any]) -> int:
     basis = "|".join(
         str(audit.get(key) or "")
-        for key in ("lead_id", "business_name", "name", "audit_profile", "audit_slug", "business_address", "summary_text")
+        for key in ("lead_id", "business_name", "name", "audit_profile", "audit_slug", "business_address")
     )
     return sum((index + 1) * ord(char) for index, char in enumerate(basis)) % 7
 
@@ -678,6 +723,7 @@ def _medical_summary(audit: dict[str, Any], *, business_name: str, focus: str, m
     reviews_count = _safe_int(state.get("reviews_count"))
     services_count = _safe_int(state.get("services_count"))
     has_activity = state.get("has_recent_activity")
+    description_applicable = state.get("description_applicable") is not False
     if rating_text:
         trust_parts.append(f"рейтинг {rating_text}")
     if reviews_count > 0:
@@ -691,8 +737,25 @@ def _medical_summary(audit: dict[str, Any], *, business_name: str, focus: str, m
     else:
         first = "У карточки уже есть основа для доверия пациентов."
 
-    freshness = "свежих обновлений и " if has_activity is False else ""
     queries = _medical_patient_queries(focus)
+    if not description_applicable:
+        if has_activity is False:
+            second = (
+                f"В карточке нет свежих новостей о направлениях: {queries}."
+                if queries
+                else "В карточке нет свежих новостей о направлениях клиники."
+            )
+        else:
+            second = (
+                f"Основные направления можно показать заметнее: {queries}."
+                if queries
+                else "Основные направления можно показать заметнее."
+            )
+        third = "Сначала стоит показать актуальные услуги и как записаться."
+        summary = normalize_audit_text(" ".join([first, second, third]), audit_profile="medical")
+        return truncate_sentence(summary, max_length)
+
+    freshness = "свежих обновлений и " if has_activity is False else ""
     if queries:
         second = f"Сейчас карточке не хватает {freshness}понятного описания под запросы пациентов: {queries}."
     else:
@@ -736,6 +799,8 @@ def _editorial_next_action(audit: dict[str, Any], issue_fix: str) -> str:
     variant = _summary_variant_index(audit)
     audit_profile = str(audit.get("audit_profile") or "").strip().lower()
     words = _profile_action_words(audit_profile)
+    state = audit.get("current_state") if isinstance(audit.get("current_state"), dict) else {}
+    description_applicable = state.get("description_applicable") is not False
     normalized_fix = normalize_audit_text(issue_fix, audit_profile=str(audit.get("audit_profile") or ""))
     if audit_profile == "shopping_center":
         shopping_center_variants = (
@@ -761,23 +826,31 @@ def _editorial_next_action(audit: dict[str, Any], issue_fix: str) -> str:
         return retail_variants[variant]
     if focus:
         variants = (
-            f"показать в описании {focus}: что выбрать, кому подходит и как {words['action']}",
-            f"выделить {focus} и добавить короткую причину для {words['choice']}",
-            f"собрать {focus} в понятный блок: результат, цена или ориентир, следующий шаг",
-            f"переписать описание вокруг {focus}, чтобы клиент быстрее дошёл до {words['next']}",
-            f"показать, что здесь главное: {focus}, и чем эта точка удобнее конкурентов",
-            f"разделить {focus} по сценариям: для кого, какой результат, что делать дальше",
-            f"добавить короткий блок про {focus}: отличие, ориентир по выбору и следующий шаг",
+            f"показать {'в описании' if description_applicable else 'в карточке'} основные направления - {focus}: что выбрать, кому подходит и как {words['action']}",
+            f"выделить направления - {focus} - и добавить короткую причину для {words['choice']}",
+            f"собрать направления в понятный блок: {focus}; указать результат, цену или ориентир и следующий шаг",
+            f"{'переписать описание вокруг направлений' if description_applicable else 'собрать направления в карточке'} - {focus}, чтобы клиент быстрее дошёл до {words['next']}",
+            f"показать основные направления - {focus} - и объяснить, чем эта точка удобнее конкурентов",
+            f"разделить направления - {focus} - по сценариям: для кого, какой результат, что делать дальше",
+            f"добавить короткий блок о направлениях - {focus}: отличие, ориентир по выбору и следующий шаг",
         )
         return variants[variant]
     if normalized_fix:
         lowered = normalized_fix.lower()
         if "опис" in lowered:
-            return f"добавить в описание основные услуги, поводы обратиться и понятный способ {words['next']}"
+            return (
+                f"добавить в описание основные услуги, поводы обратиться и понятный способ {words['next']}"
+                if description_applicable
+                else f"выделить в карточке основные услуги, поводы обратиться и понятный способ {words['next']}"
+            )
         if "цен" in lowered:
             return "добавить цены или диапазоны цен в услуги, чтобы клиент мог сравнить варианты до звонка"
         if "отзыв" in lowered:
-            return "ответить на свежие отзывы и вынести сильные формулировки клиентов в описание карточки"
+            return (
+                "ответить на свежие отзывы и вынести сильные формулировки клиентов в описание карточки"
+                if description_applicable
+                else "ответить на свежие отзывы и использовать сильные формулировки клиентов в новостях и услугах"
+            )
         if "фото" in lowered:
             return "добавить фото работ, входа или результата, чтобы карточка давала больше доказательств выбора"
         return normalized_fix[:1].lower() + normalized_fix[1:]

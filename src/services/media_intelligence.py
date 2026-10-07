@@ -9,7 +9,8 @@ from typing import Any
 
 from psycopg2.extras import Json
 
-from services.media_file_storage import store_media_file
+from core.upload_security import upload_content_matches_type
+from services.media_file_storage import build_media_delivery_url, store_media_file
 
 
 PHOTO_LIBRARY: dict[str, list[dict[str, str]]] = {
@@ -189,6 +190,8 @@ def create_uploaded_photo_asset(
     extension = _photo_extension(original_name=original_name, mime_type=mime_type)
     if extension not in {"jpg", "jpeg", "png", "webp"}:
         raise ValueError("Поддерживаются JPG, PNG и WebP")
+    if not upload_content_matches_type(extension=extension, mime_type=mime_type, content=content):
+        raise ValueError("содержимое файла не соответствует формату изображения")
     asset_id = str(uuid.uuid4())
     stored = store_media_file(
         business_id=business_id,
@@ -200,12 +203,13 @@ def create_uploaded_photo_asset(
         mime_type=mime_type,
     )
     content_hash = hashlib.sha256(content).hexdigest()
-    original_url = stored.get("public_url") or f"/api/media-intelligence/photos/{asset_id}/file?variant=original"
+    delivery_url = build_media_delivery_url(asset_id=asset_id, content_hash=content_hash)
+    original_url = stored.get("public_url") or delivery_url or f"/api/media-intelligence/photos/{asset_id}/file?variant=original"
     versions = {
         "original": {
             "storage_path": stored.get("storage_path"),
             "storage_key": stored.get("storage_key"),
-            "public_url": stored.get("public_url") or "",
+            "public_url": stored.get("public_url") or delivery_url,
             "mime_type": stored.get("mime_type") or mime_type,
             "size_bytes": stored.get("size_bytes") or len(content),
         },
@@ -253,7 +257,7 @@ def list_photo_assets(cursor: Any, business_id: str) -> list[dict[str, Any]]:
         """
         SELECT *
         FROM photo_assets
-        WHERE business_id = %s
+        WHERE business_id = %s AND metadata_json->>'disk_import_available' IS DISTINCT FROM 'false'
         ORDER BY quality_score DESC, updated_at DESC
         LIMIT 200
         """,
@@ -562,3 +566,53 @@ def record_photo_usage(
         """,
         (datetime.now(timezone.utc), photo_asset_id, business_id),
     )
+
+
+def ensure_recommended_photo_usage(
+    cursor: Any,
+    *,
+    business_id: str,
+    content_plan_item_id: str,
+) -> dict[str, Any]:
+    cursor.execute(
+        """
+        SELECT photo_asset_id
+        FROM photo_asset_usage_events
+        WHERE business_id = %s
+          AND usage_type = 'publication'
+          AND target_id = %s
+          AND (target_platform IS NULL OR target_platform = '')
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (business_id, content_plan_item_id),
+    )
+    existing = _row_to_dict(cursor, cursor.fetchone()) or {}
+    existing_asset_id = _clean_text(existing.get("photo_asset_id"))
+    if existing_asset_id:
+        return {"selected": True, "photo_asset_id": existing_asset_id, "source": "existing"}
+
+    recommendation = recommend_media_for_post(
+        cursor,
+        business_id=business_id,
+        content_plan_item_id=content_plan_item_id,
+    )
+    selected = recommendation.get("selected_asset")
+    if recommendation.get("status") != "ready" or not isinstance(selected, dict):
+        return {"selected": False, "photo_asset_id": "", "source": "none"}
+    photo_asset_id = _clean_text(selected.get("id"))
+    if not photo_asset_id:
+        return {"selected": False, "photo_asset_id": "", "source": "none"}
+    record_photo_usage(
+        cursor,
+        business_id=business_id,
+        photo_asset_id=photo_asset_id,
+        usage_type="publication",
+        target_id=content_plan_item_id,
+        metadata={
+            "source": "automatic_media_planner",
+            "category": _clean_text(selected.get("category")),
+            "rank_score": int(selected.get("rank_score") or 0),
+        },
+    )
+    return {"selected": True, "photo_asset_id": photo_asset_id, "source": "recommendation"}

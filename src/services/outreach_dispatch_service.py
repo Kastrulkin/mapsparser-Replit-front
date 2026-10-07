@@ -6,6 +6,7 @@ the large admin route module without changing behavior.
 """
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from services.outreach_safety_service import (
@@ -17,6 +18,78 @@ from services.outreach_safety_service import (
 )
 
 
+def _preflight_and_dispatch(p, item, *, author_reply_sync_started_at=None):
+    """Native preflight plus permission/lifecycle fence across the provider call."""
+    conn = p.get_db_connection()
+    held = []
+    try:
+        cur = conn.cursor()
+        queue_id = str(item.get("id") or "")
+        preflight = run_dispatch_preflight(cur, queue_id, author_reply_sync_started_at=author_reply_sync_started_at)
+        if preflight.get("allowed"):
+            try:
+                item = bind_preflight_dispatch_item(item, preflight)
+            except ValueError as exc:
+                preflight = {**preflight, "allowed": False, "reason_code": str(exc)}
+        checked = preflight.get("item") or {}
+        policy = checked.get("policy_json") or {}
+        if preflight.get("allowed") and policy.get("approval_mode") == "ai_rules":
+            from services.outreach_ai_authorization import load, AuthorizationBusy
+            try:
+                grant = load(cur, policy.get("ai_authorization_id"))
+                if not grant:
+                    preflight = {**preflight, "allowed": False, "reason_code": "ai_rules_authorization_revoked_or_changed"}
+                else:
+                    rules = grant["rules"]
+                    process = rules["process"]
+                    keys = [f"ai-outreach:{rules['sender_account_id']}:{process['type']}:{process['id']}"]
+                    if process["type"] == "automation":
+                        keys.append(f"agent-pause-fence:{process['id']}")
+                    for key in keys:
+                        cur.execute("SELECT pg_try_advisory_lock(hashtext(%s)) AS acquired", (key,))
+                        if not (cur.fetchone() or {}).get("acquired"):
+                            raise AuthorizationBusy("ai_rules_permission_busy")
+                        held.append(key)
+                    # Explicit final read under BOTH fences. The previous load
+                    # also held process row locks, but do not rely on that detail
+                    # for admission of an external action.
+                    current = load(cur, policy.get("ai_authorization_id"), require_running=True)
+                    if not current or str(current['id']) != str(grant['id']):
+                        preflight = {**preflight, "allowed": False, "reason_code": "ai_rules_authorization_revoked_or_changed"}
+            except AuthorizationBusy:
+                preflight = {**preflight, "allowed": False, "reason_code": "ai_rules_permission_busy", "retryable": True}
+        persist_preflight_result(cur, queue_id, preflight)
+        if not preflight.get("allowed"):
+            block_queue_item_after_preflight(cur, queue_id, preflight)
+        # Persist the existing dispatch attempt before network I/O. Session
+        # fences survive this commit but are ALWAYS released below, also on error.
+        conn.commit()
+        result = p._dispatch_outreach_queue_item(item) if preflight.get("allowed") else None
+        return item, preflight, result
+    finally:
+        try:
+            conn.rollback()
+            if held:
+                cur = conn.cursor()
+                for key in reversed(held):
+                    cur.execute("SELECT pg_advisory_unlock(hashtext(%s))", (key,))
+        finally:
+            conn.close()
+
+
+def bind_preflight_dispatch_item(item: dict[str, Any], preflight: dict[str, Any]) -> dict[str, Any]:
+    """Use only freshly validated bytes/recipient for template-authorized sends."""
+    checked = preflight.get("item") or {}
+    approval_mode = (checked.get("policy_json") or {}).get("approval_mode")
+    if approval_mode not in {"author_template", "riderra_template"}:
+        return item
+    payload = preflight.get("validated_dispatch_payload")
+    if (not isinstance(payload, dict) or payload.get("id") != str(item.get("id") or "")
+            or not payload.get("approved_text") or not payload.get("email")):
+        raise ValueError(f"{approval_mode}_dispatch_payload_missing")
+    return {**item, **payload}
+
+
 def dispatch_due_outreach_queue(
     batch_size: int = 20,
     batch_id: str | None = None,
@@ -25,14 +98,23 @@ def dispatch_due_outreach_queue(
     campaign_only: bool = False,
     allowed_business_ids: list[str] | None = None,
     allow_platform: bool = False,
+    max_daily_outreach_batch: int | None = None,
+    blocked_sender_ids: list[str] | None = None,
+    author_reply_sync_started_at: datetime | None = None,
 ) -> dict[str, Any]:
     """Dispatch queued/retry outreach items to the configured outbound provider."""
     from api import admin_prospecting as p
 
-    safe_batch_size = max(1, min(int(batch_size or 20), 200))
+    requested_batch_size = max(1, min(int(batch_size or 20), 200))
+    safe_batch_size = requested_batch_size
     cohort_business_ids = sorted({
         str(item or "").strip()
         for item in (allowed_business_ids or [])
+        if str(item or "").strip()
+    })
+    blocked_senders = sorted({
+        str(item or "").strip()
+        for item in (blocked_sender_ids or [])
         if str(item or "").strip()
     })
     if campaign_only and not allow_platform and not cohort_business_ids:
@@ -56,9 +138,21 @@ def dispatch_due_outreach_queue(
         cur.execute(
             """
             SELECT COUNT(*) AS count
-            FROM outreachsendqueue
-            WHERE sent_at >= CURRENT_DATE
-              AND delivery_status IN (%s, %s)
+            FROM outreachsendqueue queue
+            LEFT JOIN outreach_campaign_touches touch ON touch.id = queue.campaign_touch_id
+            LEFT JOIN outreach_campaigns campaign ON campaign.id = touch.campaign_id
+            LEFT JOIN lead_workstreams workstream ON workstream.id = queue.workstream_id
+            LEFT JOIN prospectingleads lead ON lead.id = queue.lead_id
+            LEFT JOIN creator_profiles creator
+              ON lead.source_external_id = 'creator:' || creator.id::text
+            WHERE queue.sent_at >= CURRENT_DATE
+              AND queue.delivery_status IN (%s, %s)
+              AND NOT COALESCE(
+                  workstream.workstream_type = 'creator_collaboration'
+                  AND campaign.sender_mode = 'localos_for_partner'
+                  AND creator.id IS NOT NULL,
+                  FALSE
+              )
             """,
             (p.QUEUE_STATUS_SENT, p.QUEUE_STATUS_DELIVERED),
         )
@@ -67,28 +161,44 @@ def dispatch_due_outreach_queue(
             (sent_row.get("count") if hasattr(sent_row, "get") else sent_row[0] if sent_row else 0)
             or 0
         )
-        safe_batch_size = min(safe_batch_size, max(0, int(p.MAX_DAILY_OUTREACH_BATCH) - sent_today))
-        if safe_batch_size <= 0:
-            return {
-                "success": True,
-                "batch_id": batch_id,
-                "queue_id": queue_id,
-                "picked": 0,
-                "sent": 0,
-                "delivered": 0,
-                "retry": 0,
-                "dlq": 0,
-                "failed": 0,
-                "blocked": 0,
-                "results": [],
-                "reason_code": "daily_limit_reached",
-            }
+        supervised_daily_cap = max(
+            1,
+            min(
+                int(max_daily_outreach_batch or p.MAX_DAILY_OUTREACH_BATCH),
+                200,
+            ),
+        )
+        legacy_remaining = max(0, supervised_daily_cap - sent_today)
+        author_only_due = legacy_remaining <= 0
+        if not author_only_due:
+            safe_batch_size = min(requested_batch_size, legacy_remaining)
         query = """
-            WITH due AS (
+            WITH cohort_activity AS (
                 SELECT
-                    q.id
+                    CASE
+                      WHEN history_campaign.scope_type='platform' THEN 'platform'
+                      WHEN history_campaign.scope_type='business' THEN 'business:' || history_campaign.business_id::text
+                      ELSE 'legacy'
+                    END AS cohort_key,
+                    MAX(history.dispatch_started_at) AS last_dispatch_at
+                FROM outreachsendqueue history
+                LEFT JOIN outreach_campaign_touches history_touch ON history_touch.id=history.campaign_touch_id
+                LEFT JOIN outreach_campaigns history_campaign ON history_campaign.id=history_touch.campaign_id
+                WHERE history.dispatch_started_at IS NOT NULL
+                GROUP BY 1
+            ), candidates AS (
+                SELECT
+                    q.id,
+                    COALESCE(q.next_retry_at,q.created_at) AS due_at,
+                    CASE
+                      WHEN candidate_campaign.scope_type='platform' THEN 'platform'
+                      WHEN candidate_campaign.scope_type='business' THEN 'business:' || candidate_campaign.business_id::text
+                      ELSE 'legacy'
+                    END AS cohort_key
                 FROM outreachsendqueue q
                 JOIN outreachsendbatches b ON b.id = q.batch_id
+                LEFT JOIN outreach_campaign_touches candidate_touch ON candidate_touch.id=q.campaign_touch_id
+                LEFT JOIN outreach_campaigns candidate_campaign ON candidate_campaign.id=candidate_touch.campaign_id
                 WHERE b.status = %s
                   AND (q.scheduled_at IS NULL OR q.scheduled_at <= NOW())
                   AND NOT EXISTS (
@@ -124,6 +234,32 @@ def dispatch_due_outreach_queue(
         if queue_id:
             query += " AND q.id = %s"
             params.append(queue_id)
+        if blocked_senders:
+            placeholders = ",".join(["%s"] * len(blocked_senders))
+            query += f" AND q.sender_account_id IS NOT NULL AND q.sender_account_id NOT IN ({placeholders})"
+            params.extend(blocked_senders)
+        if author_only_due:
+            query += """
+                AND EXISTS (
+                    SELECT 1
+                    FROM outreach_campaign_touches author_touch
+                    JOIN outreach_campaigns author_campaign ON author_campaign.id = author_touch.campaign_id
+                    JOIN lead_workstreams author_workstream ON author_workstream.id = q.workstream_id
+                    JOIN prospectingleads author_lead ON author_lead.id = q.lead_id
+                    LEFT JOIN creator_profiles author_creator
+                      ON author_lead.source_external_id = 'creator:' || author_creator.id::text
+                    WHERE author_touch.id = q.campaign_touch_id
+                      AND (
+                        (author_workstream.workstream_type = 'creator_collaboration'
+                         AND author_campaign.sender_mode = 'localos_for_partner'
+                         AND author_creator.id IS NOT NULL)
+                        OR
+                        (author_workstream.workstream_type = 'client_partnership'
+                         AND author_campaign.business_id = 'edbd961a-273f-4f15-836e-33aacc0aa0e3'
+                         AND author_campaign.policy_json->>'approval_mode' IN ('riderra_template','ai_rules'))
+                      )
+                )
+            """
         if campaign_only:
             query += " AND q.campaign_touch_id IS NOT NULL"
             cohort_clauses: list[str] = []
@@ -163,11 +299,26 @@ def dispatch_due_outreach_queue(
                     )
             """
             params.append(p.QUEUE_STATUS_RETRY)
-        query += """
+        fairness_enabled = campaign_only and (len(cohort_business_ids) + (1 if allow_platform else 0)) > 1
+        order_clause = (
+            "candidate.cohort_rank ASC, activity.last_dispatch_at ASC NULLS FIRST, candidate.due_at ASC, candidate.id ASC"
+            if fairness_enabled
+            else "candidate.due_at ASC, candidate.id ASC"
+        )
+        query += f"""
                   )
-                ORDER BY COALESCE(q.next_retry_at, q.created_at) ASC
+            ), ranked_candidates AS (
+                SELECT candidates.*,
+                       ROW_NUMBER() OVER (PARTITION BY cohort_key ORDER BY due_at,id) AS cohort_rank
+                FROM candidates
+            ), due AS (
+                SELECT q.id
+                FROM outreachsendqueue q
+                JOIN ranked_candidates candidate ON candidate.id=q.id
+                LEFT JOIN cohort_activity activity ON activity.cohort_key=candidate.cohort_key
+                ORDER BY {order_clause}
                 LIMIT %s
-                FOR UPDATE SKIP LOCKED
+                FOR UPDATE OF q SKIP LOCKED
             )
             UPDATE outreachsendqueue q
             SET delivery_status = %s,
@@ -271,40 +422,25 @@ def dispatch_due_outreach_queue(
             queue_id = str(item.get("id") or "")
             lead_id = str(item.get("lead_id") or "")
             attempt_no = int(item.get("attempts") or 1)
-            preflight_conn = p.get_db_connection()
-            try:
-                preflight_cur = preflight_conn.cursor()
-                preflight = run_dispatch_preflight(preflight_cur, queue_id)
-                persist_preflight_result(preflight_cur, queue_id, preflight)
-                if not preflight.get("allowed"):
-                    block_queue_item_after_preflight(preflight_cur, queue_id, preflight)
-                preflight_conn.commit()
-            except Exception:
-                preflight_conn.rollback()
-                raise
-            finally:
-                preflight_conn.close()
+            item, preflight, dispatch_result = _preflight_and_dispatch(
+                p, item, author_reply_sync_started_at=author_reply_sync_started_at)
             if not preflight.get("allowed"):
-                summary["blocked"] += 1
-                summary["results"].append(
-                    {
-                        "queue_id": queue_id,
-                        "lead_id": lead_id,
-                        "channel": item.get("channel"),
-                        "attempt_no": attempt_no,
-                        "delivery_status": "blocked",
-                        "reason_code": preflight.get("reason_code"),
-                    }
-                )
+                summary["retry" if preflight.get("retryable") else "blocked"] += 1
+                summary["results"].append({"queue_id": queue_id, "lead_id": lead_id,
+                    "channel": item.get("channel"), "attempt_no": attempt_no,
+                    "delivery_status": "retry" if preflight.get("retryable") else "blocked",
+                    "reason_code": preflight.get("reason_code")})
                 continue
-            dispatch_result = p._dispatch_outreach_queue_item(item)
             delivery_status = str(dispatch_result.get("delivery_status") or p.QUEUE_STATUS_FAILED).strip().lower()
             provider_message_id = dispatch_result.get("provider_message_id")
             provider_name = dispatch_result.get("provider_name")
             provider_account_id = dispatch_result.get("provider_account_id")
             recipient_kind = dispatch_result.get("recipient_kind")
             recipient_value = dispatch_result.get("recipient_value")
+            error_code = str(dispatch_result.get("error_code") or "").strip().lower()
             error_text = str(dispatch_result.get("error_text") or "").strip()[:500] or None
+            if error_code.endswith("send_uncertain"):
+                error_text = f"{error_code}: {error_text or 'provider outcome requires verification'}"[:500]
             retryable = bool(dispatch_result.get("retryable", True))
 
             update_conn = p.get_db_connection()

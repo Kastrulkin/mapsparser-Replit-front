@@ -6,6 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { LanguageProvider, useLanguage } from "./i18n/LanguageContext";
 import { CurrencyProvider } from "./contexts/CurrencyContext";
+import { featureFlags } from "./config/featureFlags";
+import { JourneyWorkspaceFocus } from "./components/journey/JourneyWorkspaceFocus";
 
 const Index = lazy(() => import("./pages/Index"));
 const About = lazy(() => import("./pages/About"));
@@ -110,11 +112,27 @@ const TodayPage = lazy(() =>
     default: module.TodayPage,
   })),
 );
+const InfluencersPage = lazy(() =>
+  import("./pages/dashboard/InfluencersPage").then((module) => ({
+    default: module.InfluencersPage,
+  })),
+);
+const CommunityFeedPage = lazy(() =>
+  import("./pages/dashboard/CommunityFeedPage").then((module) => ({
+    default: module.CommunityFeedPage,
+  })),
+);
 const FinancePage = lazy(() =>
   import("./pages/dashboard/FinancePage").then((module) => ({
     default: module.FinancePage,
   })),
 );
+const WebAnalyticsPage = lazy(() =>
+  import("./pages/dashboard/WebAnalyticsPage").then((module) => ({
+    default: module.WebAnalyticsPage,
+  })),
+);
+const WorkJournalPage = lazy(() => import("./pages/dashboard/WorkJournalPage"));
 const AverageTicketPage = lazy(() =>
   import("./pages/dashboard/AverageTicketPage").then((module) => ({
     default: module.AverageTicketPage,
@@ -133,6 +151,21 @@ const AdminPage = lazy(() =>
     default: module.AdminPage,
   })),
 );
+const JourneyAdminPage = lazy(() =>
+  import("./pages/dashboard/JourneyAdminPage").then((module) => ({
+    default: module.JourneyAdminPage,
+  })),
+);
+const GrowthPathsPage = lazy(() =>
+  import("./pages/dashboard/GrowthPathsPage").then((module) => ({
+    default: module.GrowthPathsPage,
+  })),
+);
+const MorePage = lazy(() =>
+  import("./pages/dashboard/MorePage").then((module) => ({
+    default: module.MorePage,
+  })),
+);
 const ChatsPage = lazy(() =>
   import("./pages/dashboard/ChatsPage").then((module) => ({
     default: module.ChatsPage,
@@ -146,6 +179,31 @@ const AIChatPromotionPage = lazy(() =>
 const PartnershipSearchPage = lazy(() =>
   import("./pages/dashboard/PartnershipSearchPage").then((module) => ({
     default: module.PartnershipSearchPage,
+  })),
+);
+const PromotionHubPage = lazy(() =>
+  import("./pages/dashboard/PromotionHubPage").then((module) => ({
+    default: module.PromotionHubPage,
+  })),
+);
+const InfluencerPromotionPage = lazy(() =>
+  import("./pages/dashboard/InfluencerPromotionPage").then((module) => ({
+    default: module.InfluencerPromotionPage,
+  })),
+);
+const InfluencerRegistryPage = lazy(() =>
+  import("./pages/dashboard/InfluencerRegistryPage").then((module) => ({
+    default: module.InfluencerRegistryPage,
+  })),
+);
+const CreatorRoomPage = lazy(() =>
+  import("./pages/CreatorRoomPage").then((module) => ({
+    default: module.CreatorRoomPage,
+  })),
+);
+const CreatorPortalPage = lazy(() =>
+  import("./pages/CreatorPortalPage").then((module) => ({
+    default: module.CreatorPortalPage,
   })),
 );
 const OperatorPage = lazy(() =>
@@ -171,6 +229,7 @@ const DemoEntryPage = lazy(() => import("./pages/DemoEntryPage"));
 const VeselayaRascheskaOfferPage = lazy(() => import("./pages/VeselayaRascheskaOfferPage"));
 const CheckoutReturn = lazy(() => import("./pages/CheckoutReturn"));
 const TelegramControlPage = lazy(() => import("./pages/TelegramControlPage"));
+const LeadJourneyPage = lazy(() => import("./pages/LeadJourneyPage"));
 const IndustryPatternsE2EPage = import.meta.env.DEV
   ? lazy(() => import("./pages/dev/IndustryPatternsE2EPage"))
   : null;
@@ -179,6 +238,10 @@ const queryClient = new QueryClient();
 
 const RouteFallback = () => {
   const [takingLong, setTakingLong] = useState(false);
+  const { language } = useLanguage();
+  const fallbackCopy = language === "tr"
+    ? { loading: "Ekran yükleniyor…", slow: "Ekranın yüklenmesi beklenenden uzun sürüyor.", reload: "Sayfayı yenileyin" }
+    : { loading: "Загружаем экран...", slow: "Экран загружается дольше обычного.", reload: "Обновить экран" };
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => setTakingLong(true), 5_000);
@@ -195,14 +258,14 @@ const RouteFallback = () => {
   return (
     <div className="flex min-h-[40vh] items-center justify-center px-4 py-12">
       <div className="max-w-sm rounded-lg border border-slate-200 bg-white px-5 py-4 text-center text-sm text-slate-600 shadow-sm">
-        <p>{takingLong ? "Экран загружается дольше обычного." : "Загружаем экран..."}</p>
+        <p>{takingLong ? fallbackCopy.slow : fallbackCopy.loading}</p>
         {takingLong ? (
           <button
             type="button"
             onClick={reloadRoute}
             className="mt-3 min-h-10 rounded-md bg-slate-950 px-4 py-2 font-medium text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
           >
-            Обновить экран
+            {fallbackCopy.reload}
           </button>
         ) : null}
       </div>
@@ -219,6 +282,14 @@ const shouldRenderHeader = (pathname: string) => {
     return false;
   }
 
+  if (pathname.startsWith("/creator-room/")) {
+    return false;
+  }
+
+  if (pathname.startsWith("/creator")) {
+    return false;
+  }
+
   if (pathname === "/bazich") {
     return false;
   }
@@ -228,6 +299,10 @@ const shouldRenderHeader = (pathname: string) => {
   }
 
   if (pathname === "/telegram/control") {
+    return false;
+  }
+
+  if (pathname === "/growth" || pathname.startsWith("/start/")) {
     return false;
   }
 
@@ -274,23 +349,35 @@ const AppShell = () => {
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<Navigate to="/dashboard/today" replace />} />
             <Route path="today" element={<TodayPage />} />
+            <Route path="feed" element={<CommunityFeedPage />} />
             <Route path="profile" element={<ProfilePage />} />
-            <Route path="card" element={<CardOverviewPage />} />
-            <Route path="content" element={<ContentPage />} />
+            <Route path="card" element={<JourneyWorkspaceFocus><CardOverviewPage /></JourneyWorkspaceFocus>} />
+            <Route path="content" element={<JourneyWorkspaceFocus><ContentPage /></JourneyWorkspaceFocus>} />
             <Route path="content-plan" element={<Navigate to="/dashboard/content" replace />} />
             <Route path="progress" element={<ProgressPage />} />
             <Route path="finance" element={<FinancePage />} />
+            <Route path="web-analytics" element={featureFlags.webTracking ? <WebAnalyticsPage /> : <Navigate to="/dashboard/progress" replace />} />
             <Route path="average-ticket" element={<AverageTicketPage />} />
+            <Route path="work-journal" element={<WorkJournalPage />} />
             <Route path="ai-chat-promotion" element={<AIChatPromotionPage />} />
             <Route path="settings/*" element={<SettingsPage />} />
-            <Route path="partnerships" element={<PartnershipSearchPage />} />
+            <Route path="partnerships" element={<JourneyWorkspaceFocus><PartnershipSearchPage /></JourneyWorkspaceFocus>} />
+            <Route path="promotion" element={<PromotionHubPage />} />
+            <Route path="promotion/partnerships" element={<JourneyWorkspaceFocus><PartnershipSearchPage /></JourneyWorkspaceFocus>} />
+            <Route path="influencers" element={<JourneyWorkspaceFocus><InfluencersPage /></JourneyWorkspaceFocus>} />
+            <Route path="influencers/registry" element={<JourneyWorkspaceFocus><InfluencerRegistryPage /></JourneyWorkspaceFocus>} />
+            <Route path="influencers/operations" element={<JourneyWorkspaceFocus><InfluencerPromotionPage /></JourneyWorkspaceFocus>} />
+            <Route path="promotion/influencers" element={<Navigate to="/dashboard/influencers" replace />} />
+            <Route path="growth-paths" element={<GrowthPathsPage />} />
+            <Route path="more" element={<MorePage />} />
             <Route path="operator" element={<OperatorPage />} />
             <Route path="telegram-radar" element={<TelegramRadarPage />} />
-            <Route path="agents" element={<AgentBlueprintsPage />} />
+            <Route path="agents" element={<JourneyWorkspaceFocus><AgentBlueprintsPage /></JourneyWorkspaceFocus>} />
             <Route path="bookings" element={<Navigate to="/dashboard/progress" replace />} />
             <Route path="chats" element={<ChatsPage />} />
             <Route path="network" element={<NetworkDashboardPage />} />
             <Route path="bazich" element={<AdminPage />} />
+            <Route path="bazich/journeys" element={<JourneyAdminPage />} />
           </Route>
           <Route path="/bazich" element={<AdminPage />} />
           <Route path="/dashboard-old" element={<Dashboard />} />
@@ -303,11 +390,22 @@ const AppShell = () => {
           <Route path="/reset-password" element={<SetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/checkout/return" element={<CheckoutReturn />} />
+          <Route path="/growth" element={<LeadJourneyPage />} />
+          <Route path="/start/:token" element={<LeadJourneyPage />} />
           {IndustryPatternsE2EPage ? (
             <Route path="/__e2e__/industry-patterns" element={<IndustryPatternsE2EPage />} />
           ) : null}
           <Route path="/room/:roomSlug" element={<PublicSalesRoomPage />} />
+          <Route path="/creator-room/:token" element={<CreatorRoomPage />} />
+          <Route path="/creator/join/:token" element={<CreatorPortalPage />} />
+          <Route path="/creator/login" element={<CreatorPortalPage />} />
+          <Route path="/creator/login/telegram" element={<CreatorPortalPage />} />
+          <Route path="/creator/verify-email/:token" element={<CreatorPortalPage />} />
+          <Route path="/creator/reset-password/:token" element={<CreatorPortalPage />} />
+          <Route path="/creator/offers/:offerId" element={<CreatorPortalPage />} />
+          <Route path="/creator" element={<CreatorPortalPage />} />
           <Route path="/veselaya-rascheska-hit" element={<VeselayaRascheskaOfferPage />} />
+          <Route path="/web-analytics" element={<Navigate to="/dashboard/web-analytics" replace />} />
           <Route path="/:offerSlug" element={<PublicPartnershipOfferPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

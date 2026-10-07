@@ -9,6 +9,18 @@ APIFY_CREDIT_MULTIPLIER = 10
 CONSENT_MODES = ("ask_each_time", "auto_with_limits", "disabled")
 
 PAID_ACTIONS: dict[str, dict[str, Any]] = {
+    "outreach_company_search": {
+        "label": "Поиск компаний", "action_class": "paid_external", "cost_source": "fixed_credit_per_call",
+        "provider": "apify", "credit_multiplier": APIFY_CREDIT_MULTIPLIER,
+        "manual_approval_required": True, "external_write": False,
+        "description": "Один ограниченный поисковый вызов для поручения по компаниям.",
+    },
+    "outreach_company_check": {
+        "label": "Проверка компании", "action_class": "paid_compute", "cost_source": "fixed_credit_per_check",
+        "provider": "configured_ai_provider", "credit_multiplier": 1,
+        "manual_approval_required": True, "external_write": False,
+        "description": "Проверка соответствия компании по открытым источникам.",
+    },
     "map_reviews_refresh": {
         "label": "Обновить данные карт",
         "action_class": "paid_external",
@@ -78,6 +90,16 @@ PAID_ACTIONS: dict[str, dict[str, Any]] = {
         "manual_approval_required": False,
         "external_write": False,
         "description": "Fallback-классификация свободной команды в один из безопасных сценариев LocalOS.",
+    },
+    "operator_tool_plan": {
+        "label": "Спланировать команду Operator",
+        "action_class": "paid_compute",
+        "cost_source": "model_tokens",
+        "provider": "deepseek",
+        "credit_multiplier": 1,
+        "manual_approval_required": False,
+        "external_write": False,
+        "description": "Построение ограниченного плана из разрешённых инструментов LocalOS без прямого доступа модели к базе.",
     },
 }
 

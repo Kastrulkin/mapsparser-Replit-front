@@ -4,9 +4,11 @@ from flask import Blueprint, jsonify, request
 from database_manager import DatabaseManager
 from auth_system import verify_session
 from core.auth_helpers import verify_business_access
+from core.api_errors import internal_error_response
 from progress_calculator import calculate_business_progress
 from core.card_audit import build_card_audit_snapshot
 from core.map_url_normalizer import normalize_map_url
+from subscription_manager import get_capability_access
 
 progress_bp = Blueprint('progress_api', __name__)
 
@@ -48,6 +50,16 @@ def require_auth():
     token = auth_header.split(' ')[1]
     return verify_session(token)
 
+
+def _payment_required_response(access):
+    return jsonify({
+        "success": False,
+        "error": "payment_required",
+        "payment_required": True,
+        **access,
+        "return_to": request.full_path.rstrip("?"),
+    }), 402
+
 @progress_bp.route('/api/business/<business_id>/progress', methods=['GET'])
 def get_business_progress(business_id):
     """Получить прогресс выполнения этапов роста для бизнеса"""
@@ -67,6 +79,11 @@ def get_business_progress(business_id):
         if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        access = get_capability_access(business_id, "progress", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            db.close()
+            return _payment_required_response(access)
         
         db.close()
         
@@ -78,11 +95,8 @@ def get_business_progress(business_id):
             "progress": progress_data
         })
         
-    except Exception as e:
-        print(f"❌ Ошибка получения прогресса: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось получить прогресс бизнеса")
 
 
 @progress_bp.route('/api/business/<business_id>/card-audit', methods=['GET'])
@@ -104,6 +118,11 @@ def get_business_card_audit(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
+        access = get_capability_access(business_id, "maps.audit", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            db.close()
+            return _payment_required_response(access)
+
         db.close()
 
         audit = build_card_audit_snapshot(business_id)
@@ -111,11 +130,8 @@ def get_business_card_audit(business_id):
             "success": True,
             "audit": audit,
         })
-    except Exception as e:
-        print(f"❌ Ошибка получения аудита карточки: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось получить аудит карточки")
 
 
 @progress_bp.route('/api/business/<business_id>/public-audit-links', methods=['GET'])
@@ -245,8 +261,5 @@ def get_business_public_audit_links(business_id):
             "links": links,
             "scope": "network" if is_network_parent else "business",
         })
-    except Exception as e:
-        print(f"❌ Ошибка получения ссылок на public audits: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось получить ссылки на аудит")

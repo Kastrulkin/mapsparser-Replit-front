@@ -31,7 +31,26 @@ ALLOWED_SESSION_KWARGS = {
     "launch_args",
     "init_scripts",
     "geolocation",
+    "block_service_workers",
 }
+
+PARSER_MODE_FULL = "full"
+PARSER_MODE_CARD_SNAPSHOT = "card_snapshot"
+PARSER_MODE_REVIEWS_DELTA = "reviews_delta"
+PARSER_MODE_REVIEWS_FULL = "reviews_full"
+PARSER_MODE_CONTENT_SNAPSHOT = "content_snapshot"
+PARSER_MODES = {
+    PARSER_MODE_FULL,
+    PARSER_MODE_CARD_SNAPSHOT,
+    PARSER_MODE_REVIEWS_DELTA,
+    PARSER_MODE_REVIEWS_FULL,
+    PARSER_MODE_CONTENT_SNAPSHOT,
+}
+
+
+def _normalize_parser_mode(value: Any) -> str:
+    normalized = str(value or PARSER_MODE_FULL).strip().lower()
+    return normalized if normalized in PARSER_MODES else PARSER_MODE_FULL
 
 def _find_paths(obj: Any, target_keys: List[str], max_depth: int = 6, max_preview_len: int = 120,
                 max_results_per_key: int = 20) -> Dict[str, List[Dict[str, str]]]:
@@ -223,12 +242,59 @@ class YandexMapsInterceptionParser:
         "вход",
     )
     
-    def __init__(self, debug_bundle_id: Optional[str] = None):
+    def __init__(
+        self,
+        debug_bundle_id: Optional[str] = None,
+        *,
+        parse_mode: str = PARSER_MODE_FULL,
+        known_review_ids: Optional[List[str]] = None,
+    ):
         self.api_responses: Dict[str, Any] = {}
         self.org_id: Optional[str] = None
         self.debug_bundle_id: Optional[str] = debug_bundle_id
         _base = os.getenv("DEBUG_DIR", "/app/debug_data")
         self.debug_bundle_dir: Optional[str] = os.path.join(_base, debug_bundle_id) if debug_bundle_id else None
+        self.parse_mode = _normalize_parser_mode(parse_mode)
+        self.known_review_ids = {
+            str(item).strip() for item in (known_review_ids or []) if str(item).strip()
+        }
+        self.review_ids_seen: set[str] = set()
+        self.review_api_response_count = 0
+        self.review_scroll_count = 0
+        self.review_stop_reason = "not_started"
+
+    @staticmethod
+    def _review_ids_from_payload(payload: Any) -> set[str]:
+        """Collect stable review IDs without mistaking organization IDs for reviews."""
+        found: set[str] = set()
+
+        def walk(node: Any) -> None:
+            if isinstance(node, dict):
+                looks_like_review = bool(
+                    node.get("reviewId")
+                    or (
+                        node.get("id")
+                        and (
+                            any(node.get(key) for key in ("text", "comment", "reviewText"))
+                            or (
+                                any(node.get(key) for key in ("author", "authorName", "reviewerName"))
+                                and any(node.get(key) for key in ("rating", "score"))
+                            )
+                        )
+                    )
+                )
+                if looks_like_review:
+                    review_id = str(node.get("reviewId") or node.get("id") or "").strip()
+                    if review_id:
+                        found.add(review_id)
+                for child in node.values():
+                    walk(child)
+            elif isinstance(node, list):
+                for child in node:
+                    walk(child)
+
+        walk(payload)
+        return found
 
     def _is_noisy_product(self, item: Dict[str, Any]) -> bool:
         name = str(item.get("name") or "").strip()
@@ -370,6 +436,102 @@ class YandexMapsInterceptionParser:
         # Fallback на старый формат: /org/123456/
         match = re.search(r'/org/(\d+)', url)
         return match.group(1) if match else None
+
+    def _extract_ll_z_from_url(self, url: str) -> tuple:
+        """Extract map coordinates and zoom without raising on malformed input."""
+        if not url:
+            return (None, None)
+        try:
+            query = parse_qs(urlparse(url).query)
+            return (query.get("ll", [None])[0], query.get("z", [None])[0])
+        except Exception:
+            return (None, None)
+
+    def _build_overview_url(self, base_url: str, ll: Optional[str] = None, z: Optional[str] = None) -> str:
+        """Build an organization overview URL, removing a prices suffix."""
+        parsed = urlparse(re.sub(r"/prices/?", "/", base_url or ""))
+        path = (parsed.path or "").rstrip("/") + "/"
+        overview = f"{parsed.scheme or 'https'}://{parsed.netloc or 'yandex.ru'}{path}"
+        return f"{overview}?ll={ll}&z={z}" if ll and z else overview
+
+    def _is_location_info_org_bound(self, json_data: Any, request_url: str = "") -> bool:
+        """Return true only when a location-info payload belongs to the requested organization."""
+        target = str(self.org_id or "").strip()
+        if not target or not json_data:
+            return False
+        oid_pattern = re.compile(r"oid=(\d+)", re.I)
+        org_path_pattern = re.compile(r"/org/[^/]*/" + re.escape(target) + r"(?:/|$)", re.I)
+        remaining_nodes = 50000
+
+        def scalar_matches(value: Any) -> bool:
+            if isinstance(value, bool) or value is None:
+                return False
+            if isinstance(value, (int, float)):
+                return str(int(value)) == target
+            if not isinstance(value, str):
+                return False
+            normalized = value.strip()
+            if normalized == target:
+                return True
+            oid_match = oid_pattern.search(normalized)
+            return bool(
+                (oid_match and oid_match.group(1) == target)
+                or org_path_pattern.search(normalized)
+                or normalized.endswith(f"/{target}")
+                or normalized.endswith(f"/{target}/")
+            )
+
+        def walk(node: Any, depth: int) -> bool:
+            nonlocal remaining_nodes
+            remaining_nodes -= 1
+            if remaining_nodes <= 0 or depth > 20:
+                return False
+            if isinstance(node, dict):
+                return any(scalar_matches(value) or walk(value, depth + 1) for value in node.values())
+            if isinstance(node, list):
+                return any(scalar_matches(value) or walk(value, depth + 1) for value in node)
+            return scalar_matches(node)
+
+        try:
+            return walk(json_data, 0)
+        except (TypeError, RecursionError, KeyError):
+            return False
+
+    def _extract_org_object_from_location_info(self, json_data: Any) -> Optional[Dict[str, Any]]:
+        """Select the richest node explicitly tied to the requested organization."""
+        target = str(self.org_id or "").strip()
+        if not target:
+            return None
+        candidates = self._collect_org_id_matched_nodes(json_data, target)
+        if candidates:
+            return self._select_best_org_node(candidates)
+
+        uri_pattern = re.compile(r"(?:oid=|/org/[^/]*/)" + re.escape(target) + r"(?:/|$|&)", re.I)
+        uri_candidates: List[Dict[str, Any]] = []
+
+        def walk(node: Any) -> None:
+            if isinstance(node, dict):
+                uri = node.get("uri")
+                if isinstance(uri, str) and uri_pattern.search(uri):
+                    uri_candidates.append(node)
+                for value in node.values():
+                    walk(value)
+            elif isinstance(node, list):
+                for value in node:
+                    walk(value)
+
+        walk(json_data)
+        return self._select_best_org_node(uri_candidates)
+
+    def _score_location_info_payload(self, data: Any) -> int:
+        """Score non-empty core fields in an extracted location-info payload."""
+        if not isinstance(data, dict):
+            return 0
+        return sum(
+            1
+            for key in ("phone", "site", "hours", "hours_full", "rating", "description")
+            if data.get(key)
+        )
     
     def parse_yandex_card(self, url: str, session: BrowserSession) -> Dict[str, Any]:
         """
@@ -406,10 +568,15 @@ class YandexMapsInterceptionParser:
             )
 
         # Инициализируем bundle-директорию для этого прогона (если ещё не задана в __init__)
-        if not self.debug_bundle_id:
+        debug_bundles_enabled = str(os.getenv("PARSER_DEBUG_BUNDLES_ENABLED", "false") or "false").strip().lower() in {
+            "1", "true", "yes", "on"
+        }
+        if not debug_bundles_enabled:
+            self.debug_bundle_dir = None
+        if debug_bundles_enabled and not self.debug_bundle_id:
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             self.debug_bundle_id = f"yandex_{self.org_id}_{ts}"
-        if not self.debug_bundle_dir:
+        if debug_bundles_enabled and not self.debug_bundle_dir:
             self.debug_bundle_dir = os.path.join(os.getenv("DEBUG_DIR", "/app/debug_data"), self.debug_bundle_id)
         try:
             if self.debug_bundle_dir:
@@ -516,6 +683,9 @@ class YandexMapsInterceptionParser:
 
                             # Check for organization data (search or location-info)
                             if json_data:
+                                if "fetchReviews" in url or "reviews" in url.lower():
+                                    self.review_api_response_count += 1
+                                    self.review_ids_seen.update(self._review_ids_from_payload(json_data))
                                 # Сохраняем ответ
                                 self.api_responses[url] = {
                                     "data": json_data,
@@ -592,6 +762,26 @@ class YandexMapsInterceptionParser:
         except Exception:
             print("⚠️ Страница не загрузилась полностью, но продолжаем...")
 
+        if main_http_status in {403, 429}:
+            print(f"❌ Яндекс ограничил нативный парсинг: HTTP {main_http_status}")
+            return {
+                "error": "yandex_rate_limited" if main_http_status == 429 else "yandex_forbidden",
+                "http_status": main_http_status,
+                "url": page.url or url,
+            }
+
+        try:
+            response_text = (page.locator("body").inner_text(timeout=1500) or "").strip().lower()
+        except Exception:
+            response_text = ""
+        if response_text in {"limited", "forbidden"}:
+            print(f"❌ Яндекс ограничил нативный парсинг: {response_text}")
+            return {
+                "error": "yandex_rate_limited" if response_text == "limited" else "yandex_forbidden",
+                "http_status": main_http_status,
+                "url": page.url or url,
+            }
+
         # Double check if we are still stuck on Captcha
         title = _safe_page_title()
         if _is_captcha_page(title):
@@ -623,9 +813,8 @@ class YandexMapsInterceptionParser:
         if "/prices/" in current_url or current_url.rstrip("/").endswith("/prices"):
             print("⚠️ Редирект на страницу цен (/prices/). Переходим на overview по исходному URL...")
             # Используем исходный URL (с ll= из ссылки на карты) для стабилизации региона
-            overview_url = initial_url if initial_url and "/prices/" not in initial_url else url
-            if not overview_url or "/prices/" in overview_url:
-                overview_url = re.sub(r"/prices/?", "/", current_url)
+            ll, zoom = self._extract_ll_z_from_url(initial_url or current_url)
+            overview_url = self._build_overview_url(initial_url or current_url, ll, zoom)
             try:
                 # Ждём org API при переходе на overview
                 def _is_org_api_resp(r):
@@ -711,12 +900,21 @@ class YandexMapsInterceptionParser:
 
         extra_photos_count = 0
 
+        collect_reviews = self.parse_mode in {
+            PARSER_MODE_FULL,
+            PARSER_MODE_REVIEWS_DELTA,
+            PARSER_MODE_REVIEWS_FULL,
+        }
+        collect_content = self.parse_mode in {PARSER_MODE_FULL, PARSER_MODE_CONTENT_SNAPSHOT}
+
         # 1. Скроллим основную страницу
         print("📜 Скроллим основную страницу...")
-        scroll_page(3)
+        scroll_page(1 if self.parse_mode in {PARSER_MODE_REVIEWS_DELTA, PARSER_MODE_CARD_SNAPSHOT} else 3)
 
         # 2. Кликаем и скроллим Отзывы (Reviews)
         try:
+            if not collect_reviews:
+                raise LookupError("reviews_skipped_for_parser_mode")
             reviews_tab = page.query_selector("div.tabs-select-view__title._name_reviews")
             if reviews_tab:
                 print("💬 Переходим во вкладку Отзывы...")
@@ -744,9 +942,17 @@ class YandexMapsInterceptionParser:
                 except Exception:
                     pass
 
-                # Скроллим отзывы (очень агрессивно)
-                print("📜 Скроллим отзывы (глубокий скролл - загрузка всех)...")
-                for i in range(80):  # Increased to 80
+                if self.parse_mode == PARSER_MODE_REVIEWS_DELTA:
+                    max_review_scrolls = max(3, int(os.getenv("YANDEX_REVIEWS_DELTA_MAX_SCROLLS", "18") or 18))
+                    stagnant_limit = max(2, int(os.getenv("YANDEX_REVIEWS_DELTA_STAGNANT_ROUNDS", "3") or 3))
+                else:
+                    max_review_scrolls = max(5, int(os.getenv("YANDEX_REVIEWS_FULL_MAX_SCROLLS", "80") or 80))
+                    stagnant_limit = max(3, int(os.getenv("YANDEX_REVIEWS_FULL_STAGNANT_ROUNDS", "5") or 5))
+                print(f"📜 Скроллим отзывы: mode={self.parse_mode}, max={max_review_scrolls}")
+                previous_ids = set(self.review_ids_seen)
+                stagnant_rounds = 0
+                self.review_stop_reason = "max_scrolls"
+                for i in range(max_review_scrolls):
                     # Random scroll amount
                     delta = random.randint(2000, 4000)
                     try:
@@ -769,6 +975,28 @@ class YandexMapsInterceptionParser:
                         pass
 
                     _human_pause(320, 1200)
+                    self.review_scroll_count = i + 1
+
+                    current_ids = set(self.review_ids_seen)
+                    if self.parse_mode == PARSER_MODE_REVIEWS_DELTA and self.known_review_ids.intersection(current_ids):
+                        self.review_stop_reason = "known_review_id"
+                        print(
+                            f"✅ Delta boundary reached after {self.review_scroll_count} scrolls; "
+                            f"captured={len(current_ids)}"
+                        )
+                        break
+                    if current_ids == previous_ids:
+                        stagnant_rounds += 1
+                    else:
+                        stagnant_rounds = 0
+                    previous_ids = current_ids
+                    if self.review_api_response_count > 0 and stagnant_rounds >= stagnant_limit:
+                        self.review_stop_reason = "no_new_review_ids"
+                        print(
+                            f"ℹ️ Reviews stopped after {stagnant_rounds} stagnant rounds; "
+                            f"captured={len(current_ids)}"
+                        )
+                        break
 
                     # Small "wobble" (scroll up slightly) to trigger intersection observers
                     if i % 5 == 0:
@@ -791,11 +1019,16 @@ class YandexMapsInterceptionParser:
 
             else:
                 print("ℹ️ Вкладка Отзывы не найдена (селектор)")
+        except LookupError:
+            self.review_stop_reason = "skipped_for_parser_mode"
         except Exception as e:
+            self.review_stop_reason = "interaction_error"
             print(f"⚠️ Ошибка при обработке отзывов: {e}")
 
         # 3. Кликаем и скроллим Фото (Photos)
         try:
+            if not collect_content:
+                raise LookupError("photos_skipped_for_parser_mode")
             photos_tab = page.query_selector("div.tabs-select-view__title._name_gallery")
             if photos_tab:
                 print("📷 Переходим во вкладку Фото...")
@@ -815,11 +1048,15 @@ class YandexMapsInterceptionParser:
                 scroll_page(10)
             else:
                 print("ℹ️ Вкладка Фото не найдена")
+        except LookupError:
+            pass
         except Exception as e:
             print(f"⚠️ Ошибка при обработке фото: {e}")
 
         # 4. Кликаем и скроллим Новости (News/Posts)
         try:
+            if not collect_content:
+                raise LookupError("news_skipped_for_parser_mode")
             news_tab = page.query_selector("div.tabs-select-view__title._name_posts")
             if news_tab:
                 print("📰 Переходим во вкладку Новости...")
@@ -828,11 +1065,15 @@ class YandexMapsInterceptionParser:
                 scroll_page(10)
             else:
                 print("ℹ️ Вкладка Новости не найдена")
+        except LookupError:
+            pass
         except Exception as e:
             print(f"⚠️ Ошибка при обработке новостей: {e}")
 
         # 5. Кликаем и скроллим Товары/Услуги (Prices/Goods)
         try:
+            if not collect_content:
+                raise LookupError("services_skipped_for_parser_mode")
             # Пробуем разные селекторы для таба товаров
             services_tab = page.query_selector("div.tabs-select-view__title._name_price")
             if not services_tab:
@@ -863,6 +1104,8 @@ class YandexMapsInterceptionParser:
                 scroll_page(20)  # Больше скролла
             else:
                 print("ℹ️ Вкладка Цены/Услуги не найдена")
+        except LookupError:
+            pass
         except Exception as e:
             print(f"⚠️ Ошибка при обработке услуг: {e}")
 
@@ -894,6 +1137,14 @@ class YandexMapsInterceptionParser:
         # Извлекаем данные из перехваченных ответов
         data = self._extract_data_from_responses()
         data["is_verified"] = is_verified
+        data["_parser_run"] = {
+            "mode": self.parse_mode,
+            "review_api_responses": self.review_api_response_count,
+            "review_scrolls": self.review_scroll_count,
+            "review_ids_seen": len(self.review_ids_seen),
+            "review_stop_reason": self.review_stop_reason,
+            "delta_boundary_reached": bool(self.known_review_ids.intersection(self.review_ids_seen)),
+        }
 
         # Жёсткий fail: org API не перехвачен, критичных полей нет — не low_quality, а org_api_not_loaded
         has_org_api = any(
@@ -914,7 +1165,7 @@ class YandexMapsInterceptionParser:
         # ПЕРЕД ЭТИМ: Hybrid Mode для отдельных секций
 
         # 1. Услуги/Товары (часто скрыты в API)
-        if not data.get("products"):
+        if collect_content and not data.get("products"):
             print("⚠️ Услуги не найдены через API, пробуем HTML парсинг (Hybrid Mode)...")
             try:
                 # Импорт здесь, чтобы избежать циклических зависимостей
@@ -1381,9 +1632,10 @@ class YandexMapsInterceptionParser:
             
             # Специальная обработка для location-info API
             elif 'location-info' in url:
+                if self.org_id and not self._is_location_info_org_bound(json_data, url):
+                    print("⚠️ [LOCATION_INFO] location_info_rejected_not_org_bound (area-based)")
+                    continue
                 org_data = self._extract_location_info(json_data)
-                if org_data:
-                    print(f"✅ Извлечены данные организации из location-info API")
                 if org_data:
                     print(f"✅ Извлечены данные организации из location-info API")
                     data.update(org_data)
@@ -1583,8 +1835,7 @@ class YandexMapsInterceptionParser:
         target_node: Optional[Dict[str, Any]] = None
         target_org_id = str(self.org_id or "").strip()
         if target_org_id:
-            matched_nodes = self._collect_org_id_matched_nodes(json_data, target_org_id)
-            target_node = self._select_best_org_node(matched_nodes)
+            target_node = self._extract_org_object_from_location_info(json_data)
         
         def extract_nested(data):
             if isinstance(data, dict):
@@ -1722,17 +1973,21 @@ class YandexMapsInterceptionParser:
                 for value in data.values():
                     extract_nested(value)
 
-        if target_node:
+        if target_org_id:
+            if not target_node:
+                return {}
             extract_nested(target_node)
-        # Добираем оставшиеся поля из всего ответа, но уже не перезатираем собранное.
-        extract_nested(json_data)
+        else:
+            extract_nested(json_data)
+
+        fallback_payload = target_node if target_org_id else json_data
 
         # Fallback по наиболее частым путям (payload.company.*)
         try:
             addr_nested = (
-                _get_nested(json_data, "payload.company.address.formatted")
-                or _get_nested(json_data, "payload.company.address_name")
-                or _get_nested(json_data, "payload.company.fullAddress")
+                _get_nested(fallback_payload, "payload.company.address.formatted")
+                or _get_nested(fallback_payload, "payload.company.address_name")
+                or _get_nested(fallback_payload, "payload.company.fullAddress")
             )
             _set_if_empty(result, "address", addr_nested)
         except Exception:
@@ -1740,15 +1995,15 @@ class YandexMapsInterceptionParser:
 
         try:
             rating_nested = (
-                _get_nested(json_data, "payload.company.ratingData.rating")
-                or _get_nested(json_data, "payload.company.ratingData.score")
+                _get_nested(fallback_payload, "payload.company.ratingData.rating")
+                or _get_nested(fallback_payload, "payload.company.ratingData.score")
             )
             _set_if_empty(result, "rating", rating_nested)
         except Exception:
             pass
 
         try:
-            cnt = _get_nested(json_data, "payload.company.ratingData.count")
+            cnt = _get_nested(fallback_payload, "payload.company.ratingData.count")
             if isinstance(cnt, (int, float, str)):
                 try:
                     cnt_int = int(cnt)
@@ -1759,7 +2014,7 @@ class YandexMapsInterceptionParser:
             pass
 
         try:
-            rubrics = _get_nested(json_data, "payload.company.rubrics") or []
+            rubrics = _get_nested(fallback_payload, "payload.company.rubrics") or []
             names = []
             if isinstance(rubrics, list):
                 for r in rubrics:
@@ -2022,6 +2277,8 @@ class YandexMapsInterceptionParser:
             owner_comment = (
                 item.get('ownerComment') or 
                 item.get('owner_comment') or 
+                item.get('businessComment') or
+                item.get('business_comment') or
                 item.get('response') or 
                 item.get('reply') or
                 item.get('organizationResponse') or
@@ -2421,6 +2678,8 @@ def parse_yandex_card(
     session_registry: Optional[Dict[str, BrowserSession]] = None,
     session_id: Optional[str] = None,
     debug_bundle_id: Optional[str] = None,
+    parse_mode: str = PARSER_MODE_FULL,
+    known_review_ids: Optional[List[str]] = None,
     **session_kwargs: Any,
 ) -> Dict[str, Any]:
     """
@@ -2468,9 +2727,14 @@ def parse_yandex_card(
             init_scripts=session_kwargs.get("init_scripts"),
             keep_open=keep_open_on_captcha,
             geolocation=session_kwargs.get("geolocation"),
+            block_service_workers=bool(session_kwargs.get("block_service_workers", False)),
         )
 
-    parser = YandexMapsInterceptionParser(debug_bundle_id=debug_bundle_id)
+    parser = YandexMapsInterceptionParser(
+        debug_bundle_id=debug_bundle_id,
+        parse_mode=parse_mode,
+        known_review_ids=known_review_ids,
+    )
 
     result: Dict[str, Any]
     try:

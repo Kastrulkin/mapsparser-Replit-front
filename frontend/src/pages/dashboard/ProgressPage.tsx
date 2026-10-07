@@ -28,15 +28,23 @@ import { newAuth } from '@/lib/auth_new';
 import { trackProductEvent } from '@/lib/productEvents';
 import { cn } from '@/lib/utils';
 import type { ControlScope } from '@/components/DashboardLayout';
+import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
+import type { JourneyAction } from '@/lib/leadJourney';
 import { useLanguage, type Language } from '@/i18n/LanguageContext';
 import {
+  localizedAnalyticsLevel,
+  localizedAnalyticsModule,
+  localizedAnalyticsNext,
+  localizedFocusAction,
   localizedGrowthArea,
   localizedGrowthMetric,
   localizedGrowthMilestone,
   localizedGrowthStatus,
   localizedGrowthText,
   localizedProgressBusinessName,
+  localizedRhythm,
   progressPageCopyForLanguage,
+  progressRuntimeCopyForLanguage,
   type ProgressPageCopy,
 } from './progressPageCopy';
 
@@ -44,6 +52,7 @@ type GrowthAreaKey = 'maps' | 'content' | 'partnerships' | 'automation' | 'upsel
 type GrowthAreaStatus = 'not_started' | 'in_progress' | 'healthy' | 'needs_attention' | 'unavailable';
 
 type GrowthAction = {
+  id?: string;
   title: string;
   reason: string;
   expected_outcome: string;
@@ -109,7 +118,7 @@ type GrowthOverview = {
     mission?: GrowthAction;
   };
   data_health?: GrowthDataHealth | null;
-  analytics_level?: { label?: string; next_unlock?: string | null } | null;
+  analytics_level?: { level?: string; label?: string; next_unlock?: string | null } | null;
   analytics_modules?: Array<{ key?: string; label?: string; status?: string; next_unlock?: string | null }>;
   data_rhythm?: { coverage?: number; completed_periods_8w?: number; next_due_at?: string | null } | null;
   rhythm?: { label?: string; active_weeks?: number; status?: string } | null;
@@ -278,6 +287,7 @@ export const ProgressPage = () => {
   const { currentBusinessId, controlScope, onControlScopeChange, onBusinessChange } = useOutletContext<DashboardContext>();
   const { language } = useLanguage();
   const copy = progressPageCopyForLanguage(language);
+  const runtime = progressRuntimeCopyForLanguage(language);
   const [overviewData, setOverviewData] = useState<GrowthOverview | null>(null);
   const [overviewBusinessId, setOverviewBusinessId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -289,6 +299,7 @@ export const ProgressPage = () => {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedAuditBusinessId, setSelectedAuditBusinessId] = useState<string | null>(null);
   const [parseStatus, setParseStatus] = useState<ParseStatus>('idle');
+  const [mapJourneyActions, setMapJourneyActions] = useState<JourneyAction[]>([]);
   const parseStatusRef = useRef<ParseStatus>('idle');
   const auditSectionRef = useRef<HTMLElement | null>(null);
   const requestedMapsSection = searchParams.get('section') === 'maps';
@@ -316,12 +327,24 @@ export const ProgressPage = () => {
       if (!data?.summary || !Array.isArray(data.areas)) {
         throw new Error(copy.loadErrorTitle);
       }
-      setOverviewData(data);
+      const normalizedData: GrowthOverview = {
+        ...data,
+        areas: data.areas.map((area) => ({
+          ...area,
+          milestones: Array.isArray(area.milestones) ? area.milestones : [],
+          metrics: Array.isArray(area.metrics) ? area.metrics : [],
+        })),
+        recent_achievements: Array.isArray(data.recent_achievements) ? data.recent_achievements : [],
+        problem_locations: Array.isArray(data.problem_locations) ? data.problem_locations : [],
+        analytics_modules: Array.isArray(data.analytics_modules) ? data.analytics_modules : [],
+        scope: data.scope ? { ...data.scope, locations: Array.isArray(data.scope.locations) ? data.scope.locations : [] } : data.scope,
+      };
+      setOverviewData(normalizedData);
       setOverviewBusinessId(scopeId);
-      const focusArea = data.areas.find((area) => (area.action.cta_url || area.action.screen) === (data.focus_action?.cta_url || data.focus_action?.screen));
-      setExpandedArea((current) => current ?? focusArea?.key ?? data.areas[0]?.key ?? null);
+      const focusArea = normalizedData.areas.find((area) => (area.action?.cta_url || area.action?.screen) === (normalizedData.focus_action?.cta_url || normalizedData.focus_action?.screen));
+      setExpandedArea((current) => current ?? focusArea?.key ?? normalizedData.areas[0]?.key ?? null);
 
-      const locations = data.scope?.locations || [];
+      const locations = normalizedData.scope?.locations || [];
       setSelectedAuditBusinessId((current) => {
         if (locations.some((location) => location.id === current)) return current;
         return locations[0]?.id || currentBusinessId;
@@ -413,6 +436,16 @@ export const ProgressPage = () => {
     trackProductEvent({ eventName: 'progress_open', businessId: currentBusinessId });
   }, [currentBusinessId]);
 
+  useEffect(() => {
+    if (!currentBusinessId || !overview) {
+      setMapJourneyActions([]);
+      return;
+    }
+    void newAuth.makeRequest(`/journey-actions?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' })
+      .then((result: { actions?: JourneyAction[] }) => setMapJourneyActions((result.actions || []).filter((action) => action.flow_type === 'maps')))
+      .catch(() => setMapJourneyActions([]));
+  }, [currentBusinessId, overview, overviewRefreshKey]);
+
   const refreshAll = () => {
     setOverviewRefreshKey((value) => value + 1);
     setAuditRefreshKey((value) => value + 1);
@@ -443,6 +476,7 @@ export const ProgressPage = () => {
   const mapsArea = overview?.areas.find((area) => area.key === 'maps') || null;
   const mapAuditMilestone = mapsArea?.milestones.find((milestone) => milestone.key === 'map_audited');
   const networkLocations = overview?.scope?.locations || [];
+  const recentAchievements = Array.isArray(overview?.recent_achievements) ? overview.recent_achievements : [];
   const selectedAuditLocation = networkLocations.find((location) => location.id === selectedAuditBusinessId);
   const currentMission = overview?.focus_action || overview?.growth_loop?.focus || overview?.growth_loop?.current_mission || overview?.growth_loop?.mission || null;
   const openProblemLocation = (location: NonNullable<GrowthOverview['problem_locations']>[number]) => {
@@ -459,7 +493,7 @@ export const ProgressPage = () => {
       objectId: overview?.growth_loop?.mission_id || currentMission.cta_url || currentMission.screen,
     });
     if (currentMission.target_scope?.kind === 'business' && currentMission.target_scope.id) {
-      const targetName = overview.location_breakdown?.find((location) => location.business_id === currentMission.target_scope?.id)?.business_name || 'Точка сети';
+      const targetName = overview.location_breakdown?.find((location) => location.business_id === currentMission.target_scope?.id)?.business_name || runtime.networkLocation;
       onBusinessChange?.(currentMission.target_scope.id);
       onControlScopeChange?.({ kind: 'business', id: currentMission.target_scope.id, name: targetName });
     }
@@ -467,7 +501,7 @@ export const ProgressPage = () => {
   };
   const openAreaAction = (action: GrowthAction) => {
     if (action.target_scope?.kind === 'business' && action.target_scope.id) {
-      const targetName = overview.location_breakdown?.find((location) => location.business_id === action.target_scope?.id)?.business_name || 'Точка сети';
+      const targetName = overview.location_breakdown?.find((location) => location.business_id === action.target_scope?.id)?.business_name || runtime.networkLocation;
       onBusinessChange?.(action.target_scope.id);
       onControlScopeChange?.({ kind: 'business', id: action.target_scope.id, name: targetName });
     }
@@ -527,6 +561,8 @@ export const ProgressPage = () => {
         )}
       />
 
+      {mapJourneyActions.length ? <section aria-label="План по картам" className="space-y-3"><div><h2 className="text-balance text-xl font-semibold text-slate-950">На этой неделе</h2><p className="mt-1 text-pretty text-sm text-slate-600">Выполняйте по одному пункту. После последнего LocalOS предложит обновить данные и сравнить результат.</p></div>{mapJourneyActions.map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={refreshAll} />)}</section> : null}
+
       {error ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
           <span>{copy.staleData}</span>
@@ -536,13 +572,13 @@ export const ProgressPage = () => {
 
       <DataHealthRhythmStrip dataHealth={overview.data_health} onImport={() => navigate('/dashboard/finance?tab=import')} compact showImportAction={!currentMission?.cta_url?.includes('/finance')} />
 
-      {(overview.analytics_level?.label || overview.rhythm?.label) ? <div className="flex flex-wrap gap-2 text-sm text-slate-700"><span className="rounded-full bg-slate-100 px-3 py-1.5">Аналитика: {overview.analytics_level?.label || 'в процессе'}</span>{overview.analytics_level?.next_unlock ? <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-900">Следующий уровень: {overview.analytics_level.next_unlock}</span> : null}{overview.rhythm?.label ? <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-900">Ритм: {overview.rhythm.label}</span> : null}</div> : null}
+      {(overview.analytics_level?.label || overview.rhythm?.label) ? <div className="flex flex-wrap gap-2 text-sm text-slate-700"><span className="rounded-full bg-slate-100 px-3 py-1.5">{runtime.analytics}: {localizedAnalyticsLevel(language, overview.analytics_level?.level, overview.analytics_level?.label) || runtime.inProgress}</span>{overview.analytics_level?.next_unlock ? <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-900">{runtime.nextLevel}: {localizedAnalyticsNext(language, overview.analytics_level.level, overview.analytics_level.next_unlock)}</span> : null}{overview.rhythm?.label ? <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-900">{runtime.rhythm}: {localizedRhythm(language, overview.rhythm.status, overview.rhythm.label)}</span> : null}</div> : null}
 
-      {overview.analytics_modules?.length ? <div className="flex flex-wrap gap-2">{overview.analytics_modules.map((module) => <span key={module.key || module.label} className={cn('rounded-full px-3 py-1.5 text-sm', module.status === 'ready' ? 'bg-emerald-50 text-emerald-800' : module.status === 'available' ? 'bg-amber-50 text-amber-900' : 'bg-slate-100 text-slate-600')}>{module.label}: {module.status === 'ready' ? 'готово' : module.status === 'available' ? 'обновить' : 'нужны данные'}</span>)}</div> : null}
+      {overview.analytics_modules?.length ? <div className="flex flex-wrap gap-2">{overview.analytics_modules.map((module) => <span key={module.key || module.label} className={cn('rounded-full px-3 py-1.5 text-sm', module.status === 'ready' ? 'bg-emerald-50 text-emerald-800' : module.status === 'available' ? 'bg-amber-50 text-amber-900' : 'bg-slate-100 text-slate-600')}>{localizedAnalyticsModule(language, module.key, module.label)}: {module.status === 'ready' ? runtime.ready : module.status === 'available' ? runtime.update : runtime.needsData}</span>)}</div> : null}
 
       {scopeKind === 'network' && overview.network_summary ? (
         <section className="rounded-2xl bg-slate-50 px-4 py-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
-          <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-700"><span><strong className="tabular-nums text-slate-950">{overview.network_summary.locations_count || 0}</strong> точек в сети</span><span><strong className="tabular-nums text-amber-800">{overview.network_summary.problem_locations_count || 0}</strong> требуют внимания</span><span><strong className="tabular-nums text-emerald-700">{overview.network_summary.healthy_locations_count || 0}</strong> без открытых проблем</span></div>
+          <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-700"><span><strong className="tabular-nums text-slate-950">{overview.network_summary.locations_count || 0}</strong> {runtime.networkLocations}</span><span><strong className="tabular-nums text-amber-800">{overview.network_summary.problem_locations_count || 0}</strong> {runtime.attention}</span><span><strong className="tabular-nums text-emerald-700">{overview.network_summary.healthy_locations_count || 0}</strong> {runtime.healthy}</span></div>
           {overview.problem_locations?.length ? <div className="mt-3 flex flex-wrap gap-2">{overview.problem_locations.slice(0, 6).map((location) => <Button key={location.business_id} type="button" variant="outline" className="min-h-11" onClick={() => openProblemLocation(location)}>{location.business_name}<ArrowRight className="ml-2 h-4 w-4" /></Button>)}</div> : null}
         </section>
       ) : null}
@@ -568,12 +604,12 @@ export const ProgressPage = () => {
 
         <div className="border-t border-slate-200 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0" data-tour-target="progress-focus-action">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{copy.currentPriority}</div>
-          <h2 className="mt-2 text-balance text-xl font-semibold text-slate-950">{localizedGrowthText(language, currentMission?.title) || copy.continueWorking}</h2>
-          <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">{localizedGrowthText(language, currentMission?.reason)}</p>
+          <h2 className="mt-2 text-balance text-xl font-semibold text-slate-950">{localizedFocusAction(language, currentMission?.id, 'title', currentMission?.title) || copy.continueWorking}</h2>
+          <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">{localizedFocusAction(language, currentMission?.id, 'reason', currentMission?.reason)}</p>
           {currentMission ? (
             <>
               <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
-                <strong>{copy.result}:</strong> {localizedGrowthText(language, currentMission.expected_outcome)}
+                <strong>{copy.result}:</strong> {localizedFocusAction(language, currentMission.id, 'outcome', currentMission.expected_outcome)}
               </div>
               {currentMission.estimated_effect?.amount ? (
                 <div className="mt-2 text-sm font-medium tabular-nums text-emerald-700">
@@ -581,7 +617,7 @@ export const ProgressPage = () => {
                 </div>
               ) : null}
               <Button type="button" className="mt-4 min-h-11 w-full bg-orange-500 text-white transition-transform hover:bg-orange-600 active:scale-[0.96]" onClick={openMission}>
-                {localizedGrowthText(language, currentMission.cta_label)}
+                {localizedFocusAction(language, currentMission.id, 'cta', currentMission.cta_label)}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </>
@@ -648,7 +684,10 @@ export const ProgressPage = () => {
               <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">{copy.mapsAndReputation}</div>
               <h2 id="full-audit-title" className="mt-1 text-xl font-semibold text-balance">{copy.fullAudit}</h2>
               <p className="mt-1 text-sm leading-6 text-pretty text-slate-300">
-                {selectedAuditLocation ? `${copy.location}: ${localizedProgressBusinessName(language, selectedAuditLocation.name)}. ` : ''}{copy.auditDescription}
+                {selectedAuditLocation ? (
+                  <span>{copy.location}: {localizedProgressBusinessName(language, selectedAuditLocation.name)}. </span>
+                ) : null}
+                <span>{copy.auditDescription}</span>
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -717,9 +756,9 @@ export const ProgressPage = () => {
           <Clock3 className="h-5 w-5 text-slate-500" />
           <h2 className="text-lg font-semibold text-slate-950">{copy.recentResults}</h2>
         </div>
-        {overview.recent_achievements.length > 0 ? (
+        {recentAchievements.length > 0 ? (
           <div className="mt-4 divide-y divide-slate-100">
-            {overview.recent_achievements.map((item) => {
+            {recentAchievements.map((item) => {
               const Icon = AREA_ICONS[item.area];
               return (
                 <div key={item.key} className="flex gap-3 py-3 first:pt-0 last:pb-0">

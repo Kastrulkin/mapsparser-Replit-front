@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
-import type { DragEventHandler } from 'react';
-import { AlertCircle, CheckCircle2, Circle, Loader2 } from 'lucide-react';
+import { ContactPresenceBadges, WorkflowActionRow } from '@/components/prospecting/LeadWorkflowBlocks';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ContactPresenceBadges, WorkflowActionRow } from '@/components/prospecting/LeadWorkflowBlocks';
+import { AlertCircle, CheckCircle2, Circle, Loader2 } from 'lucide-react';
+import type { DragEventHandler } from 'react';
+import { useEffect, useState } from 'react';
 
 type WorkflowBadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive';
 type WorkflowTone = 'default' | 'success' | 'warning' | 'info' | 'danger';
@@ -60,6 +60,7 @@ type PipelineLead = {
   sales_room_data_mode?: string;
   sales_room_url?: string;
   next_best_action?: {
+    code?: string;
     label?: string;
     hint?: string;
   };
@@ -349,7 +350,7 @@ const LeadPreparationGuide = ({
             {matchAssessment?.next_action || 'LocalOS сохранил результат проверки и показывает, чего не хватает для следующего шага.'}
           </p>
           {nextAction ? (
-            <Button onClick={nextAction.onClick} disabled={loading} className="mt-3 min-h-10 bg-orange-500 text-white hover:bg-orange-600 active:scale-[0.96] transition-transform">
+            <Button onClick={nextAction.onClick} disabled={loading} className="mt-3 min-h-10">
               {nextAction.label}
             </Button>
           ) : null}
@@ -360,7 +361,7 @@ const LeadPreparationGuide = ({
             {parseRunning ? 'Можно заниматься другими лидами — статус обновится сам.' : 'Сейчас нужен только один следующий шаг.'}
           </p>
           {nextAction ? (
-            <Button onClick={nextAction.onClick} disabled={loading} className="min-h-10 bg-orange-500 text-white hover:bg-orange-600 active:scale-[0.96] transition-transform">
+            <Button onClick={nextAction.onClick} disabled={loading} className="min-h-10">
               {nextAction.label}
             </Button>
           ) : parseRunning ? (
@@ -388,7 +389,7 @@ const EditableLeadBasics = ({
   const [draft, setDraft] = useState<LeadBasicsPatch>(() => getLeadBasicsDraft(lead));
 
   useEffect(() => {
-    setDraft(getLeadBasicsDraft(lead));
+    setDraft({ name: String(lead.name || '').trim(), category: String(lead.category || '').trim(), city: String(lead.city || '').trim(), address: String(lead.address || '').trim() });
   }, [lead.id, lead.name, lead.category, lead.city, lead.address]);
 
   useEffect(() => {
@@ -471,6 +472,8 @@ const EditableLeadBasics = ({
 type PartnershipLeadCardProps = {
   lead: PipelineLead;
   mode: 'raw' | 'pipeline';
+  searchLabel?: string;
+  verification?: { country?: { status?: string; source_url?: string; quote?: string }; destination?: { status?: string; source_url?: string; quote?: string }; contactVerified?: boolean };
   dragging: boolean;
   loading: boolean;
   nextStage: string;
@@ -489,6 +492,8 @@ type PartnershipLeadCardProps = {
 export const PartnershipLeadCard = ({
   lead,
   mode,
+  searchLabel,
+  verification,
   dragging,
   loading,
   nextStage,
@@ -506,9 +511,11 @@ export const PartnershipLeadCard = ({
   const stageValue = String(lead.partnership_stage || '').toLowerCase();
   const pipelineStatus = String(lead.pipeline_status || '').toLowerCase();
   const isUnprocessed = !pipelineStatus || pipelineStatus === 'unprocessed' || pipelineStatus === 'qualified' || (!stageValue || stageValue === 'imported');
-  const hasContacts = Boolean(lead.phone || lead.email || lead.telegram_url || lead.whatsapp_url || lead.website);
+  const hasContacts = Boolean(lead.phone || lead.email || lead.telegram_url || lead.whatsapp_url);
+  const verifiedForSearch = !verification || (['verified', 'not_required'].includes(verification.country?.status || '')
+    && ['verified', 'not_required'].includes(verification.destination?.status || '') && verification.contactVerified === true);
   const primaryActionLabel = mode === 'raw'
-    ? (isUnprocessed ? 'В pipeline' : 'Открыть карточку')
+    ? (isUnprocessed ? 'В отбор' : 'Открыть карточку')
     : nextStage
       ? 'Дальше'
       : 'Открыть карточку';
@@ -541,12 +548,24 @@ export const PartnershipLeadCard = ({
           {lead.client_business_name ? (
             <Badge variant="outline" className="mt-2 max-w-full truncate">Лид-партнёр · {lead.client_business_name}</Badge>
           ) : null}
+          {searchLabel ? <div className="mt-2 truncate text-xs text-muted-foreground" title={searchLabel}>Поиск: {searchLabel}</div> : null}
         </div>
         <div className="flex max-w-[45%] shrink-0 flex-wrap justify-end gap-1">
           {lead.source_provider ? <Badge variant="outline" className="max-w-full truncate">{sourceProviderLabel(lead.source_provider)}</Badge> : null}
           {lead.rating ? <Badge variant="secondary">★ {lead.rating}{lead.reviews_count ? ` (${lead.reviews_count})` : ''}</Badge> : null}
         </div>
       </div>
+      {verification && <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-700">
+        <div className="font-medium">Проверка для этого поиска</div>
+        {([['Страна компании', verification.country], ['Продаваемое направление', verification.destination]] as const).map(([label, criterion]) => (
+          <div key={label} className="mt-1">
+            {label}: {criterion?.status === 'verified' ? 'подтверждено' : criterion?.status === 'not_required' ? 'не требуется' : 'не проверено'}
+            {criterion?.status === 'verified' && /^https?:\/\//i.test(criterion.source_url || '') ? <a className="ml-1 underline" href={criterion.source_url} target="_blank" rel="noreferrer" title={criterion.quote || label}>Источник</a> : null}
+          </div>
+        ))}
+        <div className="mt-1">Рабочий контакт: {verification.contactVerified ? 'подтверждён' : 'не проверен'}</div>
+        {!verifiedForSearch && <div className="mt-2 text-amber-800">Можно взять в ручной отбор. Это не подтверждает соответствие поиску и не запускает письма.</div>}
+      </div>}
       <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
         <ContactPresenceBadges
           website={lead.website}
@@ -566,9 +585,9 @@ export const PartnershipLeadCard = ({
           <div className="mt-1 line-clamp-2 font-medium text-slate-900">
             {mode === 'raw' ? stagePresentation.helper : (lead.next_best_action?.label || 'Следующий шаг не определён')}
           </div>
-          <div className={compactMetaClass}>
+          {mode !== 'raw' && <div className={compactMetaClass}>
             {shortStatusLabel(lead.pipeline_status || 'unprocessed')} · {shortStatusLabel(lead.partnership_stage || 'imported')}
-          </div>
+          </div>}
         </div>
         {mode === 'pipeline' ? (
         <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
@@ -618,8 +637,7 @@ export const PartnershipLeadCard = ({
       <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
         <span className={mutedPillClass}><span className="truncate">Воронка: {shortStatusLabel(lead.pipeline_status || 'unprocessed')}</span></span>
         {mode === 'pipeline' ? <span className={mutedPillClass}><span className="truncate">Этап: {shortStatusLabel(lead.partnership_stage || 'новый')}</span></span> : null}
-        <span>{parseStatusLabel}</span>
-        <span>{hasContacts ? 'контакты есть' : 'контактов мало'}</span>
+        <details><summary>Технические сведения</summary><span>{parseStatusLabel}. {hasContacts ? 'Указан канал связи' : 'Канал связи не указан'}</span></details>
       </div>
     </div>
   );
@@ -967,7 +985,7 @@ export const PartnershipPipelineList = ({
           </Select>
           <Button variant="outline" onClick={onApplyBulkUpdate} disabled={loading || selectedLeadIds.length === 0}>Применить к выбранным</Button>
           <Button variant="outline" onClick={onBulkDeferLeads} disabled={loading || selectedLeadIds.length === 0}>Отложить выбранные</Button>
-          <Button variant="outline" onClick={onNormalizeSelectedViaOpenClaw} disabled={loading || selectedLeadIds.length === 0}>Подготовить письма</Button>
+          <Button variant="outline" onClick={onNormalizeSelectedViaOpenClaw} disabled={loading || selectedLeadIds.length === 0}>Обновить список выбранных</Button>
           <Button variant="outline" onClick={onBulkMarkNotRelevant} disabled={loading || selectedLeadIds.length === 0}>Неактуальны</Button>
         </div>
       </div>
@@ -1037,7 +1055,7 @@ export const PartnershipPipelineList = ({
                               Открыть комнату
                             </Button>
                           ) : null}
-                          <Button size="sm" onClick={() => onPrepareSalesRoom(lead.id, 'audited')} disabled={loading} className="min-h-10 bg-orange-500 text-white hover:bg-orange-600 active:scale-[0.96] transition-transform">
+                          <Button size="sm" onClick={() => onPrepareSalesRoom(lead.id, 'audited')} disabled={loading} className="min-h-10">
                             Подготовить предложение
                           </Button>
                           <Button
@@ -1126,7 +1144,7 @@ export const PartnershipPipelineBulkBar = ({
         <Button size="sm" variant="outline" onClick={onBulkEnrichContacts} disabled={loading}>Обогатить</Button>
         <Button size="sm" variant="outline" onClick={onBulkRunMatch} disabled={loading}>Матчинг</Button>
         <Button size="sm" variant="outline" onClick={onApplyBulkUpdate} disabled={loading || !canApplyStageOrChannel}>Применить этап/канал</Button>
-        <Button size="sm" variant="outline" onClick={onNormalizeSelectedViaOpenClaw} disabled={loading}>Подготовить письма</Button>
+        <Button size="sm" variant="outline" onClick={onNormalizeSelectedViaOpenClaw} disabled={loading}>Обновить список</Button>
         <Button size="sm" variant="outline" onClick={onBulkPrepareCommercialOffers} disabled={loading}>Подготовить КП</Button>
         <Button size="sm" variant="outline" onClick={onBulkDeleteLeads} disabled={loading}>Удалить</Button>
       </div>

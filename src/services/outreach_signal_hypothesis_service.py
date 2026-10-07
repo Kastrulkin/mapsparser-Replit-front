@@ -234,7 +234,7 @@ def derive_pain_signal_hypotheses(
     rules = _library(playbook)
     results: list[dict[str, Any]] = []
 
-    social_map = derive_composite_signal(context, ledger)
+    social_map = derive_composite_signal(context, ledger, now=current)
     social_map_rule = rules.get("active_social_with_map_gap")
     if social_map and social_map_rule:
         evidence_ids = set(social_map.get("evidence_ids") or [])

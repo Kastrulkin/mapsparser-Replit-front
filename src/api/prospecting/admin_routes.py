@@ -151,7 +151,7 @@ TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS = max(1, int(os.environ.get("TELEGRAM_REPLY_SY
 TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT = max(1, min(int(os.environ.get("TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT", "12")), 50))
 TELEGRAM_REPLY_SYNC_TIMEOUT_SEC = max(5, int(os.environ.get("TELEGRAM_REPLY_SYNC_TIMEOUT_SEC", "12")))
 LEAD_OUTREACH_MODERATION_STATUS = "lead_outreach"
-PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr")
+PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr", "hy", "kk")
 PIPELINE_UNPROCESSED = "unprocessed"
 PIPELINE_IN_PROGRESS = "in_progress"
 PIPELINE_POSTPONED = "postponed"
@@ -266,6 +266,10 @@ def approve_outreach_draft(draft_id):
             if not draft:
                 return jsonify({"error": "Draft not found"}), 404
             draft_dict = dict(draft)
+            draft_origin = draft_dict.get("learning_note_json")
+            if isinstance(draft_origin, dict) and draft_origin.get("search_task_id") and draft_origin.get("manual_review_required"):
+                return jsonify({"error": "Черновик по поиску нельзя утвердить для отправки до проверки компании и отдельного разрешения.",
+                                "code": "search_draft_not_send_ready"}), 409
 
             cur.execute(
                 """

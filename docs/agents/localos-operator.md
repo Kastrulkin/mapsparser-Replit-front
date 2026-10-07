@@ -46,6 +46,34 @@ user message
 
 The model may interpret the request and propose an action. LocalOS code must enforce tenant scope, permissions, consent policy, credit budgets, approval requirements, manual-publication limits, tool execution, and audit records.
 
+## Conversational Tool Loop
+
+Current web Operator supports a constrained multi-step planner for free-form commands. The planner uses the `operator_tool_plan` LLM task and is routed to the configured DeepSeek fast profile. DeepSeek receives recent conversation context, the selected business scope, and a public description of allowed tools. It never receives a database connection, SQL capability, provider key, or arbitrary HTTP tool.
+
+The runtime contract is:
+
+1. deterministic Operator handlers process known commands first;
+2. LocalOS builds a tool catalog scoped to the authenticated user and selected business;
+3. DeepSeek proposes one `tool_call`, `clarification`, or `final` action;
+4. LocalOS rejects unknown tools, unknown or invalid arguments, duplicate calls, and actions not explicitly requested in the current user message;
+5. read and draft handlers return structured observations; DeepSeek may use them for the next step or final summary;
+6. approval-required tools create a `pending_human` ActionOrchestrator action and stop before execution; the web or Telegram confirmation resumes that exact action, while rejection closes it without side effects;
+7. every executed or pending tool step is written to the Operator audit ledger;
+8. planning uses a bounded step budget and one reserved Operator planning credit; provider failures release that reservation.
+
+Conversational tools cover business profile, saved map status, services, unanswered reviews, content history, finance summary, appointments, progress, average ticket, network locations, partnership leads, agent status, connection health, and diagnostics. Governed draft flows cover review replies, news, social posts, content plans, service updates, communication drafts, and partnership messages. `finance.prepare_transaction` enters the ActionOrchestrator approval lifecycle and creates exactly one tenant-scoped LocalOS transaction only after approval; `communications.prepare_send` creates an approved internal send request but does not claim unsupported provider dispatch. DeepSeek never receives direct database or provider-write access. Map refresh preserves its paid external-read boundary. Service updates use `services.prepare_updates` followed by separately confirmed `services.apply_updates`. Unsupported provider publication or dispatch remains unavailable and must be reported honestly.
+
+Every public tool contract sent to the planner includes an input schema, output schema, selected-business scope, required permission, risk class, timeout budget, approval policy, and whether explicit current-message intent is required. Web and Telegram persist the same conversation context, tool trace, planner billing event, and approval state.
+
+Code sources of truth:
+
+- planner loop: `services.operator_tool_loop`;
+- planning billing: `services.operator_tool_billing`;
+- scoped tool catalog and deterministic fallbacks: `services.operator_core`;
+- task/provider routing: `services.llm.registry` and `services.llm.gateway`;
+- web conversation and audit persistence: `api.operator_api`;
+- runtime flag: `OPERATOR_TOOL_LOOP_ENABLED`.
+
 ## Surfaces
 
 ### Web Chat

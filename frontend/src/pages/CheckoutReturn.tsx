@@ -22,6 +22,7 @@ type CheckoutStatusPayload = {
   paid_at?: string;
   completed_at?: string;
   provider_status?: string;
+  return_to?: string;
 };
 
 const terminalStatuses = new Set(["completed", "failed", "expired"]);
@@ -140,8 +141,8 @@ const CheckoutReturn = () => {
           ) : null}
 
           {checkout?.status === "completed" ? (
-            <Link to="/login">
-              <Button variant="outline">Войти в LocalOS</Button>
+            <Link to={checkout.return_to?.startsWith('/dashboard/') && !checkout.return_to.startsWith('//') ? checkout.return_to : '/login'}>
+              <Button variant="outline">{checkout.return_to ? 'Вернуться к задаче' : 'Войти в LocalOS'}</Button>
             </Link>
           ) : null}
 

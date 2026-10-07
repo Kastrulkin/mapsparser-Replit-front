@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 from core.ai_learning import record_ai_learning_event
+from core.db_helpers import assert_schema_columns
 from core.industry_patterns import detect_industry_key, format_industry_pattern_prompt
 from core.industry_pattern_recalibration import (
     build_pattern_impact_metrics,
@@ -22,9 +23,12 @@ from core.industry_pattern_recalibration import (
 )
 from core.learning_patterns import format_learning_candidates_for_digest, get_service_optimization_learning_candidates
 from services.llm import analyze_text_with_gigachat
-from services.operator_scope_summary import build_operator_scope_summary, format_scope_summary_for_telegram
+from services.operator_scope_summary import build_operator_scope_summary
 from services.operator_mobile_today import build_mobile_today
-from services.superadmin_telegram_notifications import build_superadmin_morning_operations_block
+from services.superadmin_telegram_notifications import (
+    build_superadmin_morning_operations_block,
+    format_superadmin_platform_attention,
+)
 from services.telegram_control_scope import resolve_control_scope
 
 
@@ -284,121 +288,27 @@ def _coerce_interval_hours(value: Any, default_value: int) -> int:
 
 def ensure_card_automation_tables(conn) -> None:
     cursor = conn.cursor()
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS businesscardautomationsettings (
-            business_id TEXT PRIMARY KEY REFERENCES businesses(id) ON DELETE CASCADE,
-            news_enabled BOOLEAN NOT NULL DEFAULT FALSE,
-            news_interval_hours INTEGER NOT NULL DEFAULT 168,
-            news_schedule_mode TEXT NOT NULL DEFAULT 'interval',
-            news_schedule_days JSONB,
-            news_schedule_time TEXT,
-            news_content_source TEXT NOT NULL DEFAULT 'services',
-            news_next_run_at TIMESTAMPTZ,
-            news_last_run_at TIMESTAMPTZ,
-            news_last_status TEXT,
-            review_sync_enabled BOOLEAN NOT NULL DEFAULT FALSE,
-            review_sync_interval_hours INTEGER NOT NULL DEFAULT 24,
-            review_sync_schedule_mode TEXT NOT NULL DEFAULT 'interval',
-            review_sync_schedule_days JSONB,
-            review_sync_schedule_time TEXT,
-            review_sync_next_run_at TIMESTAMPTZ,
-            review_sync_last_run_at TIMESTAMPTZ,
-            review_sync_last_status TEXT,
-            review_reply_enabled BOOLEAN NOT NULL DEFAULT FALSE,
-            review_reply_interval_hours INTEGER NOT NULL DEFAULT 24,
-            review_reply_trigger TEXT NOT NULL DEFAULT 'schedule',
-            review_reply_next_run_at TIMESTAMPTZ,
-            review_reply_last_run_at TIMESTAMPTZ,
-            review_reply_last_status TEXT,
-            digest_enabled BOOLEAN NOT NULL DEFAULT FALSE,
-            digest_time TEXT NOT NULL DEFAULT '08:00',
-            digest_last_sent_on DATE,
-            created_by TEXT,
-            updated_by TEXT,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
+    assert_schema_columns(
+        cursor,
+        "businesscardautomationsettings",
+        (
+            "business_id", "news_enabled", "news_interval_hours", "news_schedule_mode",
+            "news_schedule_days", "news_schedule_time", "news_content_source",
+            "review_sync_enabled", "review_sync_schedule_mode", "review_reply_enabled",
+            "review_reply_trigger", "digest_enabled", "digest_time", "digest_last_sent_on",
+        ),
     )
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS businesscardautomationevents (
-            id TEXT PRIMARY KEY,
-            business_id TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-            action_type TEXT NOT NULL,
-            status TEXT NOT NULL,
-            triggered_by TEXT NOT NULL DEFAULT 'scheduler',
-            message TEXT,
-            payload_json JSONB,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
+    assert_schema_columns(
+        cursor,
+        "businesscardautomationevents",
+        ("id", "business_id", "action_type", "status", "triggered_by", "created_at"),
     )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_businesscardautomationevents_business_created
-        ON businesscardautomationevents(business_id, created_at DESC)
-        """
+    assert_schema_columns(
+        cursor,
+        "reviewreplydrafts",
+        ("id", "business_id", "review_id", "generated_text", "status", "updated_at"),
     )
-    cursor.execute("ALTER TABLE businesscardautomationsettings ADD COLUMN IF NOT EXISTS news_schedule_mode TEXT NOT NULL DEFAULT 'interval'")
-    cursor.execute("ALTER TABLE businesscardautomationsettings ADD COLUMN IF NOT EXISTS news_schedule_days JSONB")
-    cursor.execute("ALTER TABLE businesscardautomationsettings ADD COLUMN IF NOT EXISTS news_schedule_time TEXT")
-    cursor.execute("ALTER TABLE businesscardautomationsettings ADD COLUMN IF NOT EXISTS news_content_source TEXT NOT NULL DEFAULT 'services'")
-    cursor.execute("ALTER TABLE businesscardautomationsettings ADD COLUMN IF NOT EXISTS review_sync_schedule_mode TEXT NOT NULL DEFAULT 'interval'")
-    cursor.execute("ALTER TABLE businesscardautomationsettings ADD COLUMN IF NOT EXISTS review_sync_schedule_days JSONB")
-    cursor.execute("ALTER TABLE businesscardautomationsettings ADD COLUMN IF NOT EXISTS review_sync_schedule_time TEXT")
-    cursor.execute("ALTER TABLE businesscardautomationsettings ADD COLUMN IF NOT EXISTS review_reply_trigger TEXT NOT NULL DEFAULT 'schedule'")
-    cursor.execute("ALTER TABLE businesscardautomationsettings ADD COLUMN IF NOT EXISTS digest_enabled BOOLEAN NOT NULL DEFAULT FALSE")
-    cursor.execute("ALTER TABLE businesscardautomationsettings ADD COLUMN IF NOT EXISTS digest_time TEXT NOT NULL DEFAULT '08:00'")
-    cursor.execute("ALTER TABLE businesscardautomationsettings ADD COLUMN IF NOT EXISTS digest_last_sent_on DATE")
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS reviewreplydrafts (
-            id TEXT PRIMARY KEY,
-            business_id TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-            review_id TEXT NOT NULL,
-            user_id TEXT,
-            source TEXT,
-            rating INTEGER,
-            author_name TEXT,
-            review_text TEXT,
-            generated_text TEXT NOT NULL,
-            edited_text TEXT,
-            status TEXT NOT NULL DEFAULT 'draft',
-            tone TEXT,
-            prompt_key TEXT,
-            prompt_version TEXT,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_reviewreplydrafts_review_unique
-        ON reviewreplydrafts(review_id)
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_reviewreplydrafts_business_status
-        ON reviewreplydrafts(business_id, status, created_at DESC)
-        """
-    )
-    cursor.execute(
-        """
-        ALTER TABLE usernews
-        ADD COLUMN IF NOT EXISTS business_id TEXT
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_usernews_business_created
-        ON usernews(business_id, created_at DESC)
-        """
-    )
-    conn.commit()
+    assert_schema_columns(cursor, "usernews", ("id", "business_id", "created_at"))
 
 
 def _default_settings_payload() -> dict[str, Any]:
@@ -1007,6 +917,8 @@ def _generate_news_for_business(conn, business_id: str) -> dict[str, Any]:
         "zh": "Chinese",
         "tr": "Turkish",
         "ar": "Arabic",
+        "hy": "Armenian",
+        "kk": "Kazakh",
     }
     settings = _load_settings_row(conn, business_id)
     news_content_source = str(settings.get("news_content_source") or "services").strip().lower() or "services"
@@ -1076,6 +988,11 @@ Write all generated text in {language_name}.
         user_id=owner_id,
     )
     generated_text = _extract_json_field(generated, "news").strip()
+    from services.content_rules import enforce
+    from services.operator_social_post_generation import _default_social_post_generator
+    generated_text = enforce(conn.cursor(), business_id, owner_id, generated_text,
+        _default_social_post_generator, raw_info)
+
     if not generated_text:
         raise ValueError("AI не вернул текст новости")
     if active_news_patterns:
@@ -1182,6 +1099,8 @@ def _generate_review_reply_drafts(conn, business_id: str, batch_size: int = 5) -
         "zh": "Chinese",
         "tr": "Turkish",
         "ar": "Arabic",
+        "hy": "Armenian",
+        "kk": "Kazakh",
     }
     examples_text = _load_user_examples(conn, owner_id, "review", limit=5)
     review_industry_key = detect_industry_key(
@@ -1343,7 +1262,12 @@ def _enqueue_review_sync(conn, business_id: str) -> dict[str, Any]:
         raise ValueError("Для бизнеса не найдена ссылка на карту")
     from api.admin_prospecting import _enqueue_parse_task_for_business
 
-    task = _enqueue_parse_task_for_business(business_id, owner_id, source_url)
+    task = _enqueue_parse_task_for_business(
+        business_id,
+        owner_id,
+        source_url,
+        task_type="reviews_delta",
+    )
     return {
         "task_id": task.get("id"),
         "existing": bool(task.get("existing")),
@@ -1785,42 +1709,63 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
             text += "\n\n" + "\n\n".join(business_sections)
         if bool(bucket.get("is_superadmin")):
             platform_link = f"{TELEGRAM_MINI_APP_URL}?{urlencode({'screen': 'tasks', 'scope_type': 'platform'})}"
-            reply_markup = {"inline_keyboard": [[{"text": "Открыть inbox LocalOS", "web_app": {"url": platform_link}}]]}
+            outreach_link = f"{TELEGRAM_MINI_APP_URL}?{urlencode({'screen': 'partnerships', 'scope_type': 'platform'})}"
+            diagnostics_link = f"{TELEGRAM_MINI_APP_URL}?{urlencode({'screen': 'diagnostics', 'scope_type': 'platform'})}"
+            today_link = f"{TELEGRAM_MINI_APP_URL}?{urlencode({'screen': 'today', 'scope_type': 'platform'})}"
+            reply_markup = {
+                "inline_keyboard": [
+                    [
+                        {"text": "Ответы и кампании", "web_app": {"url": outreach_link}},
+                        {"text": "Подтверждения", "web_app": {"url": platform_link}},
+                    ],
+                    [
+                        {"text": "Ошибки обновлений", "web_app": {"url": diagnostics_link}},
+                        {"text": "Сегодня", "web_app": {"url": today_link}},
+                    ],
+                ]
+            }
+            greeting_name = str(os.getenv("SUPERADMIN_DIGEST_GREETING_NAME") or "Александр").strip() or "Александр"
+            month_names = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря")
+            report_time = datetime.now(_zoneinfo(DEFAULT_TIMEZONE)).strftime("%H:%M")
+            text = (
+                f"Доброе утро, {greeting_name}.\n\n"
+                "LocalOS · Вся платформа\n"
+                f"{sent_date.day} {month_names[sent_date.month - 1]} · сводка собрана в {report_time}"
+            )
+            operator_block = _superadmin_operator_summary_block(conn, str(bucket.get("owner_id") or ""))
+            if operator_block:
+                text += f"\n\n{operator_block}"
             operations_block = build_superadmin_morning_operations_block(conn, sent_date)
-            text += f"\n\n{operations_block}"
+            if operations_block:
+                text += f"\n\n{operations_block}"
             completed_sections = [
                 f"🏢 {item['business_name']}\n" + "\n".join(item["completed_lines"])
                 for item in bucket["businesses"]
                 if item.get("completed_lines")
             ]
             if completed_sections:
-                text += "\n\n✅ Что LocalOS уже сделал\n" + "\n\n".join(completed_sections)
+                visible_completed = completed_sections[:5]
+                remaining_completed = len(completed_sections) - len(visible_completed)
+                text += "\n\n✅ Что LocalOS уже сделал\n" + "\n\n".join(visible_completed)
+                if remaining_completed:
+                    text += f"\n\nЕщё результатов по бизнесам: {remaining_completed}"
             learning_block = _superadmin_learning_digest_block(conn)
             if learning_block:
                 text += f"\n\n{learning_block}"
-            operator_block = _superadmin_operator_summary_block(conn, str(bucket.get("owner_id") or ""))
-            if operator_block:
-                text += f"\n\n{operator_block}"
             monthly_block = _superadmin_monthly_recalibration_block(conn, sent_date)
             if monthly_block:
                 text += f"\n\n{monthly_block}"
-                reply_markup = {
-                    "inline_keyboard": [
-                        [{"text": "Открыть inbox LocalOS", "web_app": {"url": platform_link}}],
-                        [{"text": "Показать предложения", "callback_data": "industry_patterns_show"}],
-                        [{"text": "Применить только после review", "callback_data": "industry_patterns_policy"}],
-                    ]
-                }
+                reply_markup["inline_keyboard"].extend([
+                    [{"text": "Показать предложения", "callback_data": "industry_patterns_show"}],
+                    [{"text": "Применить только после review", "callback_data": "industry_patterns_policy"}],
+                ])
             impact_block = _superadmin_monthly_impact_block(conn, sent_date)
             if impact_block:
                 text += f"\n\n{impact_block}"
-                reply_markup = {
-                    "inline_keyboard": [
-                        [{"text": "Открыть inbox LocalOS", "web_app": {"url": platform_link}}],
-                        [{"text": "Impact report", "callback_data": "industry_patterns_impact"}],
-                        [{"text": "Health active-паттернов", "callback_data": "industry_patterns_health"}],
-                    ]
-                }
+                reply_markup["inline_keyboard"].extend([
+                    [{"text": "Impact report", "callback_data": "industry_patterns_impact"}],
+                    [{"text": "Health active-паттернов", "callback_data": "industry_patterns_health"}],
+                ])
         else:
             first_business = bucket["businesses"][0] if bucket.get("businesses") else {}
             network_id = str(first_business.get("network_id") or "")
@@ -1923,7 +1868,7 @@ def _superadmin_operator_summary_block(conn, owner_id: str) -> str:
             },
             user_id=owner_id,
         )
-        return format_scope_summary_for_telegram(summary)
+        return format_superadmin_platform_attention(summary)
     except Exception:
         try:
             conn.rollback()

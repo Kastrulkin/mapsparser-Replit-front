@@ -29,6 +29,7 @@ MOBILE_ACTIONS = {
     "partnerships.draft.delete": {"estimated_credits_per_item": 0, "external_effects": False},
     "community_sources.unsubscribe": {"estimated_credits_per_item": 0, "external_effects": False},
     "agents.run": {"estimated_credits_per_item": 2, "external_effects": False},
+    "agents.lifecycle": {"estimated_credits_per_item": 0, "external_effects": False},
     "diagnostics.retry": {"estimated_credits_per_item": 10, "external_effects": True},
 }
 
@@ -450,8 +451,34 @@ def create_mobile_action_preview(
             "business_id": blueprint_business_id,
             "active_version_id": str(blueprint.get("active_version_id") or ""),
             "inputs": inputs,
+            "input_snapshot_id": str(input_payload.get("input_snapshot_id") or ""),
         }
         changes = [{"object_id": blueprint_id, "operation": capability, "label": f"Запустить: {blueprint.get('name') or 'ИИ-сотрудник'}"}]
+    elif capability == "agents.lifecycle":
+        requested_business_id = _requested_business_id(scope, input_payload)
+        blueprint_id = str(input_payload.get("blueprint_id") or "").strip()
+        operation = str(input_payload.get("operation") or "").strip()
+        if not _business_allowed(scope, requested_business_id) or not blueprint_id or operation not in {"activate", "pause", "resume", "stop"}:
+            return {"status": "blocked", "blocked_reasons": ["automation_reference_required"]}
+        cursor.execute(
+            "SELECT id, business_id, name, status FROM agent_blueprints WHERE id=%s AND business_id=%s",
+            (blueprint_id, requested_business_id),
+        )
+        blueprint = _row(cursor, cursor.fetchone())
+        if not blueprint:
+            return {"status": "blocked", "blocked_reasons": ["agent_not_found_or_forbidden"]}
+        from services.operator_agent_management import prepare_lifecycle
+        prepared = prepare_lifecycle(cursor, business_id=requested_business_id, user_id=user_id,
+                                     arguments={"operation": operation, "blueprint_id": blueprint_id})
+        if prepared.get("status") != "approval_required":
+            return {**prepared, "status": "blocked" if prepared.get("status") != "clarification_required" else "clarification_required"}
+        targets = [requested_business_id]
+        objects = [{**blueprint, "business_id": requested_business_id, "operation": operation}]
+        envelope = dict(prepared["approval"]["envelope"])
+        changes = [{"object_id": blueprint_id, "operation": capability, "label": str(prepared.get("approval", {}).get("summary") or operation)}]
+        preview_extras["lifecycle_approval"] = {"summary": prepared.get("approval", {}).get("summary"),
+                                                  "expected_status": envelope.get("expected_status"),
+                                                  "version_id": envelope.get("version_id")}
     elif capability == "diagnostics.retry":
         if scope.get("kind") != "platform":
             return {"status": "blocked", "blocked_reasons": ["platform_scope_required"]}
@@ -576,6 +603,7 @@ def confirm_mobile_action(
     action_id: str,
     user_id: str,
     scope_resolver: Callable[[str, str | None], dict[str, Any] | None],
+    target_authorizer: Callable[[list[str]], bool] | None,
     executors: dict[str, Callable[[dict[str, Any], list[str], dict[str, Any]], dict[str, Any]]],
 ) -> tuple[dict[str, Any], bool]:
     cursor.execute("SELECT * FROM operatoractions WHERE id = %s AND user_id = %s FOR UPDATE", (action_id, user_id))
@@ -584,16 +612,25 @@ def confirm_mobile_action(
         return {"status": "blocked", "blocked_reasons": ["action_not_found"]}, False
     if str(action.get("status") or "") == "completed":
         return _json(action.get("result_json"), {}), True
+    if str(action.get("status") or "") not in {"pending", "pending_approval", "preview"}:
+        return {"status": "blocked", "blocked_reasons": ["action_not_pending"]}, False
     expires_at = action.get("expires_at")
     if expires_at and expires_at < datetime.now(timezone.utc):
         return {"status": "blocked", "blocked_reasons": ["preview_expired"]}, False
     scope = scope_resolver(str(action.get("scope_type") or "business"), str(action.get("scope_id") or "") or None)
     if not scope:
         return {"status": "blocked", "blocked_reasons": ["scope_forbidden"]}, False
-    stored_targets = [str(item) for item in _json(action.get("target_business_ids_json"), [])]
+    raw_targets = _json(action.get("target_business_ids_json"), [])
+    if not isinstance(raw_targets, list):
+        return {"status": "blocked", "blocked_reasons": ["invalid_action_targets"], "access_denied": True}, False
+    stored_targets = [item.strip() for item in raw_targets if isinstance(item, str) and item.strip()]
+    if not stored_targets or len(stored_targets) != len(raw_targets) or len(set(stored_targets)) != len(stored_targets):
+        return {"status": "blocked", "blocked_reasons": ["invalid_action_targets"], "access_denied": True}, False
     allowed_targets = {str(item) for item in scope.get("business_ids") or []}
     if scope.get("kind") != "platform" and any(item not in allowed_targets for item in stored_targets):
         return {"status": "blocked", "blocked_reasons": ["targets_changed"]}, False
+    if target_authorizer is None or not target_authorizer(stored_targets):
+        return {"status": "blocked", "blocked_reasons": ["write_access_forbidden"], "access_denied": True}, False
     capability = str(action.get("capability") or "")
     executor = executors.get(capability)
     if not executor:

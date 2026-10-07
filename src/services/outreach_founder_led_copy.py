@@ -16,6 +16,10 @@ from services.outreach_playbook import (
     APPROVED_LOCALOS_MESSAGE_EXAMPLES,
     APPROVED_LOCALOS_PROOFS,
 )
+from services.outreach_template_service import (
+    render_outreach_template,
+    select_outreach_template,
+)
 
 
 BEAUTY_CATEGORY_MARKERS = (
@@ -366,7 +370,8 @@ def founder_led_localos_text(
     )
     signal_combo = clean_copy(candidate.get("signal_combo"))
     composite_localos_signal = signal_combo in FOUNDER_LED_SIGNAL_COMBOS
-    if not segment and not composite_localos_signal:
+    has_selected_template = bool(clean_copy(candidate.get("outreach_template_key")))
+    if not segment and not composite_localos_signal and not has_selected_template:
         return None
 
     sender = clean_copy(candidate.get("sender"))
@@ -377,6 +382,19 @@ def founder_led_localos_text(
     approved_proof = clean_copy(candidate.get("founder_proof"))
     if not approved_proof and story:
         approved_proof = clean_copy(story.get("proof"))
+
+    # A supported, versioned template is the preferred writing path. Explicit
+    # founder-approved copy contracts keep priority, and a caller can disable
+    # reuse after the same template has already appeared in the sequence.
+    if (
+        not approved_copy_contract(candidate)
+        and clean_copy(candidate.get("outreach_template_key"))
+        and candidate.get("outreach_template_disabled") is not True
+    ):
+        template_selection = select_outreach_template(angle, candidate)
+        template_text = render_outreach_template(template_selection, candidate)
+        if template_text:
+            return template_text
 
     if angle == "signal":
         if signal_combo == "recent_price_update_announcement":
@@ -622,8 +640,7 @@ def founder_led_localos_text(
                 "В карточке FGF medical опубликованы два комплекса лазерной эпиляции. "
                 f"{diagnostic_question}\n\n"
                 "LocalOS по подтверждённому прайсу соберёт матрицу услуг и допов, "
-                "сценарии для администратора и поможет отследить результат. "
-                "Медицинскую совместимость подтверждает врач.\n\n"
+                "сценарии для администратора и поможет отследить результат.\n\n"
                 f"{final_cta}"
             )
         approved_case = localos_case_for_angle(angle, candidate)
@@ -651,7 +668,7 @@ def founder_led_localos_text(
             "Это показывает, что приёмы уже учитываются в системе, но само по себе не говорит о проблеме.\n\n"
             "Если вручную передать обезличенную статистику по услугам и визитам, LocalOS помогает "
             "проверить сценарии повторных предложений, допродаж и работы со средним чеком.\n\n"
-            f"Актуальна ли для {recipient} задача увеличивать средний чек?"
+            "Актуальна ли задача увеличивать средний чек?"
         )
 
     if angle == "crm_content":

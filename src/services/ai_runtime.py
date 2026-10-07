@@ -12,6 +12,7 @@ from typing import Any
 
 from psycopg2.extras import Json
 
+from core.outbound_network import public_outbound_urlopen
 from services.gigachat_client import get_gigachat_client
 from services.media_file_storage import load_media_file
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
@@ -72,7 +73,9 @@ def is_capability_enabled(cursor: Any, business_id: str, capability: str) -> boo
         """,
         (business_id, capability),
     )
-    row = _row_to_dict(cursor, cursor.fetchone()) or {}
+    row = _row_to_dict(cursor, cursor.fetchone())
+    if row is None:
+        return capability == VISION_CAPABILITY
     return bool(row.get("enabled"))
 
 
@@ -136,12 +139,12 @@ def list_capability_settings(cursor: Any, business_id: str) -> dict[str, dict[st
     indexed = {str(row.get("capability") or ""): row for row in rows}
     result: dict[str, dict[str, Any]] = {}
     for capability in capabilities:
-        row = indexed.get(capability) or {}
+        row = indexed.get(capability)
         result[capability] = {
             "capability": capability,
-            "enabled": bool(row.get("enabled")),
-            "enabled_at": row.get("enabled_at"),
-            "metadata_json": _json_value(row.get("metadata_json"), {}),
+            "enabled": capability == VISION_CAPABILITY if row is None else bool(row.get("enabled")),
+            "enabled_at": None if row is None else row.get("enabled_at"),
+            "metadata_json": {} if row is None else _json_value(row.get("metadata_json"), {}),
         }
     return result
 
@@ -166,7 +169,7 @@ def _download_image_as_base64(url: str) -> str:
     if not clean_url.startswith(("http://", "https://")):
         return ""
     req = urllib.request.Request(clean_url, headers={"User-Agent": "LocalOS Media Intelligence/1.0"})
-    response = urllib.request.urlopen(req, timeout=20)
+    response = public_outbound_urlopen(req, timeout=20)
     try:
         data = response.read(10 * 1024 * 1024 + 1)
     finally:

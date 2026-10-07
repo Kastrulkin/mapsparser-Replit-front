@@ -5,6 +5,7 @@ import uuid
 from datetime import date, timedelta
 from typing import Any
 
+from core.db_helpers import assert_schema_columns
 from core.industry_patterns import (
     detect_industry_key,
     evaluate_pattern_fit,
@@ -76,89 +77,11 @@ def previous_month_range(today: date | None = None) -> tuple[date, date]:
 
 def ensure_industry_pattern_tables(conn) -> None:
     cursor = conn.cursor()
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS industry_pattern_versions (
-            id TEXT PRIMARY KEY,
-            industry_key TEXT NOT NULL,
-            pattern_type TEXT NOT NULL,
-            pattern_text TEXT NOT NULL,
-            examples_json JSONB,
-            source_proposal_id TEXT,
-            version TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'active',
-            activated_by TEXT,
-            activated_at TIMESTAMPTZ DEFAULT NOW(),
-            disabled_at TIMESTAMPTZ,
-            created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS industry_pattern_proposals (
-            id TEXT PRIMARY KEY,
-            industry_key TEXT NOT NULL,
-            pattern_type TEXT NOT NULL,
-            proposed_pattern TEXT NOT NULL,
-            examples_json JSONB,
-            source_period_start DATE NOT NULL,
-            source_period_end DATE NOT NULL,
-            source_counts_json JSONB,
-            confidence NUMERIC(5, 2) NOT NULL DEFAULT 0,
-            risk_level TEXT NOT NULL DEFAULT 'medium',
-            status TEXT NOT NULL DEFAULT 'pending_review',
-            reviewed_by TEXT,
-            reviewed_at TIMESTAMPTZ,
-            decision_comment TEXT,
-            activated_version_id TEXT,
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            updated_at TIMESTAMPTZ DEFAULT NOW()
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS industry_pattern_decisions (
-            id TEXT PRIMARY KEY,
-            proposal_id TEXT NOT NULL,
-            decision TEXT NOT NULL,
-            decided_by TEXT,
-            decision_comment TEXT,
-            created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS industry_pattern_impact_events (
-            id TEXT PRIMARY KEY,
-            version_id TEXT NOT NULL,
-            industry_key TEXT NOT NULL,
-            pattern_type TEXT NOT NULL,
-            business_id TEXT,
-            user_id TEXT,
-            source TEXT NOT NULL,
-            event_type TEXT NOT NULL,
-            result_status TEXT,
-            metrics_json JSONB,
-            created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS industry_pattern_admin_events (
-            id TEXT PRIMARY KEY,
-            actor_id TEXT,
-            action TEXT NOT NULL,
-            target_type TEXT,
-            target_id TEXT,
-            metadata_json JSONB,
-            created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-        """
-    )
+    assert_schema_columns(cursor, "industry_pattern_versions", ("id", "industry_key", "pattern_type", "pattern_text", "version", "status", "created_at"))
+    assert_schema_columns(cursor, "industry_pattern_proposals", ("id", "industry_key", "pattern_type", "proposed_pattern", "source_period_start", "source_period_end", "status", "updated_at"))
+    assert_schema_columns(cursor, "industry_pattern_decisions", ("id", "proposal_id", "decision", "created_at"))
+    assert_schema_columns(cursor, "industry_pattern_impact_events", ("id", "version_id", "industry_key", "pattern_type", "source", "event_type", "created_at"))
+    assert_schema_columns(cursor, "industry_pattern_admin_events", ("id", "actor_id", "action", "metadata_json", "created_at"))
 
 
 def record_industry_pattern_admin_event(

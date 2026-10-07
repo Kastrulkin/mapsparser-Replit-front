@@ -40,6 +40,22 @@ def _table_exists(cursor: Any, table_name: str) -> bool:
     return bool(_row_value(cursor.fetchone(), "relation"))
 
 
+def _table_has_column(cursor: Any, table_name: str, column_name: str) -> bool:
+    cursor.execute(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = %s
+              AND column_name = %s
+        ) AS has_column
+        """,
+        (table_name, column_name),
+    )
+    return bool(_row_value(cursor.fetchone(), "has_column"))
+
+
 def _milestone(key: str, label: str, done: bool, achieved_at: Any = None, evidence: str = "") -> dict[str, Any]:
     return {
         "key": key,
@@ -645,13 +661,19 @@ def _load_maps(cursor: Any, business_ids: list[str]) -> dict[str, Any]:
             location_row = cursor.fetchone()
             result["attention_location"] = _row_value(location_row, "name")
     if reviews_table:
+        current_filter = (
+            "AND COALESCE(is_current, TRUE) = TRUE"
+            if _table_has_column(cursor, "externalbusinessreviews", "is_current")
+            else ""
+        )
         cursor.execute(
-            """
+            f"""
             SELECT COUNT(*) AS reviews_count,
                    COUNT(*) FILTER (WHERE COALESCE(NULLIF(TRIM(response_text), ''), '') IN ('', '—')) AS unanswered_reviews,
                    MAX(COALESCE(published_at, created_at)) AS latest_at
             FROM externalbusinessreviews
             WHERE business_id::text = ANY(%s)
+              {current_filter}
             """,
             (business_ids,),
         )
@@ -669,6 +691,7 @@ def _load_maps(cursor: Any, business_ids: list[str]) -> dict[str, Any]:
                     JOIN businesses b ON b.id::text = r.business_id::text
                     WHERE r.business_id::text = ANY(%s)
                       AND COALESCE(NULLIF(TRIM(r.response_text), ''), '') IN ('', '—')
+                      AND COALESCE(r.is_current, TRUE) = TRUE
                     GROUP BY b.id, b.name
                     ORDER BY COUNT(*) DESC, b.name
                     LIMIT 1
@@ -1249,6 +1272,23 @@ def _load_growth_overview_with_cursor(cursor: Any, connection: Any, scope: dict[
         combined_activity = action_activity + list(overview.get("recent_activity") or [])
         combined_activity.sort(key=lambda item: str(item.get("occurred_at") or ""), reverse=True)
         overview["recent_activity"] = combined_activity[:12]
+    try:
+        from services.card_growth_service import build_card_growth
+        card_growth = build_card_growth(cursor, scope)
+        overview.update(card_growth)
+        if card_growth.get("focus_action"):
+            _reset_growth_loop_focus(overview, scope, card_growth["focus_action"])
+    except Exception:
+        connection.rollback()
+        logger.warning("Managed card growth state is unavailable", exc_info=True)
+        overview.update({
+            "policy_version": None,
+            "goal": {"status": "unavailable", "options": []},
+            "card_state": {"status": "unavailable", "locations": []},
+            "baseline": {"status": "unavailable"},
+            "next_actions": [],
+            "measurement": {"status": "unavailable", "checkpoints": []},
+        })
     return overview
 
 

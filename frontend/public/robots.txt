@@ -1,6 +1,11 @@
 User-agent: Googlebot
 Allow: /
 
+User-agent: Yandex
+Allow: /
+# Chunk recovery changes the URL, not the page content.
+Clean-param: __localos_reload
+
 User-agent: Bingbot
 Allow: /
 

@@ -63,6 +63,10 @@ from services.operator_credit_reservation import finalize_reserved_action_credit
 from services.prospecting_service import ProspectingService
 from services.outreach_inbound_service import record_campaign_inbound_reaction
 from services.outreach_safety_service import classify_inbound_event, reconcile_reaction_learning_event
+from services.lead_registry_projection import (
+    lead_matches_registry_filters,
+    normalize_lead_for_registry,
+)
 from services.lead_workstream_service import (
     CLIENT_PARTNERSHIP,
     LOCALOS_SALES,
@@ -71,6 +75,7 @@ from services.lead_workstream_service import (
     update_workstream,
 )
 from services import lead_partner_type_service
+from subscription_manager import get_capability_access
 from services.sales_room_helpers import (
     append_sales_room_link_to_outreach_text as _append_sales_room_link_to_outreach_text,
     make_sales_room_url as _make_sales_room_url,
@@ -161,7 +166,7 @@ TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS = max(1, int(os.environ.get("TELEGRAM_REPLY_SY
 TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT = max(1, min(int(os.environ.get("TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT", "12")), 50))
 TELEGRAM_REPLY_SYNC_TIMEOUT_SEC = max(5, int(os.environ.get("TELEGRAM_REPLY_SYNC_TIMEOUT_SEC", "12")))
 LEAD_OUTREACH_MODERATION_STATUS = "lead_outreach"
-PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr")
+PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr", "hy", "kk")
 PIPELINE_UNPROCESSED = "unprocessed"
 PIPELINE_IN_PROGRESS = "in_progress"
 PIPELINE_POSTPONED = "postponed"
@@ -268,7 +273,7 @@ def _update_send_queue_delivery(queue_id: str, delivery_status: str, provider_me
                 sent_at = {sent_at_sql},
                 updated_at = NOW()
             WHERE id = %s
-            RETURNING id, batch_id, lead_id, workstream_id, draft_id, channel, delivery_status,
+            RETURNING id, batch_id, lead_id, workstream_id, draft_id, campaign_touch_id, channel, delivery_status,
                       provider_message_id, error_text, sent_at, created_at, updated_at
             """,
             (delivery_status, provider_message_id, error_text, queue_id),
@@ -319,6 +324,27 @@ def _update_send_queue_delivery(queue_id: str, delivery_status: str, provider_me
             event_type="delivery_sent" if delivery_status in {QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED} else "delivery_failed",
             payload={"queue_id": queue_id, "delivery_status": delivery_status, "provider_message_id": provider_message_id},
         )
+        if (
+            delivery_status in {QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED}
+            and payload.get("workstream_id")
+            and payload.get("campaign_touch_id")
+        ):
+            cur.execute("SAVEPOINT yougile_projection")
+            try:
+                from services.outreach_yougile_sync_service import enqueue_touch_sent_projection
+
+                enqueue_touch_sent_projection(cur, queue_id=queue_id)
+                cur.execute("RELEASE SAVEPOINT yougile_projection")
+            except Exception as projection_error:
+                cur.execute("ROLLBACK TO SAVEPOINT yougile_projection")
+                cur.execute("RELEASE SAVEPOINT yougile_projection")
+                _record_lead_timeline_event(
+                    cur,
+                    lead_id=str(payload.get("lead_id") or ""),
+                    workstream_id=str(payload.get("workstream_id") or "") or None,
+                    event_type="yougile_projection_failed",
+                    payload={"queue_id": queue_id, "error": str(projection_error)[:500]},
+                )
         conn.commit()
         return payload
     except Exception:
@@ -370,6 +396,9 @@ def _record_reaction(
         normalized_provider_account_id = str(provider_account_id or "").strip()[:255] or None
         normalized_provider_message_id = _normalize_provider_message_id(provider_message_id)
         if normalized_provider_name and normalized_provider_message_id:
+            if normalized_provider_name == "native_email":
+                cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))",
+                    (f"email-inbound:{normalized_provider_account_id}:{normalized_provider_message_id.lower()}",))
             cur.execute(
                 """
                 SELECT id, queue_id, lead_id, raw_reply, classified_outcome,
@@ -765,19 +794,16 @@ def search_businesses():
     except Exception as e:
         print(f"Error queueing prospecting search: {e}")
         return jsonify({"error": str(e)}), 500
-
 @admin_prospecting_bp.route("/api/admin/prospecting/business-parse-apify", methods=["POST"])
 def queue_business_parse_apify():
     """Queue single business card parsing through Apify actor (Yandex / 2GIS / Google / Apple)."""
     user_data, error = _require_auth()
     if error:
         return error
-
     data = request.get_json(silent=True) or {}
     source = str(data.get("source") or "apify_yandex").strip().lower()
     if source not in {"apify_yandex", "apify_2gis", "apify_google", "apify_apple"}:
         return jsonify({"error": "Unsupported source"}), 400
-
     service = ProspectingService(source=source)
     if not service.client:
         return jsonify({"error": "APIFY_TOKEN is not configured"}), 500
@@ -788,6 +814,8 @@ def queue_business_parse_apify():
         business_id = _resolve_business_for_user(cur, user_data, str(data.get("business_id") or "").strip())
         if not business_id:
             return jsonify({"error": "Business not found or access denied"}), 404
+        if not (maps_access := get_capability_access(business_id, "maps", bool(user_data.get("is_superadmin")))).get("allowed"):
+            return jsonify({"success": False, "error": "payment_required", **maps_access, "return_to": request.full_path.rstrip("?")}), 402
 
         if source == "apify_2gis":
             cur.execute(
@@ -857,7 +885,7 @@ def queue_business_parse_apify():
         row = cur.fetchone()
         map_url = ""
         if row:
-            map_url = str(row.get("url") if hasattr(row, "get") else row[0]).strip()
+            map_url = normalize_map_url(row.get("url") if hasattr(row, "get") else row[0])
         if not map_url:
             return jsonify({"error": "Map link is not configured for this business"}), 400
 
@@ -977,6 +1005,49 @@ def get_latest_search_job_status():
         print(f"Error getting latest prospecting search job: {e}")
         return jsonify({"error": str(e)}), 500
 
+def _registry_lead_identity_key(lead: dict[str, Any]) -> tuple[str, str] | None:
+    company_location_id = str(lead.get("company_location_id") or "").strip()
+    if company_location_id:
+        return "company_location", company_location_id
+    source_url = str(lead.get("source_url") or "").strip()
+    org_match = re.search(r"/org/(?:[^/?#]+/)?(\d+)(?:[/?#]|$)", source_url)
+    if org_match:
+        return "yandex_org", org_match.group(1)
+    source_external_id = str(lead.get("source_external_id") or "").strip()
+    source = str(lead.get("source") or "").strip().lower()
+    if source_external_id and source:
+        return f"source_external:{source}", source_external_id
+    return None
+
+
+def _registry_canonical_lead_rank(lead: dict[str, Any]) -> tuple[int, int, int, str]:
+    status = str(lead.get("status") or "").strip().lower()
+    pipeline_status = str(lead.get("pipeline_status") or "").strip().lower()
+    contacted = int(
+        status in {"sent", "contacted", "replied", "converted"}
+        or pipeline_status in {"contacted", "replied", "converted"}
+    )
+    sent = int(status == "sent")
+    active = int(pipeline_status not in {"postponed", "deferred", "archived"})
+    return contacted, sent, active, str(lead.get("id") or "")
+
+
+def _deduplicate_registry_leads(leads: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    selected_by_key: dict[tuple[str, str], tuple[int, dict[str, Any]]] = {}
+    passthrough: list[tuple[int, dict[str, Any]]] = []
+    for index, lead in enumerate(leads):
+        identity_key = _registry_lead_identity_key(lead)
+        if identity_key is None:
+            passthrough.append((index, lead))
+            continue
+        current = selected_by_key.get(identity_key)
+        if current is None or _registry_canonical_lead_rank(lead) > _registry_canonical_lead_rank(current[1]):
+            selected_by_key[identity_key] = (index, lead)
+    retained = passthrough + list(selected_by_key.values())
+    retained.sort(key=lambda item: item[0])
+    return [lead for _index, lead in retained]
+
+
 @admin_prospecting_bp.route("/api/admin/prospecting/leads", methods=["GET"])
 def get_leads():
     """Get all saved leads."""
@@ -985,6 +1056,8 @@ def get_leads():
         return error
 
     try:
+        page = max(1, int(request.args.get("page") or 1))
+        page_size = max(1, min(100, int(request.args.get("page_size") or 50)))
         filters = {
             "category": (request.args.get("category") or "").strip() or None,
             "city": (request.args.get("city") or "").strip() or None,
@@ -1011,6 +1084,8 @@ def get_leads():
         sales_room_by_lead_id: dict[str, dict[str, Any]] = {}
         group_summary_by_lead_id: dict[str, list[dict[str, Any]]] = {}
         timeline_preview_by_lead_id: dict[str, dict[str, Any]] = {}
+        client_options_by_id: dict[str, dict[str, str]] = {}
+        scoped_lead_ids: set[str] | None = None
         conn = get_db_connection()
         try:
             cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -1049,11 +1124,75 @@ def get_leads():
                 group_summary_by_lead_id = _group_summary_for_lead_ids(cur, lead_ids)
             if include_timeline:
                 timeline_preview_by_lead_id = _latest_timeline_preview(cur, lead_ids)
+            cur.execute(
+                """
+                SELECT DISTINCT
+                    client_business.id::text AS id,
+                    client_business.name,
+                    client_business.address
+                FROM lead_workstreams ws
+                JOIN businesses client_business ON client_business.id = ws.client_business_id
+                WHERE ws.workstream_type = 'client_partnership'
+                  AND ws.client_business_id IS NOT NULL
+                """
+            )
+            for row in cur.fetchall() or []:
+                option_id = str(row.get("id") or "").strip()
+                option_name = str(row.get("name") or "").strip()
+                if option_id and option_name:
+                    client_options_by_id[option_id] = {
+                        "id": option_id,
+                        "name": option_name,
+                        "address": str(row.get("address") or "").strip(),
+                    }
+            requested_workstream_type = str(filters.get("workstream_type") or "").strip()
+            requested_client_business_id = str(filters.get("client_business_id") or "").strip()
+            if requested_workstream_type or requested_client_business_id:
+                if requested_workstream_type == LOCALOS_SALES and not requested_client_business_id:
+                    cur.execute(
+                        """
+                        SELECT DISTINCT scoped.lead_id
+                        FROM (
+                            SELECT ws.lead_id::text AS lead_id
+                            FROM lead_workstreams ws
+                            WHERE ws.workstream_type = 'localos_sales'
+                            UNION ALL
+                            SELECT lead.id::text AS lead_id
+                            FROM prospectingleads lead
+                            WHERE NOT EXISTS (
+                                SELECT 1 FROM lead_workstreams existing
+                                WHERE existing.lead_id = lead.id
+                            )
+                        ) scoped
+                        """
+                    )
+                else:
+                    scope_clauses = []
+                    scope_params: list[str] = []
+                    if requested_workstream_type:
+                        scope_clauses.append("ws.workstream_type = %s")
+                        scope_params.append(requested_workstream_type)
+                    if requested_client_business_id:
+                        scope_clauses.append("ws.client_business_id::text = %s")
+                        scope_params.append(requested_client_business_id)
+                    cur.execute(
+                        f"""
+                        SELECT DISTINCT ws.lead_id::text AS lead_id
+                        FROM lead_workstreams ws
+                        WHERE {' AND '.join(scope_clauses)}
+                        """,
+                        tuple(scope_params),
+                    )
+                scoped_lead_ids = {
+                    str(row.get("lead_id") or "").strip()
+                    for row in cur.fetchall() or []
+                    if str(row.get("lead_id") or "").strip()
+                }
         finally:
             conn.close()
         normalized = []
         for lead in leads:
-            display_lead = _normalize_lead_for_display(lead)
+            display_lead = normalize_lead_for_registry(lead)
             if not display_lead:
                 continue
             canonical_partner_type = lead_partner_type_service.partner_type_for_category(
@@ -1103,6 +1242,26 @@ def get_leads():
             if include_timeline:
                 display_lead["timeline_preview"] = timeline_preview_by_lead_id.get(lead_id)
             normalized.append(display_lead)
+        normalized = _deduplicate_registry_leads(normalized)
+        normalized = [lead for lead in normalized if lead_matches_registry_filters(lead, filters)]
+        if scoped_lead_ids is not None:
+            normalized = [
+                lead for lead in normalized
+                if str(lead.get("id") or "").strip() in scoped_lead_ids
+            ]
+        unpaginated_normalized = normalized
+
+        deferred_filters = any(
+            str(filters.get(key) or "").strip()
+            for key in ("action_state", "group_id")
+        )
+        total = len(normalized)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        page = min(page, total_pages)
+        if not deferred_filters:
+            page_start = (page - 1) * page_size
+            normalized = normalized[page_start:page_start + page_size]
+
         from services.lead_workstream_service import attach_workstreams
 
         workstream_conn = get_db_connection()
@@ -1115,19 +1274,6 @@ def get_leads():
                 lead.pop("messenger_links_json", None)
                 for workstream in lead.get("workstreams") or []:
                     workstream.pop("contact_points", None)
-        client_options_by_id = {}
-        for lead in normalized:
-            for workstream in lead.get("workstreams") or []:
-                if workstream.get("workstream_type") != "client_partnership":
-                    continue
-                option_id = str(workstream.get("client_business_id") or "").strip()
-                option_name = str(workstream.get("client_business_name") or "").strip()
-                if option_id and option_name:
-                    client_options_by_id[option_id] = {
-                        "id": option_id,
-                        "name": option_name,
-                        "address": str(workstream.get("client_business_address") or "").strip(),
-                    }
         duplicate_client_names = {
             name
             for name in (
@@ -1149,7 +1295,7 @@ def get_leads():
             client_options_by_id.values(),
             key=lambda item: str(item.get("name") or "").casefold(),
         )
-        filtered = [lead for lead in normalized if _lead_matches_filters(lead, filters)]
+        filtered = normalized
         workstream_type = str(filters.get("workstream_type") or "").strip().lower()
         if workstream_type:
             filtered = [
@@ -1183,10 +1329,17 @@ def get_leads():
                 lead for lead in filtered
                 if any(str(group.get("id") or "") == group_id for group in (lead.get("groups") or []))
             ]
+        if deferred_filters:
+            total = len(filtered)
+            total_pages = max(1, (total + page_size - 1) // page_size)
+            page = min(page, total_pages)
+            page_start = (page - 1) * page_size
+            filtered = filtered[page_start:page_start + page_size]
         partner_type_counts: dict[str, int] = {}
-        for lead in filtered:
+        partner_type_source = filtered if deferred_filters else unpaginated_normalized
+        for lead in partner_type_source:
             canonical_categories = lead.get("canonical_categories") or [
-                str(lead.get("partner_type") or "other").strip() or "other"
+                *lead_partner_type_service.partner_types_for_category(lead.get("category"))
             ]
             for canonical_partner_type in dict.fromkeys(canonical_categories):
                 normalized_partner_type = str(canonical_partner_type or "other").strip() or "other"
@@ -1196,6 +1349,10 @@ def get_leads():
             {
                 "leads": filtered,
                 "count": len(filtered),
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
                 "client_options": client_options,
                 "business_category_options": category_options,
                 "partner_type_options": category_options,

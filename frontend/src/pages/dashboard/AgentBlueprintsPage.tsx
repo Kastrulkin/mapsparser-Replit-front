@@ -390,7 +390,7 @@ export const AgentBlueprintsPage = () => {
   }, [loadBlueprints]);
 
   const loadLegacyMigrationPlan = useCallback(async () => {
-    if (!currentBusinessId) {
+    if (!currentBusinessId || demoMode) {
       setLegacyMigrationPlan(null);
       return;
     }
@@ -401,14 +401,14 @@ export const AgentBlueprintsPage = () => {
       console.error(requestError);
       setLegacyMigrationPlan(null);
     }
-  }, [currentBusinessId]);
+  }, [currentBusinessId, demoMode]);
 
   useEffect(() => {
     void loadLegacyMigrationPlan();
   }, [loadLegacyMigrationPlan]);
 
   const loadPersonaAgents = useCallback(async () => {
-    if (!currentBusinessId) {
+    if (!currentBusinessId || demoMode) {
       setAvailablePersonaAgents([]);
       return;
     }
@@ -444,7 +444,7 @@ export const AgentBlueprintsPage = () => {
       console.error(requestError);
       setAvailablePersonaAgents([]);
     }
-  }, [currentBusinessId]);
+  }, [currentBusinessId, demoMode]);
 
   useEffect(() => {
     void loadPersonaAgents();

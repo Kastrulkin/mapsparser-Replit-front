@@ -145,6 +145,57 @@ OUTREACH_PATTERN_REVIEW_SCHEMA: dict[str, Any] = {
     },
     "required": ["approved", "issues", "safe_message_rules"],
 }
+COMMUNITY_TOPIC_LABEL_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "topics": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "cluster_id": {"type": "integer"},
+                    "title": {"type": "string"},
+                },
+                "required": ["cluster_id", "title"],
+            },
+        },
+    },
+    "required": ["topics"],
+}
+CONTENT_PLAN_GENERATION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "candidates": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "angle": {"type": "string"},
+                    "text": {"type": "string"},
+                    "used_fact_ids": {"type": "array", "items": {"type": "string"}},
+                    "unsupported_facts": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["id", "angle", "text", "used_fact_ids", "unsupported_facts"],
+            },
+        },
+    },
+    "required": ["candidates"],
+}
+
+BOUNDED_AGENT_RESULT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "summary": {"type": "string"},
+        "items": {"type": "array"},
+        "exceptions": {"type": "array"},
+        "drafts": {"type": "array"},
+        "source_refs": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["summary", "items", "exceptions", "drafts", "source_refs"],
+}
 
 
 def _task(
@@ -163,9 +214,11 @@ def _task(
     allow_text_fallback: bool = False,
     fallback_data_class: str = "",
     pipeline_stage: str = "",
+    thinking_enabled: bool | None = None,
 ) -> LLMTaskDefinition:
     return LLMTaskDefinition(
         task_key=key,
+        thinking_enabled=thinking_enabled,
         primary_provider=provider,
         model_profile=profile,
         data_class=data_class,
@@ -186,9 +239,30 @@ def _task(
 TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
     "review_reply": _task("review_reply", data_class="pii", prompt_version="review_reply_v1", allow_text_fallback=True, fallback_data_class="business_internal", pipeline_stage="copy"),
     "news_generation": _task("news_generation", data_class="public", prompt_version="news_generation_v1", allow_text_fallback=True, pipeline_stage="copy"),
-    "social_post_generation": _task("social_post_generation", data_class="public", prompt_version="social_post_generation_v1", allow_text_fallback=True, pipeline_stage="copy"),
+    "content_plan_direction": _task(
+        "content_plan_direction", profile="gigachat_max", response_kind="json",
+        schema={"type": "object", "properties": {"groups": {"type": "array"}, "items": {"type": "array"}, "error": {"type": "string"}}},
+        max_tokens=6000, temperature=0.2, timeout=60, prompt_version="content_plan_direction_v2", allow_text_fallback=True, thinking_enabled=False,
+    ),
+    "content_plan_generation_v2": _task(
+        "content_plan_generation_v2",
+        profile="gigachat_max",
+        data_class="public",
+        response_kind="json",
+        schema=CONTENT_PLAN_GENERATION_SCHEMA,
+        max_tokens=3000,
+        temperature=0.2,
+        timeout=60,
+        prompt_version="content_plan_generation_v2",
+        allow_text_fallback=True,
+        pipeline_stage="copy",
+    ),
+    "social_post_generation": _task("social_post_generation", data_class="public", prompt_version="social_post_generation_v1", allow_text_fallback=True, pipeline_stage="copy", thinking_enabled=False),
     "service_optimization": _task("service_optimization", prompt_version="service_optimization_v1", allow_text_fallback=True, pipeline_stage="copy"),
     "service_copy_generation": _task("service_copy_generation", response_kind="json", allow_text_fallback=True, pipeline_stage="copy"),
+    "outreach_audience_qualify": _task("outreach_audience_qualify", provider="deepseek", profile="deepseek_fast", data_class="business_internal", response_kind="json", schema={"type": "object", "properties": {"matches": {"type": "boolean"}, "country": {"type": "object", "properties": {"matches": {"type": "boolean"}, "evidence_id": {"type": "string"}, "quote": {"type": "string"}}}, "destination": {"type": "object", "properties": {"matches": {"type": "boolean"}, "evidence_id": {"type": "string"}, "quote": {"type": "string"}}}, "evidence_id": {"type": "string"}, "quote": {"type": "string"}, "reason": {"type": "string"}}, "required": ["matches", "reason"]}, max_tokens=1600, timeout=30, prompt_version="outreach_audience_qualify_v2", thinking_enabled=False),
+    "outreach_public_copy": _task("outreach_public_copy", provider="deepseek", profile="deepseek_reasoning", data_class="business_internal", prompt_version="outreach_public_copy_v1", pipeline_stage="copy"),
+    "outreach_language_review": _task("outreach_language_review", provider="gigachat", profile="gigachat_max", data_class="business_internal", prompt_version="outreach_language_review_v1", pipeline_stage="review"),
     "outreach_personalization": _task("outreach_personalization", data_class="pii", prompt_version="outreach_personalization_v13", pipeline_stage="copy"),
     "outreach_corpus_pattern_extract": _task(
         "outreach_corpus_pattern_extract",
@@ -215,6 +289,19 @@ TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
         timeout=45,
         prompt_version="outreach_corpus_pattern_review_v1",
         pipeline_stage="review",
+    ),
+    "community_topic_labeling": _task(
+        "community_topic_labeling",
+        provider="gigachat",
+        profile="gigachat_max",
+        data_class="public",
+        response_kind="json",
+        schema=COMMUNITY_TOPIC_LABEL_SCHEMA,
+        max_tokens=1200,
+        temperature=0.0,
+        timeout=45,
+        prompt_version="community_topic_labeling_v1",
+        pipeline_stage="analysis",
     ),
     "lead_audit_enrichment": _task(
         "lead_audit_enrichment",
@@ -294,6 +381,28 @@ TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
         timeout=20,
         shadow_allowed=True,
     ),
+    "operator_tool_plan": _task(
+        "operator_tool_plan",
+        provider="deepseek",
+        profile="deepseek_fast",
+        response_kind="json",
+        schema={
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["tool_call", "final", "clarification"]},
+                "tool": {"type": "string"},
+                "arguments": {"type": "object"},
+                "message": {"type": "string"},
+            },
+            "required": ["action"],
+        },
+        max_tokens=1200,
+        thinking_enabled=False,
+        temperature=0.0,
+        timeout=20,
+        shadow_allowed=False,
+        pipeline_stage="planning",
+    ),
     "agent_compiler": _task(
         "agent_compiler",
         provider="deepseek",
@@ -329,6 +438,19 @@ TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
         timeout=20,
         prompt_version="agent_table_analysis_v1",
         shadow_allowed=True,
+    ),
+    "agent_bounded_workflow_step": _task(
+        "agent_bounded_workflow_step",
+        provider="gigachat",
+        profile="gigachat_pro",
+        data_class="financial_sensitive",
+        response_kind="json",
+        schema=BOUNDED_AGENT_RESULT_SCHEMA,
+        max_tokens=3000,
+        temperature=0.0,
+        timeout=45,
+        prompt_version="agent_bounded_workflow_step_v1",
+        pipeline_stage="analysis",
     ),
     "generic_russian_analysis": _task("generic_russian_analysis"),
 }

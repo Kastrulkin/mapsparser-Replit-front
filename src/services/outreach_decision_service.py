@@ -386,6 +386,11 @@ def _approved_fact_values(items: Any) -> list[str]:
 
 
 def offer_candidates(context: dict[str, Any], sender_mode: str) -> list[dict[str, Any]]:
+    continuation = context.get("continuation_contract")
+    if isinstance(continuation, dict) and (continuation.get("qualification") or {}).get("status") == "qualified":
+        return [{"id": "continuation:" + str(continuation["task_id"]),
+                 "text": continuation["config"]["offer"], "source": "reviewed_continuation_plan",
+                 "cta": "", "status": "approved_for_draft"}]
     profile_key = "business_sender_profile" if sender_mode in {"partner_business", "localos_for_partner"} else "platform_sender_profile"
     profile = context.get(profile_key) if isinstance(context.get(profile_key), dict) else {}
     profile_can_supply_claims = sender_mode != "localos_for_partner" or bool(profile.get("confirmed_at"))

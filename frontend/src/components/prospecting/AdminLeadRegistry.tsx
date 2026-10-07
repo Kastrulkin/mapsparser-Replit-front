@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   Building2,
@@ -53,7 +53,7 @@ import {
   SheetTitle,
 } from '../ui/sheet';
 
-type WorkstreamType = 'localos_sales' | 'client_partnership';
+type WorkstreamType = 'localos_sales' | 'client_partnership' | 'creator_collaboration';
 type SenderMode = 'localos' | 'partner_business' | 'localos_for_partner';
 type RegistryView = 'leads' | 'messages' | 'results';
 type ScopeFilter = 'all' | 'localos_sales' | 'client_partnership';
@@ -96,6 +96,27 @@ interface WorkstreamState {
 interface WorkstreamAction {
   code?: string;
   label?: string;
+}
+
+interface RelationshipStage {
+  code?: 'preparing_first_touch' | 'touch_sent' | 'responded' | 'response_touch_unknown';
+  label?: string;
+  touch_number?: number;
+  channel?: string | null;
+  occurred_at?: string | null;
+}
+
+interface ReadinessCheck {
+  code?: string;
+  label?: string;
+  passed?: boolean;
+}
+
+interface ReadinessGate {
+  code?: 'ready' | 'needs_attention';
+  label?: string;
+  checks?: ReadinessCheck[];
+  blockers?: string[];
 }
 
 interface ResearchSource {
@@ -366,6 +387,17 @@ interface OutreachTouchPreview {
   human_edited?: boolean;
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const channelStatus = (value: unknown): OutreachTouchPreview['channel_status'] => {
+  switch (value) {
+    case 'ready': case 'connect_required': case 'permission_required': case 'manual':
+    case 'recipient_missing': case 'adapter_unavailable': case 'sender_degraded':
+    case 'sender_paused': case 'sender_selection_required': return value;
+    default: return 'manual';
+  }
+};
+
 interface OutreachPreview {
   status?: 'ready' | 'observe' | 'needs_contact' | 'needs_sender_setup' | 'needs_evidence' | 'needs_generation' | 'needs_revision' | 'needs_channel_setup' | 'invalid_sequence' | 'suppressed' | 'excluded';
   missing?: string[];
@@ -459,6 +491,9 @@ interface SavedOutreachCampaign {
       human_edited?: boolean;
       manual_edit_review_required?: boolean;
       manual_edit_review_passed?: boolean;
+      template_key?: string | null;
+      template_version?: number | null;
+      template_label?: string | null;
     };
   }>;
   inbound_events?: OutreachInboundEvent[];
@@ -475,6 +510,21 @@ interface OutreachCampaignSetupDraft {
   sequenceSenders: Record<number, string>;
   senderMode: SenderMode;
 }
+
+export const outreachDefaultsForWorkstream = (workstreamType?: string) => {
+  if (workstreamType === 'creator_collaboration') {
+    return {
+      senderMode: 'localos_for_partner' as SenderMode,
+      sequenceChannels: ['email'],
+      sequenceDays: [0],
+    };
+  }
+  return {
+    senderMode: (workstreamType === 'localos_sales' ? 'localos' : 'partner_business') as SenderMode,
+    sequenceChannels: ['telegram', 'email', 'max', 'vk'],
+    sequenceDays: [0, 3, 7, 12],
+  };
+};
 
 interface OutreachSenderAccountSummary {
   id: string;
@@ -551,6 +601,8 @@ interface LeadWorkstream {
   channel_state?: WorkstreamState;
   room_state?: WorkstreamState;
   next_action?: WorkstreamAction;
+  relationship_stage?: RelationshipStage;
+  readiness_gate?: ReadinessGate;
   research?: WorkstreamResearch | null;
   contact_points?: ContactPoint[];
   contact_summary?: { found?: number; verified?: number };
@@ -563,6 +615,28 @@ interface LeadWorkstream {
     status?: string;
     version?: number;
     touches_count?: number;
+    confirmed_touches_count?: number;
+    sequence_has_gap?: boolean;
+    last_confirmed_touch?: {
+      id?: string;
+      touch_number?: number;
+      channel?: string;
+      sent_at?: string;
+    } | null;
+    next_pending_touch?: {
+      id?: string;
+      touch_number?: number;
+      channel?: string;
+      status?: string;
+      scheduled_at?: string;
+    } | null;
+    first_human_response?: {
+      id?: string;
+      touch_number?: number;
+      channel?: string;
+      classification?: string;
+      occurred_at?: string;
+    } | null;
     created_at?: string;
     updated_at?: string;
     approved_at?: string | null;
@@ -726,9 +800,12 @@ const sourceLabel = (lead: LeadItem) => {
   return 'Добавлен в работу';
 };
 
-const workstreamLabel = (workstream: LeadWorkstream) => {
+export const workstreamLabel = (workstream: LeadWorkstream) => {
   if (workstream.workstream_type === 'localos_sales') {
     return 'Лид LocalOS';
+  }
+  if (workstream.workstream_type === 'creator_collaboration') {
+    return 'Автор LocalOS';
   }
   return `Лид-партнёр · ${workstream.client_business_name || 'клиент'}`;
 };
@@ -998,6 +1075,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [messageStatus, setMessageStatus] = useState('');
   const [messageChannel, setMessageChannel] = useState('');
   const [leads, setLeads] = useState<LeadItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalLeads, setTotalLeads] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const pageSize = 50;
   const [clientFilterOptions, setClientFilterOptions] = useState<ClientFilterOption[]>([]);
   const [partnerTypeFilterOptions, setPartnerTypeFilterOptions] = useState<PartnerTypeFilterOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1021,6 +1102,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [contactIntelligence, setContactIntelligence] = useState<ContactIntelligence | null>(null);
   const [contactIntelligenceLoading, setContactIntelligenceLoading] = useState(false);
   const [manualContactOpen, setManualContactOpen] = useState(false);
+  const [vkHandoffContact, setVkHandoffContact] = useState(false);
   const [manualContactType, setManualContactType] = useState('telegram');
   const [manualContactValue, setManualContactValue] = useState('');
   const [manualTelegramUsage, setManualTelegramUsage] = useState('recipient');
@@ -1060,17 +1142,26 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [campaignSetupDirty, setCampaignSetupDirty] = useState(false);
   const [senderAccounts, setSenderAccounts] = useState<OutreachSenderAccountSummary[]>([]);
   const [senderAccountsLoading, setSenderAccountsLoading] = useState(false);
+  const leadLoadRequestId = useRef(0);
 
   const loadLeads = useCallback(async () => {
+    const requestId = leadLoadRequestId.current + 1;
+    leadLoadRequestId.current = requestId;
     setLoading(true);
     setError('');
     const params = new URLSearchParams({ compact: '1', include_groups: '0', include_timeline: '0' });
+    params.set('page', String(page));
+    params.set('page_size', String(pageSize));
     if (scope !== 'all') params.set('workstream_type', scope);
     if (clientBusinessId) params.set('client_business_id', clientBusinessId);
     if (actionState) params.set('action_state', actionState);
     try {
       const payload = await newAuth.makeRequest(`/admin/prospecting/leads?${params.toString()}`);
+      if (requestId !== leadLoadRequestId.current) return;
       setLeads(Array.isArray(payload?.leads) ? payload.leads : []);
+      setTotalLeads(Number(payload?.total || 0));
+      setTotalPages(Math.max(1, Number(payload?.total_pages || 1)));
+      if (Number(payload?.page || page) !== page) setPage(Number(payload?.page || 1));
       setClientFilterOptions(Array.isArray(payload?.client_options) ? payload.client_options : []);
       setPartnerTypeFilterOptions(
         Array.isArray(payload?.business_category_options)
@@ -1080,11 +1171,12 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
             : [],
       );
     } catch (requestError) {
+      if (requestId !== leadLoadRequestId.current) return;
       setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить лидов');
     } finally {
-      setLoading(false);
+      if (requestId === leadLoadRequestId.current) setLoading(false);
     }
-  }, [scope, clientBusinessId, actionState]);
+  }, [scope, clientBusinessId, actionState, page]);
 
   useEffect(() => {
     loadLeads();
@@ -1196,7 +1288,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     ? 'platform'
     : 'business';
   const usesPlatformSender = selectedSenderScope === 'platform';
-  const selectedSenderLabel = selectedWorkstream?.workstream_type === 'localos_sales'
+  const selectedSenderLabel = ['localos_sales', 'creator_collaboration'].includes(
+    String(selectedWorkstream?.workstream_type || ''),
+  )
     ? 'LocalOS'
     : senderMode === 'localos_for_partner'
       ? `${selectedWorkstream?.client_business_name || 'Бизнес партнёра'} через LocalOS`
@@ -1268,7 +1362,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         angle: String(touch.angle_type || ''),
         subject: touch.subject,
         text: String(touch.approved_text || touch.generated_text || ''),
-        channel_status: touch.channel_status || touch.message_brief_json?.channel_status || 'manual',
+        channel_status: channelStatus(touch.channel_status || touch.message_brief_json?.channel_status),
         quality_gate: touch.quality_gate_json,
         evidence_kind: touch.message_brief_json?.evidence_kind,
         source_url: touch.message_brief_json?.source_url,
@@ -1481,7 +1575,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     const replyReceived = humanReplyEvents.some((event) => event.touch_id === touch.id);
     const status = replyReceived
       ? 'reply'
-      : !automaticOutreachChannels.has(channel) && !['manual_sent', 'sent', 'delivered'].includes(rawStatus)
+      : !automaticOutreachChannels.has(channel)
+          && !['manual_sent', 'sent', 'delivered'].includes(rawStatus)
+          && !['needs_attention', 'manual_expired'].includes(rawStatus)
         ? 'awaiting_manual_send'
         : ['approved', 'queued', 'scheduled'].includes(rawStatus)
           ? 'scheduled'
@@ -1516,7 +1612,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       errorText: delivery?.error_text || '',
     };
   });
-  const campaignNeedsAttention = campaignStatusItems.some((item) => ['failed', 'dlq', 'retry'].includes(item.status));
+  const campaignNeedsAttention = campaignStatusItems.some((item) => (
+    ['failed', 'dlq', 'retry', 'needs_attention', 'manual_expired'].includes(item.status)
+  ));
   const nextCampaignTouch = campaignStatusItems.find((item) => ['scheduled', 'awaiting_manual_send'].includes(item.status));
   const campaignStatusLabel = pilotReplyReceived
     ? 'Ответ получен'
@@ -1694,23 +1792,21 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   }, [contactIntelligence?.sender_profile?.id, contactIntelligence?.sender_profile_suggestions, selectedWorkstream?.id, usesPlatformSender]);
 
   useEffect(() => {
+    const defaults = outreachDefaultsForWorkstream(selectedWorkstream?.workstream_type);
     setOutreachPreview(null);
     setSavedOutreachCampaign(null);
     setSenderFactsOpen(false);
-    setSequenceChannels(['telegram', 'email', 'max', 'vk']);
-    setSequenceDays([0, 3, 7, 12]);
+    setSequenceChannels(defaults.sequenceChannels);
+    setSequenceDays(defaults.sequenceDays);
     setSequenceStartAt(defaultOutreachStartValue());
     setSequenceSenders({});
     setTouchEdits({});
     setEditingTouchIndex(null);
     setTouchEditsValidated(false);
     setCampaignSetupDirty(false);
-    setSenderMode(
-      selectedWorkstream?.workstream_type === 'localos_sales'
-        ? 'localos'
-        : 'partner_business',
-    );
+    setSenderMode(defaults.senderMode);
     setManualContactOpen(false);
+    setVkHandoffContact(false);
     setManualContactValue('');
     setManualContactError('');
     setManualOutreachReason(String(
@@ -1734,8 +1830,12 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           .sort((left, right) => Number(left.sequence_index || 0) - Number(right.sequence_index || 0));
         let restoredCampaignSetup = false;
         if (latestTouches.length > 0) {
-          const nextChannels = ['telegram', 'email', 'max', 'vk'];
-          const nextDays = [0, 3, 7, 12];
+          const defaults = outreachDefaultsForWorkstream(selectedWorkstream?.workstream_type);
+          const nextChannels = [...defaults.sequenceChannels];
+          const nextDays = [...defaults.sequenceDays];
+          const restoredSequenceLength = selectedWorkstream?.workstream_type === 'creator_collaboration'
+            ? latestTouches.length
+            : nextChannels.length;
           const nextSenders: Record<number, string> = {};
           const firstScheduledAt = latestTouches
             .map((touch) => touch.scheduled_at)
@@ -1749,7 +1849,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
             const sequenceIndex = Number.isInteger(Number(touch.sequence_index))
               ? Number(touch.sequence_index)
               : position;
-            if (sequenceIndex < 0 || sequenceIndex >= nextChannels.length) return;
+            if (sequenceIndex < 0 || sequenceIndex >= restoredSequenceLength) return;
+            if (sequenceIndex >= nextChannels.length) {
+              nextChannels.push(String(touch.channel || 'manual'));
+              nextDays.push(0);
+            }
             nextChannels[sequenceIndex] = String(touch.channel || nextChannels[sequenceIndex]);
             if (touch.sender_account_id) nextSenders[sequenceIndex] = touch.sender_account_id;
             const scheduledTimestamp = touch.scheduled_at
@@ -1780,13 +1884,16 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               && String(parsedValue.baseCampaignId || '') === expectedCampaignId
               && Number(parsedValue.baseCampaignVersion || 0) === expectedCampaignVersion,
             );
+            const expectedSequenceLength = outreachDefaultsForWorkstream(
+              selectedWorkstream?.workstream_type,
+            ).sequenceChannels.length;
             const validChannels = sameBaseCampaign
               && Array.isArray(parsedValue.sequenceChannels)
-              && parsedValue.sequenceChannels.length === 4
+              && parsedValue.sequenceChannels.length === expectedSequenceLength
               && parsedValue.sequenceChannels.every((channel: unknown) => typeof channel === 'string');
             const validDays = sameBaseCampaign
               && Array.isArray(parsedValue.sequenceDays)
-              && parsedValue.sequenceDays.length === 4
+              && parsedValue.sequenceDays.length === expectedSequenceLength
               && parsedValue.sequenceDays.every((day: unknown) => Number.isFinite(Number(day)));
             const validStartAt = sameBaseCampaign && typeof parsedValue.sequenceStartAt === 'string';
             const validSenders = sameBaseCampaign
@@ -1851,7 +1958,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       const restoredEdits: Record<number, OutreachTouchMessageDraft> = {};
       Object.entries(parsedValue).forEach(([rawIndex, rawDraft]) => {
         const touchIndex = Number(rawIndex);
-        if (!Number.isInteger(touchIndex) || !rawDraft || typeof rawDraft !== 'object' || Array.isArray(rawDraft)) return;
+        if (!Number.isInteger(touchIndex) || !isRecord(rawDraft)) return;
         const subject = typeof rawDraft.subject === 'string' ? rawDraft.subject : '';
         const text = typeof rawDraft.text === 'string' ? rawDraft.text : '';
         const originalSubject = typeof rawDraft.originalSubject === 'string' ? rawDraft.originalSubject : '';
@@ -2106,6 +2213,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           owner_type: manualOwnerType,
           person_name: manualPersonName,
           role_title: manualRoleTitle,
+          handoff_from_vk: vkHandoffContact,
         }),
       });
       const refreshed = await newAuth.makeRequest(
@@ -2116,6 +2224,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       setManualPersonName('');
       setManualRoleTitle('');
       setManualContactOpen(false);
+      setVkHandoffContact(false);
       setNotice(result?.entry_kind === 'telegram_source'
         ? 'Telegram-канал добавлен в источники сигналов. Радар проверит, что канал публичный.'
         : 'Контакт добавлен вручную. Выберите его получателем, когда будете готовы.');
@@ -2265,12 +2374,17 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setNotice('Способ представления изменён. Подготовьте новый preview и проверьте всю цепочку.');
   };
 
-  const campaignSequence = () => [
-    { channel: sequenceChannels[0], day_offset: sequenceDays[0], angle: 'signal', sender_account_id: sequenceSenders[0] || undefined },
-    { channel: sequenceChannels[1], day_offset: sequenceDays[1], angle: 'founder_story', sender_account_id: sequenceSenders[1] || undefined },
-    { channel: sequenceChannels[2], day_offset: sequenceDays[2], angle: 'proof', sender_account_id: sequenceSenders[2] || undefined },
-    { channel: sequenceChannels[3], day_offset: sequenceDays[3], angle: 'respectful_close', sender_account_id: sequenceSenders[3] || undefined },
-  ];
+  const campaignSequence = () => {
+    const angles = selectedWorkstream?.workstream_type === 'creator_collaboration'
+      ? ['signal']
+      : ['signal', 'founder_story', 'proof', 'respectful_close'];
+    return sequenceChannels.map((channel, index) => ({
+      channel,
+      day_offset: sequenceDays[index],
+      angle: angles[index] || 'respectful_close',
+      sender_account_id: sequenceSenders[index] || undefined,
+    }));
+  };
 
   const campaignTouchOverrides = ({ preserveSavedCampaign = false } = {}) => {
     const savedTouchesByIndex = new Map(
@@ -2513,6 +2627,39 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     }
   };
 
+  const recordManualTouchEvent = async (
+    touch: { id: string },
+    eventType: 'sent' | 'skipped' | 'reply',
+  ) => {
+    if (!savedOutreachCampaign?.id || !touch.id) return;
+    const note = eventType === 'reply'
+      ? window.prompt('Кратко запишите ответ партнёра. Он остановит следующие касания этой цепочки.')
+      : '';
+    if (eventType === 'reply' && !note?.trim()) return;
+    const busyKey = `manual-touch-${touch.id}-${eventType}`;
+    setBusyAction(busyKey);
+    setNotice('');
+    try {
+      await newAuth.makeRequest(
+        `/outreach/campaigns/${encodeURIComponent(savedOutreachCampaign.id)}/touches/${encodeURIComponent(touch.id)}/manual-event`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ event_type: eventType, note: note?.trim() || '' }),
+        },
+      );
+      setNotice(eventType === 'sent'
+        ? 'Ручная отправка отмечена. LocalOS продолжит цепочку по расписанию.'
+        : eventType === 'skipped'
+          ? 'Касание пропущено.'
+          : 'Ответ записан. Следующие касания остановлены.');
+      await reloadLatestOutreachCampaign();
+    } catch (requestError) {
+      setNotice(requestError instanceof Error ? requestError.message : 'Не удалось записать ручное действие');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
   const prepareRoom = () => {
     if (!selectedLead || !selectedWorkstream?.id) return;
     const isPartner = selectedWorkstream.workstream_type === 'client_partnership';
@@ -2669,7 +2816,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
             ))}
           </div>
           {view === 'leads' ? (
-            <Button onClick={() => setSearchOpen(true)} className="min-h-11 bg-orange-500 text-white hover:bg-orange-600">
+            <Button onClick={() => setSearchOpen(true)} className="min-h-11">
               <Search className="mr-2 h-4 w-4" />
               Найти лидов
             </Button>
@@ -2697,6 +2844,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 type="button"
                 onClick={() => {
                   setScope(item.id);
+                  setPage(1);
                   if (item.id === 'localos_sales') setClientBusinessId('');
                 }}
                 className={`min-h-8 whitespace-nowrap rounded px-3 text-xs font-semibold transition-colors ${
@@ -2709,7 +2857,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           </div>
           <select
             value={clientBusinessId}
-            onChange={(event) => setClientBusinessId(event.target.value)}
+            onChange={(event) => {
+              setClientBusinessId(event.target.value);
+              setPage(1);
+            }}
             disabled={scope === 'localos_sales'}
             className="h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
             aria-label="Фильтр по клиенту"
@@ -2747,7 +2898,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               </select>
               <select
                 value={actionState}
-                onChange={(event) => setActionState(event.target.value)}
+                onChange={(event) => {
+                  setActionState(event.target.value);
+                  setPage(1);
+                }}
                 className="h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
                 aria-label="Фильтр по следующему действию"
               >
@@ -2868,9 +3022,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               <span className="tabular-nums">
                 {loading
                   ? 'Загружаем…'
-                  : filteredLeads.length === leads.length
-                    ? `${filteredLeads.length} компаний`
-                    : `Показано ${filteredLeads.length} из ${leads.length}`}
+                  : `Показано ${filteredLeads.length} на странице · всего ${totalLeads}`}
               </span>
               <button type="button" onClick={loadLeads} className="flex min-h-10 items-center gap-2 px-2 font-medium hover:text-slate-950">
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -2891,7 +3043,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   <h3 className="font-semibold text-slate-950">В этом списке пока нет компаний</h3>
                   <p className="mt-1 max-w-md text-sm text-slate-500">Найдите новые компании или измените фильтры.</p>
                 </div>
-                <Button onClick={() => setSearchOpen(true)} className="bg-orange-500 text-white hover:bg-orange-600">Найти лидов</Button>
+                <Button onClick={() => setSearchOpen(true)}>Найти лидов</Button>
               </div>
             ) : (
               <div className="divide-y divide-slate-200">
@@ -2938,9 +3090,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                         {signalLabel(research)} · {Number(research.score || 0)}
                       </Badge>
                     )}
-                    {primary?.campaign_state ? (
+                    {primary?.relationship_stage ? (
                       <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-800">
-                        Цепочка · {campaignRegistryStatusLabels[String(primary.campaign_state.status || '')] || 'Создана'}
+                        {primary.relationship_stage.label || 'Подготовка первого касания'}
                       </Badge>
                     ) : (
                       <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">
@@ -2972,6 +3124,29 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
             })}
               </div>
             )}
+            {!error && totalPages > 1 ? (
+              <nav className="mt-4 flex flex-col items-center justify-between gap-3 border-t border-slate-200 pt-4 sm:flex-row" aria-label="Страницы списка лидов">
+                <span className="text-sm tabular-nums text-slate-500">Страница {page} из {totalPages}</span>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={loading || page <= 1}
+                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  >
+                    Предыдущая
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={loading || page >= totalPages}
+                    onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  >
+                    Следующая
+                  </Button>
+                </div>
+              </nav>
+            ) : null}
           </>
         )}
       </div>
@@ -3022,6 +3197,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className="bg-slate-50">{workstreamLabel(selectedWorkstream)}</Badge>
                 <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-800">{statusLabel(selectedWorkstream)}</Badge>
+                {selectedWorkstream.relationship_stage?.label ? (
+                  <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-800">
+                    {selectedWorkstream.relationship_stage.label}
+                  </Badge>
+                ) : null}
                 {selectedWorkstream.research && (
                   <Badge variant="outline" className={signalTone(selectedWorkstream.research)}>
                     {signalLabel(selectedWorkstream.research)} · {Number(selectedWorkstream.research.score || 0)}
@@ -3033,6 +3213,30 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   </Badge>
                 )}
               </div>
+
+              <section className="grid gap-3 md:grid-cols-3" aria-label="Организация, контакт и рабочий контекст">
+                <div className="rounded-xl bg-slate-50 p-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">Организация</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-950">{selectedLead.name || 'Без названия'}</div>
+                  <div className="mt-1 text-xs text-slate-500">{selectedLead.address || selectedLead.city || 'Адрес не указан'}</div>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">Контакт</div>
+                  <div className="mt-1 truncate text-sm font-semibold text-slate-950">{drawerRecipient?.value || 'Не выбран'}</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {drawerRecipient
+                      ? [drawerRecipient.person_name, drawerRecipient.role_title].filter(Boolean).join(' · ') || 'Официальный контакт'
+                      : 'Нужно найти и проверить'}
+                  </div>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">Рабочий контекст</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-950">{workstreamLabel(selectedWorkstream)}</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {selectedWorkstream.relationship_stage?.label || 'Подготовка первого касания'}
+                  </div>
+                </div>
+              </section>
 
               <div className="grid grid-cols-5 gap-1" aria-label="Этапы подготовки цепочки обращений">
                 {['Контакты', 'Получатель', 'Основание', 'Цепочка', 'Проверка'].map((label, index) => {
@@ -3107,6 +3311,21 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     </Button>
                   )}
                 </div>
+                {selectedWorkstream.readiness_gate?.checks?.length ? (
+                  <div className="mt-3 border-t border-slate-100 pt-3">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                      <div className={`text-xs font-semibold uppercase tracking-[0.08em] ${selectedWorkstream.readiness_gate.code === 'ready' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                        {selectedWorkstream.readiness_gate.label || 'Готовность'}
+                      </div>
+                      {selectedWorkstream.readiness_gate.checks.map((check) => (
+                        <div key={check.code || check.label} className={`inline-flex items-center gap-1.5 text-xs font-medium ${check.passed ? 'text-emerald-700' : 'text-amber-800'}`}>
+                          {check.passed ? <Check className="h-3.5 w-3.5" /> : <CircleAlert className="h-3.5 w-3.5" />}
+                          <span>{check.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 {savedCampaignChannelBlockers.length > 0 ? (
                   <div className="mt-3 rounded-xl bg-amber-50 p-3 shadow-[0_0_0_1px_rgba(245,158,11,0.22)]">
                     <div className="text-sm font-semibold text-amber-950">Что мешает утвердить цепочку</div>
@@ -3452,6 +3671,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                               </Badge>
                             </div>
                             <div className="px-4 pb-4">
+                              {touch.message_brief_json?.template_label ? (
+                                <p className="mt-2 text-xs font-medium text-sky-700">
+                                  Основа: {touch.message_brief_json.template_label}
+                                </p>
+                              ) : null}
                               {touch.message_brief_json?.observation || touch.message_brief_json?.pain_hypothesis || touch.message_brief_json?.problem_hypothesis || touch.message_brief_json?.solution || touch.message_brief_json?.relevance_bridge ? (
                                 <div className="mt-3 space-y-1 border-l-2 border-sky-200 pl-3 text-sm leading-6 text-slate-700">
                                   {touch.message_brief_json?.observation ? <p><span className="font-semibold text-slate-900">{operatorApprovedIdea ? 'Подтверждённая идея:' : 'Факт:'}</span> {touch.message_brief_json.observation}</p> : null}
@@ -3664,6 +3888,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       variant="outline"
                       onClick={() => {
                         setManualContactOpen((current) => !current);
+                        setVkHandoffContact(false);
                         setManualContactError('');
                       }}
                       disabled={busyAction === 'manual-contact'}
@@ -3693,6 +3918,34 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     error: contactIntelligence.job.error,
                   } : null))}
                 </p>
+                {['vk', 'vk_manual'].includes(String(selectedWorkstream.selected_channel || ''))
+                  && !drawerContacts.some((contact) => ['email', 'telegram'].includes(contact.type) && ['verified', 'confirmed_source'].includes(String(contact.verification_status || ''))) ? (
+                    <div className="mt-3 rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
+                      <div className="font-semibold">Запросить рабочий email или Telegram</div>
+                      <p className="mt-1 leading-6 text-sky-800">
+                        Личный VK не сканируется. Получите рабочий контакт в диалоге и сохраните его здесь — дальше LocalOS будет отслеживать ответы.
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {['email', 'telegram'].map((channel) => (
+                          <Button
+                            key={channel}
+                            type="button"
+                            variant="outline"
+                            className="min-h-10 bg-white"
+                            onClick={() => {
+                              setManualContactType(channel);
+                              setManualTelegramUsage('recipient');
+                              setVkHandoffContact(true);
+                              setManualContactOpen(true);
+                              setManualContactError('');
+                            }}
+                          >
+                            Сохранить {channel === 'email' ? 'email' : 'Telegram'}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 {manualContactOpen && (
                   <div className="mt-3 rounded-md bg-white p-3 shadow-sm shadow-slate-900/5">
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -3773,7 +4026,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     </p>
                     {manualContactError ? <div role="alert" className="mt-3 rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{manualContactError}</div> : null}
                     <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                      <Button variant="ghost" onClick={() => setManualContactOpen(false)} disabled={busyAction === 'manual-contact'} className="min-h-10">Отмена</Button>
+                      <Button variant="ghost" onClick={() => { setManualContactOpen(false); setVkHandoffContact(false); }} disabled={busyAction === 'manual-contact'} className="min-h-10">Отмена</Button>
                       <Button
                         onClick={() => void saveManualContact()}
                         disabled={busyAction === 'manual-contact' || !manualContactValue.trim()}
@@ -3920,7 +4173,12 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   </Badge>
                 </div>
 
-                {selectedWorkstream.workstream_type === 'client_partnership' ? (
+                {selectedWorkstream.workstream_type === 'creator_collaboration' ? (
+                  <div className="mt-3 rounded-md border border-orange-200 bg-orange-50 p-3 text-sm text-orange-950">
+                    <div className="font-semibold">Приглашение автора от LocalOS</div>
+                    <p className="mt-1 text-pretty text-xs leading-5">Один email от подключённого аккаунта LocalOS. Текст появится в предпросмотре и останется на ручной проверке до подтверждения.</p>
+                  </div>
+                ) : selectedWorkstream.workstream_type === 'client_partnership' ? (
                   <fieldset className="mt-3 rounded-md bg-white p-3">
                     <legend className="text-balance px-1 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Кто обращается к партнёру</legend>
                     <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -3987,7 +4245,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 </label>
 
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {[0, 1, 2, 3].map((index) => {
+                  {sequenceChannels.map((_sequenceChannel, index) => {
                     const channel = sequenceChannels[index];
                     const accounts = senderAccounts.filter((account) => account.channel === channel);
                     const sameChannelSteps = sequenceChannels
@@ -4222,7 +4480,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   </div>
                 ) : null}
                 {savedOutreachCampaign?.status === 'draft' ? (
-                  <Button onClick={() => void approveOutreachCampaign()} disabled={busyAction === 'approve-campaign' || campaignSetupDirty || savedOutreachCampaign.requires_regeneration || savedCampaignNeedsChannelSetup || !savedCampaignQualityPassed || savedCampaignHasPendingReview} className="mt-2 min-h-11 w-full bg-orange-500 text-white hover:bg-orange-600">
+                  <Button onClick={() => void approveOutreachCampaign()} disabled={busyAction === 'approve-campaign' || campaignSetupDirty || savedOutreachCampaign.requires_regeneration || savedCampaignNeedsChannelSetup || !savedCampaignQualityPassed || savedCampaignHasPendingReview} className="mt-2 min-h-11 w-full">
                     {busyAction === 'approve-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
                     {campaignSetupDirty
                       ? 'Сначала сохраните новую версию'
@@ -4326,7 +4584,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                               : 'Профиль отправителя этого бизнеса'}
                           </div>
                           <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">
-                            {usesPlatformSender
+                            {selectedWorkstream.workstream_type === 'creator_collaboration'
+                              ? 'Письмо отправляется от LocalOS. Имя автора и тема канала берутся из подтверждённой карточки автора; текст остаётся на ручной проверке.'
+                              : usesPlatformSender
                               ? 'В этом режиме факты об Александре и LocalOS не попадают в сообщение: текст строится от лица выбранного бизнеса.'
                               : 'Профиль используется только в кампаниях этого бизнеса. Его факты не смешиваются с профилями других отправителей.'}
                           </p>
@@ -4352,7 +4612,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                         </div>
                       ) : null}
                     </div>
-                    {senderMode === 'localos_for_partner' ? (
+                    {senderMode === 'localos_for_partner' && selectedWorkstream.workstream_type === 'client_partnership' ? (
                       <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-3 text-pretty text-xs leading-5 text-sky-950">
                         Сообщение будет написано от лица «{selectedWorkstream.client_business_name || 'бизнеса клиента'}». Название, категория, услуги, аудитория и география берутся из карточки бизнеса, аудита и проверки совместимости. Профиль Александра и LocalOS во внешний текст не подставляется.
                       </div>
@@ -4448,17 +4708,53 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                             <div className="mt-1 text-pretty text-xs leading-5 text-rose-700">{item.errorText}</div>
                           ) : null}
                         </div>
-                        {item.verificationHref ? (
-                          <a
-                            href={item.verificationHref}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex min-h-10 shrink-0 items-center gap-2 text-sm font-semibold text-orange-700 transition-colors hover:text-orange-800"
-                          >
-                            {item.verificationLabel}
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        ) : null}
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">
+                          {item.verificationHref ? (
+                            <a
+                              href={item.verificationHref}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-orange-700 transition-colors hover:text-orange-800"
+                            >
+                              {item.verificationLabel}
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          ) : null}
+                          {!automaticOutreachChannels.has(item.channel)
+                            && ['awaiting_manual_send', 'needs_attention', 'manual_expired'].includes(item.status) ? (
+                              <>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => void recordManualTouchEvent(item, 'sent')}
+                                  disabled={busyAction.startsWith(`manual-touch-${item.id}-`)}
+                                >
+                                  Отметить отправленным
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => void recordManualTouchEvent(item, 'skipped')}
+                                  disabled={busyAction.startsWith(`manual-touch-${item.id}-`)}
+                                >
+                                  Пропустить
+                                </Button>
+                              </>
+                            ) : null}
+                          {!automaticOutreachChannels.has(item.channel)
+                            && ['manual_sent', 'sent', 'delivered'].includes(item.status) ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void recordManualTouchEvent(item, 'reply')}
+                                disabled={busyAction.startsWith(`manual-touch-${item.id}-`)}
+                              >
+                                Записать ответ
+                              </Button>
+                            ) : null}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -4497,7 +4793,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               </LeadDrawerSection>
 
               <div className="space-y-2">
-                <Button onClick={prepareRoom} disabled={busyAction === 'prepare-room'} className="w-full min-h-11 bg-orange-500 text-white hover:bg-orange-600">
+                <Button onClick={prepareRoom} disabled={busyAction === 'prepare-room'} className="min-h-11 w-full">
                   {busyAction === 'prepare-room' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                   {selectedWorkstream.room_state?.url ? 'Обновить цифровую комнату' : 'Подготовить цифровую комнату'}
                 </Button>
@@ -4529,7 +4825,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   <OutreachSuppressionManager
                     workstreamId={selectedWorkstream.id}
                     businessId={selectedWorkstream.client_business_id}
-                    scopeType={selectedWorkstream.workstream_type === 'localos_sales' ? 'platform' : 'business'}
+                    scopeType={['localos_sales', 'creator_collaboration'].includes(selectedWorkstream.workstream_type) ? 'platform' : 'business'}
                     onChanged={() => void loadLeads()}
                   />
                 </div>
@@ -4582,7 +4878,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   {businessOptions.map((business) => <option key={business.id} value={business.id}>{business.name}</option>)}
                 </select>
               )}
-              <Button onClick={() => setSearchStep(2)} disabled={searchScope === 'client_partnership' && !searchClientId} className="w-full min-h-11 bg-orange-500 text-white hover:bg-orange-600">
+              <Button onClick={() => setSearchStep(2)} disabled={searchScope === 'client_partnership' && !searchClientId} className="min-h-11 w-full">
                 Указать категорию и территорию <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -4620,7 +4916,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               {searchError && <p className="text-sm text-red-600">{searchError}</p>}
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setSearchStep(1)} className="min-h-11">Назад</Button>
-                <Button onClick={startSearch} disabled={searchBusy} className="min-h-11 flex-1 bg-orange-500 text-white hover:bg-orange-600">
+                <Button onClick={startSearch} disabled={searchBusy} className="min-h-11 flex-1">
                   {searchBusy ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
                   {searchBusy ? 'Ищем компании…' : 'Найти компании'}
                 </Button>
@@ -4657,7 +4953,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               {searchError && <p className="text-sm text-red-600">{searchError}</p>}
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setSearchStep(2)} className="min-h-11">Изменить поиск</Button>
-                <Button onClick={saveSearchResults} disabled={searchBusy || !selectedSearchIds.length} className="min-h-11 flex-1 bg-orange-500 text-white hover:bg-orange-600">
+                <Button onClick={saveSearchResults} disabled={searchBusy || !selectedSearchIds.length} className="min-h-11 flex-1">
                   {searchBusy ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
                   Добавить выбранные
                 </Button>

@@ -20,6 +20,7 @@ from bs4 import BeautifulSoup
 from psycopg2.extras import Json, RealDictCursor
 from urllib3.exceptions import HTTPError as Urllib3HTTPError
 
+from core import outbound_network
 from services.outreach_campaign_service import (
     SENDER_MODE_LOCALOS,
     SENDER_MODE_LOCALOS_FOR_PARTNER,
@@ -33,6 +34,7 @@ from services.outreach_personalization_ai import (
 )
 from services.outreach_sender_profile_service import evaluate_sender_profile_completeness
 from services.discovered_telegram_source_service import discovered_telegram_signals
+from services.gigachat_client import GigaChatProviderError
 from services.lead_partner_type_service import partner_types_for_category
 
 try:
@@ -125,9 +127,10 @@ class PersonalizationGenerationError(RuntimeError):
 
     retryable = True
 
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str, *, retryable: bool = True):
         super().__init__(message)
         self.code = code
+        self.retryable = retryable
 
 
 class MessageQualityError(RuntimeError):
@@ -585,7 +588,7 @@ def detect_public_booking_crm_observations(
         return []
     context = artifact if isinstance(artifact, dict) else {}
     observations = _map_payload_crm_observations(lead)
-    website = lead.get("website")
+    website = None if _lead_website_identity_mismatched(lead) else lead.get("website")
     for item in lead.get("public_crm_observations") or []:
         if not isinstance(item, dict):
             continue
@@ -757,6 +760,15 @@ def _contact_pages(html: str, website_url: str, limit: int = 5) -> list[str]:
     return pages
 
 
+def _decode_website_html(body: bytes, content_type: str) -> str:
+    match = re.search(r"charset\s*=\s*[\"']?([A-Za-z0-9._-]+)", content_type or "", re.I)
+    encoding = match.group(1) if match else "utf-8"
+    try:
+        return body.decode(encoding, errors="replace")
+    except LookupError:
+        return body.decode("utf-8", errors="replace")
+
+
 def collect_public_website_intelligence(
     website: Any,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
@@ -775,27 +787,27 @@ def collect_public_website_intelligence(
             continue
         visited.add(page_url)
         try:
-            response = requests.get(page_url, headers=headers, timeout=8, allow_redirects=False, stream=True)
-            if response.is_redirect:
+            response = outbound_network.public_pinned_get(page_url, headers=headers, timeout=8)
+            if 300 <= response.status_code < 400:
                 redirect_url = _public_http_url(urljoin(page_url, str(response.headers.get("location") or "")))
                 if redirect_url and redirect_url not in visited:
                     queue.insert(0, redirect_url)
                 continue
-            response.raise_for_status()
+            if response.status_code >= 400:
+                warnings.append(f"Не удалось проверить {page_url}")
+                continue
             if "text/html" not in str(response.headers.get("content-type") or "").lower():
                 continue
-            body = response.raw.read(1_000_001, decode_content=True)
+            body = response.body
             if len(body) > 1_000_000:
                 warnings.append(f"Страница {page_url} слишком большая и пропущена")
                 continue
-            html = body.decode(response.encoding or "utf-8", errors="replace")
-            contacts.extend(extract_contacts_from_html(html, response.url))
-            crm_observations.extend(
-                extract_booking_crm_observations_from_html(html, response.url)
-            )
+            html = _decode_website_html(body, str(response.headers.get("content-type") or ""))
+            contacts.extend(extract_contacts_from_html(html, page_url))
+            crm_observations.extend(extract_booking_crm_observations_from_html(html, page_url))
             if len(visited) == 1:
-                queue.extend(_contact_pages(html, response.url))
-        except (requests.RequestException, Urllib3HTTPError):
+                queue.extend(_contact_pages(html, page_url))
+        except (ValueError, requests.RequestException, Urllib3HTTPError):
             warnings.append(f"Не удалось проверить {page_url}")
     unique: dict[tuple[str, str], dict[str, Any]] = {}
     for contact in contacts:
@@ -815,6 +827,22 @@ def collect_public_website_intelligence(
 def collect_public_website_contacts(website: Any) -> tuple[list[dict[str, Any]], list[str]]:
     contacts, _crm_observations, warnings = collect_public_website_intelligence(website)
     return contacts, warnings
+
+
+def _lead_website_identity_mismatched(lead: dict[str, Any]) -> bool:
+    enrich_payload = lead.get("enrich_payload_json")
+    if not isinstance(enrich_payload, dict):
+        enrich_payload = {}
+    website_identity = enrich_payload.get("website_identity")
+    if not isinstance(website_identity, dict):
+        website_identity = {}
+    status = str(
+        lead.get("website_identity_status")
+        or enrich_payload.get("website_identity_status")
+        or website_identity.get("status")
+        or ""
+    ).strip().lower()
+    return status == "mismatch"
 
 
 def legacy_contact_candidates(lead: dict[str, Any]) -> list[dict[str, Any]]:
@@ -844,7 +872,8 @@ def legacy_contact_candidates(lead: dict[str, Any]) -> list[dict[str, Any]]:
     add("email", lead.get("email"))
     add("telegram", lead.get("telegram_url"))
     add("whatsapp", lead.get("whatsapp_url"))
-    add("website", lead.get("website"), 0.74)
+    if not _lead_website_identity_mismatched(lead):
+        add("website", lead.get("website"), 0.74)
     links = lead.get("messenger_links_json")
     if isinstance(links, list):
         for item in links:
@@ -1450,7 +1479,7 @@ def build_native_research_payload(
             if services_value > 0 and priced_value < services_value and price_coverage <= 0.8:
                 add_signal(
                     "map_issue",
-                    f"По данным аудита карточки: всего услуг - {services_value}; с ценой - {priced_value}.",
+                    f"По данным аудита карточки на Яндекс Картах: всего услуг - {services_value}; с ценой - {priced_value}.",
                     "Можно предметно проверить, для каких услуг клиент видит цену прямо в карточке.",
                     url=audit_source_url,
                     confidence=0.95,
@@ -1468,7 +1497,11 @@ def build_native_research_payload(
                     source_type=audit_source_type,
                 )
         parse_context = audit.get("parse_context") if isinstance(audit.get("parse_context"), dict) else {}
-        if parse_context.get("description_present") is False:
+        if (
+            parse_context.get("description_present") is False
+            and current_state.get("description_applicable") is not False
+            and "yandex." not in str(source_url or "").lower()
+        ):
             add_signal(
                 "map_issue",
                 "В аудите публичной карточки описание бизнеса не найдено.",
@@ -1557,6 +1590,7 @@ def build_native_research_payload(
             "услуг, цена указана" in fact
             or "по данным аудита, услуг в карточке" in fact
             or "по данным аудита карточки: всего услуг" in fact
+            or "по данным аудита карточки на яндекс картах: всего услуг" in fact
             or "описание бизнеса не найдено" in fact
         ):
             return 0
@@ -2160,6 +2194,42 @@ def build_message_brief(
     return brief, readiness
 
 
+def _draft_provider_unavailable_state(
+    readiness: dict[str, Any],
+    error: Exception,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    error_message = str(error)[:1000]
+    quality = {
+        "passed": False,
+        "failures": ["Генератор черновика временно недоступен"],
+        "provider_error": error_message,
+    }
+    updated_readiness = {
+        **readiness,
+        "code": "needs_evidence",
+        "label": "Контакт и источник сохранены; черновик не подготовлен",
+        "missing": ["Повторить подготовку черновика после восстановления провайдера"],
+        "missing_items": [{
+            "code": "draft_provider_unavailable",
+            "label": "Повторить подготовку черновика после восстановления провайдера",
+        }],
+    }
+    return quality, updated_readiness
+
+
+def _is_terminal_draft_provider_error(error: Exception) -> bool:
+    return bool(
+        isinstance(error, PersonalizationGenerationError)
+        and not bool(getattr(error, "retryable", True))
+        and str(getattr(error, "code", "") or "") in {
+            "gigachat_payment_required",
+            "gigachat_auth_rejected",
+            "gigachat_request_rejected",
+            "gigachat_invalid_response",
+        }
+    )
+
+
 def _clean_sentence(value: Any, limit: int = 220) -> str:
     text = re.sub(r"\s+", " ", str(value or "")).strip(" .")
     if len(text) <= limit:
@@ -2419,6 +2489,7 @@ def prepare_first_message(
     semantic_review: dict[str, Any] | None = None
     if ai_enabled:
         candidate = dict(personalization_candidate or {})
+        candidate["language"] = str(lead.get("preferred_language") or "ru")
         if not candidate.get("observed_fact") or not (
             candidate.get("source_url") or (brief.get("source_urls") or [None])[0]
         ):
@@ -2510,6 +2581,7 @@ def prepare_first_message(
             raise PersonalizationGenerationError(
                 str(generation.get("error_code") or "ai_generation_failed"),
                 str(generation.get("error") or "AI не вернул проверяемый персонализированный текст"),
+                retryable=bool(generation.get("retryable", True)),
             )
         touches = generation.get("touches") or []
         reviews = generation.get("semantic_reviews") or []
@@ -2689,7 +2761,10 @@ def _hunter_contacts(
     }
     if not allow_paid_enrichment or not enabled or not api_key or not qualification_states.intersection({"qualified", "selected_for_outreach", "converted"}):
         return [], 0
-    website = normalize_contact_value("website", lead.get("website"))
+    website = normalize_contact_value(
+        "website",
+        None if _lead_website_identity_mismatched(lead) else lead.get("website"),
+    )
     domain = urlparse(website).netloc.lower().removeprefix("www.") if website else ""
     if not domain:
         return [], 0
@@ -2802,7 +2877,11 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
                lead.telegram_url, lead.whatsapp_url, lead.website, lead.source_url,
                lead.messenger_links_json, lead.pipeline_status, lead.rating,
                lead.reviews_count, lead.reviews_json, lead.services_json,
-               lead.description, lead.raw_payload_json, lead.enrich_payload_json,
+               lead.description, lead.raw_payload_json, lead.enrich_payload_json, lead.search_payload_json, lead.preferred_language,
+               EXISTS(SELECT 1 FROM operator_async_jobs continuation_job
+                      WHERE continuation_job.kind='outreach_continue'
+                        AND continuation_job.business_id=ws.client_business_id
+                        AND continuation_job.result_json->'lead_ids' @> jsonb_build_array(lead.id)) AS continuation_managed,
                lead.status AS legacy_lead_status
         FROM lead_workstreams ws
         JOIN prospectingleads lead ON lead.id = ws.lead_id
@@ -2821,7 +2900,7 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
             "lead_id", "name", "category", "city", "address", "phone", "email",
             "telegram_url", "whatsapp_url", "website", "source_url", "messenger_links_json",
             "rating", "reviews_count", "reviews_json", "services_json", "description",
-            "raw_payload_json", "enrich_payload_json",
+            "raw_payload_json", "enrich_payload_json", "search_payload_json", "preferred_language",
         )
     }
     lead["id"] = combined.get("lead_id")
@@ -2844,8 +2923,9 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
 
     cursor.execute("UPDATE lead_enrichment_jobs SET status = 'collecting', current_phase = 'collecting', updated_at = NOW() WHERE id = %s", (job.get("id"),))
     contacts = legacy_contact_candidates(lead)
+    eligible_website = None if _lead_website_identity_mismatched(lead) else lead.get("website")
     website_contacts, website_crm_observations, warnings = collect_public_website_intelligence(
-        lead.get("website")
+        eligible_website
     )
     lead["public_crm_observations"] = website_crm_observations
     contacts.extend(website_contacts)
@@ -2853,7 +2933,7 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
     upsert_contact_points(cursor, str(lead["id"]), contacts)
 
     cursor.execute("UPDATE lead_enrichment_jobs SET status = 'verifying', current_phase = 'verifying', updated_at = NOW() WHERE id = %s", (job.get("id"),))
-    verify_contact_points(cursor, str(lead["id"]), lead.get("website"))
+    verify_contact_points(cursor, str(lead["id"]), eligible_website)
     best_contact = _select_best_contact(cursor, workstream)
     hunter_used = 0
     if not best_contact or best_contact.get("owner_type") != "person" or best_contact.get("verification_status") not in VERIFIED_STATUSES:
@@ -2970,16 +3050,26 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
     draft_id = None
     draft_brief = brief
     quality: dict[str, Any] = {"passed": False, "failures": readiness.get("missing") or []}
+    if workstream.get("continuation_managed") or (lead.get("search_payload_json") or {}).get("continuation_id"):
+        # This lane only collects sources and contacts. Its owning continuation
+        # creates the canonical campaign with the reviewed offer afterwards.
+        readiness = {**readiness, "code": "needs_evidence", "missing": ["continuation_campaign_preparation"]}
     if readiness.get("code") == "ready" and sender and best_contact:
         selected_candidate = personalization_candidates[0] if personalization_candidates else None
-        message, quality, draft_brief = prepare_first_message(
-            lead,
-            workstream,
-            brief,
-            sender,
-            best_contact,
-            selected_candidate,
-        )
+        try:
+            message, quality, draft_brief = prepare_first_message(
+                lead,
+                workstream,
+                brief,
+                sender,
+                best_contact,
+                selected_candidate,
+            )
+        except (GigaChatProviderError, PersonalizationGenerationError) as error:
+            if isinstance(error, PersonalizationGenerationError) and not _is_terminal_draft_provider_error(error):
+                raise
+            quality, readiness = _draft_provider_unavailable_state(readiness, error)
+            message = ""
         if quality.get("passed"):
             draft_hash = hashlib.sha256(
                 json.dumps(
@@ -3087,7 +3177,12 @@ def fail_enrichment_job(cursor, job: dict[str, Any], error: Exception) -> dict[s
     attempt_count = int(job.get("attempt_count") or 0)
     max_attempts = int(job.get("max_attempts") or 2)
     retryable = provider_error_is_retryable(error)
-    status = "retry_wait" if retryable and attempt_count < max_attempts else "failed"
+    quality_rejection = isinstance(error, MessageQualityError)
+    status = (
+        "needs_evidence"
+        if quality_rejection
+        else "retry_wait" if retryable and attempt_count < max_attempts else "failed"
+    )
     error_code = str(getattr(error, "code", "") or error.__class__.__name__)
     error_message = str(error)[:1000]
     cursor.execute(
@@ -3095,7 +3190,7 @@ def fail_enrichment_job(cursor, job: dict[str, Any], error: Exception) -> dict[s
         UPDATE lead_enrichment_jobs
         SET status = %s, current_phase = %s,
             next_attempt_at = CASE WHEN %s = 'retry_wait' THEN NOW() + INTERVAL '10 minutes' ELSE next_attempt_at END,
-            completed_at = CASE WHEN %s = 'failed' THEN NOW() ELSE NULL END,
+            completed_at = CASE WHEN %s IN ('failed', 'needs_evidence') THEN NOW() ELSE NULL END,
             error_code = %s, error_message = %s, updated_at = NOW()
         WHERE id = %s
         RETURNING *
@@ -3109,10 +3204,15 @@ def fail_enrichment_job(cursor, job: dict[str, Any], error: Exception) -> dict[s
     cursor.execute(
         """
         UPDATE lead_workstreams workstream
-        SET lifecycle_status = CASE WHEN %s = 'retry_wait' THEN 'enriching' ELSE 'needs_attention' END,
+        SET lifecycle_status = CASE
+                WHEN %s = 'retry_wait' THEN 'enriching'
+                WHEN %s = 'needs_evidence' THEN 'needs_evidence'
+                ELSE 'needs_attention'
+            END,
             status_reason = %s,
             next_step = CASE
                 WHEN %s = 'retry_wait' THEN 'LocalOS повторит enrichment автоматически'
+                WHEN %s = 'needs_evidence' THEN 'Добавьте подтверждённые факты и подготовьте текст заново'
                 ELSE 'Проверьте ошибку enrichment и запустите повторную обработку'
             END,
             state_changed_at = NOW(),
@@ -3121,7 +3221,7 @@ def fail_enrichment_job(cursor, job: dict[str, Any], error: Exception) -> dict[s
         WHERE job.id = %s
           AND workstream.id = job.workstream_id
         """,
-        (status, error_message, status, job.get("id")),
+        (status, status, error_message, status, status, job.get("id")),
     )
     return updated_job
 

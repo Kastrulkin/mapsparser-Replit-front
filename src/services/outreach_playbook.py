@@ -9,8 +9,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.outreach_template_service import (
+    OUTREACH_TEMPLATES,
+    TEMPLATE_LIBRARY_VERSION,
+)
 
-PLAYBOOK_VERSION = "localos_outreach_playbook_v4"
+
+PLAYBOOK_VERSION = "localos_outreach_playbook_v7"
 CORPUS_TAG = "telegram_b2b"
 PAIN_SIGNAL_LIBRARY_VERSION = "beauty_pain_signals_v4"
 
@@ -27,6 +32,13 @@ B2B_METHOD_RULES = (
     "Не повторять одну боль во всей цепочке: каждое касание должно показывать новую сторону системы.",
     "Не называть касание последним: получатель мог не видеть предыдущие.",
     "Тема каждого outreach email: «Название клиента | ЛокалОС | Сотрудничество».",
+    "Email начинать с «Здравствуйте!», не писать в теле «Я Александр Демьянов, основатель LocalOS» и завершать точной подписью: -- / Александр / основатель ЛокалОС.",
+    "Для сигнала из карт всегда называть площадку: карточка на Яндекс Картах, а не просто карточка.",
+    "Первое касание о слабой карточке строить так: проверяемый сигнал, риск недополучать клиентов, исправление силами LocalOS, подтверждённый кейс и цена, ссылка на аудит для самостоятельного исправления, один вопрос.",
+    "Не подставлять название компании после слов «в карточке» в именительном падеже: использовать подтверждённый родительный падеж или перестраивать фразу без склонения.",
+    "Не писать сигнал как строку отчёта «Карточка: услуг - N, с ценой - M»; начинать естественно с «Вижу, что...» и полноценного предложения.",
+    "CTA должен продолжать выбранную боль: при нехватке времени спрашивать об экономии времени, при слабом привлечении - о клиентах онлайн.",
+    "В каждом касании использовать одну узнаваемую формулировку боли из библиотеки владельцев; боль получателя обозначать только как вопрос или гипотезу.",
 )
 
 BEAUTY_OWNER_PAINS = (
@@ -96,6 +108,14 @@ BEAUTY_OWNER_PAINS = (
         "localos_bridge": "Финансовые КПИ, разбор услуг и регулярный контроль показателей.",
         "support": "supported",
     },
+)
+
+LOCALOS_SUPPORTED_OWNER_PAIN_KEYS = (
+    "marketing_and_clients",
+    "reviews_and_service",
+    "pricing_and_average_ticket",
+    "operations_and_burnout",
+    "revenue_without_profit",
 )
 
 # These mappings are hypotheses to test, never facts about a recipient.  Each
@@ -512,7 +532,7 @@ APPROVED_OUTREACH_COPY_CONTRACTS = (
         ),
         "rules": (
             "Первый вопрос — диагностический; финальный вопрос — единственный CTA.",
-            "Матрица строится из подтверждённого прайса, а медицинскую совместимость подтверждает врач.",
+            "Матрица строится из подтверждённого прайса.",
             "Не подменять трудозатраты ручной адаптации темой повторной проверки фактов.",
             "Писать кратко и без дополнительного CTA.",
         ),
@@ -552,6 +572,8 @@ def beauty_outreach_guidance() -> dict[str, Any]:
             }
             for item in BEAUTY_OWNER_PAINS
         ],
+        "localos_supported_pain_keys": list(LOCALOS_SUPPORTED_OWNER_PAIN_KEYS),
+        "localos_supported_pain_count": len(LOCALOS_SUPPORTED_OWNER_PAIN_KEYS),
         "pain_signal_library_version": PAIN_SIGNAL_LIBRARY_VERSION,
         "pain_signal_hypotheses": [
             {
@@ -585,6 +607,15 @@ def beauty_outreach_guidance() -> dict[str, Any]:
                 "rules": list(item["rules"]),
             }
             for item in APPROVED_OUTREACH_COPY_CONTRACTS
+        ],
+        "template_library_version": TEMPLATE_LIBRARY_VERSION,
+        "outreach_templates": [
+            {
+                **item,
+                "angles": list(item["angles"]),
+                "required_evidence": list(item["required_evidence"]),
+            }
+            for item in OUTREACH_TEMPLATES
         ],
         "approved_proofs": list(APPROVED_LOCALOS_PROOFS),
         "constraints": [

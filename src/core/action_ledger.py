@@ -3,6 +3,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
+from core.db_helpers import assert_schema_columns
+
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -14,25 +16,14 @@ def month_key(dt: Optional[datetime] = None) -> str:
 
 
 def ensure_ledger_tables(cursor) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS billing_ledger (
-            id TEXT PRIMARY KEY,
-            action_id TEXT NOT NULL,
-            tenant_id TEXT NOT NULL,
-            entry_type TEXT NOT NULL,
-            tokens_in INTEGER DEFAULT 0,
-            tokens_out INTEGER DEFAULT 0,
-            cost NUMERIC(18,6) DEFAULT 0,
-            tariff_id TEXT,
-            month_key TEXT NOT NULL,
-            meta_json JSONB,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
+    assert_schema_columns(
+        cursor,
+        "billing_ledger",
+        (
+            "id", "action_id", "tenant_id", "entry_type", "tokens_in", "tokens_out",
+            "cost", "tariff_id", "month_key", "meta_json", "created_at",
+        ),
     )
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_billing_ledger_action_id ON billing_ledger(action_id)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_billing_ledger_tenant_month ON billing_ledger(tenant_id, month_key)")
 
 
 def write_ledger_entry(

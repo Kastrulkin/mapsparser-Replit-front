@@ -1,4 +1,6 @@
 from legacy_routes import shared as _shared
+from services.lead_journey_service import claim_reserved_journey, journey_enabled
+from services.product_telemetry_service import record_product_event
 
 globals().update(_shared.runtime_namespace)
 
@@ -1446,26 +1448,69 @@ def auth_verify_email():
         if not session_token:
             return jsonify({"error": "Ошибка создания сессии"}), 500
 
-        return jsonify(
-            {
-                "success": True,
-                "token": session_token,
-                "user": {
-                    "id": result['id'],
-                    "email": result['email'],
-                    "name": result.get('name'),
-                    "phone": result.get('phone'),
-                },
-            }
-        )
-    except Exception as e:
-        print(f"❌ Ошибка подтверждения email: {e}")
-        return jsonify({"error": str(e)}), 500
+        resumed_action = None
+        if journey_enabled() and journey_enabled("JOURNEY_POST_AUTH_REDIRECT_ENABLED"):
+            journey_db = DatabaseManager()
+            try:
+                journey_cursor = journey_db.conn.cursor()
+                resumed = claim_reserved_journey(journey_cursor, user_id=str(result['id']))
+                if resumed:
+                    resumed_journey, resumed_action = resumed
+                    record_product_event(
+                        journey_cursor, event_name="email_verified", surface="web",
+                        business_id=resumed_action.get("business_id"), user_id=str(result['id']),
+                        lead_id=resumed_journey.get("prospect_lead_id"), journey_id=resumed_journey.get("id"),
+                        action_id=resumed_action.get("id"), flow_type=resumed_action.get("flow_type"),
+                        entity_type=resumed_action.get("entity_type"), entity_id=resumed_action.get("entity_id"),
+                        target="email_verification", properties={"continuity": "reserved_journey"},
+                    )
+                    record_product_event(
+                        journey_cursor, event_name="journey_claimed", surface="web",
+                        business_id=resumed_action.get("business_id"), user_id=str(result['id']),
+                        lead_id=resumed_journey.get("prospect_lead_id"), journey_id=resumed_journey.get("id"),
+                        action_id=resumed_action.get("id"), flow_type=resumed_action.get("flow_type"),
+                        entity_type=resumed_action.get("entity_type"), entity_id=resumed_action.get("entity_id"),
+                        target="email_verification", properties={"source": resumed_journey.get("source")},
+                    )
+                journey_db.conn.commit()
+            except Exception:
+                journey_db.conn.rollback()
+                raise
+            finally:
+                journey_db.close()
+
+        payload = {
+            "success": True,
+            "user": {
+                "id": result['id'],
+                "email": result['email'],
+                "name": result.get('name'),
+                "phone": result.get('phone'),
+            },
+            "journey_action": resumed_action,
+        }
+        if not browser_cookie_auth_enabled():
+            payload["token"] = session_token
+        return issue_browser_session(jsonify(payload), session_token)
+    except Exception as error:
+        logger.warning("Email verification failed: %s", type(error).__name__)
+        return jsonify({
+            "success": False,
+            "error": "Не удалось подтвердить email",
+            "code": "email_verification_failed",
+        }), 500
 
 @app.route('/api/auth/resend-verification', methods=['POST'])
 @rate_limit_if_available("5 per hour")
 def auth_resend_verification():
     """Повторно отправить письмо подтверждения email."""
+    generic_response = {
+        "success": True,
+        "message": (
+            "Если аккаунт существует и email ещё не подтверждён, "
+            "мы отправили новое письмо."
+        ),
+    }
     try:
         data = request.get_json(silent=True) or {}
         email = normalize_email(data.get('email', ''))
@@ -1474,23 +1519,15 @@ def auth_resend_verification():
 
         result = rotate_verification_token(email)
         if result.get('error'):
-            return jsonify({"error": result['error']}), 400
+            return jsonify(generic_response), 200
 
-        email_sent = send_verification_email(
-            result['email'],
-            result.get('name'),
-            result.get('verification_token'),
+        send_verification_email(
+            result['email'], result.get('name'), result.get('verification_token'),
         )
-        return jsonify(
-            {
-                "success": True,
-                "email_sent": bool(email_sent),
-                "message": "Письмо подтверждения отправлено повторно",
-            }
-        )
-    except Exception as e:
-        print(f"❌ Ошибка повторной отправки подтверждения: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify(generic_response), 200
+    except Exception as error:
+        logger.warning("Verification email resend failed: %s", type(error).__name__)
+        return jsonify(generic_response), 200
 
 @app.route('/api/auth/login', methods=['POST'])
 @rate_limit_if_available("5 per minute")
@@ -1549,16 +1586,18 @@ def login():
             logger.warning("Login session creation failed: %s", type(session_error).__name__)
             return jsonify({"error": "Ошибка создания сессии"}), 500
 
-        return jsonify({
+        payload = {
             "success": True,
             "user": {
                 "id": result['id'],
                 "email": result.get('email', ''),
                 "name": result.get('name', ''),
                 "phone": result.get('phone', '')
-            },
-            "token": session_token
-        })
+            }
+        }
+        if not browser_cookie_auth_enabled():
+            payload["token"] = session_token
+        return issue_browser_session(jsonify(payload), session_token)
 
     except Exception as e:
         logger.warning("Login endpoint failed: %s", type(e).__name__)

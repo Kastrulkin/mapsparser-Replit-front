@@ -1,9 +1,13 @@
 """Public sales-room routes."""
 from __future__ import annotations
 
+from typing import Any
+
 from flask import Blueprint
 
 from core.ai_learning import record_ai_learning_event
+from core.api_errors import internal_error_response
+from core.upload_security import upload_content_matches_type
 
 from services.sales_room_public_service import (
     AUDIT_OFFER_REQUESTABLE_STATUSES,
@@ -26,7 +30,6 @@ from services.sales_room_public_service import (
     _create_sales_room_proposal_version,
     _ensure_audit_offer_user,
     _ensure_sales_room_proposal_version,
-    _ensure_sales_room_tables,
     _is_uuid_string,
     _load_sales_room_audit_offer,
     _load_sales_room_by_slug,
@@ -80,7 +83,6 @@ def public_sales_room(slug):
         user_data = _optional_auth()
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -128,9 +130,8 @@ def public_sales_room(slug):
             return jsonify({"success": True, "room": _to_json_compatible(room_json)})
         finally:
             conn.close()
-    except Exception as e:
-        print(f"Error loading public sales room: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось обработать запрос к комнате")
 
 @sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/welcome", methods=["PATCH"])
 def public_sales_room_welcome(slug):
@@ -147,7 +148,6 @@ def public_sales_room_welcome(slug):
             return jsonify({"error": "body_text is too long"}), 400
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -182,9 +182,8 @@ def public_sales_room_welcome(slug):
             return jsonify({"success": True, "welcome": {"body_text": str(welcome.get("body_text") or body_text)}})
         finally:
             conn.close()
-    except Exception as e:
-        print(f"Error updating public sales room welcome: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось обработать запрос к комнате")
 
 
 @sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/participants", methods=["POST"])
@@ -203,7 +202,6 @@ def public_sales_room_participant_register(slug):
             return jsonify({"error": "Необходимо согласие на обработку персональных данных"}), 400
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -284,9 +282,8 @@ def public_sales_room_participant_register(slug):
             )
         finally:
             conn.close()
-    except Exception as e:
-        print(f"Error registering public sales room participant: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось обработать запрос к комнате")
 
 
 @sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/participants/verify", methods=["POST"])
@@ -300,7 +297,6 @@ def public_sales_room_participant_verify(slug):
             return jsonify({"error": "verification_token is required"}), 400
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -344,9 +340,8 @@ def public_sales_room_participant_verify(slug):
             )
         finally:
             conn.close()
-    except Exception as e:
-        print(f"Error verifying public sales room participant: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось обработать запрос к комнате")
 
 
 @sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/audit-offer/request", methods=["POST"])
@@ -355,7 +350,6 @@ def public_sales_room_audit_offer_request(slug):
         normalized_slug = _slugify_company_name(slug)
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -401,9 +395,8 @@ def public_sales_room_audit_offer_request(slug):
             return jsonify({"success": True, "audit_offer": _serialize_public_audit_offer(offer, participant)})
         finally:
             conn.close()
-    except Exception as e:
-        print(f"Error requesting public sales room audit offer: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось обработать запрос к комнате")
 
 
 @sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/audit-offer/status", methods=["GET"])
@@ -413,7 +406,6 @@ def public_sales_room_audit_offer_status(slug):
         normalized_slug = _slugify_company_name(slug)
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -427,9 +419,8 @@ def public_sales_room_audit_offer_status(slug):
             return jsonify({"success": True, "audit_offer": public_offer})
         finally:
             conn.close()
-    except Exception as e:
-        print(f"Error loading public sales room audit offer status: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось обработать запрос к комнате")
 
 
 @sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/audit-offer/opened", methods=["POST"])
@@ -438,7 +429,6 @@ def public_sales_room_audit_offer_opened(slug):
         normalized_slug = _slugify_company_name(slug)
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -472,9 +462,8 @@ def public_sales_room_audit_offer_opened(slug):
             return jsonify({"success": True, "audit_offer": _serialize_public_audit_offer(offer, participant)})
         finally:
             conn.close()
-    except Exception as e:
-        print(f"Error marking public sales room audit offer opened: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось обработать запрос к комнате")
 
 @sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/proposal/suggestions", methods=["POST"])
 def public_sales_room_proposal_suggestion(slug):
@@ -519,7 +508,6 @@ def public_sales_room_proposal_suggestion(slug):
             normalized_end = None
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -569,9 +557,8 @@ def public_sales_room_proposal_suggestion(slug):
             return jsonify({"success": True, "suggestion": suggestion})
         finally:
             conn.close()
-    except Exception as e:
-        print(f"Error creating public sales room proposal suggestion: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось обработать запрос к комнате")
 
 @sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/proposal/suggestions/<string:suggestion_id>/resolve", methods=["POST"])
 def public_sales_room_proposal_suggestion_resolve(slug, suggestion_id):
@@ -600,7 +587,6 @@ def public_sales_room_proposal_suggestion_resolve(slug, suggestion_id):
             return jsonify({"error": "author_contact is required"}), 400
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -699,9 +685,8 @@ def public_sales_room_proposal_suggestion_resolve(slug, suggestion_id):
             )
         finally:
             conn.close()
-    except Exception as e:
-        print(f"Error resolving public sales room proposal suggestion: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось обработать запрос к комнате")
 
 @sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/messages", methods=["POST"])
 def public_sales_room_message(slug):
@@ -747,7 +732,6 @@ def public_sales_room_message(slug):
             return jsonify({"error": "message is too long"}), 400
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -787,9 +771,8 @@ def public_sales_room_message(slug):
             return jsonify({"success": True, "message": message})
         finally:
             conn.close()
-    except Exception as e:
-        print(f"Error creating public sales room message: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось обработать запрос к комнате")
 
 @sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/files", methods=["POST"])
 def public_sales_room_file_upload(slug):
@@ -815,9 +798,10 @@ def public_sales_room_file_upload(slug):
             return jsonify({"error": "file is empty"}), 400
         if len(content) > SALES_ROOM_UPLOAD_MAX_BYTES:
             return jsonify({"error": "file is too large"}), 400
+        if not upload_content_matches_type(extension=extension, mime_type=uploaded_file.mimetype or "", content=content):
+            return jsonify({"error": "File content does not match its type"}), 400
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -869,9 +853,8 @@ def public_sales_room_file_upload(slug):
             return jsonify({"success": True, "file": attachment})
         finally:
             conn.close()
-    except Exception as e:
-        print(f"Error uploading public sales room file: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось обработать запрос к комнате")
 
 @sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/files/<string:file_id>", methods=["GET"])
 def public_sales_room_file(slug, file_id):
@@ -882,7 +865,6 @@ def public_sales_room_file(slug, file_id):
             return jsonify({"error": "File not found"}), 404
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             cur.execute(
                 """
@@ -909,9 +891,8 @@ def public_sales_room_file(slug, file_id):
             )
         finally:
             conn.close()
-    except Exception as e:
-        print(f"Error loading public sales room file: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось обработать запрос к комнате")
 
 @sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/events", methods=["POST"])
 def public_sales_room_event(slug):
@@ -937,6 +918,5 @@ def public_sales_room_event(slug):
         finally:
             conn.close()
         return jsonify({"success": True})
-    except Exception as e:
-        print(f"Error recording public sales room event: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось обработать запрос к комнате")

@@ -7,6 +7,7 @@ Telegram-бот для управления аккаунтом LocalOS
 - Оптимизация услуг
 - Настройки компании
 """
+import asyncio
 import os
 import json
 import re
@@ -15,6 +16,7 @@ import base64
 import logging
 import requests
 import sys
+import time
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
@@ -22,7 +24,9 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotComm
 from telegram.error import BadRequest
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.request import HTTPXRequest
+from core.telegram_polling import PollingRequest
 from database_manager import get_db_connection
+from core.db_helpers import assert_schema_columns
 from core.action_orchestrator import ActionOrchestrator
 from core.helpers import get_user_language
 from core.service_optimization_verticals import (
@@ -77,7 +81,7 @@ from services.operator_review_reply_bulk import (
     format_bulk_review_reply_result_for_telegram,
     generate_review_reply_drafts_for_unanswered_reviews,
 )
-from services.operator_core import confirm_pending_operator_action, should_route_operator_message
+from services.operator_core import confirm_pending_operator_action, reject_pending_operator_action, should_route_operator_message
 from services.operator_scope_summary import build_operator_scope_summary
 from services.telegram_control_scope import (
     list_control_scopes,
@@ -106,6 +110,11 @@ from services.telegram_static_answers import (
 from services.gigachat_client import analyze_screenshot_with_gigachat
 from services.llm import analyze_text_with_gigachat
 from services.founder_content_editorial import capture_founder_content_correction_from_telegram
+from services.creator_portal_service import (
+    claim_telegram,
+    connect_creator_telegram,
+    telegram_creator_portal_link,
+)
 from subscription_manager import get_subscription_info
 from auth_system import create_session
 
@@ -607,27 +616,22 @@ def _telegram_capability_news_generate(envelope: dict, user_data: dict) -> dict:
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
+        from services.content_rules import enforce
+        from services.operator_social_post_generation import _default_social_post_generator
+        generated_text = enforce(cursor, tenant_id, str(user_data.get('user_id') or ''), generated_text,
+            _default_social_post_generator, raw_info)
+        assert_schema_columns(cursor, "usernews", (
+            "id", "user_id", "business_id", "service_id", "source_text", "generated_text", "approved", "created_at",
+        ))
         cursor.execute(
             """
-            CREATE TABLE IF NOT EXISTS UserNews (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                service_id TEXT,
-                source_text TEXT,
-                generated_text TEXT NOT NULL,
-                approved INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        cursor.execute(
-            """
-            INSERT INTO UserNews (id, user_id, service_id, source_text, generated_text)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO UserNews (id, user_id, business_id, service_id, source_text, generated_text)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
             (
                 news_id,
                 str(user_data.get("user_id") or ""),
+                tenant_id,
                 None,
                 raw_info,
                 generated_text,
@@ -1632,7 +1636,7 @@ def _build_guest_audit_result_menu(public_url: str = "") -> InlineKeyboardMarkup
         rows.append([InlineKeyboardButton("📊 Открыть аудит", url=public_url)])
     rows.append([InlineKeyboardButton("🛠 Исправить это в LocalOS", callback_data="guest_fix_localos")])
     rows.append([InlineKeyboardButton("⚔️ Сравнить с конкурентом", callback_data="guest_compare_start")])
-    rows.append([InlineKeyboardButton("💳 Посмотреть Starter за 1200 ₽", callback_data="tariff_info_starter")])
+    rows.append([InlineKeyboardButton("💳 Посмотреть «Карты» за 1200 ₽", callback_data="tariff_info_starter")])
     rows.append([InlineKeyboardButton("🧩 Подключить LocalOS", callback_data="guest_bind_help")])
     rows.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")])
     return InlineKeyboardMarkup(rows)
@@ -1645,7 +1649,7 @@ def _build_guest_compare_result_menu(own_report_url: str = "", competitor_report
     if competitor_report_url:
         rows.append([InlineKeyboardButton("⚔️ Открыть аудит конкурента", url=competitor_report_url)])
     rows.append([InlineKeyboardButton("🛠 Исправить разрыв в LocalOS", callback_data="guest_fix_localos")])
-    rows.append([InlineKeyboardButton("💳 Starter за 1200 ₽", callback_data="tariff_info_starter")])
+    rows.append([InlineKeyboardButton("💳 «Карты» за 1200 ₽", callback_data="tariff_info_starter")])
     rows.append([InlineKeyboardButton("🧩 Подключить LocalOS", callback_data="guest_bind_help")])
     rows.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")])
     return InlineKeyboardMarkup(rows)
@@ -1670,9 +1674,9 @@ def _build_tariffs_menu(back_callback: str = "back_to_menu") -> InlineKeyboardMa
     urls = get_web_urls()
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("🟠 Начальный", callback_data="tariff_info_starter")],
-            [InlineKeyboardButton("🟣 Профессиональный", callback_data="tariff_info_professional")],
-            [InlineKeyboardButton("🔶 Консьерж", callback_data="tariff_info_concierge")],
+            [InlineKeyboardButton("🟠 Карты", callback_data="tariff_info_starter")],
+            [InlineKeyboardButton("🟣 Привлечение", callback_data="tariff_info_professional")],
+            [InlineKeyboardButton("🔶 Управление", callback_data="tariff_info_concierge")],
             [InlineKeyboardButton("🌐 Все тарифы на сайте", url=urls["pricing"])],
             [InlineKeyboardButton("🔙 Назад", callback_data=back_callback)],
         ]
@@ -2071,11 +2075,17 @@ def _build_operator_result_markup(result: dict[str, Any]) -> InlineKeyboardMarku
     if href:
         absolute_href = href if href.startswith("http") else str(os.getenv("PUBLIC_BASE_URL") or "https://localos.pro").rstrip("/") + href
         rows.append([InlineKeyboardButton(str(result_ref.get("label") or "Открыть результат"), url=absolute_href)])
+    for action in result.get('ui_actions') or []:
+        target=str(action.get('href') or '')
+        if action.get('action')=='open_journal' and target.startswith('/dashboard/work-journal?'):
+            rows.append([InlineKeyboardButton(str(action.get('label') or 'Открыть запись'),url=str(os.getenv('PUBLIC_BASE_URL') or 'https://localos.pro').rstrip('/')+target)])
     approval = result.get("approval") if isinstance(result.get("approval"), dict) else {}
     action_id = str(approval.get("action_id") or "").strip()
     if action_id:
-        rows.append([InlineKeyboardButton("✅ Подтвердить", callback_data=f"operator_confirm:{action_id}")])
-    rows.append([InlineKeyboardButton("💬 Новая команда", callback_data="client_ask")])
+        rows.append([
+            InlineKeyboardButton("✅ Подтвердить", callback_data=f"operator_confirm:{action_id}"),
+            InlineKeyboardButton("❌ Отклонить", callback_data=f"operator_reject:{action_id}"),
+        ])
     return InlineKeyboardMarkup(rows)
 
 
@@ -2288,54 +2298,13 @@ def _build_partnership_summary_text(telegram_id: str) -> tuple[bool, str]:
 
 
 def _ensure_callback_recovery_history_table(cursor):
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS callback_recovery_history (
-            id TEXT PRIMARY KEY,
-            tenant_id TEXT NOT NULL,
-            triggered_by TEXT NOT NULL,
-            send_telegram_report BOOLEAN NOT NULL DEFAULT FALSE,
-            include_retry BOOLEAN NOT NULL DEFAULT TRUE,
-            replayed_count INTEGER NOT NULL DEFAULT 0,
-            sent_count INTEGER NOT NULL DEFAULT 0,
-            retried_count INTEGER NOT NULL DEFAULT 0,
-            dlq_count INTEGER NOT NULL DEFAULT 0,
-            telegram_sent_count INTEGER NOT NULL DEFAULT 0,
-            action_ids_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-            report_text TEXT NOT NULL,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_callback_recovery_history_tenant_created
-        ON callback_recovery_history (tenant_id, created_at DESC)
-        """
-    )
+    """Check Alembic-owned schema without DDL or committing caller work."""
+    assert_schema_columns(cursor, 'callback_recovery_history', ('id', 'tenant_id', 'triggered_by', 'send_telegram_report', 'include_retry', 'replayed_count', 'sent_count', 'retried_count', 'dlq_count', 'telegram_sent_count', 'action_ids_json', 'report_text', 'created_at'))
 
 
 def _ensure_support_export_send_history_table(cursor):
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS support_export_send_history (
-            id TEXT PRIMARY KEY,
-            tenant_id TEXT NOT NULL,
-            triggered_by TEXT NOT NULL,
-            action_id TEXT NULL,
-            telegram_sent_count INTEGER NOT NULL DEFAULT 0,
-            target_ids_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-            report_text TEXT NOT NULL,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_support_export_send_history_tenant_created
-        ON support_export_send_history (tenant_id, created_at DESC)
-        """
-    )
+    """Check Alembic-owned schema without DDL or committing caller work."""
+    assert_schema_columns(cursor, 'support_export_send_history', ('id', 'tenant_id', 'triggered_by', 'action_id', 'telegram_sent_count', 'target_ids_json', 'report_text', 'created_at'))
 
 
 def _load_callback_recovery_history_items(cursor, tenant_id: str, limit: int) -> list[dict]:
@@ -3722,10 +3691,34 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if args and len(args) > 0:
             bind_token = args[0]
+            if bind_token.startswith("creator_claim_"):
+                await handle_creator_claim(update, bind_token.removeprefix("creator_claim_"), user_id)
+                return
+            if bind_token.startswith("creator_connect_"):
+                await handle_creator_connect(update, bind_token.removeprefix("creator_connect_"), user_id)
+                return
             await handle_bind_token(update, context, bind_token, user_id)
             return
 
         db_user_id = get_user_id_from_telegram(user_id)
+        creator_link = _creator_portal_link(user_id)
+        if creator_link and db_user_id:
+            await _reply_effective_message(
+                update,
+                "LocalOS\n\nВыберите, в какой роли хотите продолжить.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("Я автор", url=creator_link["portal_url"])],
+                    [InlineKeyboardButton("Я управляю бизнесом", callback_data="control:home")],
+                ]),
+            )
+            return
+        if creator_link:
+            await _reply_effective_message(
+                update,
+                f"Здравствуйте, {creator_link['display_name']}!\n\nОткройте кабинет, чтобы увидеть предложения.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Открыть кабинет", url=creator_link["portal_url"])]]),
+            )
+            return
         if not db_user_id:
             await _reply_effective_message(update, _guest_welcome_text(), reply_markup=_build_guest_menu())
             return
@@ -3738,14 +3731,95 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "❌ Не удалось открыть меню. Попробуйте ещё раз через /start."
         )
 
+
+def _creator_portal_link(telegram_id: str):
+    if str(os.getenv("CREATOR_BOT_ENABLED") or "false").lower() not in {"1", "true", "yes", "on"}:
+        return None
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        result = telegram_creator_portal_link(cursor, telegram_id)
+        conn.commit()
+        return result
+    except Exception:
+        conn.rollback()
+        logger.exception("Failed to create creator portal link telegram_id=%s", telegram_id)
+        return None
+    finally:
+        conn.close()
+
+
+async def handle_creator_claim(update: Update, invite_token: str, telegram_id: str):
+    if str(os.getenv("CREATOR_BOT_ENABLED") or "false").lower() not in {"1", "true", "yes", "on"}:
+        await _reply_effective_message(update, "Кабинет автора пока не включён.")
+        return
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        result = claim_telegram(
+            cursor,
+            invite_token=invite_token,
+            telegram_id=telegram_id,
+            telegram_username=update.effective_user.username,
+        )
+        conn.commit()
+        await _reply_effective_message(
+            update,
+            f"Готово, {result['display_name']}! Аккаунт автора подключён.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Открыть кабинет", url=result["portal_url"])]]),
+        )
+    except (LookupError, ValueError) as exc:
+        conn.rollback()
+        await _reply_effective_message(update, f"❌ {exc}")
+    except Exception:
+        conn.rollback()
+        logger.exception("Failed creator claim telegram_id=%s", telegram_id)
+        await _reply_effective_message(update, "❌ Не удалось принять приглашение. Попросите LocalOS создать новую ссылку.")
+    finally:
+        conn.close()
+
+
+async def handle_creator_connect(update: Update, connect_token: str, telegram_id: str):
+    if str(os.getenv("CREATOR_BOT_ENABLED") or "false").lower() not in {"1", "true", "yes", "on"}:
+        await _reply_effective_message(update, "Уведомления для авторов пока не включены.")
+        return
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        result = connect_creator_telegram(
+            cursor,
+            token=connect_token,
+            telegram_id=telegram_id,
+            telegram_username=update.effective_user.username,
+        )
+        conn.commit()
+        await _reply_effective_message(
+            update,
+            f"Готово, {result['display_name']}! Telegram-уведомления подключены.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Вернуться в кабинет", url=result["portal_url"])]]),
+        )
+    except (LookupError, ValueError) as exc:
+        conn.rollback()
+        await _reply_effective_message(update, f"❌ {exc}")
+    except Exception:
+        conn.rollback()
+        logger.exception("Failed creator Telegram connection telegram_id=%s", telegram_id)
+        await _reply_effective_message(
+            update,
+            "❌ Не удалось подключить уведомления. Вернитесь в кабинет и создайте новую ссылку.",
+        )
+    finally:
+        conn.close()
+
+
 async def handle_bind_token(update: Update, context: ContextTypes.DEFAULT_TYPE, bind_token: str, telegram_id: str):
     """Обработка токена привязки"""
     try:
-        # Вызываем API для проверки токена
-        response = requests.post(
+        response = await asyncio.to_thread(
+            requests.post,
             f"{API_BASE_URL}/api/telegram/bind/verify",
             json={"token": bind_token, "telegram_id": telegram_id},
-            timeout=10
+            timeout=10,
         )
         
         if response.status_code == 200:
@@ -3755,15 +3829,32 @@ async def handle_bind_token(update: Update, context: ContextTypes.DEFAULT_TYPE, 
                 f"✅ Аккаунт успешно привязан!\n\n"
                 f"👤 Пользователь: {data.get('user', {}).get('name', 'Не указано')}\n"
                 f"📧 Email: {data.get('user', {}).get('email', 'Не указано')}\n\n"
-                f"Теперь вы можете использовать все функции бота!"
+                "Выберите бизнес и отправьте голосовое или текст.\n\n"
+                "Например:\n• Покажи ближайший пост.\n• Запомни для будущих текстов: …\n• Есть пожелание клиента: …"
             )
             await show_main_menu(update, context, telegram_id, data.get('user', {}).get('id'))
         else:
             error_data = response.json()
             await _reply_effective_message(update, f"❌ Ошибка привязки: {error_data.get('error', 'Неизвестная ошибка')}")
-    except Exception as e:
+    except requests.Timeout:
+        logger.exception("Bind token verification timed out for telegram_id=%s", telegram_id)
+        await _reply_effective_message(
+            update,
+            "❌ Сервер LocalOS не ответил вовремя. "
+            "Создайте новую ссылку привязки в LocalOS и повторите попытку."
+        )
+    except requests.RequestException:
+        logger.exception("Bind token verification request failed for telegram_id=%s", telegram_id)
+        await _reply_effective_message(
+            update,
+            "❌ Не удалось связаться с LocalOS. Попробуйте ещё раз через несколько минут."
+        )
+    except Exception:
         logger.exception("Bind token verification failed for telegram_id=%s", telegram_id)
-        await _reply_effective_message(update, f"❌ Ошибка подключения к серверу: {str(e)}")
+        await _reply_effective_message(
+            update,
+            "❌ Не удалось привязать аккаунт. Создайте новую ссылку привязки и повторите попытку."
+        )
 
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, telegram_id: str, db_user_id: str = None):
     """Показать главное меню"""
@@ -3842,219 +3933,260 @@ async def show_optimize_mode_selection(update: Update, context: ContextTypes.DEF
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик нажатий на кнопки"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = str(update.effective_user.id)
-    data = query.data
-    db_user_id = get_user_id_from_telegram(user_id)
-    
-    if not db_user_id:
-        state_ref = user_states.setdefault(user_id, {})
-        if data == "guest_audit_start":
-            state_ref["state"] = "waiting_guest_audit_link"
-            await query.edit_message_text(
-                "Пришлите ссылку на вашу карточку бизнеса.\n\n"
-                "Подойдут Яндекс Карты, 2ГИС и Google Maps.\n\n"
-                "Я покажу, где карточка теряет клиентов: отзывы, фото, описание, услуги и активность."
+
+async def _control_switch_callback(query: Any, user_id: str, control_scope: Any) -> None:
+    text, markup = _build_control_switcher(user_id)
+    await query.edit_message_text(text, reply_markup=markup)
+
+
+async def _control_favorite_callback(query: Any, user_id: str, control_scope: Any) -> None:
+    favorite = _toggle_current_control_favorite(user_id)
+    text, markup = _build_control_switcher(user_id)
+    if favorite is True:
+        text = "★ Добавлено в избранное.\n\n" + text
+    elif favorite is False:
+        text = "Избранное обновлено.\n\n" + text
+    else:
+        text = "Не удалось обновить избранное.\n\n" + text
+    await query.edit_message_text(text, reply_markup=markup)
+
+
+async def _control_search_callback(query: Any, user_id: str, control_scope: Any) -> None:
+    state_ref = user_states.setdefault(user_id, {})
+    state_ref["state"] = "waiting_control_scope_search"
+    await query.edit_message_text(
+        "Найдите бизнес\n\nПришлите часть названия, города или адреса одним сообщением.",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Отмена", callback_data="control_switch")]]),
+    )
+
+
+async def _control_locations_callback(query: Any, user_id: str, control_scope: Any) -> None:
+    network_id = ""
+    if control_scope and control_scope.get("kind") == "network":
+        network_id = str(control_scope.get("id") or "")
+    elif control_scope and isinstance(control_scope.get("parent_scope"), dict):
+        network_id = str(control_scope.get("parent_scope", {}).get("id") or "")
+    if not network_id:
+        await query.edit_message_text(
+            "Сначала выберите сеть.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Сменить", callback_data="control_switch")]]),
+        )
+        return
+    text, markup = _build_network_locations_switcher(user_id, network_id)
+    await query.edit_message_text(text, reply_markup=markup)
+
+
+async def _control_scope_select_callback(query: Any, user_id: str, data: str) -> None:
+    parts = data.split(":", 2)
+    selector = parts[1] if len(parts) > 1 else ""
+    requested_id = parts[2] if len(parts) > 2 else None
+    requested_kind = {"p": "platform", "n": "network", "b": "business"}.get(selector, "")
+    selected = _resolve_telegram_control_scope(
+        user_id,
+        requested_kind=requested_kind,
+        requested_id=requested_id,
+        persist=True,
+    )
+    if not selected:
+        await query.edit_message_text(
+            "Этот раздел недоступен. Возможно, права изменились.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("К выбору", callback_data="control_switch")]]),
+        )
+        return
+    user_states.setdefault(user_id, {})["state"] = "idle"
+    if selected.get("kind") == "business":
+        user_states.setdefault(user_id, {})["active_business_id"] = str(selected.get("id") or "")
+    summary = _build_telegram_control_summary(user_id, selected)
+    await _safe_edit_message(
+        query,
+        _format_control_start(summary),
+        reply_markup=_build_control_main_menu(selected),
+    )
+
+
+CONTROL_CALLBACK_ROUTES = {
+    "control_switch": _control_switch_callback,
+    "control_favorite": _control_favorite_callback,
+    "control_search": _control_search_callback,
+    "control_locations": _control_locations_callback,
+}
+
+CONTROL_PREFIX_CALLBACK_ROUTES = (
+    ("cs:", _control_scope_select_callback),
+)
+
+
+async def _dispatch_control_callback(data: str, query: Any, user_id: str, control_scope: Any) -> bool:
+    handler = CONTROL_CALLBACK_ROUTES.get(data)
+    if handler is not None:
+        await handler(query, user_id, control_scope)
+        return True
+    for prefix, prefix_handler in CONTROL_PREFIX_CALLBACK_ROUTES:
+        if data.startswith(prefix):
+            await prefix_handler(query, user_id, data)
+            return True
+    return False
+
+async def _handle_guest_callback(query: Any, update: Update, user_id: str, data: str) -> None:
+    """Handle callbacks that are valid before a LocalOS account is linked."""
+    state_ref = user_states.setdefault(user_id, {})
+    if data == "guest_audit_start":
+        state_ref["state"] = "waiting_guest_audit_link"
+        await query.edit_message_text(
+            "Пришлите ссылку на вашу карточку бизнеса.\n\n"
+            "Подойдут Яндекс Карты, 2ГИС и Google Maps.\n\n"
+            "Я покажу, где карточка теряет клиентов: отзывы, фото, описание, услуги и активность."
+        )
+        return
+    if data == "guest_compare_start":
+        state_ref["state"] = "waiting_guest_compare_own_link"
+        await query.edit_message_text(
+            f"{guest_compare_text()}\n\nСначала пришлите ссылку на вашу карточку.",
+            reply_markup=_build_guest_menu(),
+        )
+        return
+    if data == "guest_more":
+        await query.edit_message_text("Что можно сделать после бесплатного аудита", reply_markup=_build_guest_more_menu())
+        return
+    if data == "guest_about":
+        await query.edit_message_text(guest_about_text(), reply_markup=_build_guest_more_menu())
+        return
+    if data == "guest_tariffs":
+        await query.edit_message_text(guest_tariffs_text(), reply_markup=_build_tariffs_menu("guest_more"))
+        return
+    if data == "guest_fix_localos":
+        await query.edit_message_text(tariff_detail_text("starter"), reply_markup=_build_tariff_detail_menu("starter", "guest_more"))
+        return
+    if data == "guest_bind_help":
+        await query.edit_message_text(guest_connect_account_text(), reply_markup=_build_guest_more_menu())
+        return
+    if data.startswith("crypto_pay_"):
+        tier_key = data.replace("crypto_pay_", "", 1)
+        guest_checkout = _guest_checkout_context(user_id)
+        try:
+            invoice = create_crypto_invoice_for_checkout_session(
+                tariff_id=tier_key,
+                source="telegram_guest_checkout",
+                telegram_id=user_id,
+                telegram_username=str(getattr(update.effective_user, "username", "") or ""),
+                telegram_name=str(getattr(update.effective_user, "full_name", "") or ""),
+                maps_url=str(guest_checkout.get("maps_url") or "").strip() or None,
+                normalized_maps_url=str(guest_checkout.get("normalized_maps_url") or "").strip() or None,
+                audit_slug=str(guest_checkout.get("audit_slug") or "").strip() or None,
+                audit_public_url=str(guest_checkout.get("audit_public_url") or "").strip() or None,
+                competitor_maps_url=str(guest_checkout.get("competitor_maps_url") or "").strip() or None,
+                competitor_audit_url=str(guest_checkout.get("competitor_audit_url") or "").strip() or None,
+                payload_json=guest_checkout,
             )
-            return
-        if data == "guest_compare_start":
-            state_ref["state"] = "waiting_guest_compare_own_link"
+            invoice_url = str(
+                invoice.get("bot_invoice_url")
+                or invoice.get("mini_app_invoice_url")
+                or invoice.get("web_app_invoice_url")
+                or ""
+            ).strip()
+            if not invoice_url:
+                raise RuntimeError("Crypto invoice URL is missing")
             await query.edit_message_text(
-                f"{guest_compare_text()}\n\nСначала пришлите ссылку на вашу карточку.",
+                "💎 Оплата внутри Telegram\n\n"
+                "Я подготовил invoice на выбранный тариф.\n"
+                "Откройте его по кнопке ниже и завершите оплату. После этого нажмите «Я оплатил, проверить».",
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton("💎 Открыть crypto invoice", url=invoice_url)],
+                        [InlineKeyboardButton("✅ Я оплатил, проверить", callback_data=f"crypto_check_{invoice.get('invoice_id') or invoice.get('id')}")],
+                        [InlineKeyboardButton("🔙 Назад", callback_data="guest_more")],
+                    ]
+                ),
+            )
+        except Exception as exc:
+            await query.edit_message_text(
+                "Не удалось подготовить оплату внутри Telegram.\n\n"
+                f"Причина: {exc}",
                 reply_markup=_build_guest_menu(),
             )
-            return
-        if data == "guest_more":
-            await query.edit_message_text("Что можно сделать после бесплатного аудита", reply_markup=_build_guest_more_menu())
-            return
-        if data == "guest_about":
-            await query.edit_message_text(guest_about_text(), reply_markup=_build_guest_more_menu())
-            return
-        if data == "guest_tariffs":
-            await query.edit_message_text(guest_tariffs_text(), reply_markup=_build_tariffs_menu("guest_more"))
-            return
-        if data == "guest_fix_localos":
-            await query.edit_message_text(tariff_detail_text("starter"), reply_markup=_build_tariff_detail_menu("starter", "guest_more"))
-            return
-        if data == "guest_bind_help":
-            await query.edit_message_text(guest_connect_account_text(), reply_markup=_build_guest_more_menu())
-            return
-        if data.startswith("crypto_pay_"):
-            tier_key = data.replace("crypto_pay_", "", 1)
-            guest_checkout = _guest_checkout_context(user_id)
-            try:
-                invoice = create_crypto_invoice_for_checkout_session(
-                    tariff_id=tier_key,
-                    source="telegram_guest_checkout",
-                    telegram_id=user_id,
-                    telegram_username=str(getattr(update.effective_user, "username", "") or ""),
-                    telegram_name=str(getattr(update.effective_user, "full_name", "") or ""),
-                    maps_url=str(guest_checkout.get("maps_url") or "").strip() or None,
-                    normalized_maps_url=str(guest_checkout.get("normalized_maps_url") or "").strip() or None,
-                    audit_slug=str(guest_checkout.get("audit_slug") or "").strip() or None,
-                    audit_public_url=str(guest_checkout.get("audit_public_url") or "").strip() or None,
-                    competitor_maps_url=str(guest_checkout.get("competitor_maps_url") or "").strip() or None,
-                    competitor_audit_url=str(guest_checkout.get("competitor_audit_url") or "").strip() or None,
-                    payload_json=guest_checkout,
-                )
-                invoice_url = str(
-                    invoice.get("bot_invoice_url")
-                    or invoice.get("mini_app_invoice_url")
-                    or invoice.get("web_app_invoice_url")
-                    or ""
-                ).strip()
-                if not invoice_url:
-                    raise RuntimeError("Crypto invoice URL is missing")
+        return
+    if data.startswith("crypto_check_"):
+        invoice_id = data.replace("crypto_check_", "", 1).strip()
+        try:
+            client = CryptoPayClient()
+            invoices = client.get_invoices(invoice_ids=[invoice_id])
+            invoice = invoices[0] if invoices else {}
+            status = str(invoice.get("status") or "").strip().lower()
+            if status != "paid":
                 await query.edit_message_text(
-                    "💎 Оплата внутри Telegram\n\n"
-                    "Я подготовил invoice на выбранный тариф.\n"
-                    "Откройте его по кнопке ниже и завершите оплату. После этого нажмите «Я оплатил, проверить».",
+                    "Платёж ещё не подтверждён.\n\n"
+                    "Если вы уже оплатили, подождите немного и нажмите проверку ещё раз.",
                     reply_markup=InlineKeyboardMarkup(
                         [
-                            [InlineKeyboardButton("💎 Открыть crypto invoice", url=invoice_url)],
-                            [InlineKeyboardButton("✅ Я оплатил, проверить", callback_data=f"crypto_check_{invoice.get('invoice_id') or invoice.get('id')}")],
+                            [InlineKeyboardButton("🔄 Проверить ещё раз", callback_data=f"crypto_check_{invoice_id}")],
                             [InlineKeyboardButton("🔙 Назад", callback_data="guest_more")],
                         ]
                     ),
                 )
-            except Exception as exc:
-                await query.edit_message_text(
-                    "Не удалось подготовить оплату внутри Telegram.\n\n"
-                    f"Причина: {exc}",
-                    reply_markup=_build_guest_menu(),
-                )
-            return
-        if data.startswith("crypto_check_"):
-            invoice_id = data.replace("crypto_check_", "", 1).strip()
-            try:
-                client = CryptoPayClient()
-                invoices = client.get_invoices(invoice_ids=[invoice_id])
-                invoice = invoices[0] if invoices else {}
-                status = str(invoice.get("status") or "").strip().lower()
-                if status != "paid":
-                    await query.edit_message_text(
-                        "Платёж ещё не подтверждён.\n\n"
-                        "Если вы уже оплатили, подождите немного и нажмите проверку ещё раз.",
-                        reply_markup=InlineKeyboardMarkup(
-                            [
-                                [InlineKeyboardButton("🔄 Проверить ещё раз", callback_data=f"crypto_check_{invoice_id}")],
-                                [InlineKeyboardButton("🔙 Назад", callback_data="guest_more")],
-                            ]
-                        ),
-                    )
-                    return
-                checkout_result = apply_crypto_invoice_paid(invoice)
-                audit_url = str(checkout_result.get("audit_public_url") or "").strip()
-                lines = [
-                    "✅ Оплата подтверждена.",
-                    "Аккаунт LocalOS создан и привязан к вашему Telegram.",
-                    "Теперь платные функции можно запускать без отдельной регистрации.",
-                ]
-                if audit_url:
-                    lines.extend(["", f"Ваш аудит: {audit_url}"])
-                await query.edit_message_text(
-                    "\n".join(lines),
-                    reply_markup=InlineKeyboardMarkup(
-                        [
-                            *([[InlineKeyboardButton("🔍 Открыть аудит", url=audit_url)]] if audit_url else []),
-                            [InlineKeyboardButton("✨ Что будет после аудита", callback_data="guest_more")],
-                        ]
-                    ),
-                )
-            except Exception as exc:
-                await query.edit_message_text(
-                    "Не удалось подтвердить оплату.\n\n"
-                    f"Причина: {exc}",
-                    reply_markup=_build_guest_menu(),
-                )
-            return
-        if data.startswith("tariff_info_"):
-            tier_key = data.replace("tariff_info_", "", 1)
+                return
+            checkout_result = apply_crypto_invoice_paid(invoice)
+            audit_url = str(checkout_result.get("audit_public_url") or "").strip()
+            lines = [
+                "✅ Оплата подтверждена.",
+                "Аккаунт LocalOS создан и привязан к вашему Telegram.",
+                "Теперь платные функции можно запускать без отдельной регистрации.",
+            ]
+            if audit_url:
+                lines.extend(["", f"Ваш аудит: {audit_url}"])
             await query.edit_message_text(
-                tariff_detail_text(tier_key),
-                reply_markup=_build_tariff_detail_menu(tier_key),
+                "\n".join(lines),
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        *([[InlineKeyboardButton("🔍 Открыть аудит", url=audit_url)]] if audit_url else []),
+                        [InlineKeyboardButton("✨ Что будет после аудита", callback_data="guest_more")],
+                    ]
+                ),
             )
-            return
-        await query.edit_message_text("❌ Аккаунт не привязан. Используйте /start <код_привязки> или вернитесь в гостевое меню.", reply_markup=_build_guest_menu())
+        except Exception as exc:
+            await query.edit_message_text(
+                "Не удалось подтвердить оплату.\n\n"
+                f"Причина: {exc}",
+                reply_markup=_build_guest_menu(),
+            )
         return
+    if data.startswith("tariff_info_"):
+        tier_key = data.replace("tariff_info_", "", 1)
+        await query.edit_message_text(
+            tariff_detail_text(tier_key),
+            reply_markup=_build_tariff_detail_menu(tier_key),
+        )
+        return
+    await query.edit_message_text("❌ Аккаунт не привязан. Используйте /start <код_привязки> или вернитесь в гостевое меню.", reply_markup=_build_guest_menu())
+    return
+
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик нажатий на кнопки"""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = str(update.effective_user.id)
+    data = query.data
+    from services.operator_telegram_voice import callback
+    import sys
+    if await callback(update, context, sys.modules[__name__]):
+        return
+    db_user_id = get_user_id_from_telegram(user_id)
     
+    if not db_user_id:
+        await _handle_guest_callback(query, update, user_id, data)
+        return
+
     business_ctx = resolve_business_context(user_id)
     if business_ctx:
         business_ctx = {**business_ctx, "telegram_id": user_id, "telegram_name": update.effective_user.full_name}
 
     control_scope = _resolve_telegram_control_scope(user_id)
-    if data == "control_switch":
-        text, markup = _build_control_switcher(user_id)
-        await query.edit_message_text(text, reply_markup=markup)
+    if await _dispatch_control_callback(data, query, user_id, control_scope):
         return
-    if data == "control_favorite":
-        favorite = _toggle_current_control_favorite(user_id)
-        text, markup = _build_control_switcher(user_id)
-        if favorite is True:
-            text = "★ Добавлено в избранное.\n\n" + text
-        elif favorite is False:
-            text = "Избранное обновлено.\n\n" + text
-        else:
-            text = "Не удалось обновить избранное.\n\n" + text
-        await query.edit_message_text(text, reply_markup=markup)
-        return
-    if data == "control_search":
-        state_ref = user_states.setdefault(user_id, {})
-        state_ref["state"] = "waiting_control_scope_search"
-        await query.edit_message_text(
-            "Найдите бизнес\n\nПришлите часть названия, города или адреса одним сообщением.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Отмена", callback_data="control_switch")]]),
-        )
-        return
-    if data == "control_locations":
-        network_id = ""
-        if control_scope and control_scope.get("kind") == "network":
-            network_id = str(control_scope.get("id") or "")
-        elif control_scope and isinstance(control_scope.get("parent_scope"), dict):
-            network_id = str(control_scope.get("parent_scope", {}).get("id") or "")
-        if not network_id:
-            await query.edit_message_text(
-                "Сначала выберите сеть.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Сменить", callback_data="control_switch")]]),
-            )
-            return
-        text, markup = _build_network_locations_switcher(user_id, network_id)
-        await query.edit_message_text(text, reply_markup=markup)
-        return
-    if data.startswith("cs:"):
-        parts = data.split(":", 2)
-        selector = parts[1] if len(parts) > 1 else ""
-        requested_id = parts[2] if len(parts) > 2 else None
-        requested_kind = {"p": "platform", "n": "network", "b": "business"}.get(selector, "")
-        selected = _resolve_telegram_control_scope(
-            user_id,
-            requested_kind=requested_kind,
-            requested_id=requested_id,
-            persist=True,
-        )
-        if not selected:
-            await query.edit_message_text(
-                "Этот раздел недоступен. Возможно, права изменились.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("К выбору", callback_data="control_switch")]]),
-            )
-            return
-        user_states.setdefault(user_id, {})["state"] = "idle"
-        if selected.get("kind") == "business":
-            user_states.setdefault(user_id, {})["active_business_id"] = str(selected.get("id") or "")
-        summary = _build_telegram_control_summary(user_id, selected)
-        await _safe_edit_message(
-            query,
-            _format_control_start(summary),
-            reply_markup=_build_control_main_menu(selected),
-        )
-        return
-
     protected_business_prefixes = (
         "operator_confirm:",
+        "operator_reject:",
         "approval_approved_",
         "approval_rejected_",
         "approval_status_",
@@ -4127,10 +4259,47 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("❌ Для аккаунта не найден активный бизнес.", reply_markup=_build_client_more_menu())
             return
         action_id = data.replace("operator_confirm:", "", 1).strip()
+        from subscription_manager import get_subscription_access
         conn = get_db_connection()
         cursor = conn.cursor()
         try:
+            from services.operator_audio import authorize_actor
+            _actor, access = authorize_actor(cursor, str(business_ctx["user_id"]), str(business_ctx["business_id"]))
             result, _idempotent = confirm_pending_operator_action(
+                cursor,
+                action_id=action_id,
+                business_id=str(business_ctx.get("business_id") or ""),
+                user_id=str(business_ctx.get("user_id") or ""),
+                subscription_access=access,
+            )
+            conn.commit()
+            await query.edit_message_text(
+                format_operator_chat_result_for_telegram(result),
+                reply_markup=_build_operator_result_markup(result),
+            )
+        except Exception:
+            conn.rollback()
+            logger.exception("Operator action confirmation failed action_id=%s", action_id)
+            await query.edit_message_text(
+                "Не удалось подтвердить действие. Повторите позже.",
+                reply_markup=_build_ask_localos_menu(),
+            )
+        finally:
+            conn.close()
+        return
+
+    if data.startswith("operator_reject:"):
+        business_ctx = _control_scope_business_context(user_id, control_scope)
+        if not business_ctx or not business_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден активный бизнес.", reply_markup=_build_client_more_menu())
+            return
+        action_id = data.replace("operator_reject:", "", 1).strip()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            from services.operator_audio import authorize_actor
+            authorize_actor(cursor, str(business_ctx["user_id"]), str(business_ctx["business_id"]))
+            result, _idempotent = reject_pending_operator_action(
                 cursor,
                 action_id=action_id,
                 business_id=str(business_ctx.get("business_id") or ""),
@@ -4141,10 +4310,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 format_operator_chat_result_for_telegram(result),
                 reply_markup=_build_operator_result_markup(result),
             )
-        except Exception as exc:
+        except Exception:
             conn.rollback()
+            logger.exception("Operator action rejection failed action_id=%s", action_id)
             await query.edit_message_text(
-                "Не удалось подтвердить действие.\n\nПричина: " + str(exc),
+                "Не удалось отклонить действие.",
                 reply_markup=_build_ask_localos_menu(),
             )
         finally:
@@ -5136,8 +5306,17 @@ async def show_settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE,
     
     await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
+async def handle_operator_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from services.operator_telegram_inputs import receive
+    if not await receive(update,context,sys.modules[__name__]):
+        await update.message.reply_text('Выберите доступный бизнес в LocalOS. Приём файлов Оператором доступен в рабочем пилоте.')
+
+
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик фото"""
+    from services.operator_telegram_inputs import receive
+    if await receive(update,context,sys.modules[__name__]):
+        return
     user_id = str(update.effective_user.id)
     
     if user_id not in user_states:
@@ -5429,6 +5608,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик текстовых сообщений"""
     user_id = str(update.effective_user.id)
     text = update.message.text
+    from services.operator_telegram_voice import correction
+    import sys
+    if await correction(update, context, sys.modules[__name__]):
+        return
     reply_to_message = getattr(update.message, "reply_to_message", None)
     reply_to_message_id = int(getattr(reply_to_message, "message_id", 0) or 0)
     if reply_to_message_id:
@@ -5558,186 +5741,17 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         business_ctx = {**business_ctx, "telegram_name": update.effective_user.full_name}
-        if should_route_operator_message(text):
-            operator_payload = build_operator_chat_payload(business_ctx, text)
-            await update.message.reply_text(
-                str(operator_payload.get("text") or "Команда обработана."),
-                reply_markup=_build_operator_result_markup(operator_payload.get("result") or {}),
-            )
-            return
-        operator_intent = classify_operator_chat_intent(text)
-        if classify_bulk_review_reply_intent(text):
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            try:
-                business_id = str(business_ctx.get("business_id") or "")
-                owner_id = str(business_ctx.get("user_id") or "")
-                record_operator_event(
-                    cursor,
-                    business_id=business_id,
-                    user_id=owner_id,
-                    event_type="operator_message_received",
-                    channel="telegram",
-                    status="received",
-                    input_summary={"message": text[:500]},
-                )
-                result = generate_review_reply_drafts_for_unanswered_reviews(
-                    cursor,
-                    business_id=business_id,
-                    user_id=owner_id,
-                    limit=5,
-                    channel="telegram",
-                )
-                record_operator_event(
-                    cursor,
-                    business_id=business_id,
-                    user_id=owner_id,
-                    event_type="operator_tool_executed",
-                    channel="telegram",
-                    action_key="review_replies_generate",
-                    status=str(result.get("status") or "blocked"),
-                    reason_code=",".join(result.get("blocked_reasons") or []) or None,
-                    input_summary={"intent": "bulk_review_replies_generate"},
-                    output_summary={
-                        "status": result.get("status"),
-                        "charged_credits": result.get("charged_credits"),
-                        "drafts_count": len(result.get("drafts") or []),
-                    },
-                    metadata={
-                        "credit_charged": bool(result.get("credit_charged")),
-                        "paid_actions_performed": bool(result.get("credit_charged")),
-                        "external_writes_performed": False,
-                        "manual_publication_only": True,
-                    },
-                )
-                conn.commit()
-                await update.message.reply_text(
-                    format_bulk_review_reply_result_for_telegram(result),
-                    reply_markup=_build_reviews_menu(),
-                )
-            except Exception:
-                conn.rollback()
-                await update.message.reply_text(
-                    "Не удалось подготовить ответы на отзывы. Попробуйте ещё раз или откройте кабинет.",
-                    reply_markup=_build_reviews_menu(),
-                )
-            finally:
-                conn.close()
-            return
-        if operator_intent == "manual_review_add_and_reply_generate":
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            try:
-                business_id = str(business_ctx.get("business_id") or "")
-                owner_id = str(business_ctx.get("user_id") or "")
-                record_operator_event(
-                    cursor,
-                    business_id=business_id,
-                    user_id=owner_id,
-                    event_type="operator_message_received",
-                    channel="telegram",
-                    status="received",
-                    input_summary={"message": text[:500]},
-                )
-                result = process_operator_chat_message(
-                    cursor,
-                    business_id=business_id,
-                    user_id=owner_id,
-                    message=text,
-                    channel="telegram",
-                )
-                record_operator_event(
-                    cursor,
-                    business_id=business_id,
-                    user_id=owner_id,
-                    event_type="operator_tool_executed",
-                    channel="telegram",
-                    action_key="review_replies_generate",
-                    status=str(result.get("status") or "blocked"),
-                    reason_code=",".join(result.get("blocked_reasons") or []) or None,
-                    input_summary={"intent": operator_intent},
-                    output_summary={"status": result.get("status"), "charged_credits": result.get("charged_credits")},
-                    metadata={
-                        "credit_charged": bool(result.get("credit_charged")),
-                        "paid_actions_performed": bool(result.get("credit_charged")),
-                        "external_writes_performed": False,
-                    },
-                )
-                conn.commit()
-                response_text = str(result.get("chat_response") or "Команда обработана.")
-                if result.get("status") == "completed" and result.get("reply_text"):
-                    response_text = (
-                        response_text
-                        + "\n\n"
-                        + "Чтобы опубликовать ответ, скопируйте текст из сообщения и вставьте его в кабинете карты. "
-                        + "LocalOS не публиковал ответ во внешнюю систему."
-                    )
-                await update.message.reply_text(
-                    response_text,
-                    reply_markup=_build_reviews_menu(),
-                )
-            except Exception:
-                conn.rollback()
-                await update.message.reply_text(
-                    "Не удалось обработать отзыв в LocalOS. Попробуйте ещё раз или откройте кабинет.",
-                    reply_markup=_build_reviews_menu(),
-                )
-            finally:
-                conn.close()
-            return
-        client_intent = classify_client_intent(text)
-        if client_intent == "today":
-            await update.message.reply_text(build_today_text(business_ctx), reply_markup=_build_client_main_menu())
-            return
-        if client_intent == "card":
-            await update.message.reply_text(build_card_text(business_ctx), reply_markup=_build_card_menu())
-            return
-        if client_intent == "reviews":
-            await update.message.reply_text(build_reviews_text(business_ctx), reply_markup=_build_reviews_menu())
-            return
-        if client_intent == "refresh_jobs":
-            await update.message.reply_text(build_refresh_jobs_text(business_ctx), reply_markup=_build_reviews_menu())
-            return
-        if client_intent == "refresh_retry":
-            await update.message.reply_text(build_refresh_retry_text(business_ctx, text), reply_markup=_build_reviews_menu())
-            return
-        if client_intent == "growth":
-            await update.message.reply_text(build_growth_text(business_ctx), reply_markup=_build_growth_menu())
-            return
-        if client_intent == "automation":
-            await update.message.reply_text(
-                "\n\n".join([automation_intro_text(), build_automation_text(business_ctx)]),
-                reply_markup=_build_automation_menu(),
-            )
-            return
-        if client_intent == "subscription":
-            await update.message.reply_text(build_subscription_text(business_ctx), reply_markup=_build_subscription_menu(business_ctx))
-            return
-        if client_intent == "help":
-            await update.message.reply_text(ask_localos_intro_text(), reply_markup=_build_ask_localos_menu())
-            return
-        if client_intent == "approvals":
-            business_ctx_with_actor = {
-                **business_ctx,
-                "telegram_id": user_id,
-                "telegram_name": update.effective_user.full_name,
-            }
-            _ok, approvals_text, approvals_markup = _build_pending_approvals_view(business_ctx_with_actor)
-            await update.message.reply_text(approvals_text, reply_markup=approvals_markup)
-            return
-        if client_intent == "businesses":
-            await businesses_command(update, context)
-            return
-        if client_intent == "cabin":
-            urls = get_web_urls()
-            await update.message.reply_text(
-                f"Изменять данные бизнеса лучше в личном кабинете.\n\nОткрыть: {urls['profile']}",
-                reply_markup=_build_client_more_menu(),
-            )
-            return
-        if client_intent == "":
-            await update.message.reply_text(build_operator_chat_text(business_ctx, text), reply_markup=_build_ask_localos_menu())
-            return
+        business_ctx["operator_payload"] = {"request_id": f"tg:{update.effective_chat.id}:{update.message.message_id}"}
+        import asyncio
+        operator_payload = await asyncio.to_thread(build_operator_chat_payload, business_ctx, text)
+        from services.operator_request_history import mark_delivery
+        try:
+            await update.message.reply_text(operator_payload['text'], reply_markup=_build_operator_result_markup(operator_payload['result']))
+        except Exception:
+            await asyncio.to_thread(mark_delivery, operator_payload['result'].get('request_audit_id'), 'failed')
+            raise
+        await asyncio.to_thread(mark_delivery, operator_payload['result'].get('request_audit_id'), 'delivered')
+        return
 
     if state == 'waiting_transaction':
         await handle_transaction_text(update, context, user_id, text)
@@ -6286,7 +6300,25 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Операция отменена")
 
 
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from services.operator_telegram_voice import receive_voice
+    import sys
+    await receive_voice(update, context, sys.modules[__name__])
+
+
+async def _stop_operator_voice(application: Application):
+    import asyncio
+    task = application.bot_data.get("operator_voice_delivery")
+    if task:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
 async def _configure_bot_commands(application: Application):
+    import asyncio
+    import sys
+    from services.operator_telegram_voice import delivery_loop
+    application.bot_data["operator_voice_delivery"] = asyncio.create_task(delivery_loop(application, sys.modules[__name__]))
     """Настроить нижнее меню команд Telegram."""
     await application.bot.set_my_commands(
         [
@@ -6304,17 +6336,10 @@ async def _configure_bot_commands(application: Application):
     )
 
 
-def main():
-    """Запуск бота"""
-    if not TELEGRAM_BOT_TOKEN:
-        print("⚠️  TELEGRAM_BOT_TOKEN не установлен. Бот не будет запущен.")
-        print("💡 Установите токен: export TELEGRAM_BOT_TOKEN='ваш_токен'")
-        print("💡 Или добавьте в .env файл: TELEGRAM_BOT_TOKEN=ваш_токен")
-        return
-    
+def _run_bot_once():
     try:
         proxy_url = resolve_telegram_http_proxy()
-        builder = Application.builder().token(TELEGRAM_BOT_TOKEN).post_init(_configure_bot_commands)
+        builder = Application.builder().token(TELEGRAM_BOT_TOKEN).post_init(_configure_bot_commands).post_shutdown(_stop_operator_voice)
         if proxy_url:
             # PTB/httpx can hang on long polling through the HTTP proxy when
             # getUpdates shares the same request transport. Separate request
@@ -6327,7 +6352,7 @@ def main():
                 write_timeout=30.0,
                 pool_timeout=60.0,
             )
-            get_updates_request = HTTPXRequest(
+            get_updates_request = PollingRequest(
                 proxy=proxy_url,
                 connection_pool_size=4,
                 connect_timeout=20.0,
@@ -6336,6 +6361,8 @@ def main():
                 pool_timeout=60.0,
             )
             builder = builder.request(request).get_updates_request(get_updates_request)
+        if not proxy_url:
+            builder = builder.get_updates_request(PollingRequest(connect_timeout=20.0,read_timeout=45.0))
         application = builder.build()
         
         # Регистрируем обработчики
@@ -6363,7 +6390,9 @@ def main():
         application.add_handler(CommandHandler("support_export", support_export_command))
         application.add_handler(CommandHandler("recovery_report", recovery_report_command))
         application.add_handler(CallbackQueryHandler(button_callback))
+        application.add_handler(MessageHandler(filters.VOICE, handle_voice))
         application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+        application.add_handler(MessageHandler(filters.Document.ALL, handle_operator_document))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
         application.add_error_handler(_telegram_error_handler)
         
@@ -6371,7 +6400,7 @@ def main():
         print(f"📡 API Base URL: {API_BASE_URL}")
         print("✅ Бот готов к работе. Ожидаю сообщения...")
         
-        application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+        application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=False)
     except Exception as e:
         print(f"❌ Ошибка запуска бота: {e}")
         print(f"💡 Проверьте:")
@@ -6379,6 +6408,33 @@ def main():
         print(f"   2. Установлена ли зависимость: pip install python-telegram-bot>=20.0")
         print(f"   3. Доступность интернета для подключения к Telegram API")
         raise
+
+
+def main():
+    """Запуск бота с ограниченным повтором при сбоях Telegram-маршрута."""
+    if not TELEGRAM_BOT_TOKEN:
+        print("⚠️  TELEGRAM_BOT_TOKEN не установлен. Бот не будет запущен.")
+        print("💡 Установите токен: export TELEGRAM_BOT_TOKEN='ваш_токен'")
+        print("💡 Или добавьте в .env файл: TELEGRAM_BOT_TOKEN=ваш_токен")
+        return
+    retry_delay = 5
+    while True:
+        # run_polling closes its event loop, including after a failed startup.
+        # Each retry must have a fresh loop and fresh transports.
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            _run_bot_once()
+            return
+        except KeyboardInterrupt:
+            raise
+        except Exception:
+            print(f"⏳ Повторное подключение к Telegram через {retry_delay} сек.")
+            time.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, 30)
+        finally:
+            if not loop.is_closed():
+                loop.close()
 
 if __name__ == "__main__":
     main()

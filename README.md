@@ -12,12 +12,27 @@ LocalOS помогает владельцам и управляющим лока
 
 ## Возможности
 
+### Тарифы и доступы
+- `Карты` — 1 200 ₽/месяц: карты, услуги, отзывы, фото, новости для карт, конкуренты, прогресс, отраслевой Telegram-радар и веб-аналитика с tracker-скриптом.
+- `Привлечение` — 5 000 ₽/месяц: всё из `Карты`, полный цикл партнёров и инфлюенсеров, видимость в AI-чатах.
+- `Управление` — 25 000 ₽/месяц: всё из `Привлечение`, финансы, средний чек, ИИ-сотрудники, Оператор, рабочие чаты, соцсети и бизнес-автоматизация.
+- `Elite` остаётся отдельным договорным тарифом. Legacy-алиасы нормализуются сервером, а credits 240/1000 сохраняются.
+- Пользователи ниже тарифа `Привлечение` видят безопасное preview из 10 инфлюенсеров и 10 партнёров. Закрытые записи и контакты не передаются в браузер.
+- Публикации, внешние отправки, платежи и изменения от имени бизнеса на любом тарифе требуют явного подтверждения.
+
 ### Карты и аудит карточки
 - Парсинг и обновление данных карточек: название, адрес, рейтинг, отзывы, услуги, фото, публичные поля и метрики.
 - Поддержка Яндекс/Яндекс.Бизнес, Google Business Profile, 2ГИС и Apify-пайплайнов там, где конкретный источник реализован.
 - Аудит карточки, вертикальные профили качества, gap-анализ, рекомендации, публичные audit-offer/sales-room страницы и история изменений.
 - Очередь парсинга, статусы задач, retry/recovery, captcha/error visibility и smoke-проверки для надёжности.
 - Сетевой режим: родительский бизнес, локации, network dashboard, network-wide reviews и история метрик. Владелец может добавлять сотрудников ко всей сети или только к отдельному бизнесу. Сотрудники работают под собственными аккаунтами без прав superadmin и без передачи владения.
+
+### Аналитика сайта (beta)
+- Лёгкий standalone `tracker.js` собирает анонимные сессии, просмотры страниц, пороги прокрутки, безопасные CTA-клики, внешние переходы и факт начала/отправки формы.
+- Tracker не читает значения полей, не использует fingerprinting, session replay, heatmaps или персонализацию и поддерживает consent mode.
+- В кабинете доступны посетители, сессии, страницы, источники, целевые действия и популярные пути за 7/30/90 дней; данные ограничены существующим tenant-доступом к бизнесу.
+- Агрегированные SQL-метрики подготовлены как источник данных для будущих сигналов «Пути роста», без LLM-обработки событий.
+- Production/privacy contract, flags and rollout gates: [`docs/WEB_TRACKING_PRODUCTION.md`](docs/WEB_TRACKING_PRODUCTION.md).
 
 ### Услуги и меню услуг
 - Управление услугами, категориями, ценами, описаниями, SEO-вариантами и источниками данных.
@@ -93,9 +108,10 @@ LocalOS помогает владельцам и управляющим лока
 - Production остаётся cohort beta: async runtime ограничивается `AGENT_BETA_BUSINESS_IDS`, а scheduler и внешние действия включаются только для явно допущенных сценариев. Датированные canary-доказательства и незакрытые gates ведутся отдельно в `docs/AGENTS_BETA_PRODUCTION_STATUS.md`; README не является источником mutable production-счётчиков.
 
 ### Интеграции и внешние write-действия
-- Google Business Profile подключается через OAuth; production-доступ зависит от статуса Google API approval и конкретного включённого capability.
+- Google Business Profile подключается через OAuth; проект `localos-gbp` (`649313441761`) одобрен Google для Basic API Access с квотой `300 QPM`, API включены, новый OAuth-клиент установлен в production env, а live-статус конкретного capability зависит от OAuth-подключения бизнеса и read-only smoke-проверки.
 - Для повторной заявки создан отдельный Google Cloud project `localos-gbp` (`649313441761`) и агентская организация `LocalOS`. В группу `Клиенты LocalOS` добавлена подтверждённая карточка клиента «Веселая расческа», проспект Энгельса, 154, с ролью менеджера без передачи основного владения.
-- Повторная заявка на Basic API Access находится на рассмотрении. Номера обращений, дата последней проверки и post-approval checklist зафиксированы в `docs/GOOGLE_BUSINESS_PROFILE_LOCALOS_SETUP.md`. До подтверждённого одобрения новый OAuth-клиент не заменяет текущий production-клиент.
+- Basic API Access одобрен 2026-09-03 для проекта `localos-gbp` (`649313441761`) с квотой `300 QPM`. Номера обращений, дата последней проверки, Google policy reminder и post-approval checklist зафиксированы в `docs/GOOGLE_BUSINESS_PROFILE_LOCALOS_SETUP.md`. Production server-side OAuth smoke пройден; до real-business smoke внешние write-действия остаются за ручным подтверждением.
+- В публичных материалах LocalOS описывает это только как интеграцию с Google Business Profile API. Нельзя заявлять партнёрство, спонсорство или endorsement со стороны Google без отдельного письменного разрешения Google.
 - AI-agent webhooks для Telegram и WhatsApp Business API используют business-level настройки и не обходят policy/approval.
 - Любой publish/send/payment/delete/bulk mutation/provider write требует явного review/approval и должен быть описан как поддержанный только после реализации, тестов и deployment checks.
 
@@ -121,7 +137,7 @@ LocalOS помогает владельцам и управляющим лока
   - Используются в webhooks ИИ-агента (`/api/webhooks/telegram`), когда бот общается напрямую с клиентами.
   - В уведомлениях владельцу (support-запросы, бронирования) поле `telegram_bot_token` опционально: если заполнено — уведомление может уйти через бот бизнеса, если нет — через глобальный бот LocalOS.
 - **Текущий production runtime**
-  - Основной owner-bot запускается как `openclaw-localos-telegram-bot.service`.
+  - Основной owner-bot запускается как Compose-сервис `telegram-bot`; host-level systemd polling отключён, чтобы не было двух poller с одним токеном.
   - Telegram Bot API и внешние social HTTP API направляются через Grimbird HTTP proxy на OpenClaw.
   - Telethon/userbot использует Grimbird SOCKS5 proxy.
   - На LocalOS используются private endpoints `192.168.0.177:10809` и `192.168.0.177:10808`; loopback endpoints допустимы только на OpenClaw.
@@ -170,8 +186,8 @@ LocalOS помогает владельцам и управляющим лока
 | Фронтенд (Dev) | `3000` | Vite dev server |
 | Фронтенд (Prod) | `80/443` | Nginx (статический фронтенд) |
 | Бэкенд API | `8000` | Flask API сервер |
-| Бот управления | - | `openclaw-localos-telegram-bot.service` (host runtime polling) |
-| Бот обмена отзывами | - | Systemd сервис (polling) |
+| Бот управления | - | Compose-сервис `telegram-bot` (polling) |
+| Legacy-боты | - | Host-level systemd не используется как production runtime |
 | Grimbird HTTP proxy | `192.168.0.177:10809` | Telegram Bot API и внешние social HTTP API с LocalOS host |
 | Grimbird SOCKS5 proxy | `192.168.0.177:10808` | Telethon/MTProto с LocalOS host |
 
@@ -518,7 +534,7 @@ python scripts/smoke_client_info_gate.py
 На текущем проде `localos.pro` systemd-сервисы для `app` и `worker` не используются как основная схема запуска. Канонический runtime:
 
 - `docker compose`
-- `postgres`, `app`, `worker` как отдельные контейнеры
+- `postgres`, `redis`, `app`, `worker`, `telegram-bot` как отдельные контейнеры
 - frontend раздаётся Flask из `/app/frontend/dist`
 
 Старые примеры с non-Docker runtime сохранены только как legacy-контекст и не должны использоваться как актуальная инструкция деплоя.
@@ -577,23 +593,15 @@ SMTP_PASSWORD=ваш_пароль
 ### 3. Запуск сервисов
 ```bash
 cd /opt/seo-app
-docker compose up -d postgres app worker
-
-# Текущий production owner-bot работает отдельным host service.
-systemctl restart openclaw-localos-telegram-bot.service
-
-# Отдельный legacy-бот обмена отзывами, если он включён на хосте.
-systemctl restart telegram-reviews-bot.service
+docker compose up -d postgres redis app worker telegram-bot
 ```
 
 ### 4. Проверка работы
 ```bash
 cd /opt/seo-app
 docker compose ps
-docker compose logs --since 10m app worker
+docker compose logs --since 10m app worker telegram-bot
 curl -I http://localhost:8000
-systemctl status openclaw-localos-telegram-bot.service --no-pager
-systemctl status telegram-reviews-bot.service --no-pager
 ```
 
 ## Как коммитить изменения

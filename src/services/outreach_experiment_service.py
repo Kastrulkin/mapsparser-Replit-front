@@ -180,7 +180,13 @@ def build_active_social_map_gap_signal(
     }
 
 
-def derive_composite_signal(context: dict[str, Any], ledger: list[dict[str, Any]]) -> dict[str, Any] | None:
+def derive_composite_signal(
+    context: dict[str, Any],
+    ledger: list[dict[str, Any]],
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any] | None:
+    current_time = now or datetime.now(timezone.utc)
     stored_activity = context.get("official_social_activity")
     if isinstance(stored_activity, dict) and stored_activity.get("last_post_at"):
         signal = build_active_social_map_gap_signal(
@@ -191,6 +197,7 @@ def derive_composite_signal(context: dict[str, Any], ledger: list[dict[str, Any]
                 "source_url": context.get("source_url"),
             },
             stored_activity,
+            now=current_time,
         )
         if signal["eligible"]:
             return {
@@ -198,7 +205,7 @@ def derive_composite_signal(context: dict[str, Any], ledger: list[dict[str, Any]
                 **signal,
                 "fact": signal["observed_fact"],
                 "status": "observed",
-                "observed_at": datetime.now(timezone.utc).isoformat(),
+                "observed_at": current_time.isoformat(),
                 "pattern_id": None,
                 "pattern_version": 1,
                 "opening_type": "specific_observation",
@@ -218,9 +225,8 @@ def derive_composite_signal(context: dict[str, Any], ledger: list[dict[str, Any]
     if not dated:
         return None
     latest_at, latest = max(dated, key=lambda item: item[0])
-    now = datetime.now(timezone.utc)
-    posts_30d = sum(1 for published, _ in dated if (now - published).days <= 30)
-    posts_90d = sum(1 for published, _ in dated if (now - published).days <= 90)
+    posts_30d = sum(1 for published, _ in dated if (current_time - published).days <= 30)
+    posts_90d = sum(1 for published, _ in dated if (current_time - published).days <= 90)
     signal = build_active_social_map_gap_signal(
         {
             "rating": context.get("rating"),
@@ -234,7 +240,7 @@ def derive_composite_signal(context: dict[str, Any], ledger: list[dict[str, Any]
             "posts_30d": posts_30d,
             "posts_90d": posts_90d,
         },
-        now=now,
+        now=current_time,
     )
     if not signal["eligible"]:
         return None
@@ -243,7 +249,7 @@ def derive_composite_signal(context: dict[str, Any], ledger: list[dict[str, Any]
         **signal,
         "fact": signal["observed_fact"],
         "status": "observed",
-        "observed_at": now.isoformat(),
+        "observed_at": current_time.isoformat(),
         "pattern_id": None,
         "pattern_version": 1,
         "opening_type": "specific_observation",

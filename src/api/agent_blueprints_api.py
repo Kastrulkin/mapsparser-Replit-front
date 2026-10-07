@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import Blueprint, Response, jsonify, request
 
-from core.auth_helpers import require_auth_from_request, verify_business_access
+from core.auth_helpers import require_auth_from_request, verify_business_access, verify_business_write_access
 from database_manager import DatabaseManager
 from services.agent_blueprint_runner import (
     AgentBlueprintRunner,
@@ -19,6 +19,15 @@ from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
 from services.agent_builder_billing import charge_agent_creation_credits
 from services.agent_builder_session import build_agent_builder_state, preview_to_setup
 from services.agent_compiled_artifact import validate_compiled_artifact_candidate
+from services.compiled_script_artifact import build_artifact as build_compiled_script_artifact, generate_candidate_from_description, validate_artifact as validate_compiled_script_artifact
+from services.compiled_script_runtime import CompiledRuntimeUnavailable, preview as preview_compiled_script
+from services.agent_workflow_dsl import build_workflow_dsl_document
+from services.agent_workflow_graph import validate_workflow_graph, validate_workflow_step_approval_order, workflow_dsl_to_graph, workflow_graph_to_steps
+from services.agent_visual_editor_registry import (
+    apply_visual_editor_settings,
+    validate_visual_editor_settings,
+    visual_editor_registry,
+)
 from services.agent_blueprint_workspace import (
     build_agent_version_diff,
     build_blueprint_review,
@@ -46,6 +55,7 @@ from services.agent_provider_registry import (
 )
 from services.agent_integration_preflight import NATIVE_READY_PROVIDERS, build_agent_integration_preflight
 from services.agent_metrics import build_agent_metrics_summary
+from services.agent_template_catalog import build_agent_from_template, build_agent_template_catalog, get_agent_template
 from services.agent_capability_handlers import capability_runtime_contract
 from services.agent_run_contract import RESERVED_AGENT_INPUT_FIELDS, effective_agent_input_schema, validate_agent_run_input
 from services.agent_run_queue import async_agent_runs_enabled, enqueue_agent_run
@@ -61,9 +71,217 @@ from api.agent_builder_api import (
 agent_blueprints_bp = Blueprint("agent_blueprints_api", __name__)
 
 
+class AgentLifecycleBusy(ValueError):
+    pass
+
+
+@agent_blueprints_bp.errorhandler(AgentLifecycleBusy)
+def _lifecycle_busy_response(error):
+    return jsonify(success=False, code="AGENT_LIFECYCLE_BUSY",
+                   error="Завершается текущая операция. Повторите изменение через несколько секунд."), 409
+
+
+AGENT_READ_ONLY_POST_ENDPOINTS = {
+    "agent_blueprints_api.preflight_agent_blueprint_run",
+}
+
+
+def _agent_request_requires_write() -> bool:
+    return (
+        request.method not in {"GET", "HEAD", "OPTIONS"}
+        and request.endpoint not in AGENT_READ_ONLY_POST_ENDPOINTS
+    )
+
+
+@agent_blueprints_bp.route("/api/agent-templates", methods=["GET"])
+def list_agent_templates():
+    user_data, auth_error = _require_auth()
+    if auth_error:
+        return auth_error
+    status_filter = str(request.args.get("status") or "").strip()
+    templates = build_agent_template_catalog()
+    if status_filter:
+        templates = [item for item in templates if item.get("certification_status") == status_filter]
+    return jsonify({"success": True, "templates": templates, "count": len(templates)})
+
+
+@agent_blueprints_bp.route("/api/agent-templates/<template_key>", methods=["GET"])
+def get_agent_template_manifest(template_key: str):
+    user_data, auth_error = _require_auth()
+    if auth_error:
+        return auth_error
+    template = get_agent_template(template_key)
+    if not template:
+        return _json_error("Template not found", 404, "AGENT_TEMPLATE_NOT_FOUND")
+    return jsonify({"success": True, "template": template})
+
+
+@agent_blueprints_bp.route("/api/agent-templates/<template_key>/use", methods=["POST"])
+def use_agent_template(template_key: str):
+    user_data, auth_error = _require_auth()
+    if auth_error:
+        return auth_error
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get("business_id") or "").strip()
+    if not business_id:
+        return _json_error("business_id is required", 400, "VALIDATION_ERROR")
+    template_bundle = build_agent_from_template(template_key)
+    if not template_bundle:
+        return _json_error("Template not found", 404, "AGENT_TEMPLATE_NOT_FOUND")
+    definition = template_bundle["definition"]
+    draft = template_bundle["draft"]
+    if definition.get("certification_status") not in {"beta", "certified"}:
+        return _json_error(
+            "Template is not available for self-service yet",
+            409,
+            "AGENT_TEMPLATE_NOT_AVAILABLE",
+        )
+    template_version = str(definition["version"])
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        allowed, access_error = _require_business_access(cursor, business_id, user_data)
+        if not allowed:
+            return access_error
+        lock_key = f"agent-template:{business_id}:{template_key}:{template_version}"
+        cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (lock_key,))
+        cursor.execute(
+            """
+            SELECT *
+            FROM agent_blueprints
+            WHERE business_id = %s
+              AND metadata_json->>'template_key' = %s
+              AND metadata_json->>'template_version' = %s
+              AND status <> 'archived'
+            ORDER BY created_at ASC
+            LIMIT 1
+            """,
+            (business_id, template_key, template_version),
+        )
+        existing = cursor.fetchone()
+        if existing:
+            db.conn.commit()
+            return jsonify(
+                {
+                    "success": True,
+                    "created": False,
+                    "blueprint": _normalize_json_row(dict(existing)),
+                    "template_key": template_key,
+                    "template_version": template_version,
+                }
+            )
+        blueprint_id = str(uuid.uuid4())
+        metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
+        metadata = dict(metadata)
+        version_payload = draft.get("version_payload") if isinstance(draft.get("version_payload"), dict) else {}
+        trigger = str(version_payload.get("trigger") or "manual.run")
+        metadata.update(
+            {
+                "template_key": template_key,
+                "template_version": template_version,
+                "created_from_template": True,
+                "is_account_example": False,
+                "execution_mode": "scheduled" if trigger.startswith("schedule.") else "manual",
+                "execution_mode_confirmed_at": _utc_now_text(),
+                "execution_mode_confirmed_by_user_id": _user_id(user_data),
+                "required_connectors": definition.get("required_connections") or [],
+                "template_certification_status": definition.get("certification_status") or "draft",
+            }
+        )
+        version_payload = dict(version_payload)
+        version_payload["execution_mode"] = str(metadata.get("execution_mode") or "manual")
+        schedule = version_payload.get("schedule") if isinstance(version_payload.get("schedule"), dict) else {}
+        if str(schedule.get("timezone") or "") == "business_timezone":
+            schedule = dict(schedule)
+            schedule["timezone"] = _template_business_timezone(cursor, business_id)
+            version_payload["schedule"] = schedule
+        runtime_config = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+        version_payload["runtime_config"] = dict(runtime_config)
+        if not isinstance(version_payload.get("schedule"), dict):
+            version_payload["schedule"] = (
+                version_payload["runtime_config"].get("schedule")
+                if isinstance(version_payload["runtime_config"].get("schedule"), dict)
+                else {}
+            )
+        version_payload["required_integration_bindings"] = (
+            metadata.get("required_integration_bindings")
+            if isinstance(metadata.get("required_integration_bindings"), list)
+            else version_payload.get("required_integration_bindings") or []
+        )
+        cursor.execute(
+            """
+            INSERT INTO agent_blueprints (
+                id, business_id, name, category, description, status, created_by_user_id, metadata_json
+            )
+            VALUES (%s, %s, %s, %s, %s, 'draft', %s, %s::jsonb)
+            """,
+            (
+                blueprint_id,
+                business_id,
+                str(definition["name"]),
+                str(draft.get("category") or "custom"),
+                str(definition["business_result"]),
+                _user_id(user_data),
+                json.dumps(metadata, ensure_ascii=False),
+            ),
+        )
+        version = _insert_version(cursor, blueprint_id, version_payload, user_data)
+        db.conn.commit()
+        blueprint = _load_blueprint(cursor, blueprint_id)
+        return jsonify(
+            {
+                "success": True,
+                "created": True,
+                "blueprint": _normalize_json_row(blueprint),
+                "version": version,
+                "template_key": template_key,
+                "template_version": template_version,
+                "next_step": "review_scenario",
+            }
+        ), 201
+    except Exception:
+        try:
+            db.conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        db.close()
+
+
+def _template_business_timezone(cursor, business_id: str) -> str:
+    cursor.execute(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'businesses'
+              AND column_name = 'timezone'
+        ) AS has_timezone
+        """
+    )
+    row = cursor.fetchone() or {}
+    has_timezone = bool(row.get("has_timezone")) if isinstance(row, dict) else bool(row[0])
+    if not has_timezone:
+        return "Europe/Moscow"
+    cursor.execute("SELECT timezone FROM businesses WHERE id = %s LIMIT 1", (business_id,))
+    business = cursor.fetchone() or {}
+    timezone_name = str(business.get("timezone") or "Europe/Moscow") if isinstance(business, dict) else str(business[0] or "Europe/Moscow")
+    try:
+        ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        return "Europe/Moscow"
+    return timezone_name
+
+
 def _env_enabled(name: str, default: bool = False) -> bool:
     fallback = "true" if default else "false"
     return str(os.getenv(name, fallback)).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _truthy_value(value: object) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _env_positive_int(name: str, default: int) -> int:
@@ -82,6 +300,36 @@ def _require_auth():
     if not user_data:
         return None, _json_error("Authorization required", 401, "AUTH_REQUIRED")
     return user_data, None
+
+
+def _require_compiled_standard_session(user_data: dict):
+    """Compiled artifacts are created and approved only by a direct session."""
+    session_kind = str(user_data.get("session_kind") or "standard").strip().lower()
+    impersonating = bool(user_data.get("impersonating") or user_data.get("impersonated_by"))
+    if session_kind == "standard" and not impersonating:
+        return None
+    return _json_error(
+        "Compiled scripts доступны только из вашей обычной сессии.",
+        403,
+        "COMPILED_SESSION_NOT_ALLOWED",
+    )
+
+
+def _require_current_compiled_account(cursor, user_data: dict):
+    cursor.execute(
+        """SELECT COALESCE(is_active,FALSE) AS is_active,
+                  COALESCE(is_verified,FALSE) AS is_verified
+           FROM users WHERE id=%s""",
+        (_user_id(user_data),),
+    )
+    account = cursor.fetchone() or {}
+    if bool(account.get("is_active")) and bool(account.get("is_verified")):
+        return None
+    return _json_error(
+        "Для compiled scripts нужен активный подтверждённый аккаунт.",
+        403,
+        "COMPILED_ACCOUNT_NOT_ALLOWED",
+    )
 
 
 def _user_id(user_data: dict) -> str:
@@ -191,7 +439,8 @@ def _load_personas_by_id(cursor, persona_ids: list[str]) -> dict:
 
 
 def _require_business_access(cursor, business_id: str, user_data: dict):
-    has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+    access_check = verify_business_write_access if _agent_request_requires_write() else verify_business_access
+    has_access, owner_id = access_check(cursor, business_id, user_data)
     if not owner_id:
         return False, _json_error("Business not found", 404, "BUSINESS_NOT_FOUND")
     if not has_access:
@@ -604,6 +853,7 @@ def _admin_agent_runtime_overview(cursor, *, now: datetime | None = None) -> dic
                COUNT(*) FILTER (WHERE status = 'running') running,
                COUNT(*) FILTER (WHERE status = 'retry_wait') retry_wait,
                COUNT(*) FILTER (WHERE status = 'waiting_approval') waiting_approval,
+               COUNT(*) FILTER (WHERE status = 'waiting_provider') waiting_provider,
                COUNT(*) FILTER (
                    WHERE status = 'running'
                      AND COALESCE(heartbeat_at, started_at, updated_at) < NOW() - INTERVAL '5 minutes'
@@ -626,7 +876,7 @@ def _admin_agent_runtime_overview(cursor, *, now: datetime | None = None) -> dic
         """
         SELECT COUNT(DISTINCT r.id) FILTER (
                    WHERE b.status = 'archived'
-                     AND r.status IN ('queued', 'retry_wait', 'waiting_approval')
+                     AND r.status IN ('queued', 'retry_wait', 'waiting_approval', 'waiting_provider')
                ) archived_unfinished_runs,
                COUNT(DISTINCT a.id) FILTER (
                    WHERE b.status = 'archived'
@@ -965,6 +1215,7 @@ def _admin_agent_runtime_overview(cursor, *, now: datetime | None = None) -> dic
             "running": int(run_state.get("running") or 0),
             "retry_wait": int(run_state.get("retry_wait") or 0),
             "waiting_approval": int(run_state.get("waiting_approval") or 0),
+            "waiting_provider": int(run_state.get("waiting_provider") or 0),
             "stale_running": int(run_state.get("stale_running") or 0),
             "failed_24h": int(run_state.get("failed_24h") or 0),
             "completed_24h": int(run_state.get("completed_24h") or 0),
@@ -1966,12 +2217,20 @@ def _apply_custom_process_to_version_payload(version_payload: dict, custom_proce
     limits = payload.get("limits") if isinstance(payload.get("limits"), dict) else {}
     limits["daily_append_cap"] = daily_append_cap
     payload["limits"] = limits
+    payload["runtime_config"] = dict(custom_process)
+    payload["trigger"] = str(custom_process.get("trigger") or payload.get("trigger") or "manual.run")
+    schedule = custom_process.get("schedule") if isinstance(custom_process.get("schedule"), dict) else {}
+    payload["schedule"] = schedule
+    payload["execution_mode"] = "scheduled" if payload["trigger"] in {"schedule.daily", "schedule.weekly"} else str(payload.get("execution_mode") or "manual")
     return payload
 
 
-def _build_custom_process_preview_input(blueprint: dict, payload: dict) -> dict:
+def _build_custom_process_preview_input(blueprint: dict, payload: dict, version: dict | None = None) -> dict:
     metadata = _blueprint_metadata(blueprint)
-    custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    version_payload = build_version_payload_from_row(version or {}) if version else {}
+    custom_process = version_payload.get("runtime_config") if isinstance(version_payload.get("runtime_config"), dict) else {}
+    if not custom_process:
+        custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
     google_sheets = custom_process.get("google_sheets") if isinstance(custom_process.get("google_sheets"), dict) else {}
     source_event_id = f"preview-{uuid.uuid4()}"
     message_text = str(payload.get("message_text") or "Новая заявка из preview").strip() or "Новая заявка из preview"
@@ -2019,12 +2278,14 @@ def _build_agent_preview_run_input(blueprint: dict, version: dict | None, payloa
     metadata = _blueprint_metadata(blueprint)
     user_input = payload.get("input") if isinstance(payload.get("input"), dict) else {}
     preview = metadata.get("agent_builder_preview") if isinstance(metadata.get("agent_builder_preview"), dict) else {}
-    custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    version_payload = build_version_payload_from_row(version or {}) if version else {}
+    custom_process = version_payload.get("runtime_config") if isinstance(version_payload.get("runtime_config"), dict) else {}
+    if not custom_process:
+        custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
     required_bindings = metadata.get("required_integration_bindings") if isinstance(metadata.get("required_integration_bindings"), list) else []
     if not required_bindings and version:
         version_payload = build_version_payload_from_row(version)
         required_bindings = version_payload.get("required_integration_bindings") if isinstance(version_payload.get("required_integration_bindings"), list) else []
-    version_payload = build_version_payload_from_row(version or {}) if version else {}
     capability_allowlist = version_payload.get("capability_allowlist") if isinstance(version_payload.get("capability_allowlist"), list) else []
     steps = version_payload.get("steps") if isinstance(version_payload.get("steps"), list) else []
     trigger_event_id = str(user_input.get("trigger_event_id") or f"preview-{uuid.uuid4()}")
@@ -2568,16 +2829,29 @@ def _execution_version_contract(cursor, blueprint: dict, version: dict | None, *
                     "approval_type": approval_type or "manual_review",
                 }
             )
-    schedule_status = _agent_schedule_status(blueprint)
+    schedule_status = _agent_schedule_status(blueprint, version)
     metadata = _blueprint_metadata(blueprint)
+    version_payload = build_version_payload_from_row(version)
     connection_bindings = metadata.get("agent_binding_integrations") if isinstance(metadata.get("agent_binding_integrations"), dict) else {}
-    required_connectors = metadata.get("required_connectors") if isinstance(metadata.get("required_connectors"), list) else []
+    required_bindings = (
+        version_payload.get("required_integration_bindings")
+        if isinstance(version_payload.get("required_integration_bindings"), list)
+        else []
+    )
+    required_connectors = [
+        str(item.get("provider") or item.get("key") or "").strip()
+        for item in required_bindings
+        if isinstance(item, dict) and str(item.get("provider") or item.get("key") or "").strip()
+    ]
+    if not required_connectors:
+        required_connectors = metadata.get("required_connectors") if isinstance(metadata.get("required_connectors"), list) else []
     return {
         "role": role,
         "version_id": str(version.get("id") or ""),
         "version_number": _version_number(version),
         "goal": str(version.get("goal") or blueprint.get("description") or "").strip(),
-        "trigger": str((metadata.get("custom_process") or {}).get("trigger") or ("schedule.daily" if _agent_execution_mode(blueprint) == "scheduled" else "manual.run")),
+        "execution_mode": _agent_execution_mode(blueprint, version),
+        "trigger": _agent_version_trigger(blueprint, version),
         "schedule": {
             "time": schedule_status.get("time"),
             "timezone": schedule_status.get("timezone"),
@@ -2588,6 +2862,7 @@ def _execution_version_contract(cursor, blueprint: dict, version: dict | None, *
         "sources": required_connectors,
         "connections": connection_bindings,
         "expected_result": output_schema,
+        "limits": version_payload.get("limits") if isinstance(version_payload.get("limits"), dict) else {},
         "approval_policy": approval_policy,
         "approval_boundaries": approval_boundaries,
         "capabilities": [capability_runtime_contract(str(item or "")) for item in capabilities if str(item or "").strip()],
@@ -2615,7 +2890,7 @@ def _build_execution_contract(cursor, blueprint: dict, candidate_version: dict |
     return {
         "schema": "localos_agent_execution_contract_v1",
         "original_request": original_request,
-        "execution_mode": _agent_execution_mode(blueprint),
+        "execution_mode": str((candidate or active or {}).get("execution_mode") or _agent_execution_mode(blueprint)),
         "candidate": candidate,
         "active": active,
         "has_unpublished_changes": bool(candidate and (not active or candidate.get("version_id") != active.get("version_id"))),
@@ -2639,16 +2914,30 @@ def _resolve_candidate_version(cursor, blueprint: dict):
     return _load_latest_blueprint_version(cursor, str(blueprint.get("id") or ""))
 
 
-def _agent_execution_mode(blueprint: dict) -> str:
+def _agent_version_trigger(blueprint: dict, version: dict | None = None) -> str:
+    if version and "trigger" in version:
+        trigger = str(version.get("trigger") or "").strip()
+        if trigger:
+            return trigger
     metadata = _blueprint_metadata(blueprint)
-    explicit = str(metadata.get("execution_mode") or "").strip().lower()
-    if explicit in {"one_off", "manual", "scheduled"}:
-        return explicit
     custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
-    trigger = str(custom_process.get("trigger") or metadata.get("trigger") or "manual.run").strip()
-    schedule = custom_process.get("schedule") if isinstance(custom_process.get("schedule"), dict) else {}
-    if trigger == "schedule.daily" or schedule:
+    return str(custom_process.get("trigger") or metadata.get("trigger") or "manual.run").strip()
+
+
+def _agent_execution_mode(blueprint: dict, version: dict | None = None) -> str:
+    metadata = _blueprint_metadata(blueprint)
+    if version and "execution_mode" in version:
+        version_mode = str(version.get("execution_mode") or "").strip().lower()
+        if version_mode in {"one_off", "manual", "scheduled"}:
+            return version_mode
+    trigger = _agent_version_trigger(blueprint, version)
+    if trigger.startswith("schedule."):
         return "scheduled"
+    explicit = str(metadata.get("execution_mode") or "").strip().lower()
+    if explicit == "one_off" and trigger == "manual.run":
+        return "one_off"
+    if explicit in {"manual", "scheduled"} and not version:
+        return explicit
     return "manual"
 
 
@@ -2677,6 +2966,8 @@ def _agent_lifecycle_state(blueprint: dict) -> str:
         and last_run_input.get("preview_mode") is False
     ):
         return "completed"
+    if status == "paused":
+        return "paused"
     if status == "active":
         return "active"
     if last_run_status == "completed" and last_run_input.get("preview_mode") is True:
@@ -2695,12 +2986,14 @@ def _agent_business_result_from_artifact(payload: object) -> dict:
     return {**result, **({"saved_destination": destination} if destination else {})}
 
 
-def _agent_schedule_status(blueprint: dict) -> dict:
-    if _agent_execution_mode(blueprint) != "scheduled":
+def _agent_schedule_status(blueprint: dict, version: dict | None = None) -> dict:
+    if _agent_execution_mode(blueprint, version) != "scheduled":
         return {"ready": True, "required": False}
     metadata = _blueprint_metadata(blueprint)
     custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
-    schedule = custom_process.get("schedule") if isinstance(custom_process.get("schedule"), dict) else {}
+    schedule = parse_json_field((version or {}).get("schedule_json"), {}) if version and "schedule_json" in version else {}
+    if not isinstance(schedule, dict) or not schedule:
+        schedule = custom_process.get("schedule") if isinstance(custom_process.get("schedule"), dict) else {}
     schedule_time = str(schedule.get("time") or "").strip()
     timezone_name = str(schedule.get("timezone") or "").strip()
     if not schedule_time:
@@ -2717,7 +3010,15 @@ def _agent_schedule_status(blueprint: dict) -> dict:
         return {"ready": False, "required": True, "reason": "schedule_time_invalid"}
     local_now = datetime.now(timezone.utc).astimezone(schedule_timezone)
     next_local = local_now.replace(hour=parsed_time.hour, minute=parsed_time.minute, second=0, microsecond=0)
-    if next_local <= local_now:
+    trigger = _agent_version_trigger(blueprint, version)
+    if trigger == "schedule.weekly":
+        weekday = schedule.get("weekday")
+        if not isinstance(weekday, int) or isinstance(weekday, bool) or not 0 <= weekday <= 6:
+            return {"ready": False, "required": True, "reason": "schedule_weekday_invalid"}
+        next_local += timedelta(days=(weekday - local_now.weekday()) % 7)
+        if next_local <= local_now:
+            next_local += timedelta(days=7)
+    elif next_local <= local_now:
         next_local += timedelta(days=1)
     return {
         "ready": True,
@@ -2730,6 +3031,12 @@ def _agent_schedule_status(blueprint: dict) -> dict:
 
 def _remember_active_version(cursor, blueprint: dict, version: dict, user_data: dict, action: str, reason: str = "") -> dict:
     blueprint_id = str(blueprint.get("id") or "")
+    # Feedback can already hold the blueprint row lock. Never wait here on a
+    # worker holding the opposite (lifecycle fence -> blueprint) lock order.
+    cursor.execute("SELECT pg_try_advisory_xact_lock(hashtext(%s)) AS acquired",
+                   (f"agent-pause-fence:{blueprint_id}",))
+    if not (cursor.fetchone() or {}).get("acquired"):
+        raise AgentLifecycleBusy("agent_lifecycle_busy")
     refreshed_blueprint = _load_blueprint(cursor, blueprint_id) if blueprint_id else None
     metadata = _blueprint_metadata(refreshed_blueprint or blueprint)
     previous_active_id = str(metadata.get("active_version_id") or "").strip()
@@ -2748,6 +3055,27 @@ def _remember_active_version(cursor, blueprint: dict, version: dict, user_data: 
     metadata["active_version_number"] = event["active_version_number"]
     metadata["active_version_updated_at"] = event["created_at"]
     metadata["version_events"] = events[-50:]
+    version_payload = build_version_payload_from_row(version)
+    custom_process = version_payload.get("runtime_config") if isinstance(version_payload.get("runtime_config"), dict) else None
+    if custom_process is None:
+        custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    else:
+        custom_process = dict(custom_process)
+    custom_process["trigger"] = str(version_payload.get("trigger") or "manual.run")
+    schedule = version_payload.get("schedule") if isinstance(version_payload.get("schedule"), dict) else {}
+    if custom_process["trigger"].startswith("schedule.") and schedule:
+        custom_process["schedule"] = schedule
+    else:
+        custom_process.pop("schedule", None)
+    metadata["custom_process"] = custom_process
+    metadata["execution_mode"] = str(version_payload.get("execution_mode") or "manual")
+    metadata["execution_mode_confirmed_at"] = event["created_at"]
+    metadata["execution_mode_confirmed_by_user_id"] = _user_id(user_data)
+    metadata["required_integration_bindings"] = (
+        version_payload.get("required_integration_bindings")
+        if isinstance(version_payload.get("required_integration_bindings"), list)
+        else []
+    )
     _save_blueprint_metadata(cursor, blueprint_id, metadata)
     cursor.execute(
         """
@@ -2759,6 +3087,9 @@ def _remember_active_version(cursor, blueprint: dict, version: dict, user_data: 
         """,
         (blueprint_id,),
     )
+    if previous_active_id and previous_active_id != event["active_version_id"]:
+        from services.agent_outreach_continuation import supersede_previous_version
+        supersede_previous_version(cursor, blueprint_id, event["active_version_id"])
     return event
 
 
@@ -2803,46 +3134,19 @@ def _require_blueprint_access(cursor, blueprint_id: str, user_data: dict):
     return blueprint, None
 
 
-def _without_archived_clause(where_sql: str) -> str:
+def _without_archived_clause(where_sql: str, include_account_examples: bool = False) -> str:
+    conditions = ["b.status <> 'archived'"]
+    if not include_account_examples:
+        conditions.append("COALESCE(b.metadata_json->>'is_account_example', 'false') <> 'true'")
+    conjunction = " AND ".join(conditions)
     if where_sql.strip():
-        return f"{where_sql} AND b.status <> 'archived'"
-    return "WHERE b.status <> 'archived'"
+        return f"{where_sql} AND {conjunction}"
+    return f"WHERE {conjunction}"
 
 
-def _insert_version(cursor, blueprint_id: str, payload: dict, user_data: dict):
-    cursor.execute(
-        "SELECT COALESCE(MAX(version_number), 0) + 1 AS next_version FROM agent_blueprint_versions WHERE blueprint_id = %s",
-        (blueprint_id,),
-    )
-    version_row = cursor.fetchone() or {}
-    version_number = int(version_row.get("next_version") or 1)
-    version_id = str(uuid.uuid4())
-    steps = normalize_steps(payload.get("steps"))
-    cursor.execute(
-        """
-        INSERT INTO agent_blueprint_versions (
-            id, blueprint_id, version_number, goal, inputs_schema_json, steps_json,
-            persona_agent_id, capability_allowlist_json, approval_policy_json,
-            output_schema_json, created_by_user_id
-        )
-        VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s)
-        """,
-        (
-            version_id,
-            blueprint_id,
-            version_number,
-            str(payload.get("goal") or "").strip(),
-            json.dumps(payload.get("inputs_schema") if isinstance(payload.get("inputs_schema"), dict) else {}, ensure_ascii=False),
-            json.dumps(steps, ensure_ascii=False),
-            str(payload.get("persona_agent_id") or "").strip() or None,
-            json.dumps(payload.get("capability_allowlist") if isinstance(payload.get("capability_allowlist"), list) else [], ensure_ascii=False),
-            json.dumps(payload.get("approval_policy") if isinstance(payload.get("approval_policy"), dict) else {}, ensure_ascii=False),
-            json.dumps(payload.get("output_schema") if isinstance(payload.get("output_schema"), dict) else {}, ensure_ascii=False),
-            _user_id(user_data),
-        ),
-    )
-    cursor.execute("SELECT * FROM agent_blueprint_versions WHERE id = %s", (version_id,))
-    return _normalize_json_row(dict(cursor.fetchone()))
+def _insert_version(cursor, blueprint_id: str, payload: dict, user_data: dict, *, trusted_compiled: bool = False):
+    from services.agent_version_store import insert_version
+    return insert_version(cursor, blueprint_id, payload, user_data, trusted_compiled=trusted_compiled)
 
 
 @agent_blueprints_bp.route("/api/admin/agent-blueprints/overview", methods=["GET"])
@@ -2979,6 +3283,9 @@ def list_agent_blueprints():
     cursor = db.conn.cursor()
     try:
         business_id = str(request.args.get("business_id") or "").strip()
+        include_account_examples = bool(user_data.get("is_superadmin")) and _truthy_value(
+            request.args.get("include_examples")
+        )
         params = []
         where_sql = ""
         if business_id:
@@ -3065,7 +3372,7 @@ def list_agent_blueprints():
                 FROM agent_blueprint_versions
                 WHERE blueprint_id = b.id
             ) vs ON TRUE
-            {_without_archived_clause(where_sql)}
+            {_without_archived_clause(where_sql, include_account_examples)}
             ORDER BY b.created_at DESC
             LIMIT 200
             """,
@@ -3084,6 +3391,9 @@ def list_agent_blueprints():
             decorated["execution_mode"] = _agent_execution_mode(row)
             decorated["execution_mode_source"] = _agent_execution_mode_source(row)
             decorated["execution_mode_confirmation_required"] = _agent_execution_mode_confirmation_required(row)
+            # This is a read-only compiled-pilot marker. It deliberately does not
+            # change the generic blueprint lifecycle or status shown elsewhere.
+            decorated["compiled_approved_version_id"] = row.get("compiled_approved_version_id") or None
             decorated["suggested_execution_mode"] = _agent_execution_mode(row)
             decorated["lifecycle_state"] = _agent_lifecycle_state(row)
             decorated["last_business_result"] = _agent_business_result_from_artifact(row.get("last_result_payload_json"))
@@ -3179,185 +3489,44 @@ def create_agent_blueprint_draft():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        allowed, access_error = _require_business_access(cursor, business_id, user_data)
-        if not allowed:
-            return access_error
-        clone_from_blueprint_id = str(payload.get("clone_from_blueprint_id") or "").strip()
-        clone_metadata = {}
-        if clone_from_blueprint_id:
-            clone_blueprint, clone_access_error = _require_blueprint_access(cursor, clone_from_blueprint_id, user_data)
-            if clone_access_error:
-                return clone_access_error
-            if str(clone_blueprint.get("business_id") or "") != business_id:
-                return _json_error("Копия должна принадлежать тому же бизнесу.", 400, "CLONE_BUSINESS_MISMATCH")
-            source_metadata = _blueprint_metadata(clone_blueprint)
-            clone_keys = {
-                "agent_sources",
-                "agent_integration_ids",
-                "agent_integration_bindings",
-                "agent_binding_provider_routes",
-                "required_integration_bindings",
-                "agent_setup",
-            }
-            clone_metadata = {key: source_metadata.get(key) for key in clone_keys if key in source_metadata}
-        connection_inventory = _load_direct_builder_connection_inventory(cursor, business_id)
-        builder_state = build_agent_builder_state(
-            [{"role": "user", "content": description}],
-            str(payload.get("category") or ""),
-            use_ai=False,
-            business_id=business_id,
-            user_id=_user_id(user_data),
-            connected_integrations=connection_inventory,
-        )
-        preview = builder_state.get("preview") if isinstance(builder_state.get("preview"), dict) else {}
-        feasibility = preview.get("feasibility") if isinstance(preview.get("feasibility"), dict) else {}
-        setup_flow = preview.get("setup_flow") if isinstance(preview.get("setup_flow"), dict) else {}
-        if feasibility.get("status") == "forbidden":
-            return jsonify(
-                {
-                    "success": False,
-                    "error": "Такой агент не может быть создан в рамках политики LocalOS.",
-                    "code": "AGENT_REQUEST_FORBIDDEN",
-                    "feasibility": feasibility,
-                    "setup_flow": setup_flow,
-                }
-            ), 400
-        selected_bindings = _direct_selected_connection_bindings(payload, preview, connection_inventory)
-        missing_connection_choices = _direct_missing_required_connection_choices(preview, selected_bindings)
-        if missing_connection_choices:
-            return jsonify(
-                {
-                    "success": False,
-                    "error": "Выберите, какие существующие подключения использовать для агента.",
-                    "code": "AGENT_CONNECTION_CHOICE_REQUIRED",
-                    "missing_connection_choices": missing_connection_choices,
-                    "connection_summary": preview.get("connection_summary") if isinstance(preview.get("connection_summary"), dict) else {},
-                    "setup_flow": setup_flow,
-                }
-            ), 400
-        selected_provider_routes = _selected_provider_routes(payload, preview, connection_inventory)
-        missing_provider_routes = _missing_required_provider_routes(preview, selected_provider_routes)
-        if missing_provider_routes:
-            return jsonify(
-                {
-                    "success": False,
-                    "error": "Выберите provider route для обязательных шагов агента.",
-                    "code": "AGENT_PROVIDER_ROUTE_REQUIRED",
-                    "missing_provider_routes": missing_provider_routes,
-                    "connection_readiness": preview.get("connection_readiness") if isinstance(preview.get("connection_readiness"), dict) else {},
-                    "setup_flow": setup_flow,
-                }
-            ), 400
-        if _required_provider_route_bindings(preview) and not bool(payload.get("accepted_provider_routes")):
-            return jsonify(
-                {
-                    "success": False,
-                    "error": "Подтвердите выбранные provider routes перед созданием draft.",
-                    "code": "AGENT_PROVIDER_ROUTES_CONFIRMATION_REQUIRED",
-                    "selected_provider_routes": selected_provider_routes,
-                    "connection_readiness": preview.get("connection_readiness") if isinstance(preview.get("connection_readiness"), dict) else {},
-                    "setup_flow": setup_flow,
-                    "next_step": "accept_provider_routes",
-                    "next_step_title": "Подтвердите routes агента",
-                }
-            ), 400
-        planner_context = preview.get("openclaw_planner_context") if isinstance(preview.get("openclaw_planner_context"), dict) else {}
-        planner_loop = preview.get("openclaw_planner_loop") if isinstance(preview.get("openclaw_planner_loop"), dict) else {}
-        draft = build_agent_blueprint_draft(
-            description,
-            str(payload.get("category") or ""),
-            use_ai=bool(payload.get("use_ai_compiler")),
-            business_id=business_id,
-            user_id=_user_id(user_data),
-            planner_context=planner_context,
-        )
-        blueprint_id = str(uuid.uuid4())
-        billing = charge_agent_creation_credits(
-            cursor,
-            business_id=business_id,
-            user_id=_user_id(user_data),
-            source_id=blueprint_id,
-            description=description,
-            channel="agent_blueprint_draft",
-        )
-        if billing.get("status") == "blocked":
+        from services.agent_blueprint_creation import create_draft
+        request_key = str(payload.get("idempotency_key") or request.headers.get("Idempotency-Key") or uuid.uuid4()).strip()
+        result = create_draft(cursor, business_id=business_id, user_id=_user_id(user_data),
+                              actor_context=user_data, payload=payload, idempotency_key=request_key)
+        if result.get("status") != "completed":
             db.conn.rollback()
-            return jsonify(
-                {
-                    "success": False,
-                    "error": "Недостаточно кредитов для создания агента.",
-                    "code": "AGENT_CREATION_BILLING_BLOCKED",
-                    "billing": billing,
-                }
-            ), 402
-        metadata = {
-            **clone_metadata,
-            **(draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}),
-        }
-        version_payload = draft.get("version_payload") if isinstance(draft.get("version_payload"), dict) else {}
-        requested_mode = str(payload.get("execution_mode") or "").strip().lower()
-        trigger = str(version_payload.get("trigger") or "manual.run").strip()
-        metadata["execution_mode"] = (
-            requested_mode
-            if requested_mode in {"one_off", "manual", "scheduled"}
-            else "scheduled" if trigger == "schedule.daily" else "manual"
-        )
-        custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
-        if metadata["execution_mode"] == "scheduled":
-            custom_process["trigger"] = "schedule.daily"
-            schedule_time = str(payload.get("schedule_time") or payload.get("time") or "").strip()
-            schedule_timezone = str(payload.get("schedule_timezone") or payload.get("timezone") or "").strip()
-            if schedule_time and schedule_timezone:
-                custom_process["schedule"] = {"time": schedule_time, "timezone": schedule_timezone}
+            code = str(result.get("code") or (result.get("blocked_reasons") or ["AGENT_DRAFT_CREATE_BLOCKED"])[0])
+            http_status = 402 if code == "AGENT_CREATION_BILLING_BLOCKED" else 403 if code in {"FORBIDDEN", "access_denied"} else 409 if code.startswith("idempotency_") else 400
+            return jsonify({"success": False, "error": str(result.get("error") or result.get("chat_response") or "Не удалось создать черновик."),
+                            "code": code, "result": result,
+                            "feasibility": result.get("feasibility"), "setup_flow": result.get("setup_flow"),
+                            "connection_summary": result.get("connection_summary"),
+                            "missing_connection_choices": result.get("missing_connection_choices"),
+                            "missing_provider_routes": result.get("missing_provider_routes"),
+                            "selected_provider_routes": result.get("selected_provider_routes"),
+                            "billing": result.get("billing")}), http_status
+
+        blueprint_id = str(result.get("blueprint_id") or "")
+        blueprint = _load_blueprint(cursor, blueprint_id)
+        if not blueprint:
+            db.conn.rollback()
+            return _json_error("Created draft could not be loaded", 500, "AGENT_DRAFT_LOAD_FAILED")
+        metadata = _blueprint_metadata(blueprint)
+        version_id = str((result.get("candidate_version") or {}).get("id") or "")
+        if version_id:
+            version = _load_blueprint_version_for_blueprint(cursor, blueprint_id, version_id)
         else:
-            custom_process["trigger"] = "manual.run"
-            custom_process.pop("schedule", None)
-        metadata["custom_process"] = custom_process
-        metadata["execution_mode_confirmed_at"] = _utc_now_text()
-        metadata["execution_mode_confirmed_by_user_id"] = _user_id(user_data)
-        if clone_from_blueprint_id:
-            metadata["cloned_from_blueprint_id"] = clone_from_blueprint_id
-        metadata["builder"] = str(metadata.get("builder") or "direct_description_builder_v1")
-        metadata["direct_draft_envelope"] = "localos_openclaw_policy_envelope_v1"
-        metadata["agent_builder_preview"] = preview
-        metadata["feasibility"] = feasibility
-        metadata["openclaw_planner_context"] = planner_context
-        metadata["openclaw_planner_loop"] = planner_loop
-        metadata["required_connectors"] = preview.get("required_connectors") if isinstance(preview.get("required_connectors"), list) else []
-        metadata["builder_setup_flow"] = setup_flow
-        metadata["agent_setup"] = preview_to_setup(preview)
-        metadata["setup_completed"] = bool(setup_flow.get("can_create_draft"))
-        metadata["billing"] = billing
-        metadata = _apply_direct_selected_connection_bindings(metadata, selected_bindings)
-        metadata = _apply_selected_provider_routes(metadata, selected_provider_routes)
-        metadata["builder_selected_connection_bindings"] = selected_bindings
-        metadata["builder_selected_provider_routes"] = selected_provider_routes
-        metadata["builder_provider_routes_accepted"] = bool(payload.get("accepted_provider_routes"))
-        cursor.execute(
-            """
-            INSERT INTO agent_blueprints (
-                id, business_id, name, category, description, status, created_by_user_id, metadata_json
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
-            """,
-            (
-                blueprint_id,
-                business_id,
-                str(draft.get("name") or "").strip() or "Кастомный агент",
-                str(draft.get("category") or "custom").strip().lower(),
-                str(draft.get("description") or "").strip() or None,
-                "draft",
-                _user_id(user_data),
-                json.dumps(metadata, ensure_ascii=False),
-            ),
-        )
-        version = _insert_version(cursor, blueprint_id, version_payload, user_data)
-        connection_preflight = build_agent_integration_preflight(
-            cursor,
-            business_id=business_id,
-            metadata=metadata,
-            input_payload={},
-        )
+            version = _load_latest_blueprint_version(cursor, blueprint_id)
+        if not version:
+            db.conn.rollback()
+            return _json_error("Created version could not be loaded", 500, "AGENT_VERSION_LOAD_FAILED")
+        preview = metadata.get("agent_builder_preview") if isinstance(metadata.get("agent_builder_preview"), dict) else {}
+        setup_flow = metadata.get("builder_setup_flow") if isinstance(metadata.get("builder_setup_flow"), dict) else {}
+        feasibility = metadata.get("feasibility") if isinstance(metadata.get("feasibility"), dict) else {}
+        billing = metadata.get("billing") if isinstance(metadata.get("billing"), dict) else result.get("billing") or {}
+        selected_bindings = metadata.get("builder_selected_connection_bindings") if isinstance(metadata.get("builder_selected_connection_bindings"), dict) else {}
+        selected_routes = metadata.get("builder_selected_provider_routes") if isinstance(metadata.get("builder_selected_provider_routes"), dict) else {}
+        connection_preflight = build_agent_integration_preflight(cursor, business_id=business_id, metadata=metadata, input_payload={})
         connection_context = _agent_connection_context(cursor, business_id, metadata)
         connection_plan = _activation_connection_plan_from_preflight(
             connection_preflight,
@@ -3367,30 +3536,26 @@ def create_agent_blueprint_draft():
         )
         post_create_handoff = _build_agent_post_connect_handoff(connection_plan)
         db.conn.commit()
-        blueprint = _load_blueprint(cursor, blueprint_id)
-        return jsonify(
-            {
-                "success": True,
-                "blueprint": _normalize_json_row(blueprint),
-                "version": version,
-                "draft": {
-                    "category": draft.get("category"),
-                    "summary": draft.get("summary") if isinstance(draft.get("summary"), dict) else {},
-                },
-                "billing": billing,
-                "setup_flow": setup_flow,
-                "feasibility": feasibility,
-                "connection_summary": preview.get("connection_summary") if isinstance(preview.get("connection_summary"), dict) else {},
-                "connector_intelligence": preview.get("connector_intelligence") if isinstance(preview.get("connector_intelligence"), dict) else {},
-                "openclaw_planner_loop": planner_loop,
-                "selected_connection_bindings": selected_bindings,
-                "selected_provider_routes": selected_provider_routes,
-                "connection_preflight": connection_preflight,
-                "connection_plan": connection_plan,
-                "post_create_handoff": post_create_handoff,
-                "next_step": str(setup_flow.get("post_create_next_step") or setup_flow.get("next_step") or ""),
-            }
-        ), 201
+        return jsonify({
+            "success": True,
+            "blueprint": _normalize_json_row(blueprint),
+            "version": version,
+            "draft": {"category": result.get("draft", {}).get("category"),
+                      "summary": result.get("draft", {}).get("summary") or metadata.get("agent_draft_summary") or {}},
+            "billing": billing,
+            "setup_flow": setup_flow,
+            "feasibility": feasibility,
+            "connection_summary": preview.get("connection_summary") if isinstance(preview.get("connection_summary"), dict) else {},
+            "connector_intelligence": preview.get("connector_intelligence") if isinstance(preview.get("connector_intelligence"), dict) else {},
+            "openclaw_planner_loop": metadata.get("openclaw_planner_loop") or {},
+            "selected_connection_bindings": selected_bindings,
+            "selected_provider_routes": selected_routes,
+            "connection_preflight": connection_preflight,
+            "connection_plan": connection_plan,
+            "post_create_handoff": post_create_handoff,
+            "next_step": str(setup_flow.get("post_create_next_step") or setup_flow.get("next_step") or ""),
+            "idempotent_replay": bool(result.get("idempotent_replay")),
+        }), 200 if result.get("idempotent_replay") else 201
     except Exception:
         db.conn.rollback()
         raise
@@ -3443,8 +3608,201 @@ def apply_agent_blueprint_legacy_migration():
         db.close()
 
 
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/graph", methods=["GET"])
+def get_agent_blueprint_graph(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        candidate = _resolve_candidate_version(cursor, blueprint)
+        if not candidate:
+            return _json_error("Blueprint has no candidate version", 404, "AGENT_VERSION_NOT_FOUND")
+        version_payload = build_version_payload_from_row(candidate)
+        dsl = build_workflow_dsl_document(version_payload, _blueprint_metadata(blueprint))
+        required_bindings = (
+            version_payload.get("required_integration_bindings")
+            if isinstance(version_payload.get("required_integration_bindings"), list)
+            else []
+        )
+        model_steps = [
+            {
+                "key": str(step.get("key") or step.get("id") or ""),
+                "title": _execution_step_title(step),
+                "preset": str(step.get("model_preset") or ""),
+                "task_key": str(step.get("model_task_key") or ""),
+            }
+            for step in normalize_steps(version_payload.get("steps"))
+            if step.get("bounded_model_call") is True
+            or str(step.get("type") or step.get("step_type") or "").strip().lower() in {"model", "llm", "ai"}
+        ]
+        return jsonify(
+            {
+                "success": True,
+                "blueprint_id": blueprint_id,
+                "version_id": str(candidate.get("id") or ""),
+                "version_number": _version_number(candidate),
+                "graph": workflow_dsl_to_graph(dsl),
+                "settings": {
+                    "execution_mode": str(version_payload.get("execution_mode") or "manual"),
+                    "trigger": str(version_payload.get("trigger") or "manual.run"),
+                    "schedule": version_payload.get("schedule") if isinstance(version_payload.get("schedule"), dict) else {},
+                    "sources": [
+                        {
+                            "key": str(item.get("key") or ""),
+                            "provider": str(item.get("provider") or ""),
+                            "required": bool(item.get("required", True)),
+                        }
+                        for item in required_bindings
+                        if isinstance(item, dict)
+                    ],
+                    "ai_steps": model_steps,
+                    "expected_result": version_payload.get("output_schema") if isinstance(version_payload.get("output_schema"), dict) else {},
+                    "limits": version_payload.get("limits") if isinstance(version_payload.get("limits"), dict) else {},
+                },
+                "editing_contract": {
+                    "mode": "registered_nodes_only",
+                    "active_version_unchanged": True,
+                    "save_creates_candidate_version": True,
+                    "requires_preview_before_activation": True,
+                    "editable_fields": ["trigger", "schedule", "sources", "checks", "bounded_ai", "approval", "result", "limits", "step_order"],
+                    "read_only_fields": ["code", "provider", "capability", "system_fields"],
+                },
+                "editor_registry": visual_editor_registry(),
+            }
+        )
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/graph/candidate", methods=["POST"])
+def create_agent_graph_candidate(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    graph = payload.get("graph") if isinstance(payload.get("graph"), dict) else {}
+    settings = payload.get("settings") if isinstance(payload.get("settings"), dict) else {}
+    visual_settings = settings.get("visual_editor") if isinstance(settings.get("visual_editor"), dict) else {}
+    visual_validation = validate_visual_editor_settings(visual_settings) if visual_settings else {"valid": True, "errors": []}
+    if not visual_validation["valid"]:
+        return jsonify(
+            {
+                "success": False,
+                "error": "Настройки содержат незарегистрированные значения.",
+                "code": "AGENT_VISUAL_EDITOR_SETTINGS_INVALID",
+                "validation": visual_validation,
+            }
+        ), 400
+    graph_validation = validate_workflow_graph(graph)
+    if not graph_validation["valid"]:
+        return jsonify(
+            {
+                "success": False,
+                "error": "Схема содержит недопустимые связи.",
+                "code": "AGENT_GRAPH_INVALID",
+                "validation": graph_validation,
+            }
+        ), 400
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        candidate = _resolve_candidate_version(cursor, blueprint)
+        if not candidate:
+            return _json_error("Blueprint has no candidate version", 404, "AGENT_VERSION_NOT_FOUND")
+        version_payload = build_version_payload_from_row(candidate)
+        if visual_settings:
+            version_payload = apply_visual_editor_settings(version_payload, visual_settings)
+        else:
+            original_steps = normalize_steps(version_payload.get("steps"))
+            original_by_key = {
+                str(step.get("key") or step.get("id") or ""): step
+                for step in original_steps
+                if str(step.get("key") or step.get("id") or "").strip()
+            }
+            ordered_graph_steps = workflow_graph_to_steps(graph)
+            ordered_keys = [str(step.get("key") or "") for step in ordered_graph_steps]
+            if set(ordered_keys) != set(original_by_key) or len(ordered_keys) != len(original_by_key):
+                return _json_error(
+                    "Добавлять или удалять шаги можно только через зарегистрированные блоки.",
+                    400,
+                    "AGENT_GRAPH_NODE_SET_CHANGED",
+                )
+            version_payload["steps"] = [original_by_key[key] for key in ordered_keys]
+        execution_mode = str(
+            version_payload.get("execution_mode")
+            if visual_settings
+            else settings.get("execution_mode") or version_payload.get("execution_mode") or "manual"
+        ).strip().lower()
+        if execution_mode not in {"one_off", "manual", "scheduled"}:
+            return _json_error("Выберите допустимый режим запуска.", 400, "AGENT_GRAPH_EXECUTION_MODE_INVALID")
+        version_payload["execution_mode"] = execution_mode
+        if execution_mode == "scheduled":
+            schedule = settings.get("schedule") if isinstance(settings.get("schedule"), dict) else version_payload.get("schedule")
+            schedule = schedule if isinstance(schedule, dict) else {}
+            from services.agent_schedule_contract import apply_schedule, ScheduleError
+            from services.business_input_settings import resolve
+            changes = dict(schedule)
+            if not visual_settings and settings.get("trigger"):
+                changes["trigger"] = settings["trigger"]
+            try:
+                version_payload = apply_schedule(
+                    version_payload, changes,
+                    business_timezone=None if schedule.get("timezone") else resolve(cursor, blueprint.get("business_id")).get("timezone"),
+                )
+            except ScheduleError as error:
+                return _json_error(str(error), 400, "AGENT_GRAPH_" + error.code)
+        else:
+            version_payload["trigger"] = "manual.run"
+            version_payload["schedule"] = {}
+        approval_order_validation = validate_workflow_step_approval_order(version_payload["steps"])
+        if not approval_order_validation["valid"]:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Подтверждение должно находиться перед защищённым действием.",
+                    "code": "AGENT_GRAPH_APPROVAL_ORDER_INVALID",
+                    "validation": approval_order_validation,
+                }
+            ), 400
+        compiled_validation = validate_compiled_artifact_candidate(version_payload, _blueprint_metadata(blueprint))
+        if not compiled_validation.get("ready"):
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Процесс не прошёл backend-проверку.",
+                    "code": "AGENT_GRAPH_COMPILED_VALIDATION_FAILED",
+                    "validation": compiled_validation.get("validation") or {},
+                }
+            ), 400
+        version_payload["change_note"] = "Процесс изменён в визуальном редакторе"
+        version = _insert_version(cursor, blueprint_id, version_payload, user_data)
+        db.conn.commit()
+        return jsonify(
+            {
+                "success": True,
+                "candidate_version": version,
+                "active_version_unchanged": True,
+                "next_step": "run_preview",
+            }
+        ), 201
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
 @agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>", methods=["GET"])
 def get_agent_blueprint(blueprint_id: str):
+    from services.compiled_pilot_access import compiled_pilot_allowed
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
@@ -3547,13 +3905,20 @@ def get_agent_blueprint(blueprint_id: str):
         }
         decorated_blueprint["lifecycle_state"] = _agent_lifecycle_state(lifecycle_blueprint)
         decorated_blueprint["last_business_result"] = last_business_result
-        schedule_status = _agent_schedule_status(blueprint)
+        schedule_status = _agent_schedule_status(blueprint, active_version)
         decorated_blueprint["next_run_at"] = schedule_status.get("next_run_at") if blueprint.get("status") == "active" else None
+        compiled_version_id = str(blueprint.get("compiled_approved_version_id") or "")
+        compiled_approved_version = _load_blueprint_version_for_blueprint(cursor, blueprint_id, compiled_version_id) if compiled_version_id else None
         return jsonify(
             {
                 "success": True,
                 "blueprint": decorated_blueprint,
+                "compiled_access": {
+                    "preview": compiled_pilot_allowed(blueprint.get("business_id")),
+                    "execute": compiled_pilot_allowed(blueprint.get("business_id"), execute=True),
+                },
                 "active_version": active_version if active_version else None,
+                "compiled_approved_version": _normalize_json_row(compiled_approved_version) if compiled_approved_version else None,
                 "active_version_id": str((active_version or {}).get("id") or ""),
                 "active_version_number": _version_number(active_version),
                 "candidate_version": candidate_version if candidate_version else None,
@@ -3605,7 +3970,10 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
         str((active_version or {}).get("id") or ""),
     )
     mode_blueprint = {**blueprint, "metadata_json": metadata}
-    mode_confirmation_required = _agent_execution_mode_confirmation_required(mode_blueprint)
+    mode_confirmation_required = not (
+        active_version
+        and str(active_version.get("execution_mode") or "").strip().lower() in {"one_off", "manual", "scheduled"}
+    ) and _agent_execution_mode_confirmation_required(mode_blueprint)
     if mode_confirmation_required:
         blockers.append(
             {
@@ -3618,6 +3986,13 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
         blockers.append({"type": "version", "message": "Создайте или выберите версию агента."})
     else:
         version_payload = build_version_payload_from_row(active_version)
+        compiled_state = str(active_version.get("compiled_state") or "legacy")
+        if compiled_state != "legacy":
+            strict_compiled_validation = validate_compiled_script_artifact(
+                parse_json_field(active_version.get("compiled_artifact_json"), {})
+            )
+            if compiled_state not in {"approved", "active"} or not strict_compiled_validation.get("valid"):
+                blockers.append({"type": "compiled_script", "message": "Compiled script требует успешного preview и подтверждения неизменного артефакта."})
         compiled_validation = validate_compiled_artifact_candidate(
             version_payload,
             metadata,
@@ -3641,7 +4016,7 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
                 "capabilities": unsupported_capabilities,
             }
         )
-    schedule_status = _agent_schedule_status(blueprint)
+    schedule_status = _agent_schedule_status(blueprint, active_version)
     if not schedule_status.get("ready"):
         blockers.append(
             {
@@ -3650,10 +4025,15 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
                 "reason": str(schedule_status.get("reason") or "schedule_required"),
             }
         )
+    preflight_metadata = dict(metadata)
+    if active_version:
+        version_bindings = version_payload.get("required_integration_bindings")
+        if isinstance(version_bindings, list):
+            preflight_metadata["required_integration_bindings"] = version_bindings
     preflight = build_agent_integration_preflight(
         cursor,
         business_id=str(blueprint.get("business_id") or ""),
-        metadata=metadata,
+        metadata=preflight_metadata,
         input_payload={},
     )
     connection_context = _agent_connection_context(cursor, str(blueprint.get("business_id") or ""), metadata)
@@ -3685,6 +4065,7 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
         and bool(preflight.get("ready"))
         and bool(preview_run_status.get("ready"))
         and all(item.get("beta_enabled") for item in capability_contracts)
+        and not any(item.get("type") == "compiled_script" for item in blockers)
     )
     next_step = "activate_version" if ready else _activation_gate_next_step(blockers)
     human_blockers = _activation_gate_human_blockers(blockers, preflight, compiled_validation)
@@ -3756,6 +4137,20 @@ def _activation_preview_run_status(cursor, blueprint_id: str, version_id: str) -
             "accepted_statuses": accepted_statuses,
             "message": "Создайте версию агента, затем запустите preview.",
         }
+    cursor.execute("SELECT compiled_state, compiled_preview_json FROM agent_blueprint_versions WHERE id = %s AND blueprint_id = %s", (version_id, blueprint_id))
+    compiled_version = cursor.fetchone() or {}
+    if str(compiled_version.get("compiled_state") or "legacy") in {"approved", "active"}:
+        compiled_preview = parse_json_field(compiled_version.get("compiled_preview_json"), {})
+        if isinstance(compiled_preview, dict) and compiled_preview.get("status") == "passed":
+            return {
+                "schema": "localos_agent_preview_run_status_v1",
+                "required": True,
+                "ready": True,
+                "status": "completed",
+                "accepted_statuses": accepted_statuses,
+                "message": "Independent compiled-script preview completed.",
+                "run": None,
+            }
     cursor.execute(
         """
         SELECT id, status, input_json, output_json, error_text, started_at, completed_at, updated_at
@@ -4192,7 +4587,7 @@ def archive_agent_blueprint(blueprint_id: str):
                     WHERE COALESCE(input_json->>'preview_mode', 'false') <> 'true'
                       AND status = 'completed'
                 ) AS completed_work_runs,
-                COUNT(*) FILTER (WHERE status = 'running') AS running_runs,
+                COUNT(*) FILTER (WHERE status IN ('running', 'waiting_provider')) AS running_runs,
                 COUNT(*) FILTER (
                     WHERE COALESCE(input_json->>'preview_mode', 'false') = 'true'
                       AND status <> 'superseded'
@@ -4221,7 +4616,7 @@ def archive_agent_blueprint(blueprint_id: str):
         archive_snapshot = dict(cursor.fetchone() or {})
         if int(archive_snapshot.get("running_runs") or 0) > 0:
             return _json_error(
-                "Дождитесь завершения текущей работы агента, затем архивируйте его.",
+                "Завершите текущую работу и сверку записи в таблицу, затем архивируйте сотрудника.",
                 409,
                 "AGENT_RUN_ALREADY_IN_PROGRESS",
             )
@@ -4431,6 +4826,471 @@ def get_agent_blueprint_version_diff(blueprint_id: str, version_id: str):
         db.close()
 
 
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/snapshots", methods=["POST"])
+def create_agent_compiled_snapshot(blueprint_id: str):
+    from core.auth_context import AuthContext
+    from services.compiled_input_snapshots import create_snapshot, SnapshotUnavailable, SnapshotQuotaExceeded
+    from services.compiled_pilot_access import compiled_pilot_allowed
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    session_error = _require_compiled_standard_session(user_data)
+    if session_error:
+        return session_error
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return _json_error("Ожидается таблица.", 400, "INVALID_JSON_PAYLOAD")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        account_error = _require_current_compiled_account(cursor, user_data)
+        if account_error:
+            return account_error
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        if not compiled_pilot_allowed(blueprint.get("business_id")):
+            return _json_error("Проверка таблиц пока недоступна для этого бизнеса.", 403, "COMPILED_PILOT_NOT_ALLOWED")
+        snapshot = create_snapshot(cursor, auth=AuthContext.from_session(user_data),
+            blueprint_id=blueprint_id, business_id=blueprint.get("business_id"),
+            input_payload=payload.get("input"), name=payload.get("name"))
+        db.conn.commit()
+        return jsonify({"success": True, "snapshot": snapshot}), 201
+    except SnapshotQuotaExceeded:
+        db.conn.rollback()
+        return _json_error("Достигнут лимит: 100 таблиц за 7 дней для этого пользователя и бизнеса.", 429, "COMPILED_SNAPSHOT_QUOTA_EXCEEDED")
+    except SnapshotUnavailable:
+        db.conn.rollback()
+        return _json_error("Нет доступа к источнику таблицы.", 403, "COMPILED_SNAPSHOT_UNAVAILABLE")
+    except ValueError:
+        db.conn.rollback()
+        return _json_error("Проверьте формат и размер таблицы: до 200 строк, 20 колонок и 20 КБ.", 422, "COMPILED_TABLE_INVALID")
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/compile", methods=["POST"])
+def compile_agent_blueprint_script(blueprint_id: str):
+    from services.compiled_generation_admission import (
+        input_digest,
+        mark_generation_failed,
+        mark_generation_succeeded,
+        reserve_generation,
+    )
+    from services.compiled_pilot_access import compiled_pilot_allowed
+    from services.compiled_table_contract import normalize_table_contract, normalize_table_input, table_manifest
+    from services.compiled_script_runtime import execute_pilot
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    session_error = _require_compiled_standard_session(user_data)
+    if session_error:
+        return session_error
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
+    description = str(payload.get("description") or "").strip()
+    if not description or len(description) > 3000:
+        return _json_error("Опишите процесс для компиляции.", 400, "COMPILED_DESCRIPTION_REQUIRED")
+    table_contract = None
+    try:
+        if "table_contract" in payload:
+            table_contract = normalize_table_contract(payload["table_contract"])
+    except ValueError:
+        return _json_error("Проверьте колонки и правила таблицы.", 422, "COMPILED_TABLE_CONTRACT_INVALID")
+    advanced_enabled = _env_enabled("COMPILED_SCRIPT_ADVANCED_ENABLED") and bool(user_data.get("is_superadmin"))
+    if table_contract is None and not advanced_enabled:
+        return _json_error("Первый compiled-пилот работает только с правилами проверки таблицы.", 403, "COMPILED_TABLE_CONTRACT_REQUIRED")
+    if isinstance(payload.get("source"), str) and not advanced_enabled:
+        return _json_error("Исходник программы доступен только техническому оператору в advanced-режиме.", 403, "COMPILED_MANUAL_SOURCE_FORBIDDEN")
+    supplied_key = str(payload.get("idempotency_key") or "").strip()
+    if table_contract is not None and not supplied_key:
+        return _json_error("Для компиляции таблицы нужен ключ идемпотентности.", 400, "COMPILED_GENERATION_IDEMPOTENCY_REQUIRED")
+    generation_key = supplied_key or str(uuid.uuid4())
+    generation_digest = input_digest(
+        {
+            "description": description,
+            "table_contract": table_contract,
+            "fixtures": payload.get("fixtures"),
+            "source": payload.get("source"),
+            "manifest": payload.get("manifest"),
+        }
+    )
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    generation_request_id = ""
+    try:
+        account_error = _require_current_compiled_account(cursor, user_data)
+        if account_error:
+            return account_error
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        if not compiled_pilot_allowed(blueprint.get("business_id")):
+            return _json_error("Проверка таблиц пока недоступна для этого бизнеса.", 403, "COMPILED_PILOT_NOT_ALLOWED")
+        runner_digest = str(os.getenv("COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST") or "")
+        if not runner_digest.startswith("sha256:"):
+            return _json_error("Compiled runner ещё не закреплён образом.", 503, "COMPILED_RUNTIME_NOT_READY")
+        user_fixtures = payload.get("fixtures") if isinstance(payload.get("fixtures"), list) else []
+        if any(not isinstance(item, dict) or item.get("source") != "user" or "expected" not in item for item in user_fixtures):
+            return _json_error("Добавьте подтверждённые пользователем fixtures с expected.", 400, "COMPILED_USER_FIXTURES_INVALID")
+        if table_contract is not None:
+            if not user_fixtures:
+                return _json_error("Задайте ожидаемый результат хотя бы для одного примера.", 422, "COMPILED_USER_FIXTURE_REQUIRED")
+            if len(user_fixtures) > 16:
+                return _json_error("Добавьте не более 16 примеров: остальные проверки выполняет LocalOS.", 422, "COMPILED_USER_FIXTURE_LIMIT")
+            try:
+                for fixture in user_fixtures:
+                    normalize_table_input(fixture.get("input"), table_contract["columns"])
+            except ValueError:
+                return _json_error("Пример не соответствует колонкам таблицы.", 422, "COMPILED_TABLE_FIXTURE_INVALID")
+        admission = reserve_generation(
+            cursor,
+            user_id=_user_id(user_data),
+            business_id=str(blueprint.get("business_id") or ""),
+            blueprint_id=blueprint_id,
+            idempotency_key=generation_key,
+            request_digest=generation_digest,
+        )
+        if admission.get("status") == "replayed":
+            version_id = str((admission.get("request") or {}).get("result_version_id") or "")
+            version = _load_blueprint_version_for_blueprint(cursor, blueprint_id, version_id)
+            if version:
+                db.conn.commit()
+                return jsonify({
+                    "success": True,
+                    "candidate_version": version,
+                    "artifact": parse_json_field(version.get("compiled_artifact_json"), {}),
+                    "reused": True,
+                    "next_step": "run_compiled_preview",
+                }), 200
+            mark_generation_failed(cursor, str((admission.get("request") or {}).get("id") or ""), "COMPILED_GENERATION_RESULT_MISSING")
+            db.conn.commit()
+            return _json_error("Сохранённый результат генерации недоступен.", 409, "COMPILED_GENERATION_RESULT_MISSING")
+        if admission.get("status") != "reserved":
+            db.conn.commit()
+            code = str(admission.get("code") or "COMPILED_GENERATION_FAILED")
+            status = 409 if code in {"COMPILED_GENERATION_IN_PROGRESS", "COMPILED_GENERATION_IDEMPOTENCY_CONFLICT", "COMPILED_GENERATION_STALE_UNKNOWN"} else 429 if code in {"COMPILED_GENERATION_QUOTA_EXCEEDED", "COMPILED_GENERATION_RATE_LIMITED"} else 422
+            return _json_error("Генерация уже обрабатывается или недоступна для этого ключа.", status, code)
+        generation_request_id = str((admission.get("request") or {}).get("id") or "")
+        # The reservation is durable before the provider call; no DB
+        # transaction stays open while the model is running.
+        db.conn.commit()
+        # Manual source is intentionally an advanced route; ordinary users get one AI generation here.
+        if isinstance(payload.get("source"), str):
+            candidate = {"status": "ready", "candidate": {"source": payload.get("source"), "manifest": payload.get("manifest"), "fixtures": payload.get("fixtures")}}
+            provenance = {"mode": "manual_source", "description": description}
+        else:
+            generation_options = {"business_id": str(blueprint.get("business_id") or ""), "user_id": _user_id(user_data), "runner_image_digest": runner_digest}
+            if table_contract is not None:
+                generation_options["table_contract"] = table_contract
+                generation_options["validation_fixtures"] = user_fixtures
+            candidate = generate_candidate_from_description(description, **generation_options)
+            provenance = {"mode": "ai_generation", "description": description, "provider": str(candidate.get("source") or "")}
+        raw = candidate.get("candidate") if isinstance(candidate.get("candidate"), dict) else {}
+        generated_fixtures = raw.get("fixtures") if isinstance(raw.get("fixtures"), list) else []
+        generated_fixtures = [{**item, "source": "generator"} for item in generated_fixtures if isinstance(item, dict)]
+        manifest = raw.get("manifest") if isinstance(raw.get("manifest"), dict) else {}
+        manifest = table_manifest(table_contract, runner_digest) if table_contract is not None else {**manifest, "runner_image_digest": runner_digest}
+        if table_contract is not None:
+            # Model examples are not independent evidence. The user's examples and
+            # platform boundary fixtures are compared against the independent oracle.
+            generated_fixtures = []
+            provenance["version_name"] = table_contract["version_name"]
+        raw = {**raw, "manifest": manifest, "fixtures": [*user_fixtures, *generated_fixtures]}
+        checked = validate_compiled_script_artifact({"schema": "localos_compiled_script_artifact_v1", **raw, "artifact_hash": raw.get("artifact_hash")}) if raw.get("artifact_hash") else None
+        if candidate.get("status") != "ready" or not raw:
+            mark_generation_failed(cursor, generation_request_id, "COMPILED_GENERATION_NEEDS_FIX")
+            db.conn.commit()
+            return jsonify({"success": False, "code": "COMPILED_GENERATION_NEEDS_FIX", "generation": candidate}), 422
+        try:
+            artifact = build_compiled_script_artifact(raw.get("source"), raw.get("manifest"), raw.get("fixtures"), provenance)
+        except ValueError:
+            mark_generation_failed(cursor, generation_request_id, "COMPILED_ARTIFACT_INVALID")
+            db.conn.commit()
+            return jsonify({"success": False, "code": "COMPILED_ARTIFACT_INVALID", "validation": checked or candidate}), 422
+        if table_contract is not None:
+            sample = {column: "пример" for column in table_contract["columns"]}
+            fixture_inputs = [{"rows": []}, {"rows": [sample]}, {"rows": [sample, sample]}]
+            if table_contract["required_columns"]:
+                missing = dict(sample)
+                missing[table_contract["required_columns"][0]] = " "
+                fixture_inputs.append({"rows": [missing]})
+            fixtures = list(user_fixtures)
+            for fixture_input in fixture_inputs:
+                expected = execute_pilot(artifact, fixture_input)
+                expected = {key: value for key, value in expected.items() if key not in {"artifact_hash", "runtime_ai_calls", "external_effects"}}
+                fixtures.append({"input": fixture_input, "expected": expected, "source": "platform"})
+            artifact = build_compiled_script_artifact(raw.get("source"), manifest, fixtures, provenance)
+        account_error = _require_current_compiled_account(cursor, user_data)
+        if account_error:
+            mark_generation_failed(cursor, generation_request_id, "COMPILED_GENERATION_ACCOUNT_CHANGED")
+            db.conn.commit()
+            return account_error
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            mark_generation_failed(cursor, generation_request_id, "COMPILED_GENERATION_ACCESS_CHANGED")
+            db.conn.commit()
+            return access_error
+        if not compiled_pilot_allowed(blueprint.get("business_id")):
+            mark_generation_failed(cursor, generation_request_id, "COMPILED_GENERATION_COHORT_CHANGED")
+            db.conn.commit()
+            return _json_error("Доступ к пилоту изменился.", 403, "COMPILED_PILOT_NOT_ALLOWED")
+        cursor.execute("SELECT id FROM agent_blueprints WHERE id = %s FOR UPDATE", (blueprint_id,))
+        base = _resolve_candidate_version(cursor, blueprint) or {}
+        version_payload = build_version_payload_from_row(base)
+        version_payload["goal"] = description
+        version_payload["compiled_artifact"] = artifact
+        version_payload["compiled_artifact_hash"] = artifact["artifact_hash"]
+        version_payload["compiled_state"] = "checking"
+        version = _insert_version(cursor, blueprint_id, version_payload, user_data, trusted_compiled=True)
+        mark_generation_succeeded(cursor, generation_request_id, str(version.get("id") or ""))
+        db.conn.commit()
+        return jsonify({"success": True, "candidate_version": version, "artifact": artifact, "next_step": "run_compiled_preview"}), 201
+    except Exception:
+        db.conn.rollback()
+        if generation_request_id:
+            try:
+                mark_generation_failed(cursor, generation_request_id, "COMPILED_GENERATION_INTERNAL_ERROR")
+                db.conn.commit()
+            except Exception:
+                db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/preview", methods=["POST"])
+def preview_agent_blueprint_script(blueprint_id: str):
+    from services.compiled_pilot_access import compiled_pilot_allowed
+    from services.compiled_input_snapshots import resolve_snapshot, SnapshotUnavailable
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    session_error = _require_compiled_standard_session(user_data)
+    if session_error:
+        return session_error
+    if str(os.getenv("COMPILED_SCRIPT_PREVIEW_ENABLED", "false")).lower() not in {"1", "true", "yes", "on"}:
+        return _json_error("Preview compiled scripts пока выключен.", 404, "COMPILED_PREVIEW_DISABLED")
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        account_error = _require_current_compiled_account(cursor, user_data)
+        if account_error:
+            return account_error
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        if not compiled_pilot_allowed(blueprint.get("business_id")):
+            return _json_error("Проверка таблиц пока недоступна для этого бизнеса.", 403, "COMPILED_PILOT_NOT_ALLOWED")
+        version = _load_blueprint_version_for_blueprint(cursor, blueprint_id, str(payload.get("version_id") or ""))
+        if not version:
+            return _json_error("Версия не найдена.", 404, "VERSION_NOT_FOUND")
+        if str(version.get("compiled_state") or "") not in {"checking", "needs_fix", "ready_approval"}:
+            return _json_error("Preview уже подтверждённой версии не меняет evidence.", 409, "COMPILED_PREVIEW_STATE_INVALID")
+        artifact = parse_json_field(version.get("compiled_artifact_json"), {})
+        validation = validate_compiled_script_artifact(artifact)
+        if not validation.get("valid"):
+            return jsonify({"success": False, "code": "COMPILED_ARTIFACT_INVALID", "validation": validation}), 422
+        preview_input = payload.get("input") if isinstance(payload.get("input"), dict) else {}
+        if payload.get("snapshot_id"):
+            try:
+                snapshot = resolve_snapshot(cursor, payload["snapshot_id"], blueprint.get("business_id"), _user_id(user_data), blueprint_id)
+                preview_input = snapshot["input"]
+            except SnapshotUnavailable:
+                return _json_error("Снимок недоступен или срок хранения истёк. Загрузите таблицу снова.", 404, "COMPILED_SNAPSHOT_UNAVAILABLE")
+        db.conn.rollback()
+        try:
+            preview_result = preview_compiled_script(artifact, preview_input)
+        except CompiledRuntimeUnavailable:
+            return _json_error("Защищённый runtime для compiled scripts недоступен.", 503, "COMPILED_RUNTIME_UNAVAILABLE")
+        except ValueError:
+            return _json_error("Таблица не соответствует правилам этой версии.", 422, "COMPILED_INPUT_INVALID")
+        account_error = _require_current_compiled_account(cursor, user_data)
+        if account_error:
+            return account_error
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        if not compiled_pilot_allowed(blueprint.get("business_id")):
+            return _json_error("Доступ к пилоту изменился.", 403, "COMPILED_PILOT_NOT_ALLOWED")
+        cursor.execute("SELECT id FROM agent_blueprint_versions WHERE id = %s AND blueprint_id = %s FOR UPDATE", (str(version.get("id") or ""), blueprint_id))
+        current = _load_blueprint_version_for_blueprint(cursor, blueprint_id, str(version.get("id") or ""))
+        if not current or current.get("compiled_state") not in {"checking", "needs_fix", "ready_approval"} or current.get("compiled_artifact_hash") != version.get("compiled_artifact_hash"):
+            return _json_error("Версия уже изменилась. Откройте её снова.", 409, "COMPILED_PREVIEW_STATE_INVALID")
+        if preview_result.get("status") != "passed":
+            cursor.execute("UPDATE agent_blueprint_versions SET compiled_state = 'needs_fix', compiled_preview_json = %s::jsonb WHERE id = %s AND blueprint_id = %s", (json.dumps(preview_result, ensure_ascii=False), str(version.get("id") or ""), blueprint_id))
+            db.conn.commit()
+            return jsonify({"success": False, "code": "COMPILED_PREVIEW_FAILED", "preview": preview_result}), 422
+        cursor.execute("""UPDATE agent_blueprint_versions SET compiled_state = 'ready_approval', compiled_preview_json = %s::jsonb
+            WHERE id = %s AND blueprint_id = %s""", (json.dumps(preview_result, ensure_ascii=False), str(version.get("id") or ""), blueprint_id))
+        db.conn.commit()
+        return jsonify({"success": True, "version_id": version.get("id"), "preview": preview_result, "approval_digest": validation.get("artifact_hash"), "fixture_digest": preview_result.get("fixture_digest"), "next_step": "approve_compiled_version"})
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/approve", methods=["POST"])
+def approve_agent_blueprint_script(blueprint_id: str):
+    from services.compiled_pilot_access import compiled_pilot_allowed
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    session_error = _require_compiled_standard_session(user_data)
+    if session_error:
+        return session_error
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        account_error = _require_current_compiled_account(cursor, user_data)
+        if account_error:
+            return account_error
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        if not compiled_pilot_allowed(blueprint.get("business_id")):
+            return _json_error("Проверка таблиц пока недоступна для этого бизнеса.", 403, "COMPILED_PILOT_NOT_ALLOWED")
+        # Keep the same lock order as admission: blueprint, then pinned version.
+        # Approval changes a protected column, never client-editable metadata.
+        cursor.execute("SELECT id FROM agent_blueprints WHERE id = %s FOR UPDATE", (blueprint_id,))
+        cursor.execute("SELECT id FROM agent_blueprint_versions WHERE id = %s AND blueprint_id = %s FOR UPDATE", (str(payload.get("version_id") or ""), blueprint_id))
+        version = _load_blueprint_version_for_blueprint(cursor, blueprint_id, str(payload.get("version_id") or ""))
+        artifact = parse_json_field((version or {}).get("compiled_artifact_json"), {})
+        validation = validate_compiled_script_artifact(artifact)
+        if not version or str(version.get("compiled_state") or "") != "ready_approval" or not validation.get("valid"):
+            return _json_error("Сначала выполните успешный preview неизменённого артефакта.", 409, "COMPILED_APPROVAL_BLOCKED")
+        preview_evidence = parse_json_field(version.get("compiled_preview_json"), {})
+        if str((preview_evidence.get("result") or {}).get("artifact_hash") or "") != str(validation.get("artifact_hash") or ""):
+            return _json_error("Preview evidence не соответствует текущему артефакту.", 409, "COMPILED_APPROVAL_EVIDENCE_INVALID")
+        if str(payload.get("approval_digest") or "") != str(validation.get("artifact_hash") or ""):
+            return _json_error("Подтверждение относится к другой версии скрипта.", 409, "COMPILED_APPROVAL_DIGEST_MISMATCH")
+        if str(payload.get("fixture_digest") or "") != str(preview_evidence.get("fixture_digest") or ""):
+            return _json_error("Подтверждение относится к другому preview evidence.", 409, "COMPILED_APPROVAL_FIXTURE_DIGEST_MISMATCH")
+        cursor.execute("""UPDATE agent_blueprint_versions SET compiled_state = 'approved', compiled_approved_at = NOW(), compiled_approved_by_user_id = %s
+            WHERE id = %s AND blueprint_id = %s""", (_user_id(user_data), str(version.get("id") or ""), blueprint_id))
+        cursor.execute("""UPDATE agent_blueprints SET compiled_approved_version_id = %s, updated_at = NOW()
+            WHERE id = %s""", (str(version.get("id") or ""), blueprint_id))
+        from core.auth_context import AuthContext
+        from services.product_telemetry_service import record_confirmed_user_action
+        record_confirmed_user_action(cursor,auth=AuthContext.from_session(user_data),
+            event_name="automation_preflight_approved",business_id=blueprint.get("business_id"),
+            flow="automation",operation_key=f"compiled-approval:{version.get('id')}",entity_id=version.get("id"))
+        db.conn.commit()
+        return jsonify({"success": True, "version_id": version.get("id"), "artifact_hash": validation.get("artifact_hash"), "state": "approved", "next_step": "run_compiled_script"})
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/run", methods=["POST"])
+def run_agent_blueprint_script(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    session_error = _require_compiled_standard_session(user_data)
+    if session_error:
+        return session_error
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        account_error = _require_current_compiled_account(cursor, user_data)
+        if account_error:
+            return account_error
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        from services.compiled_pilot_access import compiled_pilot_allowed
+        if not compiled_pilot_allowed(str(blueprint.get("business_id") or ""), execute=True):
+            return _json_error("Запуск compiled scripts пока недоступен для этого бизнеса.", 404, "COMPILED_EXECUTE_DISABLED")
+        version = _load_blueprint_version_for_blueprint(cursor, blueprint_id, str(payload.get("version_id") or ""))
+        if not version or str(version.get("compiled_state") or "") not in {"approved", "active"} or not version.get("compiled_approved_at") or not str(version.get("compiled_approved_by_user_id") or ""):
+            return _json_error("Для запуска требуется подтверждённая версия скрипта.", 409, "COMPILED_RUN_NOT_APPROVED")
+        from core.auth_context import AuthContext
+        from services.agent_run_admission import AgentRunAdmissionService
+        from services.compiled_input_snapshots import SnapshotUnavailable, resolve_snapshot
+        auth = AuthContext.from_session(user_data)
+        snapshot_id = str(payload.get("snapshot_id") or payload.get("input_snapshot_id") or "").strip()
+        if not snapshot_id:
+            return _json_error("Для запуска нужна сохранённая таблица.", 400, "COMPILED_INPUT_SNAPSHOT_REQUIRED")
+        idempotency_key = str(payload.get("idempotency_key") or "").strip()
+        if not idempotency_key:
+            return _json_error("Укажите ключ идемпотентности запуска.", 400, "IDEMPOTENCY_KEY_REQUIRED")
+        # A retry is a read of the accepted journal entry, not a fresh use of
+        # an expired input. Tenant access and the direct session were checked
+        # above; version and snapshot must still match that exact intent.
+        cursor.execute(
+            """SELECT id,blueprint_version_id,input_snapshot_id FROM agent_runs
+               WHERE business_id=%s AND blueprint_id=%s AND idempotency_key=%s
+               LIMIT 1""",
+            (str(blueprint.get("business_id") or ""), blueprint_id, idempotency_key),
+        )
+        existing = cursor.fetchone()
+        if existing:
+            if (
+                str(existing.get("blueprint_version_id") or "") != str(version.get("id") or "")
+                or str(existing.get("input_snapshot_id") or "") != snapshot_id
+            ):
+                return _json_error("Ключ запуска относится к другим версии или таблице.", 409, "COMPILED_RUN_IDEMPOTENCY_CONFLICT")
+            replayed_run = AgentBlueprintRunner(cursor).load_run(str(existing.get("id") or ""), user_data)
+            return jsonify({"success": True, "version_id": version.get("id"), "run": replayed_run, "reused": True, "status": str((replayed_run or {}).get("status") or "queued")}), 200
+        try:
+            snapshot = resolve_snapshot(
+                cursor,
+                snapshot_id,
+                str(blueprint.get("business_id") or ""),
+                auth.user_id,
+                blueprint_id=blueprint_id,
+            )
+        except SnapshotUnavailable:
+            return _json_error("Таблица недоступна или устарела. Создайте новую версию.", 409, "COMPILED_INPUT_SNAPSHOT_UNAVAILABLE")
+        from core.unit_of_work import UnitOfWork
+        from services.product_telemetry_service import record_confirmed_user_action
+        admission = UnitOfWork(database=db)
+        with admission:
+            run = AgentRunAdmissionService(admission.cursor).admit(
+                auth=auth,
+                blueprint=blueprint,
+                version=version,
+                input_payload=snapshot["input"],
+                idempotency_key=idempotency_key,
+                input_snapshot=snapshot,
+            )
+            if not run.get("success"):
+                admission.rollback()
+                return jsonify({"success": False, "code": str(run.get("code") or "COMPILED_RUN_FAILED"), "error": str(run.get("error") or "Не удалось запустить compiled script."), "details": run}), 422
+            record_confirmed_user_action(admission.cursor,auth=auth,
+                event_name="automation_run_linked",business_id=blueprint.get("business_id"),
+                flow="automation",operation_key=f"compiled-run:{blueprint_id}:{idempotency_key}",
+                entity_id=(run.get("run") or {}).get("id"))
+            admission.commit()
+            return jsonify({"success": True, "version_id": version.get("id"), "run": run.get("run"), "reused": bool(run.get("reused")), "status": "queued"}), 202
+    except Exception:
+        try:
+            db.conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        db.close()
+
+
 @agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/versions/<version_id>/activate", methods=["POST"])
 def activate_agent_blueprint_version(blueprint_id: str, version_id: str):
     user_data, error_response = _require_auth()
@@ -4498,6 +5358,12 @@ def rollback_agent_blueprint_version(blueprint_id: str, version_id: str):
         active_before = _resolve_active_version(cursor, blueprint)
         if active_before and str(active_before.get("id") or "") == str(version.get("id") or ""):
             return _json_error("Version is already active", 400, "VERSION_ALREADY_ACTIVE")
+        if str(version.get("compiled_state") or "legacy") != "legacy":
+            artifact = parse_json_field(version.get("compiled_artifact_json"), {})
+            strict = validate_compiled_script_artifact(artifact)
+            configured_digest = str(os.getenv("COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST") or "")
+            if not strict.get("valid") or artifact.get("manifest", {}).get("runner_image_digest") != configured_digest:
+                return _json_error("Rollback compiled версии требует актуальный verified runner image.", 409, "COMPILED_ROLLBACK_RUNTIME_MISMATCH")
         reason = str(payload.get("reason") or "rollback").strip()
         rollback_gate = {}
         if not _version_was_active_before(blueprint, version):
@@ -4884,7 +5750,6 @@ def save_agent_blueprint_custom_process(blueprint_id: str):
         compiled_process["last_edited_by_user_id"] = _user_id(user_data)
         compiled_process["last_edited_at"] = _utc_now_text()
         metadata["compiled_process"] = compiled_process
-        _save_blueprint_metadata(cursor, blueprint_id, metadata)
         latest_version = _load_latest_blueprint_version(cursor, blueprint_id)
         version = None
         if latest_version:
@@ -4892,13 +5757,12 @@ def save_agent_blueprint_custom_process(blueprint_id: str):
             version_payload = _apply_custom_process_to_version_payload(version_payload, custom_process)
             version = _insert_version(cursor, blueprint_id, version_payload, user_data)
         db.conn.commit()
-        refreshed = _load_blueprint(cursor, blueprint_id)
         activation_gate = (
             _build_activation_gate_summary(
                 cursor,
-                blueprint=refreshed or blueprint,
+                blueprint=blueprint,
                 active_version=version,
-                metadata=_blueprint_metadata(refreshed or blueprint),
+                metadata=metadata,
             )
             if version
             else {}
@@ -4927,17 +5791,6 @@ def save_agent_blueprint_schedule(blueprint_id: str):
     if error_response:
         return error_response
     payload = request.get_json(silent=True) or {}
-    schedule_time = str(payload.get("time") or "").strip()
-    timezone_name = str(payload.get("timezone") or "").strip()
-    try:
-        parsed_time = datetime.strptime(schedule_time, "%H:%M")
-        schedule_time = parsed_time.strftime("%H:%M")
-    except ValueError:
-        return _json_error("Укажите время в формате ЧЧ:ММ.", 400, "SCHEDULE_TIME_INVALID")
-    try:
-        ZoneInfo(timezone_name)
-    except ZoneInfoNotFoundError:
-        return _json_error("Укажите корректный часовой пояс.", 400, "SCHEDULE_TIMEZONE_INVALID")
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
@@ -4945,19 +5798,21 @@ def save_agent_blueprint_schedule(blueprint_id: str):
         if access_error:
             return access_error
         metadata = _blueprint_metadata(blueprint)
-        custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
-        custom_process["trigger"] = "schedule.daily"
-        custom_process["schedule"] = {"time": schedule_time, "timezone": timezone_name}
-        metadata["custom_process"] = custom_process
-        metadata["execution_mode"] = "scheduled"
-        metadata["execution_mode_confirmed_at"] = _utc_now_text()
-        metadata["execution_mode_confirmed_by_user_id"] = _user_id(user_data)
-        _save_blueprint_metadata(cursor, blueprint_id, metadata)
-        refreshed = _load_blueprint(cursor, blueprint_id) or blueprint
-        candidate_version = _resolve_candidate_version(cursor, refreshed)
+        latest_version = _resolve_candidate_version(cursor, blueprint)
+        if not latest_version:
+            return _json_error("Blueprint has no candidate version", 404, "AGENT_VERSION_NOT_FOUND")
+        version_payload = build_version_payload_from_row(latest_version)
+        from services.agent_schedule_contract import apply_schedule, ScheduleError
+        try:
+            version_payload = apply_schedule(version_payload, payload)
+        except ScheduleError:
+            import sys
+            error = sys.exception()
+            return _json_error(str(error), 400, error.code)
+        candidate_version = _insert_version(cursor, blueprint_id, version_payload, user_data)
         activation_gate = _build_activation_gate_summary(
             cursor,
-            blueprint=refreshed,
+            blueprint=blueprint,
             active_version=candidate_version,
             metadata=metadata,
         )
@@ -4966,7 +5821,9 @@ def save_agent_blueprint_schedule(blueprint_id: str):
             {
                 "success": True,
                 "execution_mode": "scheduled",
-                "schedule": custom_process["schedule"],
+                "schedule": version_payload["schedule"],
+                "candidate_version": candidate_version,
+                "active_version_unchanged": True,
                 "activation_gate": activation_gate,
             }
         )
@@ -4986,17 +5843,6 @@ def save_agent_blueprint_execution_mode(blueprint_id: str):
     execution_mode = str(payload.get("execution_mode") or "").strip().lower()
     if execution_mode not in {"one_off", "manual", "scheduled"}:
         return _json_error("Выберите тип запуска агента.", 400, "EXECUTION_MODE_INVALID")
-    schedule_time = str(payload.get("time") or "").strip()
-    timezone_name = str(payload.get("timezone") or "").strip()
-    if execution_mode == "scheduled":
-        try:
-            schedule_time = datetime.strptime(schedule_time, "%H:%M").strftime("%H:%M")
-        except ValueError:
-            return _json_error("Укажите время в формате ЧЧ:ММ.", 400, "SCHEDULE_TIME_INVALID")
-        try:
-            ZoneInfo(timezone_name)
-        except ZoneInfoNotFoundError:
-            return _json_error("Укажите корректный часовой пояс.", 400, "SCHEDULE_TIMEZONE_INVALID")
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
@@ -5004,27 +5850,30 @@ def save_agent_blueprint_execution_mode(blueprint_id: str):
         if access_error:
             return access_error
         metadata = _blueprint_metadata(blueprint)
-        custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+        latest_version = _resolve_candidate_version(cursor, blueprint)
+        if not latest_version:
+            return _json_error("Blueprint has no candidate version", 404, "AGENT_VERSION_NOT_FOUND")
+        version_payload = build_version_payload_from_row(latest_version)
+        version_payload["execution_mode"] = execution_mode
         if execution_mode == "scheduled":
-            custom_process["trigger"] = "schedule.daily"
-            custom_process["schedule"] = {"time": schedule_time, "timezone": timezone_name}
+            from services.agent_schedule_contract import apply_schedule, ScheduleError
+            try:
+                version_payload = apply_schedule(version_payload, payload)
+            except ScheduleError:
+                import sys
+                error = sys.exception()
+                return _json_error(str(error), 400, error.code)
         else:
-            custom_process["trigger"] = "manual.run"
-            custom_process.pop("schedule", None)
-        metadata["custom_process"] = custom_process
-        metadata["execution_mode"] = execution_mode
-        metadata["execution_mode_confirmed_at"] = _utc_now_text()
-        metadata["execution_mode_confirmed_by_user_id"] = _user_id(user_data)
-        _save_blueprint_metadata(cursor, blueprint_id, metadata)
-        refreshed = _load_blueprint(cursor, blueprint_id) or blueprint
-        candidate_version = _resolve_candidate_version(cursor, refreshed)
+            version_payload["trigger"] = "manual.run"
+            version_payload["schedule"] = {}
+        candidate_version = _insert_version(cursor, blueprint_id, version_payload, user_data)
         activation_gate = _build_activation_gate_summary(
             cursor,
-            blueprint=refreshed,
+            blueprint=blueprint,
             active_version=candidate_version,
             metadata=metadata,
         )
-        schedule_status = _agent_schedule_status(refreshed)
+        schedule_status = _agent_schedule_status(blueprint, candidate_version)
         db.conn.commit()
         return jsonify(
             {
@@ -5032,8 +5881,10 @@ def save_agent_blueprint_execution_mode(blueprint_id: str):
                 "execution_mode": execution_mode,
                 "execution_mode_source": "explicit",
                 "execution_mode_confirmation_required": False,
-                "schedule": custom_process.get("schedule") if execution_mode == "scheduled" else None,
+                "schedule": version_payload.get("schedule") if execution_mode == "scheduled" else None,
                 "next_run_at": schedule_status.get("next_run_at") if execution_mode == "scheduled" else None,
+                "candidate_version": candidate_version,
+                "active_version_unchanged": True,
                 "activation_gate": activation_gate,
             }
         )
@@ -5060,7 +5911,7 @@ def preview_agent_blueprint_custom_process(blueprint_id: str):
         version_id = str((candidate_version or {}).get("id") or "").strip()
         if not version_id:
             return _json_error("Blueprint has no version", 400, "NO_VERSION")
-        preview_input = _build_custom_process_preview_input(blueprint, payload)
+        preview_input = _build_custom_process_preview_input(blueprint, payload, candidate_version)
         runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
         result = runner.start_run(version_id, preview_input, user_data)
         db.conn.commit()
@@ -5247,7 +6098,8 @@ def start_agent_blueprint_run(blueprint_id: str):
         raw_input = payload.get("input") if isinstance(payload.get("input"), dict) else {}
         preview_mode = raw_input.get("preview_mode") is True
         execution_mode = _agent_execution_mode(blueprint)
-        if not preview_mode and _agent_execution_mode_confirmation_required(blueprint):
+        async_enabled = async_agent_runs_enabled(str(blueprint.get("business_id") or ""))
+        if not async_enabled and not preview_mode and _agent_execution_mode_confirmation_required(blueprint):
             return _json_error(
                 "Сначала выберите, как должен запускаться агент.",
                 400,
@@ -5259,13 +6111,13 @@ def start_agent_blueprint_run(blueprint_id: str):
             version_id = str((selected_version or {}).get("id") or "")
         elif not _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), version_id):
             return _json_error("Blueprint version does not belong to this blueprint", 400, "VERSION_BLUEPRINT_MISMATCH")
-        if version_id and not preview_mode and execution_mode != "one_off":
-            active_version = _resolve_active_version(cursor, blueprint)
-            if str((active_version or {}).get("id") or "") != version_id:
-                return _json_error("Сначала включите проверенную версию агента.", 400, "AGENT_VERSION_NOT_ACTIVE")
         if not version_id:
             return _json_error("Blueprint has no version", 400, "NO_VERSION")
         version = _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), version_id)
+        if not async_enabled and version_id and not preview_mode and execution_mode != "one_off":
+            active_version = _resolve_active_version(cursor, blueprint)
+            if str((active_version or {}).get("id") or "") != version_id:
+                return _json_error("Сначала включите проверенную версию агента.", 400, "AGENT_VERSION_NOT_ACTIVE")
         user_input = {
             str(key): value
             for key, value in raw_input.items()
@@ -5300,21 +6152,26 @@ def start_agent_blueprint_run(blueprint_id: str):
             if preview_mode
             else normalized_raw_input
         )
-        if async_agent_runs_enabled(str(blueprint.get("business_id") or "")):
-            result = enqueue_agent_run(
-                cursor,
-                blueprint=blueprint,
-                version=version or {},
-                input_payload=run_input,
-                user_data=user_data,
-                idempotency_key=str(payload.get("idempotency_key") or ""),
-            )
-            if not result.get("success"):
-                db.conn.rollback()
-                status = 409 if result.get("code") == "AGENT_RUN_ALREADY_IN_PROGRESS" else 402 if result.get("code") == "AGENT_RUN_BILLING_BLOCKED" else 400
-                return jsonify(result), status
-            db.conn.commit()
-            return jsonify(result), 200 if result.get("reused") else 202
+        if async_enabled:
+            from core.auth_context import AuthContext
+            from services.agent_run_admission import AgentRunAdmissionService
+            from core.unit_of_work import UnitOfWork
+            admission = UnitOfWork(database=db)
+            with admission:
+                result = AgentRunAdmissionService(admission.cursor).admit(
+                    auth=AuthContext.from_session(user_data),
+                    blueprint=blueprint,
+                    version=version or {},
+                    input_payload=run_input,
+                    idempotency_key=str(payload.get("idempotency_key") or ""),
+                    require_execution_mode_confirmation=True,
+                )
+                if not result.get("success"):
+                    admission.rollback()
+                    status = 409 if result.get("code") == "AGENT_RUN_ALREADY_IN_PROGRESS" else 402 if result.get("code") == "AGENT_RUN_BILLING_BLOCKED" else 400
+                    return jsonify(result), status
+                admission.commit()
+                return jsonify(result), 200 if result.get("reused") else 202
         runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
         result = runner.start_run(version_id, run_input, user_data)
         db.conn.commit()
@@ -5324,7 +6181,10 @@ def start_agent_blueprint_run(blueprint_id: str):
             return _json_error(str(result.get("error") or "run failed"), 400, "RUN_FAILED")
         return jsonify(result), 201
     except Exception:
-        db.conn.rollback()
+        try:
+            db.conn.rollback()
+        except Exception:
+            pass
         raise
     finally:
         db.close()

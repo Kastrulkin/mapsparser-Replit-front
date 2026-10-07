@@ -568,7 +568,7 @@ def get_metrics_history(business_id):
 def add_manual_metric(business_id):
     """Добавить метрику вручную"""
     try:
-        user_data = require_auth()
+        user_data = require_auth_from_request()
         if not user_data:
             return jsonify({"error": "Требуется авторизация"}), 401
         
@@ -637,7 +637,7 @@ def add_manual_metric(business_id):
 def delete_manual_metric(business_id, metric_id):
     """Удалить метрику (только ручные)"""
     try:
-        user_data = require_auth()
+        user_data = require_auth_from_request()
         if not user_data:
             return jsonify({"error": "Требуется авторизация"}), 401
         

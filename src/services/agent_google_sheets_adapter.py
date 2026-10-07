@@ -79,7 +79,7 @@ class GoogleSheetsAppendAdapter:
         current_values = self.read_range_values(spreadsheet_id, range_value)
         if _contains_formula(current_values):
             raise GoogleSheetsAdapterError("Existing formulas cannot be overwritten.")
-        if expected_values and _normalized_matrix(current_values) != _normalized_matrix(expected_values):
+        if isinstance(request.get("expected_values"), list) and _normalized_matrix(current_values) != _normalized_matrix(expected_values):
             raise GoogleSheetsAdapterError("GOOGLE_SHEETS_VALUES_CHANGED")
         return {
             "success": True,
@@ -121,14 +121,20 @@ class GoogleSheetsAppendAdapter:
             "updated_cells": payload.get("updatedCells"),
         }
 
-    def read_range_values(self, spreadsheet_id: str, range_value: str) -> list[list[Any]]:
+    def read_range_values(
+        self,
+        spreadsheet_id: str,
+        range_value: str,
+        *,
+        value_render_option: str = "FORMULA",
+    ) -> list[list[Any]]:
         credentials = _refresh_credentials_if_needed(dict(self.credentials))
         token = str(credentials.get("token") or "").strip()
         if not token:
             raise GoogleSheetsAdapterError("Google Sheets credentials do not include access token.")
         url = f"https://sheets.googleapis.com/v4/spreadsheets/{quote(spreadsheet_id, safe='')}/values/{quote(range_value, safe='')}"
         request_kwargs = {
-            "params": {"majorDimension": "ROWS", "valueRenderOption": "FORMULA"},
+            "params": {"majorDimension": "ROWS", "valueRenderOption": value_render_option},
             "headers": {"Authorization": f"Bearer {token}"},
             "timeout": self.timeout_seconds,
         }

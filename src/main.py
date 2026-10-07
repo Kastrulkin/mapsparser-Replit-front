@@ -19,6 +19,7 @@ import random
 import re
 import threading
 import logging
+import time
 from functools import lru_cache
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -26,8 +27,7 @@ import requests
 
 # GigaChat TLS verification is explicit: use GIGACHAT_SSL_VERIFY=false only as a documented provider workaround.
 os.environ.setdefault('GIGACHAT_SSL_VERIFY', 'true')
-from flask import Flask, request, jsonify, render_template_string, send_from_directory, Response
-from flask_cors import CORS
+from flask import Flask, g, request, jsonify, render_template_string, send_from_directory, Response
 from werkzeug.serving import WSGIRequestHandler
 from werkzeug.exceptions import HTTPException
 
@@ -57,6 +57,7 @@ from parsequeue_status import STATUS_COMPLETED, STATUS_ERROR, normalize_status
 from auth_system import CONSENT_VERSION, authenticate_user, create_session, normalize_email, verify_email_token, verify_session, rotate_verification_token
 from billing_constants import TARIFFS
 from core.email_delivery import build_password_setup_link, send_email as deliver_email, send_password_setup_email, send_verification_email
+from core.cors_policy import configure_cors
 from init_database_schema import init_database_schema
 from core.default_ai_prompts import get_default_ai_prompts
 from core.beauty_service_optimization import (
@@ -134,6 +135,7 @@ from api.agent_prospecting_api import agent_prospecting_bp
 from api.agent_builder_api import agent_builder_bp
 from api.agent_blueprints_api import agent_blueprints_bp
 from api.capabilities_api import capabilities_bp, PHASE1_ACTION_ORCHESTRATOR
+from api.work_journal_api import work_journal_bp
 from api.average_ticket_api import average_ticket_bp
 from api.reports_api import reports_bp
 from api.operator_api import operator_bp
@@ -144,7 +146,18 @@ from api.company_registry_api import company_registry_bp
 from api.telegram_opportunity_radar_api import telegram_opportunity_radar_bp
 from api.telegram_research_api import telegram_research_bp
 from api.outreach_campaign_api import outreach_campaign_bp
+from api.material_downloads_api import material_downloads_bp
+from api.creator_promotion_api import creator_promotion_bp
+from api.creator_portal_api import creator_portal_bp
+from api.lead_journey_api import lead_journey_bp
+from api.web_tracking_api import ingestion_rate_limited_response, tracking_rate_limit_key, web_tracking_bp
 from core.agent_api_security import log_agent_discovery_event, should_track_discovery_path
+from core.security_headers import register_security_headers
+from core.browser_session import (
+    browser_cookie_auth_enabled,
+    issue_browser_session,
+    register_browser_session_security,
+)
 from services.prospecting_service import ProspectingService
 from core.card_audit import build_card_audit_snapshot, build_lead_card_preview_snapshot
 from core.ai_learning import record_ai_learning_event
@@ -232,11 +245,9 @@ except ImportError:
     db = None
     migrate = None
 
-# Настройка CORS для продакшена и разработки.
-# В .env укажите: ALLOWED_ORIGINS=http://localhost:3000,https://localos.pro
-allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
-allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
-CORS(app, supports_credentials=True, origins=allowed_origins)
+configure_cors(app)
+register_security_headers(app)
+register_browser_session_security(app)
 
 # Настройка rate limiting
 if RATE_LIMITER_AVAILABLE:
@@ -262,8 +273,17 @@ def rate_limit_if_available(limit_str):
     return decorator
 
 if limiter:
+    @app.before_request
+    def remember_web_tracking_request_start():
+        if request.path == "/api/tracking/events":
+            g.web_tracking_started_at = time.perf_counter()
+
     @app.errorhandler(429)
     def handle_rate_limit(error):
+        if request.path == "/api/tracking/events":
+            return ingestion_rate_limited_response(
+                getattr(g, "web_tracking_started_at", time.perf_counter())
+            )
         return jsonify(
             {
                 "success": False,
@@ -318,6 +338,7 @@ app.register_blueprint(agent_builder_bp)
 app.register_blueprint(agent_blueprints_bp)
 app.register_blueprint(capabilities_bp)
 app.register_blueprint(average_ticket_bp)
+app.register_blueprint(work_journal_bp)
 app.register_blueprint(reports_bp)
 app.register_blueprint(operator_bp)
 app.register_blueprint(auth_user_bp)
@@ -327,6 +348,23 @@ app.register_blueprint(company_registry_bp)
 app.register_blueprint(telegram_opportunity_radar_bp)
 app.register_blueprint(telegram_research_bp)
 app.register_blueprint(outreach_campaign_bp)
+app.register_blueprint(material_downloads_bp)
+app.register_blueprint(creator_promotion_bp)
+app.register_blueprint(creator_portal_bp)
+app.register_blueprint(lead_journey_bp)
+app.register_blueprint(web_tracking_bp)
+if limiter:
+    _web_tracking_endpoint = "web_tracking_api.receive_tracking_events"
+    _web_tracking_view = app.view_functions[_web_tracking_endpoint]
+    _web_tracking_view = limiter.limit(
+        os.getenv("WEB_TRACKING_IP_TRACKER_RATE_LIMIT", "120 per minute"),
+        key_func=tracking_rate_limit_key,
+    )(_web_tracking_view)
+    _web_tracking_view = limiter.limit(
+        os.getenv("WEB_TRACKING_GLOBAL_RATE_LIMIT", "12000 per minute"),
+        key_func=lambda: "web_tracking_global",
+    )(_web_tracking_view)
+    app.view_functions[_web_tracking_endpoint] = _web_tracking_view
 
 # Dev-safeguard: не допускаем дублирования /api/services/list
 try:
@@ -366,8 +404,17 @@ SITE_URL = "https://localos.pro"
 DEFAULT_OG_IMAGE = "https://localos.pro/assets/hero-image-BXgvVNKj.jpg"
 PUBLIC_AUDIT_APP_ROUTES = {
     "about",
+    "articles",
+    "cases",
     "contact",
+    "creator",
+    "data-deletion",
+    "demo",
+    "docs",
+    "documents",
+    "growth",
     "policy",
+    "privacy",
     "requisites",
     "login",
     "dashboard",
@@ -382,6 +429,8 @@ PUBLIC_AUDIT_APP_ROUTES = {
     "bazich",
     "public-audit",
     "assets",
+    "veselaya-rascheska-hit",
+    "web-analytics",
 }
 
 # HTML шаблон для главной страницы
@@ -484,6 +533,54 @@ SENSITIVE_PROBE_EXACT_PATHS = {
 # ==================== ХЕЛПЕР: РАБОТА С БИЗНЕСАМИ ====================
 # Импортируем helper функции из core модуля
 from core.helpers import get_business_owner_id, get_business_id_from_user, get_user_language, find_business_id_for_user
+from subscription_manager import get_capability_access
+
+
+@app.before_request
+def require_legacy_maps_content_access():
+    protected_capability = None
+    if request.path.startswith("/api/news/"):
+        protected_capability = "maps.news"
+    elif request.path in {"/api/reviews/reply", "/api/review-replies/update"}:
+        protected_capability = "maps.reviews"
+    if not protected_capability or request.method == "OPTIONS":
+        return None
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    user_data = verify_session(auth_header.split(" ", 1)[1])
+    if not user_data:
+        return None
+    payload = request.get_json(silent=True) if request.method in {"POST", "PUT", "PATCH"} else {}
+    payload = payload if isinstance(payload, dict) else {}
+    business_id = str(payload.get("business_id") or request.args.get("business_id") or "").strip()
+    if not business_id and payload.get("news_id"):
+        db = DatabaseManager()
+        try:
+            cursor = db.conn.cursor()
+            cursor.execute(
+                "SELECT business_id FROM usernews WHERE id = %s AND user_id = %s LIMIT 1",
+                (str(payload.get("news_id")), str(user_data.get("user_id") or "")),
+            )
+            row = cursor.fetchone()
+            business_id = str(row.get("business_id") if hasattr(row, "get") else row[0]) if row else ""
+        finally:
+            db.close()
+    if not business_id and request.path != "/api/news/list":
+        business_id = str(get_business_id_from_user(str(user_data.get("user_id") or "")) or "").strip()
+    if not business_id:
+        return jsonify({"success": False, "error": "business_id обязателен"}), 400
+
+    access = get_capability_access(business_id, protected_capability, bool(user_data.get("is_superadmin")))
+    if access.get("allowed"):
+        return None
+    return jsonify({
+        "success": False,
+        "error": "payment_required",
+        **access,
+        "return_to": request.full_path.rstrip("?"),
+    }), 402
 
 # ==================== СЕРВИС: ОПТИМИЗАЦИЯ УСЛУГ ====================
 

@@ -23,6 +23,7 @@ from flask import Blueprint, current_app, jsonify, redirect, request
 
 from auth_encryption import decrypt_auth_data, encrypt_auth_data
 from auth_system import verify_session
+from core.api_errors import internal_error_response
 from core.auth_helpers import verify_business_access
 from core.helpers import get_business_owner_id
 from core.map_url_normalizer import is_google_map_url
@@ -56,6 +57,7 @@ from services.meta_oauth_service import (
     meta_graph_api_version,
     public_meta_asset,
 )
+from subscription_manager import get_capability_access
 
 
 logger = logging.getLogger(__name__)
@@ -63,6 +65,66 @@ external_accounts_bp = Blueprint("external_accounts_api", __name__)
 
 DEFAULT_VK_RETURN_PATH = "/dashboard/settings/integrations?focus=vk"
 DEFAULT_META_RETURN_PATH = "/dashboard/settings/integrations?focus=meta"
+
+
+@external_accounts_bp.before_request
+def require_maps_external_accounts_access():
+    if request.method == "OPTIONS" or not (
+        request.path.startswith("/api/business/")
+        or request.path.startswith("/api/external-accounts/")
+    ):
+        return None
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    user_data = verify_session(auth_header.split(" ", 1)[1])
+    if not user_data:
+        return None
+    route_values = request.view_args or {}
+    business_id = str(route_values.get("business_id") or "").strip()
+    db = None
+    try:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        if not business_id and route_values.get("account_id"):
+            cursor.execute(
+                "SELECT business_id FROM externalbusinessaccounts WHERE id = %s LIMIT 1",
+                (str(route_values.get("account_id")),),
+            )
+            row = cursor.fetchone()
+            business_id = str(row.get("business_id") if hasattr(row, "get") else row[0]) if row else ""
+        if not business_id:
+            return None
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not owner_id or not has_access:
+            return None
+        scoped_business_ids = [business_id]
+        if str(request.args.get("scope") or "").strip().lower() == "network":
+            cursor.execute("SELECT network_id FROM businesses WHERE id = %s LIMIT 1", (business_id,))
+            row = cursor.fetchone()
+            network_id = str(row.get("network_id") if hasattr(row, "get") else row[0]) if row else ""
+            if network_id:
+                cursor.execute("SELECT id FROM businesses WHERE network_id = %s OR id = %s ORDER BY id", (network_id, network_id))
+                scoped_business_ids = [str(row.get("id") if hasattr(row, "get") else row[0]) for row in cursor.fetchall()]
+        access_rows = [
+            get_capability_access(item, "maps", bool(user_data.get("is_superadmin")))
+            for item in scoped_business_ids
+        ]
+        if access_rows and all(item.get("allowed") for item in access_rows):
+            return None
+        access = next((item for item in access_rows if not item.get("allowed")), get_capability_access(business_id, "maps"))
+        return jsonify({
+            "success": False,
+            "error": "payment_required",
+            **access,
+            "return_to": request.full_path.rstrip("?"),
+        }), 402
+    except Exception:
+        message = "Не удалось получить подключения" if request.method == "GET" and request.path.endswith("/external-accounts") else "Не удалось проверить тарифный доступ"
+        return internal_error_response(message)
+    finally:
+        if db is not None:
+            db.close()
 
 
 try:
@@ -1403,14 +1465,8 @@ def get_external_accounts(business_id):
             resp["_debug"] = {"tableName": "externalbusinessaccounts"}
         return jsonify(resp)
 
-    except Exception as e:
-        import traceback
-        err_tb = traceback.format_exc()
-        print(f"❌ Ошибка GET external-accounts: {e}\n{err_tb}")
-        payload = {"error": str(e), "detail": "get_external_accounts"}
-        if getattr(current_app, "debug", False):
-            payload["traceback"] = err_tb
-        return jsonify(payload), 500
+    except Exception:
+        return internal_error_response("Не удалось получить подключения")
 
 @external_accounts_bp.route("/api/business/<business_id>/external-accounts", methods=["POST"])
 def upsert_external_account(business_id):
@@ -1513,11 +1569,9 @@ def upsert_external_account(business_id):
         if auth_data_str:
             try:
                 auth_data_encrypted = encrypt_auth_data(auth_data_str)
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
+            except Exception:
                 db.close()
-                return jsonify({"error": f"Ошибка шифрования данных: {str(e)}", "field": "auth_data"}), 500
+                return internal_error_response("Не удалось сохранить подключение")
 
         # SELECT с блокировкой при наличии строки, чтобы избежать гонки update/create
         cursor.execute(
@@ -1612,12 +1666,8 @@ def upsert_external_account(business_id):
             }
         return jsonify(resp)
 
-    except Exception as e:
-        print(f"❌ Ошибка сохранения внешнего аккаунта: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось сохранить подключение")
 
 @external_accounts_bp.route("/api/external-accounts/<account_id>", methods=["DELETE"])
 def delete_external_account(account_id):
@@ -1958,13 +2008,13 @@ def get_external_reviews(business_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        # Проверяем, что пользователь владелец бизнеса или суперадмин
-        owner_id = get_business_owner_id(cursor, business_id)
+        # Проверяем доступ владельца, участника бизнеса или участника сети.
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
         if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+        if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
@@ -1998,6 +2048,7 @@ def get_external_reviews(business_id):
         else:
             review_query += " WHERE r.business_id = %s "
             review_params.append(business_id)
+        review_query += " AND COALESCE(r.is_current, TRUE) = TRUE "
         source_filter_sql = _map_source_filter_sql("r.source", source_filter_raw)
         if source_filter_sql:
             review_query += f" AND {source_filter_sql} "
@@ -2081,6 +2132,8 @@ def get_external_summary(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
+        source_filter_raw = str(request.args.get("source") or "").strip().lower()
+
         # Проверяем, существуют ли таблицы (Postgres)
         cursor.execute("""
             SELECT table_name FROM information_schema.tables
@@ -2101,7 +2154,7 @@ def get_external_summary(business_id):
             reviews_total = 0
             last_parse_date = None
             competitors = None
-            if card_row:
+            if card_row and not source_filter_raw:
                 try:
                     rating = float(card_row.get("rating")) if card_row.get("rating") is not None else None
                 except (TypeError, ValueError):
@@ -2123,7 +2176,6 @@ def get_external_summary(business_id):
             })
 
         requested_scope = str(request.args.get("scope") or "").strip().lower()
-        source_filter_raw = str(request.args.get("source") or "").strip().lower()
         business_row, network_id, aggregate_network = _resolve_network_scope_for_business(cursor, business_id, requested_scope)
 
         stats_query = """
@@ -2309,7 +2361,7 @@ def get_external_summary(business_id):
         #   - сначала metrics_card, если это metrics_update
         #   - затем chosen_card (обычно full)
         metrics_overview = _as_dict_obj(metrics_card.get("overview")) if metrics_card else {}
-        if rating is None:
+        if rating is None and not source_filter_raw:
             if metrics_card and metrics_overview.get("snapshot_type") == "metrics_update" and metrics_card.get("rating") is not None:
                 try:
                     rating = float(metrics_card.get("rating"))
@@ -2321,7 +2373,10 @@ def get_external_summary(business_id):
                 except (TypeError, ValueError):
                     rating = None
 
-        if reviews_total == 0:
+        if reviews_total == 0 and stats_row and stats_row.get("reviews_total") is not None:
+            reviews_total = int(stats_row.get("reviews_total") or 0)
+
+        if reviews_total == 0 and not source_filter_raw:
             if metrics_card and metrics_overview.get("snapshot_type") == "metrics_update" and (metrics_card.get("reviews_count") or 0) != 0:
                 reviews_total = int(metrics_card.get("reviews_count") or 0)
             elif parse_row and (parse_row.get("reviews_count") or 0) != 0:

@@ -64,6 +64,13 @@ SLOP_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         ),
     ),
     (
+        "карточка как строка отчёта",
+        re.compile(
+            r"\bкарточк\w*[^\n]{0,100}:\s*услуг\s*-\s*\d+\s*,?\s*с\s+цен\w*\s*-\s*\d+",
+            re.IGNORECASE,
+        ),
+    ),
+    (
         "проверить сценарии увеличения среднего чека",
         re.compile(
             r"\bпровер\w*\s+сценари\w*\s+увеличени\w*\s+средн\w*\s+чек\w*\b",
@@ -106,8 +113,10 @@ DIRECT_PAIN_RE = re.compile(
     re.IGNORECASE,
 )
 SIGNAL_RE = re.compile(
-    r"\b(?:увидел\w*|заметил\w*|сообщил\w*|обновил\w*|анонсир\w*|"
-    r"опубликов\w*|в\s+карточк\w*|в\s+telegram|в\s+официальн\w*\s+канал\w*)\b",
+    r"\b(?:вижу|увидел\w*|заметил\w*|сообщил\w*|обновил\w*|анонсир\w*|"
+    r"опубликов\w*|в\s+карточк\w*|карточк\w*[^\n]{0,120}яндекс\w*\s+карт\w*|"
+    r"рейтинг\w*[^\n]{0,120}яндекс\w*\s+карт\w*|"
+    r"на\s+сайт\w*|в\s+telegram|в\s+официальн\w*\s+канал\w*)\b",
     re.IGNORECASE,
 )
 
@@ -279,6 +288,18 @@ def review_human_language(
         normalized,
         publication_capabilities,
     )
+    named_online_channels = sum(
+        bool(pattern.search(normalized))
+        for pattern in (
+            re.compile(r"\btelegram\b", re.IGNORECASE),
+            re.compile(r"(?:^|[^a-zа-яё0-9])vk(?:[^a-zа-яё0-9]|$)", re.IGNORECASE),
+            re.compile(r"яндекс\w*\s+карт\w*", re.IGNORECASE),
+        )
+    )
+    cta_scope_aligned = not (
+        named_online_channels >= 2
+        and bool(re.search(r"клиент\w*\s+с\s+карт\w*\s*\?\s*$", normalized))
+    )
 
     checks = {
         "cliche_free": not matched_phrases,
@@ -289,6 +310,7 @@ def review_human_language(
         "language_support": support_status in {"supported", "not_checked", "unavailable"}
         or conditional_operator_support,
         "publication_claim_supported": publication_claim_supported,
+        "cta_scope_aligned": cta_scope_aligned,
     }
     reason_codes: list[str] = []
     if matched_phrases:
@@ -312,6 +334,8 @@ def review_human_language(
         reason_codes.append("PROOF_WORDING_CHANGED")
     if not publication_claim_supported:
         reason_codes.append("UNSUPPORTED_PUBLICATION_CLAIM")
+    if not cta_scope_aligned:
+        reason_codes.append("CTA_SCOPE_MISMATCH")
 
     return {
         "passed": not reason_codes,

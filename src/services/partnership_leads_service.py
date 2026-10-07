@@ -15,6 +15,7 @@ from psycopg2.extras import RealDictCursor
 from database_manager import DatabaseManager
 from pg_db_utils import get_db_connection
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
+from core.api_errors import internal_error_response
 from services.lead_workstream_service import (
     CLIENT_PARTNERSHIP,
     LOCALOS_SALES,
@@ -24,6 +25,8 @@ from services.lead_workstream_service import (
     resolve_workstream,
     update_workstream,
 )
+from services.outreach_safety_service import partnership_repeat_contact_guard
+from subscription_manager import get_capability_access
 from api import admin_prospecting as _legacy
 
 ALLOWED_OUTREACH_CHANNELS = _legacy.ALLOWED_OUTREACH_CHANNELS
@@ -67,6 +70,7 @@ _to_json_compatible = _legacy._to_json_compatible
 __all__ = [
     "partnership_list_leads",
     "partnership_update_lead",
+    "partnership_catalog_shortlist",
     "partnership_mark_lead_manual_contact",
     "partnership_bulk_update_leads",
     "partnership_delete_lead",
@@ -85,6 +89,28 @@ __all__ = [
     "create_lead_workstream",
 ]
 
+
+def _partnership_write_access(business_id: str, user_data: dict):
+    access = get_capability_access(business_id, "partnerships", bool(user_data.get("is_superadmin")))
+    if access.get("allowed"):
+        return None
+    return jsonify({"success": False, "error": "payment_required", **access, "return_to": request.full_path.rstrip("?")}), 402
+
+
+def _sanitize_partnership_preview_item(item: dict[str, Any]) -> dict[str, Any]:
+    """Keep the free card useful without returning operational or contact data."""
+    safe = dict(item)
+    for key in (
+        "workstreams", "next_action", "next_best_action", "channel_state", "room_state",
+        "lead_kind", "contact_points", "contact_summary", "selected_recipient",
+        "selected_channel", "contact_guard", "research", "campaign_state",
+        "message_readiness", "enrichment_state", "sales_room_url",
+        "phone", "email", "website", "telegram_url", "whatsapp_url",
+        "contact_person", "contact_name", "outreach_notes", "draft_text",
+    ):
+        safe.pop(key, None)
+    return safe
+
 def partnership_list_leads():
     """User-level list of partnership leads for one business."""
     user_data, error = _require_auth()
@@ -97,6 +123,8 @@ def partnership_list_leads():
         pipeline_status_filter = str(request.args.get("pipeline_status") or "").strip().lower() or None
         pilot_cohort = str(request.args.get("pilot_cohort") or "").strip().lower() or None
         q = str(request.args.get("q") or "").strip().lower()
+        search_task_id = str(request.args.get("search_task_id") or "").strip()
+        company_filter = str(request.args.get("company_filter") or "all")
         limit = max(1, min(int(request.args.get("limit") or 100), 500))
         offset = max(0, int(request.args.get("offset") or 0))
 
@@ -109,12 +137,38 @@ def partnership_list_leads():
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            access = get_capability_access(business_id, 'partnerships', bool(user_data.get('is_superadmin')))
+            safe_catalog = not bool(access.get('allowed'))
 
             where_sql = [
                 "active_ws.client_business_id = %s",
                 "active_ws.workstream_type = 'client_partnership'",
             ]
             params: list[Any] = [business_id]
+            task_state = {}
+            if search_task_id:
+                cur.execute("""SELECT result_json FROM operator_async_jobs
+                    WHERE id::text=%s AND business_id=%s AND kind='outreach_continue'""",
+                    (search_task_id, business_id))
+                search_task = cur.fetchone()
+                if not search_task:
+                    return jsonify({"error": "search_task_not_found"}), 404
+                task_state = (dict(search_task).get("result_json") or {}) if hasattr(search_task, "keys") else (search_task[0] or {})
+                where_sql.append("prospectingleads.id::text = ANY(%s::text[])")
+                params.append([str(value) for value in (task_state.get("lead_ids") or [])])
+            if company_filter not in {'all', 'suitable', 'needs_decision', 'excluded'}:
+                return jsonify({'error': 'invalid_company_filter'}), 400
+            from services.outreach_continuation import qualified_contact_ids
+            eligible_ids = qualified_contact_ids(task_state)
+            excluded_sql = "(COALESCE(active_ws.status,'') IN ('not_relevant','disqualified','closed_lost') OR COALESCE(partnership_stage,'') IN ('rejected','shortlist_rejected'))"
+            if company_filter == 'excluded':
+                where_sql.append(excluded_sql)
+            elif company_filter == 'suitable':
+                where_sql.extend(["NOT " + excluded_sql, "active_ws.id::text=ANY(%s::text[])"])
+                params.append(eligible_ids)
+            elif company_filter == 'needs_decision':
+                where_sql.extend(["NOT " + excluded_sql, "active_ws.id::text<>ALL(%s::text[])", "COALESCE(active_ws.status,'') NOT IN ('in_progress','contacted','replied','responded','waiting_reply','sent','delivered')"])
+                params.append(eligible_ids)
             if stage_filter:
                 where_sql.append("COALESCE(partnership_stage, 'imported') = %s")
                 params.append(stage_filter)
@@ -156,13 +210,14 @@ def partnership_list_leads():
                 where_sql.append("COALESCE(pilot_cohort, 'backlog') = %s")
                 params.append(pilot_cohort)
             if q:
-                where_sql.append("(LOWER(COALESCE(name, '')) LIKE %s OR LOWER(COALESCE(source_url, '')) LIKE %s)")
+                where_sql.append("(LOWER(COALESCE(name, '')) LIKE %s OR LOWER(COALESCE(source_url, '')) LIKE %s OR LOWER(COALESCE(city, '')) LIKE %s OR LOWER(COALESCE(category, '')) LIKE %s)")
                 q_like = f"%{q}%"
-                params.extend([q_like, q_like])
+                params.extend([q_like, q_like, q_like, q_like])
 
             cur.execute(
                 f"""
-                SELECT prospectingleads.id, prospectingleads.name, prospectingleads.address, prospectingleads.city,
+                SELECT COUNT(*) OVER() AS preview_total_count,
+                       prospectingleads.id, prospectingleads.name, prospectingleads.address, prospectingleads.city,
                        prospectingleads.category, prospectingleads.source_url, prospectingleads.source,
                        prospectingleads.source_kind, prospectingleads.source_provider,
                        prospectingleads.external_place_id, prospectingleads.external_source_id,
@@ -184,6 +239,15 @@ def partnership_list_leads():
                        prospectingleads.parse_business_id, prospectingleads.updated_at,
                        prospectingleads.created_at,
                        active_ws.id AS active_workstream_id,
+                       active_ws.lifecycle_status AS workstream_lifecycle_status,
+                       active_ws.status_reason AS workstream_status_reason,
+                       relationship.negotiation_stage AS relationship_status,
+                       COALESCE(relationship.do_not_call, FALSE) AS relationship_do_not_call,
+                       prior_message.author_type AS prior_message_author_type,
+                       prior_message.direction AS prior_message_direction,
+                       prior_message.body_text AS prior_message_body_text,
+                       prior_message.source_channel AS prior_message_source_channel,
+                       COALESCE(prior_message.occurred_at, prior_message.created_at) AS prior_message_created_at,
                        (
                            SELECT client_business.name
                            FROM businesses client_business
@@ -204,12 +268,28 @@ def partnership_list_leads():
                        artifact_last.updated_at AS artifact_updated_at
                 FROM prospectingleads
                 JOIN lead_workstreams active_ws ON active_ws.lead_id = prospectingleads.id
+                LEFT JOIN lead_relationship_states relationship ON relationship.workstream_id = active_ws.id
+                LEFT JOIN LATERAL (
+                    SELECT message.author_type, message.direction, message.body_text,
+                           message.source_channel, message.occurred_at, message.created_at
+                    FROM sales_rooms room
+                    JOIN sales_room_messages message ON message.room_id = room.id
+                    WHERE room.lead_id = prospectingleads.id
+                      AND (room.workstream_id = active_ws.id OR room.workstream_id IS NULL)
+                      AND NULLIF(BTRIM(COALESCE(message.body_text, '')), '') IS NOT NULL
+                      AND (
+                          COALESCE(message.direction, 'room') = 'inbound'
+                          OR COALESCE(message.author_type, 'visitor') IN ('visitor', 'partner', 'recipient')
+                      )
+                    ORDER BY COALESCE(message.occurred_at, message.created_at) DESC, message.created_at DESC
+                    LIMIT 1
+                ) prior_message ON TRUE
                 LEFT JOIN LATERAL (
                     SELECT
                         pq.id, pq.status, pq.updated_at, pq.created_at, pq.retry_after, pq.error_message
                     FROM parsequeue pq
                     WHERE (
-                            (prospectingleads.parse_business_id IS NOT NULL AND pq.business_id = prospectingleads.parse_business_id)
+                            (prospectingleads.parse_business_id IS NOT NULL AND pq.business_id = prospectingleads.parse_business_id::text)
                             OR (
                                 prospectingleads.parse_business_id IS NULL
                                 AND prospectingleads.source_url IS NOT NULL
@@ -249,25 +329,75 @@ def partnership_list_leads():
             conn.close()
 
         items = []
+        preview_total_count = 0
         for row in rows:
             payload = dict(row) if hasattr(row, "keys") else {}
+            preview_total_count = max(preview_total_count, int(payload.pop('preview_total_count', 0) or 0))
             parse_status = str(payload.get("parse_status") or "").strip().lower()
             if parse_status in {"completed", "done"}:
                 payload = _sync_partnership_lead_from_parsed_data(payload)
             sales_room_slug = str(payload.get("sales_room_slug") or "").strip()
             if sales_room_slug:
                 payload["sales_room_url"] = _make_sales_room_url(sales_room_slug)
+            prior_conversation = None
+            if payload.get("prior_message_body_text"):
+                prior_conversation = {
+                    "author_type": payload.pop("prior_message_author_type", None),
+                    "direction": payload.pop("prior_message_direction", None),
+                    "body_text": payload.pop("prior_message_body_text", None),
+                    "source_channel": payload.pop("prior_message_source_channel", None),
+                    "created_at": payload.pop("prior_message_created_at", None),
+                }
+            else:
+                for key in (
+                    "prior_message_author_type", "prior_message_direction",
+                    "prior_message_body_text", "prior_message_source_channel",
+                    "prior_message_created_at",
+                ):
+                    payload.pop(key, None)
+            payload["contact_guard"] = partnership_repeat_contact_guard(
+                lifecycle_status=payload.get("workstream_lifecycle_status"),
+                workstream_status=payload.get("pipeline_status"),
+                relationship_status=payload.pop("relationship_status", None),
+                prior_conversation=prior_conversation,
+                do_not_call=bool(payload.pop("relationship_do_not_call", False)),
+            )
+            if payload["contact_guard"].get("blocked"):
+                payload["pipeline_status"] = payload["contact_guard"].get("display_status")
             payload["next_best_action"] = _partnership_next_best_action(payload)
+            if safe_catalog:
+                for private_key in (
+                    'phone', 'email', 'telegram_url', 'whatsapp_url', 'website',
+                    'search_payload_json', 'enrich_payload_json', 'sales_room_url',
+                    'selected_channel', 'contact_guard', 'next_best_action',
+                ):
+                    payload.pop(private_key, None)
             items.append(payload)
         attach_conn = get_db_connection()
         try:
             items = attach_workstreams(attach_conn, items)
         finally:
             attach_conn.close()
-        return jsonify({"success": True, "count": len(items), "items": items})
+        for item in items:
+            item["catalog_shortlisted"] = str(item.get("pipeline_status") or "") == "shortlisted"
+        if safe_catalog:
+            items = [_sanitize_partnership_preview_item(item) for item in items]
+        return jsonify({
+            "success": True,
+            "count": preview_total_count or len(items),
+            "items": items,
+            "access": access,
+            "preview": {
+                "limited": False,
+                "visible_limit": limit,
+                "hidden_count": 0,
+                "required_tier": "professional",
+                "required_tier_name": "Привлечение",
+            },
+        })
     except Exception as e:
         print(f"Error listing partnership leads: {e}")
-        return jsonify({"error": str(e)}), 500
+        return internal_error_response("Не удалось получить список партнёров")
 
 
 def create_lead_workstream(lead_id):
@@ -359,6 +489,9 @@ def partnership_update_lead(lead_id):
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            access_error = _partnership_write_access(business_id, user_data)
+            if access_error:
+                return access_error
             cur.execute(
                 """
                 SELECT l.id, l.name, l.telegram_url, l.whatsapp_url, l.email, ws.id AS workstream_id
@@ -523,6 +656,55 @@ def partnership_update_lead(lead_id):
         return jsonify({"error": str(e)}), 500
 
 
+def partnership_catalog_shortlist(lead_id):
+    """Save a tenant-scoped catalog shortlist choice without opening outreach."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    data = request.get_json(silent=True) or {}
+    requested_business_id = str(data.get("business_id") or "").strip() or None
+    selected = data.get("selected")
+    if not isinstance(selected, bool):
+        return jsonify({"error": "selected must be boolean"}), 400
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            cur.execute(
+                """
+                SELECT id
+                FROM lead_workstreams
+                WHERE lead_id = %s
+                  AND client_business_id = %s
+                  AND workstream_type = 'client_partnership'
+                LIMIT 1
+                """,
+                (lead_id, business_id),
+            )
+            workstream = cur.fetchone()
+            if not workstream:
+                return jsonify({"error": "Lead not found"}), 404
+            updated = update_workstream(
+                conn,
+                workstream_id=str(workstream["id"]),
+                status="shortlisted" if selected else "unprocessed",
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify({
+            "success": True,
+            "lead_id": lead_id,
+            "catalog_shortlisted": selected,
+            "workstream": _to_json_compatible(updated),
+        })
+    except Exception:
+        return internal_error_response("Не удалось обновить shortlist партнёров")
+
+
 def partnership_mark_lead_manual_contact(lead_id):
     """User-level manual contact marker for room-first partnership outreach."""
     user_data, error = _require_auth()
@@ -545,6 +727,9 @@ def partnership_mark_lead_manual_contact(lead_id):
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            access_error = _partnership_write_access(business_id, user_data)
+            if access_error:
+                return access_error
             cur.execute(
                 """
                 SELECT l.*, ws.id AS workstream_id
@@ -637,6 +822,9 @@ def partnership_bulk_update_leads():
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            access_error = _partnership_write_access(business_id, user_data)
+            if access_error:
+                return access_error
             if selected_channel is not None and selected_channel != "manual":
                 cur.execute(
                     """
@@ -800,6 +988,9 @@ def partnership_delete_lead(lead_id):
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            access_error = _partnership_write_access(business_id, user_data)
+            if access_error:
+                return access_error
             cur.execute(
                 """
                 DELETE FROM lead_workstreams
@@ -847,6 +1038,9 @@ def partnership_bulk_delete_leads():
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            access_error = _partnership_write_access(business_id, user_data)
+            if access_error:
+                return access_error
             cur.execute(
                 """
                 DELETE FROM lead_workstreams
@@ -900,6 +1094,9 @@ def partnership_prepare_sales_room(lead_id):
             conn.close()
         if not business_id:
             return jsonify({"error": "Business not found or access denied"}), 403
+        access_error = _partnership_write_access(business_id, user_data)
+        if access_error:
+            return access_error
         result = _prepare_partnership_sales_room(
             lead_id=lead_id,
             business_id=business_id,

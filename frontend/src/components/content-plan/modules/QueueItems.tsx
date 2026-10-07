@@ -27,6 +27,7 @@ const DraftWorkIndicator = ({ isRu, ready }) => {
 };
 
 export const QueueItems = ({ scope }) => {
+  const [manualContentConfirmed, setManualContentConfirmed] = React.useState<Record<string, boolean>>({});
   const {
     isRu, draftEdits, setDraftEdits, themeEdits, setThemeEdits, dateEdits, setDateEdits, busyItemId,
     expandedDuplicateItemId, setExpandedDuplicateItemId, duplicateTargetSelections, duplicateDateOverrides, setDuplicateDateOverrides, recentGeneratedItemId, draftGeneratingItemId, socialPostsByItem, socialTextEdits,
@@ -1136,6 +1137,23 @@ export const QueueItems = ({ scope }) => {
                                           ? 'Можно оставить пустым, но ссылка помогает потом связать реакции и заявки с конкретной публикацией.'
                                           : 'Optional, but a URL helps connect reactions and leads to the exact publication later.'}
                                       </div>
+                                      <label className="md:col-span-2 flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-700">
+                                        <input
+                                          type="checkbox"
+                                          checked={Boolean(manualContentConfirmed[post.id])}
+                                          onChange={(event) => setManualContentConfirmed((prev) => ({
+                                            ...prev,
+                                            [post.id]: event.target.checked,
+                                          }))}
+                                          disabled={postBusy}
+                                          className="mt-0.5 h-4 w-4 shrink-0"
+                                        />
+                                        <span>
+                                          {isRu
+                                            ? 'Проверил на площадке: текст и выбранные фото отображаются правильно.'
+                                            : 'Checked on the platform: copy and selected photos display correctly.'}
+                                        </span>
+                                      </label>
                                     </div>
                                   ) : null}
                                     {(post.provider_post_url || post.provider_post_id) && !publishEvidence ? (
@@ -1246,8 +1264,8 @@ export const QueueItems = ({ scope }) => {
                                           type="button"
                                           size="sm"
                                           variant="outline"
-                                          onClick={() => { void markSocialPostPublished(post); }}
-                                          disabled={postBusy}
+                                          onClick={() => { void markSocialPostPublished(post, Boolean(manualContentConfirmed[post.id])); }}
+                                          disabled={postBusy || !manualContentConfirmed[post.id]}
                                         >
                                           {isRu ? 'Отметить размещённым' : 'Mark published'}
                                         </Button>

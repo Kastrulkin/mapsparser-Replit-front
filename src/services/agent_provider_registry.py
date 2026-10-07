@@ -43,6 +43,9 @@ PROVIDER_REGISTRY: Dict[str, Dict[str, Any]] = {
 
 
 CAPABILITY_PROVIDER_MAP: Dict[str, List[Dict[str, Any]]] = {
+    "outreach.continue": [
+        {"provider": "native_localos", "state": "available", "role": "approved_workflow_job_binding"},
+    ],
     "outreach.send_batch": [
         {"provider": "openclaw", "state": "available", "role": "preferred_boundary"},
         {"provider": "maton", "state": "available", "role": "delivery_bridge"},

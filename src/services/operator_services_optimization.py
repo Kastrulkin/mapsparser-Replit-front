@@ -4,6 +4,7 @@ import json
 import uuid
 from typing import Any, Callable
 
+from core.db_helpers import assert_schema_columns
 from services.llm import analyze_text_with_gigachat
 from services.knowledge_retrieval import semantic_context_for_cursor
 from services.llm.analytics import queue_service_catalog_analysis
@@ -51,55 +52,21 @@ def _positive_limit(value: Any) -> int:
 
 
 def _ensure_service_regeneration_tables(cursor: Any) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS serviceregenerationjobs (
-            id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            business_id TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'awaiting_confirmation',
-            requested_by TEXT NOT NULL DEFAULT 'ui',
-            limit_count INTEGER NOT NULL DEFAULT 10,
-            total_problem_count INTEGER NOT NULL DEFAULT 0,
-            selected_count INTEGER NOT NULL DEFAULT 0,
-            fixed_count INTEGER NOT NULL DEFAULT 0,
-            failed_count INTEGER NOT NULL DEFAULT 0,
-            manual_review_count INTEGER NOT NULL DEFAULT 0,
-            remaining_count INTEGER,
-            remaining_after_batch INTEGER NOT NULL DEFAULT 0,
-            confirmation_required BOOLEAN NOT NULL DEFAULT TRUE,
-            cooldown_until TIMESTAMPTZ,
-            message TEXT,
-            summary_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            started_at TIMESTAMPTZ,
-            finished_at TIMESTAMPTZ
-        )
-        """
+    assert_schema_columns(
+        cursor,
+        "serviceregenerationjobs",
+        (
+            "id", "user_id", "business_id", "status", "requested_by", "limit_count",
+            "selected_count", "confirmation_required", "summary_json", "created_at", "updated_at",
+        ),
     )
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS serviceregenerationjobitems (
-            id TEXT PRIMARY KEY,
-            job_id TEXT NOT NULL REFERENCES serviceregenerationjobs(id) ON DELETE CASCADE,
-            service_id TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'queued',
-            attempt_no INTEGER NOT NULL DEFAULT 0,
-            issue_codes_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-            issue_labels_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-            keyword_score_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            instructions TEXT,
-            before_optimized_name TEXT,
-            before_optimized_description TEXT,
-            after_optimized_name TEXT,
-            after_optimized_description TEXT,
-            after_issue_labels_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-            error TEXT,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
+    assert_schema_columns(
+        cursor,
+        "serviceregenerationjobitems",
+        (
+            "id", "job_id", "service_id", "status", "attempt_no", "issue_codes_json",
+            "before_optimized_name", "after_optimized_name", "created_at", "updated_at",
+        ),
     )
 
 

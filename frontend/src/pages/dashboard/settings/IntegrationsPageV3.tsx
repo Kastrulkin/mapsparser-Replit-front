@@ -41,6 +41,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 import { newAuth } from '@/lib/auth_new';
+import { browserAuthenticationAvailable, browserBearerToken } from '@/lib/browserSessionFetch';
 import { cn } from '@/lib/utils';
 
 import { SettingsDetailSheet } from './SettingsHubComponents';
@@ -133,7 +134,7 @@ const typeCopy: Record<ConnectionType, string> = {
 const serviceDescriptions: Record<string, string> = {
   telegram: 'Привяжите бот LocalOS для управления аккаунтом и отдельно выберите канал/чат, куда будут уходить согласованные посты.',
   whatsapp: 'Сохраните номер и WABA-доступ, когда канал готов к отправке сообщений клиентам.',
-  outreach_email: 'Один mailbox используется для отправки одобренных писем и обязательной проверки ответов.',
+  outreach_email: 'С этой почты LocalOS отправляет одобренные письма и проверяет ответы',
   outreach_vk: 'VK-сообщество используется только для одобренных сообщений и проверки ответов по кампаниям LocalOS.',
   outreach_max: 'LocalOS готовит MAX-сообщения, а владелец аккаунта отправляет их и отмечает ответы вручную.',
   google_sheets: 'Агенты могут читать таблицы и готовить изменения. Запись выполняется только после вашего подтверждения.',
@@ -177,7 +178,7 @@ const serviceGroup = (serviceId: string): ServiceGroupKey => {
 };
 
 const authHeaders = () => {
-  const token = newAuth.getToken() || localStorage.getItem('auth_token');
+  const token = newAuth.getToken() || browserBearerToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
@@ -389,7 +390,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setGoogleBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const oauthParams = new URLSearchParams({ business_id: currentBusinessId });
       const fallbackReturnTo = `/dashboard/settings/integrations?focus=${encodeURIComponent(purpose)}`;
       oauthParams.set('return_to', safeDashboardReturnTo(returnTo) || fallbackReturnTo);
@@ -421,7 +422,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setGoogleActionUrl(null);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/google/locations`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -448,7 +449,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setGoogleBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/google/bind-location`, {
         method: 'POST',
         headers: {
@@ -483,7 +484,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setGoogleBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/google/sync`, {
         method: 'POST',
         headers: {
@@ -514,7 +515,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setVkBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const groupId = vkOwnerId.trim().replace(/^-/, '');
       const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/external-accounts`, {
         method: 'POST',
@@ -560,7 +561,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setMetaMessage(null);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/meta/oauth/start`, {
         method: 'POST',
         headers: {
@@ -590,7 +591,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setMetaMessage(null);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/meta/assets`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -614,7 +615,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setMetaBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/meta/bind`, {
         method: 'POST',
         headers: {
@@ -642,7 +643,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setMetaBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const response = await fetch(`/api/external-accounts/${encodeURIComponent(metaAccount.id)}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
@@ -687,7 +688,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setMatonBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/external-accounts`, {
         method: 'POST',
         headers: {
@@ -821,7 +822,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
       return (
         <SetupPanel
           title="Google Business"
-          description="Ждём согласования Google. Это не мешает Google Таблицам."
+          description="Подключите Google-аккаунт с доступом к карточке компании, затем выберите локацию для отзывов, статистики и постов."
         >
           {!googleBusinessAccount ? (
             <Button onClick={() => handleGoogleConnect('google_business')} disabled={googleBusy || !currentBusinessId} className="min-h-10 bg-slate-900 text-white hover:bg-slate-800">
@@ -1255,7 +1256,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
               <TabsTrigger value="safety" className="min-h-10 rounded-xl">Безопасность</TabsTrigger>
               <TabsTrigger value="support" className="min-h-10 rounded-xl">Для поддержки</TabsTrigger>
             </TabsList>
-            <TabsContent value="setup" className="space-y-4">
+            <TabsContent value="setup" forceMount className="space-y-4 data-[state=inactive]:hidden">
               {renderSetup(selectedService)}
               {renderHelp(selectedService)}
             </TabsContent>

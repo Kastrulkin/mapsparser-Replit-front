@@ -914,40 +914,37 @@ def _card_richness_score(card: Optional[Dict[str, Any]]) -> int:
 
 
 def _select_preferred_rich_card(cards: List[Dict[str, Any]]) -> Dict[str, Any]:
-    best_card: Dict[str, Any] = {}
-    best_key = (-1, datetime.min.replace(tzinfo=timezone.utc))
-    for card in cards:
-        snapshot_type = _card_snapshot_type(card)
-        if snapshot_type and snapshot_type != "full":
-            continue
-        score = _card_richness_score(card)
-        created_at = _coerce_dt(card.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc)
-        key = (score, created_at)
-        if key > best_key:
-            best_card = card
-            best_key = key
-    return best_card
+    eligible = [
+        card
+        for card in cards
+        if not _card_snapshot_type(card) or _card_snapshot_type(card) == "full"
+    ]
+    if not eligible:
+        return {}
+    # A card row is a versioned observation. Completeness is useful only as a
+    # tiebreaker within the same observation time; it must not resurrect a
+    # historically larger catalog or old news after a fresh parse.
+    return max(
+        eligible,
+        key=lambda card: (
+            _coerce_dt(card.get("created_at") or card.get("updated_at"))
+            or datetime.min.replace(tzinfo=timezone.utc),
+            _card_richness_score(card),
+        ),
+    )
 
 
 def _select_preferred_metrics_card(cards: List[Dict[str, Any]]) -> Dict[str, Any]:
-    best_card: Dict[str, Any] = {}
-    best_key = (
-        -1,
-        -1,
-        datetime.min.replace(tzinfo=timezone.utc),
+    eligible = [card for card in cards if _card_has_metric_payload(card)]
+    if not eligible:
+        return {}
+    return max(
+        eligible,
+        key=lambda card: (
+            _coerce_dt(card.get("created_at") or card.get("updated_at"))
+            or datetime.min.replace(tzinfo=timezone.utc),
+        ),
     )
-    for card in cards:
-        if not _card_has_metric_payload(card):
-            continue
-        reviews_count = _extract_int(card.get("reviews_count") or 0)
-        rating_value = _extract_numeric(card.get("rating"))
-        rating_score = int(round((rating_value or 0) * 100))
-        created_at = _coerce_dt(card.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc)
-        key = (reviews_count, rating_score, created_at)
-        if key > best_key:
-            best_card = card
-            best_key = key
-    return best_card
 
 
 def _extract_yandex_org_id_from_url(url: Any) -> Optional[str]:
@@ -1243,6 +1240,29 @@ def _has_meaningful_business_description(description: Any, address: Any) -> bool
     if len(normalized_description) < 80 and any(marker in padded_description for marker in address_markers) and any(char.isdigit() for char in normalized_description):
         return False
     return True
+
+
+def _fresh_parse_is_verified(
+    status: Any,
+    observed_at: Any,
+    *,
+    now: Optional[datetime] = None,
+    max_age: timedelta = timedelta(days=7),
+) -> bool:
+    if str(status or "").strip().lower() not in {"completed", "done", "success"}:
+        return False
+    raw = str(observed_at or "").strip()
+    if not raw:
+        return False
+    try:
+        parsed_at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if parsed_at.tzinfo is None:
+        parsed_at = parsed_at.replace(tzinfo=timezone.utc)
+    checked_at = now or datetime.now(timezone.utc)
+    age = checked_at - parsed_at.astimezone(timezone.utc)
+    return timedelta(0) <= age <= max_age
 
 
 def _detect_audit_profile(business_type: Any, business_name: Any, overview: Any) -> str:
@@ -3694,7 +3714,7 @@ def _build_beauty_issue_blocks(
                 "problem": "Слишком общая структура карточки размывает коммерческие запросы.",
             "evidence": f"Для этой ниши особенно важны точные категории, направления услуг ({focus_text}), цены и регулярные фото-обновления.",
             "impact": "Карточка слабее отрабатывает поисковые запросы по конкретным процедурам.",
-            "fix": f"Проверить категории и разделить направления так, чтобы клиент быстро находил {focus_text} без лишнего поиска.",
+            "fix": f"Проверить категории и разделить направления так, чтобы клиент быстро находил нужный раздел: {focus_text}.",
         }
     )
     issue_blocks.append(
@@ -4480,6 +4500,9 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         city = str(address.split(",", 1)[0] or "").strip()
     recent_days = int(policy_value("activity", "recent_days", 45))
     snapshot = _resolve_lead_business_snapshot(lead)
+    last_parse_status = str(snapshot.get("last_parse_status") or "lead_preview").strip().lower()
+    last_parse_at = snapshot.get("last_parse_at")
+    facts_verified = _fresh_parse_is_verified(last_parse_status, last_parse_at)
     lead_import_payload = _extract_lead_import_payload(lead)
     business = snapshot.get("business") or {}
     imported_services_preview = lead_import_payload.get("services_preview") if isinstance(lead_import_payload.get("services_preview"), list) else []
@@ -4510,20 +4533,27 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     )
     audit_profile = str(audit_profile_details.get("profile") or "default_local_business")
 
-    rating_raw = snapshot.get("rating") if snapshot.get("rating") is not None else lead.get("rating")
+    # A completed, fresh parse is authoritative. Imported lead fields have no
+    # per-fact observation timestamp and must not override newer card data.
+    rating_raw = snapshot.get("rating") if facts_verified else None
     rating = _extract_numeric(rating_raw)
+    lead_reviews_count = _extract_int(lead.get("reviews_count") or 0)
     imported_reviews_count = _extract_int(
         lead_import_payload.get("reviews_count")
         if lead_import_payload.get("reviews_count") is not None
         else (lead.get("reviews_count") or 0)
     )
     snapshot_reviews_count = _extract_int(snapshot.get("reviews_count") or 0)
-    reviews_count = imported_reviews_count if imported_reviews_count > 0 else snapshot_reviews_count
+    reviews_count = snapshot_reviews_count if facts_verified else 0
     parsed_contacts = snapshot.get("parsed_contacts") or {}
     has_website = bool(str(lead.get("website") or parsed_contacts.get("website") or business.get("website") or "").strip())
-    has_description = bool(snapshot.get("description_present")) or _has_meaningful_business_description(
-        lead.get("description"),
-        lead.get("address"),
+    map_source_url = str(snapshot.get("source_url") or lead.get("source_url") or "").lower()
+    description_applicable = "yandex." not in map_source_url
+    has_description = (
+        bool(snapshot.get("description_present"))
+        or _has_meaningful_business_description(lead.get("description"), lead.get("address"))
+        if description_applicable
+        else True
     )
     has_phone = bool(str(lead.get("phone") or parsed_contacts.get("phone") or business.get("phone") or "").strip())
     has_email = bool(str(lead.get("email") or parsed_contacts.get("email") or business.get("email") or "").strip())
@@ -4544,19 +4574,19 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     services_preview_limited = bool(lead_import_payload.get("services_preview_limited"))
     snapshot_services_count = _extract_int(snapshot.get("services_count") or 0)
     snapshot_priced_services_count = _extract_int(snapshot.get("priced_services_count") or 0)
-    services_count = max(snapshot_services_count, imported_services_total_count)
-    priced_services_count = max(snapshot_priced_services_count, imported_services_with_price_count)
+    services_count = snapshot_services_count if facts_verified else 0
+    priced_services_count = snapshot_priced_services_count if facts_verified else 0
     unanswered_reviews_count = _extract_int(snapshot.get("unanswered_reviews_count") or 0)
     imported_photos = lead_import_payload.get("photos") if isinstance(lead_import_payload.get("photos"), list) else []
     snapshot_photos = snapshot.get("photo_urls") if isinstance(snapshot.get("photo_urls"), list) else []
     effective_photos = imported_photos if imported_photos else snapshot_photos
-    photos_count = _extract_int(snapshot.get("photos_count") or len(effective_photos) or 0)
-    news_count = _extract_int(snapshot.get("news_count") or 0)
-    recent_news_count = _extract_int(snapshot.get("recent_news_count") or 0)
-    old_news_count = _extract_int(snapshot.get("old_news_count") or 0)
-    latest_news_at = snapshot.get("latest_news_at")
-    news_status = str(snapshot.get("news_status") or "").strip().lower()
-    has_recent_activity = bool(snapshot.get("has_recent_activity") or recent_news_count > 0)
+    photos_count = _extract_int(snapshot.get("photos_count") or len(snapshot_photos) or 0) if facts_verified else 0
+    news_count = _extract_int(snapshot.get("news_count") or 0) if facts_verified else 0
+    recent_news_count = _extract_int(snapshot.get("recent_news_count") or 0) if facts_verified else 0
+    old_news_count = _extract_int(snapshot.get("old_news_count") or 0) if facts_verified else 0
+    latest_news_at = snapshot.get("latest_news_at") if facts_verified else None
+    news_status = str(snapshot.get("news_status") or "").strip().lower() if facts_verified else ""
+    has_recent_activity = bool(snapshot.get("has_recent_activity") or recent_news_count > 0) if facts_verified else False
     cadence_news_min = int(policy_value("cadence", "news_posts_per_month_min", 4))
     cadence_photos_min = int(policy_value("cadence", "photos_per_month_min", 8))
     cadence_response_hours_max = int(policy_value("cadence", "reviews_response_hours_max", 48))
@@ -5133,21 +5163,24 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     if audit_profile in baseline_profiles:
         action_plan = _merge_action_plan(action_plan, baseline_action_plan)
     snapshot_services_preview = snapshot.get("services_preview") if isinstance(snapshot.get("services_preview"), list) else []
-    if snapshot_services_preview:
+    if facts_verified and snapshot_services_preview:
         services_preview = snapshot_services_preview
-    elif imported_services_preview and not hospitality_mode:
-        services_preview = imported_services_preview
-    elif not services_preview and audit_profile not in {"shopping_center", *SPECIALIZED_LOCAL_PROFILES}:
+    elif facts_verified and not services_preview and audit_profile not in {"shopping_center", *SPECIALIZED_LOCAL_PROFILES}:
         services_preview = _lead_demo_services_preview(business_type)
+    else:
+        services_preview = []
     news_preview = (
-        snapshot.get("news_preview")
-        or (lead_import_payload.get("news_preview") if isinstance(lead_import_payload.get("news_preview"), list) else None)
-        or []
+        (snapshot.get("news_preview") or []) if facts_verified else []
     )
-    last_parse_status = snapshot.get("last_parse_status") or "lead_preview"
     no_new_services_found = bool(
         services_count <= 0 and str(last_parse_status).lower() not in {"lead_preview", "preview"}
     )
+    if not facts_verified:
+        issue_blocks = []
+        findings = []
+        recommended_actions = []
+        top_issues = []
+        action_plan = {"next_24h": [], "next_7d": [], "ongoing": []}
     reasoning = _build_reasoning_fields(
         audit_profile=audit_profile,
         business_name=lead_name,
@@ -5175,6 +5208,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         "parse_context": {
             "last_parse_at": snapshot.get("last_parse_at") or lead.get("updated_at") or lead.get("created_at"),
             "last_parse_status": last_parse_status,
+            "facts_verified": facts_verified,
             "last_parse_task_id": snapshot.get("last_parse_task_id"),
             "last_parse_retry_after": snapshot.get("last_parse_retry_after"),
             "last_parse_error": snapshot.get("last_parse_error"),
@@ -5199,24 +5233,25 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         },
         "findings": findings[:5],
         "current_state": {
-            "rating": rating,
-            "reviews_count": reviews_count,
-            "unanswered_reviews_count": unanswered_reviews_count,
-            "services_count": services_count,
-            "services_with_price_count": priced_services_count,
+            "rating": rating if facts_verified else None,
+            "reviews_count": reviews_count if facts_verified else None,
+            "unanswered_reviews_count": unanswered_reviews_count if facts_verified else None,
+            "services_count": services_count if facts_verified else None,
+            "services_with_price_count": priced_services_count if facts_verified else None,
             "is_verified": audit_is_verified,
             "raw_is_verified": is_verified,
             "paid_promotion_detected": paid_promotion_detected,
             "has_website": has_website,
-            "has_recent_activity": has_recent_activity,
-            "news_count": news_count,
-            "recent_news_count": recent_news_count,
-            "old_news_count": old_news_count,
-            "latest_news_at": latest_news_at,
-            "news_status": news_status or None,
-            "photos_state": photos_state,
-            "photos_count": photos_count,
-            "description_present": has_description,
+            "has_recent_activity": has_recent_activity if facts_verified else None,
+            "news_count": news_count if facts_verified else None,
+            "recent_news_count": recent_news_count if facts_verified else None,
+            "old_news_count": old_news_count if facts_verified else None,
+            "latest_news_at": latest_news_at if facts_verified else None,
+            "news_status": (news_status or None) if facts_verified else None,
+            "photos_state": photos_state if facts_verified else None,
+            "photos_count": photos_count if facts_verified else None,
+            "description_applicable": description_applicable,
+            "description_present": has_description if description_applicable and facts_verified else None,
             "booking_offer_count": booking_offer_count if hospitality_mode else 0,
         },
         "revenue_potential": revenue_potential,
@@ -6060,6 +6095,10 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
             and services_count > 0
         )
         has_successful_parse = bool(latest_successful_parse.get("updated_at"))
+        facts_verified = _fresh_parse_is_verified(
+            latest_parse.get("status"),
+            latest_parse.get("updated_at"),
+        )
 
         result = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -6074,6 +6113,7 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
                 "last_parse_status": latest_parse.get("status"),
                 "last_successful_parse_at": latest_successful_parse.get("updated_at"),
                 "has_successful_parse": has_successful_parse,
+                "facts_verified": facts_verified,
                 "no_new_services_found": no_new_services_found,
             },
             "audit_mode": "hospitality" if hospitality_mode else "default",

@@ -1,22 +1,26 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Target, Lightbulb, Award, Heart, Globe } from "lucide-react";
 import Footer from "@/components/Footer";
+import SeoMeta from "@/components/SeoMeta";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect } from "react";
+import { ArrowUpRight, BriefcaseBusiness, Clock3, Factory, PackageCheck, Store, Truck, Wrench } from "lucide-react";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { newAuth } from "@/lib/auth_new";
+import { browserAuthenticationAvailable } from "@/lib/browserSessionFetch";
+import { aboutStoryCopy } from "@/content/aboutStoryCopy";
 
 const About = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t, language } = useLanguage();
   const isRu = language === "ru";
+  const story = aboutStoryCopy[language];
 
   const handleSubscribeLanding = async (tierId: "starter" | "professional" | "concierge") => {
     const token = newAuth.getToken();
 
-    if (!token) {
+    if (!browserAuthenticationAvailable(token)) {
       localStorage.setItem("selectedTier", tierId);
       localStorage.setItem("selectedTierSource", "pricing");
       navigate(`/login?tab=register&source=pricing&tier=${tierId}`);
@@ -95,177 +99,106 @@ const About = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <SeoMeta
+        description={story.metaDescription}
+        path="/about"
+        title={story.metaTitle}
+      />
 
-      {/* Hero Section */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-orange-50 via-white to-amber-50">
-        <div className="max-w-7xl mx-auto text-center">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-8">
-            {t.about.heroTitle}
-          </h1>
-          <p className="text-2xl text-gray-600 max-w-4xl mx-auto mb-8 leading-relaxed">
-            {t.about.heroSubtitle}
-          </p>
+      <section className="relative overflow-hidden border-b border-white/10 bg-slate-950 px-4 py-20 text-white sm:px-6 sm:py-24 lg:px-8 lg:py-32">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-primary/20 blur-3xl" aria-hidden="true" />
+        <div className="pointer-events-none absolute -bottom-32 left-1/3 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl" aria-hidden="true" />
+        <div className="relative mx-auto grid max-w-7xl items-end gap-14 lg:grid-cols-12 lg:gap-20">
+          <div className="lg:col-span-8">
+            <div className="mb-7 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.22em] text-orange-300">
+              <span className="h-px w-8 bg-orange-400" aria-hidden="true" />
+              {story.eyebrow}
+            </div>
+            <h1 className="max-w-5xl text-balance text-4xl font-semibold tracking-[-0.045em] sm:text-5xl lg:text-7xl lg:leading-[1.02]">
+              {story.title}
+            </h1>
+            <p className="mt-8 max-w-3xl text-pretty text-lg leading-8 text-slate-300 sm:text-xl sm:leading-9">
+              {story.intro}
+            </p>
+          </div>
+
+          <div className="lg:col-span-4">
+            <div className="rounded-[28px] border border-white/10 bg-white/[0.06] p-7 shadow-2xl shadow-black/20 backdrop-blur-sm sm:p-8">
+              <Clock3 className="h-6 w-6 text-orange-400" aria-hidden="true" />
+              <div className="mt-8 text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">{story.workdayValue}</div>
+              <p className="mt-4 text-base leading-7 text-slate-300">{story.workdayText}</p>
+              <p className="mt-6 border-t border-white/10 pt-5 text-sm font-medium text-orange-300">{story.workdayNote}</p>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Problem Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
-        <div className="max-w-5xl mx-auto">
-          <div className="space-y-8 text-lg text-gray-600 leading-relaxed">
-            <p className="text-xl">
-              {t.about.problemText}
-            </p>
-            <div className="text-center py-8">
-              <div className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent">
-                {t.about.problemHighlight}
+      <section className="bg-white px-4 py-20 sm:px-6 sm:py-24 lg:px-8 lg:py-32">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid gap-14 lg:grid-cols-12 lg:gap-20">
+            <aside className="lg:col-span-4">
+              <div className="lg:sticky lg:top-24">
+                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">{story.storyEyebrow}</div>
+                <h2 className="mt-5 text-balance text-4xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-5xl">{story.storyTitle}</h2>
+                <p className="mt-6 max-w-md text-lg leading-8 text-slate-600">{story.storyIntro}</p>
+                <div className="mt-8 flex flex-wrap gap-2">
+                  {story.industries.map((industry, index) => {
+                    const icons = [Truck, Store, Factory, PackageCheck, Wrench];
+                    const Icon = icons[index];
+                    return (
+                      <span key={industry} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700">
+                        <Icon className="h-4 w-4 text-primary" aria-hidden="true" />
+                        {industry}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            </aside>
+
+            <div className="lg:col-span-8">
+              <ol className="border-l border-slate-200">
+                {[
+                  [story.chapterOneTitle, story.chapterOneText],
+                  [story.chapterTwoTitle, story.chapterTwoText],
+                  [story.chapterThreeTitle, story.chapterThreeText],
+                ].map(([title, text], index) => (
+                  <li key={title} className="relative pb-14 pl-8 last:pb-0 sm:pl-12">
+                    <span className="absolute -left-4 top-0 grid h-8 w-8 place-items-center rounded-full border-4 border-white bg-slate-950 text-[10px] font-semibold tracking-wider text-white">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <h3 className="text-balance text-2xl font-semibold tracking-[-0.025em] text-slate-950 sm:text-3xl">{title}</h3>
+                    <div className="mt-4 max-w-3xl space-y-4">
+                      {text.split("\n\n").map((paragraph) => (
+                        <p className="text-pretty text-base leading-8 text-slate-600 sm:text-lg" key={paragraph}>{paragraph}</p>
+                      ))}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+
+              <div className="mt-16 overflow-hidden rounded-[28px] bg-orange-50 ring-1 ring-inset ring-orange-200/70">
+                <div className="grid gap-8 p-7 sm:p-9 lg:grid-cols-[1fr_auto] lg:items-end lg:p-10">
+                  <div>
+                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-orange-700">
+                      <BriefcaseBusiness className="h-4 w-4" aria-hidden="true" />
+                      {story.channelEyebrow}
+                    </div>
+                    <h3 className="mt-5 text-balance text-3xl font-semibold tracking-[-0.035em] text-slate-950">{story.channelTitle}</h3>
+                    <p className="mt-4 max-w-2xl text-pretty text-base leading-7 text-slate-700">{story.channelText}</p>
+                  </div>
+                  <a
+                    href="https://t.me/meowandco"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-950/10 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 motion-reduce:transform-none"
+                  >
+                    {story.channelButton}
+                    <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+                  </a>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* About Us Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold text-foreground mb-8">{t.about.teamTitle}</h2>
-          <p className="text-lg text-muted-foreground mb-8">
-            {t.about.teamText}
-          </p>
-        </div>
-      </section>
-
-      {/* Target Audience Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-muted/50">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold text-foreground mb-8">{t.about.targetTitle}</h2>
-          <p className="text-xl text-muted-foreground mb-8">
-            {t.about.targetText}
-          </p>
-
-          <div className="grid md:grid-cols-4 gap-6 mb-8">
-            <div className="text-center">
-              <div className="text-3xl mb-2">💇‍♀️</div>
-              <div className="font-medium text-foreground">{t.about.salons}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl mb-2">💅</div>
-              <div className="font-medium text-foreground">{t.about.masters}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl mb-2">🎨</div>
-              <div className="font-medium text-foreground">{t.about.studios}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl mb-2">🏪</div>
-              <div className="font-medium text-foreground">{t.about.localBusiness}</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Results Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-orange-50 via-white to-amber-50">
-        <div className="max-w-5xl mx-auto text-center">
-          <div className="bg-white rounded-3xl p-16 shadow-2xl shadow-orange-500/10 border-2 border-orange-200">
-            <h2 className="text-4xl font-bold text-gray-900 mb-8">{t.about.resultsTitle}</h2>
-            <div className="text-7xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent mb-6">{t.about.resultsPercent}</div>
-            <p className="text-2xl text-gray-700 leading-relaxed">
-              {t.about.resultsText}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* How We Work Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="text-3xl font-bold text-foreground mb-12 text-center">{t.about.howTitle}</h2>
-
-          <div className="mb-12">
-            <h3 className="text-2xl font-semibold text-foreground mb-6 text-center">
-              {t.about.howSubtitle}
-            </h3>
-          </div>
-
-          <div className="grid lg:grid-cols-2 gap-12">
-            {/* Option 1 */}
-            <Card className="group p-10 bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
-              <CardContent className="p-0">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg">
-                    <span className="text-white font-bold text-xl">1</span>
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-900">{t.about.option1Title}</h3>
-                </div>
-                <div className="space-y-4 text-gray-600 mb-8">
-                  <div className="flex items-start gap-3">
-                    <span className="text-orange-500 text-xl">•</span>
-                    <span className="text-base">{t.about.option1Point1}</span>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="text-orange-500 text-xl">•</span>
-                    <span className="text-base">{t.about.option1Point2}</span>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="text-orange-500 text-xl">•</span>
-                    <span className="text-base">{t.about.option1Point3}</span>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="text-orange-500 text-xl">•</span>
-                    <span className="text-base">{t.about.option1Point4}</span>
-                  </div>
-                </div>
-                <Button
-                  size="lg"
-                  className="mt-2 text-lg px-10 py-6 btn-iridescent"
-                  onClick={() => {
-                    window.location.href = '/#hero-form';
-                  }}
-                >
-                  {t.about.option1Button}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Option 2 */}
-            <Card className="group p-10 bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-400 hover:border-orange-500 hover:shadow-2xl hover:shadow-orange-500/20 transition-all duration-300 rounded-2xl">
-              <CardContent className="p-0">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg">
-                    <span className="text-white font-bold text-xl">2</span>
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-900">{t.about.option2Title}</h3>
-                </div>
-                <div className="space-y-4 text-gray-700 mb-8">
-                  <div className="flex items-start gap-3">
-                    <span className="text-orange-500 text-xl">•</span>
-                    <span className="text-base">{t.about.option2Point1}</span>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="text-orange-500 text-xl">•</span>
-                    <span className="text-base">{t.about.option2Point2}</span>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="text-orange-500 text-xl">•</span>
-                    <span className="text-base">{t.about.option2Point3}</span>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="text-orange-500 text-xl">•</span>
-                    <span className="text-base">{t.about.option2Point4}</span>
-                  </div>
-                </div>
-                <Button
-                  variant="default"
-                  size="lg"
-                  className="text-lg px-10 py-6 btn-iridescent mt-2"
-                  onClick={() => {
-                    navigate('/contact');
-                  }}
-                >
-                  {t.about.option2Button}
-                </Button>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </section>
@@ -281,17 +214,17 @@ const About = () => {
             <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent mb-2">
-                  {isRu ? "Начальный" : t.about.pricingStarterTitle}
+                  {isRu ? "Карты" : t.about.pricingStarterTitle}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
                   {isRu ? "1200 ₽/месяц (240 кредитов)" : t.about.pricingStarterPrice}
                 </div>
-                {isRu ? <div className="text-sm text-gray-600 mb-3">Примерно хватит на:</div> : null}
+                {isRu ? <div className="text-sm text-gray-600 mb-3">Всё для локальной видимости:</div> : null}
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
-                  <div>- {isRu ? "100–120 коротких публикаций" : t.about.pricingStarterPoint1}</div>
-                  <div>- {isRu ? "около 200 ответов на отзывы" : t.about.pricingStarterPoint2}</div>
-                  <div>- {isRu ? "60–100 анализов фото*" : t.about.pricingStarterPoint3}</div>
-                  <div>- {isRu ? "или любую комбинацию действий" : t.about.pricingStarterPoint4}</div>
+                  <div>- {isRu ? "аудит, услуги, отзывы, фото и конкуренты" : t.about.pricingStarterPoint1}</div>
+                  <div>- {isRu ? "новости для публикации на картах" : t.about.pricingStarterPoint2}</div>
+                  <div>- {isRu ? "Telegram-радар по вашей индустрии" : t.about.pricingStarterPoint3}</div>
+                  <div>- {isRu ? "веб-аналитика и tracker для сайта" : t.about.pricingStarterPoint4}</div>
                 </div>
                 {isRu ? <div className="mb-6 text-xs leading-5 text-gray-500">* Интеллектуальная работа с фотографиями включается отдельно и расходует кредиты только при анализе нового фото.</div> : null}
                 <Button
@@ -307,22 +240,20 @@ const About = () => {
 
             {/* Option 0 - 5000 ₽/месяц */}
             <Card className="group p-8 flex flex-col h-full bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-400 hover:border-orange-500 hover:shadow-2xl hover:shadow-orange-500/20 transition-all duration-300 rounded-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 bg-gradient-to-br from-orange-500 to-amber-600 text-white text-xs font-bold px-4 py-1 rounded-bl-xl">POPULAR</div>
+              <div className="absolute top-0 right-0 bg-gradient-to-br from-orange-500 to-amber-600 text-white text-xs font-bold px-4 py-1 rounded-bl-xl">{story.popular}</div>
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
-                  {isRu ? "Профессиональный" : t.about.pricingOption0Title}
+                  {isRu ? "Привлечение" : t.about.pricingOption0Title}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
                   {isRu ? "5000 ₽/месяц (1000 кредитов)" : t.about.pricingOption0Price}
                 </div>
                 {isRu ? <div className="text-sm text-gray-600 mb-3">Хватит чтобы:</div> : null}
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
-                  <div>- {isRu ? "постить новости" : t.about.pricingOption0Point1}</div>
-                  <div>- {isRu ? "отвечать на отзывы" : t.about.pricingOption0Point2}</div>
-                  <div>- {isRu ? "проверять конкурентов" : t.about.pricingOption0Point3}</div>
-                  <div>- {isRu ? "подключить ии агентов для общения с клиентами" : t.about.pricingOption0Point4}</div>
-                  <div>- {isRu ? "отслеживать финансовые показатели" : t.about.pricingOption0Point5}</div>
-                  <div>- {isRu ? "управлять компанией через Телеграм" : t.about.pricingOption0Point6}</div>
+                  <div>- {isRu ? "всё из тарифа «Карты»" : t.about.pricingOption0Point1}</div>
+                  <div>- {isRu ? "полный цикл работы с партнёрами" : t.about.pricingOption0Point2}</div>
+                  <div>- {isRu ? "полный цикл работы с инфлюенсерами" : t.about.pricingOption0Point3}</div>
+                  <div>- {isRu ? "продвижение и видимость в AI-чатах" : t.about.pricingOption0Point4}</div>
                 </div>
                 <Button
                   variant="default"
@@ -339,18 +270,18 @@ const About = () => {
             <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
-                  {isRu ? "Консьерж" : t.about.pricingOption1Title}
+                  {isRu ? "Управление" : t.about.pricingOption1Title}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
                   {isRu ? "25000 ₽/месяц" : t.about.pricingOption1Price}
                 </div>
-                {isRu ? <div className="text-sm text-gray-600 mb-3">(Мы всё делаем за вас)</div> : null}
+                {isRu ? <div className="text-sm text-gray-600 mb-3">Рост показателей и автоматизация</div> : null}
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
-                  <div>- {isRu ? "Карточка компании на картах" : t.about.pricingOption1Point1}</div>
-                  <div>- {isRu ? "Коммуникация с клиентами" : t.about.pricingOption1Point2}</div>
-                  <div>- {isRu ? "Допродажи и кросс-продажи" : t.about.pricingOption1Point3}</div>
-                  <div>- {isRu ? "Оптимизация бизнес-процессов" : t.about.pricingOption1Point4}</div>
-                  <div>- {isRu ? "Выделенный менеджер" : t.about.pricingOption1Point5}</div>
+                  <div>- {isRu ? "всё из тарифа «Привлечение»" : t.about.pricingOption1Point1}</div>
+                  <div>- {isRu ? "финансы и рост среднего чека" : t.about.pricingOption1Point2}</div>
+                  <div>- {isRu ? "ИИ-сотрудники и Оператор" : t.about.pricingOption1Point3}</div>
+                  <div>- {isRu ? "рабочие чаты и автоматизация" : t.about.pricingOption1Point4}</div>
+                  <div>- {isRu ? "контент для соцсетей и подключение каналов" : t.about.pricingOption1Point5}</div>
                 </div>
                 <Button
                   variant="default"

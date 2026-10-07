@@ -24,6 +24,7 @@ from psycopg2.extras import Json, RealDictCursor
 from auth_system import CONSENT_VERSION, normalize_email, verify_session
 from core.channel_delivery import normalize_phone, send_maton_bridge_message
 from core.card_audit import build_lead_card_preview_snapshot
+from core.db_helpers import assert_schema_columns
 from core.audit_quality import evaluate_audit_quality
 from core.telegram_userbot import load_userbot_account, send_message as userbot_send_message
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
@@ -157,7 +158,7 @@ TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS = max(1, int(os.environ.get("TELEGRAM_REPLY_SY
 TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT = max(1, min(int(os.environ.get("TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT", "12")), 50))
 TELEGRAM_REPLY_SYNC_TIMEOUT_SEC = max(5, int(os.environ.get("TELEGRAM_REPLY_SYNC_TIMEOUT_SEC", "12")))
 LEAD_OUTREACH_MODERATION_STATUS = "lead_outreach"
-PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr")
+PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr", "hy", "kk")
 PIPELINE_UNPROCESSED = "unprocessed"
 PIPELINE_IN_PROGRESS = "in_progress"
 PIPELINE_POSTPONED = "postponed"
@@ -349,7 +350,6 @@ def _create_sales_room_invitation_draft(
     return draft
 
 def _record_sales_room_event(conn, *, slug: str, event_type: str, metadata: dict[str, Any] | None = None) -> None:
-    _ensure_sales_room_tables(conn)
     cur = conn.cursor()
     cur.execute("SELECT id FROM sales_rooms WHERE slug = %s LIMIT 1", (slug,))
     row = cur.fetchone()
@@ -1010,17 +1010,7 @@ def _load_partnership_artifact(cur, lead_id: str) -> dict[str, Any]:
     return _row_to_dict(row)
 
 def _ensure_partnership_artifacts_table_from_cursor(cur) -> None:
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS partnershipleadartifacts (
-            lead_id TEXT PRIMARY KEY REFERENCES prospectingleads(id) ON DELETE CASCADE,
-            audit_json JSONB,
-            match_json JSONB,
-            offer_draft_json JSONB,
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
+    assert_schema_columns(cur, "partnershipleadartifacts", ("lead_id", "audit_json", "match_json", "offer_draft_json", "updated_at"))
 
 def _refresh_existing_partnership_sales_room(
     cur,

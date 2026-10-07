@@ -600,6 +600,8 @@ def _attach_compiled_metadata(metadata: Dict[str, Any], version_payload: Dict[st
     metadata["compiler_contract"] = {
         "llm_usage": "design_time_only",
         "runtime_truth": "agent_blueprint_versions.steps_json",
+        "runtime_planner_required": False,
+        "runtime_model_steps": [],
         "runtime_llm_required": False,
         "runtime_executes_compiled_steps": True,
     }
@@ -1037,6 +1039,8 @@ def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[s
     metadata["compiler_contract"] = {
         "llm_usage": "design_time_only",
         "runtime_truth": "agent_blueprint_versions.steps_json",
+        "runtime_planner_required": False,
+        "runtime_model_steps": [],
         "runtime_llm_required": False,
         "runtime_executes_compiled_steps": True,
     }
@@ -1050,26 +1054,6 @@ def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[s
         "metadata": metadata,
         "version_payload": version_payload,
         "summary": _summary("custom", sources, steps),
-    }
-    if (source.get("key") == "telegram" or destination.get("key") == "telegram") and not _contains_any(lowered, ["telegram", "телеграм", "бот", "webhook"]):
-        return {}
-    if source.get("key") == destination.get("key") and source.get("key") != "telegram":
-        return {}
-    action_words = ["связ", "процесс", "workflow", "автомат", "редакт", "добав", "строк", "append", "занос", "созда", "запис", "импорт", "каждый", "ежеднев"]
-    if not _contains_any(lowered, action_words):
-        return {}
-    trigger = str(source.get("trigger") or "")
-    schedule = {}
-    if _contains_any(lowered, ["каждый", "ежеднев", "вечер", "утро", "день", "schedule", "daily"]):
-        trigger = "schedule.daily"
-        schedule = {"time": "19:00", "timezone": "business_timezone"}
-    if not trigger:
-        trigger = "manual.run"
-    return {
-        "source": source,
-        "destination": destination,
-        "trigger": trigger,
-        "schedule": schedule,
     }
 
 
@@ -1803,6 +1787,8 @@ def _source_destination_compilation(description: str, intent: Dict[str, Any]) ->
     metadata["compiler_contract"] = {
         "llm_usage": "design_time_only",
         "runtime_truth": "agent_blueprint_versions.steps_json",
+        "runtime_planner_required": False,
+        "runtime_model_steps": [],
         "runtime_llm_required": False,
         "runtime_executes_compiled_steps": True,
     }
@@ -2237,6 +2223,8 @@ def _communications_compilation(request_text: str, preferred_template_key: str =
     metadata["compiler_contract"] = {
         "llm_usage": "design_time_only",
         "runtime_truth": "agent_blueprint_versions.steps_json",
+        "runtime_planner_required": False,
+        "runtime_model_steps": [],
         "runtime_llm_required": False,
         "runtime_executes_compiled_steps": True,
     }

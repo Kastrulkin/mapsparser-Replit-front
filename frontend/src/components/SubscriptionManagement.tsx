@@ -6,6 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { cn } from '@/lib/utils';
 import { DESIGN_TOKENS } from '@/lib/design-tokens';
+import { browserAuthenticationAvailable, browserBearerToken } from '@/lib/browserSessionFetch';
 import { Check, Crown, Zap, Shield, Star, Rocket, CreditCard, CalendarClock, Link2Off, RefreshCw } from 'lucide-react';
 
 interface SubscriptionTier {
@@ -92,6 +93,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   const paymentSource = searchParams.get('source');
   const autoStartCheckout = searchParams.get('autostart') === '1';
   const selectedTierFromUrl = searchParams.get('tier');
+  const checkoutReturnTo = searchParams.get('return_to') || (typeof window !== 'undefined' ? window.sessionStorage.getItem('localos_checkout_return_to') : null);
   const autoCheckoutStartedRef = useRef(false);
   const { language, t } = useLanguage();
 
@@ -100,7 +102,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     return [
       {
         id: 'starter',
-        name: isRu ? 'Начальный' : 'Starter',
+        name: isRu ? 'Карты' : 'Maps',
         price: isRu ? 1200 : 15,
         currency: isRu ? '₽' : '$',
         period: isRu ? '₽/месяц (240 кредитов)' : t.dashboard.subscription.perMonth,
@@ -108,10 +110,11 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
         icon: Rocket,
         features: isRu
           ? [
-              'настроить услуги на картах',
-              'ответить на отзывы',
-              'создать новости для публикации',
-              'проверить конкурента',
+              'провести аудит и улучшать карточки на картах',
+              'работать с услугами, отзывами, фото и конкурентами',
+              'создавать новости для публикации на картах',
+              'собирать отраслевые посты через Telegram-радар',
+              'подключить tracker и анализировать поведение на сайте',
             ]
           : [
               t.dashboard.subscription.starterFeature1,
@@ -121,7 +124,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
       },
       {
         id: 'professional',
-        name: isRu ? 'Профессиональный' : 'Professional',
+        name: isRu ? 'Привлечение' : 'Acquisition',
         price: isRu ? 5000 : 55,
         currency: isRu ? '₽' : '$',
         period: isRu ? '₽/месяц (1000 кредитов)' : t.dashboard.subscription.perMonth,
@@ -130,12 +133,10 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
         icon: Zap,
         features: isRu
           ? [
-              'постить новости',
-              'отвечать на отзывы',
-              'проверять конкурентов',
-              'подключить ии агентов для общения с клиентами',
-              'отслеживать финансовые показатели',
-              'управлять компанией через Телеграм',
+              'всё из тарифа «Карты»',
+              'искать партнёров и вести полный цикл сотрудничества',
+              'искать инфлюенсеров, готовить сообщения и учитывать результаты',
+              'проверять видимость бизнеса в AI-чатах',
             ]
           : [
               t.dashboard.subscription.profFeature1,
@@ -146,19 +147,19 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
       },
       {
         id: 'concierge',
-        name: isRu ? 'Консьерж' : 'Concierge',
+        name: isRu ? 'Управление' : 'Management',
         price: isRu ? 25000 : 310,
         currency: isRu ? '₽' : '$',
         period: isRu ? '₽/месяц' : t.dashboard.subscription.perMonth,
-        lead: isRu ? '(Мы всё делаем за вас)' : undefined,
+        lead: isRu ? 'Управление ростом и автоматизацией' : undefined,
         icon: Crown,
         features: isRu
           ? [
-              'Карточка компании на картах',
-              'Коммуникация с клиентами',
-              'Допродажи и кросс-продажи',
-              'Оптимизация бизнес-процессов',
-              'Выделенный менеджер',
+              'всё из тарифа «Привлечение»',
+              'финансы и рост среднего чека',
+              'ИИ-сотрудники и Оператор',
+              'рабочие чаты и автоматизация бизнеса',
+              'контент для соцсетей и подключение каналов',
             ]
           : [
               t.dashboard.subscription.conciergeFeature1,
@@ -195,7 +196,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     ];
   }, [language, t]);
 
-  const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+  const token = typeof window !== 'undefined' ? browserBearerToken() : null;
 
   const formatDateTime = (value?: string | null) => {
     if (!value) return language === 'ru' ? '—' : '—';
@@ -230,7 +231,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   };
 
   const loadBillingStatus = async (options?: { silent?: boolean }) => {
-    if (!businessId || !token) return;
+    if (!businessId || !browserAuthenticationAvailable(token)) return;
     if (!options?.silent) {
       setBillingLoading(true);
     }
@@ -273,9 +274,10 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     const isReturnPage = window.location.pathname.endsWith('/billing/return') || searchParams.get('yookassa_return') === '1';
     if (!isReturnPage || !businessId) return;
 
-    if (!token) return;
+    if (!browserAuthenticationAvailable(token)) return;
 
     let aborted = false;
+    let completedReturnTo = '';
     (async () => {
       try {
         const params = new URLSearchParams({ business_id: businessId });
@@ -292,6 +294,9 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
             title: language === 'ru' ? 'Оплата успешна!' : 'Payment successful!',
             description: language === 'ru' ? 'Подписка активирована. Карта сохранена для ежемесячного продления, если вы не отвяжете её в кабинете.' : 'Subscription activated. The card is saved for monthly renewal until you unlink it in your account.',
           });
+          if (checkoutReturnTo?.startsWith('/dashboard/') && !checkoutReturnTo.startsWith('//')) {
+            completedReturnTo = checkoutReturnTo;
+          }
         } else if (status === 'blocked') {
           toast({
             title: language === 'ru' ? 'Оплата не завершена' : 'Payment not completed',
@@ -303,14 +308,18 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
         // ignore return status fetch errors
       } finally {
         if (!aborted) {
-          window.history.replaceState({}, '', '/dashboard/profile');
+          if (completedReturnTo) {
+            window.sessionStorage.removeItem('localos_checkout_return_to');
+            window.location.replace(completedReturnTo);
+          }
+          else window.history.replaceState({}, '', '/dashboard/profile');
         }
       }
     })();
     return () => {
       aborted = true;
     };
-  }, [businessId, language, toast, searchParams]);
+  }, [businessId, checkoutReturnTo, language, toast, searchParams]);
 
   useEffect(() => {
     if (business) {
@@ -363,7 +372,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
 
     setProcessing(true);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const selectedTier = tiers.find((tier) => tier.id === tierId);
       const paymentProvider = await paymentProviderForTier(selectedTier);
 
@@ -380,6 +389,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
           business_id: businessId,
           tariff_id: tierId,
           source: 'dashboard_subscription_management',
+          return_to: checkoutReturnTo,
         })
       });
 

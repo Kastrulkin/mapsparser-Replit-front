@@ -3,13 +3,14 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertCircle, ArrowLeft, BarChart3, Bot, Building2, CalendarDays, Camera, Check, ChevronLeft, ChevronRight, CircleEllipsis,
   ClipboardCheck, Copy, CreditCard, FileText, LayoutGrid, Loader2, MapPinned,
-  MessageCircle, Network, PackageCheck, Pencil, RefreshCw, Search, Send, Settings, ShieldCheck,
-  Sparkles, Star, Trash2, TrendingDown, TrendingUp, Upload, Users, WandSparkles,
+  MessageCircle, Network, PackageCheck, Pencil, Radio, RefreshCw, Search, Send, Settings, ShieldCheck,
+  Sparkles, Star, Trash2, TrendingDown, TrendingUp, Upload, Users, WandSparkles, X,
 } from 'lucide-react';
 import localOsLogo from '@/assets/images/logo.png';
 import { PartnershipsMobileModule } from '@/components/telegram/PartnershipsMobileModule';
 import { CompaniesMobileModule } from '@/components/telegram/CompaniesMobileModule';
 import { CommunitySourcesMobileModule } from '@/components/telegram/CommunitySourcesMobileModule';
+import { CommunityFeedMobile } from '@/components/telegram/CommunityFeedMobile';
 import AgentsMobileModule from '@/components/telegram/AgentsMobileModule';
 import DiagnosticsMobileModule from '@/components/telegram/DiagnosticsMobileModule';
 import FinanceCrmMobilePanel from '@/components/telegram/FinanceCrmMobilePanel';
@@ -20,7 +21,9 @@ import { ScopeProvider, useMobileScope, type MobileScope } from '@/components/te
 import { ProgressMobileModule, type ProgressPayload } from '@/components/telegram/ProgressMobileModule';
 import { TodayMobileV2, type TodayPayload } from '@/components/telegram/TodayMobileV2';
 import GrowthNavigation from '@/components/telegram/GrowthNavigation';
-import MobileOnboarding from '@/components/telegram/MobileOnboarding';
+import LeadJourneyOnboarding from '@/components/telegram/LeadJourneyOnboarding';
+import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
+import { clearLeadJourneyToken, saveLeadJourneyToken, type JourneyAction, type LeadJourneyKey } from '@/lib/leadJourney';
 import { cancelMobileJob, confirmMobileAction, loadMobileJob, mobileAuthHeaders, mobileJsonHeaders, mobileScopeQuery, readMobileJson, retryMobileJob, type MobileJob } from '@/lib/mobileDataClient';
 import { resolveMobileRoute } from '@/lib/mobileDeepLinkRouter';
 import { resolveMobileAttentionScreen } from '@/lib/mobileTaskRouter';
@@ -131,9 +134,20 @@ type ReviewResult = {
   filters?: { sources?: string[]; ratings?: number[]; locations?: Array<{ id: string; name: string }> };
 };
 
-type OperatorMessage = { id?: string; role: 'user' | 'operator'; text: string; status?: string; capability?: string; created_at?: string; screen?: string };
+type OperatorMessage = {
+  id?: string;
+  role: 'user' | 'operator';
+  text: string;
+  status?: string;
+  capability?: string;
+  created_at?: string;
+  screen?: string;
+  action_id?: string;
+  action_error?: string;
+};
+type OperatorActionDecision = 'confirm' | 'reject';
 type ModuleItem = { id?: string; business_id?: string; kind?: string; title?: string; subtitle?: string; business_name?: string; status?: string; rating?: number; reviews_count?: number; seo_score?: number; price?: string; category?: string; source?: string; updated_at?: string; amount?: string | number; previous_amount?: string | number; unit?: string; metric_key?: string; period_label?: string; day?: string; orders_count?: number; transaction_type?: string; selected_channel?: string; run_id?: string; run_status?: string; error_text?: string; provider_sources?: string[]; parse_status?: string; parse_source?: string; parse_updated_at?: string; refresh_cost_credits?: number; scheduled_refresh_cost_credits?: number; review_sync_enabled?: boolean; review_sync_interval_hours?: number; review_sync_schedule_mode?: string; review_sync_schedule_days?: number[]; review_sync_schedule_time?: string; review_sync_next_run_at?: string; review_sync_last_run_at?: string; review_sync_last_status?: string; plan_id?: string; plan_title?: string; plan_period_days?: number; scheduled_for?: string; content_type?: string; draft_text?: string };
-type NotificationPreferences = { daily_digest?: boolean; reviews?: boolean; tasks?: boolean; errors?: boolean; agent_results?: boolean; finance_rhythm?: boolean };
+type NotificationPreferences = { daily_digest?: boolean; reviews?: boolean; tasks?: boolean; errors?: boolean; agent_results?: boolean; finance_rhythm?: boolean; content_publications?: boolean; content_publications_lead_days?: number; content_publications_time?: string; content_publications_platforms?: string[] };
 type FinanceValue = string | number | boolean | null | undefined;
 type FinanceRecommendation = { code?: string; title?: string; text?: string; severity?: string; target_metric?: string | null; data_needed?: string[] };
 type FinanceDashboardMobile = {
@@ -151,10 +165,11 @@ type FinanceDashboardMobile = {
   workplaces?: Array<Record<string, FinanceValue>>;
 };
 type ModuleData = { items?: ModuleItem[]; counts?: { total?: number }; as_of?: string; data_warnings?: string[]; status?: string; preferences?: NotificationPreferences; available_actions?: Array<{ key?: string; label?: string }>; filters?: { period_days?: number[]; density?: string[] }; finance_dashboard?: FinanceDashboardMobile };
-type Tab = 'today' | 'tasks' | 'reviews' | 'progress' | 'operator' | 'more';
+type Tab = 'today' | 'tasks' | 'feed' | 'reviews' | 'progress' | 'operator' | 'more' | 'menu';
 
 type TelegramWebApp = {
   initData?: string;
+  initDataUnsafe?: { start_param?: string };
   ready?: () => void;
   expand?: () => void;
   openTelegramLink?: (url: string) => void;
@@ -196,6 +211,8 @@ const previewBootstrap: Bootstrap = {
     { key: 'progress', label: 'Прогресс', group: 'primary', status: 'available' },
     { key: 'cards', label: 'Карточки', group: 'more', status: 'read_only' },
     { key: 'content', label: 'Контент', group: 'more', status: 'available' },
+    { key: 'influencers', label: 'Инфлюенсеры', group: 'more', status: 'available' },
+    { key: 'partnerships', label: 'Партнёрства', group: 'more', status: 'available' },
     { key: 'services', label: 'Услуги', group: 'more', status: 'available' },
     { key: 'finance', label: 'Финансы', group: 'more', status: 'available' },
   ],
@@ -263,11 +280,14 @@ const readJson = readMobileJson;
 const scopeQuery = mobileScopeQuery;
 const authHeaders = mobileJsonHeaders;
 const authOnlyHeaders = mobileAuthHeaders;
-const isTab = (value: string | null): value is Tab => Boolean(value && ['today', 'tasks', 'reviews', 'progress', 'operator', 'more'].includes(value));
+const isTab = (value: string | null): value is Tab => Boolean(value && ['today', 'tasks', 'feed', 'reviews', 'progress', 'operator', 'more', 'menu'].includes(value));
 
 export const TelegramControlPage = () => {
   const preview = isPreview();
   const initData = webApp()?.initData || '';
+  const launchParams = new URLSearchParams(window.location.search);
+  const rawJourneyParam = launchParams.get('journey_token') || launchParams.get('tgWebAppStartParam') || webApp()?.initDataUnsafe?.start_param || '';
+  const journeyToken = rawJourneyParam.startsWith('journey_') ? rawJourneyParam.slice(8) : /^[A-Za-z0-9_-]{32,}$/.test(rawJourneyParam) ? rawJourneyParam : '';
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(preview ? previewBootstrap : null);
   const [workspace, setWorkspace] = useState<Workspace | null>(preview ? { items: previewBootstrap.summary?.attention_items, summary: previewBootstrap.summary } : null);
   const [todayData, setTodayData] = useState<TodayPayload | null>(preview ? previewToday : null);
@@ -299,6 +319,7 @@ export const TelegramControlPage = () => {
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [command, setCommand] = useState('');
   const [operatorBusy, setOperatorBusy] = useState(false);
+  const [operatorActionBusy, setOperatorActionBusy] = useState<{ actionId: string; decision: OperatorActionDecision } | null>(null);
   const [reviewActionBusy, setReviewActionBusy] = useState('');
   const [messages, setMessages] = useState<OperatorMessage[]>([]);
   const [historyLoadedFor, setHistoryLoadedFor] = useState('');
@@ -309,6 +330,8 @@ export const TelegramControlPage = () => {
   const [restoredJob, setRestoredJob] = useState<MobileJob | null>(null);
   const [restoredJobBusy, setRestoredJobBusy] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [paywall, setPaywall] = useState<NavigationItem | null>(null);
+  const [journeyAction, setJourneyAction] = useState<JourneyAction | null>(null);
   const trackedTodayScope = useRef('');
   const scopeRequestVersion = useRef(0);
   const catalogSearchVersion = useRef(0);
@@ -376,6 +399,12 @@ export const TelegramControlPage = () => {
     }).catch(() => undefined);
   };
 
+  const loadJourneyAction = async (actionId: string, businessId: string) => {
+    if (!actionId || !businessId) return;
+    const response = await fetch(`/api/journey-actions/${encodeURIComponent(actionId)}?business_id=${encodeURIComponent(businessId)}`, { headers: authHeaders() }).then(readJson<{ action?: JourneyAction }>);
+    setJourneyAction(response.action || null);
+  };
+
   const loadBootstrap = async (query = '', cursor = '', appendCatalog = false, catalogOnly = false, requestedVersion?: number) => {
     if (preview) return;
     if (!initData) { setLoading(false); return; }
@@ -403,6 +432,23 @@ export const TelegramControlPage = () => {
       }).then(readJson<Bootstrap>);
       if (catalogOnly && requestVersion !== catalogSearchVersion.current) return;
       if (result.web_session_token) window.sessionStorage.setItem('localos_mini_session', result.web_session_token);
+      if (!catalogOnly && journeyToken && result.selected_scope?.kind === 'business' && result.selected_scope.id) {
+        saveLeadJourneyToken(journeyToken);
+        try {
+          const claimed = await fetch('/api/journeys/claim', {
+            method: 'POST', headers: authHeaders(),
+            body: JSON.stringify({ token: journeyToken, business_id: result.selected_scope.id, surface: 'telegram_mini_app' }),
+          }).then(readJson<{ action?: JourneyAction }>);
+          setJourneyAction(claimed.action || null);
+          if (claimed.action) result.resolved_deep_link = { screen: 'today', item_type: 'journey_action', item_id: claimed.action.id };
+          clearLeadJourneyToken();
+        } catch {
+          // Keep the token so the same journey can be resumed in web or retried in Mini App.
+        }
+      }
+      if (!catalogOnly && result.resolved_deep_link?.item_type === 'journey_action' && result.resolved_deep_link.item_id && result.selected_scope?.kind === 'business' && result.selected_scope.id) {
+        await loadJourneyAction(result.resolved_deep_link.item_id, result.selected_scope.id);
+      }
       if (appendCatalog) {
         setBootstrap((current) => ({
           ...current,
@@ -600,8 +646,17 @@ export const TelegramControlPage = () => {
     if (historyLoadedFor === scopeKey) return;
     try {
       const params = scopeQuery(scope);
-      const result = await fetch(`/api/operator/mobile/operator/history?${params.toString()}`, { headers: authHeaders() }).then(readJson<{ items?: Array<{ id?: string; role?: string; content?: string; status?: string; capability?: string; created_at?: string; result_json?: { mobile_route?: { screen?: string } } }> }>);
-      setMessages((result.items || []).map((item) => ({ id: item.id, role: item.role === 'user' ? 'user' : 'operator', text: item.content || '', status: item.status, capability: item.capability, created_at: item.created_at, screen: item.result_json?.mobile_route?.screen })));
+      const result = await fetch(`/api/operator/mobile/operator/history?${params.toString()}`, { headers: authHeaders() }).then(readJson<{ items?: Array<{ id?: string; role?: string; content?: string; status?: string; capability?: string; created_at?: string; result_json?: { mobile_route?: { screen?: string }; approval?: { action_id?: string } } }> }>);
+      setMessages((result.items || []).map((item) => ({
+        id: item.id,
+        role: item.role === 'user' ? 'user' : 'operator',
+        text: item.content || '',
+        status: item.status,
+        capability: item.capability,
+        created_at: item.created_at,
+        screen: item.result_json?.mobile_route?.screen,
+        action_id: item.status === 'approval_required' ? item.result_json?.approval?.action_id : undefined,
+      })));
       setHistoryLoadedFor(scopeKey);
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить историю.'); }
   };
@@ -695,6 +750,14 @@ export const TelegramControlPage = () => {
 
   useEffect(() => {
     if (!bootstrap) return;
+    const requestedScreen = bootstrap.resolved_deep_link?.screen === 'analytics' ? 'finance' : bootstrap.resolved_deep_link?.screen;
+    const requestedEntry = bootstrap.navigation?.find((item) => item.key === requestedScreen);
+    if (requestedEntry?.status === 'read_only' && requestedEntry.reason?.toLowerCase().includes('оплат')) {
+      setPaywall(requestedEntry);
+      setTab('today');
+      setModule('');
+      return;
+    }
     const route = resolveMobileRoute(bootstrap.resolved_deep_link, bootstrap.navigation || []);
     setTab(route.tab);
     setModule(route.module);
@@ -709,16 +772,39 @@ export const TelegramControlPage = () => {
   }, [bootstrap?.selected_scope?.kind, bootstrap?.selected_scope?.id, bootstrap?.resolved_deep_link?.screen]);
 
   const openMobileTarget = (screen = 'tasks', targetScope?: { kind?: string; id?: string }) => {
+    if (screen === 'influencers') {
+      setCommand('Найди локальных авторов для моего бизнеса и подготовь первый вариант сотрудничества');
+      setModule('');
+      setTab('operator');
+      return;
+    }
+    const destination = screen === 'analytics' || screen === 'finance_import' ? 'finance' : screen;
+    const navigationEntry = bootstrap?.navigation?.find((item) => item.key === destination);
+    if (navigationEntry?.status === 'read_only' && navigationEntry.reason?.toLowerCase().includes('оплат')) {
+      setPaywall(navigationEntry);
+      return;
+    }
     const navigate = () => {
-      if (isTab(screen) && screen !== 'more') { setModule(''); setTab(screen); return; }
-      const destination = screen === 'analytics' ? 'finance' : screen;
-      setTab('more'); setModule(destination || 'tasks');
+      if (isTab(screen)) { setModule(''); setTab(screen); return; }
+      const moduleTarget = screen === 'analytics' ? 'finance' : screen;
+      setTab('more'); setModule(moduleTarget || 'tasks');
     };
     if (targetScope?.id && (targetScope.id !== scope?.id || targetScope.kind !== scope?.kind)) {
       void chooseScope(targetScope.kind || 'business', targetScope.id).then((changed) => { if (changed) navigate(); });
       return;
     }
     navigate();
+  };
+
+  const completeLeadJourneyOnboarding = (direction?: LeadJourneyKey) => {
+    finishOnboarding();
+    if (direction === 'maps') openMobileTarget('cards');
+    else if (direction === 'content') openMobileTarget('content');
+    else if (direction === 'partnerships') openMobileTarget('partnerships');
+    else if (direction === 'influencers') {
+      setCommand('Найди локальных авторов для моего бизнеса и подготовь первый вариант сотрудничества');
+      openMobileTarget('operator');
+    }
   };
 
   const createCrmRequest = async ({ crmName, crmUrl, contact, comment }: { crmName: string; crmUrl: string; contact: string; comment: string }) => {
@@ -745,11 +831,45 @@ export const TelegramControlPage = () => {
     try {
       const result = await fetch('/api/operator/chat', {
         method: 'POST', headers: authHeaders(), body: JSON.stringify({ business_id: scope.id, message: text, channel: 'telegram_mini_app' }),
-      }).then(readJson<{ operator_result?: { chat_response?: string; summary?: string; status?: string; capability?: string; mobile_route?: { screen?: string } } }>);
-      setMessages((current) => [...current, { role: 'operator', text: result.operator_result?.chat_response || result.operator_result?.summary || 'Готово. Результат добавлен в задачи.', status: result.operator_result?.status, capability: result.operator_result?.capability, screen: result.operator_result?.mobile_route?.screen }]);
+      }).then(readJson<{ operator_result?: { chat_response?: string; summary?: string; status?: string; capability?: string; mobile_route?: { screen?: string }; approval?: { action_id?: string } } }>);
+      setMessages((current) => [...current, {
+        role: 'operator',
+        text: result.operator_result?.chat_response || result.operator_result?.summary || 'Готово. Результат добавлен в задачи.',
+        status: result.operator_result?.status,
+        capability: result.operator_result?.capability,
+        screen: result.operator_result?.mobile_route?.screen,
+        action_id: result.operator_result?.approval?.action_id,
+      }]);
       await loadWorkspace();
     } catch (requestError) { setMessages((current) => [...current, { role: 'operator', text: requestError instanceof Error ? requestError.message : 'Не смог разобрать запрос.' }]); }
     finally { setOperatorBusy(false); }
+  };
+
+  const resolveOperatorAction = async (actionId: string, decision: OperatorActionDecision) => {
+    if (scope?.kind !== 'business' || !scope.id || operatorActionBusy) return;
+    setOperatorActionBusy({ actionId, decision });
+    setMessages((current) => current.map((item) => item.action_id === actionId ? { ...item, action_error: undefined } : item));
+    try {
+      const result = await fetch(`/api/operator/actions/${encodeURIComponent(actionId)}/${decision === 'confirm' ? 'confirm' : 'reject'}`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ business_id: scope.id }),
+      }).then(readJson<{ operator_result?: { chat_response?: string; summary?: string; status?: string } }>);
+      const operatorResult = result.operator_result;
+      setMessages((current) => current.map((item) => item.action_id === actionId ? {
+        ...item,
+        text: operatorResult?.chat_response || operatorResult?.summary || (decision === 'confirm' ? 'Действие выполнено.' : 'Действие отклонено.'),
+        status: operatorResult?.status || (decision === 'confirm' ? 'completed' : 'rejected'),
+        action_id: undefined,
+        action_error: undefined,
+      } : item));
+      await loadWorkspace();
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : 'Не удалось обработать решение.';
+      setMessages((current) => current.map((item) => item.action_id === actionId ? { ...item, action_error: message } : item));
+    } finally {
+      setOperatorActionBusy(null);
+    }
   };
 
   const prepareSelectedReviews = async (reviewIds: string[]) => {
@@ -832,19 +952,21 @@ export const TelegramControlPage = () => {
       <MobileShell
         header={<TopBar />}
         error={error}
-        overlay={<><ActionPreviewSheet preview={actionPreview} busy={reviewActionBusy === 'bulk'} confirmLabel="Подготовить ответы" onConfirm={() => void confirmSelectedReviews()} onCancel={() => setActionPreview(null)} /><JobProgressSheet job={restoredJob} busy={restoredJobBusy} onClose={() => setRestoredJob(null)} onRetry={() => void retryRestoredJob()} onCancel={() => void cancelRestoredJob()} />{showOnboarding ? <MobileOnboarding hasSwitcher={hasSwitcher} networkMode={scope?.kind === 'network' || Boolean(scope?.parent_scope?.id)} onFinish={finishOnboarding} /> : null}</>}
-        navigation={!picker && !showOnboarding ? <BottomNav current={tab === 'progress' ? 'more' : tab} setCurrent={(next) => { setModule(''); setTab(next); }} /> : null}
+        overlay={<><ActionPreviewSheet preview={actionPreview} busy={reviewActionBusy === 'bulk'} confirmLabel="Подготовить ответы" onConfirm={() => void confirmSelectedReviews()} onCancel={() => setActionPreview(null)} /><JobProgressSheet job={restoredJob} busy={restoredJobBusy} onClose={() => setRestoredJob(null)} onRetry={() => void retryRestoredJob()} onCancel={() => void cancelRestoredJob()} />{paywall ? <SubscriptionPaywall item={paywall} close={() => setPaywall(null)} /> : null}{showOnboarding ? <LeadJourneyOnboarding onFinish={completeLeadJourneyOnboarding} /> : null}</>}
+        navigation={!picker && !showOnboarding ? <BottomNav current={tab} setCurrent={(next) => openMobileTarget(next)} /> : null}
       >
         <AnimatePresence initial={false} mode="wait">
           <motion.div key={`${tab}-${module}-${picker}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={spring}>
             {picker && pickerNetwork ? <NetworkScopePicker network={pickerNetwork} currentScope={scope} locations={networkLocations.items || []} total={networkLocations.counts?.total || 0} nextCursor={networkLocations.cursor} search={networkSearch} setSearch={setNetworkSearch} loading={networkLocationsLoading} choose={chooseScope} back={() => { setPickerNetwork(null); setNetworkSearch(''); }} loadMore={() => void loadNetworkLocations(pickerNetwork, networkSearch, networkLocations.cursor || '', true)} /> : null}
             {picker && !pickerNetwork ? <ScopePicker catalog={catalog} search={search} setSearch={setSearch} choose={chooseScope} openNetwork={(network) => { setPickerNetwork(network); setNetworkSearch(''); }} loadMore={() => void loadBootstrap(search.trim(), catalog?.next_business_cursor || '', true, true)} /> : null}
-            {!picker && tab === 'today' ? bootstrap?.today_v2_enabled !== false ? <TodayMobileV2 data={todayData} loading={todayLoading} slowLoading={todaySlowLoading} command={command} setCommand={setCommand} ask={askOperator} openTarget={openMobileTarget} openProgress={() => openMobileTarget(scope?.kind === 'platform' ? 'tasks' : 'progress')} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} track={trackMobileInteraction} trackProduct={trackProductEvent} openFinanceImport={() => openMobileTarget('finance_import')} /> : <Today summary={summary} tasks={tasks} command={command} setCommand={setCommand} ask={askOperator} openTask={openTask} /> : null}
+            {!picker && tab === 'today' ? <>{journeyAction && scope?.kind === 'business' && scope.id ? <div className="px-4 pb-4"><JourneyActionCard action={journeyAction} businessId={scope.id} surface="telegram_mini_app" dark onUpdated={() => void loadJourneyAction(journeyAction.id, scope.id)} /></div> : null}{bootstrap?.today_v2_enabled !== false ? <TodayMobileV2 data={todayData} loading={todayLoading} slowLoading={todaySlowLoading} command={command} setCommand={setCommand} ask={askOperator} openTarget={openMobileTarget} openProgress={() => openMobileTarget(scope?.kind === 'platform' ? 'tasks' : 'progress')} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} track={trackMobileInteraction} trackProduct={trackProductEvent} openFinanceImport={() => openMobileTarget('finance_import')} refresh={() => void loadToday(scope, true, true)} /> : <Today summary={summary} tasks={tasks} command={command} setCommand={setCommand} ask={askOperator} openTask={openTask} />}</> : null}
             {!picker && tab === 'tasks' ? <Tasks items={tasks} filter={taskFilter} setFilter={setTaskFilter} openTask={openTask} /> : null}
+            {!picker && tab === 'feed' ? <CommunityFeedMobile scope={scope} preview={preview} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} /> : null}
             {!picker && tab === 'reviews' ? <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
             {!picker && tab === 'progress' ? <Screen title="Прогресс" subtitle="Выполненные шаги, текущие проблемы и одно следующее действие."><ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} /></Screen> : null}
-            {!picker && tab === 'operator' ? <Operator messages={messages} busy={operatorBusy} command={command} setCommand={setCommand} ask={askOperator} openScreen={openMobileTarget} /> : null}
-            {!picker && tab === 'more' && !module ? <More navigation={visibleNavigation} onOpen={openMobileTarget} openProgress={() => openMobileTarget('progress')} restartTour={() => setShowOnboarding(true)} /> : null}
+            {!picker && tab === 'operator' ? <Operator messages={messages} busy={operatorBusy} actionBusy={operatorActionBusy} command={command} setCommand={setCommand} ask={askOperator} resolveAction={resolveOperatorAction} openScreen={openMobileTarget} /> : null}
+            {!picker && tab === 'more' && !module ? <More navigation={visibleNavigation} onOpen={openMobileTarget} openProgress={() => openMobileTarget('progress')} onLocked={setPaywall} restartTour={() => setShowOnboarding(true)} /> : null}
+            {!picker && tab === 'menu' ? <UtilityMenu navigation={visibleNavigation} onOpen={openMobileTarget} /> : null}
             {!picker && tab === 'more' && module ? <ModuleScreen module={module} focusItemId={deepLinkItemId} scope={scope} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={() => setModule('')} /> : null}
           </motion.div>
         </AnimatePresence>
@@ -928,11 +1050,54 @@ const FilterSelect = ({ label, value, setValue, options }: { label: string; valu
 
 const ResponseBox = ({ label, text }: { label: string; text: string }) => <div className="mt-4 rounded-[18px] bg-black/20 p-3 ring-1 ring-inset ring-white/[0.06]"><div className="flex items-center justify-between"><small className="font-semibold text-primary">{label}</small><button type="button" aria-label="Скопировать" onClick={() => void navigator.clipboard.writeText(text)} className="grid h-11 w-11 place-items-center text-zinc-500 active:scale-[0.96]"><Copy className="h-4 w-4" /></button></div><p className="text-sm leading-6 text-zinc-300">{text}</p></div>;
 
-const Operator = ({ messages, busy, command, setCommand, ask, openScreen }: { messages: OperatorMessage[]; busy: boolean; command: string; setCommand: (value: string) => void; ask: (event: FormEvent) => void; openScreen: (screen: string) => void }) => <Screen title="Оператор" subtitle="Напишите задачу обычными словами. Результат появится здесь или в нужном разделе."><div className="min-h-[42vh] space-y-3">{messages.length ? messages.map((message, index) => <div key={message.id || `${message.role}-${index}`} className={`max-w-[88%] rounded-[20px] px-4 py-3 text-sm leading-6 ${message.role === 'user' ? 'ml-auto bg-primary text-white' : 'bg-white/[0.05] text-zinc-300 ring-1 ring-inset ring-white/[0.07]'}`}><p className="whitespace-pre-wrap">{message.text}</p>{message.role === 'operator' && message.status === 'completed' ? <small className="mt-2 block text-[10px] text-zinc-600">Готово</small> : null}{message.role === 'operator' && message.screen ? <button type="button" onClick={() => openScreen(message.screen || 'tasks')} className="mt-3 min-h-11 w-full rounded-[14px] bg-white/[0.05] text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]">Открыть результат</button> : null}</div>) : <Empty icon={Bot} title="Что поручить?" text="Например: «Подготовь ответы на плохие отзывы» или «Проверь свежесть карточки»." />}{busy ? <div className="flex items-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin text-primary motion-reduce:animate-none" />Определяю задачу и готовлю результат…</div> : null}</div><form onSubmit={ask} className="sticky bottom-24 mt-4 flex gap-2 rounded-[20px] bg-zinc-900 p-2 ring-1 ring-inset ring-white/[0.08]"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Напишите задачу" className="min-h-12 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-zinc-700" /><button aria-label="Отправить задачу" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary active:scale-[0.96]"><Send className="h-4 w-4" /></button></form></Screen>;
+const Operator = ({ messages, busy, actionBusy, command, setCommand, ask, resolveAction, openScreen }: {
+  messages: OperatorMessage[];
+  busy: boolean;
+  actionBusy: { actionId: string; decision: OperatorActionDecision } | null;
+  command: string;
+  setCommand: (value: string) => void;
+  ask: (event: FormEvent) => void;
+  resolveAction: (actionId: string, decision: OperatorActionDecision) => void;
+  openScreen: (screen: string) => void;
+}) => <Screen title="Оператор" subtitle="Напишите задачу обычными словами. Результат появится здесь или в нужном разделе.">
+  <div className="min-h-[42vh] space-y-3">
+    {messages.length ? messages.map((message, index) => {
+      const resolving = Boolean(message.action_id && actionBusy?.actionId === message.action_id);
+      return <div key={message.id || `${message.role}-${index}`} className={`max-w-[88%] rounded-[20px] px-4 py-3 text-sm leading-6 ${message.role === 'user' ? 'ml-auto bg-primary text-white' : 'bg-white/[0.05] text-zinc-300 ring-1 ring-inset ring-white/[0.07]'}`}>
+        <p className="whitespace-pre-wrap text-pretty">{message.text}</p>
+        {message.role === 'operator' && message.status === 'completed' ? <small className="mt-2 flex items-center gap-1 text-[10px] text-emerald-400"><Check className="h-3 w-3" />Готово</small> : null}
+        {message.role === 'operator' && message.status === 'rejected' ? <small className="mt-2 flex items-center gap-1 text-[10px] text-zinc-500"><X className="h-3 w-3" />Отклонено</small> : null}
+        {message.role === 'operator' && message.status === 'approval_required' && message.action_id ? <div className="mt-3 rounded-[18px] bg-black/20 p-2 ring-1 ring-inset ring-amber-300/15">
+          <div className="flex items-center gap-2 px-1 pb-2 text-[11px] leading-4 text-amber-200/80"><ShieldCheck className="h-4 w-4 shrink-0" />Проверьте действие: оно не выполнится без вашего решения.</div>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" disabled={Boolean(actionBusy)} onClick={() => resolveAction(message.action_id || '', 'reject')} className="flex min-h-11 items-center justify-center gap-2 rounded-[14px] bg-white/[0.055] px-3 text-xs font-semibold text-zinc-300 ring-1 ring-inset ring-white/[0.08] transition-[background-color,transform] active:scale-[0.96] disabled:opacity-50 disabled:active:scale-100">{resolving && actionBusy?.decision === 'reject' ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <X className="h-4 w-4" />}Отклонить</button>
+            <button type="button" disabled={Boolean(actionBusy)} onClick={() => resolveAction(message.action_id || '', 'confirm')} className="flex min-h-11 items-center justify-center gap-2 rounded-[14px] bg-primary px-3 text-xs font-semibold text-white shadow-[0_10px_30px_rgba(255,92,51,0.2)] transition-[filter,transform] active:scale-[0.96] disabled:opacity-50 disabled:active:scale-100">{resolving && actionBusy?.decision === 'confirm' ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}Подтвердить</button>
+          </div>
+          {message.action_error ? <p role="alert" className="mt-2 px-1 text-pretty text-[11px] leading-4 text-red-300">{message.action_error}</p> : null}
+        </div> : null}
+        {message.role === 'operator' && message.screen ? <button type="button" onClick={() => openScreen(message.screen || 'tasks')} className="mt-3 min-h-11 w-full rounded-[14px] bg-white/[0.05] text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.07] transition-[background-color,transform] active:scale-[0.96]">Открыть результат</button> : null}
+      </div>;
+    }) : <Empty icon={Bot} title="Что поручить?" text="Например: «Подготовь ответы на плохие отзывы» или «Проверь свежесть карточки»." />}
+    {busy ? <div className="flex items-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin text-primary motion-reduce:animate-none" />Определяю задачу и готовлю результат…</div> : null}
+  </div>
+  <form onSubmit={ask} className="sticky bottom-24 mt-4 flex gap-2 rounded-[20px] bg-zinc-900 p-2 ring-1 ring-inset ring-white/[0.08]"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Напишите задачу" className="min-h-12 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-zinc-700" /><button aria-label="Отправить задачу" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary transition-transform active:scale-[0.96]"><Send className="h-4 w-4" /></button></form>
+</Screen>;
 
-const More = ({ navigation, onOpen, openProgress, restartTour }: { navigation: NavigationItem[]; onOpen: (key: string) => void; openProgress: () => void; restartTour: () => void }) => {
-  return <Screen title="Развитие" subtitle="Выберите цель. Внутри будет первое действие и текущие данные.">
-    <GrowthNavigation navigation={navigation} onOpen={onOpen} onOpenProgress={openProgress} onRestartTour={restartTour} />
+const SubscriptionPaywall = ({ item, close }: { item: NavigationItem; close: () => void }) => <div className="fixed inset-0 z-50 flex items-end bg-black/70 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Раздел доступен после оплаты"><div className="w-full rounded-[28px] bg-zinc-900 p-5 shadow-2xl ring-1 ring-inset ring-white/[0.08]"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/15 text-primary"><CreditCard className="h-5 w-5" /></span><h2 className="mt-4 text-xl font-semibold">{item.label} доступен после оплаты</h2><p className="mt-2 text-sm leading-6 text-zinc-500">{item.reason || 'Подключите тариф для выбранной точки.'}</p><a href="/dashboard/billing" className="mt-5 flex min-h-12 w-full items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold text-white">Перейти к оплате</a><button type="button" onClick={close} className="mt-2 min-h-12 w-full rounded-2xl bg-white/[0.04] text-sm font-semibold text-zinc-400">Закрыть</button></div></div>;
+
+const More = ({ navigation, onOpen, openProgress, onLocked, restartTour }: { navigation: NavigationItem[]; onOpen: (key: string) => void; openProgress: () => void; onLocked: (item: NavigationItem) => void; restartTour: () => void }) => {
+  return <Screen title="Пути роста" subtitle="Выберите цель. Внутри будет первое действие и текущие данные.">
+    <GrowthNavigation navigation={navigation} onOpen={onOpen} onOpenProgress={openProgress} onLocked={onLocked} onRestartTour={restartTour} />
+  </Screen>;
+};
+
+const UtilityMenu = ({ navigation, onOpen }: { navigation: NavigationItem[]; onOpen: (key: string) => void }) => {
+  const hiddenFromMenu = new Set(['today', 'progress', 'cards', 'content', 'influencers', 'partnerships']);
+  const items = navigation.filter((item) => item.status !== 'hidden' && !hiddenFromMenu.has(item.key));
+  return <Screen title="Ещё" subtitle="Рабочие очереди, управление и настройки.">
+    <div className="space-y-2">
+      {items.map((item) => <button key={item.key} type="button" onClick={() => onOpen(item.key)} className="flex min-h-14 w-full items-center gap-3 rounded-[18px] bg-white/[0.04] px-4 text-left ring-1 ring-inset ring-white/[0.07] transition-[background-color,transform] duration-150 active:scale-[0.96]"><span className="grid h-10 w-10 place-items-center rounded-[13px] bg-primary/10 text-primary"><CircleEllipsis className="h-4 w-4" /></span><span className="min-w-0 flex-1"><b className="block text-sm">{item.label}</b>{item.reason ? <small className="mt-0.5 block truncate text-zinc-600">{item.reason}</small> : null}</span><ChevronRight className="h-4 w-4 text-zinc-700" /></button>)}
+    </div>
   </Screen>;
 };
 
@@ -961,7 +1126,7 @@ type ModuleScreenProps = {
 const ModuleScreen = ({ module, focusItemId, scope, data, loading, progressData, progressLoading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, reload, openTarget, track, trackProduct, openTasks, requestCrm, back }: ModuleScreenProps) => {
   const content = moduleNames[module] || ['Раздел', 'Данные и доступные действия.'];
   return <Screen title={content[0]} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>
-    {module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} trackProduct={trackProduct} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'finance' || module === 'finance_import' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} requestCrm={requestCrm} initialSection={module === 'finance_import' ? 'import' : 'overview'} trackProduct={trackProduct} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
+    {module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} trackProduct={trackProduct} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'finance' || module === 'finance_import' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} requestCrm={requestCrm} initialSection={module === 'finance_import' ? 'import' : 'overview'} trackProduct={trackProduct} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} canManage={Boolean(data.available_actions?.some((action) => action.key === 'agents.lifecycle'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
   </Screen>;
 };
 
@@ -1557,8 +1722,13 @@ const ModuleUnavailable = () => <Empty icon={CircleEllipsis} title="Раздел
 const NotificationSettings = ({ preferences, saving, save }: { preferences: NotificationPreferences; saving: boolean; save: (preferences: NotificationPreferences) => Promise<void> }) => {
   const [value, setValue] = useState<NotificationPreferences>(preferences);
   useEffect(() => setValue(preferences), [preferences]);
-  const rows: Array<[keyof NotificationPreferences, string, string]> = [['daily_digest', 'Утренняя сводка', 'Задачи и изменения за сутки'], ['finance_rhythm', 'Ритм статистики', 'Один раз перед сроком и один — после'], ['reviews', 'Новые отзывы', 'Когда нужен ответ'], ['tasks', 'Решения', 'Черновики и подтверждения'], ['errors', 'Ошибки', 'Точка или подключение требует внимания'], ['agent_results', 'Результаты ЛокалОС', 'Новый результат готов к проверке']];
-  return <div><div className="space-y-2">{rows.map(([key, title, description]) => <label key={key} className="flex min-h-16 items-center gap-3 rounded-[20px] bg-white/[0.04] px-4 ring-1 ring-inset ring-white/[0.07]"><span className="min-w-0 flex-1"><b className="block text-sm">{title}</b><small className="mt-1 block text-zinc-600">{description}</small></span><input type="checkbox" checked={Boolean(value[key])} onChange={(event) => setValue((current) => ({ ...current, [key]: event.target.checked }))} className="h-6 w-6 accent-primary" /></label>)}</div><button disabled={saving} onClick={() => void save(value)} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold active:scale-[0.96] disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}{saving ? 'Сохраняем…' : 'Сохранить'}</button></div>;
+  const rows: Array<[keyof NotificationPreferences, string, string]> = [['daily_digest', 'Утренняя сводка', 'Задачи и изменения за сутки'], ['content_publications', 'Публикации', 'Готовые тексты для ручного размещения'], ['finance_rhythm', 'Ритм статистики', 'Один раз перед сроком и один — после'], ['reviews', 'Новые отзывы', 'Когда нужен ответ'], ['tasks', 'Решения', 'Черновики и подтверждения'], ['errors', 'Ошибки', 'Точка или подключение требует внимания'], ['agent_results', 'Результаты ЛокалОС', 'Новый результат готов к проверке']];
+  return <div><div className="space-y-2">{rows.map(([key, title, description]) => <label key={key} className="flex min-h-16 items-center gap-3 rounded-[20px] bg-white/[0.04] px-4 ring-1 ring-inset ring-white/[0.07]"><span className="min-w-0 flex-1"><b className="block text-sm">{title}</b><small className="mt-1 block text-zinc-600">{description}</small></span><input type="checkbox" checked={Boolean(value[key])} onChange={(event) => setValue((current) => ({ ...current, [key]: event.target.checked }))} className="h-6 w-6 accent-primary" /></label>)}</div>{value.content_publications && <div className="mt-3 space-y-3 rounded-[20px] bg-white/[0.04] p-4">
+    <label className="block text-sm">За сколько дней до публикации<input aria-label="За сколько дней до публикации" type="number" min={0} max={7} value={value.content_publications_lead_days ?? 0} onChange={event => setValue(current => ({ ...current, content_publications_lead_days: Number(event.target.value) }))} className="mt-2 min-h-11 w-full rounded-[14px] bg-black/20 px-3" /></label>
+    <label className="block text-sm">Время по часовому поясу бизнеса<input aria-label="Время передачи материалов" type="time" value={value.content_publications_time || ''} onChange={event => setValue(current => ({ ...current, content_publications_time: event.target.value }))} className="mt-2 min-h-11 w-full rounded-[14px] bg-black/20 px-3" /></label>
+    <label className="flex items-start gap-3 text-sm"><input type="checkbox" checked={(value.content_publications_platforms || []).length === 3} onChange={event => setValue(current => ({ ...current, content_publications_platforms: event.target.checked ? ['vk', 'telegram', 'max'] : [] }))} className="h-6 w-6 accent-primary" />Передавать только полный комплект для VK, Telegram и MAX</label>
+    <p className="text-xs text-zinc-500">Подготовленные тексты и фото придут через подключённого бота. Публикацию выполняет получатель.</p>
+  </div>}<button disabled={saving} onClick={() => void save(value)} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold active:scale-[0.96] disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}{saving ? 'Сохраняем…' : 'Сохранить'}</button></div>;
 };
 
 const StatusPill = ({ value }: { value?: string }) => <span className="shrink-0 rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] text-zinc-500 ring-1 ring-inset ring-white/[0.06]">{value === 'active' ? 'Активна' : value === 'archived' ? 'Архив' : value === 'approved' || value === 'completed' ? 'Готово' : value === 'draft' || value === 'draft_generated' || value === 'edited' ? 'Черновик' : value === 'planned' ? 'Запланировано' : value === 'fresh' ? 'Актуально' : value === 'running' || value === 'processing' ? 'В работе' : value === 'failed' || value === 'error' ? 'Ошибка' : value || 'Данные'}</span>;
@@ -1599,7 +1769,11 @@ export const NetworkScopePicker = ({ network, currentScope, locations, total, ne
 
 const ScopePicker = ({ catalog, search, setSearch, choose, openNetwork, loadMore }: { catalog?: Catalog; search: string; setSearch: (value: string) => void; choose: (kind: string, id?: string | null) => void; openNetwork: (network: NetworkCatalogItem) => void; loadMore: () => void }) => <Screen title="Где работаем?" subtitle="Выбор сохранится для следующего запуска."><label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-zinc-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, город или адрес" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label><div className="mt-4 space-y-2">{catalog?.platform ? <ScopeRow icon={ShieldCheck} label="Вся платформа" meta="Операционная картина ЛокалОС" onClick={() => void choose('platform')} /> : null}{catalog?.networks?.map((item) => <ScopeRow key={item.id} icon={Network} label={item.name || 'Сеть'} meta={`${locationCountLabel(item.locations_count || 0)} · Выбрать`} onClick={() => openNetwork(item)} />)}{catalog?.businesses?.filter((item) => Boolean(search.trim()) || !item.network_id).map((item) => <ScopeRow key={item.id} icon={Building2} label={item.name || 'Бизнес'} meta={[item.network_name, item.address].filter(Boolean).join(' · ') || 'Самостоятельный бизнес'} onClick={() => void choose('business', item.id)} />)}{catalog?.has_more_businesses ? <button type="button" onClick={loadMore} className="min-h-12 w-full rounded-2xl bg-white/[0.05] text-sm font-semibold text-zinc-300 shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-transform active:scale-[0.96]">Показать ещё</button> : null}</div></Screen>;
 
-const BottomNav = ({ current, setCurrent }: { current: Tab; setCurrent: (tab: Tab) => void }) => { const items: Array<[Tab, string, typeof Sparkles]> = [['today', 'Сегодня', Sparkles], ['tasks', 'В работе', ClipboardCheck], ['reviews', 'Отзывы', MessageCircle], ['operator', 'Оператор', Bot], ['more', 'Развитие', LayoutGrid]]; return <nav aria-label="Главное меню" className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-xl border-t border-white/[0.07] bg-zinc-950/90 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl"> <div className="grid grid-flow-col auto-cols-fr">{items.map(([key, label, Icon]) => <button key={key} type="button" aria-current={current === key ? 'page' : undefined} onClick={() => setCurrent(key)} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[10px] transition-[color,transform,background-color] duration-150 active:scale-[0.96] ${current === key ? 'bg-primary/10 text-primary' : 'text-zinc-600'}`}><Icon className="h-5 w-5" /><span>{label}</span></button>)}</div></nav>; };
+const BottomNav = ({ current, setCurrent }: { current: Tab; setCurrent: (tab: Tab) => void }) => {
+  const activeKey: Tab = current === 'reviews' ? 'more' : current === 'operator' || current === 'feed' ? 'menu' : current === 'tasks' ? 'today' : current;
+  const items: Array<[Tab, string, typeof Sparkles]> = [['today', 'Сегодня', Sparkles], ['more', 'Пути роста', LayoutGrid], ['progress', 'Результаты', TrendingUp], ['menu', 'Ещё', CircleEllipsis]];
+  return <nav aria-label="Главное меню" className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-xl border-t border-white/[0.07] bg-zinc-950/90 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl"><div className="grid grid-flow-col auto-cols-fr">{items.map(([key, label, Icon]) => <button key={key} type="button" aria-current={activeKey === key ? 'page' : undefined} onClick={() => setCurrent(key)} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[10px] transition-[color,transform,background-color] duration-150 active:scale-[0.96] ${activeKey === key ? 'bg-primary/10 text-primary' : 'text-zinc-600'}`}><Icon className="h-5 w-5" /><span>{label}</span></button>)}</div></nav>;
+};
 
 const Screen = ({ title, subtitle, children, action }: { title: string; subtitle: string; children: React.ReactNode; action?: React.ReactNode }) => <section className="px-4"><div className="mb-5 flex items-start gap-3"><div className="min-w-0 flex-1"><h1 className="text-balance text-2xl font-semibold tracking-[-0.04em]">{title}</h1><p className="mt-1 text-pretty text-sm leading-6 text-zinc-500">{subtitle}</p></div>{action}</div>{children}</section>;
 const PrimaryButton = ({ children, onClick }: { children: React.ReactNode; onClick: () => void }) => <button onClick={onClick} className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(255,92,51,0.24)] transition-[filter,transform] active:scale-[0.96]">{children}<ChevronRight className="h-4 w-4" /></button>;

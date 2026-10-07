@@ -46,7 +46,107 @@ from services.outreach_founder_led_copy import (
     outreach_email_subject,
     select_approved_localos_case,
 )
+
+
+LOCALOS_EMAIL_SIGNATURE = "--\nАлександр\nоснователь ЛокалОС"
+_LOCALOS_EMAIL_IDENTITY_RE = re.compile(
+    r"(?:^|\n\n)Я Александр Демьянов, основатель (?:LocalOS|ЛокалОС)\.?(?=\n\n|$)"
+)
+
+
+def _fresh_successful_snapshot(
+    parse_context: Any,
+    *,
+    now: datetime | None = None,
+    max_age: timedelta = timedelta(days=7),
+) -> bool:
+    """Allow absence/count claims only from a recent full parse."""
+
+    if not isinstance(parse_context, dict):
+        return False
+    if str(parse_context.get("last_parse_status") or "").strip().lower() not in {
+        "completed",
+        "success",
+    }:
+        return False
+    raw_observed_at = str(parse_context.get("last_parse_at") or "").strip()
+    if not raw_observed_at:
+        return False
+    try:
+        observed_at = datetime.fromisoformat(raw_observed_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if observed_at.tzinfo is None:
+        observed_at = observed_at.replace(tzinfo=timezone.utc)
+    checked_at = now or datetime.now(timezone.utc)
+    age = checked_at - observed_at.astimezone(timezone.utc)
+    return timedelta(0) <= age <= max_age
+
+
+def _format_channel_outreach_message(
+    value: Any,
+    *,
+    channel: str,
+    sender_mode: str,
+) -> str:
+    """Apply the approved channel-specific sender identity contract."""
+
+    raw = str(value or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if channel == "email" and sender_mode == SENDER_MODE_LOCALOS:
+        raw = re.sub(
+            r"\n\n--\nАлександр\nоснователь ЛокалОС\s*$",
+            "",
+            raw,
+        )
+    message = format_outreach_message(raw)
+    if channel != "email" or sender_mode != SENDER_MODE_LOCALOS or not message:
+        return message
+    message = re.sub(
+        r"^(Здравствуйте!)\s*Я Александр Демьянов, "
+        r"основатель (?:LocalOS|ЛокалОС)\.?\s*",
+        r"\1\n\n",
+        message,
+    )
+    message = _LOCALOS_EMAIL_IDENTITY_RE.sub("", message)
+    message = message.strip()
+    return f"{message}\n\n{LOCALOS_EMAIL_SIGNATURE}"
+
+
+def _message_content_without_localos_email_signature(value: Any) -> str:
+    message = str(value or "").rstrip()
+    suffix = f"\n\n{LOCALOS_EMAIL_SIGNATURE}"
+    return message[:-len(suffix)] if message.endswith(suffix) else message
+
+
+def _message_for_template_match(value: Any) -> str:
+    message = _message_content_without_localos_email_signature(value)
+    opening = "Здравствуйте!\n\n"
+    if message.startswith(opening):
+        return (
+            "Здравствуйте! Я Александр Демьянов, основатель LocalOS.\n\n"
+            + message[len(opening):]
+        )
+    return message
 from services.outreach_signal_hypothesis_service import derive_pain_signal_hypotheses
+from services.outreach_template_service import (
+    CREATOR_NAME_ONLY_TEMPLATE_KEY,
+    CREATOR_NAME_ONLY_TEMPLATE_CONSTRAINT,
+    CREATOR_NEUTRAL_TEMPLATE_KEY,
+    CREATOR_NEUTRAL_TEMPLATE_CONSTRAINT,
+    CREATOR_INVITATION_TEMPLATE_KEY,
+    CREATOR_INVITATION_TEMPLATE_VERSION,
+    attach_public_audit_link,
+    render_creator_invitation_template,
+    select_outreach_template,
+    template_allows_two_questions,
+    template_copy_matches,
+    template_owner_pain_matches,
+)
+from services.author_template_authorization_service import (
+    exact_author_invitation,
+    load_author_template_authorization,
+    template_manifest,
+)
 from services.outreach_relationship_service import (
     ROOM_INVITATION_CLASSIFICATIONS,
     mark_room_ready_after_positive_reply,
@@ -56,12 +156,17 @@ from services.outreach_relationship_service import (
 )
 from services.outreach_sender_profile_service import evaluate_sender_profile_completeness
 from services.outreach_safety_service import (
+    AUTHOR_CHANNEL_DAILY_LIMITS,
+    AUTHOR_DAILY_LIMIT,
+    AUTHOR_POLICY_VERSION,
     approval_snapshot_hash,
     classify_inbound_event,
+    is_localos_author_lane,
     recipient_key,
     record_learning_event,
     research_source_fact_fingerprint,
     sender_scope_preflight_reason,
+    stable_hash,
     strategy_fingerprint,
 )
 
@@ -91,6 +196,7 @@ DEFAULT_SEQUENCE = (
     ("email", 25, "integrated_system"),
 )
 PLATFORM_DEFAULT_EMAIL_SENDER = "localosgo@gmail.com"
+CREATOR_OUTREACH_BRIDGE_VERSION = "creator-outreach-bridge-v1"
 
 
 def _evidence_aware_sequence_angle(
@@ -701,7 +807,7 @@ def _represented_business_opening(context: dict[str, Any]) -> str:
 def resolve_sender_mode(workstream_type: str, requested_mode: Any = None) -> str:
     """Resolve an explicit sender identity without allowing a hidden fallback."""
     motion = _text(workstream_type)
-    if motion not in {"localos_sales", "client_partnership"}:
+    if motion not in {"localos_sales", "client_partnership", "creator_collaboration"}:
         raise ValueError("Unsupported workstream_type for outreach sender")
     requested = _text(requested_mode).lower()
     default_mode = (
@@ -714,8 +820,8 @@ def resolve_sender_mode(workstream_type: str, requested_mode: Any = None) -> str
         raise ValueError("Unsupported sender_mode")
     if motion == "localos_sales" and mode != SENDER_MODE_LOCALOS:
         raise ValueError("LocalOS sales campaigns must be sent by LocalOS")
-    if motion == "client_partnership" and mode == SENDER_MODE_LOCALOS:
-        raise ValueError("Partner campaigns require partner_business or localos_for_partner sender_mode")
+    if motion in {"client_partnership", "creator_collaboration"} and mode == SENDER_MODE_LOCALOS:
+        raise ValueError("Business campaigns require partner_business or localos_for_partner sender_mode")
     return mode
 
 
@@ -1222,7 +1328,37 @@ def _email_recipient_structure_eligible(contact: dict[str, Any]) -> bool:
     return not any(normalized_local.startswith(prefix) for prefix in EMAIL_ROLE_MISMATCH_PREFIXES)
 
 
-def _recipient_contact_eligible(contact: dict[str, Any]) -> bool:
+def _contact_entity_identity_eligible(
+    contact: dict[str, Any],
+    context: dict[str, Any] | None = None,
+) -> bool:
+    metadata = contact.get("metadata_json")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    identity_status = _text(
+        metadata.get("entity_identity_status")
+        or contact.get("entity_identity_status")
+    ).lower()
+    if identity_status == "mismatch":
+        return False
+    expected_external_id = _text((context or {}).get("source_external_id"))
+    contact_external_id = _text(
+        metadata.get("belongs_to_yandex_org_id")
+        or contact.get("belongs_to_yandex_org_id")
+    )
+    return not (
+        expected_external_id
+        and contact_external_id
+        and expected_external_id != contact_external_id
+    )
+
+
+def _recipient_contact_eligible(
+    contact: dict[str, Any],
+    context: dict[str, Any] | None = None,
+) -> bool:
+    if not _contact_entity_identity_eligible(contact, context):
+        return False
     if _text(contact.get("contact_type")) != "email":
         return True
     if _text(contact.get("verification_status")) not in {"verified", "confirmed_source"}:
@@ -1230,9 +1366,14 @@ def _recipient_contact_eligible(contact: dict[str, Any]) -> bool:
     return _email_recipient_structure_eligible(contact)
 
 
-def _selected_recipient_contact_eligible(contact: dict[str, Any]) -> bool:
+def _selected_recipient_contact_eligible(
+    contact: dict[str, Any],
+    context: dict[str, Any] | None = None,
+) -> bool:
     """Allow a human-selected, structurally safe email without auto-selecting it."""
-    if _recipient_contact_eligible(contact):
+    if not _contact_entity_identity_eligible(contact, context):
+        return False
+    if _recipient_contact_eligible(contact, context):
         return True
     if _text(contact.get("contact_type")) != "email":
         return False
@@ -1288,7 +1429,7 @@ def _normalize_outreach_fact(value: Any) -> str:
     )
     if services_match:
         return (
-            "По данным аудита карточки: всего услуг - "
+            "По данным аудита карточки на Яндекс Картах: всего услуг - "
             f"{services_match.group(1)}; с ценой - {services_match.group(2)}."
         )
     compact_services_match = re.search(
@@ -1299,19 +1440,19 @@ def _normalize_outreach_fact(value: Any) -> str:
     )
     if compact_services_match:
         return (
-            "По данным аудита карточки: всего услуг - "
+            "По данным аудита карточки на Яндекс Картах: всего услуг - "
             f"{compact_services_match.group(1)}; с ценой - "
             f"{compact_services_match.group(2)}."
         )
     current_services_match = re.search(
-        r"(?:по данным аудита карточки:\s*)?всего услуг\s*[—-]\s*(\d+);"
+        r"(?:по данным аудита карточки(?: на яндекс картах)?:\s*)?всего услуг\s*[—-]\s*(\d+);"
         r"\s*с ценой\s*[—-]\s*(\d+)",
         fact,
         flags=re.I,
     )
     if current_services_match:
         return (
-            "По данным аудита карточки: всего услуг - "
+            "По данным аудита карточки на Яндекс Картах: всего услуг - "
             f"{current_services_match.group(1)}; с ценой - {current_services_match.group(2)}."
         )
     rating_match = re.search(
@@ -1374,16 +1515,511 @@ def _signal_is_material(candidate: dict[str, Any]) -> bool:
     if rating_match:
         rating = float(rating_match.group(1).replace(",", "."))
         reviews = int(rating_match.group(2))
-        return rating <= 4.2 or reviews <= 10
+        return rating > 0 and (rating <= 4.2 or reviews <= 10)
     return True
+
+
+def _merge_recent_research_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Keep the latest research contract while retaining recent public evidence."""
+    if not rows:
+        return {}
+    merged = dict(rows[0])
+    identity_fields = {
+        "signals_json": ("evidence_id", "id", "source_url", "url", "observed_fact", "fact"),
+        "evidence_json": ("evidence_id", "id", "source_url", "url", "observed_fact", "fact"),
+        "sources_json": ("url", "source_url", "title"),
+        "contact_evidence_json": ("contact_type", "type", "normalized_value", "value", "source_url"),
+    }
+    for field, keys in identity_fields.items():
+        values: list[Any] = []
+        seen: set[str] = set()
+        for row in rows:
+            for item in _list(row.get(field)):
+                if not isinstance(item, dict):
+                    continue
+                identity = "|".join(_text(item.get(key)).lower() for key in keys)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                values.append(item)
+        merged[field] = values
+    merged["research_history_rows_merged"] = len(rows)
+    return merged
+
+
+def _russian_publication_count(value: int) -> str:
+    """Return a human Russian verb and noun form for a publication count."""
+    tail_100 = value % 100
+    tail_10 = value % 10
+    if 11 <= tail_100 <= 14:
+        noun = "публикаций"
+    elif tail_10 == 1:
+        noun = "публикация"
+    elif 2 <= tail_10 <= 4:
+        noun = "публикации"
+    else:
+        noun = "публикаций"
+    verb = "вышла" if noun == "публикация" else "вышло"
+    return f"{verb} {value} {noun}"
+
+
+def _russian_visible_service_count(value: int) -> str:
+    """Return a human Russian phrase for the visible service count."""
+    tail_100 = value % 100
+    tail_10 = value % 10
+    if 11 <= tail_100 <= 14:
+        noun = "услуг"
+    elif tail_10 == 1:
+        noun = "услуга"
+    elif 2 <= tail_10 <= 4:
+        noun = "услуги"
+    else:
+        noun = "услуг"
+    verb = "видна" if noun == "услуга" else "видны"
+    return f"{verb} {value} {noun}"
+
+
+def _load_creator_outreach_bridge(
+    cursor: Any,
+    workstream: dict[str, Any],
+) -> dict[str, Any]:
+    """Map approved creator campaign facts into the outreach preview context.
+
+    The bridge is deliberately read-only and fail-closed: it accepts only the
+    exact prepared workstream, a current approved creator campaign, a confirmed
+    unchanged email contact, and fresh creator evidence already linked to the
+    same business/candidate.
+    """
+    if _text(workstream.get("workstream_type")) != "creator_collaboration":
+        return {}
+    cursor.execute(
+        """
+        SELECT candidate.id AS candidate_id,
+               candidate.creator_profile_id,
+               candidate.score_snapshot_json AS candidate_score_snapshot_json,
+               candidate.updated_at AS candidate_updated_at,
+               candidate.score_snapshot_json->'contact_confirmation' AS contact_confirmation,
+               profile.display_name AS creator_display_name,
+               profile.description AS creator_description,
+               selected_contact.id AS selected_contact_point_id,
+               selected_contact.contact_type AS selected_contact_type,
+               selected_contact.normalized_value AS selected_contact_value,
+               selected_contact.verification_status AS selected_contact_verification,
+               selected_contact.source_url AS selected_contact_source_url,
+               campaign.id AS creator_campaign_id,
+               campaign.business_id,
+               campaign.terms_version,
+               campaign.approved_at,
+               campaign.offer_json,
+               campaign.formats_json,
+               campaign.budget_json,
+               campaign.period_json,
+               campaign.constraints_json,
+               channel.id AS channel_id,
+               channel.platform,
+               channel.canonical_url AS channel_url,
+               channel.metadata_json AS channel_metadata,
+               channel.last_observed_at AS channel_observed_at,
+               evidence.id AS evidence_id,
+               evidence.evidence_type,
+               evidence.source_url AS evidence_source_url,
+               evidence.summary_text AS evidence_summary,
+               evidence.confidence AS evidence_confidence,
+               evidence.observed_at AS evidence_observed_at,
+               evidence.stale_after AS evidence_stale_after,
+               (
+                 campaign.status IN ('approved', 'active')
+                 AND campaign.approved_at IS NOT NULL
+                 AND campaign.approved_terms_version = campaign.terms_version
+                 AND COALESCE(
+                       (campaign.constraints_json->>'invitation_only')::boolean,
+                       FALSE
+                     ) = TRUE
+                 AND CASE
+                       WHEN NULLIF(BTRIM(campaign.period_json->>'expires_at'), '') IS NULL
+                       THEN TRUE
+                       WHEN pg_input_is_valid(
+                           campaign.period_json->>'expires_at',
+                           'timestamp with time zone'
+                       ) THEN (campaign.period_json->>'expires_at')::timestamptz > NOW()
+                       ELSE FALSE
+                     END
+                 AND CASE
+                       WHEN NULLIF(BTRIM(campaign.period_json->>'end_at'), '') IS NULL
+                       THEN TRUE
+                       WHEN pg_input_is_valid(
+                           campaign.period_json->>'end_at',
+                           'timestamp with time zone'
+                       ) THEN (campaign.period_json->>'end_at')::timestamptz > NOW()
+                       ELSE FALSE
+                     END
+               ) AS approved_offer_current,
+               COUNT(*) OVER ()::int AS bridge_match_count
+        FROM creator_campaign_candidates candidate
+        JOIN creator_campaigns campaign ON campaign.id = candidate.campaign_id
+        JOIN creator_profiles profile ON profile.id = candidate.creator_profile_id
+        JOIN lead_workstreams selected_workstream
+          ON selected_workstream.id = candidate.workstream_id
+         AND selected_workstream.lead_id = candidate.lead_id
+        JOIN lead_contact_points selected_contact
+          ON selected_contact.id = selected_workstream.selected_contact_point_id
+         AND selected_contact.lead_id = candidate.lead_id
+         AND selected_contact.contact_type = 'email'
+         AND selected_contact.verification_status IN (
+               'verified', 'confirmed_source', 'valid_format'
+             )
+        JOIN creator_commercial_profiles commercial
+          ON commercial.creator_profile_id = profile.id
+        JOIN LATERAL (
+            SELECT item.*
+            FROM creator_channels item
+            WHERE item.creator_profile_id = profile.id
+              AND item.verification_status = 'verified'
+              AND LOWER(RTRIM(item.canonical_url, '/')) =
+                  LOWER(RTRIM(COALESCE(%s, ''), '/'))
+            ORDER BY
+              CASE WHEN LOWER(RTRIM(item.canonical_url, '/')) =
+                             LOWER(RTRIM(COALESCE(%s, ''), '/'))
+                   THEN 0 ELSE 1 END,
+              item.last_observed_at DESC NULLS LAST,
+              item.created_at DESC
+            LIMIT 1
+        ) channel ON TRUE
+        JOIN LATERAL (
+            SELECT item.*
+            FROM creator_evidence item
+            WHERE item.creator_profile_id = profile.id
+              AND NULLIF(BTRIM(item.summary_text), '') IS NOT NULL
+              AND NULLIF(BTRIM(item.source_url), '') IS NOT NULL
+              AND item.observed_at IS NOT NULL
+              AND item.stale_after IS NOT NULL
+              AND item.stale_after > NOW()
+              AND COALESCE(item.confidence, 0) >= 0.7
+              AND COALESCE(
+                    candidate.score_snapshot_json->'contact_confirmation'->>'note',
+                    ''
+                  ) LIKE '%%' || item.id::text || '%%'
+              AND CASE LOWER(channel.platform)
+                    WHEN 'youtube' THEN LOWER(item.source_url) ~
+                        '^https?://(www\\.)?(youtube\\.com|youtu\\.be)/'
+                    WHEN 'telegram' THEN LOWER(item.source_url) ~
+                        '^https?://(t\\.me|telegram\\.me)/'
+                    WHEN 'vk' THEN LOWER(item.source_url) ~
+                        '^https?://(www\\.)?vk\\.(com|ru)/'
+                    ELSE LOWER(item.source_url) LIKE
+                         '%%' || LOWER(SPLIT_PART(SPLIT_PART(channel.canonical_url, '://', 2), '/', 1)) || '%%'
+                  END
+            ORDER BY
+              CASE WHEN item.evidence_type = 'manual_public_source'
+                         AND item.metadata_json->>'business_id' = campaign.business_id::text
+                   THEN 0 ELSE 1 END,
+              item.confidence DESC,
+              item.observed_at DESC NULLS LAST,
+              item.created_at DESC
+            LIMIT 1
+        ) evidence ON TRUE
+        WHERE candidate.workstream_id = %s
+          AND candidate.lead_id = %s
+          AND candidate.status = 'invitation_ready'
+          AND campaign.sender_mode = 'localos_for_partner'
+          AND profile.id::text = NULLIF(
+              regexp_replace(COALESCE(%s, ''), '^creator:', ''),
+              ''
+          )
+          AND COALESCE(
+              (candidate.score_snapshot_json->'contact_confirmation'->>'confirmed')::boolean,
+              FALSE
+          ) = TRUE
+          AND NULLIF(BTRIM(
+                candidate.score_snapshot_json->'contact_confirmation'->>'note'
+              ), '') IS NOT NULL
+          AND NULLIF(BTRIM(
+                candidate.score_snapshot_json->'contact_confirmation'->>'source_url'
+              ), '') IS NOT NULL
+          AND COALESCE(
+                candidate.score_snapshot_json->'contact_confirmation'->>'note',
+                ''
+              ) LIKE '%%' || channel.id::text || '%%'
+          AND LOWER(BTRIM(COALESCE(commercial.preferred_contact, ''))) =
+              LOWER(BTRIM(COALESCE(%s, '')))
+          AND LOWER(BTRIM(COALESCE(selected_contact.normalized_value, ''))) =
+              LOWER(BTRIM(COALESCE(commercial.preferred_contact, '')))
+          AND LOWER(RTRIM(COALESCE(selected_contact.source_url, ''), '/')) =
+              LOWER(RTRIM(channel.canonical_url, '/'))
+        LIMIT 1
+        """,
+        (
+            workstream.get("source_url"),
+            workstream.get("source_url"),
+            workstream.get("id"),
+            workstream.get("lead_id"),
+            workstream.get("source_external_id"),
+            workstream.get("email"),
+        ),
+    )
+    row = _dict(cursor.fetchone())
+    if not row:
+        return {"status": "blocked", "blocking_reason": "recipient_evidence"}
+    if int(row.get("bridge_match_count") or 0) != 1:
+        return {
+            "status": "blocked",
+            "blocking_reason": "creator_campaign_ambiguous",
+        }
+    if row.get("approved_offer_current") is not True:
+        return {"status": "blocked", "blocking_reason": "approved_offer"}
+    offer = row.get("offer_json") if isinstance(row.get("offer_json"), dict) else {}
+    approved_reason = _text(offer.get("details"))
+    if not approved_reason:
+        return {"status": "blocked", "blocking_reason": "approved_offer"}
+    if not row.get("evidence_observed_at") or (
+        row.get("evidence_stale_after") is not None
+        and row.get("evidence_stale_after") <= datetime.now(timezone.utc)
+    ):
+        return {
+            "status": "blocked",
+            "blocking_reason": "creator_evidence_stale_or_ownership_unverified",
+        }
+    contact_confirmation = (
+        row.get("contact_confirmation")
+        if isinstance(row.get("contact_confirmation"), dict)
+        else {}
+    )
+    channel_metadata = (
+        row.get("channel_metadata")
+        if isinstance(row.get("channel_metadata"), dict)
+        else {}
+    )
+    channel_identity = (
+        channel_metadata.get("observed_identity")
+        if isinstance(channel_metadata.get("observed_identity"), dict)
+        else {}
+    )
+    evidence = {
+        "evidence_id": _text(row.get("evidence_id")),
+        "id": _text(row.get("evidence_id")),
+        "kind": "creator_public_evidence",
+        "observed_fact": _text(row.get("evidence_summary")),
+        "fact": _text(row.get("evidence_summary")),
+        "source_url": _text(row.get("evidence_source_url")),
+        "observed_at": row.get("evidence_observed_at"),
+        "freshness": "current_snapshot",
+        "confidence": float(
+            row.get("evidence_confidence")
+            if row.get("evidence_confidence") is not None
+            else 0.0
+        ),
+        "usable_for_outreach": True,
+        "source_type": _text(row.get("evidence_type")),
+        "evidence_kind": "creator_campaign_bridge",
+        "provider_key": _text(row.get("channel_id")),
+    }
+    ownership_evidence = {
+        "evidence_id": f"creator-contact-ownership:{_text(row.get('candidate_id'))}",
+        "id": f"creator-contact-ownership:{_text(row.get('candidate_id'))}",
+        "kind": "creator_contact_ownership",
+        "observed_fact": _text(contact_confirmation.get("note")),
+        "fact": _text(contact_confirmation.get("note")),
+        "source_url": _text(contact_confirmation.get("source_url")),
+        "observed_at": row.get("candidate_updated_at"),
+        "freshness": "current_snapshot",
+        "confidence": 1.0,
+        "usable_for_outreach": True,
+        "source_type": "operator_confirmed_creator_contact",
+        "evidence_kind": "creator_contact_ownership",
+        "provider_key": _text(row.get("channel_id")),
+    }
+    approval_evidence = {
+        "evidence_id": (
+            f"creator-campaign:{_text(row.get('creator_campaign_id'))}:"
+            f"terms:{int(row.get('terms_version') or 0)}"
+        ),
+        "id": (
+            f"creator-campaign:{_text(row.get('creator_campaign_id'))}:"
+            f"terms:{int(row.get('terms_version') or 0)}"
+        ),
+        "kind": "operator_approved_partnership_reason",
+        "observed_fact": approved_reason,
+        "fact": approved_reason,
+        "source_url": _text(row.get("channel_url")),
+        "observed_at": row.get("approved_at"),
+        "freshness": "current_snapshot",
+        "confidence": 1.0,
+        "usable_for_outreach": True,
+        "status": "approved",
+        "source_type": "creator_campaign",
+        "evidence_kind": "creator_invitation_approved",
+        "provider_key": _text(row.get("channel_id")),
+    }
+    constraints_json = row.get("constraints_json")
+    constraints = dict(constraints_json) if isinstance(constraints_json, dict) else {}
+    constraints.pop("author_invitation_variant", None)
+    candidate_snapshot = row.get("candidate_score_snapshot_json")
+    candidate_variant = _text((candidate_snapshot if isinstance(candidate_snapshot, dict) else {}).get("author_invitation_variant"))
+    if candidate_variant:
+        constraints["author_invitation_variant"] = candidate_variant
+    provenance_contract = {
+        "bridge_version": CREATOR_OUTREACH_BRIDGE_VERSION,
+        "creator_campaign_id": _text(row.get("creator_campaign_id")),
+        "candidate_id": _text(row.get("candidate_id")),
+        "creator_profile_id": _text(row.get("creator_profile_id")),
+        "terms_version": int(row.get("terms_version") or 0),
+        "preferred_contact": _text(workstream.get("email")).lower(),
+        "selected_contact_point_id": _text(row.get("selected_contact_point_id")),
+        "selected_contact_value": _text(row.get("selected_contact_value")).lower(),
+        "selected_contact_verification": _text(
+            row.get("selected_contact_verification")
+        ),
+        "selected_contact_source_url": _text(row.get("selected_contact_source_url")),
+        "channel_id": _text(row.get("channel_id")),
+        "evidence_id": _text(row.get("evidence_id")),
+        "creator_display_name": _text(row.get("creator_display_name")),
+        "creator_description": _text(row.get("creator_description")),
+        "channel_identity_title": _text(channel_identity.get("title")),
+        "channel_identity_description": _text(channel_identity.get("description")),
+        "public_observed_fact": _text(row.get("evidence_summary")),
+        "offer": offer,
+        "formats": row.get("formats_json") if isinstance(row.get("formats_json"), list) else [],
+        "budget": row.get("budget_json") if isinstance(row.get("budget_json"), dict) else {},
+        "period": row.get("period_json") if isinstance(row.get("period_json"), dict) else {},
+        "constraints": constraints,
+        "contact_confirmation": contact_confirmation,
+    }
+    provenance_evidence = {
+        "evidence_id": f"creator-bridge-provenance:{_text(row.get('candidate_id'))}",
+        "id": f"creator-bridge-provenance:{_text(row.get('candidate_id'))}",
+        "kind": "creator_bridge_provenance",
+        "observed_fact": stable_hash(provenance_contract, "creator-bridge:"),
+        "fact": stable_hash(provenance_contract, "creator-bridge:"),
+        "source_url": _text(row.get("channel_url")),
+        "observed_at": row.get("approved_at"),
+        "freshness": "current_snapshot",
+        "confidence": 1.0,
+        "usable_for_outreach": True,
+        "source_type": "creator_campaign_contract",
+        "evidence_kind": "creator_bridge_provenance",
+        "provider_key": _text(row.get("channel_id")),
+    }
+    bridge = {
+        "status": "ready",
+        "version": CREATOR_OUTREACH_BRIDGE_VERSION,
+        "creator_campaign_id": _text(row.get("creator_campaign_id")),
+        "candidate_id": _text(row.get("candidate_id")),
+        "creator_profile_id": _text(row.get("creator_profile_id")),
+        "preferred_contact": _text(workstream.get("email")).lower(),
+        "selected_contact_point_id": _text(
+            row.get("selected_contact_point_id")
+        ),
+        "terms_version": int(row.get("terms_version") or 0),
+        "approved_at": row.get("approved_at"),
+        "channel_id": _text(row.get("channel_id")),
+        "channel_url": _text(row.get("channel_url")),
+        "evidence_id": _text(row.get("evidence_id")),
+        "creator_display_name": _text(row.get("creator_display_name")),
+        "creator_description": _text(row.get("creator_description")),
+        "channel_identity_title": _text(channel_identity.get("title")),
+        "channel_identity_description": _text(channel_identity.get("description")),
+        "public_observed_fact": _text(row.get("evidence_summary")),
+        "evidence": evidence,
+        "ownership_evidence": ownership_evidence,
+        "approval_evidence": approval_evidence,
+        "provenance_evidence": provenance_evidence,
+        "approved_reason": approved_reason,
+        "offer": offer,
+        "formats": row.get("formats_json") if isinstance(row.get("formats_json"), list) else [],
+        "budget": row.get("budget_json") if isinstance(row.get("budget_json"), dict) else {},
+        "period": row.get("period_json") if isinstance(row.get("period_json"), dict) else {},
+        "constraints": constraints,
+    }
+    bridge["source_fact_fingerprint"] = research_source_fact_fingerprint({
+        "signals_json": [
+            evidence,
+            ownership_evidence,
+            approval_evidence,
+            provenance_evidence,
+        ],
+    })
+    return bridge
+
+
+def _merge_creator_outreach_bridge_research(
+    research: dict[str, Any],
+    bridge: dict[str, Any],
+) -> dict[str, Any]:
+    if not bridge or bridge.get("status") == "blocked":
+        return research
+    merged = dict(research or {})
+    bridge_evidence = [
+        dict(bridge["evidence"]),
+        dict(bridge["ownership_evidence"]),
+        dict(bridge["approval_evidence"]),
+        dict(bridge["provenance_evidence"]),
+    ]
+    for field in ("evidence_json", "signals_json"):
+        items = [dict(item) for item in _list(merged.get(field)) if isinstance(item, dict)]
+        known_ids = {
+            _text(item.get("evidence_id") or item.get("id"))
+            for item in items
+        }
+        for evidence in bridge_evidence:
+            if evidence["evidence_id"] not in known_ids:
+                items.append(dict(evidence))
+                known_ids.add(evidence["evidence_id"])
+        merged[field] = items
+    evidence = bridge_evidence[0]
+    sources = [dict(item) for item in _list(merged.get("sources_json")) if isinstance(item, dict)]
+    if not any(_text(item.get("url") or item.get("source_url")) == evidence["source_url"] for item in sources):
+        sources.append({
+            "url": evidence["source_url"],
+            "source_url": evidence["source_url"],
+            "evidence_id": evidence["evidence_id"],
+            "channel_id": bridge["channel_id"],
+            "observed_at": evidence.get("observed_at"),
+        })
+    merged["sources_json"] = sources
+    message_brief = (
+        dict(merged.get("message_brief_json"))
+        if isinstance(merged.get("message_brief_json"), dict)
+        else {}
+    )
+    message_brief.update({
+        "operator_approved_reason": bridge["approved_reason"],
+        "operator_approved_at": bridge["approved_at"],
+        "operator_approved_source": "creator_campaign",
+        "creator_outreach_bridge_version": bridge["version"],
+        "creator_campaign_id": bridge["creator_campaign_id"],
+        "creator_candidate_id": bridge["candidate_id"],
+        "creator_profile_id": bridge["creator_profile_id"],
+        "creator_terms_version": bridge["terms_version"],
+        "creator_channel_id": bridge["channel_id"],
+        "creator_evidence_id": bridge["evidence_id"],
+        "source_fact_fingerprint": bridge["source_fact_fingerprint"],
+    })
+    merged["message_brief_json"] = message_brief
+    merged["researched_at"] = evidence.get("observed_at") or merged.get("researched_at")
+    merged["creator_outreach_bridge"] = {
+        key: value
+        for key, value in bridge.items()
+        if key not in {
+            "evidence",
+            "ownership_evidence",
+            "approval_evidence",
+            "provenance_evidence",
+        }
+    }
+    return merged
 
 
 def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
     cursor.execute(
         """
         SELECT ws.*, l.name AS lead_name, l.address, l.city, l.category,
-               l.rating, l.reviews_count, l.website, l.source_url,
+               l.rating, l.reviews_count, l.website, l.source_url, l.preferred_language,
+               l.source_external_id,
                l.services_json, l.reviews_json, l.search_payload_json,
+               EXISTS(SELECT 1 FROM operator_async_jobs continuation_job
+                      WHERE continuation_job.kind='outreach_continue'
+                        AND continuation_job.business_id=ws.client_business_id
+                        AND continuation_job.result_json->'lead_ids' @> jsonb_build_array(l.id)) AS continuation_managed,
                CASE
                    WHEN LOWER(COALESCE(
                        l.raw_payload_json->>'isVerifiedOwner',
@@ -1414,6 +2050,18 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
                    WHERE public_offer.lead_id = l.id AND public_offer.is_active = TRUE
                    LIMIT 1
                ) AS public_audit_url,
+               (
+                   SELECT public_offer.page_json
+                   FROM adminprospectingleadpublicoffers public_offer
+                   WHERE public_offer.lead_id = l.id AND public_offer.is_active = TRUE
+                   LIMIT 1
+               ) AS public_audit_page_json,
+               (
+                   SELECT public_offer.updated_at
+                   FROM adminprospectingleadpublicoffers public_offer
+                   WHERE public_offer.lead_id = l.id AND public_offer.is_active = TRUE
+                   LIMIT 1
+               ) AS public_audit_updated_at,
                l.business_id AS lead_business_id,
                client.name AS client_business_name,
                client.business_type AS client_business_type,
@@ -1447,11 +2095,21 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
         """
         SELECT * FROM lead_workstream_research
         WHERE workstream_id = %s
-        ORDER BY researched_at DESC, created_at DESC LIMIT 1
+          AND researched_at >= NOW() - INTERVAL '90 days'
+        ORDER BY researched_at DESC, created_at DESC
+        LIMIT 25
         """,
         (workstream_id,),
     )
-    workstream["research"] = _dict(cursor.fetchone())
+    workstream["research"] = _merge_recent_research_rows(
+        [_dict(row) for row in cursor.fetchall()]
+    )
+    creator_bridge = _load_creator_outreach_bridge(cursor, workstream)
+    workstream["creator_outreach_bridge"] = creator_bridge
+    workstream["research"] = _merge_creator_outreach_bridge_research(
+        workstream["research"],
+        creator_bridge,
+    )
     cursor.execute(
         """
         SELECT * FROM outreach_sender_profiles
@@ -1465,7 +2123,7 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
     workstream["sender_profile"] = _dict(cursor.fetchone())
     workstream["business_sender_profile"] = (
         dict(workstream["sender_profile"])
-        if workstream.get("workstream_type") == "client_partnership"
+        if workstream.get("workstream_type") in {"client_partnership", "creator_collaboration"}
         else {}
     )
     cursor.execute(
@@ -1479,7 +2137,7 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
         """
     )
     workstream["platform_sender_profile"] = _dict(cursor.fetchone())
-    if workstream.get("workstream_type") == "client_partnership":
+    if workstream.get("workstream_type") in {"client_partnership", "creator_collaboration"}:
         cursor.execute(
             """
             SELECT COUNT(*) AS service_count
@@ -1509,7 +2167,10 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
         SELECT MAX(document.published_at) AS last_post_at,
                COUNT(*) FILTER (WHERE document.published_at >= NOW() - INTERVAL '30 days') AS posts_30d,
                COUNT(*) FILTER (WHERE document.published_at >= NOW() - INTERVAL '90 days') AS posts_90d,
-               MAX(source.canonical_url) AS source_url
+               MAX(source.canonical_url) AS source_url,
+               BOOL_AND(source.sync_status = 'ready') AS source_sync_ready,
+               BOOL_AND(source.backfill_completed_at IS NOT NULL) AS source_backfill_complete,
+               MAX(source.last_collected_at) AS source_last_collected_at
         FROM lead_signal_links link
         JOIN knowledge_sources source ON source.id::text = link.source_id
         JOIN knowledge_documents document
@@ -1519,14 +2180,37 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
           AND link.status = 'selected'
           AND source.status = 'active'
           AND source.visibility = 'public'
+          AND LOWER(source.canonical_url) NOT SIMILAR TO
+              '%%(dikidi_business|yclients|altegio|sonline)%%'
+          AND EXISTS (
+              SELECT 1
+              FROM lead_contact_points source_contact
+              WHERE source_contact.lead_id = %s
+                AND source_contact.contact_type = 'telegram'
+                AND LOWER(RTRIM(COALESCE(
+                    source_contact.normalized_value,
+                    source_contact.value
+                ), '/')) = LOWER(RTRIM(source.canonical_url, '/'))
+                AND source_contact.source_url IS NOT NULL
+          )
           AND document.document_type = 'telegram_message'
         """,
-        (workstream_id,),
+        (workstream_id, workstream.get("lead_id")),
     )
     social_activity = _dict(cursor.fetchone())
+    last_collected_at = social_activity.get("source_last_collected_at")
+    if last_collected_at and getattr(last_collected_at, "tzinfo", None) is None:
+        last_collected_at = last_collected_at.replace(tzinfo=timezone.utc)
+    social_count_verified = bool(
+        social_activity.get("source_sync_ready")
+        and social_activity.get("source_backfill_complete")
+        and last_collected_at
+        and datetime.now(timezone.utc) - last_collected_at <= timedelta(hours=48)
+    )
     workstream["official_social_activity"] = {
         **social_activity,
         "official": bool(social_activity.get("last_post_at")),
+        "count_verified": social_count_verified,
     }
     if workstream.get("workstream_type") == "client_partnership":
         cursor.execute(
@@ -1542,9 +2226,164 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
     return workstream
 
 
+def _context_source_fact_fingerprint(context: dict[str, Any]) -> str:
+    author_lane = (
+        context.get("workstream_type") == "creator_collaboration"
+        and context.get("sender_mode") == SENDER_MODE_LOCALOS_FOR_PARTNER
+    )
+    if author_lane and (context.get("creator_outreach_bridge") or {}).get("status") != "ready":
+        return ""
+    return research_source_fact_fingerprint(context.get("research"))
+
+
+def _creator_email_contact_matches_bridge(
+    availability: dict[str, dict[str, Any]],
+    bridge: dict[str, Any],
+) -> bool:
+    email_availability = availability.get("email") or {}
+    return bool(
+        _text(email_availability.get("contact_point_id"))
+        and _text(email_availability.get("contact_point_id"))
+        == _text(bridge.get("selected_contact_point_id"))
+        and _text(email_availability.get("recipient")).lower()
+        == _text(bridge.get("preferred_contact")).lower()
+    )
+
+
+def current_outreach_source_fact_fingerprint(
+    cursor: Any,
+    workstream_id: str,
+    sender_mode: str,
+) -> str:
+    """Resolve the same current facts used by preview, approval and dispatch."""
+    context = _apply_sender_mode(_load_context(cursor, workstream_id), sender_mode)
+    return _context_source_fact_fingerprint(context)
+
+
 def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
     research = context.get("research") or {}
     ledger: list[dict[str, Any]] = []
+    audit_page = (
+        context.get("public_audit_page_json")
+        if isinstance(context.get("public_audit_page_json"), dict)
+        else {}
+    )
+    audit = audit_page.get("audit") if isinstance(audit_page.get("audit"), dict) else {}
+    audit_state = (
+        audit.get("current_state")
+        if isinstance(audit.get("current_state"), dict)
+        else {}
+    )
+    parse_context = audit.get("parse_context") if isinstance(audit.get("parse_context"), dict) else {}
+    audit_facts_verified = bool(
+        parse_context.get("facts_verified") is True
+        and _fresh_successful_snapshot(parse_context)
+    )
+    if context.get("source_url") and audit_state and audit_facts_verified:
+        audit_observed_at = parse_context.get("last_parse_at")
+        if int(audit_state.get("news_count") or 0) == 0:
+            ledger.append({
+                "id": "map-content-gap",
+                "kind": "map_gap",
+                "fact": f"В карточке {_text(context.get('lead_name'))} на Яндекс Картах нет новостей.",
+                "status": "observed",
+                "source_url": context.get("source_url"),
+                "observed_at": audit_observed_at,
+                "freshness": "current_snapshot",
+                "confidence": 0.95,
+                "hypothesis": None,
+                "relevance": "Новости показывают актуальные услуги и дают клиентам ещё один повод обратиться из карт.",
+                "source_type": "public_audit_current_state",
+                "signal_combo": "map_content_gap",
+            })
+        else:
+            ledger.append({
+                "id": "current-map-news-activity",
+                "kind": "active_map_news",
+                "fact": (
+                    f"Вижу, вы ведёте карточку {_text(context.get('lead_name'))} "
+                    "на Яндекс Картах и публикуете новости."
+                ),
+                "status": "observed",
+                "source_url": context.get("source_url"),
+                "observed_at": audit_observed_at,
+                "freshness": "current_snapshot",
+                "confidence": 0.95,
+                "hypothesis": None,
+                "relevance": "Один материал для нескольких площадок приходится адаптировать отдельно.",
+                "source_type": "public_audit_current_state",
+                "signal_combo": "active_social_multichannel_content",
+            })
+    social_activity = (
+        context.get("official_social_activity")
+        if isinstance(context.get("official_social_activity"), dict)
+        else {}
+    )
+    posts_30d = int(social_activity.get("posts_30d") or 0)
+    if (
+        social_activity.get("official") is True
+        and social_activity.get("count_verified") is True
+        and posts_30d > 0
+        and _text(social_activity.get("source_url"))
+    ):
+        ledger.append({
+            "id": "official-social-activity-30d",
+            "kind": "active_social_activity",
+            "fact": (
+                f"Вижу, вы ведёте соцсети: за последние 30 дней в Telegram "
+                f"{_russian_publication_count(posts_30d)}."
+            ),
+            "status": "observed",
+            "source_url": social_activity.get("source_url"),
+            "observed_at": social_activity.get("last_post_at"),
+            "freshness": "current_snapshot",
+            "confidence": 0.95,
+            "hypothesis": None,
+            "relevance": "Публикации для нескольких площадок приходится адаптировать отдельно.",
+            "source_type": "official_telegram_activity",
+            "signal_combo": "active_social_multichannel_content",
+        })
+    elif (
+        social_activity.get("official") is True
+        and posts_30d > 0
+        and _text(social_activity.get("source_url"))
+        and _text(social_activity.get("last_post_at"))
+    ):
+        # A partial or still-syncing archive proves recent activity when it
+        # contains a dated official post, but it cannot support an exact count.
+        ledger.append({
+            "id": "official-social-activity-recent",
+            "kind": "active_social_activity",
+            "fact": "Вижу, вы ведёте соцсети: в Telegram есть свежие публикации.",
+            "status": "observed",
+            "source_url": social_activity.get("source_url"),
+            "observed_at": social_activity.get("last_post_at"),
+            "freshness": "current_snapshot",
+            "confidence": 0.9,
+            "hypothesis": None,
+            "relevance": "Публикации для нескольких площадок приходится адаптировать отдельно.",
+            "source_type": "official_telegram_activity",
+            "signal_combo": "active_social_multichannel_content",
+        })
+    map_services_count = int(context.get("map_services_count") or 0)
+    if 0 < map_services_count <= 100 and _text(context.get("source_url")):
+        ledger.append({
+            "id": "current-map-service-catalog",
+            "kind": "service_catalog",
+            "fact": (
+                f"В карточке компании {_text(context.get('lead_name'))} на Яндекс Картах "
+                f"{_russian_visible_service_count(map_services_count)}."
+            ),
+            "status": "observed",
+            "source_url": context.get("source_url"),
+            "observed_at": context.get("updated_at"),
+            "freshness": "current_snapshot",
+            "confidence": 0.9,
+            "hypothesis": None,
+            "relevance": "Опубликованный список услуг позволяет проверить пары основной и дополнительной услуги.",
+            "source_type": "public_map_service_catalog",
+            "signal_combo": "current_service_catalog",
+        })
     research_brief = (
         research.get("message_brief_json")
         if isinstance(research.get("message_brief_json"), dict)
@@ -1610,6 +2449,11 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
     for index, signal in enumerate(source_items):
         if not isinstance(signal, dict):
             continue
+        if _text(signal.get("kind")) in {
+            "creator_bridge_provenance",
+            "creator_contact_ownership",
+        }:
+            continue
         if signal.get("usable_for_outreach") is False:
             continue
         if _text(signal.get("freshness")) in {"stale", "unknown_dated_source"}:
@@ -1625,11 +2469,20 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
         if identity in seen_research_items or fallback_identity in seen_research_items:
             continue
         seen_research_items.update({identity, fallback_identity})
+        signal_status = (
+            "approved"
+            if (
+                _text(signal.get("kind")) == "operator_approved_partnership_reason"
+                and _text(signal.get("status")) == "approved"
+                and _text(signal.get("source_type")) == "creator_campaign"
+            )
+            else "observed"
+        )
         ledger.append({
             "id": _text(signal.get("evidence_id") or signal.get("id")) or f"research-{index + 1}",
             "kind": _text(signal.get("kind") or "public_signal"),
             "fact": fact,
-            "status": "observed",
+            "status": signal_status,
             "source_url": source_url,
             "observed_at": signal.get("published_at") or signal.get("observed_at") or research.get("researched_at"),
             "freshness": _text(signal.get("freshness") or "unknown"),
@@ -1648,7 +2501,11 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             "safe_angles": _list(signal.get("safe_angles")),
         })
     rating = context.get("rating")
-    if rating is not None and float(rating) < 4.5 and context.get("source_url"):
+    if (
+        rating is not None
+        and 0 < float(rating) < 4.5
+        and context.get("source_url")
+    ):
         ledger.append({
             "id": "map-rating",
             "kind": "map_rating",
@@ -1736,12 +2593,19 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             rank = -1
         elif kind == "service_compatibility":
             rank = 0
+        elif beauty_sales and kind in {"active_social_activity", "active_map_news"}:
+            rank = 0
         elif beauty_sales and kind in {"telegram_post", "social_post"}:
             rank = 1
+        elif kind == "map_rating":
+            rank = 1
+        elif kind in {"map_issue", "service_catalog"}:
+            rank = 2
+        elif kind == "map_gap":
+            rank = 3
         elif (
             "по данным аудита, услуг в карточке" in fact
             or "по данным аудита карточки: всего услуг" in fact
-            or "описание бизнеса не найдено" in fact
         ):
             rank = 2
         elif "рейтинг -" in fact and "отзывов -" in fact:
@@ -2118,6 +2982,8 @@ def _strategy_dimensions(
             else []
         ),
         "localos_action": candidate.get("localos_action"),
+        "outreach_template_key": candidate.get("outreach_template_key"),
+        "outreach_template_version": candidate.get("outreach_template_version"),
         "publication_capabilities": candidate.get("publication_capabilities") or {},
         "channel": channel,
         "sequence_index": sequence_index,
@@ -2152,7 +3018,7 @@ def channel_availability(cursor: Any, context: dict[str, Any]) -> dict[str, dict
     eligible_contacts = [
         contact
         for contact in all_contacts
-        if _recipient_contact_eligible(contact)
+        if _recipient_contact_eligible(contact, context)
     ]
     selected_contact_id = _text(context.get("selected_contact_point_id"))
     selected_contact = next(
@@ -2160,7 +3026,7 @@ def channel_availability(cursor: Any, context: dict[str, Any]) -> dict[str, dict
             contact
             for contact in all_contacts
             if _text(contact.get("id")) == selected_contact_id
-            and _selected_recipient_contact_eligible(contact)
+            and _selected_recipient_contact_eligible(contact, context)
         ),
         None,
     )
@@ -2204,7 +3070,7 @@ def channel_availability(cursor: Any, context: dict[str, Any]) -> dict[str, dict
                 "value": context.get("email"),
                 "source_url": context.get("source_url"),
             }
-            contact = fallback if _recipient_contact_eligible(fallback) else None
+            contact = fallback if _recipient_contact_eligible(fallback, context) else None
         if channel == "telegram" and not contact and context.get("telegram_url"):
             contact = {"id": None, "value": context.get("telegram_url")}
         if channel == "whatsapp" and not contact and context.get("whatsapp_url"):
@@ -2278,7 +3144,7 @@ def channel_availability(cursor: Any, context: dict[str, Any]) -> dict[str, dict
         result[channel] = {
             "status": status,
             "contact_point_id": str(contact.get("id")) if contact and contact.get("id") else None,
-            "recipient": _text(contact.get("value")) if contact else None,
+            "recipient": _text(contact.get("normalized_value") or contact.get("value")) if contact else None,
             "sender_account_id": str(sender.get("id")) if sender and sender.get("id") else None,
             "sender_health": sender.get("health_status") if sender else None,
             "sender_accounts": sender_options,
@@ -2339,9 +3205,20 @@ def _quality_gate(
                 and final_cta in text
                 and text.rstrip().endswith(final_cta)
             )
+    approved_template_two_question_copy = template_allows_two_questions(
+        _message_for_template_match(text),
+        _text(angle),
+        candidate,
+    )
+    selected_template_key = _text(candidate.get("outreach_template_key"))
+    selected_template_copy = bool(
+        selected_template_key
+        and template_copy_matches(_message_for_template_match(text), _text(angle), candidate)
+    )
     allowed_question_count = 2 if (
-        _text(angle) == "reviews_service"
+        (_text(angle) == "reviews_service" and not selected_template_copy)
         or approved_two_question_copy
+        or approved_template_two_question_copy
     ) else 1
     word_count = len(re.findall(r"\b[\wа-яА-ЯёЁ0-9-]+\b", text, flags=re.UNICODE))
     channel_word_limit = 120 if channel == "email" else 60 if channel == "sms" else 90
@@ -2455,7 +3332,7 @@ def _quality_gate(
             and "цен" in normalized_text
             and "прайс" in normalized_text
         )
-    grounded_observation = composite_signal_grounded or observation_is_grounded(
+    grounded_observation = selected_template_copy or composite_signal_grounded or observation_is_grounded(
         text,
         source_observation,
     )
@@ -2584,7 +3461,7 @@ def _quality_gate(
         or contains(candidate.get("founder_proof"))
     )
     checks = {
-        "removal": contains(candidate.get("recipient")) and (
+        "removal": selected_template_copy or contains(candidate.get("recipient")) and (
             any(contains(anchor) for anchor in personalization_anchors)
             or grounded_observation
             or approved_case_present
@@ -2598,7 +3475,7 @@ def _quality_gate(
                 or _text(angle) in {
                     "founder_story", "proof", "audit_step", "phone_handoff",
                     "content_operations", "average_ticket", "reviews_service", "integrated_system", "founder_origin",
-                    "crm_growth", "crm_content",
+                    "crm_growth", "crm_content", "reviews_content",
                 }
             )
             and (
@@ -2608,6 +3485,8 @@ def _quality_gate(
             )
         ),
         "bridge": (
+            selected_template_copy
+            or
             any(contains(anchor) for anchor in personalization_anchors[1:])
             or approved_case_present
             or bool(
@@ -2638,7 +3517,7 @@ def _quality_gate(
                 and _text(angle) in {
                     "founder_story", "proof", "audit_step", "phone_handoff",
                     "content_operations", "average_ticket", "reviews_service", "integrated_system", "founder_origin",
-                    "crm_growth", "crm_content",
+                    "crm_growth", "crm_content", "reviews_content",
                 }
                 and (founder_context_present or selected_candidate_link)
             )
@@ -2681,6 +3560,16 @@ def _quality_gate(
         "signal_strength": _signal_is_material(candidate),
         "style_contract": not any(mark in text for mark in ("—", "«", "»")),
         "sequence_policy": not sequence_closing_language,
+        "email_signature_contract": bool(
+            channel != "email"
+            or _text(candidate.get("sender_mode")) != SENDER_MODE_LOCALOS
+            or (
+                "Я Александр Демьянов, основатель LocalOS." not in text
+                and text.endswith(LOCALOS_EMAIL_SIGNATURE)
+                and text.count(LOCALOS_EMAIL_SIGNATURE) == 1
+            )
+        ),
+        "owner_pain_language": template_owner_pain_matches(text, _text(angle), candidate),
     }
     language_review = review_human_language(
         text,
@@ -2697,7 +3586,8 @@ def _quality_gate(
             else None
         ),
         require_signal_flow=(
-            _text(angle) == "signal" and bool(candidate.get("localos_action"))
+            bool(candidate.get("outreach_template_key"))
+            or (_text(angle) == "signal" and bool(candidate.get("localos_action")))
         ),
         publication_capabilities=(
             candidate.get("publication_capabilities")
@@ -2714,10 +3604,14 @@ def _quality_gate(
             "PAIN_SUPPORT_INSUFFICIENT",
             "PROOF_WORDING_CHANGED",
             "UNSUPPORTED_PUBLICATION_CLAIM",
+            "CTA_SCOPE_MISMATCH",
         }
         or (
-            _text(angle) == "signal"
-            and _text(candidate.get("sender_mode")) == "localos"
+            _text(candidate.get("sender_mode")) == "localos"
+            and (
+                _text(angle) == "signal"
+                or bool(candidate.get("outreach_template_key"))
+            )
         )
     ]
     checks["human_language"] = not enforced_language_codes
@@ -2744,6 +3638,10 @@ def _quality_gate(
         blocking_reasons.append("style_contract_violation")
     if not checks["sequence_policy"]:
         blocking_reasons.append("sequence_closing_language")
+    if not checks["email_signature_contract"]:
+        blocking_reasons.append("email_signature_contract_failed")
+    if not checks["owner_pain_language"]:
+        blocking_reasons.append("owner_pain_language_missing")
     if enforced_language_codes:
         blocking_reasons.append("human_language_gate_failed")
     if salon_price_proof_present and not salon_price_proof_scope_valid:
@@ -2759,6 +3657,8 @@ def _quality_gate(
         "signal_too_weak_for_cold_outreach": "DECORATIVE_PERSONALIZATION",
         "style_contract_violation": "STYLE_VIOLATION",
         "sequence_closing_language": "STYLE_VIOLATION",
+        "email_signature_contract_failed": "EMAIL_SIGNATURE_CONTRACT",
+        "owner_pain_language_missing": "OWNER_PAIN_LANGUAGE_MISSING",
         "human_language_gate_failed": enforced_language_codes[0] if enforced_language_codes else "STYLE_VIOLATION",
         "salon_price_proof_scope_mismatch": "PROOF_SCOPE_MISMATCH",
     }
@@ -2778,6 +3678,8 @@ def _quality_gate(
         "signal_strength": "DECORATIVE_PERSONALIZATION",
         "style_contract": "STYLE_VIOLATION",
         "sequence_policy": "STYLE_VIOLATION",
+        "email_signature_contract": "EMAIL_SIGNATURE_CONTRACT",
+        "owner_pain_language": "OWNER_PAIN_LANGUAGE_MISSING",
         "human_language": enforced_language_codes[0] if enforced_language_codes else "STYLE_VIOLATION",
     }
     diagnostic_codes = [key for key, passed in checks.items() if not passed]
@@ -3040,8 +3942,10 @@ def _normalize_touch_overrides(
             raise ValueError("touch override sequence_index must be an integer") from exc
         if override_index < 0 or override_index > 20 or override_index in normalized:
             raise ValueError("touch override sequence_index is invalid or duplicated")
-        override_text = format_outreach_message(item.get("text"))
-        override_subject = _text(item.get("subject"))
+        exact_text = str(item.get("text") or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+        exact_subject = str(item.get("subject") or "").strip()
+        override_text = format_outreach_message(exact_text)
+        override_subject = _text(exact_subject)
         original_text = format_outreach_message(item.get("original_text"))
         original_subject = _text(item.get("original_subject"))
         if not override_text:
@@ -3053,11 +3957,107 @@ def _normalize_touch_overrides(
         normalized[override_index] = {
             "text": override_text,
             "subject": override_subject,
+            "exact_text": exact_text,
+            "exact_subject": exact_subject,
             "original_text": original_text[:3000],
             "original_subject": original_subject[:200],
             "human_edited": item.get("human_edited") is True,
         }
     return normalized
+
+
+def _apply_creator_invitation_template_contract(
+    gate: dict[str, Any],
+    *,
+    subject: str,
+    body: str,
+    bridge: dict[str, Any],
+    manual_review_context: str,
+    manual_reviewer_role: str,
+    template_authorization: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Accept exact author copy under manual review or a trusted template grant."""
+    result = dict(gate)
+    rendered = render_creator_invitation_template(bridge)
+    allowed_diagnostics = {"removal", "bridge", "specificity", "style_contract"}
+    allowed_reasons = {
+        "DECORATIVE_PERSONALIZATION",
+        "WEAK_OFFER_BRIDGE",
+        "STYLE_VIOLATION",
+    }
+    allowed_blocking = {"decorative_personalization", "style_contract_violation"}
+    exact_server_copy = bool(
+        rendered
+        and subject == rendered["subject"]
+        and body == rendered["body"]
+    )
+    authorized_saved_review = bool(
+        manual_review_context == "saved_draft_review"
+        and manual_reviewer_role == "superadmin"
+    )
+    grant = template_authorization or {}
+    authorized_template = bool(
+        rendered and rendered.get("key") in {
+            CREATOR_NAME_ONLY_TEMPLATE_KEY, CREATOR_NEUTRAL_TEMPLATE_KEY,
+        }
+        and grant.get("id") and grant.get("approved_by")
+        and grant.get("manifest") == template_manifest()
+    )
+    only_business_specific_failures = bool(
+        set(result.get("diagnostic_codes") or []).issubset(allowed_diagnostics)
+        and set(result.get("reason_codes") or []).issubset(allowed_reasons)
+        and set(result.get("blocking_reasons") or []).issubset(allowed_blocking)
+    )
+    contract_passed = bool(
+        exact_server_copy
+        and (authorized_saved_review or authorized_template)
+        and only_business_specific_failures
+    )
+    result["creator_invitation_copy_contract"] = {
+        "key": rendered.get("key") if rendered else CREATOR_INVITATION_TEMPLATE_KEY,
+        "version": rendered.get("version") if rendered else CREATOR_INVITATION_TEMPLATE_VERSION,
+        "passed": contract_passed,
+        "exact_server_copy": exact_server_copy,
+        "authorized_saved_review": authorized_saved_review,
+        "authorized_template": authorized_template,
+        "template_authorization_id": grant.get("id") if authorized_template else None,
+        "subject_sha256": rendered.get("subject_sha256") if rendered else None,
+        "body_sha256": rendered.get("body_sha256") if rendered else None,
+        "channel_id": rendered.get("channel_id") if rendered else None,
+        "evidence_id": rendered.get("evidence_id") if rendered else None,
+    }
+    if not contract_passed:
+        if exact_server_copy and not (authorized_saved_review or authorized_template):
+            result["passed"] = False
+            result["verdict"] = "revise"
+            result["blocking_reasons"] = list(dict.fromkeys(
+                list(result.get("blocking_reasons") or [])
+                + ["manual_edit_requires_review"]
+            ))
+            reason_codes = list(dict.fromkeys(
+                list(result.get("reason_codes") or [])
+                + ["MANUAL_EDIT_REQUIRES_REVIEW"]
+            ))
+            result["reason_codes"] = reason_codes
+            result["canonical_reason_codes"] = reason_codes
+        return result
+    checks = dict(result.get("checks") or {})
+    for key in allowed_diagnostics:
+        checks[key] = True
+    criterion_scores = _quality_criterion_scores(checks)
+    result.update({
+        "checks": checks,
+        "criterion_scores": criterion_scores,
+        "score": sum(criterion_scores.values()),
+        "total_score": sum(criterion_scores.values()),
+        "diagnostic_codes": [],
+        "reason_codes": [],
+        "canonical_reason_codes": [],
+        "blocking_reasons": [],
+        "verdict": "approve",
+        "passed": True,
+    })
+    return result
 
 
 def _resolve_next_sequence_channel(
@@ -3086,10 +4086,65 @@ def build_preview(
     trust_strategy: str | None = None,
     generate_ai: bool | None = None,
     manual_reviewer_role: str | None = None,
+    manual_review_context: str | None = None,
+    preparation_job_id: str | None = None,
 ) -> dict[str, Any]:
     context = _apply_sender_mode(_load_context(cursor, workstream_id), sender_mode)
-    source_fact_fingerprint = research_source_fact_fingerprint(context.get("research"))
+    continuation = None
+    preparation = None
+    if preparation_job_id:
+        from services.partner_search_drafts import load_preparation_contract
+        preparation = load_preparation_contract(cursor, preparation_job_id, workstream_id)
+        if not preparation:
+            return {"workstream_id": workstream_id, "status": "needs_evidence", "touches": [],
+                    "reason_code": "draft_preparation_not_authorized"}
+    if context.get("continuation_managed") or (context.get("search_payload_json") or {}).get("continuation_id"):
+        from services.outreach_continuation import load_workstream_contract
+        continuation = load_workstream_contract(cursor, workstream_id)
+        if not preparation and (not continuation or not continuation.get("enabled")
+                or continuation.get("status") not in {"running", "queued"}
+                or continuation.get("blocker")
+                or (continuation.get("qualification") or {}).get("status") != "qualified"):
+            return {"workstream_id": workstream_id, "status": "needs_evidence", "touches": [],
+                    "reason_code": "continuation_audience_review_required"}
+        context["continuation_contract"] = continuation
+    source_fact_fingerprint = _context_source_fact_fingerprint(context)
+    author_lane = (
+        context.get("workstream_type") == "creator_collaboration"
+        and context.get("sender_mode") == SENDER_MODE_LOCALOS_FOR_PARTNER
+    )
+    # Read the permission journal here, never accept a grant from preview JSON
+    # or mutable creator-campaign constraints.
+    author_template_authorization = {}
+    creator_constraints = (context.get("creator_outreach_bridge") or {}).get(
+        "constraints", {}
+    )
+    creator_constraints = (
+        creator_constraints if isinstance(creator_constraints, dict) else {}
+    )
+    if author_lane and (
+        creator_constraints.get("invitation_template")
+        == CREATOR_NAME_ONLY_TEMPLATE_CONSTRAINT
+        or creator_constraints.get("author_invitation_variant")
+        == CREATOR_NEUTRAL_TEMPLATE_CONSTRAINT
+    ):
+        author_template_authorization = load_author_template_authorization(cursor)
+    reviewer_role = _text(manual_reviewer_role) or "authorized_user"
+    review_context = _text(manual_review_context)
     ledger = build_evidence_ledger(context)
+    if continuation and (continuation.get("qualification") or {}).get("status") == "qualified":
+        qualification = continuation["qualification"]
+        evidence = qualification.get("evidence") or {}
+        if not evidence.get("fact") or not evidence.get("source_url"):
+            return {"workstream_id": workstream_id, "status": "needs_evidence", "touches": [], "reason_code": "continuation_evidence_missing"}
+        # Use the actual qualified public fact, not an unrelated map-rating opener.
+        qualified_evidence = {**evidence, "id": "qualified-audience-fact", "kind": "public_signal",
+                              "status": "observed", "relevance": (preparation or {}).get("offer") or continuation["config"].get("offer"),
+                              "observed_at": evidence.get("observed_at"), "freshness": "current_snapshot", "confidence": 0.8}
+        ledger = [qualified_evidence] + [item for item in ledger
+            if item.get("source_url") and item.get("fact")
+            and not str(item.get("kind") or "").startswith("map")
+            and item.get("fact") != evidence.get("fact")]
     pain_playbook = None
     localos_sales = context.get("workstream_type") == "localos_sales"
     beauty_sales = bool(
@@ -3135,6 +4190,13 @@ def build_preview(
     )
     availability = channel_availability(cursor, context)
     suppression = _suppression_status(cursor, context)
+    creator_contact_mismatch = False
+    if author_lane and (context.get("creator_outreach_bridge") or {}).get("status") == "ready":
+        bridge = context["creator_outreach_bridge"]
+        creator_contact_mismatch = not _creator_email_contact_matches_bridge(
+            availability,
+            bridge,
+        )
     decision = build_outreach_decision(
         context,
         ledger,
@@ -3146,6 +4208,9 @@ def build_preview(
     offers = offer_candidates(context, _text(context.get("sender_mode")))
     trusts = trust_candidates(context, _text(context.get("sender_mode")))
     selected_offer = select_offer(offers, offer_id)
+    if preparation:
+        selected_offer = {"id": "reviewed_search_offer", "text": preparation["offer"],
+                          "source": "confirmed_draft_job"}
     selected_trust = select_trust(trusts, trust_strategy)
     candidates = build_personalization_candidates(
         context,
@@ -3154,7 +4219,9 @@ def build_preview(
         selected_trust=selected_trust,
     )
     base_payload = {
+        "continuation_qualification": (continuation or {}).get("qualification"),
         "workstream_id": workstream_id,
+        "workstream_type": context.get("workstream_type"),
         "lead_id": str(context.get("lead_id")),
         "lead": {
             "name": context.get("lead_name"),
@@ -3179,6 +4246,36 @@ def build_preview(
             **base_payload,
             "status": "suppressed" if suppression["suppressed"] else "excluded",
             "suppression": suppression,
+            "touches": [],
+        }
+    creator_bridge = context.get("creator_outreach_bridge") or {}
+    if author_lane and creator_bridge.get("status") != "ready":
+        blocking_reason = _text(
+            creator_bridge.get("blocking_reason") or "recipient_evidence"
+        )
+        return {
+            **base_payload,
+            "status": "needs_evidence",
+            "decision": {
+                **decision,
+                "action": "needs_evidence",
+                "reason_codes": [blocking_reason],
+            },
+            "missing": [blocking_reason],
+            "sender_profile_completeness": profile_completeness,
+            "touches": [],
+        }
+    if author_lane and creator_contact_mismatch:
+        return {
+            **base_payload,
+            "status": "needs_evidence",
+            "decision": {
+                **decision,
+                "action": "needs_evidence",
+                "reason_codes": ["creator_contact_mismatch"],
+            },
+            "missing": ["creator_contact_mismatch"],
+            "sender_profile_completeness": profile_completeness,
             "touches": [],
         }
     if decision["action"] != "write_now" or not candidates:
@@ -3211,9 +4308,22 @@ def build_preview(
         }
         for channel, day, angle in DEFAULT_SEQUENCE
     ]
+    if sequence is None and author_lane:
+        # The author lane currently has a complete reply-sync receipt only for
+        # email. Do not create manual touches that bypass queue reservation.
+        selected_sequence = [{
+            "channel": "email",
+            "day_offset": 0,
+            "angle": "signal",
+            "skip_if_unavailable": False,
+        }]
     if sequence is None and context.get("sender_mode") == SENDER_MODE_PARTNER_BUSINESS:
         selected_sequence[1]["angle"] = "business_reputation"
-    if sequence is None and context.get("sender_mode") == SENDER_MODE_LOCALOS_FOR_PARTNER:
+    if (
+        sequence is None
+        and context.get("sender_mode") == SENDER_MODE_LOCALOS_FOR_PARTNER
+        and len(selected_sequence) > 1
+    ):
         selected_sequence[1]["angle"] = "matching_authority"
     if context.get("sender_mode") == SENDER_MODE_PARTNER_BUSINESS:
         selected_sequence = [
@@ -3238,7 +4348,19 @@ def build_preview(
     usable = [channel for channel, item in availability.items() if item["status"] in {"ready", "manual"}]
     touches = []
     previous_angles: list[str] = []
+    previous_sequence_keys: list[str] = []
+    used_template_keys: list[str] = []
+    used_pain_keys: list[str] = []
     sequence_issues: list[str] = []
+    if author_lane:
+        sequence_issues.extend(
+            f"author_channel_unsupported:{channel}"
+            for channel in sorted({
+                _text(item.get("channel")).lower()
+                for item in selected_sequence
+                if _text(item.get("channel")).lower() not in AUTHOR_CHANNEL_DAILY_LIMITS
+            })
+        )
     start = start_at or datetime.now(timezone.utc)
     previous_offset: int | None = None
     research_brief = (context.get("research") or {}).get("message_brief_json") or {}
@@ -3250,6 +4372,23 @@ def build_preview(
     primary_candidate = next(
         (candidate for candidate in candidates if candidate.get("id") == selected_candidate_id),
         candidates[0],
+    )
+    if author_lane:
+        creator_evidence_id = _text(
+            (context.get("creator_outreach_bridge") or {}).get("evidence_id")
+        )
+        primary_candidate = next(
+            (
+                candidate
+                for candidate in candidates
+                if _text(candidate.get("evidence_id")) == creator_evidence_id
+            ),
+            primary_candidate,
+        )
+    creator_template = (
+        render_creator_invitation_template(context.get("creator_outreach_bridge") or {})
+        if author_lane
+        else None
     )
     crm_evidence = (
         primary_candidate.get("crm_evidence")
@@ -3265,24 +4404,28 @@ def build_preview(
         )
         normalized_sequence.append(normalized_item)
     selected_sequence = normalized_sequence
-    if context.get("workstream_type") == "localos_sales" and (
-        primary_candidate.get("recipient_segment")
-        or _text(primary_candidate.get("signal_combo"))
-    ):
-        primary_candidate["outreach_playbook"] = pain_playbook or load_approved_pain_library(cursor)
-        primary_candidate["language_support"] = language_support_for_candidate(
-            cursor,
-            primary_candidate,
-            primary_candidate["outreach_playbook"],
-        )
-        primary_candidate["pain_hypothesis"] = primary_candidate.get("problem_hypothesis")
-        primary_candidate["pain_support"] = (
-            primary_candidate["language_support"].get("pain_support")
-            or primary_candidate["language_support"]
-        )
-        primary_candidate["pain_reference_ids"] = list(
-            primary_candidate["language_support"].get("pain_reference_ids") or []
-        )
+    if context.get("workstream_type") == "localos_sales":
+        approved_playbook = pain_playbook or load_approved_pain_library(cursor)
+        for supported_candidate in candidates:
+            if not (
+                supported_candidate.get("recipient_segment")
+                or _text(supported_candidate.get("signal_combo"))
+            ):
+                continue
+            supported_candidate["outreach_playbook"] = approved_playbook
+            supported_candidate["language_support"] = language_support_for_candidate(
+                cursor,
+                supported_candidate,
+                approved_playbook,
+            )
+            supported_candidate["pain_hypothesis"] = supported_candidate.get("problem_hypothesis")
+            supported_candidate["pain_support"] = (
+                supported_candidate["language_support"].get("pain_support")
+                or supported_candidate["language_support"]
+            )
+            supported_candidate["pain_reference_ids"] = list(
+                supported_candidate["language_support"].get("pain_reference_ids") or []
+            )
     override_by_index = _normalize_touch_overrides(touch_overrides)
     for index, item in enumerate(selected_sequence):
         requested_channel = _text(item.get("channel")).lower()
@@ -3293,14 +4436,18 @@ def build_preview(
         availability_item = dict(availability[requested_channel])
         angle = _text(item.get("angle") or "proof")
         day_offset = max(0, int(item.get("day_offset") or 0))
-        if angle in previous_angles:
-            sequence_issues.append(f"duplicate_angle:{angle}")
         if previous_offset is not None and day_offset <= previous_offset:
             sequence_issues.append(f"unsafe_interval:{previous_offset}:{day_offset}")
-        # A sequence changes the angle, not the underlying public fact. Introducing a
-        # new signal in a follow-up (especially a negative review) requires a separate
-        # explicit personalization selection and a new approval version.
-        candidate = primary_candidate
+        requested_candidate_id = _text(item.get("personalization_candidate_id"))
+        candidate = next(
+            (
+                personalization_candidate
+                for personalization_candidate in candidates
+                if requested_candidate_id
+                and _text(personalization_candidate.get("id")) == requested_candidate_id
+            ),
+            primary_candidate,
+        )
         if crm_evidence and angle in {"crm_growth", "crm_content"}:
             candidate = {
                 **primary_candidate,
@@ -3319,8 +4466,67 @@ def build_preview(
                 "observed_at": crm_evidence.get("observed_at"),
                 "evidence_status": crm_evidence.get("status") or "observed",
             }
-        message = format_outreach_message(
-            _message_for_angle(angle, candidate, story, previous_angles)
+        candidate = {**candidate, "channel": requested_channel}
+        template_selection = select_outreach_template(
+            angle,
+            candidate,
+            used_template_keys=used_template_keys,
+            used_pain_keys=used_pain_keys,
+        )
+        if author_lane and requested_channel == "email" and creator_template:
+            template_selection = {
+                "status": "selected",
+                "library_version": creator_template["library_version"],
+                "key": creator_template["key"],
+                "version": creator_template["version"],
+                "label": "Приглашение автора LocalOS",
+                "pain_key": None,
+                "question_policy": "invitation_question_and_profile_details",
+                "required_evidence": ["current_creator_identity", "current_creator_contact"],
+                "rejected": [],
+            }
+        if template_selection.get("status") == "selected":
+            candidate = {
+                **candidate,
+                "outreach_template_key": template_selection.get("key"),
+                "outreach_template_version": template_selection.get("version"),
+                "outreach_template_disabled": False,
+                "include_public_audit_link": len(touches) == 0,
+            }
+            used_template_keys.append(_text(template_selection.get("key")))
+            if _text(template_selection.get("pain_key")):
+                used_pain_keys.append(_text(template_selection.get("pain_key")))
+        else:
+            candidate = {
+                **candidate,
+                "outreach_template_key": None,
+                "outreach_template_version": None,
+                "outreach_template_disabled": True,
+                "include_public_audit_link": len(touches) == 0,
+            }
+        sequence_key = _text(template_selection.get("key")) or f"angle:{angle}"
+        if sequence_key in previous_sequence_keys:
+            sequence_issues.append(f"duplicate_sequence_reason:{sequence_key}")
+        message = (
+            creator_template["body"]
+            if author_lane and requested_channel == "email" and creator_template
+            else _format_channel_outreach_message(
+                attach_public_audit_link(
+                    _message_for_angle(angle, candidate, story, previous_angles),
+                    candidate,
+                ),
+                channel=requested_channel,
+                sender_mode=_text(context.get("sender_mode")),
+            )
+        )
+        touch_subject = (
+            creator_template["subject"]
+            if author_lane and requested_channel == "email" and creator_template
+            else (
+                _text(item.get("subject"))[:200]
+                if requested_channel == "email" and _text(item.get("subject"))
+                else _email_subject(angle, candidate) if requested_channel == "email" else None
+            )
         )
         requested_sender_id = _text(item.get("sender_account_id"))
         if requested_channel in AUTOMATIC_CHANNELS and requested_sender_id:
@@ -3352,6 +4558,16 @@ def build_preview(
             suppressed=suppression["suppressed"],
             angle=angle,
         )
+        if author_lane and requested_channel == "email":
+            gate = _apply_creator_invitation_template_contract(
+                gate,
+                subject=_text(touch_subject),
+                body=message,
+                bridge=context.get("creator_outreach_bridge") or {},
+                manual_review_context=review_context,
+                manual_reviewer_role=reviewer_role,
+                template_authorization=author_template_authorization,
+            )
         strategy = _strategy_dimensions(
             context,
             research_brief,
@@ -3368,15 +4584,12 @@ def build_preview(
             "day_offset": day_offset,
             "scheduled_at": start + timedelta(days=day_offset),
             "angle": angle,
-            "subject": (
-                _text(item.get("subject"))[:200]
-                if requested_channel == "email" and _text(item.get("subject"))
-                else _email_subject(angle, candidate) if requested_channel == "email" else None
-            ),
+            "subject": touch_subject,
             "text": message,
             "quality_gate": gate,
             "channel_status": availability_item["status"],
             "contact_point_id": availability_item.get("contact_point_id"),
+            "recipient": availability_item.get("recipient"),
             "sender_account_id": availability_item.get("sender_account_id"),
             "evidence_id": candidate["evidence_id"],
             "evidence_kind": candidate.get("evidence_kind"),
@@ -3392,12 +4605,16 @@ def build_preview(
             "source_fact_fingerprint": source_fact_fingerprint,
             "strategy": strategy,
             "strategy_fingerprint": strategy_fingerprint(strategy),
+            "template_selection": template_selection,
+            "template_key": template_selection.get("key"),
+            "template_version": template_selection.get("version"),
         })
         previous_angles.append(angle)
+        previous_sequence_keys.append(sequence_key)
         previous_offset = day_offset
     ai_enabled = (
         ai_personalization_enabled() if generate_ai is None else bool(generate_ai)
-    ) and not override_by_index and (
+    ) and not override_by_index and not author_lane and (
         _text(primary_candidate.get("evidence_kind"))
         != "operator_approved_partnership_reason"
     )
@@ -3423,6 +4640,11 @@ def build_preview(
             "forbidden_claims": [],
         }
 
+        if preparation:
+            generation_story = {**generation_story, "offer": preparation["offer"]}
+        elif continuation:
+            generation_story = {**generation_story, "offer": continuation["config"]["offer"]}
+
         def voice_example_text(item: Any) -> str:
             if isinstance(item, dict):
                 return _text(item.get("text") or item.get("message") or item.get("example"))
@@ -3440,7 +4662,7 @@ def build_preview(
                 "contact_name": _text(primary_candidate.get("contact_name")),
                 "contact_role": _text(primary_candidate.get("contact_role")),
             },
-            candidate=primary_candidate,
+            candidate={**primary_candidate, "language": (preparation or {}).get("language") or ((continuation or {}).get("config") or {}).get("language") or context.get("preferred_language") or "ru"},
             founder_story=generation_story,
             sequence=touches,
             voice_examples=voice_examples,
@@ -3460,7 +4682,18 @@ def build_preview(
                 index = int(touch["sequence_index"])
                 generated_touch = generated_by_index[index]
                 semantic_review = review_by_index[index]
-                touch["text"] = format_outreach_message(generated_touch["text"])
+                generated_text = format_outreach_message(generated_touch["text"])
+                if index == 0:
+                    generated_text = format_outreach_message(attach_public_audit_link(
+                        generated_text,
+                        {**primary_candidate, "include_public_audit_link": True},
+                    ))
+                generated_text = _format_channel_outreach_message(
+                    generated_text,
+                    channel=_text(touch.get("channel")),
+                    sender_mode=_text(context.get("sender_mode")),
+                )
+                touch["text"] = generated_text
                 if touch["channel"] == "email":
                     touch["subject"] = generated_touch.get("subject") or touch.get("subject")
                 touch["problem_hypothesis"] = generated_touch.get("problem_hypothesis")
@@ -3502,15 +4735,24 @@ def build_preview(
         expected_indexes = {int(touch["sequence_index"]) for touch in touches}
         if not set(override_by_index).issubset(expected_indexes):
             raise ValueError("touch_overrides contain an unknown campaign touch")
-        reviewer_role = _text(manual_reviewer_role) or "authorized_user"
         for touch in touches:
             index = int(touch["sequence_index"])
             if index not in override_by_index:
                 continue
             override = override_by_index[index]
-            touch["text"] = override["text"]
+            touch["text"] = (
+                override["exact_text"]
+                if author_lane
+                else _format_channel_outreach_message(
+                    override["text"],
+                    channel=_text(touch.get("channel")),
+                    sender_mode=_text(context.get("sender_mode")),
+                )
+            )
             if touch["channel"] == "email" and override["subject"]:
-                touch["subject"] = override["subject"]
+                touch["subject"] = (
+                    override["exact_subject"] if author_lane else override["subject"]
+                )
             touch["generation_source"] = "manual_product_correction"
             touch["generation_prompt_version"] = PROMPT_VERSION
             touch["semantic_review_prompt_version"] = REVIEW_PROMPT_VERSION
@@ -3526,6 +4768,16 @@ def build_preview(
                 suppressed=suppression["suppressed"],
                 angle=touch["angle"],
             )
+            if author_lane and touch["channel"] == "email":
+                gate = _apply_creator_invitation_template_contract(
+                    gate,
+                    subject=_text(touch.get("subject")),
+                    body=touch["text"],
+                    bridge=context.get("creator_outreach_bridge") or {},
+                    manual_review_context=review_context,
+                    manual_reviewer_role=reviewer_role,
+                    template_authorization=author_template_authorization,
+                )
             gate["manual_review"] = {
                 "passed": bool(gate.get("passed")),
                 "review_version": REVIEW_PROMPT_VERSION,
@@ -3578,8 +4830,10 @@ def build_preview(
         generated_at=start,
     )
     return {
+        "continuation_qualification": (continuation or {}).get("qualification"),
         "status": preview_status,
         "workstream_id": workstream_id,
+        "workstream_type": context.get("workstream_type"),
         "lead_id": str(context.get("lead_id")),
         "lead": base_payload["lead"],
         "scope_type": "platform" if context.get("workstream_type") == "localos_sales" else "business",
@@ -3617,10 +4871,63 @@ def build_preview(
 def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> dict[str, Any]:
     if preview.get("status") not in {"ready", "needs_channel_setup", "needs_evidence", "needs_revision"} or not preview.get("touches"):
         raise ValueError("needs_evidence")
+    author_lane = (
+        preview.get("workstream_type") == "creator_collaboration"
+        and preview.get("sender_mode") == SENDER_MODE_LOCALOS_FOR_PARTNER
+    )
+    riderra_template_record = (
+        preview.get("riderra_template_record")
+        if isinstance(preview.get("riderra_template_record"), dict)
+        else {}
+    )
+    if author_lane and any(
+        _text(touch.get("channel")).lower() not in AUTHOR_CHANNEL_DAILY_LIMITS
+        for touch in preview["touches"]
+    ):
+        raise ValueError("Author campaign channel unsupported")
     workstream_id = str(preview["workstream_id"])
     cursor.execute("SELECT COALESCE(MAX(version), 0) + 1 AS next_version FROM outreach_campaigns WHERE workstream_id = %s", (workstream_id,))
     version = int(_scalar(cursor.fetchone(), "next_version"))
     campaign_id = str(uuid.uuid4())
+    policy = {
+        "stop_on_reply": True,
+        "daily_limit": 10,
+        "minimum_cadence_hours": 24,
+        "manual_timeout_hours": 48,
+        "manual_timeout_action": "needs_attention",
+        "no_reply_grace_hours": 168,
+        "approval_scope": "whole_sequence",
+        "sender_mode": preview.get("sender_mode"),
+        "sender_scope_type": preview.get("sender_scope_type"),
+        "represented_business_id": preview.get("represented_business_id"),
+        "represented_business_name": preview.get("represented_business_name"),
+        "represented_sender_profile_id": preview.get("represented_sender_profile_id"),
+    }
+    if author_lane:
+        policy.update({
+            "author_policy_version": AUTHOR_POLICY_VERSION,
+            "daily_limit": AUTHOR_DAILY_LIMIT,
+            "channel_daily_limits": AUTHOR_CHANNEL_DAILY_LIMITS,
+        })
+    if riderra_template_record:
+        from services.riderra_template_authorization_service import (
+            APPROVAL_MODE as RIDERRA_APPROVAL_MODE,
+            BUSINESS_ID as RIDERRA_BUSINESS_ID,
+            DAILY_LIMIT as RIDERRA_DAILY_LIMIT,
+            TEMPLATE_VERSION as RIDERRA_TEMPLATE_VERSION,
+        )
+        if (
+            preview.get("workstream_type") != "client_partnership"
+            or str(preview.get("business_id") or "") != RIDERRA_BUSINESS_ID
+            or len(preview["touches"]) != 1
+        ):
+            raise ValueError("riderra_template_preview_scope_invalid")
+        policy.update({
+            "approval_mode": RIDERRA_APPROVAL_MODE,
+            "daily_limit": RIDERRA_DAILY_LIMIT,
+            "riderra_template_version": RIDERRA_TEMPLATE_VERSION,
+            "riderra_template_record": riderra_template_record,
+        })
     cursor.execute(
         """
         INSERT INTO outreach_campaigns (
@@ -3638,20 +4945,7 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
             preview.get("sender_mode"), Json(preview.get("selected_offer") or {}),
             preview.get("selected_trust", {}).get("strategy") or "",
             Json(_json_safe(preview.get("decision") or {})),
-            Json({
-                "stop_on_reply": True,
-                "daily_limit": 10,
-                "minimum_cadence_hours": 24,
-                "manual_timeout_hours": 48,
-                "manual_timeout_action": "needs_attention",
-                "no_reply_grace_hours": 168,
-                "approval_scope": "whole_sequence",
-                "sender_mode": preview.get("sender_mode"),
-                "sender_scope_type": preview.get("sender_scope_type"),
-                "represented_business_id": preview.get("represented_business_id"),
-                "represented_business_name": preview.get("represented_business_name"),
-                "represented_sender_profile_id": preview.get("represented_sender_profile_id"),
-            }),
+            Json(policy),
             recipient_key(str(preview["lead_id"])), user_id,
         ),
     )
@@ -3691,6 +4985,11 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
                     "original_generated_text": touch.get("original_generated_text"),
                     "original_generated_subject": touch.get("original_generated_subject"),
                     "source_fact_fingerprint": touch.get("source_fact_fingerprint"),
+                    "template_key": touch.get("template_key"),
+                    "template_version": touch.get("template_version"),
+                    "template_label": (touch.get("template_selection") or {}).get("label"),
+                    "template_selection": touch.get("template_selection") or {},
+                    "riderra_template_record": touch.get("riderra_template_record") or {},
                 }),
                 Json(touch["quality_gate"]),
                 touch.get("strategy_fingerprint"), Json(touch.get("strategy") or {}),
@@ -3755,13 +5054,242 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
     }
 
 
-def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str, Any]:
+def build_riderra_template_preview(
+    cursor: Any, record: dict[str, Any], *, start_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Build one native campaign preview from a live grant member."""
+    from services.riderra_template_authorization_service import (
+        BUSINESS_ID as RIDERRA_BUSINESS_ID,
+        NORTH_CHINA_TEMPLATE_ID as RIDERRA_NORTH_CHINA_TEMPLATE_ID,
+        PHUKET_TEMPLATE_ID as RIDERRA_PHUKET_TEMPLATE_ID,
+        SENDER_ACCOUNT_ID as RIDERRA_SENDER_ACCOUNT_ID,
+        exact_invitation as exact_riderra_invitation,
+        load_authorization as load_riderra_authorization,
+        manifest_record as riderra_manifest_record,
+        verify_database_binding as verify_riderra_database_binding,
+    )
+
+    grant = load_riderra_authorization(cursor)
+    if not grant:
+        raise ValueError("riderra_template_authorization_required")
+    member = riderra_manifest_record(
+        grant, workstream_id=str(record.get("workstream_id") or ""), lead_id=str(record.get("lead_id") or ""),
+        contact_point_id=str(record.get("contact_point_id") or ""),
+    )
+    if not member or member != record:
+        raise ValueError("riderra_template_membership_required")
+    normalized = member
+    verify_riderra_database_binding(cursor, normalized)
+    cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"riderra-buyer:{normalized['lead_id']}",))
+    cursor.execute(
+        """SELECT campaign.id
+           FROM outreach_campaigns campaign
+           LEFT JOIN outreach_campaign_touches touch ON touch.campaign_id=campaign.id
+           LEFT JOIN outreachsendqueue queue ON queue.campaign_touch_id=touch.id
+           WHERE campaign.business_id=%s AND campaign.lead_id=%s
+             AND (campaign.status IN ('draft','approved','active','paused','completed')
+                  OR queue.delivery_status IN ('queued','sending','sent','delivered')
+                  OR lower(COALESCE(queue.error_text,'')) LIKE '%%send_uncertain%%')
+           LIMIT 1""",
+        (RIDERRA_BUSINESS_ID, normalized["lead_id"]),
+    )
+    if cursor.fetchone():
+        raise ValueError("existing_riderra_campaign_requires_reuse")
+    context = _apply_sender_mode(_load_context(cursor, normalized["workstream_id"]), SENDER_MODE_PARTNER_BUSINESS)
+    availability = channel_availability(cursor, context)
+    email = availability.get("email") or {}
+    sender_ids = {str(item.get("id") or "") for item in email.get("sender_accounts") or [] if item.get("status") == "ready"}
+    if (
+        str(context.get("lead_id") or "") != normalized["lead_id"]
+        or str(context.get("client_business_id") or "") != RIDERRA_BUSINESS_ID
+        or str(email.get("contact_point_id") or "") != normalized["contact_point_id"]
+        or str(email.get("recipient") or "").lower() != normalized["recipient"]
+        or RIDERRA_SENDER_ACCOUNT_ID not in sender_ids
+        or not exact_riderra_invitation(
+            record=normalized, authorization=grant, subject=normalized["subject"], body=normalized["body"],
+            sender_account_id=RIDERRA_SENDER_ACCOUNT_ID, channel="email", sequence_index=0,
+        )
+    ):
+        raise ValueError("riderra_template_preview_binding_changed")
+    suppression = _suppression_status(cursor, context)
+    if suppression.get("suppressed"):
+        raise ValueError("riderra_template_recipient_suppressed")
+    is_phuket = normalized.get("template_id") == RIDERRA_PHUKET_TEMPLATE_ID
+    is_north_china = normalized.get("template_id") == RIDERRA_NORTH_CHINA_TEMPLATE_ID
+    is_example_template = is_phuket or is_north_china
+    quote_context = normalized.get("pricebook_examples") if is_example_template else normalized.get("pricebook")
+    source_url = _text(context.get("source_url") or "riderra-postgresql-city-pricing")
+    evidence = build_evidence_ledger(context)
+    candidate = {
+        "id": f"riderra:{normalized['source_fact_fingerprint']}",
+        "evidence_id": f"riderra:{normalized['source_fact_fingerprint']}",
+        "source_url": source_url,
+        "observed_fact": normalized["opening"],
+        "relevance_to_offer": (
+            "Phuket airport transfer examples" if is_phuket else
+            "Northern Europe and Moscow airport transfer examples" if is_north_china else
+            quote_context["route"]
+        ),
+    }
+    gate = {
+        "passed": True, "verdict": "approve", "score": 18, "total_score": 18,
+        "max_score": 18, "reason_codes": [], "blocking_reasons": [],
+        "approval_mode": "riderra_template", "exact_server_copy": True,
+    }
+    scheduled_at = start_at or datetime.now(timezone.utc)
+    touch = {
+        "sequence_index": 0, "channel": "email", "day_offset": 0, "scheduled_at": scheduled_at,
+        "angle": "riderra_buyer_offer", "subject": normalized["subject"], "text": normalized["body"],
+        "quality_gate": gate, "channel_status": "ready", "contact_point_id": normalized["contact_point_id"],
+        "recipient": normalized["recipient"],
+        "sender_account_id": RIDERRA_SENDER_ACCOUNT_ID, "evidence_id": candidate["evidence_id"],
+        "evidence_kind": "riderra_buyer_opening", "source_url": source_url,
+        "observation": normalized["opening"],
+        "solution": (
+            "Phuket airport transfer examples" if is_phuket else
+            "Northern Europe and Moscow airport transfer examples" if is_north_china else
+            quote_context["route"]
+        ),
+        "source_fact_fingerprint": normalized["source_fact_fingerprint"],
+        "strategy": {"workstream_type": "client_partnership", "sender_mode": "partner_business",
+                     "segment": "transfer_buyer", "template_version": normalized.get("template_version")},
+        "strategy_fingerprint": stable_hash(normalized, "riderra:"),
+        "template_key": normalized.get("template_id") or "riderra_buyer_first_email",
+        "template_version": normalized.get("template_version") or "riderra-buyer-first-email-v1",
+        "template_selection": {"key": normalized.get("template_id") or "riderra_buyer_first_email",
+                               "version": normalized.get("template_version") or "riderra-buyer-first-email-v1"},
+        "riderra_template_record": normalized,
+    }
+    return {
+        "status": "ready", "workstream_id": normalized["workstream_id"], "workstream_type": "client_partnership",
+        "lead_id": normalized["lead_id"], "lead": {"name": normalized["company"], "city": normalized["city"]},
+        "scope_type": "business", "business_id": RIDERRA_BUSINESS_ID, "sender_mode": "partner_business",
+        "sender_scope_type": "business", "sender_profile_id": str((context.get("sender_profile") or {}).get("id") or ""),
+        "decision": {"action": "write_now", "reason_codes": []}, "selected_offer": {}, "selected_trust": {},
+        "evidence": evidence or [candidate], "personalization_candidates": [candidate],
+        "channel_availability": availability, "suppression": suppression, "touches": [touch],
+        "quality_gate": gate, "review_record": {}, "generation": {"source": "deterministic", "status": "ready"},
+        "sequence_issues": [], "missing": [], "riderra_template_record": normalized,
+    }
+
+
+def approve_campaign_by_author_template(cursor: Any, campaign_id: str) -> dict[str, Any]:
+    """Queue one exact first invitation using the recorded template permission.
+
+    This is a separate, explicit operation; saving/previewing a draft still does
+    not send or queue it. No per-message human review is fabricated.
+    """
+    cursor.execute(
+        """SELECT campaign.*, workstream.workstream_type
+           FROM outreach_campaigns campaign
+           JOIN lead_workstreams workstream ON workstream.id = campaign.workstream_id
+           WHERE campaign.id = %s FOR UPDATE OF campaign""", (campaign_id,),
+    )
+    campaign = _dict(cursor.fetchone())
+    if not campaign or not is_localos_author_lane(campaign):
+        raise ValueError("author_template_campaign_scope_invalid")
+    cursor.execute(
+        "SELECT * FROM outreach_campaign_touches WHERE campaign_id = %s ORDER BY sequence_index",
+        (campaign_id,),
+    )
+    touches = [_dict(row) for row in cursor.fetchall()]
+    if len(touches) != 1:
+        raise ValueError("author_template_single_first_touch_required")
+    touch = touches[0]
+    grant = load_author_template_authorization(
+        cursor, sender_account_id=str(touch.get("sender_account_id") or ""),
+    )
+    if not grant:
+        raise ValueError("author_template_authorization_required")
+    context = _apply_sender_mode(_load_context(cursor, str(campaign["workstream_id"])), SENDER_MODE_LOCALOS_FOR_PARTNER)
+    bridge = context.get("creator_outreach_bridge") or {}
+    if (str(touch.get("contact_point_id") or "") != str(bridge.get("selected_contact_point_id") or "")
+            or not exact_author_invitation(
+                bridge=bridge, subject=str(touch.get("subject") or ""),
+                body=str(touch.get("generated_text") or ""), authorization=grant,
+                sender_account_id=str(touch.get("sender_account_id") or ""),
+                channel=str(touch.get("channel") or ""),
+                sequence_index=int(touch.get("sequence_index") or 0),
+            )):
+        raise ValueError("author_template_exact_copy_or_contact_required")
+    policy = dict(campaign.get("policy_json") or {})
+    if campaign.get("status") in {"approved", "active"}:
+        if policy.get("author_template_authorization_id") == grant["id"]:
+            return {"id": campaign_id, "status": campaign["status"], "already_authorized": True}
+        raise ValueError("author_template_campaign_already_approved")
+    if campaign.get("status") != "draft":
+        raise ValueError("author_template_draft_required")
+    policy.update({
+        "approval_mode": "author_template",
+        "author_template_authorization_id": grant["id"],
+        "author_template_manifest": grant["manifest"],
+    })
+    cursor.execute("UPDATE outreach_campaigns SET policy_json = %s WHERE id = %s", (Json(policy), campaign_id))
+    return approve_campaign(cursor, campaign_id, user_id=None, template_authorization=grant)
+
+
+def approve_campaign_by_riderra_template(cursor: Any, campaign_id: str) -> dict[str, Any]:
+    """Approve one exact Riderra first email without fabricating message review."""
+    from services.riderra_template_authorization_service import (
+        APPROVAL_MODE as RIDERRA_APPROVAL_MODE,
+        BUSINESS_ID as RIDERRA_BUSINESS_ID,
+        exact_invitation as exact_riderra_invitation,
+        load_authorization as load_riderra_authorization,
+        manifest_record as riderra_manifest_record,
+        verify_database_binding as verify_riderra_database_binding,
+    )
+
+    cursor.execute(
+        """SELECT campaign.*, workstream.workstream_type
+           FROM outreach_campaigns campaign JOIN lead_workstreams workstream ON workstream.id=campaign.workstream_id
+           WHERE campaign.id=%s FOR UPDATE OF campaign""", (campaign_id,),
+    )
+    campaign = _dict(cursor.fetchone())
+    if (not campaign or campaign.get("status") != "draft" or campaign.get("workstream_type") != "client_partnership"
+            or str(campaign.get("business_id") or "") != RIDERRA_BUSINESS_ID):
+        raise ValueError("riderra_template_campaign_scope_invalid")
+    cursor.execute("SELECT * FROM outreach_campaign_touches WHERE campaign_id=%s ORDER BY sequence_index", (campaign_id,))
+    touches = [_dict(row) for row in cursor.fetchall()]
+    if len(touches) != 1:
+        raise ValueError("riderra_template_single_first_touch_required")
+    touch = touches[0]
+    record = (touch.get("message_brief_json") or {}).get("riderra_template_record") or {}
+    grant = load_riderra_authorization(cursor, sender_account_id=str(touch.get("sender_account_id") or ""))
+    member = riderra_manifest_record(
+        grant, workstream_id=str(campaign.get("workstream_id") or ""), lead_id=str(campaign.get("lead_id") or ""),
+        contact_point_id=str(touch.get("contact_point_id") or ""),
+    ) if grant else {}
+    if (not grant or not member or member != record
+            or not exact_riderra_invitation(record=record, authorization=grant,
+                subject=str(touch.get("subject") or ""), body=str(touch.get("generated_text") or ""),
+                sender_account_id=str(touch.get("sender_account_id") or ""),
+                channel=str(touch.get("channel") or ""), sequence_index=int(touch.get("sequence_index") or 0))):
+        raise ValueError("riderra_template_exact_copy_or_membership_required")
+    verify_riderra_database_binding(cursor, record)
+    policy = dict(campaign.get("policy_json") or {})
+    policy.update({"approval_mode": RIDERRA_APPROVAL_MODE, "riderra_template_authorization_id": grant["id"],
+                   "riderra_template_records_sha256": grant["manifest"]["records_sha256"]})
+    cursor.execute("UPDATE outreach_campaigns SET policy_json=%s WHERE id=%s", (Json(policy), campaign_id))
+    return approve_campaign(cursor, campaign_id, user_id=None, riderra_template_authorization=grant)
+
+
+def approve_campaign(
+    cursor: Any, campaign_id: str, *, user_id: str | None,
+    template_authorization: dict[str, Any] | None = None,
+    riderra_template_authorization: dict[str, Any] | None = None,
+    reviewed_batch_id: str | None = None,
+    ai_authorization: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not user_id and not template_authorization and not riderra_template_authorization and not ai_authorization:
+        raise ValueError("campaign_approval_authority_required")
     cursor.execute(
         """
-        SELECT c.*, COUNT(t.id) AS touch_count,
+        SELECT c.*, MAX(ws.workstream_type) AS workstream_type,
+               COUNT(t.id) AS touch_count,
                BOOL_AND(COALESCE((t.quality_gate_json->>'passed')::boolean, FALSE)) AS quality_passed,
                BOOL_AND(CASE WHEN t.channel IN ('telegram', 'email', 'vk') THEN t.sender_account_id IS NOT NULL ELSE TRUE END) AS senders_ready
         FROM outreach_campaigns c
+        JOIN lead_workstreams ws ON ws.id = c.workstream_id
         LEFT JOIN outreach_campaign_touches t ON t.campaign_id = c.id
         WHERE c.id = %s
         GROUP BY c.id
@@ -3773,6 +5301,52 @@ def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str
         raise LookupError("Campaign not found")
     if campaign.get("status") != "draft":
         raise ValueError("Only a draft campaign can be approved")
+    if ((campaign.get("policy_json") or {}).get("approval_mode") == "riderra_template"
+            and not riderra_template_authorization):
+        raise ValueError("riderra_template_authorization_required")
+    if (campaign.get("policy_json") or {}).get("approval_mode") == "ai_rules" and not ai_authorization:
+        raise ValueError("ai_rules_authorization_required")
+    if template_authorization:
+        policy = campaign.get("policy_json") or {}
+        current_grant = load_author_template_authorization(
+            cursor, sender_account_id=template_authorization.get("sender_account_id"),
+        )
+        if (not is_localos_author_lane(campaign) or not current_grant
+                or current_grant["id"] != template_authorization.get("id")
+                or policy.get("author_template_authorization_id") != current_grant["id"]
+                or policy.get("approval_mode") != "author_template"):
+            raise ValueError("author_template_authorization_changed")
+    if riderra_template_authorization:
+        from services.riderra_template_authorization_service import (
+            APPROVAL_MODE as RIDERRA_APPROVAL_MODE,
+            load_authorization as load_riderra_authorization,
+        )
+        policy = campaign.get("policy_json") or {}
+        current_grant = load_riderra_authorization(
+            cursor, sender_account_id=riderra_template_authorization.get("sender_account_id"),
+            authorization_id=riderra_template_authorization.get("id"),
+        )
+        if (not current_grant or current_grant["id"] != riderra_template_authorization.get("id")
+                or policy.get("riderra_template_authorization_id") != current_grant["id"]
+                or policy.get("approval_mode") != RIDERRA_APPROVAL_MODE):
+            raise ValueError("riderra_template_authorization_changed")
+    if is_localos_author_lane(campaign):
+        policy = campaign.get("policy_json") if isinstance(campaign.get("policy_json"), dict) else {}
+        channel_limits = policy.get("channel_daily_limits") if isinstance(policy.get("channel_daily_limits"), dict) else {}
+        try:
+            policy_current = (
+                policy.get("author_policy_version") == AUTHOR_POLICY_VERSION
+                and int(policy.get("daily_limit") or 0) == AUTHOR_DAILY_LIMIT
+                and set(channel_limits) == set(AUTHOR_CHANNEL_DAILY_LIMITS)
+                and all(
+                    int(channel_limits.get(channel) or 0) == limit
+                    for channel, limit in AUTHOR_CHANNEL_DAILY_LIMITS.items()
+                )
+            )
+        except (TypeError, ValueError):
+            policy_current = False
+        if not policy_current:
+            raise ValueError("Author campaign daily policy is not current")
     if (
         not campaign.get("touch_count")
         or not campaign.get("quality_passed")
@@ -3798,31 +5372,60 @@ def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str
         (campaign_id,),
     )
     approval_touches = [_dict(row) for row in cursor.fetchall()]
+    if is_localos_author_lane(campaign) and any(
+        _text(touch.get("channel")).lower() not in AUTHOR_CHANNEL_DAILY_LIMITS
+        for touch in approval_touches
+    ):
+        raise ValueError("Author campaign channel unsupported")
     channels_ready = all(
         runtime_touch_channel_status(touch) == ("ready" if touch.get("channel") in AUTOMATIC_CHANNELS else "manual")
         for touch in approval_touches
     )
     if not channels_ready:
         raise ValueError("Campaign preflight failed")
+    if ai_authorization:
+        from services.outreach_ai_campaigns import validate
+        policy = campaign.get("policy_json") or {}
+        current_grant = validate(cursor, campaign=campaign, touches=approval_touches,
+            authorization_id=str(ai_authorization.get("id") or ""), job_id=policy.get("continuation_job_id"))
+        if (policy.get("approval_mode") != "ai_rules" or not current_grant
+                or str(current_grant["id"]) != policy.get("ai_authorization_id")):
+            raise ValueError("ai_rules_authorization_changed")
+    author_template_approval = bool(
+        template_authorization
+        and is_localos_author_lane(campaign)
+        and (campaign.get("policy_json") or {}).get("approval_mode") == "author_template"
+    )
+    deterministic_template_approval = bool(author_template_approval or riderra_template_authorization)
     if not all(
         generation_contract_current(
             touch.get("message_brief_json"),
             touch.get("quality_gate_json"),
+            require_ai=True if ai_authorization else False if deterministic_template_approval else None,
         )
         for touch in approval_touches
     ):
         raise ValueError("Campaign generation is outdated; create a new preview")
-    cursor.execute(
-        """
-        SELECT evidence_json, signals_json, report_hash
-        FROM lead_workstream_research
-        WHERE workstream_id = %s
-        ORDER BY researched_at DESC, created_at DESC
-        LIMIT 1
-        """,
-        (campaign.get("workstream_id"),),
-    )
-    current_source_fingerprint = research_source_fact_fingerprint(_dict(cursor.fetchone()))
+    if is_localos_author_lane(campaign):
+        current_source_fingerprint = current_outreach_source_fact_fingerprint(
+            cursor,
+            _text(campaign.get("workstream_id")),
+            _text(campaign.get("sender_mode")),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT evidence_json, signals_json, report_hash
+            FROM lead_workstream_research
+            WHERE workstream_id = %s
+            ORDER BY researched_at DESC, created_at DESC
+            LIMIT 1
+            """,
+            (campaign.get("workstream_id"),),
+        )
+        current_source_fingerprint = research_source_fact_fingerprint(
+            _dict(cursor.fetchone())
+        )
     if (
         not current_source_fingerprint
         or any(
@@ -3876,15 +5479,17 @@ def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str
         "UPDATE outreach_campaign_touches SET status = 'approved', approved_text = generated_text, updated_at = NOW() WHERE campaign_id = %s",
         (campaign_id,),
     )
-    batch_id = str(uuid.uuid4())
-    cursor.execute(
-        """
-        INSERT INTO outreachsendbatches (
-            id, batch_date, daily_limit, status, created_by, approved_by, created_at, updated_at
-        ) VALUES (%s, CURRENT_DATE, 10, 'approved', %s, %s, NOW(), NOW())
-        """,
-        (batch_id, user_id, user_id),
-    )
+    batch_id = reviewed_batch_id or str(uuid.uuid4())
+    if reviewed_batch_id:
+        cursor.execute("SELECT id FROM outreachsendbatches WHERE id=%s AND status='draft' FOR UPDATE", (batch_id,))
+        if not cursor.fetchone():
+            raise ValueError("reviewed_batch_not_draft")
+    else:
+        cursor.execute(
+            """INSERT INTO outreachsendbatches (
+                id, batch_date, daily_limit, status, created_by, approved_by, created_at, updated_at
+            ) VALUES (%s, (NOW() AT TIME ZONE 'Europe/Moscow')::date, %s, 'approved', %s, %s, NOW(), NOW())""",
+            (batch_id, int((campaign.get("policy_json") or {}).get("daily_limit") or 10), user_id, user_id))
     cursor.execute(
         """
         SELECT t.*, c.lead_id, c.workstream_id, c.sender_profile_id
@@ -3945,7 +5550,21 @@ def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str
         campaign_id,
         "campaign_approved",
         actor_id=user_id,
-        payload={"version": int(result.get("version") or 0), "batch_id": batch_id},
+        payload={
+            "version": int(result.get("version") or 0), "batch_id": batch_id,
+            "approval_mode": (
+                "ai_rules" if ai_authorization else
+                "author_template" if template_authorization else
+                "riderra_template" if riderra_template_authorization else "manual"
+            ),
+            "template_authorization_id": (template_authorization or riderra_template_authorization or {}).get("id"),
+            "ai_authorization_id": str((ai_authorization or {}).get("id") or "") or None,
+        },
+    )
+    result["approval_mode"] = (
+        "ai_rules" if ai_authorization else
+        "author_template" if template_authorization else
+        "riderra_template" if riderra_template_authorization else "manual"
     )
     return result
 
@@ -3965,7 +5584,12 @@ def change_campaign_status(
     if action not in transitions:
         raise ValueError("Unsupported campaign action")
     allowed_from, next_status = transitions[action]
-    cursor.execute("SELECT id, status, approved_snapshot_hash FROM outreach_campaigns WHERE id = %s FOR UPDATE", (campaign_id,))
+    cursor.execute(
+        """SELECT id, status, approved_snapshot_hash, scope_type, business_id,
+                  sender_mode, policy_json
+           FROM outreach_campaigns WHERE id = %s FOR UPDATE""",
+        (campaign_id,),
+    )
     campaign = _dict(cursor.fetchone())
     if not campaign:
         raise LookupError("Campaign not found")
@@ -3991,28 +5615,35 @@ def change_campaign_status(
             raise ValueError("Review edited campaign messages before resuming")
         cursor.execute(
             """
-            SELECT COUNT(*)
+            SELECT t.*, s.scope_type AS sender_scope_type,
+                   s.business_id AS sender_business_id,
+                   s.status AS sender_status,
+                   s.health_status AS sender_health_status,
+                   s.outreach_enabled AS sender_outreach_enabled,
+                   s.capabilities_json AS sender_capabilities_json,
+                   p.outreach_enabled AS telegram_outreach_enabled
             FROM outreach_campaign_touches t
-            JOIN outreach_campaigns c ON c.id = t.campaign_id
             LEFT JOIN outreach_sender_accounts s ON s.id = t.sender_account_id
             LEFT JOIN telegram_account_permissions p ON p.account_id = s.external_account_id
             WHERE t.campaign_id = %s
               AND t.channel IN ('telegram', 'email', 'vk')
-              AND (
-                  s.id IS NULL
-                  OR s.status <> 'connected'
-                  OR s.scope_type <> c.scope_type
-                  OR COALESCE(s.business_id, '') <> COALESCE(c.business_id, '')
-                  OR s.health_status IN ('paused', 'blocked')
-                  OR COALESCE((s.capabilities_json->>'direct_send')::boolean, FALSE) = FALSE
-                  OR COALESCE((s.capabilities_json->>'reply_sync')::boolean, FALSE) = FALSE
-                  OR (t.channel = 'telegram' AND COALESCE(p.outreach_enabled, FALSE) = FALSE)
-                  OR (t.channel IN ('email', 'vk') AND COALESCE(s.outreach_enabled, FALSE) = FALSE)
-              )
             """,
             (campaign_id,),
         )
-        if int(_scalar(cursor.fetchone(), "count") or 0) > 0:
+        resume_touches = [_dict(row) for row in cursor.fetchall()]
+        sender_preflight_failed = any(
+            not touch.get("sender_account_id")
+            or touch.get("sender_status") != "connected"
+            or touch.get("sender_health_status") in {"paused", "blocked"}
+            or not isinstance(touch.get("sender_capabilities_json"), dict)
+            or touch["sender_capabilities_json"].get("direct_send") is not True
+            or touch["sender_capabilities_json"].get("reply_sync") is not True
+            or (touch.get("channel") == "telegram" and not touch.get("telegram_outreach_enabled"))
+            or (touch.get("channel") in {"email", "vk"} and not touch.get("sender_outreach_enabled"))
+            or sender_scope_preflight_reason({**campaign, **touch}) is not None
+            for touch in resume_touches
+        )
+        if sender_preflight_failed:
             raise ValueError("Sender account preflight failed")
     cursor.execute(
         "UPDATE outreach_campaigns SET status = %s, stop_reason = %s, updated_at = NOW() WHERE id = %s RETURNING id, version, status, stop_reason",
@@ -4052,9 +5683,17 @@ def record_manual_touch(
     *,
     user_id: str,
     note: str = "",
+    occurred_at: datetime | None = None,
 ) -> dict[str, Any]:
     if event_type not in {"sent", "skipped", "reply"}:
         raise ValueError("Unsupported manual event")
+    recorded_at = occurred_at or datetime.now(timezone.utc)
+    if recorded_at.tzinfo is None:
+        raise ValueError("Manual event occurred_at must include a timezone")
+    recorded_at = recorded_at.astimezone(timezone.utc)
+    now = datetime.now(timezone.utc)
+    if recorded_at > now + timedelta(minutes=1):
+        raise ValueError("Manual event occurred_at must not be in the future")
     cursor.execute(
         """
         SELECT t.*, c.lead_id, c.workstream_id, c.scope_type, c.business_id,
@@ -4085,8 +5724,38 @@ def record_manual_touch(
             delivery_json = delivery_json || %s, updated_at = NOW()
         WHERE id = %s
         """,
-        (next_touch_status, Json({"manual_event": event_type, "note": note}), touch_id),
+        (
+            next_touch_status,
+            Json({
+                "manual_event": event_type,
+                "manual_occurred_at": recorded_at.isoformat(),
+                "evidence_kind": "user_confirmed",
+                "note": note,
+            }),
+            touch_id,
+        ),
     )
+    if event_type == "sent":
+        cursor.execute(
+            """
+            UPDATE lead_workstreams
+            SET status = 'contacted', lifecycle_status = 'waiting_reply',
+                status_reason = NULL, selected_channel = %s,
+                last_contact_at = %s, last_contact_channel = %s,
+                last_contact_comment = NULLIF(%s, ''),
+                next_action_at = %s + INTERVAL '4 days',
+                next_step = 'Проверить ответ',
+                state_changed_at = GREATEST(state_changed_at, %s), updated_at = NOW()
+            WHERE id = %s
+              AND (last_contact_at IS NULL OR last_contact_at <= %s)
+              AND lifecycle_status NOT IN ('replied', 'converted', 'closed_lost', 'suppressed')
+              AND status <> 'paused'
+            """,
+            (
+                touch.get("channel"), recorded_at, touch.get("channel"), note.strip(),
+                recorded_at, recorded_at, touch.get("workstream_id"), recorded_at,
+            ),
+        )
     if event_type == "reply":
         classification = classify_inbound_event({"raw_reply": note})
         if classification["creates_suppression"]:
@@ -4110,17 +5779,18 @@ def record_manual_touch(
                 id, campaign_id, touch_id, lead_id, workstream_id, channel,
                 event_type, classification, is_human, stops_campaign, confidence,
                 raw_payload_json, classified_by, occurred_at, created_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, 'reply', %s, %s, %s, %s, %s, 'manual', NOW(), NOW())
+            ) VALUES (%s, %s, %s, %s, %s, %s, 'reply', %s, %s, %s, %s, %s, 'manual', %s, NOW())
             """,
             (
                 str(uuid.uuid4()), campaign_id, touch_id, touch["lead_id"], touch["workstream_id"],
                 touch.get("channel"), classification["classification"], classification["is_human"],
-                classification["stops_campaign"], classification["confidence"], Json({"reply": note}),
+                classification["stops_campaign"], classification["confidence"],
+                Json({"reply": note, "evidence_kind": "user_confirmed"}), recorded_at,
             ),
         )
         cursor.execute(
-            "UPDATE outreach_campaigns SET status = 'stopped', stop_reason = 'recipient_replied', last_reply_at = NOW(), updated_at = NOW() WHERE id = %s",
-            (campaign_id,),
+            "UPDATE outreach_campaigns SET status = 'stopped', stop_reason = 'recipient_replied', last_reply_at = GREATEST(COALESCE(last_reply_at, %s), %s), updated_at = NOW() WHERE id = %s",
+            (recorded_at, recorded_at, campaign_id),
         )
         cursor.execute(
             "UPDATE outreach_campaign_touches SET status = 'reply_cancelled', delivery_json = delivery_json || %s, updated_at = NOW() WHERE campaign_id = %s AND sequence_index > (SELECT sequence_index FROM outreach_campaign_touches WHERE id = %s) AND status IN ('approved', 'scheduled', 'queued', 'manual', 'awaiting_manual_send', 'manual_expired', 'needs_attention', 'paused')",
@@ -4133,12 +5803,36 @@ def record_manual_touch(
         cursor.execute(
             """
             UPDATE lead_workstreams
-            SET lifecycle_status = 'replied', status_reason = %s,
-                next_step = 'Ответить получателю вручную', state_changed_at = NOW(),
+            SET lifecycle_status = CASE
+                    WHEN lifecycle_status IN ('converted', 'closed_lost', 'suppressed') OR status = 'paused'
+                    THEN lifecycle_status ELSE 'replied'
+                END,
+                status_reason = CASE
+                    WHEN lifecycle_status IN ('converted', 'closed_lost', 'suppressed') OR status = 'paused'
+                    THEN status_reason ELSE %s
+                END,
+                next_step = CASE
+                    WHEN lifecycle_status IN ('converted', 'closed_lost', 'suppressed') OR status = 'paused'
+                    THEN next_step ELSE 'Ответить получателю вручную'
+                END,
+                last_contact_at = GREATEST(COALESCE(last_contact_at, %s), %s),
+                last_contact_channel = CASE
+                    WHEN last_contact_at IS NULL OR last_contact_at <= %s THEN %s
+                    ELSE last_contact_channel
+                END,
+                last_contact_comment = CASE
+                    WHEN last_contact_at IS NULL OR last_contact_at <= %s THEN NULLIF(%s, '')
+                    ELSE last_contact_comment
+                END,
+                state_changed_at = GREATEST(state_changed_at, %s),
                 updated_at = NOW()
             WHERE id = %s
             """,
-            (classification["classification"], touch["workstream_id"]),
+            (
+                classification["classification"], recorded_at, recorded_at,
+                recorded_at, touch.get("channel"), recorded_at, note.strip(),
+                recorded_at, touch["workstream_id"],
+            ),
         )
         upsert_relationship_from_reply(
             cursor,
@@ -4161,7 +5855,7 @@ def record_manual_touch(
                 channel=str(touch.get("channel") or "manual"),
                 provider_event_id=None,
                 raw_reply=note,
-                occurred_at=datetime.now(timezone.utc),
+                occurred_at=recorded_at,
             )
             if classification["classification"] in ROOM_INVITATION_CLASSIFICATIONS:
                 mark_room_ready_after_positive_reply(
@@ -4188,7 +5882,13 @@ def record_manual_touch(
                 },
                 touch=touch,
                 outcome_type=learning_outcome,
-                payload={"source": "manual", "classification": classification["classification"]},
+                payload={
+                    "source": "manual",
+                    "evidence_kind": "user_confirmed",
+                    "classification": classification["classification"],
+                    "occurred_at": recorded_at.isoformat(),
+                },
+                occurred_at=recorded_at,
             )
     if event_type in {"sent", "reply"}:
         cursor.execute(
@@ -4211,12 +5911,22 @@ def record_manual_touch(
                 },
                 touch=touch,
                 outcome_type="sent",
-                payload={"source": "manual", "manual_event": event_type},
+                payload={
+                    "source": "manual",
+                    "evidence_kind": "user_confirmed",
+                    "manual_event": event_type,
+                    "occurred_at": recorded_at.isoformat(),
+                },
+                occurred_at=recorded_at,
             )
     record_campaign_event(
         cursor, campaign_id, f"manual_{event_type}", actor_id=user_id,
         touch_id=touch_id, reason_code="recipient_replied" if event_type == "reply" else None,
-        payload={"note": note},
+        payload={
+            "note": note,
+            "occurred_at": recorded_at.isoformat(),
+            "evidence_kind": "user_confirmed",
+        },
     )
     if event_type in {"sent", "skipped"}:
         cursor.execute(
@@ -4228,8 +5938,9 @@ def record_manual_touch(
               AND sequence_index > %s
               AND status = 'paused'
               AND preflight_reason = 'prior_manual_touch_pending'
+              AND updated_at <= %s
             """,
-            (campaign_id, int(touch.get("sequence_index") or 0)),
+            (campaign_id, int(touch.get("sequence_index") or 0), recorded_at),
         )
         cursor.execute(
             """
@@ -4242,8 +5953,9 @@ def record_manual_touch(
             )
               AND delivery_status = 'paused'
               AND preflight_reason = 'prior_manual_touch_pending'
+              AND updated_at <= %s
             """,
-            (campaign_id, int(touch.get("sequence_index") or 0)),
+            (campaign_id, int(touch.get("sequence_index") or 0), recorded_at),
         )
         cursor.execute(
             """
@@ -4253,8 +5965,9 @@ def record_manual_touch(
             WHERE id = %s
               AND status = 'paused'
               AND stop_reason IN ('prior_manual_touch_pending', 'manual_touch_timeout')
+              AND updated_at <= %s
             """,
-            (campaign_id,),
+            (campaign_id, recorded_at),
         )
         cursor.execute(
             """
@@ -4270,7 +5983,31 @@ def record_manual_touch(
             """,
             (campaign_id,),
         )
-    return {"campaign_id": campaign_id, "touch_id": touch_id, "event_type": event_type}
+    if event_type in {"sent", "reply"}:
+        cursor.execute("SAVEPOINT yougile_manual_projection")
+        try:
+            from services.outreach_yougile_sync_service import enqueue_touch_sent_projection
+
+            enqueue_touch_sent_projection(cursor, touch_id=touch_id)
+            cursor.execute("RELEASE SAVEPOINT yougile_manual_projection")
+        except Exception as projection_error:
+            cursor.execute("ROLLBACK TO SAVEPOINT yougile_manual_projection")
+            cursor.execute("RELEASE SAVEPOINT yougile_manual_projection")
+            record_campaign_event(
+                cursor,
+                campaign_id,
+                "yougile_projection_failed",
+                actor_id=user_id,
+                touch_id=touch_id,
+                payload={"error": str(projection_error)[:500]},
+            )
+    return {
+        "campaign_id": campaign_id,
+        "touch_id": touch_id,
+        "event_type": event_type,
+        "occurred_at": recorded_at.isoformat(),
+        "evidence_kind": "user_confirmed",
+    }
 
 
 def record_campaign_business_outcome(
@@ -4513,6 +6250,12 @@ def finalize_no_reply_campaigns(
               SELECT 1
               FROM outreach_inbound_events inbound
               WHERE inbound.campaign_id = campaign.id AND inbound.is_human = TRUE
+          )
+          AND EXISTS (
+              SELECT 1
+              FROM outreach_campaign_touches touch
+              WHERE touch.campaign_id = campaign.id
+                AND touch.status IN ('manual_sent', 'sent', 'delivered')
           )
           AND NOT EXISTS (
               SELECT 1

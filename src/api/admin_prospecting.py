@@ -12,6 +12,7 @@ import uuid
 import re
 import time
 import random
+from contextvars import ContextVar
 from difflib import SequenceMatcher
 from urllib.parse import unquote
 from datetime import date, datetime, timedelta, timezone
@@ -155,7 +156,7 @@ TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS = max(1, int(os.environ.get("TELEGRAM_REPLY_SY
 TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT = max(1, min(int(os.environ.get("TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT", "12")), 50))
 TELEGRAM_REPLY_SYNC_TIMEOUT_SEC = max(5, int(os.environ.get("TELEGRAM_REPLY_SYNC_TIMEOUT_SEC", "12")))
 LEAD_OUTREACH_MODERATION_STATUS = "lead_outreach"
-PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr")
+PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr", "hy", "kk")
 PIPELINE_UNPROCESSED = "unprocessed"
 PIPELINE_IN_PROGRESS = "in_progress"
 PIPELINE_POSTPONED = "postponed"
@@ -283,6 +284,10 @@ _IMPLEMENTATIONS = {
     for name, value in vars(module).items()
     if callable(value) and getattr(value, "__module__", "") == module.__name__
 }
+_compatibility_call_depth: ContextVar[int] = ContextVar(
+    "admin_prospecting_compatibility_call_depth",
+    default=0,
+)
 
 
 def _bind_runtime_namespace() -> None:
@@ -298,8 +303,14 @@ def _bind_runtime_namespace() -> None:
 def _compatibility_wrapper(name: str, implementation: Any):
     @wraps(implementation)
     def wrapper(*args: Any, **kwargs: Any):
-        _bind_runtime_namespace()
-        return _IMPLEMENTATIONS[name](*args, **kwargs)
+        depth = _compatibility_call_depth.get()
+        if depth == 0:
+            _bind_runtime_namespace()
+        token = _compatibility_call_depth.set(depth + 1)
+        try:
+            return _IMPLEMENTATIONS[name](*args, **kwargs)
+        finally:
+            _compatibility_call_depth.reset(token)
 
     return wrapper
 

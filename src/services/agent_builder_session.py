@@ -64,11 +64,12 @@ def build_agent_builder_state(
     user_id: str = "",
     connected_integrations: List[Dict[str, Any]] | None = None,
     subscription: Dict[str, Any] | None = None,
+    compiled_draft: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     normalized_messages = _normalize_messages(messages)
     description = _conversation_text(normalized_messages)
     category = _clean_text(preferred_category) or infer_blueprint_category(description)
-    draft = compile_agent_blueprint(
+    draft = compiled_draft if compiled_draft is not None else compile_agent_blueprint(
         description,
         category,
         use_ai=False,
@@ -89,7 +90,7 @@ def build_agent_builder_state(
         business_id=business_id,
         user_id=user_id,
     )
-    if use_ai:
+    if use_ai and compiled_draft is None:
         draft = compile_agent_blueprint(
             description,
             category,

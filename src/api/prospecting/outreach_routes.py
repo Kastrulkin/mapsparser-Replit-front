@@ -62,6 +62,7 @@ from services.outreach_sender_profile_service import evaluate_sender_profile_com
 from services.lead_preparation_progress_service import record_lead_preparation_step
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.prospecting_service import ProspectingService
+from services.outreach_draft_review import draft_review_digest, canonical_review
 from services.sales_room_helpers import (
     append_sales_room_link_to_outreach_text as _append_sales_room_link_to_outreach_text,
     make_sales_room_url as _make_sales_room_url,
@@ -101,6 +102,7 @@ from services.sales_room_audit_offer_service import (
     serialize_public_audit_offer as _serialize_public_audit_offer,
     serialize_sales_room_participant as _serialize_sales_room_participant,
 )
+from api.prospecting.public_offer_reader import load_public_offer_row
 
 from api.prospecting.shared import admin_prospecting_bp
 
@@ -152,7 +154,7 @@ TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS = max(1, int(os.environ.get("TELEGRAM_REPLY_SY
 TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT = max(1, min(int(os.environ.get("TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT", "12")), 50))
 TELEGRAM_REPLY_SYNC_TIMEOUT_SEC = max(5, int(os.environ.get("TELEGRAM_REPLY_SYNC_TIMEOUT_SEC", "12")))
 LEAD_OUTREACH_MODERATION_STATUS = "lead_outreach"
-PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr")
+PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr", "hy", "kk")
 PIPELINE_UNPROCESSED = "unprocessed"
 PIPELINE_IN_PROGRESS = "in_progress"
 PIPELINE_POSTPONED = "postponed"
@@ -1446,32 +1448,8 @@ def partnership_public_offer_page(slug):
         normalized_slug = _slugify_company_name(slug)
         conn = get_db_connection()
         try:
-            _ensure_partnership_public_offers_table(conn)
-            _ensure_admin_prospecting_public_offers_table(conn)
             cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT slug, page_json, updated_at
-                FROM partnershippublicoffers
-                WHERE slug = %s
-                  AND is_active = TRUE
-                LIMIT 1
-                """,
-                (normalized_slug,),
-            )
-            row = cur.fetchone()
-            if not row:
-                cur.execute(
-                    """
-                    SELECT slug, page_json, generated_json, published_json, updated_at
-                    FROM adminprospectingleadpublicoffers
-                    WHERE slug = %s
-                      AND is_active = TRUE
-                    LIMIT 1
-                    """,
-                    (normalized_slug,),
-                )
-                row = cur.fetchone()
+            row = load_public_offer_row(cur, normalized_slug)
             if not row:
                 return jsonify({"error": "Offer page not found"}), 404
             row_dict = dict(row) if row and hasattr(row, "keys") else {}
@@ -1958,6 +1936,17 @@ def partnership_list_drafts():
             """
             query += ACTIVE_PARTNERSHIP_LEAD_SQL
             params: list[Any] = [business_id]
+            task_id = str(request.args.get("search_task_id") or "").strip()
+            if task_id:
+                from services.partnership_group_view import load_group_scope, GroupNotFound
+                try:
+                    group = load_group_scope(cur, business_id, task_id)
+                except GroupNotFound:
+                    return jsonify({"error": "search_task_not_found"}), 404
+                query += " AND l.id::text=ANY(%s::text[])"
+                params.append(group['lead_ids'])
+            limit = max(1, min(int(request.args.get('limit') or 200), 500))
+            offset = max(0, int(request.args.get('offset') or 0))
             if status_filter:
                 query += " AND d.status = %s"
                 params.append(status_filter)
@@ -1977,17 +1966,28 @@ def partnership_list_drafts():
                     learning_note_json, created_at, updated_at,
                     lead_name, category, city, email,
                     selected_channel, lead_status,
-                    lead_pipeline_status, lead_partnership_stage
+                    lead_pipeline_status, lead_partnership_stage, COUNT(*) OVER() AS total_count
                 FROM ranked_drafts
                 WHERE draft_rank = 1
                 ORDER BY updated_at DESC, created_at DESC
-                LIMIT 200
+                LIMIT %s OFFSET %s
             """
+            params.extend([limit, offset])
             cur.execute(query, tuple(params))
             rows = [_serialize_draft(dict(row)) for row in cur.fetchall()]
+            for row in rows:
+                try:
+                    row["canonical_review"] = canonical_review(cur, row)
+                    if row["canonical_review"]:
+                        row["generated_text"] = row["canonical_review"]["text"]
+                        row["edited_text"] = row["canonical_review"]["text"]
+                        row["approved_text"] = row["canonical_review"]["text"] if row.get("status") == DRAFT_APPROVED else None
+                except ValueError:
+                    row["canonical_review"] = {"stale": True}
+                row["review_digest"] = draft_review_digest(row)
         finally:
             conn.close()
-        return jsonify({"success": True, "drafts": rows, "count": len(rows)})
+        return jsonify({"success": True, "drafts": rows, "count": len(rows), "total_count": int(rows[0].get("total_count") or 0) if rows else 0})
     except Exception as e:
         print(f"Error listing partnership drafts: {e}")
         return jsonify({"error": str(e)}), 500
@@ -2002,6 +2002,9 @@ def partnership_approve_draft(draft_id):
         data = request.get_json(silent=True) or {}
         requested_business_id = str(data.get("business_id") or "").strip() or None
         approved_text = str(data.get("approved_text") or "").strip()
+        expected_review_digest = data.get("expected_review_digest")
+        if not isinstance(expected_review_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_review_digest):
+            return jsonify({"error": "Обновите список и проверьте текущую версию письма перед утверждением.", "code": "draft_review_required"}), 400
         if not approved_text:
             return jsonify({"error": "approved_text is required"}), 400
 
@@ -2015,13 +2018,15 @@ def partnership_approve_draft(draft_id):
                 return jsonify({"error": "Business not found or access denied"}), 403
             cur.execute(
                 """
-                SELECT d.id, d.lead_id, d.generated_text, d.edited_text, d.status, d.learning_note_json
+                SELECT d.id, d.lead_id, d.generated_text, d.edited_text, d.status, d.learning_note_json,
+                       d.approved_text, d.updated_at, d.channel, l.email, l.selected_channel
                 FROM outreachmessagedrafts d
                 JOIN prospectingleads l ON l.id = d.lead_id
                 WHERE d.id = %s
                   AND l.business_id = %s
                   AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
                 LIMIT 1
+                FOR UPDATE OF d, l
                 """,
                 (draft_id, business_id),
             )
@@ -2029,8 +2034,33 @@ def partnership_approve_draft(draft_id):
             if not row:
                 return jsonify({"error": "Draft not found"}), 404
             draft_row = dict(row) if hasattr(row, "keys") else {
-                "id": row[0], "lead_id": row[1], "generated_text": row[2], "edited_text": row[3], "status": row[4], "learning_note_json": row[5]
+                "id": row[0], "lead_id": row[1], "generated_text": row[2], "edited_text": row[3], "status": row[4], "learning_note_json": row[5],
+                "approved_text": row[6], "updated_at": row[7], "channel": row[8], "email": row[9], "selected_channel": row[10]
             }
+            draft_origin = draft_row.get("learning_note_json")
+            if isinstance(draft_origin, dict) and draft_origin.get("search_task_id") and draft_origin.get("manual_review_required"):
+                conn.rollback()
+                return jsonify({"error": "Это черновик по поиску. Сначала подтвердите соответствие компании и контакт, затем отдельно согласуйте отправку.",
+                                "code": "search_draft_not_send_ready"}), 409
+            draft_row["canonical_review"] = canonical_review(cur, draft_row)
+            if expected_review_digest != draft_review_digest(draft_row):
+                conn.rollback()
+                return jsonify({"error": "Черновик или контакт изменился. Обновите список и проверьте письмо ещё раз.", "code": "draft_review_stale"}), 409
+
+            if isinstance(draft_origin, dict) and draft_origin.get("campaign_id"):
+                from services.outreach_campaign_service import update_draft_campaign_touch
+                cur.execute("""SELECT touch.generated_text FROM outreach_campaign_touches touch
+                    JOIN outreach_campaigns campaign ON campaign.id=touch.campaign_id
+                    WHERE touch.id=%s AND campaign.id=%s AND campaign.business_id=%s
+                      AND campaign.status='draft' FOR UPDATE OF touch, campaign""",
+                    (draft_origin.get("campaign_touch_id"), draft_origin["campaign_id"], business_id))
+                canonical = cur.fetchone()
+                if not canonical:
+                    return jsonify({"error": "Письмо уже изменено или отправка согласована. Обновите группу.", "code": "campaign_review_stale"}), 409
+                if canonical["generated_text"] != approved_text:
+                    update_draft_campaign_touch(cur, campaign_id=draft_origin["campaign_id"],
+                        touch_id=draft_origin["campaign_touch_id"], subject=draft_origin.get("subject"),
+                        generated_text=approved_text, user_id=user_data["user_id"])
 
             edited_text = str(draft_row.get("edited_text") or "")
             generated_text = str(draft_row.get("generated_text") or "")
@@ -2044,8 +2074,10 @@ def partnership_approve_draft(draft_id):
             learning_note = draft_row.get("learning_note_json")
             if not isinstance(learning_note, dict):
                 learning_note = {}
+            reviewed = canonical_review(cur, draft_row)
             accepted_learning_note = {
                 **learning_note,
+                "reviewed_campaign_hash": (reviewed or {}).get("hash"),
                 "intent": "partnership_outreach",
                 "accepted": True,
                 "edited_before_accept": edited_before_accept,

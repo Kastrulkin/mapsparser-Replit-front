@@ -51,6 +51,7 @@ WITH review_candidates AS (
                         source_reviews.id
            ) AS canonical_rank
     FROM externalbusinessreviews source_reviews
+    WHERE COALESCE(source_reviews.is_current, TRUE) = TRUE
 ), canonical_reviews AS (
     SELECT id, business_id, source, external_review_id, rating, author_name, text,
            COALESCE(NULLIF(BTRIM(response_text), ''), matching_response_text) AS response_text,

@@ -41,13 +41,14 @@ def get_or_create_operator_conversation(
         cursor.execute(
             """
             SELECT * FROM operatorconversations
-            WHERE id = %s AND business_id = %s AND user_id = %s
+            WHERE id = %s AND business_id = %s AND user_id = %s AND channel = %s
             """,
-            (requested_id, business_id, user_id),
+            (requested_id, business_id, user_id, channel),
         )
         existing = _row(cursor, cursor.fetchone())
         if existing:
             return existing
+        raise ValueError("Диалог недоступен в этом канале или бизнесе")
     if clean_transport_key:
         cursor.execute(
             """
@@ -97,7 +98,7 @@ def set_operator_pending_context(cursor: Any, conversation_id: str, context: dic
         SET pending_context = %s::jsonb, updated_at = NOW()
         WHERE id = %s
         """,
-        (json.dumps(context or {}, ensure_ascii=False), conversation_id),
+        (json.dumps(context or {}, ensure_ascii=False, default=str), conversation_id),
     )
 
 
@@ -118,9 +119,9 @@ def append_operator_message(
         """
         INSERT INTO operatormessages (
             id, conversation_id, business_id, user_id, role, content,
-            capability, status, result_json
+            capability, status, result_json, created_at
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, clock_timestamp())
         """,
         (
             message_id,
@@ -144,7 +145,7 @@ def list_operator_messages(cursor: Any, *, conversation_id: str, business_id: st
         SELECT id, role, content, capability, status, result_json, created_at
         FROM operatormessages
         WHERE conversation_id = %s AND business_id = %s
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, CASE WHEN role='user' THEN 1 ELSE 0 END
         LIMIT %s
         """,
         (conversation_id, business_id, max(1, min(int(limit or 100), 200))),
@@ -181,19 +182,22 @@ def create_pending_operator_action(
     user_id: str,
     capability: str,
     envelope: dict[str, Any],
+    request_key: str = "",
 ) -> dict[str, Any]:
     stable_source = json.dumps(envelope, ensure_ascii=False, sort_keys=True, default=str)
     idempotency_key = hashlib.sha256(
         f"{business_id}|{user_id}|{capability}|{stable_source}".encode("utf-8")
     ).hexdigest()[:32]
+    if request_key:
+        idempotency_key = hashlib.sha256(f"{idempotency_key}|{request_key}".encode()).hexdigest()[:32]
     action_id = str(uuid.uuid4())
     cursor.execute(
         """
         INSERT INTO operatoractions (
             id, conversation_id, business_id, user_id, capability,
-            idempotency_key, envelope_json
+            idempotency_key, envelope_json, expires_at
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
+        VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, CASE WHEN %s THEN NOW() + INTERVAL '15 minutes' ELSE NULL END)
         ON CONFLICT (business_id, idempotency_key)
         DO UPDATE SET updated_at = NOW()
         RETURNING *
@@ -206,6 +210,7 @@ def create_pending_operator_action(
             capability,
             idempotency_key,
             json.dumps(envelope, ensure_ascii=False, default=str),
+            capability == "outreach.ai_rules",
         ),
     )
     return _row(cursor, cursor.fetchone())
@@ -215,14 +220,38 @@ def get_operator_action(cursor: Any, *, action_id: str, business_id: str, user_i
     cursor.execute(
         """
         SELECT * FROM operatoractions
-        WHERE id = %s AND business_id = %s AND user_id = %s
+        WHERE id = %s AND business_id = %s AND user_id = %s FOR UPDATE
         """,
         (action_id, business_id, user_id),
     )
     return _row(cursor, cursor.fetchone())
 
 
+def list_pending_operator_actions(
+    cursor: Any,
+    *,
+    conversation_id: str,
+    business_id: str,
+    user_id: str,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    cursor.execute(
+        """
+        SELECT id, capability, status, created_at
+        FROM operatoractions
+        WHERE conversation_id = %s AND business_id = %s AND user_id = %s
+          AND status = 'pending'
+        ORDER BY created_at DESC
+        LIMIT %s
+        """,
+        (conversation_id, business_id, user_id, max(1, min(int(limit or 20), 50))),
+    )
+    return [_row(cursor, value) for value in (cursor.fetchall() or [])]
+
+
 def finish_operator_action(cursor: Any, *, action_id: str, result: dict[str, Any]) -> None:
+    from services.operator_request_history import action_finished
+    action_finished(cursor, action_id, 'completed', result)
     cursor.execute(
         """
         UPDATE operatoractions
@@ -232,4 +261,50 @@ def finish_operator_action(cursor: Any, *, action_id: str, result: dict[str, Any
         WHERE id = %s
         """,
         (json.dumps(result, ensure_ascii=False, default=str), action_id),
+    )
+    result_json = json.dumps(result, ensure_ascii=False, default=str)
+    result_text = str(result.get("chat_response") or result.get("summary") or "").strip()
+    cursor.execute(
+        """
+        UPDATE operatormessages
+        SET status = 'completed',
+            content = COALESCE(NULLIF(%s, ''), content),
+            result_json = COALESCE(result_json, '{}'::jsonb) || %s::jsonb
+        WHERE conversation_id = (
+            SELECT conversation_id FROM operatoractions WHERE id = %s
+        )
+          AND role = 'operator'
+          AND result_json #>> '{approval,action_id}' = %s
+        """,
+        (result_text, result_json, action_id, action_id),
+    )
+
+
+def reject_operator_action(cursor: Any, *, action_id: str, result: dict[str, Any]) -> None:
+    from services.operator_request_history import action_finished
+    action_finished(cursor, action_id, 'rejected', result)
+    cursor.execute(
+        """
+        UPDATE operatoractions
+        SET status = 'rejected', confirmed_at = COALESCE(confirmed_at, NOW()),
+            result_json = %s::jsonb, updated_at = NOW()
+        WHERE id = %s
+        """,
+        (json.dumps(result, ensure_ascii=False, default=str), action_id),
+    )
+    result_json = json.dumps(result, ensure_ascii=False, default=str)
+    result_text = str(result.get("chat_response") or result.get("summary") or "").strip()
+    cursor.execute(
+        """
+        UPDATE operatormessages
+        SET status = 'rejected',
+            content = COALESCE(NULLIF(%s, ''), content),
+            result_json = COALESCE(result_json, '{}'::jsonb) || %s::jsonb
+        WHERE conversation_id = (
+            SELECT conversation_id FROM operatoractions WHERE id = %s
+        )
+          AND role = 'operator'
+          AND result_json #>> '{approval,action_id}' = %s
+        """,
+        (result_text, result_json, action_id, action_id),
     )

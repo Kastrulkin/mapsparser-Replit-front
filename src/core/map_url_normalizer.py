@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+import re
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 
@@ -38,6 +39,22 @@ _DROP_TRAILING_MAP_SECTIONS = {
 }
 
 
+def _clean_pasted_url(raw_url: Any) -> str:
+    value = str(raw_url or "").strip()
+    value = value.strip('"\'`<> \t\r\n')
+    markdown = re.fullmatch(r"\[[^\]]*\]\((https?://\S+)\)", value)
+    if markdown:
+        value = markdown.group(1)
+    for opening, closing in [("(", ")"), ("[", "]")]:
+        while value.endswith(closing) and value.count(closing) > value.count(opening):
+            value = value[:-1]
+    if value.startswith("//"):
+        value = "https:" + value
+    elif re.match(r"^(?:www\.)?(?:maps\.google\.com|google\.com|maps\.app\.goo\.gl|share\.google|yandex\.(?:ru|com)|2gis\.(?:ru|com)|maps\.apple\.com)/", value, re.I):
+        value = "https://" + value
+    return value
+
+
 def _normalize_google_path(path: str) -> str:
     clean_path = str(path or "")
     place_marker = "/maps/place/"
@@ -54,7 +71,7 @@ def _normalize_google_path(path: str) -> str:
 
 
 def is_google_map_url(raw_url: Any) -> bool:
-    value = str(raw_url or "").strip().lower()
+    value = _clean_pasted_url(raw_url).lower()
     if not value:
         return False
     if "maps.app.goo.gl" in value or "share.google" in value:
@@ -84,7 +101,7 @@ def _drop_trailing_map_section(path: str) -> str:
 
 
 def normalize_map_url(raw_url: Any) -> str:
-    value = str(raw_url or "").strip()
+    value = _clean_pasted_url(raw_url)
     if not value:
         return ""
     parsed = urlparse(value)
@@ -104,6 +121,9 @@ def normalize_map_url(raw_url: Any) -> str:
         for key, val in query_pairs:
             lowered_key = str(key or "").lower()
             if lowered_key in _KEEP_GOOGLE_KEYS:
+                # parse_qsl decodes pasted %29; only numeric IDs have this repair.
+                if lowered_key in {"cid", "ludocid"} and re.fullmatch(r"[0-9]+[)\]}>.,;]+", val):
+                    val = re.match(r"[0-9]+", val).group(0)
                 filtered_pairs.append((key, val))
         query_pairs = filtered_pairs
     else:

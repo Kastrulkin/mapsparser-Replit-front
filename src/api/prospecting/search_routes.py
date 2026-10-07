@@ -28,6 +28,7 @@ from core.card_audit import build_lead_card_preview_snapshot
 from core.audit_quality import evaluate_audit_quality
 from core.telegram_userbot import load_userbot_account, send_message as userbot_send_message
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
+from core.api_errors import internal_error_response
 from core.audit_editorial import (
     apply_audit_editorial_pass,
     build_editorial_summary,
@@ -151,7 +152,7 @@ TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS = max(1, int(os.environ.get("TELEGRAM_REPLY_SY
 TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT = max(1, min(int(os.environ.get("TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT", "12")), 50))
 TELEGRAM_REPLY_SYNC_TIMEOUT_SEC = max(5, int(os.environ.get("TELEGRAM_REPLY_SYNC_TIMEOUT_SEC", "12")))
 LEAD_OUTREACH_MODERATION_STATUS = "lead_outreach"
-PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr")
+PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr", "hy", "kk")
 PIPELINE_UNPROCESSED = "unprocessed"
 PIPELINE_IN_PROGRESS = "in_progress"
 PIPELINE_POSTPONED = "postponed"
@@ -1511,7 +1512,7 @@ def partnership_blockers_summary():
         )
     except Exception as e:
         print(f"Error partnership blockers summary: {e}")
-        return jsonify({"error": str(e)}), 500
+        return internal_error_response("Не удалось получить препятствия по партнёрствам")
 
 @admin_prospecting_bp.route("/api/partnership/outcomes-summary", methods=["GET"])
 def partnership_outcomes_summary():

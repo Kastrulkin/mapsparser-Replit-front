@@ -706,9 +706,13 @@ def _insert_version(cursor, blueprint_id: str, payload: dict, user_data: dict):
         INSERT INTO agent_blueprint_versions (
             id, blueprint_id, version_number, goal, inputs_schema_json, steps_json,
             persona_agent_id, capability_allowlist_json, approval_policy_json,
-            output_schema_json, created_by_user_id
+            output_schema_json, execution_mode, trigger, schedule_json, runtime_config_json, limits_json,
+            required_integration_bindings_json, created_by_user_id
         )
-        VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s)
+        VALUES (
+            %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb, %s::jsonb,
+            %s::jsonb, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s
+        )
         """,
         (
             version_id,
@@ -721,6 +725,17 @@ def _insert_version(cursor, blueprint_id: str, payload: dict, user_data: dict):
             json.dumps(payload.get("capability_allowlist") if isinstance(payload.get("capability_allowlist"), list) else [], ensure_ascii=False),
             json.dumps(payload.get("approval_policy") if isinstance(payload.get("approval_policy"), dict) else {}, ensure_ascii=False),
             json.dumps(payload.get("output_schema") if isinstance(payload.get("output_schema"), dict) else {}, ensure_ascii=False),
+            str(payload.get("execution_mode") or ("scheduled" if payload.get("trigger") == "schedule.daily" else "manual")).strip(),
+            str(payload.get("trigger") or "manual.run").strip(),
+            json.dumps(payload.get("schedule") if isinstance(payload.get("schedule"), dict) else {}, ensure_ascii=False),
+            json.dumps(payload.get("runtime_config") if isinstance(payload.get("runtime_config"), dict) else {}, ensure_ascii=False),
+            json.dumps(payload.get("limits") if isinstance(payload.get("limits"), dict) else {}, ensure_ascii=False),
+            json.dumps(
+                payload.get("required_integration_bindings")
+                if isinstance(payload.get("required_integration_bindings"), list)
+                else [],
+                ensure_ascii=False,
+            ),
             _user_id(user_data),
         ),
     )
@@ -1055,6 +1070,20 @@ def create_blueprint_from_agent_builder_session(session_id: str):
         )
         version_payload = draft.get("version_payload") if isinstance(draft.get("version_payload"), dict) else {}
         version_payload = _apply_answer_bindings_to_version_payload(version_payload, answer_bindings)
+        version_payload["execution_mode"] = str(metadata.get("execution_mode") or "manual")
+        version_payload["runtime_config"] = (
+            dict(metadata.get("custom_process")) if isinstance(metadata.get("custom_process"), dict) else {}
+        )
+        version_payload["schedule"] = (
+            version_payload["runtime_config"].get("schedule")
+            if isinstance(version_payload["runtime_config"].get("schedule"), dict)
+            else {}
+        )
+        version_payload["required_integration_bindings"] = (
+            metadata.get("required_integration_bindings")
+            if isinstance(metadata.get("required_integration_bindings"), list)
+            else version_payload.get("required_integration_bindings") or []
+        )
         version = _insert_version(cursor, blueprint_id, version_payload, user_data)
         _save_session_state(
             cursor,

@@ -4,10 +4,13 @@ import hashlib
 import json
 import re
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Dict
+from zoneinfo import ZoneInfo
 
 from database_manager import DatabaseManager
+from core.db_helpers import assert_schema_columns
 from core.finance_imports import normalize_finance_import_rows
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.outreach_send_capability import (
@@ -23,6 +26,8 @@ CapabilityHandler = Callable[[Dict[str, Any], Dict[str, Any]], Dict[str, Any]]
 
 
 CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
+    "outreach.continue": {"risk":"internal_request", "side_effects":"binds an approved workflow to its existing outreach job", "approval_required":False},
+    'work.colleague.send': {'risk':'external_send','side_effects':'queues one reviewed colleague message','approval_required':True},
     "outreach.send_batch": {
         "risk": "external_send",
         "side_effects": "queues approved outreach records inside LocalOS",
@@ -103,6 +108,18 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "side_effects": "normalizes finance transaction proposals; LocalOS write requires a separate approval/apply flow",
         "approval_required": True,
     },
+    "work.policy.apply": {"risk":"owner_policy_write","approval_required":True,"side_effects":"versioned owner rules after approval"},
+    "finance.daily.apply_operator": {"risk": "localos_finance_write", "side_effects": "applies one versioned finance fact after explicit approval", "approval_required": True},
+    "finance.transaction.apply_operator": {
+        "risk": "localos_finance_write",
+        "side_effects": "creates exactly one approved LocalOS finance transaction for the selected tenant",
+        "approval_required": True,
+    },
+    "finance.sales_import.apply_operator": {
+        "risk": "localos_finance_bulk_write",
+        "side_effects": "creates up to 100 approved LocalOS sales for the selected tenant and skips duplicate keys",
+        "approval_required": True,
+    },
     "partnership.audit_card": {
         "risk": "localos_partnership_read",
         "side_effects": "none; returns a structured partner-card audit snapshot",
@@ -132,6 +149,7 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
 
 
 CAPABILITY_RUNTIME_STATUS = {
+    'work.colleague.send': ('production_external_write',True),
     "reviews.reply.draft": ("production_draft", True),
     "services.optimize": ("production_draft", True),
     "news.generate": ("production_draft", True),
@@ -144,6 +162,7 @@ CAPABILITY_RUNTIME_STATUS = {
     "partnership.match_services": ("production_read", True),
     "partnership.draft_offer": ("production_draft", True),
     "outreach.send_batch": ("request_only", False),
+    "outreach.continue": ("production_internal_write", True),
     "reviews.reply.publish_request": ("request_only", False),
     "appointments.create_request": ("request_only", False),
     "communications.send_reminder": ("request_only", False),
@@ -151,6 +170,10 @@ CAPABILITY_RUNTIME_STATUS = {
     "sheets.append_row_request": ("production_external_write", True),
     "google_sheets.update_cells": ("production_external_write", True),
     "finance.transaction.create": ("request_only", False),
+    "work.policy.apply": ("production_internal_write",True),
+    "finance.daily.apply_operator": ("production_internal_write", True),
+    "finance.transaction.apply_operator": ("production_internal_write", True),
+    "finance.sales_import.apply_operator": ("production_internal_write", True),
     "billing.reserve": ("manual_only", False),
     "billing.settle": ("manual_only", False),
 }
@@ -213,7 +236,11 @@ def capability_runtime_contract(name: str) -> Dict[str, Any]:
 
 
 def build_capability_handlers() -> Dict[str, CapabilityHandler]:
+    from services.operator_colleagues import handle
+    from services.agent_outreach_continuation import request as outreach_continue_request
     handlers: Dict[str, CapabilityHandler] = {
+        'work.colleague.send': handle,
+        'outreach.continue': outreach_continue_request,
         OUTREACH_SEND_BATCH_CAPABILITY: handle_outreach_send_batch,
         "reviews.reply.draft": _handle_reviews_reply_draft,
         "reviews.reply.publish_request": _handle_reviews_reply_publish_request,
@@ -230,6 +257,10 @@ def build_capability_handlers() -> Dict[str, CapabilityHandler]:
         "google_sheets.update_cells": _handle_sheets_append_row_request,
         "google_sheets.read_rows": _handle_google_sheets_read_rows,
         "finance.transaction.create": _handle_finance_transaction_create,
+        "work.policy.apply": _handle_work_policy,
+        "finance.daily.apply_operator": _handle_finance_daily_apply_operator,
+        "finance.transaction.apply_operator": _handle_finance_transaction_apply_operator,
+        "finance.sales_import.apply_operator": _handle_finance_sales_import_apply_operator,
         "partnership.audit_card": _handle_partnership_audit_card,
         "partnership.match_services": _handle_partnership_match_services,
         "partnership.draft_offer": _handle_partnership_draft_offer,
@@ -350,120 +381,19 @@ def _table_columns(cursor: Any, table_name: str) -> set[str]:
 
 
 def _ensure_communication_request_table(cursor: Any) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS agent_communication_requests (
-            id TEXT PRIMARY KEY,
-            action_id TEXT NOT NULL UNIQUE,
-            business_id TEXT NOT NULL,
-            user_id TEXT,
-            capability TEXT NOT NULL,
-            message_type TEXT NOT NULL,
-            status TEXT NOT NULL,
-            channel TEXT,
-            recipient_count INTEGER NOT NULL DEFAULT 0,
-            recipients_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-            message_template TEXT,
-            limits_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            consent_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            delivery_state TEXT NOT NULL DEFAULT 'not_dispatched',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_agent_communication_requests_business_status ON agent_communication_requests(business_id, status, created_at DESC)"
-    )
+    assert_schema_columns(cursor, "agent_communication_requests", ("id", "action_id", "business_id", "capability", "message_type", "status", "recipients_json", "limits_json", "consent_json", "delivery_state", "created_at", "updated_at"))
 
 
 def _ensure_service_optimization_request_table(cursor: Any) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS agent_service_optimization_requests (
-            id TEXT PRIMARY KEY,
-            action_id TEXT NOT NULL UNIQUE,
-            business_id TEXT NOT NULL,
-            user_id TEXT,
-            status TEXT NOT NULL,
-            service_count INTEGER NOT NULL DEFAULT 0,
-            suggestions_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-            diff_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-            apply_state TEXT NOT NULL DEFAULT 'not_applied',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_agent_service_optimization_requests_business_status ON agent_service_optimization_requests(business_id, status, created_at DESC)"
-    )
-    cursor.execute(
-        """
-        ALTER TABLE agent_service_optimization_requests
-        ADD COLUMN IF NOT EXISTS diff_json JSONB NOT NULL DEFAULT '[]'::jsonb
-        """
-    )
+    assert_schema_columns(cursor, "agent_service_optimization_requests", ("id", "action_id", "business_id", "status", "service_count", "suggestions_json", "diff_json", "apply_state", "created_at", "updated_at"))
 
 
 def _ensure_review_reply_draft_table(cursor: Any) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS reviewreplydrafts (
-            id TEXT PRIMARY KEY,
-            business_id TEXT NOT NULL,
-            review_id TEXT NOT NULL,
-            user_id TEXT,
-            source TEXT,
-            rating INTEGER,
-            author_name TEXT,
-            review_text TEXT,
-            generated_text TEXT NOT NULL,
-            edited_text TEXT,
-            status TEXT NOT NULL DEFAULT 'draft',
-            tone TEXT,
-            prompt_key TEXT,
-            prompt_version TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_reviewreplydrafts_review_unique ON reviewreplydrafts(review_id)")
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_reviewreplydrafts_business_status ON reviewreplydrafts(business_id, status, created_at DESC)"
-    )
+    assert_schema_columns(cursor, "reviewreplydrafts", ("id", "business_id", "review_id", "generated_text", "status", "tone", "prompt_key", "prompt_version", "created_at", "updated_at"))
 
 
 def _ensure_sheet_operation_request_table(cursor: Any) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS agent_sheet_operation_requests (
-            id TEXT PRIMARY KEY,
-            action_id TEXT NOT NULL UNIQUE,
-            business_id TEXT NOT NULL,
-            user_id TEXT,
-            integration_id TEXT,
-            spreadsheet_id TEXT,
-            sheet_name TEXT,
-            operation TEXT NOT NULL,
-            status TEXT NOT NULL,
-            approval_state TEXT NOT NULL DEFAULT 'pending_human',
-            apply_state TEXT NOT NULL DEFAULT 'not_applied',
-            row_values_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-            mapping_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            source_event_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            limits_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            provider_write_performed BOOLEAN NOT NULL DEFAULT FALSE,
-            error_text TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_agent_sheet_operation_requests_business_status ON agent_sheet_operation_requests(business_id, status, created_at DESC)"
-    )
+    assert_schema_columns(cursor, "agent_sheet_operation_requests", ("id", "action_id", "business_id", "operation", "status", "approval_state", "apply_state", "row_values_json", "mapping_json", "source_event_json", "limits_json", "provider_write_performed", "created_at", "updated_at"))
 
 
 def _template_value(value: Any, context: Dict[str, Any]) -> Any:
@@ -524,20 +454,20 @@ def _load_appointments(cursor: Any, tenant_id: str, payload: Dict[str, Any]) -> 
         filters.append("status = %s")
         params.append(status)
     if date_from:
-        filters.append("booking_date >= %s")
+        filters.append("booking_time::date >= %s::date")
         params.append(date_from)
     if date_to:
-        filters.append("booking_date <= %s")
+        filters.append("booking_time::date <= %s::date")
         params.append(date_to)
     limit = max(1, min(int(payload.get("limit") or 50), 200))
     params.append(limit)
     cursor.execute(
         f"""
         SELECT id, business_id, client_phone, client_name, service_id, service_name,
-               booking_date, booking_time, status, notes, created_at, updated_at
+               booking_time::date AS booking_date, booking_time, status, notes, created_at, updated_at
         FROM Bookings
         WHERE {' AND '.join(filters)}
-        ORDER BY booking_date ASC NULLS LAST, booking_time ASC NULLS LAST, created_at DESC
+        ORDER BY booking_time ASC NULLS LAST, created_at DESC
         LIMIT %s
         """,
         tuple(params),
@@ -1477,6 +1407,303 @@ def _handle_finance_transaction_create(envelope: Dict[str, Any], user_data: Dict
     )
 
 
+def _handle_finance_transaction_apply_operator(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
+    payload = _payload(envelope)
+    tenant_id = str(envelope.get("tenant_id") or "").strip()
+    action_id = str(envelope.get("action_id") or "").strip()
+    rows = payload.get("rows") if isinstance(payload.get("rows"), list) else []
+    if not tenant_id or not action_id or len(rows) != 1 or not isinstance(rows[0], dict):
+        return _result(
+            "validation_error",
+            error_code="ONE_SCOPED_FINANCE_ROW_REQUIRED",
+            localos_write_performed=False,
+            provider_write_performed=False,
+        )
+
+    row = rows[0]
+    try:
+        amount = Decimal(str(row.get("amount") or "0"))
+    except (InvalidOperation, ValueError):
+        amount = Decimal("0")
+    transaction_type = str(row.get("transaction_type") or "").strip().lower()
+    transaction_date = str(row.get("transaction_date") or date.today().isoformat()).strip()
+    try:
+        date.fromisoformat(transaction_date)
+    except Exception:
+        return _result(
+            "validation_error",
+            error_code="FINANCE_DATE_INVALID",
+            localos_write_performed=False,
+            provider_write_performed=False,
+        )
+    if not amount.is_finite() or amount <= 0 or transaction_type not in {"income", "expense"}:
+        return _result(
+            "validation_error",
+            error_code="FINANCE_AMOUNT_OR_TYPE_INVALID",
+            localos_write_performed=False,
+            provider_write_performed=False,
+        )
+
+    transaction_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"localos:operator-finance:{action_id}"))
+    category = str(row.get("category") or "").strip()
+    description = str(row.get("description") or "").strip()
+    user_id = _actor_user_id(envelope, user_data)
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        columns = _table_columns(cursor, "financialtransactions")
+        required_columns = {"id", "business_id", "amount"}
+        if not required_columns.issubset(columns):
+            raise RuntimeError("financialtransactions schema is unavailable")
+
+        fields = ["id", "business_id", "amount"]
+        values = [transaction_id, tenant_id, amount]
+        optional_values = [
+            ("user_id", user_id),
+            ("transaction_date", transaction_date),
+            ("transaction_type", transaction_type),
+            ("category", category),
+            ("description", description),
+            ("notes", description),
+        ]
+        for field, value in optional_values:
+            if field in columns:
+                fields.append(field)
+                values.append(value)
+        placeholders = ", ".join(["%s"] * len(fields))
+        cursor.execute(
+            f"INSERT INTO financialtransactions ({', '.join(fields)}) VALUES ({placeholders}) ON CONFLICT (id) DO NOTHING RETURNING id",
+            tuple(values),
+        )
+        inserted = cursor.fetchone()
+        cursor.execute(
+            "SELECT id, business_id, amount, transaction_type FROM financialtransactions WHERE id = %s AND business_id = %s LIMIT 1",
+            (transaction_id, tenant_id),
+        )
+        stored = _row_to_dict(cursor, cursor.fetchone())
+        if not stored:
+            raise RuntimeError("approved finance transaction was not persisted in tenant scope")
+        db.conn.commit()
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+    return _result(
+        "finance_transaction_created",
+        transaction={
+            "id": str(stored.get("id") or transaction_id),
+            "business_id": str(stored.get("business_id") or tenant_id),
+            "amount": stored.get("amount", amount),
+            "transaction_type": str(stored.get("transaction_type") or transaction_type),
+            "transaction_date": transaction_date,
+            "category": category,
+            "description": description,
+        },
+        created=bool(inserted),
+        localos_write_performed=True,
+        provider_write_performed=False,
+    )
+
+
+def _handle_finance_sales_import_apply_operator(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
+    payload = _payload(envelope)
+    tenant_id = str(envelope.get("tenant_id") or "").strip()
+    action_id = str(envelope.get("action_id") or "").strip()
+    rows = payload.get("rows") if isinstance(payload.get("rows"), list) else []
+    if not tenant_id or not action_id or not rows or len(rows) > 100:
+        return _result(
+            "validation_error",
+            error_code="SCOPED_FINANCE_SALES_ROWS_REQUIRED",
+            localos_write_performed=False,
+            provider_write_performed=False,
+        )
+
+    normalized = []
+    for index, row in enumerate(rows, start=1):
+        if not isinstance(row, dict):
+            return _result(
+                "validation_error",
+                error_code=f"FINANCE_SALE_ROW_INVALID:{index}",
+                localos_write_performed=False,
+                provider_write_performed=False,
+            )
+        try:
+            amount = Decimal(str(row.get("amount") or "0"))
+        except (InvalidOperation, ValueError):
+            amount = Decimal("0")
+        transaction_date = str(row.get("transaction_date") or "").strip()
+        try:
+            date.fromisoformat(transaction_date)
+        except ValueError:
+            transaction_date = ""
+        duplicate_key = str(row.get("duplicate_key") or "").strip()
+        title = str(row.get("title") or "").strip()[:300]
+        sale_type = str(row.get("sale_type") or "service").strip().lower()
+        if (
+            not amount.is_finite()
+            or amount <= 0
+            or amount > Decimal("99999999.99")
+            or not transaction_date
+            or not duplicate_key
+            or not title
+            or sale_type not in {"service", "upsell", "cross_sell"}
+        ):
+            return _result(
+                "validation_error",
+                error_code=f"FINANCE_SALE_ROW_INVALID:{index}",
+                localos_write_performed=False,
+                provider_write_performed=False,
+            )
+        normalized.append(
+            {
+                **row,
+                "amount": amount,
+                "transaction_date": transaction_date,
+                "duplicate_key": duplicate_key,
+                "title": title,
+                "sale_type": sale_type,
+            }
+        )
+
+    user_id = _actor_user_id(envelope, user_data)
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    created = []
+    duplicate_count = 0
+    try:
+        columns = _table_columns(cursor, "financialtransactions")
+        required_columns = {
+            "id",
+            "business_id",
+            "amount",
+            "transaction_type",
+            "transaction_date",
+            "duplicate_key",
+            "source_hash",
+            "import_batch_id",
+        }
+        if not required_columns.issubset(columns):
+            raise RuntimeError("financialtransactions sales import schema is unavailable")
+        for row in normalized:
+            transaction_id = str(
+                uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"localos:operator-finance-sale:{tenant_id}:{row['duplicate_key']}",
+                )
+            )
+            notes = str(row.get("notes") or "").strip()[:1000]
+            description = f"{row['title']} · {row['sale_type']}" + (f" · {notes}" if notes else "")
+            fields = [
+                "id",
+                "business_id",
+                "amount",
+                "transaction_type",
+                "transaction_date",
+                "duplicate_key",
+                "source_hash",
+                "import_batch_id",
+            ]
+            values = [
+                transaction_id,
+                tenant_id,
+                row["amount"],
+                "income",
+                row["transaction_date"],
+                row["duplicate_key"],
+                str(row.get("source_hash") or payload.get("source_hash") or "") or None,
+                str(row.get("import_batch_id") or payload.get("import_batch_id") or "") or None,
+            ]
+            optional_values = [
+                ("user_id", user_id),
+                ("description", description),
+                ("notes", description),
+                ("source", "operator_chat"),
+                ("currency", row.get("currency")),
+                ("receipt_id", row.get("receipt_id")),
+                ("sale_type", row.get("sale_type")),
+                ("services", json.dumps([{"name": row["title"], "sale_type": row["sale_type"]}], ensure_ascii=False)),
+            ]
+            for field, value in optional_values:
+                if field in columns:
+                    fields.append(field)
+                    values.append(value)
+            placeholders = ", ".join(["%s"] * len(fields))
+            cursor.execute(
+                f"INSERT INTO financialtransactions ({', '.join(fields)}) VALUES ({placeholders}) ON CONFLICT DO NOTHING RETURNING id",
+                tuple(values),
+            )
+            inserted = cursor.fetchone()
+            if inserted:
+                created.append(
+                    {
+                        "id": transaction_id,
+                        "transaction_date": row["transaction_date"],
+                        "amount": row["amount"],
+                        "title": row["title"],
+                        "sale_type": row["sale_type"],
+                    }
+                )
+            else:
+                duplicate_count += 1
+
+        today = datetime.now(ZoneInfo("Europe/Moscow")).date()
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS transactions_count,
+                   COALESCE(SUM(amount), 0) AS income,
+                   COALESCE(AVG(amount), 0) AS average_ticket
+            FROM financialtransactions
+            WHERE business_id = %s
+              AND transaction_type = 'income'
+              AND transaction_date = %s
+            """,
+            (tenant_id, today),
+        )
+        summary = _row_to_dict(cursor, cursor.fetchone())
+        db.conn.commit()
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+    created_count = len(created)
+    income = Decimal(str(summary.get("income") or 0))
+    average_ticket = Decimal(str(summary.get("average_ticket") or 0))
+    chat_response = (
+        f"Записано продаж: {created_count}. "
+        f"Выручка за {today.isoformat()}: {income:.2f}. "
+        f"Средний чек: {average_ticket:.2f}."
+    )
+    if duplicate_count:
+        chat_response += f" Дублей пропущено: {duplicate_count}."
+    return _result(
+        "finance_sales_import_completed",
+        capability="finance.sales_import",
+        chat_response=chat_response,
+        transactions=created,
+        created_count=created_count,
+        duplicate_count=duplicate_count,
+        summary={
+            "date": today.isoformat(),
+            "transactions_count": int(summary.get("transactions_count") or 0),
+            "income": income,
+            "average_ticket": average_ticket,
+        },
+        result_ref={
+            "entity_type": "finance.sales_import",
+            "entity_id": str(payload.get("import_batch_id") or "") or None,
+            "label": "Открыть Финансы",
+            "href": "/dashboard/finance",
+        },
+        localos_write_performed=created_count > 0,
+        provider_write_performed=False,
+        external_writes_performed=False,
+    )
+
+
 def _normalize_partnership_intent(payload: Dict[str, Any]) -> str:
     intent = str(payload.get("intent") or "partnership_outreach").strip().lower()
     return intent if intent in {"partnership_outreach", "client_outreach"} else "partnership_outreach"
@@ -1741,6 +1968,8 @@ def _handle_sheets_append_row_request(envelope: Dict[str, Any], user_data: Dict[
                 source_event_json = EXCLUDED.source_event_json,
                 limits_json = EXCLUDED.limits_json,
                 updated_at = CURRENT_TIMESTAMP
+            WHERE agent_sheet_operation_requests.approval_state = 'pending_human'
+              AND agent_sheet_operation_requests.apply_state = 'not_applied'
             RETURNING id
             """,
             (
@@ -1768,6 +1997,14 @@ def _handle_sheets_append_row_request(envelope: Dict[str, Any], user_data: Dict[
             ),
         )
         row = cursor.fetchone()
+        if row is None:
+            db.conn.rollback()
+            return _result(
+                "blocked",
+                reason_code="SHEET_REQUEST_ALREADY_BOUND",
+                request_id=request_id,
+                error="The existing sheet request is already approved or has an external outcome; its content is preserved.",
+            )
         request_id = str((row.get("id") if isinstance(row, dict) else row[0]) or request_id)
         db.conn.commit()
     except Exception:
@@ -1885,3 +2122,13 @@ def _count_recipients(payload: Dict[str, Any]) -> int:
     if isinstance(audience, list):
         return len(audience)
     return 0
+
+
+def _handle_finance_daily_apply_operator(envelope, user_data):
+    from services.finance_daily import handle_apply
+    return handle_apply(envelope, user_data)
+
+
+def _handle_work_policy(envelope,user_data):
+    from services.work_recommendations import handle_policy
+    return handle_policy(envelope,user_data)

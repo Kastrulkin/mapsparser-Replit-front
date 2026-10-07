@@ -12,8 +12,11 @@ import {
 } from 'lucide-react';
 import { GrowthLoopPanel, type AnalyticsLevel, type AnalyticsModule, type DataHealth, type GrowthLoop, type GrowthRhythm, type LocationBreakdown, type NetworkSummary, type ProblemLocation } from '@/components/telegram/GrowthLoopPanel';
 import { ruCountLabel } from '@/lib/ruPlural';
+import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
+import type { JourneyAction } from '@/lib/leadJourney';
 
 export type TodayFocusAction = {
+  priority?: number;
   id?: string;
   title?: string;
   reason?: string;
@@ -25,6 +28,9 @@ export type TodayFocusAction = {
 };
 
 export type TodayActivityItem = {
+  flow?: string;
+  urgency?: string;
+  preview?: string | null;
   id?: string;
   title?: string;
   description?: string;
@@ -47,12 +53,24 @@ export type CommunityPulseItem = TodayActivityItem & {
 };
 
 export type TodayPayload = {
+  preference?: { primary_flow: string; available_flows?: string[] };
+  work_sections?: { needs_decision?: TodayActivityItem[]; continue_work?: TodayActivityItem[]; results?: TodayActivityItem[] };
   scope?: { kind?: 'platform' | 'network' | 'business'; id?: string | null; name?: string; business_ids?: string[] };
   focus_action?: TodayFocusAction | null;
   active_work?: TodayActivityItem[];
   changes_24h?: TodayActivityItem[];
   community_pulse?: CommunityPulseItem[];
   completed_results?: TodayActivityItem[];
+  profile_reminders?: Array<{
+    id: string;
+    title: string;
+    description?: string;
+    cta_label?: string;
+    screen?: string;
+    business_id?: string;
+    business_name?: string;
+    target_scope?: { kind: 'business' | 'network' | 'platform'; id?: string | null };
+  }>;
   progress_summary?: {
     completed_milestones?: number;
     total_milestones?: number;
@@ -68,6 +86,7 @@ export type TodayPayload = {
   network_summary?: NetworkSummary | null;
   problem_locations?: ProblemLocation[];
   location_breakdown?: LocationBreakdown[];
+  journey_actions?: JourneyAction[];
 };
 
 type TodayMobileV2Props = {
@@ -83,6 +102,7 @@ type TodayMobileV2Props = {
   track: (eventName: string, target?: string) => void;
   trackProduct?: (eventName: 'mission_open' | 'statistics_flow_opened', objectId?: string) => void;
   openFinanceImport?: () => void;
+  refresh?: () => void;
 };
 
 const spring = { type: 'spring', duration: 0.3, bounce: 0 };
@@ -163,21 +183,45 @@ export const TodayMobileV2 = ({
   track,
   trackProduct,
   openFinanceImport,
+  refresh,
 }: TodayMobileV2Props) => {
   if (loading && !data) return <TodaySkeleton slow={slowLoading} />;
 
-  const focus = data?.focus_action;
-  const activeWork = data?.active_work || [];
+  const preferredFlow = data?.preference?.primary_flow;
+  const preferredScreens: Record<string, string> = { content: 'content', maps: 'cards', influencers: 'influencers', partnerships: 'partnerships', upsells: 'finance', automation: 'agents' };
+  const preferredLabels: Record<string, string> = { content: 'Контент-план', maps: 'Карты и отзывы', influencers: 'Работа с авторами', partnerships: 'Партнёрства', upsells: 'Продажи и средний чек', automation: 'ИИ-сотрудники' };
+  const decisions = data?.work_sections?.needs_decision || [];
+  const urgent = decisions.find((item) => item.urgency === 'urgent');
+  const preferredItem = [...decisions, ...(data?.work_sections?.continue_work || [])].find((item) => item.flow === preferredFlow);
+  const preferenceAllowed = preferredFlow && preferredScreens[preferredFlow] && (data?.preference?.available_flows || []).includes(preferredFlow);
+  const personalizedFocus: TodayFocusAction | null = preferenceAllowed ? {
+    id: preferredItem?.id || `priority:${preferredFlow}`,
+    title: preferredLabels[preferredFlow],
+    reason: preferredItem?.title || 'Откройте выбранное направление и продолжите работу.',
+    cta_label: preferredFlow === 'content' ? 'Открыть контент-план' : 'Продолжить работу',
+    screen: preferredScreens[preferredFlow],
+    target_scope: preferredItem?.business_id ? { kind: 'business', id: preferredItem.business_id } : undefined,
+  } : null;
+  const urgentFocus: TodayFocusAction | null = urgent ? {
+    id: urgent.id, title: urgent.title, reason: urgent.description,
+    screen: urgent.screen || preferredScreens[urgent.flow || ''] || 'tasks',
+    cta_label: 'Разобрать задачу',
+    target_scope: urgent.business_id ? { kind: 'business', id: urgent.business_id } : undefined,
+  } : null;
+  const focus = urgentFocus || ((data?.focus_action?.priority || 0) >= 100 ? data?.focus_action : personalizedFocus || data?.focus_action);
+  const activeWork = data?.work_sections?.continue_work || data?.active_work || [];
   const changes = data?.changes_24h || [];
   const pulse = data?.community_pulse || [];
-  const results = data?.completed_results || [];
+  const results = data?.work_sections?.results || data?.completed_results || [];
+  const profileReminders = data?.profile_reminders || [];
   const progress = data?.progress_summary;
   const isPlatform = data?.scope?.kind === 'platform';
   const isNetwork = data?.scope?.kind === 'network';
+  const journeyActions = data?.journey_actions || [];
 
   return (
     <div className="px-4">
-      <motion.section
+      {journeyActions.length && !personalizedFocus ? <section className="space-y-3">{journeyActions.slice(0, 3).map((action) => action.business_id ? <JourneyActionCard key={action.id} action={action} businessId={action.business_id} surface="telegram_mini_app" dark onUpdated={() => refresh?.()} /> : null)}</section> : <motion.section
         initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
         animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
         transition={spring}
@@ -185,7 +229,7 @@ export const TodayMobileV2 = ({
       >
         <div className="flex items-center gap-2 text-xs font-medium text-primary">
           <Sparkles className="h-4 w-4" />
-          {focus ? (isNetwork ? 'Главное по сети' : 'Сейчас важнее всего') : 'Новых задач нет'}
+          {focus ? 'Что сделать сейчас' : 'Новых задач нет'}
         </div>
         <div className="mt-4 flex items-start gap-4">
           <div className="min-w-0 flex-1">
@@ -200,7 +244,7 @@ export const TodayMobileV2 = ({
         </div>
         {focus?.expected_outcome ? (
           <div className="mt-4 rounded-[16px] bg-black/20 px-3 py-2.5 text-pretty text-xs leading-5 text-zinc-400">
-            <b className="text-zinc-200">Результат:</b> {focus.expected_outcome}
+            <b className="text-zinc-200">После этого:</b> {focus.expected_outcome}
           </div>
         ) : null}
         <button
@@ -216,7 +260,19 @@ export const TodayMobileV2 = ({
           {focus?.cta_label || (isPlatform ? 'Открыть очередь платформы' : 'Открыть план роста')}
           <ChevronRight className="h-4 w-4" />
         </button>
-      </motion.section>
+      </motion.section>}
+
+      {personalizedFocus && focus !== personalizedFocus ? <section className="mt-3 rounded-2xl bg-white/[0.04] p-4">
+        <h2 className="text-balance text-lg font-semibold">{personalizedFocus.title}</h2>
+        <p className="mt-1 text-sm text-zinc-400">Ваше выбранное направление работы.</p>
+        <button type="button" onClick={() => openTarget(personalizedFocus.screen, personalizedFocus.target_scope)} className="mt-3 min-h-11 rounded-xl bg-white/[0.08] px-4 text-sm font-semibold active:scale-[0.96]">{personalizedFocus.cta_label}</button>
+      </section> : null}
+
+      <div className="mt-3 grid grid-cols-3 gap-1.5 rounded-[18px] bg-white/[0.025] p-2 text-center text-[10px] leading-4 text-zinc-600 shadow-[0_0_0_1px_rgba(255,255,255,0.055)]" aria-label="Рабочий цикл LocalOS">
+        <span className="rounded-[12px] bg-white/[0.035] px-2 py-2"><b className="block text-zinc-300">Действие</b>готовый шаг</span>
+        <span className="rounded-[12px] bg-white/[0.035] px-2 py-2"><b className="block text-zinc-300">Статус</b>что произошло</span>
+        <span className="rounded-[12px] bg-white/[0.035] px-2 py-2"><b className="block text-zinc-300">Дальше</b>новый шаг</span>
+      </div>
 
       <section className="mt-3 overflow-hidden rounded-[22px] bg-white/[0.035] shadow-[0_0_0_1px_rgba(255,255,255,0.07)]">
         <div className="flex min-h-14 items-center gap-3 px-4">
@@ -228,7 +284,7 @@ export const TodayMobileV2 = ({
             <input onFocus={() => track('today_delegate_focus')} value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Например: подготовь ответы" className="min-h-12 min-w-0 flex-1 rounded-2xl bg-black/20 px-4 text-sm outline-none ring-1 ring-inset ring-white/[0.07] placeholder:text-zinc-700 focus:ring-primary/50" />
             <button aria-label="Отправить поручение" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary text-white transition-transform active:scale-[0.96]"><Send className="h-4 w-4" /></button>
           </div>
-          <p className="px-1 pt-2 text-pretty text-[11px] leading-4 text-zinc-600">Опишите результат обычными словами. Внешние действия всегда попросят подтверждение.</p>
+          <p className="px-1 pt-2 text-pretty text-[11px] leading-4 text-zinc-600">Опишите результат обычными словами. Перед публикацией, отправкой или оплатой ЛокалОС попросит подтверждение.</p>
         </form>
       </section>
 
@@ -236,7 +292,7 @@ export const TodayMobileV2 = ({
         <motion.section layout className="mt-4 rounded-[22px] bg-sky-400/[0.055] p-4 shadow-[0_0_0_1px_rgba(56,189,248,0.12)]">
           <div className="flex items-center gap-2">
             <Activity className="h-4 w-4 text-sky-300" />
-            <h2 className="text-sm font-semibold">Сейчас выполняется</h2>
+            <h2 className="text-sm font-semibold">ЛокалОС сейчас</h2>
             <span className="ml-auto h-2 w-2 rounded-full bg-sky-300 motion-safe:animate-pulse" />
           </div>
           <div className="mt-3 space-y-3">
@@ -258,9 +314,30 @@ export const TodayMobileV2 = ({
 
       <GrowthLoopPanel growthLoop={data?.growth_loop} dataHealth={data?.data_health} analyticsLevel={data?.analytics_level} rhythm={data?.rhythm} scopeKind={data?.scope?.kind} analyticsModules={data?.analytics_modules} networkSummary={data?.network_summary} problemLocations={data?.problem_locations} locationBreakdown={data?.location_breakdown} showImportAction={!['finance', 'finance_import'].includes(focus?.screen || '')} onOpenImport={() => { trackProduct?.('statistics_flow_opened', 'finance_import'); openFinanceImport?.(); }} onOpenLocation={(businessId, screen) => { trackProduct?.('statistics_flow_opened', businessId); openTarget(screen, { kind: 'business', id: businessId }); }} />
 
-      <Section title="За последние 24 часа" subtitle="Только новые факты из подключённых источников.">
+      {profileReminders.length ? (
+        <Section title="Сделайте ЛокалОС точнее" subtitle="Один раз расскажите о бизнесе — дальше эти факты будут использоваться в работе.">
+          {profileReminders.slice(0, 3).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => openTarget(item.screen || 'partnerships', item.target_scope)}
+              className="flex min-h-20 w-full items-start gap-3 py-4 text-left transition-transform active:scale-[0.96]"
+            >
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] bg-primary/15 text-primary"><Sparkles className="h-4 w-4" /></span>
+              <span className="min-w-0 flex-1">
+                <b className="block text-balance text-sm leading-5">{item.title}</b>
+                <small className="mt-1 block text-pretty text-[11px] leading-4 text-zinc-600">{item.description}</small>
+                {item.business_name && isNetwork ? <small className="mt-2 block truncate text-[10px] text-zinc-700">{item.business_name}</small> : null}
+              </span>
+              <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-zinc-700" />
+            </button>
+          ))}
+        </Section>
+      ) : null}
+
+      <Section title="Что изменилось" subtitle="Отзывы, продажи и другие события за последние 24 часа.">
         {changes.length ? changes.slice(0, 3).map((item) => <ActivityRow key={item.id} item={item} icon={Clock3} onClick={() => openTarget(item.screen, item.business_id ? { kind: 'business', id: item.business_id } : undefined)} />) : (
-          <div className="flex min-h-16 items-center gap-3 py-3 text-sm text-zinc-600"><Check className="h-5 w-5 text-emerald-400" />Новых изменений не обнаружено.</div>
+          <div className="flex min-h-16 items-center gap-3 py-3 text-sm text-zinc-600"><Check className="h-5 w-5 text-emerald-400" />За последние сутки ничего нового.</div>
         )}
       </Section>
 
@@ -284,11 +361,11 @@ export const TodayMobileV2 = ({
               </span>
               <ArrowUpRight className="h-4 w-4 shrink-0 text-zinc-700" />
             </a>
-          )) : <button type="button" onClick={openSources} className="flex min-h-16 w-full items-center gap-3 py-3 text-left text-sm text-zinc-600"><Radio className="h-5 w-5 text-primary" /><span>За сутки не набралось подтверждённой темы. ЛокалОС продолжает следить за отраслью; здесь можно добавить свои источники.</span><ChevronRight className="ml-auto h-4 w-4" /></button>}
+          )) : <button type="button" onClick={openSources} className="flex min-h-16 w-full items-center gap-3 py-3 text-left text-sm text-zinc-600"><Radio className="h-5 w-5 text-primary" /><span>За последние сутки заметных обсуждений не было. Можно добавить каналы, за которыми вы хотите следить.</span><ChevronRight className="ml-auto h-4 w-4" /></button>}
         </Section>
       ) : null}
 
-      <Section title="ЛокалОС сделал" subtitle="Только завершённые действия с датой и источником.">
+      <Section title="Готово в ЛокалОС" subtitle="Черновики, планы и отчёты, которые уже можно открыть и проверить.">
         {results.length ? (
           <AnimatePresence initial={false}>
             {results.slice(0, 3).map((item) => (
@@ -297,20 +374,20 @@ export const TodayMobileV2 = ({
               </motion.div>
             ))}
           </AnimatePresence>
-        ) : <div className="py-4 text-pretty text-sm leading-6 text-zinc-600">Первый подтверждённый результат появится здесь после завершения работы.</div>}
+        ) : <div className="py-4 text-pretty text-sm leading-6 text-zinc-600">Готовых материалов пока нет.</div>}
       </Section>
 
       {progress ? (
         <section className="mt-7 rounded-[24px] bg-gradient-to-br from-primary/[0.1] to-white/[0.035] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24),0_0_0_1px_rgba(255,92,51,0.14)]">
           <div className="flex items-end justify-between gap-3">
             <div>
-              <small className="text-zinc-600">Выполнено по плану</small>
-              <b className="mt-1 block text-lg">Прогресс бизнеса</b>
+              <small className="text-zinc-600">План роста</small>
+              <b className="mt-1 block text-lg">Что уже сделано</b>
             </div>
             <b className="text-2xl tabular-nums text-primary">{progress.percent || 0}%</b>
           </div>
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/20"><motion.div className="h-full rounded-full bg-primary" initial={false} animate={{ width: `${progress.percent || 0}%` }} transition={spring} /></div>
-          <p className="mt-3 text-pretty text-xs leading-5 text-zinc-500"><span className="tabular-nums">{progress.completed_milestones || 0}</span> из <span className="tabular-nums">{progress.total_milestones || 0}</span> шагов подтверждены реальными данными.</p>
+          <p className="mt-3 text-pretty text-xs leading-5 text-zinc-500">Выполнено <span className="tabular-nums">{progress.completed_milestones || 0}</span> из <span className="tabular-nums">{progress.total_milestones || 0}</span> шагов.</p>
           <button type="button" onClick={() => { track('today_progress_open', 'progress'); openProgress(); }} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white/[0.07] pl-4 pr-3.5 text-sm font-semibold shadow-[0_0_0_1px_rgba(255,255,255,0.08)] transition-transform active:scale-[0.96]">Открыть план роста<ChevronRight className="h-4 w-4" /></button>
         </section>
       ) : isPlatform ? (

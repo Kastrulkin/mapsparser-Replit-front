@@ -26,6 +26,11 @@ def resolve_current_lazy_chunk(frontend_dist_dir: str, requested_filename: str) 
     if not clean_filename or os.path.basename(clean_filename) != clean_filename:
         return None
 
+    # Hashed modules belong to a specific build. Replacing an existing module
+    # can mix router/context instances across the public and private entries.
+    if os.path.isfile(os.path.join(frontend_dist_dir, "assets", clean_filename)):
+        return None
+
     requested_match = _LAZY_CHUNK_PATTERN.fullmatch(clean_filename)
     if not requested_match:
         return None

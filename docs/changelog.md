@@ -1,5 +1,11 @@
 # Documentation Changelog
 
+## 2026-09-04
+
+- Recorded Google approval for Google Business Profile Basic API Access on project `localos-gbp` (`649313441761`) with `300 QPM`.
+- Replaced stale Google approval-pending wording across integration and product docs.
+- Added the Google policy reminder: LocalOS may describe an integration with Google Business Profile APIs, but must not imply Google partnership, sponsorship, or endorsement without separate written approval.
+
 ## 2026-07-23
 
 - Added a scoped manual MAX sender binding: LocalOS stores the account phone, prepares MAX touches and records operator-confirmed delivery/reply states without direct send or access to personal chats.
@@ -28,7 +34,7 @@
 
 - Updated the main project description after reviewing the last three months of changes.
 - Reflected LocalOS scope beyond map SEO: Google Business Profile, compiled agents, OpenClaw boundary, supervised outreach, finance, Telegram/WhatsApp, content planning, parser reliability, and approval requirements.
-- Marked Google Business Profile as `beta / Google approval pending` and kept external publishing behind explicit approval.
+- At that time, marked Google Business Profile as `beta` with external publishing behind explicit approval.
 
 ## 2026-05-14
 

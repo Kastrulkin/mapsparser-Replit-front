@@ -1,6 +1,7 @@
 import hashlib
 import json
 import re
+import sys
 import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -15,6 +16,7 @@ from database_manager import DatabaseManager
 from services.llm import analyze_text_with_gigachat
 from services.llm.analytics import build_average_ticket_analysis_payload, queue_average_ticket_analysis
 from services.knowledge_retrieval import semantic_context_for_cursor
+from subscription_manager import get_capability_access
 
 
 average_ticket_bp = Blueprint("average_ticket_api", __name__)
@@ -78,87 +80,28 @@ def _require_business_access():
         return user_data, business_id, (jsonify({"error": "Бизнес не найден"}), 404)
     if not has_access:
         return user_data, business_id, (jsonify({"error": "Нет доступа к бизнесу"}), 403)
+    capability_access = get_capability_access(business_id, "average_ticket")
+    if not capability_access.get("allowed"):
+        return user_data, business_id, (
+            jsonify({
+                "error": "payment_required",
+                **capability_access,
+                "return_to": request.full_path.rstrip("?"),
+            }),
+            402,
+        )
+    from services import work_journal
+    db=DatabaseManager()
+    try:
+        cursor=db.conn.cursor()
+        from services import work_recommendations
+        protected=work_journal.enabled(business_id) or (work_journal.installed(cursor) and work_recommendations.policy(cursor,business_id)['version']>0)
+        if protected:
+            work_journal.scope(cursor,business_id,user_data.get('user_id'),write=request.method not in {'GET','OPTIONS'},owner_only=request.method not in {'GET','OPTIONS'} and not request.path.endswith('/events'))
+    except PermissionError:
+        return user_data,business_id,(jsonify({'error':'Нет права на это действие.'}),403)
+    finally:db.close()
     return user_data, business_id, None
-
-
-def _ensure_table(cursor):
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS averageticketmatrices (
-            id TEXT PRIMARY KEY,
-            business_id TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-            status TEXT NOT NULL DEFAULT 'draft',
-            source_services_hash TEXT,
-            matrix_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            generated_by TEXT REFERENCES users(id) ON DELETE SET NULL,
-            generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_averageticketmatrices_business_id ON averageticketmatrices(business_id, generated_at DESC)"
-    )
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS averageticketevents (
-            id TEXT PRIMARY KEY,
-            business_id TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-            matrix_id TEXT REFERENCES averageticketmatrices(id) ON DELETE SET NULL,
-            link_id TEXT,
-            package_id TEXT,
-            booking_id TEXT,
-            main_service_id TEXT REFERENCES userservices(id) ON DELETE SET NULL,
-            addon_service_id TEXT REFERENCES userservices(id) ON DELETE SET NULL,
-            event_type TEXT NOT NULL,
-            event_date DATE DEFAULT CURRENT_DATE,
-            amount NUMERIC(12, 2),
-            master_id TEXT,
-            client_name TEXT,
-            notes TEXT,
-            created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_averageticketevents_business_date
-        ON averageticketevents(business_id, event_date DESC, created_at DESC)
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_averageticketevents_booking
-        ON averageticketevents(business_id, booking_id)
-        """
-    )
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS averageticketpackages (
-            id TEXT PRIMARY KEY,
-            business_id TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-            name TEXT NOT NULL,
-            service_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
-            service_names JSONB NOT NULL DEFAULT '[]'::jsonb,
-            base_total NUMERIC(12, 2) DEFAULT 0,
-            package_price NUMERIC(12, 2),
-            bonus_text TEXT,
-            positioning TEXT,
-            script TEXT,
-            status TEXT NOT NULL DEFAULT 'draft',
-            created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_averageticketpackages_business_status
-        ON averageticketpackages(business_id, status)
-        """
-    )
 
 
 def _table_columns(cursor, table_name):
@@ -334,7 +277,6 @@ def _find_service_by_name(services, service_name):
 
 
 def _load_packages(cursor, business_id):
-    _ensure_table(cursor)
     cursor.execute(
         """
         SELECT id, name, service_ids, service_names, base_total, package_price, bonus_text,
@@ -381,7 +323,6 @@ def _calculate_package_totals(services, service_ids, package_price):
 
 
 def _load_latest_matrix(cursor, business_id):
-    _ensure_table(cursor)
     cursor.execute(
         """
         SELECT id, business_id, status, source_services_hash, matrix_json, generated_by, generated_at, updated_at
@@ -731,9 +672,10 @@ def _active_links_for_service(matrix, service_id, service_name):
 
 
 def _load_events(cursor, business_id, start_date=None, end_date=None):
-    _ensure_table(cursor)
     params = [business_id]
     filters = ["business_id = %s"]
+    from services import work_journal
+    if work_journal.installed(cursor):filters.append('NOT is_voided')
     if start_date:
         filters.append("event_date >= %s")
         params.append(start_date)
@@ -980,6 +922,15 @@ def get_average_ticket_overview():
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
+        from services import work_journal, work_recommendations
+        shared=None
+        if work_journal.installed(cursor) and (work_journal.enabled(business_id) or work_recommendations.policy(cursor,business_id)['rules_json']):
+            actor=work_journal.scope(cursor,business_id,user_data.get('user_id'))
+            try:shared=work_recommendations.recommend(cursor,business_id,user_data.get('user_id'),{'date':request.args.get('date')})
+            except ValueError:
+                shared={'status':'clarification_required','items':[],'message':'Укажите дату или часовой пояс бизнеса.'}
+            if not actor['all_visits']:
+                return jsonify({'success':True,'services':work_recommendations.catalog(cursor,business_id),'latest_matrix':{},'stats':{},'kpis':{},'daily_plan':shared['items'],'events':[],'packages':[],'work_recommendations':shared})
         business = _load_business(cursor, business_id)
         services = _load_services(cursor, business_id)
         latest = _load_latest_matrix(cursor, business_id)
@@ -992,7 +943,7 @@ def get_average_ticket_overview():
         )
         packages = _load_packages(cursor, business_id)
         target_date = request.args.get("date") or date.today().isoformat()
-        daily_plan = _load_daily_plan(cursor, business_id, services, matrix or {}, target_date)
+        daily_plan = shared["items"] if shared is not None else _load_daily_plan(cursor, business_id, services, matrix or {}, target_date)
         kpis = _load_finance_metrics(cursor, business_id, events, matrix or {})
         return jsonify(
             {
@@ -1005,6 +956,7 @@ def get_average_ticket_overview():
                 "stats": _matrix_stats(matrix or {}),
                 "kpis": kpis,
                 "daily_plan": daily_plan,
+                "work_recommendations": shared,
                 "events": events,
                 "packages": packages,
                 "finance_link": "/dashboard/finance",
@@ -1029,7 +981,6 @@ def generate_average_ticket_matrix():
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        _ensure_table(cursor)
         business = _load_business(cursor, business_id)
         services = _load_services(cursor, business_id)
         if len(services) < 2:
@@ -1103,6 +1054,14 @@ def generate_average_ticket_matrix():
         if error_note:
             matrix["generation_note"] = error_note
 
+        from services import work_journal, work_recommendations
+        if work_journal.enabled(business_id):
+            cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))',('work-journal:'+business_id,))
+            existing=work_recommendations.matrix(cursor,business_id).get('matrix_json') or {}
+            cursor.execute('''INSERT INTO business_upsell_policies(business_id,matrix_json) VALUES (%s,%s::jsonb)
+                ON CONFLICT(business_id) DO UPDATE SET matrix_json=COALESCE(business_upsell_policies.matrix_json,EXCLUDED.matrix_json)''',(business_id,json.dumps(existing)))
+            for row in matrix.get('upsell_matrix') or []:
+                for addon in row.get('recommended_addons') or []:addon['status']='draft'
         matrix_id = str(uuid.uuid4())
         source_hash = _services_hash(services)
         cursor.execute(
@@ -1156,7 +1115,6 @@ def update_average_ticket_link(matrix_id):
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        _ensure_table(cursor)
         cursor.execute(
             """
             SELECT matrix_json
@@ -1180,6 +1138,12 @@ def update_average_ticket_link(matrix_id):
         if not updated:
             return jsonify({"error": "Связка не найдена"}), 404
 
+        from services import work_journal
+        if work_journal.enabled(business_id):
+            from api.work_journal_api import create_policy_preview
+            preview=create_policy_preview(cursor,business_id,user_data.get('user_id'),{'kind':'matrix','matrix_id':matrix_id,'matrix_json':matrix,'message':'Изменить связки допродаж','request_id':data.get('request_id')})
+            db.conn.commit()
+            return jsonify(preview)
         cursor.execute(
             """
             UPDATE averageticketmatrices
@@ -1191,6 +1155,9 @@ def update_average_ticket_link(matrix_id):
         db.conn.commit()
         latest = _load_latest_matrix(cursor, business_id)
         return jsonify({"success": True, "latest_matrix": latest, "stats": _matrix_stats(matrix)})
+    except (PermissionError,ValueError):
+        if db:db.conn.rollback()
+        return jsonify({'error':str(sys.exception())}),403 if isinstance(sys.exception(),PermissionError) else 409
     except Exception:
         if db:
             db.conn.rollback()
@@ -1218,7 +1185,6 @@ def create_average_ticket_link(matrix_id):
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        _ensure_table(cursor)
         services = _load_services(cursor, business_id)
         service_by_id = {item.get("id"): item for item in services}
         main_service = service_by_id.get(main_service_id)
@@ -1270,6 +1236,12 @@ def create_average_ticket_link(matrix_id):
             if str(addon.get("id") or "") == link_id or str(addon.get("service_id") or "") == addon_service_id:
                 return jsonify({"error": "Такая связка уже есть"}), 409
         target_row.setdefault("recommended_addons", []).append(new_link)
+        from services import work_journal
+        if work_journal.enabled(business_id):
+            from api.work_journal_api import create_policy_preview
+            preview=create_policy_preview(cursor,business_id,user_data.get('user_id'),{'kind':'matrix','matrix_id':matrix_id,'matrix_json':matrix,'message':'Изменить связки допродаж','request_id':data.get('request_id')})
+            db.conn.commit()
+            return jsonify(preview)
         cursor.execute(
             """
             UPDATE averageticketmatrices
@@ -1281,6 +1253,9 @@ def create_average_ticket_link(matrix_id):
         db.conn.commit()
         latest = _load_latest_matrix(cursor, business_id)
         return jsonify({"success": True, "latest_matrix": latest, "stats": _matrix_stats(matrix)})
+    except (PermissionError,ValueError):
+        if db:db.conn.rollback()
+        return jsonify({'error':str(sys.exception())}),403 if isinstance(sys.exception(),PermissionError) else 409
     except Exception:
         if db:
             db.conn.rollback()
@@ -1313,7 +1288,17 @@ def create_average_ticket_event():
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        _ensure_table(cursor)
+        from services import work_journal
+        if work_journal.enabled(business_id):
+            translated={'bought':'performed','package_bought':'performed','package_offered':'offered'}.get(event_type,event_type)
+            if translated not in {'offered','declined','interested','performed'}:
+                return jsonify({'error':'Этот результат нужно оформить отдельной командой Оператора.'}),409
+            row=work_journal.save_note(cursor,business_id,user_data.get('user_id'),'web',None,data.get('request_id') or str(uuid.uuid4()),
+                data.get('notes') or 'Отметка результата предложения',{'quote':data.get('notes') or 'Отметка результата предложения','outcome':translated,
+                'booking_id':data.get('booking_id'),'service_id':data.get('main_service_id'),'addon_service_id':data.get('addon_service_id')})
+            db.conn.commit()
+            return jsonify({'success':True,'event_id':row['id'],'journal_entry':row,'message':'Рабочий результат записан. Финансовая продажа не создана.'})
+
         cursor.execute(
             """
             INSERT INTO averageticketevents
@@ -1372,7 +1357,6 @@ def create_average_ticket_package():
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        _ensure_table(cursor)
         services = _load_services(cursor, business_id)
         valid_ids = {item.get("id") for item in services}
         clean_service_ids = [item for item in service_ids if item in valid_ids]
@@ -1426,7 +1410,6 @@ def update_average_ticket_package(package_id):
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        _ensure_table(cursor)
         services = _load_services(cursor, business_id)
         cursor.execute(
             "SELECT id FROM averageticketpackages WHERE id = %s AND business_id = %s LIMIT 1",

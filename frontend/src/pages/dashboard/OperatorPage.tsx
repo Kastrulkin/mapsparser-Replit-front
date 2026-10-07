@@ -1,32 +1,33 @@
-import { useEffect, useId, useRef, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { OperatorActivity, OperatorReply } from '@/components/operator/OperatorActivity';
+import { OutreachGroupCard, type GroupPresentation } from '@/components/prospecting/OutreachGroupCard';
+import { OperatorRequestHistory } from '@/components/operator/OperatorRequestHistory';
+import { OperatorSpeech, OperatorVoiceInput, VoiceSubmission } from '@/components/operator/OperatorVoice';
+import { voiceHeaders, waitForOperatorResult } from '@/components/operator/OperatorVoice.logic';
+import { OperatorWorkdayInput } from '@/components/operator/OperatorWorkdayInput';
 import {
-  AlertTriangle,
-  Bot,
-  CheckCircle2,
-  ChevronDown,
-  Copy,
-  ExternalLink,
-  Loader2,
-  MessageSquareText,
-  RefreshCw,
-  Send,
+	Bot,
+	CheckCircle2,
+	ChevronDown,
+	Copy,
+	ExternalLink,
+	Loader2,
+	MessageSquareText,
+	RefreshCw,
+	Send,
 } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 
-import { Button } from '@/components/ui/button';
-import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 import { BetaFeedbackBanner } from '@/components/dashboard/BetaFeedbackBanner';
+import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
+import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { api } from '@/services/api';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { cn } from '@/lib/utils';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { api } from '@/services/api';
 import {
-  localizeDemoBusinessName,
-  localizedAttentionCopy,
-  localizedDataWarning,
-  localizedMetricLabel,
-  localizedMetricSource,
-  operatorPageCopyForLanguage,
+	localizeDemoBusinessName,
+	operatorPageCopyForLanguage,
 } from './operatorPageCopy';
 
 type DashboardContext = {
@@ -38,7 +39,22 @@ type DashboardContext = {
 };
 
 type OperatorChatResult = {
+  message_id?: string;
+  input_type?: string;
   status: 'completed' | 'blocked' | 'unsupported' | string;
+  search_started?: boolean;
+  task?: {
+    id: string;
+    presentation?: GroupPresentation;
+    revision?: string;
+    business_id?: string;
+    status: string;
+    display_name?: string;
+    stage?: string;
+    config?: { target_count?: number; max_candidates?: number; max_search_calls?: number };
+    state?: { search_calls?: number };
+    report?: { found?: number; imported?: number; awaiting_check?: number; checking?: number; verification_failed?: number; excluded?: number; duplicates?: number; eligible?: number; shortfall?: number; credit_limit?: number; credits_charged?: number };
+  };
   intent?: string;
   chat_response?: string;
   queue_id?: string;
@@ -58,6 +74,7 @@ type OperatorChatResult = {
     name?: string;
     title?: string;
     status?: string;
+    unavailable_reason?: string;
     examples?: string[];
   }>;
   summary?: string;
@@ -74,7 +91,9 @@ type OperatorChatResult = {
     status?: string;
     action_id?: string;
     summary?: string;
+    capability?: string;
   };
+  credit_quote?: { total_max?: number };
   ai_router?: {
     status?: string;
     intent?: string;
@@ -147,6 +166,8 @@ type OperatorChatResult = {
 };
 
 type RefreshResult = {
+  message_id?: string;
+  input_type?: string;
   status: 'completed' | 'processing' | 'failed' | 'blocked' | string;
   queue_id?: string;
   queue_status?: string;
@@ -204,32 +225,17 @@ type ChatMessage = {
   id: string;
   role: 'user' | 'operator';
   text: string;
+  fresh?: boolean;
   result?: OperatorChatResult | RefreshResult;
-};
-
-type ScopeSummary = {
-  as_of?: string;
-  metrics?: Array<{
-    key?: string;
-    label?: string;
-    value?: string | number | null;
-    source?: string;
-    source_label?: string;
-    updated_at?: string | null;
-  }>;
-  attention_items?: Array<{
-    id?: string;
-    title?: string;
-    description?: string;
-    count?: number;
-    severity?: string;
-  }>;
-  data_warnings?: string[];
 };
 
 const resultText = (result: OperatorChatResult | RefreshResult | null) => {
   if (!result) return '';
-  return result.chat_response || result.result_summary?.title || 'Готово.';
+  return (
+    ('chat_response' in result && result.chat_response) ||
+    ('result_summary' in result && result.result_summary?.title) ||
+    'Готово.'
+  );
 };
 
 const draftText = (result: OperatorChatResult | RefreshResult | null) => {
@@ -262,10 +268,19 @@ export const OperatorPage = () => {
   const { language } = useLanguage();
   const copy = operatorPageCopyForLanguage(language);
   const businessName = localizeDemoBusinessName(currentBusiness?.name || '', language) || copy.selectedBusiness;
+  const activeBusiness = useRef(currentBusinessId);
+  activeBusiness.current = currentBusinessId;
   const [chatMessage, setChatMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const [pendingChatMessage, setPendingChatMessage] = useState<string | null>(null);
+  const [pendingChatPhase, setPendingChatPhase] = useState('Отправляем команду…');
+  const [commandWaiting, setCommandWaiting] = useState(false);
+  const [commandAccepted, setCommandAccepted] = useState(false);
+  const chatWindowRef = useRef<HTMLDivElement>(null);
+  const scrollToLatestRef = useRef(false);
   const chatSendInFlightRef = useRef(false);
+  const pendingRequest = useRef({ businessId: "", text: "", groupId: "", id: "" });
   const [refreshCheckingQueueId, setRefreshCheckingQueueId] = useState<string | null>(null);
   const [bulkGeneratingKey, setBulkGeneratingKey] = useState<string | null>(null);
   const [applyingServiceJobId, setApplyingServiceJobId] = useState<string | null>(null);
@@ -274,41 +289,47 @@ export const OperatorPage = () => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const historyVersion = useRef(0);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyRetry, setHistoryRetry] = useState(0);
   const [confirmingActionId, setConfirmingActionId] = useState<string | null>(null);
-  const [scopeSummary, setScopeSummary] = useState<ScopeSummary | null>(null);
-  const [scopeSummaryLoading, setScopeSummaryLoading] = useState(false);
-
+  const [rejectingActionId, setRejectingActionId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchTasks, setSearchTasks] = useState<NonNullable<OperatorChatResult['task']>[]>([]);
+  const requestedSearchId = searchParams.get('search_task_id') || '';
+  const [selectedSearchId, setSelectedSearchId] = useState(requestedSearchId);
+  useEffect(() => { setSelectedSearchId(requestedSearchId); }, [requestedSearchId]);
+  const suggestedCommand = searchParams.get('command');
+  useEffect(() => { if (suggestedCommand) setChatMessage(suggestedCommand); }, [suggestedCommand]);
+  const [savedSearchTask, setSavedSearchTask] = useState<OperatorChatResult['task']>();
+  const activeSearchTask = selectedSearchId ? searchTasks.find(task => task.id === selectedSearchId && task.business_id === currentBusinessId) || (savedSearchTask?.id === selectedSearchId && savedSearchTask?.business_id === currentBusinessId ? savedSearchTask : undefined) : undefined;
   useEffect(() => {
-    if (!currentBusinessId) {
-      setScopeSummary(null);
-      return;
-    }
-    let cancelled = false;
-    setScopeSummaryLoading(true);
-    api.get('/operator/summary', {
-      params: { scope_type: 'business', scope_id: currentBusinessId },
-    }).then((response) => {
-      if (!cancelled) setScopeSummary(response.data.summary || null);
-    }).catch(() => {
-      if (!cancelled) setScopeSummary(null);
-    }).finally(() => {
-      if (!cancelled) setScopeSummaryLoading(false);
-    });
-    return () => {
-      cancelled = true;
+    setSearchTasks([]); setSavedSearchTask(undefined);
+    if (!currentBusinessId) return;
+    let live = true;
+    const refresh = async () => {
+      try {
+        const response = await api.get('/partnership/continuations', { params: { business_id: currentBusinessId } });
+        if (live) setSearchTasks(response.data?.items || []);
+      } catch { if (live) setSavedSearchTask(undefined); }
     };
+    void refresh();
+    return () => { live = false; };
   }, [currentBusinessId]);
-
   useEffect(() => {
     if (!currentBusinessId) {
       setConversationId(null);
       setMessages([]);
       return;
     }
+    setMessages([]); setConversationId(null); setPendingChatMessage(null);
+    chatSendInFlightRef.current = false; setChatLoading(false); setConfirmingActionId(null); setRejectingActionId(null);
     const storageKey = `localos_operator_conversation_${currentBusinessId}`;
     const storedConversationId = window.localStorage.getItem(storageKey);
     let cancelled = false;
+    const version = ++historyVersion.current;
     setHistoryLoading(true);
+    setHistoryError(null);
     const request = storedConversationId
       ? api.get(`/operator/conversations/${encodeURIComponent(storedConversationId)}/messages`, {
           params: { business_id: currentBusinessId, limit: 100 },
@@ -317,31 +338,59 @@ export const OperatorPage = () => {
           params: { business_id: currentBusinessId, channel: 'web', limit: 100 },
         });
     request.then((response) => {
-      if (cancelled) return;
+      if (cancelled || version !== historyVersion.current) return;
       const storedMessages = Array.isArray(response.data.messages) ? response.data.messages : [];
       const loadedConversationId = storedConversationId || response.data.conversation?.id || null;
       setConversationId(loadedConversationId);
+      scrollToLatestRef.current = true;
       setMessages(mapStoredMessages(storedMessages));
       if (loadedConversationId) window.localStorage.setItem(storageKey, loadedConversationId);
-    }).catch(() => {
+    }).catch((error: unknown) => {
       if (cancelled) return;
-      window.localStorage.removeItem(storageKey);
-      setConversationId(null);
-      setMessages([]);
+      const status = (
+        typeof error === 'object'
+        && error !== null
+        && 'response' in error
+        && typeof error.response === 'object'
+        && error.response !== null
+        && 'status' in error.response
+        && typeof error.response.status === 'number'
+      ) ? error.response.status : null;
+      if (status === 404 && storedConversationId) {
+        window.localStorage.removeItem(storageKey);
+        setConversationId(null);
+        setMessages([]);
+        setHistoryError('Предыдущая переписка больше недоступна. Можно начать новую задачу.');
+        return;
+      }
+      if (status === 403) {
+        window.localStorage.removeItem(storageKey);
+        setConversationId(null);
+        setMessages([]);
+        setHistoryError('Нет доступа к этой истории. Проверьте выбранный бизнес или обратитесь к владельцу.');
+        return;
+      }
+      setHistoryError('Не удалось обновить историю. Последние сообщения сохранены на экране.');
     }).finally(() => {
       if (!cancelled) setHistoryLoading(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [currentBusinessId]);
+  }, [currentBusinessId, historyRetry]);
+
+  useEffect(() => {
+    if (!scrollToLatestRef.current || !chatWindowRef.current) return;
+    chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
+    scrollToLatestRef.current = false;
+  }, [messages, pendingChatMessage]);
 
   const appendPair = (userText: string, result: OperatorChatResult) => {
     const stamp = String(Date.now());
     setMessages((current) => [
       ...current,
       { id: `${stamp}-user`, role: 'user', text: userText },
-      { id: `${stamp}-operator`, role: 'operator', text: resultText(result), result },
+      { id: `${stamp}-operator`, role: 'operator', text: resultText(result), fresh: true, result },
     ]);
   };
 
@@ -352,15 +401,24 @@ export const OperatorPage = () => {
         id: `${Date.now()}-${suffix}`,
         role: 'operator',
         text: resultText(result),
+        fresh: true,
         result,
       },
     ]);
   };
 
-  const sendOperatorChatMessage = async (overrideText?: string) => {
+  const sendOperatorChatMessage = async (overrideText?: string, source?: VoiceSubmission) => {
     const text = (overrideText || chatMessage).trim();
     if (!currentBusinessId || !text || chatSendInFlightRef.current) return;
+    if (pendingRequest.current.businessId !== currentBusinessId || pendingRequest.current.text !== text || pendingRequest.current.groupId !== selectedSearchId) pendingRequest.current = { businessId: currentBusinessId, text, groupId: selectedSearchId, id: crypto.randomUUID() };
+    historyVersion.current++;
+    setHistoryLoading(false);
     chatSendInFlightRef.current = true;
+    scrollToLatestRef.current = true;
+    setPendingChatMessage(text);
+    setPendingChatPhase('Отправляем команду…');
+    setCommandAccepted(false);
+    setCommandWaiting(false);
     setChatLoading(true);
     try {
       const response = await api.post('/operator/chat', {
@@ -368,19 +426,42 @@ export const OperatorPage = () => {
         message: text,
         conversation_id: conversationId,
         channel: 'web',
+        search_task_id: selectedSearchId || null,
+        request_id: pendingRequest.current.id,
+        ...source,
       });
-      const result = response.data.operator_result || {
+      if (activeBusiness.current !== currentBusinessId) return;
+      const initialResult = response.data.operator_result || {
         status: 'blocked',
         chat_response: 'Не получил ответ Operator.',
       };
+      setCommandAccepted(true);
+      setPendingChatPhase('Готовим ответ…');
+      const result=await waitForOperatorResult(initialResult,currentBusinessId,voiceHeaders,()=>activeBusiness.current===currentBusinessId, job => {
+        setCommandWaiting(job.status === 'queued' || job.status === 'waiting_for_review');
+        if (job.status === 'queued') setPendingChatPhase('Команда в очереди · ждёт запуска');
+        else if (job.status === 'running') setPendingChatPhase(job.stage || 'Выполняем команду…');
+        else if (job.status === 'waiting_for_review') setPendingChatPhase('Нужно ваше подтверждение');
+      });
+      if(activeBusiness.current!==currentBusinessId)return;
+      pendingRequest.current = { businessId: "", text: "", groupId: "", id: "" };
+      scrollToLatestRef.current = true;
       appendPair(text, result);
+      if (result.task?.id && (!result.task.business_id || result.task.business_id === currentBusinessId)) {
+        setSavedSearchTask({...result.task, business_id: currentBusinessId});
+        setSelectedSearchId(result.task.id);
+        setSearchParams(current => { const next = new URLSearchParams(current); next.set('search_task_id', result.task.id); next.set('business_id', currentBusinessId); return next; }, { replace: true });
+      }
       const nextConversationId = response.data.conversation_id || result.conversation_id;
       if (nextConversationId) {
         setConversationId(nextConversationId);
         window.localStorage.setItem(`localos_operator_conversation_${currentBusinessId}`, nextConversationId);
       }
-      if (!overrideText) setChatMessage('');
+      if (!overrideText) setChatMessage((current) => current.trim() === text ? '' : current);
     } catch (err) {
+      if (activeBusiness.current !== currentBusinessId) return;
+      if (source) throw err;
+      scrollToLatestRef.current = true;
       appendPair(text, {
         status: 'blocked',
         intent: 'error',
@@ -388,8 +469,11 @@ export const OperatorPage = () => {
         blocked_reasons: ['operator_chat_request_failed'],
       });
     } finally {
-      chatSendInFlightRef.current = false;
-      setChatLoading(false);
+      if (activeBusiness.current === currentBusinessId) {
+        chatSendInFlightRef.current = false;
+        setPendingChatMessage(null);
+        setChatLoading(false);
+      }
     }
   };
 
@@ -544,11 +628,13 @@ export const OperatorPage = () => {
       const response = await api.post(`/operator/actions/${encodeURIComponent(actionId)}/confirm`, {
         business_id: currentBusinessId,
       });
+      if (activeBusiness.current !== currentBusinessId) return;
       appendOperatorResult(
         response.data.operator_result || { status: 'blocked', chat_response: 'Не удалось выполнить подтверждённое действие.' },
         'approval',
       );
     } catch (err) {
+      if (activeBusiness.current !== currentBusinessId) return;
       appendOperatorResult(
         {
           status: 'blocked',
@@ -557,7 +643,33 @@ export const OperatorPage = () => {
         'approval-error',
       );
     } finally {
-      setConfirmingActionId(null);
+      if (activeBusiness.current === currentBusinessId) setConfirmingActionId(null);
+    }
+  };
+
+  const rejectOperatorAction = async (actionId: string | undefined) => {
+    if (!currentBusinessId || !actionId) return;
+    setRejectingActionId(actionId);
+    try {
+      const response = await api.post(`/operator/actions/${encodeURIComponent(actionId)}/reject`, {
+        business_id: currentBusinessId,
+      });
+      if (activeBusiness.current !== currentBusinessId) return;
+      appendOperatorResult(
+        response.data.operator_result || { status: 'blocked', chat_response: 'Не удалось отклонить действие.' },
+        'rejection',
+      );
+    } catch (err) {
+      if (activeBusiness.current !== currentBusinessId) return;
+      appendOperatorResult(
+        {
+          status: 'blocked',
+          chat_response: err instanceof Error ? err.message : 'Не удалось отклонить действие',
+        },
+        'rejection-error',
+      );
+    } finally {
+      if (activeBusiness.current === currentBusinessId) setRejectingActionId(null);
     }
   };
 
@@ -571,57 +683,11 @@ export const OperatorPage = () => {
   return (
     <div className="space-y-5" data-tour-target="operator-overview">
       <DashboardPageHeader
-        eyebrow="LocalOS Operator"
+        eyebrow="LocalOS"
         title={copy.title}
         description={copy.description}
         icon={Bot}
       />
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-label={copy.priorityTitle}>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold text-slate-950">{copy.priorityTitle}</div>
-            <div className="mt-1 text-sm text-slate-500">
-              {copy.priorityDescription}
-            </div>
-          </div>
-          {scopeSummaryLoading ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-400" /> : null}
-        </div>
-        {scopeSummary?.attention_items?.length ? (
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            {scopeSummary.attention_items.slice(0, 3).map((item) => {
-              const localizedItem = localizedAttentionCopy(copy, item.id, item.title, item.description);
-              return <div key={item.id || item.title} className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
-                <div className="flex items-start gap-2">
-                  {item.severity === 'low'
-                    ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                    : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />}
-                  <div className="min-w-0">
-                    <div className="font-medium text-slate-950">{localizedItem.title}{item.count ? ` · ${item.count}` : ''}</div>
-                    {localizedItem.description ? <div className="mt-1 text-xs leading-5 text-slate-600">{localizedItem.description}</div> : null}
-                  </div>
-                </div>
-              </div>;
-            })}
-          </div>
-        ) : null}
-        {scopeSummary?.metrics?.length ? (
-          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500">
-            {scopeSummary.metrics.slice(0, 4).map((metric) => (
-              <span key={metric.key || metric.label} className="tabular-nums">
-                <strong className="font-semibold text-slate-800">{localizedMetricLabel(copy, metric.key, metric.label)}: {metric.value ?? '—'}</strong>
-                {' · '}{localizedMetricSource(copy, metric.source, metric.source_label)}
-                {metric.updated_at ? ` · ${new Date(metric.updated_at).toLocaleString(language, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}
-              </span>
-            ))}
-          </div>
-        ) : null}
-        {scopeSummary?.data_warnings?.length ? (
-          <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-200">
-            {localizedDataWarning(copy, scopeSummary.data_warnings[0])}
-          </div>
-        ) : null}
-      </section>
 
       <BetaFeedbackBanner
         area="operator"
@@ -631,23 +697,29 @@ export const OperatorPage = () => {
         businessName={businessName}
       />
 
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-4 py-3">
-          <div className="text-sm font-semibold text-slate-950">
-            {businessName}
-          </div>
-          <div className="mt-1 text-sm leading-6 text-slate-600">
-            {copy.safetyNote}
-          </div>
-        </div>
+      {currentBusinessId && <Link to="/dashboard/profile" className="text-sm text-primary underline">{language === 'ru' ? 'Город и валюта — в «Профиль и бизнес»' : 'City and currency — Profile and business'}</Link>}
 
-        <div className="max-h-[62vh] min-h-[480px] space-y-4 overflow-y-auto bg-slate-50/70 px-4 py-4">
-          {historyLoading ? (
+      {currentBusinessId && <OperatorRequestHistory key={currentBusinessId} businessId={currentBusinessId} language={language} />}
+
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {currentBusinessId && searchTasks.length > 0 && <div className="border-t bg-background px-4 py-3"><label className="text-sm">Группа компаний<select aria-label="Группа компаний" className="ml-2 rounded-md border bg-background px-2 py-2" value={selectedSearchId} onChange={event => { setSelectedSearchId(event.target.value); const next = new URLSearchParams(searchParams); if (event.target.value) next.set('search_task_id', event.target.value); else next.delete('search_task_id'); next.set('business_id', currentBusinessId); setSearchParams(next, { replace: true }); }}><option value="">Выберите поиск</option>{searchTasks.map(task => <option key={task.id} value={task.id}>{task.display_name || task.id}</option>)}</select></label></div>}
+        {currentBusinessId && activeSearchTask?.id && <div className="border-t border-slate-200 bg-white px-4 py-3"><OutreachTaskStatus key={`${currentBusinessId}:${activeSearchTask.id}`} businessId={currentBusinessId} initialTask={activeSearchTask} /></div>}
+        <div ref={chatWindowRef} data-testid="operator-message-list" className="max-h-[62vh] min-h-[480px] space-y-4 overflow-y-auto bg-slate-50/70 px-4 py-4">
+          {historyError ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="status">
+              <span>{historyError}</span>
+              <Button size="sm" variant="outline" onClick={() => setHistoryRetry((current) => current + 1)} disabled={historyLoading}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Повторить
+              </Button>
+            </div>
+          ) : null}
+          {historyLoading && messages.length === 0 ? (
             <div className="flex min-h-[320px] items-center justify-center text-sm text-slate-500">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {copy.loadingHistory}
+              <span translate="no" className="notranslate">{copy.loadingHistory}</span>
             </div>
-          ) : messages.length === 0 ? (
+          ) : messages.length === 0 && !pendingChatMessage ? (
             <div className="mx-auto flex min-h-[320px] max-w-2xl flex-col items-center justify-center text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white">
                 <Bot className="h-6 w-6" />
@@ -670,7 +742,7 @@ export const OperatorPage = () => {
               </div>
             </div>
           ) : (
-            messages.map((message) => (
+            messages.map((message, index) => (
               <div key={message.id} className={cn('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
                 <div
                   className={cn(
@@ -680,10 +752,15 @@ export const OperatorPage = () => {
                       : 'border border-slate-200 bg-white text-slate-800',
                   )}
                 >
-                  <div className="whitespace-pre-wrap">{message.text}</div>
+                  {message.role === 'operator' ? <OperatorReply animate={message.fresh} text={message.result && 'approval' in message.result && message.result.approval?.capability === 'partnerships.continue_outreach' && !('credit_quote' in message.result && message.result.credit_quote)
+                    ? 'Прежние условия поиска устарели. Откройте актуальную стоимость в кредитах LocalOS.'
+                    : message.text.replace(/DeepSeek/gi, 'ИИ')} /> : <div className="whitespace-pre-wrap">{message.text}</div>}
+                  {message.role === 'operator' && currentBusinessId && <OperatorSpeech key={`${currentBusinessId}:${message.id}`} businessId={currentBusinessId} messageId={message.result?.message_id || message.id} prepare={message.result?.input_type === 'voice'} />}
                   {message.role === 'operator' && message.result ? (
                     <OperatorResultActions
                       result={message.result}
+                      businessId={currentBusinessId}
+                      canStartPreview={index === messages.length - 1}
                       copiedKey={copiedKey}
                       loading={{
                         refreshCheckingQueueId,
@@ -692,6 +769,7 @@ export const OperatorPage = () => {
                         manualPublishDraftId,
                         recoveringQueueId,
                         confirmingActionId,
+                        rejectingActionId,
                       }}
                       onCopy={copyText}
                       onCheckRefresh={checkRefreshResult}
@@ -700,15 +778,29 @@ export const OperatorPage = () => {
                       onApplyServices={applyServiceSuggestions}
                       onMarkManualPublished={markManualPublished}
                       onConfirmOperatorAction={confirmOperatorAction}
+                      onRejectOperatorAction={rejectOperatorAction}
+                      onSendCommand={sendOperatorChatMessage}
+                      onEditPreview={() => setChatMessage('Измени условия последнего поиска: ')}
                     />
                   ) : null}
                 </div>
               </div>
             ))
           )}
+          {pendingChatMessage && <div className="flex justify-end">
+            <div className="max-w-3xl rounded-2xl bg-slate-950 px-4 py-3 text-sm leading-6 text-white shadow-sm">
+              <div className="whitespace-pre-wrap">{pendingChatMessage}</div>
+
+            </div>
+          </div>}
+          {pendingChatMessage && <OperatorActivity phase={pendingChatPhase} accepted={commandAccepted} waiting={commandWaiting} />}
         </div>
 
+
         <div className="border-t border-slate-200 bg-white px-4 py-4">
+          {currentBusinessId && <OperatorVoiceInput key={currentBusinessId} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onSubmit={sendOperatorChatMessage} />}
+          {currentBusinessId && <OperatorWorkdayInput key={`inputs:${currentBusinessId}`} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onConversation={setConversationId} />}
+
           <div className="flex flex-col gap-3 lg:flex-row">
             <textarea
               className="min-h-[96px] flex-1 resize-y rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-950 outline-none ring-sky-200 placeholder:text-slate-400 focus:ring-2"
@@ -750,8 +842,59 @@ export const OperatorPage = () => {
   );
 };
 
+type OutreachTask = NonNullable<OperatorChatResult['task']>;
+
+function OutreachTaskStatus({ businessId, initialTask }: { businessId: string; initialTask: OutreachTask }) {
+  const [task, setTask] = useState(initialTask);
+  const [refreshError, setRefreshError] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
+  const actionInFlight = useRef(false);
+  useEffect(() => {
+    let active = true;
+    let working = !!initialTask.presentation?.active;
+    let inFlight = false;
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const response = await api.get(`/partnership/continuations/${encodeURIComponent(initialTask.id)}`, { params: { business_id: businessId } });
+        if (!active) return;
+        const current = response.data as OutreachTask;
+        if (current) { working = !!current.presentation?.active; setTask(current); }
+        setRefreshError(!current);
+      } catch {
+        if (active) setRefreshError(true);
+      } finally { inFlight = false; }
+    };
+    void refresh();
+    let lastRefresh = Date.now();
+    const timer = window.setInterval(() => {
+      if (Date.now() - lastRefresh >= (working && !document.hidden ? 3000 : 15000)) { lastRefresh = Date.now(); void refresh(); }
+    }, 1000);
+    const focusRefresh = () => { if (!document.hidden) { lastRefresh = Date.now(); void refresh(); } };
+    document.addEventListener('visibilitychange', focusRefresh);
+    window.addEventListener('focus', focusRefresh);
+    return () => { active = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', focusRefresh); window.removeEventListener('focus', focusRefresh); };
+  }, [businessId, initialTask.id]);
+  return <div className="space-y-2">
+    <OutreachGroupCard name={task.display_name || 'Выбранный поиск'} presentation={task.presentation} busy={actionBusy} onAction={async action => {
+      if (actionInFlight.current) return;
+      actionInFlight.current = true; setActionBusy(true);
+      try {
+        await api.post(`/partnership/continuations/${task.id}`, { business_id: businessId, revision: task.revision, action: action.kind === 'draft_resume' ? 'resume_letters' : action.action });
+        const response = await api.get(`/partnership/continuations/${task.id}`, { params: { business_id: businessId } });
+        setTask(response.data); setRefreshError(false);
+      } catch { setRefreshError(true); }
+      finally { actionInFlight.current = false; setActionBusy(false); }
+    }} />
+    {refreshError && <p role="alert" className="text-sm text-destructive">Не удалось обновить состояние. Результаты сохранены; откройте поиск в «Партнёрствах».</p>}
+  </div>;
+}
+
 type OperatorResultActionsProps = {
   result: OperatorChatResult | RefreshResult;
+  businessId: string;
+  canStartPreview: boolean;
   copiedKey: string | null;
   loading: {
     refreshCheckingQueueId: string | null;
@@ -760,6 +903,7 @@ type OperatorResultActionsProps = {
     manualPublishDraftId: string | null;
     recoveringQueueId: string | null;
     confirmingActionId: string | null;
+    rejectingActionId: string | null;
   };
   onCopy: (key: string, text: string) => Promise<void>;
   onCheckRefresh: (queueId: string | undefined) => Promise<void>;
@@ -768,10 +912,15 @@ type OperatorResultActionsProps = {
   onApplyServices: (jobId: string | undefined) => Promise<void>;
   onMarkManualPublished: (draftId: string | undefined) => Promise<void>;
   onConfirmOperatorAction: (actionId: string | undefined) => Promise<void>;
+  onRejectOperatorAction: (actionId: string | undefined) => Promise<void>;
+  onSendCommand: (text: string) => Promise<void>;
+  onEditPreview: () => void;
 };
 
 const OperatorResultActions = ({
   result,
+  businessId,
+  canStartPreview,
   copiedKey,
   loading,
   onCopy,
@@ -781,6 +930,9 @@ const OperatorResultActions = ({
   onApplyServices,
   onMarkManualPublished,
   onConfirmOperatorAction,
+  onRejectOperatorAction,
+  onSendCommand,
+  onEditPreview,
 }: OperatorResultActionsProps) => {
   const capabilityPanelId = useId();
   const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
@@ -795,12 +947,17 @@ const OperatorResultActions = ({
   const drafts = 'drafts' in result ? result.drafts || [] : [];
   const billingUrl = 'billing_url' in result ? result.billing_url : undefined;
   const resultRef = 'result_ref' in result ? result.result_ref : undefined;
+  const searchPreview = 'capability' in result && ['partnerships.prepare_message', 'partnerships.continue_outreach'].includes(result.capability || '')
+    && 'search_started' in result && result.search_started === false;
+  const searchTask = 'task' in result ? result.task : undefined;
   const approval = 'approval' in result ? result.approval : undefined;
+  const outdatedOutreachApproval = approval?.capability === 'partnerships.continue_outreach'
+    && !('credit_quote' in result && result.credit_quote?.total_max !== undefined);
   const capabilityCatalog = 'capability_catalog' in result ? result.capability_catalog || [] : [];
   const capabilityExamples = 'capabilities' in result ? result.capabilities || [] : [];
   const isOperatorHelp =
-    result.intent === 'operator_help' || capabilityCatalog.length > 0 || capabilityExamples.length > 0;
-  const hasUsefulResultRef = Boolean(resultRef?.href && resultRef.href !== '/dashboard/operator');
+    ('intent' in result && result.intent === 'operator_help') || capabilityCatalog.length > 0 || capabilityExamples.length > 0;
+  const hasUsefulResultRef = !searchPreview && Boolean(resultRef?.href && resultRef.href !== '/dashboard/operator');
   const aiRouter = result.ai_router;
   const queueId = result.queue_id;
   const status = result.status || '';
@@ -824,7 +981,9 @@ const OperatorResultActions = ({
                 : 'bg-amber-50 text-amber-800 ring-amber-200',
           )}
         >
-          {status || 'operator'}
+          {searchPreview ? 'Ожидает запуска' : searchTask?.id
+            ? status === 'approval_required' ? 'Ожидает подтверждения запуска' : 'Поручение сохранено'
+            : status || 'operator'}
         </span>
         {'credit_charged' in result && result.credit_charged ? <span>Списано {result.charged_credits || 0} кредитов</span> : null}
         {'manual_publication_only' in result && result.manual_publication_only ? <span>Публикация вручную</span> : null}
@@ -835,6 +994,16 @@ const OperatorResultActions = ({
           </span>
         ) : null}
       </div>
+
+      {searchPreview && canStartPreview && !approval?.action_id ? (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-sky-950">
+          <p className="font-medium">Поиск ещё не начался</p>
+          <p className="mt-1">Условия и лимиты показаны выше. Подтвердите запуск.</p>
+          <Button type="button" size="sm" className="mt-2" onClick={() => void onSendCommand('Начни поиск по показанным условиям')}>
+            Начать поиск
+          </Button>
+        </div>
+      ) : null}
 
       {textToCopy ? (
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
@@ -965,16 +1134,36 @@ const OperatorResultActions = ({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        {approval?.action_id && approval.status === 'pending' ? (
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => void onConfirmOperatorAction(approval.action_id)}
-            disabled={loading.confirmingActionId === approval.action_id}
-          >
-            {loading.confirmingActionId === approval.action_id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-            Подтвердить
-          </Button>
+        {approval?.action_id && approval.status === 'pending' && outdatedOutreachApproval ? (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+            Условия этого подтверждения устарели. Стоимость поиска теперь указана в кредитах LocalOS.
+            <Button type="button" size="sm" variant="outline" className="mt-2 block" onClick={() => void onSendCommand('Покажи актуальные условия и стоимость в кредитах для последнего поручения по поиску компаний и подготовь новое подтверждение запуска')}>
+              Показать актуальные условия
+            </Button>
+          </div>
+        ) : null}
+        {approval?.action_id && approval.status === 'pending' && !outdatedOutreachApproval ? (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => void onConfirmOperatorAction(approval.action_id)}
+              disabled={loading.confirmingActionId === approval.action_id || loading.rejectingActionId === approval.action_id}
+            >
+              {loading.confirmingActionId === approval.action_id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              {searchPreview ? 'Начать поиск' : 'Подтвердить'}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => { if (searchPreview) onEditPreview(); else void onRejectOperatorAction(approval.action_id); }}
+              disabled={loading.confirmingActionId === approval.action_id || loading.rejectingActionId === approval.action_id}
+            >
+              {loading.rejectingActionId === approval.action_id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {searchPreview ? 'Изменить условия' : 'Отклонить'}
+            </Button>
+          </>
         ) : null}
         {isOperatorHelp ? (
           <Button
@@ -1101,16 +1290,19 @@ type OperatorCapabilityItem = {
   name?: string;
   title?: string;
   status?: string;
+  unavailable_reason?: string;
   examples?: string[];
 };
 
 const capabilityGroup = (status: string | undefined) => {
+  if (status === 'disabled') return 'disabled';
   if (status === 'request_only' || status === 'manual') return 'section';
   if (status === 'gap') return 'manual';
   return 'chat';
 };
 
 const capabilityStatusLabel = (status: string | undefined) => {
+  if (status === 'disabled') return 'Недоступно';
   if (status === 'draft_only') return 'Готовлю черновик';
   if (status === 'approval_required') return 'После подтверждения';
   if (status === 'request_only' || status === 'manual') return 'Открою раздел';
@@ -1131,6 +1323,7 @@ const OperatorCapabilitiesPanel = ({
     { key: 'chat', title: 'Могу выполнить в чате' },
     { key: 'section', title: 'Открою нужный раздел' },
     { key: 'manual', title: 'Пока только вручную' },
+    { key: 'disabled', title: 'Не включено для этого бизнеса' },
   ];
 
   return (
@@ -1150,6 +1343,7 @@ const OperatorCapabilitiesPanel = ({
                     <div key={item.name || item.title} className="flex flex-col gap-1 py-2 first:pt-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                       <div className="min-w-0">
                         <div className="font-medium text-slate-950">{item.title || 'Возможность LocalOS'}</div>
+                        {item.unavailable_reason && <p className="text-xs text-slate-500">{item.unavailable_reason}</p>}
                         {item.examples?.[0] ? (
                           <div className="text-pretty text-xs text-slate-500">Например: «{item.examples[0]}»</div>
                         ) : null}

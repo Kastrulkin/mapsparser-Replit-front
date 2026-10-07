@@ -7,8 +7,8 @@ from flask import Blueprint, current_app, jsonify, request
 
 from auth_system import verify_session
 from core.parsing_runtime_config import get_use_apify_map_parsing, set_use_apify_map_parsing
-from database_manager import DatabaseManager
-from parsequeue_status import STATUS_ERROR, normalize_status
+from database_manager import DatabaseManager, get_db_connection
+from parsequeue_status import STATUS_COMPLETED, STATUS_ERROR, normalize_status
 
 
 parsing_admin_bp = Blueprint("parsing_admin_api", __name__)
@@ -21,6 +21,18 @@ def _row_to_dict(cursor, row):
         return {k: row[k] for k in row.keys()}
     cols = [d[0] for d in cursor.description]
     return dict(zip(cols, row))
+
+
+def _count_from_row(cursor, row):
+    """Safely extract a count from tuple and mapping database rows."""
+    if row is None:
+        return 0
+    row_dict = _row_to_dict(cursor, row)
+    if not row_dict:
+        return 0
+    if "cnt" in row_dict and row_dict["cnt"] is not None:
+        return int(row_dict["cnt"])
+    return int(next(iter(row_dict.values())))
 
 
 @parsing_admin_bp.route('/api/admin/parsing/tasks', methods=['GET'])

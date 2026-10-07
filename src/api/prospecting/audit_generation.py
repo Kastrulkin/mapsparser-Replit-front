@@ -61,6 +61,15 @@ from services.llm import analyze_text_with_gigachat
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.prospecting_service import ProspectingService
 from services.telegram_account_permissions_service import assert_account_access
+from services.outreach_reply_tracking_service import record_bound_inbound_event
+from api.prospecting.telegram_reply_scope import (
+    telegram_reply_sync_outcome, telegram_reply_sync_result, telegram_reply_sync_summary,
+    trusted_telegram_reply_sender_account_id as _trusted_telegram_reply_sender_account_id,
+)
+from services.outreach_safety_service import (
+    classify_inbound_event,
+    load_partnership_repeat_contact_guard,
+)
 from services.sales_room_helpers import (
     append_sales_room_link_to_outreach_text as _append_sales_room_link_to_outreach_text,
     make_sales_room_url as _make_sales_room_url,
@@ -151,7 +160,21 @@ TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS = max(1, int(os.environ.get("TELEGRAM_REPLY_SY
 TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT = max(1, min(int(os.environ.get("TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT", "12")), 50))
 TELEGRAM_REPLY_SYNC_TIMEOUT_SEC = max(5, int(os.environ.get("TELEGRAM_REPLY_SYNC_TIMEOUT_SEC", "12")))
 LEAD_OUTREACH_MODERATION_STATUS = "lead_outreach"
-PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr")
+PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr", "hy", "kk")
+
+
+def _to_json_compatible(value: Any) -> Any:
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(key): _to_json_compatible(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_json_compatible(item) for item in value]
+    return value
+
+
 PIPELINE_UNPROCESSED = "unprocessed"
 PIPELINE_IN_PROGRESS = "in_progress"
 PIPELINE_POSTPONED = "postponed"
@@ -687,7 +710,16 @@ def _create_send_batch(user_id: str, draft_ids: list[str] | None = None):
         params.append(remaining_slots)
         cur.execute(query, params)
         selected_rows = [dict(row) for row in cur.fetchall()]
-        valid_rows = [row for row in selected_rows if _lead_has_channel_contact(row, row.get("channel"))]
+        valid_rows = []
+        for row in selected_rows:
+            if not _lead_has_channel_contact(row, row.get("channel")):
+                continue
+            contact_guard = load_partnership_repeat_contact_guard(
+                cur,
+                lead_id=str(row.get("lead_id") or ""),
+            )
+            if not contact_guard.get("blocked"):
+                valid_rows.append(row)
 
         if not valid_rows:
             return None, "No approved drafts available for queue"
@@ -726,8 +758,14 @@ def _create_send_batch(user_id: str, draft_ids: list[str] | None = None):
             cur.execute(
                 """
                 UPDATE prospectingleads
-                SET status = %s,
-                    pipeline_status = %s,
+                SET status = CASE
+                        WHEN COALESCE(status, '') IN ('replied', 'responded', 'converted', 'suppressed') THEN status
+                        ELSE %s
+                    END,
+                    pipeline_status = CASE
+                        WHEN COALESCE(pipeline_status, '') IN ('replied', 'responded', 'converted', 'suppressed') THEN pipeline_status
+                        ELSE %s
+                    END,
                     updated_at = NOW()
                 WHERE id = %s
                 """,
@@ -847,6 +885,19 @@ def _approve_send_batch(batch_id: str, user_id: str):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
+        cur.execute("SELECT id FROM outreachsendbatches WHERE id=%s AND status=%s FOR UPDATE", (batch_id, BATCH_DRAFT))
+        if not cur.fetchone():
+            return None, "Batch is not in draft status"
+        cur.execute("""SELECT q.id, touch.campaign_id, touch.generated_text, d.approved_text, d.lead_id, d.learning_note_json
+            FROM outreachsendqueue q JOIN outreach_campaign_touches touch ON touch.id=q.campaign_touch_id
+            JOIN outreachmessagedrafts d ON d.id=q.draft_id
+            WHERE q.batch_id=%s ORDER BY touch.campaign_id FOR UPDATE OF q, touch, d""", (batch_id,))
+        canonical_rows = [dict(row) for row in cur.fetchall()]
+        if canonical_rows:
+            from services.outreach_draft_review import approve_reviewed_campaigns
+            approve_error = approve_reviewed_campaigns(cur, batch_id, canonical_rows, user_id)
+            if approve_error:
+                return None, approve_error
         cur.execute(
             """
             UPDATE outreachsendbatches
@@ -1414,11 +1465,14 @@ def _load_telegram_reply_sync_candidates(
                 q.recipient_kind,
                 q.recipient_value,
                 q.sent_at,
+                q.sender_account_id,
                 l.name AS lead_name,
                 TRUE AS outreach_permission_checked,
                 permission.outreach_enabled,
                 sender.scope_type AS sender_scope_type,
-                sender.business_id AS sender_business_id
+                sender.business_id AS sender_business_id,
+                sender.external_account_id AS sender_external_account_id,
+                account.source AS sender_external_account_source
             FROM outreachsendqueue q
             JOIN prospectingleads l ON l.id = q.lead_id
             JOIN outreach_sender_accounts sender ON sender.id = q.sender_account_id
@@ -1446,7 +1500,61 @@ def _load_telegram_reply_sync_candidates(
         """
         params.append(safe_limit)
         cur.execute(query, params)
-        return [dict(row) for row in cur.fetchall()]
+        queue_items = [dict(row) for row in cur.fetchall()]
+        remaining = max(0, safe_limit - len(queue_items))
+        telegram_thread_sync_enabled = str(
+            os.getenv("OUTREACH_TELEGRAM_THREAD_SYNC_ENABLED") or "false"
+        ).strip().lower() in {"1", "true", "yes", "on"}
+        allowed_business_ids = [
+            value.strip()
+            for value in os.getenv("OUTREACH_THREAD_SYNC_BUSINESS_IDS", "").split(",")
+            if value.strip()
+        ]
+        if not remaining or batch_id or not telegram_thread_sync_enabled or not allowed_business_ids:
+            return queue_items
+        binding_query = """
+            SELECT
+                NULL::text AS id,
+                binding.id AS binding_id,
+                binding.lead_id,
+                binding.channel,
+                'sent' AS delivery_status,
+                'telegram_app' AS provider_name,
+                sender.external_account_id AS provider_account_id,
+                binding.last_processed_event_id AS provider_message_id,
+                'telegram' AS recipient_kind,
+                binding.external_peer_id AS recipient_value,
+                COALESCE(binding.last_processed_at, binding.created_at) AS sent_at,
+                lead.name AS lead_name,
+                TRUE AS outreach_permission_checked,
+                permission.outreach_enabled,
+                sender.scope_type AS sender_scope_type,
+                sender.business_id AS sender_business_id,
+                binding.workstream_id,
+                binding.business_id,
+                binding.sender_account_id,
+                sender.external_account_id AS sender_external_account_id,
+                account.source AS sender_external_account_source
+            FROM outreach_thread_bindings binding
+            JOIN prospectingleads lead ON lead.id = binding.lead_id
+            JOIN outreach_sender_accounts sender ON sender.id = binding.sender_account_id
+            JOIN externalbusinessaccounts account ON account.id = sender.external_account_id
+            JOIN telegram_account_permissions permission ON permission.account_id = account.id
+            WHERE binding.channel = 'telegram'
+              AND binding.status = 'active'
+              AND sender.status = 'connected'
+              AND account.is_active = TRUE
+              AND permission.outreach_enabled = TRUE
+              AND binding.business_id = ANY(%s)
+        """
+        binding_params: list[Any] = [allowed_business_ids]
+        if sender_account_id:
+            binding_query += " AND binding.sender_account_id = %s"
+            binding_params.append(sender_account_id)
+        binding_query += " ORDER BY COALESCE(binding.last_processed_at, binding.created_at) ASC LIMIT %s"
+        binding_params.append(remaining)
+        cur.execute(binding_query, binding_params)
+        return queue_items + [dict(row) for row in cur.fetchall()]
     finally:
         conn.close()
 
@@ -1456,8 +1564,17 @@ def _sync_telegram_app_replies_for_queue_item(
     per_chat_limit: int = TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT,
 ) -> dict[str, Any]:
     queue_id = str(item.get("id") or "").strip()
-    if not queue_id:
+    binding_id = str(item.get("binding_id") or "").strip()
+    if not queue_id and not binding_id:
         return {"status": "skipped", "reason": "missing_queue_id", "imported": 0, "duplicates": 0}
+
+    if not _trusted_telegram_reply_sender_account_id(item):
+        return {
+            "status": "failed",
+            "reason": "telegram_sender_scope_unverified",
+            "imported": 0,
+            "duplicates": 0,
+        }
 
     provider_account_id = str(item.get("provider_account_id") or "").strip()
     account = _resolve_telegram_app_account(provider_account_id)
@@ -1527,6 +1644,45 @@ def _sync_telegram_app_replies_for_queue_item(
     last_reaction = None
     for reply in replies:
         provider_message_id = _normalize_provider_message_id(reply.get("message_id"))
+        if binding_id:
+            tracking_conn = get_db_connection()
+            try:
+                tracking_cursor = tracking_conn.cursor()
+                tracking_cursor.execute(
+                    "SELECT * FROM outreach_thread_bindings WHERE id = %s AND status = 'active' FOR UPDATE",
+                    (binding_id,),
+                )
+                binding_row = tracking_cursor.fetchone()
+                if not binding_row:
+                    tracking_conn.rollback()
+                    return {
+                        "status": "failed", "reason": "thread_binding_missing",
+                        "imported": imported, "duplicates": duplicates,
+                    }
+                text = str(reply.get("text") or "").strip()
+                classification = classify_inbound_event({"body": text, "raw_reply": text})
+                status = record_bound_inbound_event(
+                    tracking_cursor,
+                    binding=dict(binding_row),
+                    sender_account_id=str(item.get("sender_account_id") or ""),
+                    channel="telegram",
+                    provider_event_id=f"telegram:{provider_account_id}:{provider_message_id}",
+                    raw_reply=text,
+                    classification=classification,
+                    occurred_at=reply.get("created_at"),
+                    raw_payload={"telegram_message_id": provider_message_id},
+                )
+                tracking_conn.commit()
+            except Exception:
+                tracking_conn.rollback()
+                raise
+            finally:
+                tracking_conn.close()
+            if status == "duplicate":
+                duplicates += 1
+            elif status == "recorded":
+                imported += 1
+            continue
         reaction, reaction_error = _record_reaction(
             queue_id,
             reply.get("text"),
@@ -1553,18 +1709,11 @@ def _sync_telegram_app_replies_for_queue_item(
         imported += 1
         last_reaction = reaction
 
-    if imported > 0:
-        return {
-            "status": "imported",
-            "imported": imported,
-            "duplicates": duplicates,
-            "last_reaction": last_reaction,
-        }
-    return {
-        "status": "noop",
-        "imported": 0,
-        "duplicates": duplicates,
-    }
+    return telegram_reply_sync_outcome(
+        imported=imported,
+        duplicates=duplicates,
+        last_reaction=last_reaction,
+    )
 
 def _sync_telegram_app_replies(
     batch_id: str | None = None,
@@ -1576,27 +1725,16 @@ def _sync_telegram_app_replies(
         batch_id=batch_id,
         sender_account_id=sender_account_id,
     )
-    summary = {
-        "success": True,
-        "batch_id": batch_id,
-        "sender_account_id": sender_account_id,
-        "picked": len(items),
-        "imported": 0,
-        "duplicates": 0,
-        "noops": 0,
-        "failed": 0,
-        "results": [],
-    }
+    summary = telegram_reply_sync_summary(
+        batch_id=batch_id,
+        sender_account_id=sender_account_id,
+        picked=len(items),
+    )
     for item in items:
         result = _sync_telegram_app_replies_for_queue_item(item)
-        summary["results"].append(
-            {
-                "queue_id": item.get("id"),
-                "lead_id": item.get("lead_id"),
-                "lead_name": item.get("lead_name"),
-                **result,
-            }
-        )
+        item_result, sender_result = telegram_reply_sync_result(item, result)
+        summary["results"].append(item_result)
+        summary["sender_results"].append(sender_result)
         if result.get("status") == "imported":
             summary["imported"] += int(result.get("imported") or 0)
             summary["duplicates"] += int(result.get("duplicates") or 0)

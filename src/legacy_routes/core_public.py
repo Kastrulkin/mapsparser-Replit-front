@@ -1,6 +1,9 @@
 from legacy_routes import shared as _shared
 from core.frontend_asset_compatibility import resolve_current_lazy_chunk
 from core.auth_helpers import verify_business_access
+from core.html_head import replace_or_insert_tag as _replace_or_insert_tag
+from core.readiness import database_ready
+from core.public_page_html import is_known_spa_route, should_noindex_spa_route, load_public_page, load_public_shell, replace_public_page_body
 
 globals().update(_shared.runtime_namespace)
 
@@ -276,12 +279,6 @@ def _schema_for_route(route_path: str, route_seo: Dict[str, Any]) -> Any:
         return _route_article_schema(route_path, route_seo)
     return None
 
-def _replace_or_insert_tag(html_text: str, pattern: str, replacement: str) -> str:
-    updated, count = re.subn(pattern, replacement, html_text, count=1, flags=re.IGNORECASE | re.DOTALL)
-    if count:
-        return updated
-    return html_text.replace("</head>", f"  {replacement}\n</head>", 1)
-
 def _set_named_meta(html_text: str, attribute: str, key: str, content: str) -> str:
     escaped_content = _escape_head_value(content)
     escaped_key = re.escape(key)
@@ -300,7 +297,7 @@ def _set_jsonld(html_text: str, schema: Any) -> str:
     script = f'<script id="localos-jsonld" type="application/ld+json">{jsonld}</script>'
     updated, count = re.subn(
         r'<script\s+id="localos-jsonld"\s+type="application/ld\+json">.*?</script>',
-        script,
+        lambda _match: script,
         html_text,
         count=1,
         flags=re.IGNORECASE | re.DOTALL,
@@ -309,16 +306,33 @@ def _set_jsonld(html_text: str, schema: Any) -> str:
         return updated
     return html_text.replace("</head>", f"  {script}\n</head>", 1)
 
-def _render_spa_index(path: str = ""):
+def _render_spa_index(path: str = "", status_code: int = 200):
     route_path = _normalize_content_route(path)
+    if route_path == "/docs/overview":
+        route_path = "/docs"
+    if route_path == "/growth":
+        direction = request.args.get("direction", "")
+        candidate = f"/growth?direction={direction}"
+        if load_public_page(FRONTEND_DIST_DIR, candidate) is not None:
+            route_path = candidate
+    noindex = status_code == 404 or should_noindex_spa_route(route_path)
     index_html = _read_frontend_index_html()
     if index_html is None:
-        return send_from_directory(FRONTEND_DIST_DIR, "index.html")
+        response = send_from_directory(FRONTEND_DIST_DIR, "index.html")
+        response.status_code = status_code
+        if noindex:
+            response.headers["X-Robots-Tag"] = "noindex"
+        return response
 
     seo_data = _load_content_seo_data()
     routes = seo_data.get("routes") if isinstance(seo_data.get("routes"), dict) else {}
     default_seo = seo_data.get("default") if isinstance(seo_data.get("default"), dict) else {}
     route_seo = routes.get(route_path) if isinstance(routes.get(route_path), dict) else default_seo
+    public_page = load_public_page(FRONTEND_DIST_DIR, route_path)
+    if public_page is not None:
+        index_html = load_public_shell(FRONTEND_DIST_DIR, index_html)
+        route_seo = {**route_seo, "title": public_page["title"], "description": public_page["description"]}
+        index_html = replace_public_page_body(index_html, public_page)
     title = route_seo.get("title") or default_seo.get("title") or "LocalOS.pro - Локальное продвижение локального бизнеса"
     description = route_seo.get("description") or default_seo.get("description") or ""
     og_type = route_seo.get("ogType") or default_seo.get("ogType") or "website"
@@ -327,7 +341,7 @@ def _render_spa_index(path: str = ""):
 
     index_html = re.sub(
         r"<title>.*?</title>",
-        f"<title>{_escape_head_value(title)}</title>",
+        lambda _match: f"<title>{_escape_head_value(title)}</title>",
         index_html,
         count=1,
         flags=re.IGNORECASE | re.DOTALL,
@@ -339,10 +353,14 @@ def _render_spa_index(path: str = ""):
     index_html = _set_named_meta(index_html, "property", "og:url", canonical_url)
     index_html = _set_named_meta(index_html, "property", "og:image", image)
     index_html = _set_named_meta(index_html, "name", "twitter:image", image)
+    if noindex:
+        index_html = _set_named_meta(index_html, "name", "robots", "noindex, follow")
     index_html = _set_canonical(index_html, canonical_url)
-    index_html = _set_jsonld(index_html, _schema_for_route(route_path, route_seo))
+    index_html = _set_jsonld(index_html, public_page.get("schema") if public_page is not None and public_page.get("schema") else _schema_for_route(route_path, route_seo))
 
-    response = Response(index_html, mimetype="text/html")
+    response = Response(index_html, status=status_code, mimetype="text/html")
+    if noindex:
+        response.headers["X-Robots-Tag"] = "noindex"
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
@@ -365,7 +383,6 @@ def serve_assets(filename):
     assets_dir = os.path.join(FRONTEND_DIST_DIR, 'assets')
     current_chunk = resolve_current_lazy_chunk(FRONTEND_DIST_DIR, filename)
     if current_chunk and current_chunk != filename:
-        logger.warning("Serving current Vite chunk %s for stale request %s", current_chunk, filename)
         response = send_from_directory(assets_dir, current_chunk)
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["X-LocalOS-Asset-Fallback"] = current_chunk
@@ -1399,6 +1416,10 @@ def spa_fallback(path):
         # Если файл существует в dist, отдаем его напрямую
         return send_from_directory(FRONTEND_DIST_DIR, path)
 
+    if load_public_page(FRONTEND_DIST_DIR, _normalize_content_route(path)) is not None:
+        # Reserved public pages must not be interpreted as database-backed offer slugs.
+        return _render_spa_index(path)
+
     if _is_public_offer_slug(path):
         response = send_from_directory(os.path.join(PUBLIC_FRONTEND_DIST_DIR, 'public-audit'), 'index.html')
         if response:
@@ -1407,8 +1428,12 @@ def spa_fallback(path):
             response.headers["Expires"] = "0"
         return response
 
-    # Иначе - SPA индекс с route-specific SEO/JSON-LD для краулеров без JavaScript.
-    return _render_spa_index(path)
+    # Unknown URLs must not look like successful copies of the homepage to crawlers.
+    route_path = _normalize_content_route(path)
+    seo_data = _load_content_seo_data()
+    seo_routes = seo_data.get("routes") if isinstance(seo_data.get("routes"), dict) else {}
+    status_code = 200 if is_known_spa_route(route_path, seo_routes) else 404
+    return _render_spa_index(path, status_code=status_code)
 
 @app.route('/api/users/reports', methods=['GET'])
 def stub_users_reports():
@@ -1498,6 +1523,13 @@ def analyze():
 def health():
     """Проверка здоровья сервера"""
     return jsonify({"status": "ok", "message": "SEO анализатор работает"})
+
+
+@app.route('/ready', methods=['GET'])
+def ready():
+    if database_ready():
+        return jsonify({"status": "ready"}), 200
+    return jsonify({"status": "not_ready"}), 503
 
 def _row_to_dict(cursor, row):
     """Маппинг строки в dict: dict-like row — по ключам, tuple-row — по cursor.description."""

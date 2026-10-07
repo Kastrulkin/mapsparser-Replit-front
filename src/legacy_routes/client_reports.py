@@ -150,6 +150,13 @@ def news_generate():
         db = DatabaseManager()
         cur = db.conn.cursor()
         business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id') or data.get('business_id'))
+        if not business_id:
+            raise ValueError("Выберите бизнес для подготовки новости")
+        from services.content_rules import enforce
+        from services.operator_social_post_generation import _default_social_post_generator
+        generated_text = enforce(cur, business_id, user_data['user_id'], generated_text,
+            _default_social_post_generator, raw_info)
+
         business_name = "Бизнес"
         business_categories = ""
         business_type_context = ""
@@ -668,7 +675,7 @@ def news_approve():
         _ensure_usernews_learning_columns(cur)
         cur.execute(
             """
-            SELECT id, service_id, generated_text, original_generated_text, edited_before_approve, prompt_key, prompt_version
+            SELECT id, business_id, source_text, service_id, generated_text, original_generated_text, edited_before_approve, prompt_key, prompt_version
             FROM usernews
             WHERE id = %s AND user_id = %s
             """,
@@ -679,6 +686,13 @@ def news_approve():
             db.close()
             return jsonify({"error": "Новость не найдена"}), 404
         current_data = _row_to_dict(cur, current_row)
+        from services.content_rules import validate
+        from services.operator_social_post_generation import _default_social_post_generator
+        if not current_data.get('business_id'):
+            raise ValueError('У новости не указан бизнес. Подготовьте её заново в выбранном бизнесе.')
+        validate(cur, current_data['business_id'], user_data['user_id'], current_data['generated_text'],
+            _default_social_post_generator, current_data.get('source_text') or '')
+
         cur.execute("UPDATE usernews SET approved = 1 WHERE id = %s AND user_id = %s", (news_id, user_data['user_id']))
         if cur.rowcount == 0:
             db.close()

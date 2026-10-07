@@ -4,6 +4,7 @@ import sys
 
 from flask import Blueprint, Response, jsonify, request
 
+from core.api_errors import internal_error_response
 from core.auth_helpers import require_auth_from_request, verify_business_access
 from database_manager import DatabaseManager
 from services.ai_runtime import (
@@ -24,11 +25,54 @@ from services.media_intelligence import (
     recommend_media_for_post,
     upsert_photo_asset,
 )
-from services.media_file_storage import load_media_file
+from services.media_file_storage import load_media_file, verify_media_delivery_token
 from services.photo_analysis_quota import get_network_photo_analysis_quota
 
 
 media_intelligence_bp = Blueprint("media_intelligence", __name__, url_prefix="/api/media-intelligence")
+
+
+@media_intelligence_bp.route("/public/photos/<asset_id>/file", methods=["GET"])
+def public_media_photo_file(asset_id: str):
+    variant = str(request.args.get("variant") or "original").strip() or "original"
+    token = str(request.args.get("token") or "").strip()
+    if variant not in {"original", "preview", "thumb"}:
+        return jsonify({"success": False, "error": "Файл не найден"}), 404
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT storage_key, versions_json, content_hash
+            FROM photo_assets
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (str(asset_id or "").strip(),),
+        )
+        row = cursor.fetchone()
+        photo = dict(row) if hasattr(row, "keys") else None
+        if not photo or not verify_media_delivery_token(
+            asset_id=asset_id,
+            content_hash=str(photo.get("content_hash") or ""),
+            variant=variant,
+            token=token,
+        ):
+            return jsonify({"success": False, "error": "Файл не найден"}), 404
+        versions = photo.get("versions_json") if isinstance(photo.get("versions_json"), dict) else {}
+        variant_data = versions.get(variant) if isinstance(versions.get(variant), dict) else {}
+        storage_path = str(variant_data.get("storage_path") or photo.get("storage_key") or "").strip()
+        content = load_media_file(storage_path)
+        if content is None:
+            return jsonify({"success": False, "error": "Файл не найден"}), 404
+        response = Response(content, mimetype=str(variant_data.get("mime_type") or "image/jpeg"))
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+    except Exception:
+        return internal_error_response("Не удалось получить файл фотографии")
+    finally:
+        db.close()
 
 
 def _user_id(user_data: dict) -> str:
@@ -109,7 +153,7 @@ def media_settings_get():
             }
         )
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось получить настройки фотографий")
     finally:
         db.close()
 
@@ -140,7 +184,7 @@ def media_settings_post():
         return jsonify({"success": True, "setting": setting})
     except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось сохранить настройки фотографий")
     finally:
         db.close()
 
@@ -166,7 +210,7 @@ def media_photos_list():
             }
         )
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось получить фотографии")
     finally:
         db.close()
 
@@ -208,7 +252,7 @@ def media_photos_create():
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
     except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось добавить фотографию")
     finally:
         db.close()
 
@@ -254,7 +298,7 @@ def media_photo_upload():
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
     except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось загрузить фотографию")
     finally:
         db.close()
 
@@ -297,7 +341,7 @@ def media_photo_file(asset_id: str):
         mime_type = str(variant_data.get("mime_type") or "image/jpeg")
         return Response(content, mimetype=mime_type)
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось получить файл фотографии")
     finally:
         db.close()
 
@@ -344,7 +388,7 @@ def media_photo_analyze(asset_id: str):
         return jsonify(result), status_code
     except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось проанализировать фотографию")
     finally:
         db.close()
 
@@ -378,7 +422,7 @@ def media_photo_new_version(asset_id: str):
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 404
     except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось создать версию фотографии")
     finally:
         db.close()
 
@@ -396,6 +440,8 @@ def media_photo_usage(asset_id: str):
         ok, error_response = _require_business(cursor, business_id, user_data)
         if not ok:
             return error_response
+        cursor.execute("SELECT id FROM photo_assets WHERE id=%s AND business_id=%s AND metadata_json->>'disk_import_available' IS DISTINCT FROM 'false'",(asset_id,business_id))
+        if not cursor.fetchone():raise ValueError('Фото недоступно для новых публикаций.')
         usage_type = str(payload.get("usage_type") or "publication")
         target_id = str(payload.get("target_id") or "").strip()
         target_platform = str(payload.get("target_platform") or "").strip()
@@ -427,7 +473,7 @@ def media_photo_usage(asset_id: str):
         )
     except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось сохранить использование фотографии")
     finally:
         db.close()
 
@@ -461,7 +507,7 @@ def media_coverage_get():
             return error_response
         return jsonify({"success": True, "coverage": build_photo_coverage(cursor, business_id)})
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось получить покрытие фотографиями")
     finally:
         db.close()
 
@@ -483,6 +529,9 @@ def media_post_recommendation(item_id: str):
     except ValueError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 404
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось подобрать фотографию для публикации")
     finally:
         db.close()
+
+from api.disk_import_api import register_disk_import_routes
+register_disk_import_routes(media_intelligence_bp)

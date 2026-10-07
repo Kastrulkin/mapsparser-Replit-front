@@ -8,17 +8,21 @@ from __future__ import annotations
 import json
 import sys
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, Response, jsonify, request
 
 from auth_encryption import encrypt_auth_data, decrypt_auth_data
 from auth_system import verify_session
 from core import finance_crm, finance_imports
+from core.api_errors import internal_error_response
 from core.finance_kpis import calculate_finance_snapshot, default_period_range, get_default_finance_thresholds
 from core.auth_helpers import verify_business_access
 from core.helpers import get_business_id_from_user, get_business_owner_id
 from database_manager import DatabaseManager
+from services.gigachat_client import analyze_screenshot_with_gigachat
+from services.llm import analyze_text_with_gigachat
+from subscription_manager import get_capability_access
 
 
 finance_bp = Blueprint("finance_api", __name__)
@@ -86,7 +90,29 @@ def _require_finance_user_and_business():
     if not has_access:
         return user_data, business_id, (jsonify({"error": "Нет доступа к этому бизнесу"}), 403)
 
+    capability_access = get_capability_access(business_id, 'finance', bool(user_data.get('is_superadmin')))
+    if not capability_access.get('allowed'):
+        return user_data, business_id, (
+            jsonify({
+                "error": "payment_required",
+                **capability_access,
+                "return_to": request.full_path.rstrip('?'),
+            }),
+            402,
+        )
+
     return user_data, business_id, None
+
+
+@finance_bp.before_request
+def require_finance_capability():
+    if request.method == 'OPTIONS' or request.endpoint in {
+        'finance_api.get_finance_import_template',
+        'finance_api.get_finance_import_templates',
+    }:
+        return None
+    _user_data, _business_id, error_response = _require_finance_user_and_business()
+    return error_response
 
 
 def _finance_period_from_request():
@@ -550,6 +576,15 @@ def _finance_snapshot_for_period(cursor, business_id, start_date, end_date):
     payload = _load_finance_payload(cursor, business_id, start_date, end_date)
     thresholds = _load_finance_thresholds(cursor, business_id)
     snapshot = calculate_finance_snapshot(payload, thresholds)
+    from services.finance_daily import canonical_report, overlay_snapshot
+    daily = canonical_report(cursor,business_id,start_date,end_date)
+    snapshot = overlay_snapshot(snapshot,daily)
+    if daily is not None:
+        payload["financial_daily"] = daily
+        # Preserve source periods and values; never prorate revenue into selected days.
+        cursor.execute('SELECT to_jsonb(s) data FROM finance_service_metrics s WHERE business_id=%s AND period_start<=%s AND period_end>=%s',(business_id,end_date,start_date))
+        payload['services']=[row['data'] for row in cursor.fetchall()]
+        snapshot['services']=payload['services']
     return payload, thresholds, snapshot
 
 
@@ -1017,6 +1052,7 @@ def get_finance_dashboard():
 
 @finance_bp.route('/api/finance/manual-entry', methods=['POST', 'OPTIONS'])
 def add_finance_manual_entry():
+    db = None
     try:
         if request.method == 'OPTIONS':
             return ('', 204)
@@ -1029,24 +1065,28 @@ def add_finance_manual_entry():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         inserted = _insert_finance_manual_payload(cursor, business_id, data)
-        db.conn.commit()
         payload, thresholds, snapshot = _finance_snapshot_for_period(
             cursor,
             business_id,
             data.get('period_start') or data.get('from') or default_period_range()[0],
             data.get('period_end') or data.get('to') or default_period_range()[1],
         )
-        db.close()
-
-        return jsonify({
+        response = jsonify({
             "success": True,
             "business_id": business_id,
             "inserted": inserted,
             "thresholds": thresholds,
             "dashboard": snapshot,
         })
+        db.conn.commit()
+        return response
     except Exception:
-        return jsonify({"error": f"Ошибка сохранения финансовых данных: {str(sys.exc_info()[1])}"}), 500
+        if db is not None:
+            db.conn.rollback()
+        return internal_error_response("Не удалось сохранить финансовые данные")
+    finally:
+        if db is not None:
+            db.close()
 
 
 @finance_bp.route('/api/finance/recalculate', methods=['POST', 'OPTIONS'])
@@ -1413,11 +1453,15 @@ def preview_finance_import():
             "valid_rows": len(normalized.get("rows", [])),
             "failed_rows": len(normalized.get("errors", [])),
             "mapping": normalized.get("mapping", {}),
+            "mapping_details": normalized.get("mapping_details", []),
+            "needs_mapping_confirmation": normalized.get("needs_mapping_confirmation", False),
+            "unmapped_headers": normalized.get("unmapped_headers", []),
+            "source_headers": normalized.get("source_headers", []),
             "preview": preview_rows,
             "errors": normalized.get("errors", [])[:20],
         })
     except Exception:
-        return jsonify({"error": f"Ошибка preview импорта: {str(sys.exc_info()[1])}"}), 500
+        return internal_error_response("Не удалось подготовить импорт финансов")
 
 
 @finance_bp.route('/api/finance/import-file', methods=['POST', 'OPTIONS'])
@@ -2116,6 +2160,13 @@ def update_transaction(transaction_id):
             db.close()
             return jsonify({"error": "Нет доступа к транзакции"}), 403
 
+        from services.finance_daily import installed
+        if installed(cursor):
+            cursor.execute('SELECT 1 FROM finance_daily_events WHERE target_id=%s LIMIT 1',(transaction_id,))
+            if cursor.fetchone():
+                db.close()
+                return jsonify({'error':'Исправьте эту запись через Оператора: требуется новое подтверждение с сохранением истории.'}),409
+
         fields = []
         params = []
         if 'transaction_date' in data:
@@ -2180,6 +2231,12 @@ def delete_transaction(transaction_id):
             db.close()
             return jsonify({"error": "Нет доступа к транзакции"}), 403
 
+        from services.finance_daily import installed
+        if installed(cursor):
+            cursor.execute('SELECT 1 FROM finance_daily_events WHERE target_id=%s LIMIT 1',(transaction_id,))
+            if cursor.fetchone():
+                db.close()
+                return jsonify({'error':'Отмените эту запись через Оператора: история должна сохраниться.'}),409
         cursor.execute("DELETE FROM financialtransactions WHERE id = %s", (transaction_id,))
         db.conn.commit()
         db.close()
@@ -2569,6 +2626,18 @@ def get_financial_metrics():
                 start_date = (now - timedelta(days=365)).strftime('%Y-%m-%d')
                 end_date = now.strftime('%Y-%m-%d')
 
+        from services.finance_daily import canonical_report
+        daily = canonical_report(cursor,business_id,start_date,end_date)
+        if daily is not None:
+            values = next(iter(daily['currencies'].values())) if len(daily['currencies'])==1 else {}
+            db.close()
+            return jsonify({'success':True,'financial_daily':daily,'currency':next(iter(daily['currencies'])) if len(daily['currencies'])==1 else None,
+                'metrics':{'total_revenue':values.get('revenue'),'total_orders':values.get('checks'),'average_check':values.get('average_check'),
+                           'refunds':values.get('refunds'),'net_revenue':values.get('net_revenue'),'upsell_share':values.get('upsell_share'),
+                           'new_clients':None,'returning_clients':None,'retention_rate':None,'revenue_growth':None},
+                'growth':{'revenue_growth':None,'orders_growth':None},
+                'period':{'start_date':start_date,'end_date':end_date,'type':period}})
+
         # Формируем WHERE условие с учётом business_id
         where_clause = "transaction_date BETWEEN %s AND %s"
         where_params = [start_date, end_date]
@@ -2937,3 +3006,40 @@ def calculate_roi():
 
     except Exception as e:
         return jsonify({"error": f"Ошибка расчета ROI: {str(e)}"}), 500
+
+
+@finance_bp.route('/api/finance/daily', methods=['GET'])
+def get_daily_finance():
+    user,business_id,error=_require_finance_user_and_business()
+    if error:return error
+    from services.finance_daily import installed, read_period, day_context, enabled
+    db=DatabaseManager()
+    try:
+        cursor=db.conn.cursor()
+        if not installed(cursor):return jsonify({'enabled':False,'days':[],'currencies':{}})
+        context=day_context(cursor,business_id)
+        start=request.args.get('start') or context.get('today')
+        end=request.args.get('end') or start
+        if not start:
+            cursor.execute('SELECT MAX(date) latest_date FROM finance_daily_summaries WHERE business_id=%s',(business_id,))
+            latest=cursor.fetchone()
+            start=latest['latest_date'] if latest else None
+            end=start
+        if not start:return jsonify({'enabled':enabled(business_id),'settings':context,'days':[],'currencies':{}})
+        return jsonify({'enabled':enabled(business_id),**read_period(cursor,business_id,start,end)})
+    except ValueError:
+        return jsonify({'error':'Укажите корректный период.'}),400
+    finally:db.close()
+
+
+@finance_bp.route('/api/finance/daily/<target_id>/history', methods=['GET'])
+def get_daily_finance_history(target_id):
+    user,business_id,error=_require_finance_user_and_business()
+    if error:return error
+    from services.operator_conversations import _row
+    db=DatabaseManager()
+    try:
+        cursor=db.conn.cursor()
+        cursor.execute('SELECT kind,before_json,after_json,user_id,channel,created_at FROM finance_daily_events WHERE business_id=%s AND target_id=%s ORDER BY created_at DESC LIMIT 100',(business_id,target_id))
+        return jsonify({'items':[_row(cursor,row) for row in cursor.fetchall()]})
+    finally:db.close()

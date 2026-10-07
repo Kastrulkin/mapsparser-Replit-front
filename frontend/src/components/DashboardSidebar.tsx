@@ -15,7 +15,11 @@ import {
   Sparkles,
   Handshake,
   Bot,
-  Radar
+  Radar,
+  BarChart3,
+  Megaphone,
+  LayoutGrid,
+  CircleEllipsis,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { useState } from 'react';
@@ -26,6 +30,7 @@ import { DESIGN_TOKENS } from '../lib/design-tokens';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { getDemoWorkspaceCopy } from '../i18n/demoWorkspaceCopy';
 import { getDashboardNavigationCopy } from '../i18n/dashboardNavigationCopy';
+import { featureFlags } from '../config/featureFlags';
 
 interface DashboardSidebarProps {
   isMobile?: boolean;
@@ -46,7 +51,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   const navigationCopy = getDashboardNavigationCopy(language);
   const [isOpen, setIsOpen] = useState(false);
 
-  const menuItems = [
+  const legacyMenuItems = [
     {
       id: 'today',
       label: language === 'ru' ? 'Сегодня' : 'Today',
@@ -160,6 +165,36 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
         : 'General account, integration, and workflow settings.',
     },
   ];
+  const menuItems = featureFlags.growthPathsNavigation ? [
+    {
+      id: 'today',
+      label: 'Сегодня',
+      icon: Calendar,
+      path: '/dashboard/today',
+      tooltip: 'Главное действие и короткая очередь на сегодня.',
+    },
+    {
+      id: 'growth-paths',
+      label: 'Пути роста',
+      icon: LayoutGrid,
+      path: '/dashboard/growth-paths',
+      tooltip: 'Карты, контент, инфлюенсеры и партнёрства — с одним следующим шагом.',
+    },
+    {
+      id: 'progress',
+      label: 'Результаты',
+      icon: TrendingUp,
+      path: '/dashboard/progress',
+      tooltip: 'Завершённые действия, изменения и динамика показателей.',
+    },
+    {
+      id: 'more',
+      label: 'Ещё',
+      icon: CircleEllipsis,
+      path: '/dashboard/more',
+      tooltip: 'Профиль, финансы, агенты, чаты, интеграции и настройки.',
+    },
+  ] : legacyMenuItems;
 
   const handleLinkClick = () => {
     if (isMobile && onClose) {

@@ -15,7 +15,7 @@ import urllib.request
 from database_manager import DatabaseManager, get_db_connection
 from auth_system import CONSENT_VERSION, verify_session
 from core.email_delivery import send_verification_email
-from subscription_manager import get_automation_block_message, has_paid_automation_access
+from subscription_manager import get_capability_access
 from timezone_utils import get_timezone_from_address
 from core.telegram_token_store import (
     decode_telegram_bot_token,
@@ -29,11 +29,37 @@ from core.channel_router import (
     get_routing_plan,
     dispatch_with_routing,
 )
+from services.lead_journey_service import JourneyError, journey_enabled, load_public_journey, reserve_journey
 import uuid
 import json
 from datetime import datetime, timedelta
 
 messengers_bp = Blueprint('messengers', __name__)
+
+
+@messengers_bp.before_request
+def require_chat_capability():
+    protected_endpoints = {
+        'messengers.connect_telegram',
+        'messengers.telegram_bot_status',
+        'messengers.telegram_bot_publish_target_probe',
+        'messengers.channels_status',
+        'messengers.channels_test_send',
+        'messengers.verify_whatsapp',
+    }
+    if request.endpoint not in protected_endpoints or request.method == 'OPTIONS':
+        return None
+    user_data = require_auth()
+    if not user_data:
+        return jsonify({"error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get('business_id') or request.args.get('business_id') or '').strip()
+    if not business_id:
+        return None
+    access = get_capability_access(business_id, 'chats', bool(user_data.get('is_superadmin')))
+    if access.get('allowed'):
+        return None
+    return jsonify({"success": False, "error": "payment_required", **access, "return_to": request.full_path.rstrip('?')}), 402
 
 
 def _row_get(row, key, index=0, default=None):
@@ -547,6 +573,7 @@ def register_with_business():
         business_city = data.get('business_city', '').strip()
         business_country = data.get('business_country', 'US').strip()
         audit_slug = data.get('audit_slug', '').strip()
+        journey_token = str(data.get('journey_token') or '').strip()
         
         if not email or not password:
             return jsonify({"error": "Email и пароль обязательны"}), 400
@@ -561,6 +588,17 @@ def register_with_business():
 
         if _looks_like_url(business_city):
             return jsonify({"error": "Поле «Город» не должно содержать ссылку на карту"}), 400
+
+        if journey_token:
+            if not journey_enabled():
+                return jsonify({"error": "Персональная ссылка пока недоступна"}), 404
+            journey_db = DatabaseManager()
+            try:
+                load_public_journey(journey_db.conn.cursor(), journey_token)
+            except JourneyError as exc:
+                return jsonify({"error": str(exc), "code": exc.code}), exc.status_code
+            finally:
+                journey_db.close()
         
         # Создаём пользователя
         from auth_system import create_user
@@ -625,6 +663,14 @@ def register_with_business():
                     SET {', '.join(update_fields)}
                     WHERE id = %s
                 """, update_values)
+
+            if journey_token:
+                reserve_journey(
+                    cursor,
+                    token=journey_token,
+                    user_id=user_id,
+                    business_id=business_id,
+                )
             
             db.conn.commit()
             db.close()
@@ -656,6 +702,7 @@ def register_with_business():
                 "claimed_from_audit_slug": claimed_business.get('claimed_from_audit_slug') if claimed_business else None,
             },
             "timezone": timezone_result.get('timezone', 'UTC'),
+            "journey_pending": bool(journey_token),
         }), 201
         
     except Exception as e:
@@ -702,9 +749,20 @@ def update_business_profile():
             'ai_agent_tone',
             'ai_agents_config',
         }
-        if any(field in data for field in automation_fields) and not has_paid_automation_access(business_id):
-            db.close()
-            return jsonify({"error": get_automation_block_message(business_id), "code": "automation_locked"}), 403
+        if any(field in data for field in automation_fields):
+            automation_access = get_capability_access(
+                business_id,
+                "automation",
+                bool(user_data.get("is_superadmin")),
+            )
+            if not automation_access.get("allowed"):
+                db.close()
+                return jsonify({
+                    "success": False,
+                    "error": "payment_required",
+                    **automation_access,
+                    "return_to": "/dashboard/settings?section=ai-agents",
+                }), 402
         
         # Собираем схему Businesses, чтобы безопасно обновлять только существующие поля
         cursor.execute("""

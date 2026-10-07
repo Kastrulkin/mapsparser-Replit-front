@@ -1,73 +1,83 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { useOutletContext, useSearchParams } from 'react-router-dom';
-import { newAuth } from '@/lib/auth_new';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { ProspectingIntakePanel } from '@/components/prospecting/ProspectingWorkspaceChrome';
-import { getRequestErrorMessage, runLoadingAction } from '@/components/prospecting/prospectingAsync';
-import { collectLeadIdsForSource, preparePartnershipBatch, runPartnershipPilotFlow, sourceMatchesDescriptor } from '@/components/prospecting/partnershipFlowHelpers';
-import { usePartnershipWorkspaceDerivedData } from '@/components/prospecting/usePartnershipWorkspaceDerivedData';
+import { OutreachContinuation } from '@/components/prospecting/OutreachContinuation';
+import { buildCandidateSearchGroups, resolveSearchTask, taskLabel, type SearchTaskGroup } from '@/components/prospecting/partnershipSearchGroups';
+import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
+import { OutreachLearningInsights } from '@/components/prospecting/OutreachLearningInsights';
+import { PartnershipAnalyticsWorkspace } from '@/components/prospecting/PartnershipAnalyticsWorkspace';
+import type { AuditData, MatchData } from '@/components/prospecting/PartnershipLeadDetailDrawer';
 import {
-  buildOperatorSnapshotMarkdown,
-  buildOperatorSnapshotPayload,
-  buildPartnershipCsvTemplate,
-  downloadTextFile,
-} from '@/components/prospecting/partnershipExport';
-import { PartnershipWorkspaceOverview } from '@/components/prospecting/PartnershipWorkspaceOverview';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { getPartnershipWorkspaceCopy } from '@/i18n/partnershipWorkspaceCopy';
-import { PartnershipRawIntakeControls } from '@/components/prospecting/PartnershipRawIntakeControls';
-import {
-  PartnershipDraftsSection,
-  PartnershipQueueSection,
-  PartnershipSentSection,
+	PartnershipDraftsSection,
+	PartnershipQueueSection,
+	PartnershipSentSection,
 } from '@/components/prospecting/PartnershipOperationalSections';
 import {
-  PartnershipLeadCard,
-  PartnershipPipelineBoard,
-  PartnershipPipelineBulkBar,
-  PartnershipPipelineList,
+	PartnershipLeadCard,
+	PartnershipPipelineBoard,
+	PartnershipPipelineBulkBar,
+	PartnershipPipelineList,
 } from '@/components/prospecting/PartnershipPipelineSections';
-import { PartnershipAnalyticsWorkspace } from '@/components/prospecting/PartnershipAnalyticsWorkspace';
-import { OutreachLearningInsights } from '@/components/prospecting/OutreachLearningInsights';
+import { PartnershipRawIntakeControls } from '@/components/prospecting/PartnershipRawIntakeControls';
+import { PartnershipResults } from '@/components/prospecting/PartnershipResults';
+import { PartnershipWorkspaceOverview } from '@/components/prospecting/PartnershipWorkspaceOverview';
+import { ProspectingIntakePanel } from '@/components/prospecting/ProspectingWorkspaceChrome';
 import {
-  approvePartnershipBatch,
-  approvePartnershipDraft,
-  bulkDeletePartnershipLeads,
-  bulkEnrichPartnershipContacts,
-  bulkMatchPartnershipLeads,
-  bulkUpdatePartnershipLeads,
-  confirmPartnershipReaction,
-  createPartnershipBatch,
-  deletePartnershipDraft,
-  deletePartnershipLead,
-  deletePartnershipQueueItem,
-  exportPartnershipData,
-  getStringIds,
-  importPartnershipFile,
-  importPartnershipLinks,
-  loadPartnershipBatches,
-  loadPartnershipBlockers,
-  loadPartnershipDrafts,
-  loadPartnershipFunnel,
-  loadPartnershipHealth,
-  loadPartnershipLeads,
-  loadPartnershipLearningMetrics,
-  loadPartnershipOutcomes,
-  loadPartnershipRalphLoop,
-  loadPartnershipSourceQuality,
-  markPartnershipLeadManualContact,
-  normalizePartnershipLeads,
-  patchPartnershipLead,
-  preparePartnershipSalesRoom,
-  recordPartnershipReaction,
-  runPartnershipGeoSearch,
-  runPartnershipLeadAction,
-  startPartnershipContactIntelligence,
-  updatePartnershipQueueDelivery,
+	approvePartnershipBatch,
+	approvePartnershipDraft,
+	bulkDeletePartnershipLeads,
+	bulkEnrichPartnershipContacts,
+	bulkMatchPartnershipLeads,
+	bulkUpdatePartnershipLeads,
+	confirmPartnershipReaction,
+	createPartnershipBatch,
+	deletePartnershipDraft,
+	deletePartnershipLead,
+	deletePartnershipQueueItem,
+	exportPartnershipData,
+	getStringIds,
+	importPartnershipFile,
+	importPartnershipLinks,
+	loadPartnershipBatches,
+	loadPartnershipBlockers,
+	loadPartnershipDrafts,
+	loadPartnershipFunnel,
+	loadPartnershipHealth,
+	loadPartnershipLeads,
+	loadPartnershipLearningMetrics,
+	loadPartnershipOutcomes,
+	loadPartnershipRalphLoop,
+	loadPartnershipSourceQuality,
+	markPartnershipLeadManualContact,
+	normalizePartnershipLeads,
+	patchPartnershipLead,
+	preparePartnershipSalesRoom,
+	recordPartnershipReaction,
+	runPartnershipGeoSearch,
+	runPartnershipLeadAction,
+	startPartnershipContactIntelligence,
+	updatePartnershipQueueDelivery,
 } from '@/components/prospecting/partnershipApi';
+import {
+	buildOperatorSnapshotMarkdown,
+	buildOperatorSnapshotPayload,
+	buildPartnershipCsvTemplate,
+	downloadTextFile,
+} from '@/components/prospecting/partnershipExport';
+import { collectLeadIdsForSource, preparePartnershipBatch, runPartnershipPilotFlow, sourceMatchesDescriptor } from '@/components/prospecting/partnershipFlowHelpers';
+import type { PartnershipBatch, PartnershipBlockers, PartnershipDraft, PartnershipFunnel, PartnershipHealth, PartnershipLead, PartnershipLearningMetric, PartnershipOutcomes, PartnershipRalphLoop, PartnershipReaction, PartnershipSourceQuality } from '@/components/prospecting/partnershipTypes';
+import { getRequestErrorMessage, runLoadingAction } from '@/components/prospecting/prospectingAsync';
+import { usePartnershipWorkspaceDerivedData } from '@/components/prospecting/usePartnershipWorkspaceDerivedData';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { getPartnershipWorkspaceCopy } from '@/i18n/partnershipWorkspaceCopy';
+import { newAuth } from '@/lib/auth_new';
+import { errorMessage } from '@/lib/errorMessage';
+import { loadJourneyActions, type JourneyAction } from '@/lib/leadJourney';
+import { getCapabilityAccessForBusiness } from '@/lib/subscriptionAccess';
+import type { DashboardOutletContext } from '@/types/business';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 
 const RalphLoopAnalyticsPanel = lazy(() =>
   import('@/components/prospecting/PartnershipAnalyticsPanels').then((module) => ({
@@ -77,307 +87,49 @@ const RalphLoopAnalyticsPanel = lazy(() =>
 
 const PartnershipLeadDetailDrawer = lazy(() => import('@/components/prospecting/PartnershipLeadDetailDrawer'));
 
-type PartnershipLead = {
+
+
+
+
+type DraftApprovalReview = {
   id: string;
-  name?: string;
-  address?: string;
-  city?: string;
-  category?: string;
-  source_url?: string;
-  source?: string;
-  source_kind?: string;
-  source_provider?: string;
-  client_business_name?: string;
-  external_place_id?: string;
-  external_source_id?: string;
-  dedupe_key?: string;
-  lat?: number;
-  lon?: number;
-  search_payload_json?: Record<string, any> | null;
-  enrich_payload_json?: {
-    provider?: string;
-    found_fields?: string[];
-    confidence?: Record<string, number>;
-    contacts?: Record<string, string | null>;
-    raw?: Record<string, any>;
-  } | null;
-  matched_sources_json?: string[] | null;
-  phone?: string;
-  email?: string;
-  website?: string;
-  telegram_url?: string;
-  whatsapp_url?: string;
-  status?: string;
-  partnership_stage?: string;
-  pipeline_status?: string;
-  pilot_cohort?: string;
-  selected_channel?: string;
-  updated_at?: string;
-  rating?: number;
-  reviews_count?: number;
-  parse_task_id?: string;
-  parse_status?: string;
-  parse_updated_at?: string;
-  parse_retry_after?: string;
-  parse_error?: string;
-  audit_ready?: boolean;
-  match_summary_json?: {
-    match_score?: number;
-    score_explanation?: string;
-    overlap?: string[];
-    offer_angles?: string[];
-  } | null;
-  artifact_updated_at?: string;
-  deferred_reason?: string;
-  deferred_until?: string;
-  next_best_action?: {
-    code?: string;
-    label?: string;
-    hint?: string;
-    priority?: 'low' | 'medium' | 'high';
-  };
+  businessId: string;
+  digest: string;
+  leadName: string;
+  recipient: string;
+  channel: string;
+  sender: string;
+  schedule: string;
+  text: string;
 };
 
-type PartnershipDraft = {
-  id: string;
-  lead_id: string;
-  lead_name?: string;
-  channel?: string;
-  status?: string;
-  lead_status?: string;
-  lead_pipeline_status?: string;
-  lead_partnership_stage?: string;
-  generated_text?: string;
-  edited_text?: string;
-  approved_text?: string;
-  updated_at?: string;
-};
+type InsightKey = 'health' | 'funnel' | 'blockers' | 'outcomes' | 'sourceQuality' | 'ralphLoop' | 'learningMetrics';
 
-type PartnershipBatch = {
-  id: string;
-  status: string;
-  batch_date?: string;
-  created_at?: string;
-  updated_at?: string;
-  items?: Array<{
-    id: string;
-    lead_name?: string;
-    delivery_status?: string;
-    error_text?: string;
-    channel?: string;
-    latest_outcome?: string | null;
-    latest_human_outcome?: string | null;
-    latest_raw_reply?: string | null;
-  }>;
-};
 
-type PartnershipReaction = {
-  id: string;
-  queue_id: string;
-  lead_id: string;
-  lead_name?: string;
-  batch_id?: string;
-  channel?: string;
-  delivery_status?: string;
-  raw_reply?: string | null;
-  classified_outcome?: string | null;
-  human_confirmed_outcome?: string | null;
-};
 
-type PartnershipLearningMetric = {
-  capability: string;
-  accepted_total: number;
-  accepted_raw_total: number;
-  accepted_edited_total: number;
-  accepted_raw_pct: number;
-  edited_before_accept_pct: number;
-};
 
-type PartnershipHealth = {
-  openclaw?: {
-    enabled?: boolean;
-    caps_endpoint_configured?: boolean;
-    token_configured?: boolean;
-  };
-  counts?: {
-    leads_total?: number;
-    drafts_total?: number;
-    batches_total?: number;
-    reactions_total?: number;
-  };
-};
 
-type PartnershipFunnelStage = {
-  key: string;
-  label: string;
-  count: number;
-  conversion_from_prev_pct?: number;
-};
 
-type PartnershipFunnel = {
-  window_days?: number;
-  funnel?: PartnershipFunnelStage[];
-  summary?: {
-    work_to_contact_pct?: number;
-    reply_to_conversion_pct?: number;
-    total_count?: number;
-    contacted_count?: number;
-    converted_count?: number;
-  };
-};
 
-type PartnershipOutcomeSummary = {
-  total_reactions?: number;
-  positive_count?: number;
-  question_count?: number;
-  no_response_count?: number;
-  hard_no_count?: number;
-  positive_rate_pct?: number;
-  question_rate_pct?: number;
-  no_response_rate_pct?: number;
-  hard_no_rate_pct?: number;
-};
 
-type PartnershipOutcomes = {
-  window_days?: number;
-  summary?: PartnershipOutcomeSummary;
-  by_channel?: Array<{
-    channel?: string;
-    total?: number;
-    positive_count?: number;
-    question_count?: number;
-    no_response_count?: number;
-    hard_no_count?: number;
-  }>;
-};
 
-type PartnershipSourceQualityItem = {
-  source_kind?: string;
-  source_provider?: string;
-  leads_total?: number;
-  audited_count?: number;
-  matched_count?: number;
-  draft_count?: number;
-  sent_count?: number;
-  positive_count?: number;
-  audit_rate_pct?: number;
-  match_rate_pct?: number;
-  draft_rate_pct?: number;
-  sent_rate_pct?: number;
-  positive_rate_pct?: number;
-  lead_to_positive_pct?: number;
-};
 
-type PartnershipSourceQuality = {
-  window_days?: number;
-  items?: PartnershipSourceQualityItem[];
-};
 
-type PartnershipBlocker = {
-  key: string;
-  label: string;
-  count: number;
-  severity?: 'info' | 'warning' | 'danger';
-  hint?: string;
-};
 
-type PartnershipBlockers = {
-  window_days?: number;
-  summary?: Record<string, number>;
-  blockers?: PartnershipBlocker[];
-};
 
-type PartnershipRalphLoop = {
-  window_days?: number;
-  pilot_cohort?: string;
-  summary?: {
-    leads_total?: number;
-    parsed_completed_count?: number;
-    audited_count?: number;
-    matched_count?: number;
-    drafts_total?: number;
-    drafts_approved_count?: number;
-    sent_total?: number;
-    positive_count?: number;
-    question_count?: number;
-    no_response_count?: number;
-    hard_no_count?: number;
-    positive_rate_pct?: number;
-  };
-  baseline?: {
-    window_days?: number;
-    sent_total?: number;
-    positive_count?: number;
-    positive_rate_pct?: number;
-    deltas?: {
-      sent_total?: number;
-      positive_count?: number;
-      positive_rate_pct?: number;
-    };
-  };
-  top_channels?: Array<{
-    channel?: string;
-    total?: number;
-    positive_count?: number;
-    positive_rate_pct?: number;
-  }>;
-  source_performance?: Array<{
-    source_kind?: string;
-    source_provider?: string;
-    leads_total?: number;
-    audited_count?: number;
-    matched_count?: number;
-    draft_count?: number;
-    sent_count?: number;
-    positive_count?: number;
-    audit_rate_pct?: number;
-    match_rate_pct?: number;
-    draft_rate_pct?: number;
-    sent_rate_pct?: number;
-    positive_rate_pct?: number;
-    lead_to_positive_pct?: number;
-  }>;
-  learning?: Array<{
-    capability?: string;
-    accepted_total?: number;
-    accepted_edited_total?: number;
-    edited_before_accept_pct?: number;
-    prompt_key?: string;
-    prompt_version?: string;
-  }>;
-  prompt_performance?: Array<{
-    prompt_key?: string;
-    prompt_version?: string;
-    drafts_total?: number;
-    approved_total?: number;
-    edited_approved_total?: number;
-    edited_before_accept_pct?: number;
-    sent_total?: number;
-    positive_count?: number;
-    positive_rate_pct?: number;
-  }>;
-  recommended_prompt_version?: {
-    prompt_key?: string;
-    prompt_version?: string;
-    drafts_total?: number;
-    approved_total?: number;
-    edited_approved_total?: number;
-    edited_before_accept_pct?: number;
-    sent_total?: number;
-    positive_count?: number;
-    positive_rate_pct?: number;
-  } | null;
-  blockers?: string[];
-  recommendations?: string[];
-  edit_insights?: {
-    edited_accepts_total?: number;
-    avg_generated_len?: number;
-    avg_final_len?: number;
-    expanded_count?: number;
-    shortened_count?: number;
-    unchanged_count?: number;
-  };
-};
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 const STAGE_OPTIONS = [
   { value: 'all', label: 'Все этапы' },
@@ -765,14 +517,21 @@ const toPilotCohort = (value: string): PilotCohort => {
 };
 
 export const PartnershipSearchPage: React.FC = () => {
-  const { currentBusinessId, user } = useOutletContext<any>();
+  const { currentBusinessId, currentBusiness, businesses, user, controlScope, onControlScopeChange, onBusinessChange } = useOutletContext<DashboardOutletContext>();
+  const currentBusinessRef = useRef(currentBusinessId);
+  const leadsRequestVersion = useRef(0);
+  currentBusinessRef.current = currentBusinessId;
+  const partnershipAccess = getCapabilityAccessForBusiness(currentBusiness, 'partnerships');
   const { language } = useLanguage();
   const partnershipCopy = getPartnershipWorkspaceCopy(language);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const showDemoPartner = searchParams.get('demo') === 'romashka';
   const requestedLeadId = searchParams.get('lead');
   const requestedFocus = searchParams.get('focus');
+  const requestedSection = searchParams.get('section');
+  const requestedSearchTaskId = searchParams.get('search_task_id');
   const [loading, setLoading] = useState(false);
+  const [journeyActions, setJourneyActions] = useState<JourneyAction[]>([]);
   const [activeLeadAction, setActiveLeadAction] = useState<{
     leadId: string;
     action: 'parse' | 'enrich' | 'audit' | 'match';
@@ -795,20 +554,52 @@ export const PartnershipSearchPage: React.FC = () => {
   const [query, setQuery] = useState(showDemoPartner ? 'Ромашка' : '');
   const [workspaceView, setWorkspaceView] = useState<PartnershipWorkspaceView>(showDemoPartner ? 'pipeline' : 'overview');
   const [items, setItems] = useState<PartnershipLead[]>([]);
+  const [leadTotalCount, setLeadTotalCount] = useState(0);
+  const [searchTasks, setSearchTasks] = useState<SearchTaskGroup[]>([]);
+  const [selectedSearchGroup, setSelectedSearchGroup] = useState(requestedSearchTaskId ? `task:${requestedSearchTaskId}` : 'all');
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [leadView, setLeadView] = useState<LeadView>('all');
   const [leadBucket, setLeadBucket] = useState<'active' | 'deferred'>('active');
   const [lastGeoSearchLeadIds, setLastGeoSearchLeadIds] = useState<string[]>([]);
+  useEffect(() => { setSearchTasks([]); setSelectedSearchGroup(requestedSearchTaskId ? `task:${requestedSearchTaskId}` : 'all'); }, [currentBusinessId, requestedSearchTaskId]);
+  useEffect(() => { if (requestedSearchTaskId) setWorkspaceView(requestedSection === 'drafts' ? 'drafts' : 'raw'); }, [requestedSearchTaskId, requestedSection]);
+  const handleSearchTasksChange = useCallback((tasks: SearchTaskGroup[]) => {
+    setSearchTasks((current) => [...tasks, ...current.filter((task) => task.id === requestedSearchTaskId && !tasks.some((item) => item.id === task.id))]);
+  }, [requestedSearchTaskId]);
+  useEffect(() => {
+    if (!requestedSearchTaskId || !currentBusinessId) return;
+    let active = true;
+    void resolveSearchTask(requestedSearchTaskId, currentBusinessId, businesses.map((business) => business.id),
+      (businessId) => newAuth.makeRequest(`/partnership/continuations/${encodeURIComponent(requestedSearchTaskId)}?business_id=${encodeURIComponent(businessId)}`, { method: 'GET' }))
+      .then((task) => {
+        if (!active) return;
+        if (!task) { setError('Этот поиск недоступен для ваших бизнесов или не найден.'); return; }
+        if (task.business_id !== currentBusinessId) {
+          setSearchParams((current) => {
+            const next = new URLSearchParams(current);
+            next.set('business_id', task.business_id);
+            return next;
+          }, { replace: true });
+          onBusinessChange(task.business_id);
+          return;
+        }
+        setError('');
+        setSearchTasks((current) => [task, ...current.filter((item) => item.id !== task.id)]);
+      });
+    return () => { active = false; };
+  }, [requestedSearchTaskId, currentBusinessId, businesses, onBusinessChange, setSearchParams]);
   const [preferredSourceFilter, setPreferredSourceFilter] = useState<{ source_kind?: string; source_provider?: string } | null>(null);
   const [bulkStage, setBulkStage] = useState('');
   const [bulkChannel, setBulkChannel] = useState('');
   const [bulkPilotCohort, setBulkPilotCohort] = useState('');
-  const [auditData, setAuditData] = useState<any>(null);
-  const [matchData, setMatchData] = useState<any>(null);
+  const [auditData, setAuditData] = useState<AuditData | null>(null);
+  const [matchData, setMatchData] = useState<MatchData | null>(null);
   const [draftText, setDraftText] = useState('');
   const [drafts, setDrafts] = useState<PartnershipDraft[]>([]);
   const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
+  const [draftApprovalReview, setDraftApprovalReview] = useState<DraftApprovalReview[] | null>(null);
+  useEffect(() => { setDraftApprovalReview(null); setSelectedDraftIds([]); }, [currentBusinessId]);
   const [draftView, setDraftView] = useState<(typeof DRAFT_VIEW_OPTIONS)[number]['value']>('all');
   const [batches, setBatches] = useState<PartnershipBatch[]>([]);
   const [selectedQueueIds, setSelectedQueueIds] = useState<string[]>([]);
@@ -826,6 +617,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [outcomes, setOutcomes] = useState<PartnershipOutcomes | null>(null);
   const [sourceQuality, setSourceQuality] = useState<PartnershipSourceQuality | null>(null);
   const [ralphLoop, setRalphLoop] = useState<PartnershipRalphLoop | null>(null);
+  const [insightErrors, setInsightErrors] = useState<Partial<Record<InsightKey, string>>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deferredReasonInput, setDeferredReasonInput] = useState('');
@@ -879,9 +671,9 @@ export const PartnershipSearchPage: React.FC = () => {
     allQueueItems,
     lastGeoSearchFlowSummary,
     selectedLeadFlowStatus,
-    visibleDrafts,
-    visibleBatches,
-    visibleReactions,
+    visibleDrafts: unscopedDrafts,
+    visibleBatches: unscopedBatches,
+    visibleReactions: unscopedReactions,
     pilotSummary,
     deferredLeadsCount,
     overdueDeferredLeadsCount,
@@ -910,6 +702,48 @@ export const PartnershipSearchPage: React.FC = () => {
     outcomes,
   });
 
+  const candidateSearchGroups = useMemo(() => buildCandidateSearchGroups(rawLeads, searchTasks), [rawLeads, searchTasks]);
+  const visibleRawLeads = useMemo(() => {
+    const scoped = selectedSearchGroup === 'all' || selectedSearchGroup.startsWith('task:') ? rawLeads
+      : rawLeads.filter((lead) => candidateSearchGroups.leadGroup.get(lead.id) === selectedSearchGroup);
+    const selected = searchTasks.find((task) => selectedSearchGroup === `task:${task.id}`);
+    if (!selected) return scoped;
+    const rank = (lead: PartnershipLead) => {
+      const position = selected.state?.lead_ids?.indexOf(lead.id) ?? -1;
+      const workstreamId = position >= 0 ? selected.state?.workstream_ids?.[position] : undefined;
+      const status = workstreamId ? selected.state?.qualifications?.[workstreamId]?.status : undefined;
+      return !status || status === 'checking' ? 0 : status === 'qualified' ? 1 : 2;
+    };
+    return [...scoped].sort((a, b) => rank(a) - rank(b));
+  }, [rawLeads, selectedSearchGroup, candidateSearchGroups, searchTasks]);
+  const searchTaskOptions = useMemo(() => searchTasks.map((task) => ({
+    id: `task:${task.id}`, label: taskLabel(task), count: task.report?.imported || 0,
+  })), [searchTasks]);
+  const selectedTask = searchTasks.find((task) => selectedSearchGroup === `task:${task.id}`);
+  const selectedTaskLeadIds = selectedSearchGroup.startsWith('task:') ? new Set(selectedTask?.state?.lead_ids || []) : null;
+  const visibleDrafts = selectedTaskLeadIds ? unscopedDrafts.filter((draft) => selectedTaskLeadIds.has(draft.lead_id)) : unscopedDrafts;
+  const visibleBatches = selectedTaskLeadIds ? unscopedBatches.map((batch) => ({
+    ...batch, items: (batch.items || []).filter((item) => item.lead_id && selectedTaskLeadIds.has(item.lead_id)),
+  })).filter((batch) => batch.items.length > 0) : unscopedBatches;
+  const visibleReactions = selectedTaskLeadIds ? unscopedReactions.filter((reaction) => selectedTaskLeadIds.has(reaction.lead_id)) : unscopedReactions;
+  const changeSearchGroup = (value: string) => {
+    setSelectedSearchGroup(value);
+    const next = new URLSearchParams(searchParams);
+    if (value.startsWith('task:')) next.set('search_task_id', value.slice(5));
+    else next.delete('search_task_id');
+    setSearchParams(next, { replace: true });
+  };
+  const loadMoreSearchLeads = async () => {
+    if (!currentBusinessId || items.length >= leadTotalCount) return;
+    const version = leadsRequestVersion.current;
+    const data = await loadPartnershipLeads({ businessId: currentBusinessId, stage, pilotCohort, query,
+      searchTaskId: selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : undefined,
+      limit: 100, offset: items.length });
+    if (version !== leadsRequestVersion.current || currentBusinessRef.current !== currentBusinessId) return;
+    setItems((current) => [...current, ...(data.items || []).filter((lead: PartnershipLead) => !current.some((item) => item.id === lead.id))]);
+    setLeadTotalCount(Number(data.count || 0));
+  };
+
   const partnershipBoardColumns = useMemo(() => {
     const buckets: Record<PartnershipBoardColumnId, PartnershipLead[]> = {
       in_progress: [],
@@ -921,6 +755,7 @@ export const PartnershipSearchPage: React.FC = () => {
       not_relevant: [],
     };
     for (const item of pipelineLeads) {
+      if (selectedTaskLeadIds && !selectedTaskLeadIds.has(item.id)) continue;
       buckets[leadToPartnershipBoardColumn(item)].push(item);
     }
     return partnershipBoardColumnIds.map((id) => ({
@@ -929,7 +764,7 @@ export const PartnershipSearchPage: React.FC = () => {
       description: partnershipBoardColumnMeta[id].description,
       leads: buckets[id],
     }));
-  }, [pipelineLeads]);
+  }, [pipelineLeads, selectedTaskLeadIds]);
 
   const demoPartner = useMemo(
     () => showDemoPartner
@@ -993,8 +828,24 @@ export const PartnershipSearchPage: React.FC = () => {
     setDraftText('');
   }, [selectedLeadId]);
 
+  const loadPartnershipJourneyActions = useLatestCallback(async () => {
+    if (!currentBusinessId) {
+      setJourneyActions([]);
+      return;
+    }
+    try {
+      const actions = await loadJourneyActions(currentBusinessId);
+      setJourneyActions(actions.filter((action) => action.flow_type === 'partnership'));
+    } catch {
+      setJourneyActions([]);
+    }
+  });
+
+  useEffect(() => { void loadPartnershipJourneyActions(); }, [currentBusinessId, loadPartnershipJourneyActions]);
+
   const loadLeads = async (queryOverride?: string, silent = false) => {
     if (!currentBusinessId) return;
+    const version = ++leadsRequestVersion.current;
     try {
       if (!silent) setLoading(true);
       setError(null);
@@ -1003,16 +854,20 @@ export const PartnershipSearchPage: React.FC = () => {
         stage,
         pilotCohort,
         query: queryOverride ?? query,
+        searchTaskId: selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : undefined,
+        limit: 100,
       });
+      if (version !== leadsRequestVersion.current || currentBusinessRef.current !== currentBusinessId) return;
       setItems(Array.isArray(data.items) ? data.items : []);
-      setSelectedLeadIds((prev) => prev.filter((id) => (data.items || []).some((x: any) => x.id === id)));
-      if (selectedLeadId && !(data.items || []).some((x: any) => x.id === selectedLeadId)) {
+      setLeadTotalCount(Number(data.count || 0));
+      setSelectedLeadIds((prev) => prev.filter((id) => (data.items || []).some((x: { id: string }) => x.id === id)));
+      if (selectedLeadId && !(data.items || []).some((x: { id: string }) => x.id === selectedLeadId)) {
         setSelectedLeadId(null);
       }
-    } catch (e: any) {
-      setError(e.message || 'Не удалось загрузить список партнёров');
+    } catch (e: unknown) {
+      if (version === leadsRequestVersion.current && currentBusinessRef.current === currentBusinessId) setError(errorMessage(e) || 'Не удалось загрузить список партнёров');
     } finally {
-      if (!silent) setLoading(false);
+      if (!silent && version === leadsRequestVersion.current) setLoading(false);
     }
   };
 
@@ -1054,8 +909,9 @@ export const PartnershipSearchPage: React.FC = () => {
     try {
       const data = await loadPartnershipRalphLoop(currentBusinessId, pilotCohort);
       setRalphLoop(data || null);
+      setInsightErrors((current) => ({ ...current, ralphLoop: undefined }));
     } catch {
-      setRalphLoop(null);
+      setInsightErrors((current) => ({ ...current, ralphLoop: 'Обучающая сводка временно недоступна.' }));
     }
   };
 
@@ -1063,7 +919,7 @@ export const PartnershipSearchPage: React.FC = () => {
     if (!currentBusinessId) return;
     const data = await loadPartnershipDrafts(currentBusinessId);
     setDrafts(Array.isArray(data.drafts) ? data.drafts : []);
-    setSelectedDraftIds((prev) => prev.filter((id) => (data.drafts || []).some((x: any) => x.id === id)));
+    setSelectedDraftIds((prev) => prev.filter((id) => (data.drafts || []).some((x: { id: string }) => x.id === id)));
   };
 
   const loadBatches = async () => {
@@ -1071,19 +927,24 @@ export const PartnershipSearchPage: React.FC = () => {
     const data = await loadPartnershipBatches(currentBusinessId);
     setBatches(Array.isArray(data.batches) ? data.batches : []);
     const queueIds = (Array.isArray(data.batches) ? data.batches : [])
-      .flatMap((batch: any) => (Array.isArray(batch.items) ? batch.items : []))
-      .map((item: any) => item.id);
+      .flatMap((batch: PartnershipBatch) => (Array.isArray(batch.items) ? batch.items : []))
+      .map((item: { id: string }) => item.id);
     setSelectedQueueIds((prev) => prev.filter((id) => queueIds.includes(id)));
     setQueueReadyDrafts(Array.isArray(data.ready_drafts) ? data.ready_drafts : []);
     setReactions(Array.isArray(data.reactions) ? data.reactions : []);
   };
 
   const loadLearningMetrics = async () => {
+    if (user?.demo_mode || user?.is_superadmin !== true) {
+      setLearningMetrics([]);
+      return;
+    }
     try {
       const data = await loadPartnershipLearningMetrics();
       setLearningMetrics(Array.isArray(data.items) ? data.items : []);
+      setInsightErrors((current) => ({ ...current, learningMetrics: undefined }));
     } catch {
-      setLearningMetrics([]);
+      setInsightErrors((current) => ({ ...current, learningMetrics: 'Метрики обучения временно недоступны.' }));
     }
   };
 
@@ -1092,8 +953,9 @@ export const PartnershipSearchPage: React.FC = () => {
     try {
       const data = await loadPartnershipHealth(currentBusinessId);
       setHealth(data || null);
+      setInsightErrors((current) => ({ ...current, health: undefined }));
     } catch {
-      setHealth(null);
+      setInsightErrors((current) => ({ ...current, health: 'Состояние воронки временно недоступно.' }));
     }
   };
 
@@ -1102,8 +964,9 @@ export const PartnershipSearchPage: React.FC = () => {
     try {
       const data = await loadPartnershipFunnel(currentBusinessId);
       setFunnel(data || null);
+      setInsightErrors((current) => ({ ...current, funnel: undefined }));
     } catch {
-      setFunnel(null);
+      setInsightErrors((current) => ({ ...current, funnel: 'Показатели воронки временно недоступны.' }));
     }
   };
 
@@ -1112,8 +975,9 @@ export const PartnershipSearchPage: React.FC = () => {
     try {
       const data = await loadPartnershipBlockers(currentBusinessId);
       setBlockers(data || null);
+      setInsightErrors((current) => ({ ...current, blockers: undefined }));
     } catch {
-      setBlockers(null);
+      setInsightErrors((current) => ({ ...current, blockers: 'Причины остановки временно недоступны.' }));
     }
   };
 
@@ -1122,8 +986,9 @@ export const PartnershipSearchPage: React.FC = () => {
     try {
       const data = await loadPartnershipOutcomes(currentBusinessId);
       setOutcomes(data || null);
+      setInsightErrors((current) => ({ ...current, outcomes: undefined }));
     } catch {
-      setOutcomes(null);
+      setInsightErrors((current) => ({ ...current, outcomes: 'Результаты касаний временно недоступны.' }));
     }
   };
 
@@ -1132,8 +997,9 @@ export const PartnershipSearchPage: React.FC = () => {
     try {
       const data = await loadPartnershipSourceQuality(currentBusinessId);
       setSourceQuality(data || null);
+      setInsightErrors((current) => ({ ...current, sourceQuality: undefined }));
     } catch {
-      setSourceQuality(null);
+      setInsightErrors((current) => ({ ...current, sourceQuality: 'Качество источников временно недоступно.' }));
     }
   };
 
@@ -1159,7 +1025,9 @@ export const PartnershipSearchPage: React.FC = () => {
 
   const refreshAllPartnershipData = async () => {
     await refreshOperationalData();
-    await refreshInsightsData();
+    if (workspaceView === 'analytics') {
+      await refreshInsightsData();
+    }
   };
 
   const runPartnershipAction = async (fallback: string, action: () => Promise<void>) => {
@@ -1188,10 +1056,19 @@ export const PartnershipSearchPage: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!partnershipAccess.allowed) {
+      void loadLeads();
+      return;
+    }
     void refreshOperationalData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentBusinessId, stage, pilotCohort, selectedSearchGroup]);
+
+  useEffect(() => {
+    if (workspaceView !== 'analytics') return;
     void refreshInsightsData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentBusinessId, stage, pilotCohort]);
+  }, [workspaceView, currentBusinessId, pilotCohort]);
 
   const handleImportLinks = async () => {
     if (!currentBusinessId) return;
@@ -1562,8 +1439,8 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadLeads();
       await loadDrafts();
       await loadBatches();
-    } catch (e: any) {
-      setError(e.message || 'Не удалось удалить выбранные лиды');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось удалить выбранные лиды');
     } finally {
       setLoading(false);
     }
@@ -1679,8 +1556,8 @@ export const PartnershipSearchPage: React.FC = () => {
         try {
           await runPartnershipLeadAction(currentBusinessId, leadId, 'parse');
           started += 1;
-        } catch (e: any) {
-          errors.push(`${leadId}: ${e?.message || 'ошибка'}`);
+        } catch (e: unknown) {
+          errors.push(`${leadId}: ${errorMessage(e) || 'ошибка'}`);
         }
       }
       setMessage(
@@ -1722,8 +1599,8 @@ export const PartnershipSearchPage: React.FC = () => {
             letter_type: 'commercial_offer',
           });
           created += 1;
-        } catch (e: any) {
-          errors.push(`${leadId}: ${e?.message || 'ошибка'}`);
+        } catch (e: unknown) {
+          errors.push(`${leadId}: ${errorMessage(e) || 'ошибка'}`);
         }
       }
       setMessage(
@@ -1966,7 +1843,7 @@ export const PartnershipSearchPage: React.FC = () => {
     pipelineStatus: string,
     options?: { deferredReason?: string | null; deferredUntil?: string | null }
   ) => {
-    if (!currentBusinessId) return;
+    if (!currentBusinessId) return false;
     const previousItems = items;
     const currentLead = items.find((item) => item.id === leadId);
     const partnershipStage = partnershipStageForPipelineStatus(pipelineStatus, currentLead);
@@ -1990,9 +1867,11 @@ export const PartnershipSearchPage: React.FC = () => {
         deferred_reason: options?.deferredReason !== undefined ? options?.deferredReason : undefined,
         deferred_until: options?.deferredUntil !== undefined ? options?.deferredUntil : undefined,
       });
-    } catch (e: any) {
+      return true;
+    } catch (e: unknown) {
       setItems(previousItems);
-      setError(e.message || 'Не удалось обновить этап партнёра');
+      setError(errorMessage(e) || 'Не удалось обновить этап партнёра');
+      return false;
     }
   };
 
@@ -2040,18 +1919,20 @@ export const PartnershipSearchPage: React.FC = () => {
 
   const approveDraft = async (draftId: string, text: string) => {
     if (!currentBusinessId) return;
+    const digest = drafts.find((draft) => draft.id === draftId)?.review_digest;
+    if (!digest) { setError('Обновите список писем перед утверждением.'); return; }
     try {
       setLoading(true);
       setError(null);
-      await approvePartnershipDraft(currentBusinessId, draftId, text);
+      await approvePartnershipDraft(currentBusinessId, draftId, text, digest);
       setMessage('Письмо утверждено');
       await loadDrafts();
       await loadBatches();
       await loadLeads();
       await loadFunnel();
       await loadOutcomes();
-    } catch (e: any) {
-      setError(e.message || 'Не удалось утвердить письмо');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось утвердить письмо');
     } finally {
       setLoading(false);
     }
@@ -2068,27 +1949,82 @@ export const PartnershipSearchPage: React.FC = () => {
     setSelectedDraftIds(checked ? visibleDrafts.map((draft) => draft.id) : []);
   };
 
+  const requestBulkDraftApproval = () => {
+    if (selectedDraftIds.some((id) => {
+      const draft = drafts.find((item) => item.id === id);
+      return Boolean(draft?.learning_note_json?.search_task_id && draft.learning_note_json.manual_review_required);
+    })) {
+      setError('В выбранных письмах есть черновики по поиску. Сначала подтвердите соответствие компаний и контакты.');
+      return;
+    }
+    const review = selectedDraftIds.map((draftId) => {
+      const draft = drafts.find((item) => item.id === draftId);
+      if (!draft) return null;
+      return {
+        id: draft.id,
+        businessId: currentBusinessId,
+        digest: draft.review_digest || '',
+        leadName: String(draft.lead_name || draft.lead_id || 'Партнёр'),
+        recipient: String(draft.recipient || draft.email || 'Не указан'),
+        channel: String(draft.channel || 'Не выбран'),
+        sender: String(draft.sender_name || 'Выбирается при ручной отправке'),
+        schedule: String(draft.scheduled_at || 'Не назначено'),
+        text: String(draft.approved_text || draft.edited_text || draft.generated_text || '').trim(),
+      };
+    }).filter((draft): draft is DraftApprovalReview => draft !== null);
+    if (review.length !== selectedDraftIds.length || review.some((draft) => !draft.text)) {
+      setError('В выбранных письмах нет текста. Проверьте их перед утверждением.');
+      return;
+    }
+    if (review.some((draft) => !draft.digest)) {
+      setError('Обновите список писем, чтобы получить текущую версию для проверки.');
+      return;
+    }
+    setDraftApprovalReview(review);
+  };
+
   const bulkApproveDrafts = async () => {
-    if (!currentBusinessId || selectedDraftIds.length === 0) return;
+    if (!currentBusinessId || !draftApprovalReview?.length) return;
+    if (draftApprovalReview.some((draft) => draft.businessId !== currentBusinessId)) {
+      setDraftApprovalReview(null);
+      return;
+    }
+    const reviewedBusinessId = currentBusinessId;
+    const currentReview = draftApprovalReview.map((review) => {
+      const draft = drafts.find((item) => item.id === review.id);
+      return {
+        ...review,
+        digest: draft?.review_digest || '',
+        text: String(draft?.approved_text || draft?.edited_text || draft?.generated_text || '').trim(),
+      };
+    });
+    if (currentReview.some((review) => !review.text) || currentReview.some((review, index) => review.text !== draftApprovalReview[index]?.text || review.digest !== draftApprovalReview[index]?.digest)) {
+      setDraftApprovalReview(null);
+      setError('Текст выбранных писем изменился. Проверьте список ещё раз перед утверждением.');
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
-      await Promise.all(
-        selectedDraftIds.map((draftId) => {
-          const draft = drafts.find((item) => item.id === draftId);
-          const text = draft?.approved_text || draft?.edited_text || draft?.generated_text || '';
-          return approvePartnershipDraft(currentBusinessId, draftId, text);
+      const results = await Promise.allSettled(
+        currentReview.map((draft) => {
+          return approvePartnershipDraft(reviewedBusinessId, draft.id, draft.text, draft.digest);
         })
       );
-      setMessage(`Утверждено писем: ${selectedDraftIds.length}`);
-      setSelectedDraftIds([]);
+      if (currentBusinessRef.current !== reviewedBusinessId) return;
+      const failedIds = currentReview.filter((_draft, index) => results[index].status === 'rejected').map((draft) => draft.id);
+      setMessage(`Утверждено писем: ${results.length - failedIds.length} из ${results.length}`);
+      if (failedIds.length) setError('Часть писем не утверждена. Обновлённые версии оставлены выбранными: проверьте их ещё раз.');
+      setSelectedDraftIds(failedIds);
+      setDraftApprovalReview(null);
       await loadDrafts();
       await loadBatches();
       await loadLeads();
-    } catch (e: any) {
-      setError(e.message || 'Не удалось массово утвердить письма');
+    } catch (e: unknown) {
+      if (currentBusinessRef.current !== reviewedBusinessId) return;
+      setError(errorMessage(e) || 'Не удалось массово утвердить письма');
     } finally {
-      setLoading(false);
+      if (currentBusinessRef.current === reviewedBusinessId) setLoading(false);
     }
   };
 
@@ -2108,8 +2044,8 @@ export const PartnershipSearchPage: React.FC = () => {
       setSelectedDraftIds([]);
       await loadDrafts();
       await loadBatches();
-    } catch (e: any) {
-      setError(e.message || 'Не удалось массово удалить письма');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось массово удалить письма');
     } finally {
       setLoading(false);
     }
@@ -2127,8 +2063,8 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadLeads();
       await loadFunnel();
       await loadOutcomes();
-    } catch (e: any) {
-      setError(e.message || 'Не удалось создать очередь');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось создать очередь');
     } finally {
       setLoading(false);
     }
@@ -2145,8 +2081,8 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadLeads();
       await loadFunnel();
       await loadOutcomes();
-    } catch (e: any) {
-      setError(e.message || 'Не удалось утвердить очередь');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось утвердить очередь');
     } finally {
       setLoading(false);
     }
@@ -2183,8 +2119,8 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadBatches();
       await loadLeads();
       await loadOutcomes();
-    } catch (e: any) {
-      setError(e.message || 'Не удалось обновить очередь');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось обновить очередь');
     } finally {
       setLoading(false);
     }
@@ -2206,8 +2142,8 @@ export const PartnershipSearchPage: React.FC = () => {
       setSelectedQueueIds([]);
       await loadBatches();
       await loadLeads();
-    } catch (e: any) {
-      setError(e.message || 'Не удалось удалить позиции очереди');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось удалить позиции очереди');
     } finally {
       setLoading(false);
     }
@@ -2226,8 +2162,8 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadLeads();
       await loadFunnel();
       await loadOutcomes();
-    } catch (e: any) {
-      setError(e.message || 'Не удалось сохранить реакцию');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось сохранить реакцию');
     } finally {
       setSendQueueBusy((prev) => {
         const next = { ...prev };
@@ -2247,8 +2183,8 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadLeads();
       await loadFunnel();
       await loadOutcomes();
-    } catch (e: any) {
-      setError(e.message || 'Не удалось подтвердить результат');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось подтвердить результат');
     } finally {
       setReactionBusy((prev) => {
         const next = { ...prev };
@@ -2282,8 +2218,8 @@ export const PartnershipSearchPage: React.FC = () => {
         'text/markdown;charset=utf-8'
       );
       setMessage('Weekly review сформирован');
-    } catch (e: any) {
-      setError(e.message || 'Не удалось сформировать weekly review');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось сформировать weekly review');
     }
   };
 
@@ -2309,8 +2245,8 @@ export const PartnershipSearchPage: React.FC = () => {
         );
       }
       setMessage(`Экспорт (${format}) сформирован`);
-    } catch (e: any) {
-      setError(e.message || 'Не удалось экспортировать отчёт');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось экспортировать отчёт');
     } finally {
       setLoading(false);
     }
@@ -2327,7 +2263,26 @@ export const PartnershipSearchPage: React.FC = () => {
   };
 
   const moveLeadToPipeline = (leadId: string) => {
-    void updateLeadStageOptimistic(leadId, PIPELINE_IN_PROGRESS, { deferredReason: '', deferredUntil: '' });
+    void updateLeadStageOptimistic(leadId, PIPELINE_IN_PROGRESS, { deferredReason: '', deferredUntil: '' })
+      .then((saved) => { if (saved) setMessage('Компания взята в отбор. Проверьте направление и контакт перед обращением.'); });
+  };
+
+  const toggleCatalogShortlist = async (lead: PartnershipLead) => {
+    if (!currentBusinessId) return;
+    const selected = !lead.catalog_shortlisted;
+    try {
+      setLoading(true);
+      setError(null);
+      await newAuth.makeRequest(`/partnership/leads/${lead.id}/shortlist`, {
+        method: 'POST',
+        body: JSON.stringify({ business_id: currentBusinessId, selected }),
+      });
+      setItems((current) => current.map((item) => item.id === lead.id ? { ...item, catalog_shortlisted: selected } : item));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Не удалось обновить shortlist.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const moveLeadToStage = (leadId: string, stageValue: string, deferred: { deferredReason: string; deferredUntil: string }) => {
@@ -2337,6 +2292,26 @@ export const PartnershipSearchPage: React.FC = () => {
   const deferLeadFromCard = (lead: PartnershipLead, deferred: { deferredReason: string; deferredUntil: string }) => {
     void updateLeadStageOptimistic(lead.id, PIPELINE_POSTPONED, deferred);
   };
+
+  if (controlScope?.kind === 'network') return <div className="space-y-4"><h1 className="text-2xl font-semibold">Партнёрства сети</h1><PartnershipResults scope={controlScope} openWork={id => { if (id) onControlScopeChange?.({ kind: 'business', id, name: businesses.find(business => business.id === id)?.name || id }); }} /></div>;
+  if (!partnershipAccess.allowed && currentBusinessId) {
+    return (
+      <div className="space-y-6 pb-24">
+        <header className="rounded-[28px] bg-white p-6 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_18px_45px_-34px_rgba(15,23,42,0.45)] sm:p-8">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">Каталог партнёров</p>
+          <h1 className="mt-2 text-balance text-3xl font-semibold text-slate-950">Партнёры рядом с вашим бизнесом</h1>
+          <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-slate-600">Изучайте публичные карточки и собирайте shortlist бесплатно. Подготовка сообщения и outreach откроются на тарифе «Привлечение».</p>
+        </header>
+        <section className="rounded-[24px] bg-white p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
+          <label className="text-sm font-semibold text-slate-700">Название, категория или город<input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadLeads(query); }} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" /></label>
+          <button type="button" onClick={() => void loadLeads(query)} className="mt-3 min-h-11 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white transition-transform active:scale-[0.96]">Найти партнёров</button>
+        </section>
+        {error ? <div role="alert" className="rounded-2xl bg-rose-50 p-4 text-sm text-rose-900">{error}</div> : null}
+        {loading && items.length === 0 ? <div className="h-64 animate-pulse rounded-[28px] bg-slate-200/70" /> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Каталог партнёров">{items.map((item) => <article key={item.id} className="rounded-[24px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"><h2 className="text-balance text-lg font-semibold text-slate-950">{item.name || 'Локальный партнёр'}</h2><p className="mt-2 text-sm text-slate-500">{[item.category, item.city].filter(Boolean).join(' · ') || 'Категория уточняется'}</p>{item.rating ? <p className="mt-4 text-sm text-slate-600">Рейтинг <span className="tabular-nums font-semibold text-slate-950">{item.rating}</span>{item.reviews_count ? ` · ${item.reviews_count} отзывов` : ''}</p> : null}<button type="button" onClick={() => void toggleCatalogShortlist(item)} disabled={loading} className={`mt-5 min-h-11 w-full rounded-xl px-4 text-sm font-semibold transition-[background-color,color,transform] active:scale-[0.96] ${item.catalog_shortlisted ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-950 text-white'}`}>{item.catalog_shortlisted ? 'В shortlist' : 'Добавить в shortlist'}</button></article>)}</div>}
+        <section className="rounded-[24px] bg-slate-950 p-5 text-white sm:flex sm:items-center sm:justify-between sm:gap-6"><div><h2 className="text-balance text-xl font-semibold">Готовы написать выбранным партнёрам?</h2><p className="mt-2 text-pretty text-sm text-slate-300">LocalOS подготовит персональные сообщения и сохранит ручное подтверждение отправки.</p></div><Link to="/dashboard/profile?focus=subscription&tier=professional#subscription" className="mt-4 inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-white px-5 text-sm font-semibold text-slate-950 transition-transform active:scale-[0.96] sm:mt-0">Открыть «Привлечение»</Link></section>
+      </div>
+    );
+  }
 
   if (showDemoPartner && currentBusinessId) {
     return (
@@ -2393,6 +2368,22 @@ export const PartnershipSearchPage: React.FC = () => {
         onWorkspaceChange={(value) => setWorkspaceView(toPartnershipWorkspaceView(value))}
       />
 
+      {(searchTaskOptions.length > 0 || candidateSearchGroups.groups.length > 0) && <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3">
+        <label className="text-sm font-medium text-slate-700">Поиск
+          <select aria-label="Выбранный поиск партнёров" className="mt-1 block min-h-10 max-w-full rounded-md border border-input bg-background px-3 text-sm" value={selectedSearchGroup} onChange={(event) => changeSearchGroup(event.target.value)}>
+            <option value="all">Все поиски</option>
+            {searchTaskOptions.map((group) => <option key={group.id} value={group.id}>{group.label} ({group.count})</option>)}
+            {candidateSearchGroups.groups.filter((group) => !group.id.startsWith('task:')).map((group) => <option key={group.id} value={group.id}>{group.label} ({group.count})</option>)}
+          </select>
+        </label>
+        {selectedSearchGroup !== 'all' && <span className="text-sm text-muted-foreground">Загружено {items.length} из {leadTotalCount} записей</span>}
+        {selectedSearchGroup.startsWith('task:') && items.length < leadTotalCount && <Button type="button" variant="outline" disabled={loading} onClick={() => void loadMoreSearchLeads()}>Загрузить ещё</Button>}
+      </div>}
+
+      {currentBusinessId && <OutreachContinuation key={currentBusinessId} businessId={currentBusinessId} onTasksChange={handleSearchTasksChange} />}
+
+      {currentBusinessId && journeyActions.length ? <section aria-label="Текущий шаг по партнёрствам" className="space-y-3">{journeyActions.slice(0, 2).map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={() => void loadPartnershipJourneyActions()} />)}</section> : null}
+
       {!currentBusinessId ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           Сначала выберите бизнес в переключателе сверху.
@@ -2431,6 +2422,9 @@ export const PartnershipSearchPage: React.FC = () => {
           ) : null}
 
           {workspaceView === 'overview' ? (
+            <>
+            <PartnershipResults scope={controlScope || { kind: 'business', id: currentBusinessId }} openWork={() => setWorkspaceView('pipeline')} />
+            <details><summary className="min-h-11 cursor-pointer py-3">Работа с кандидатами и отправками</summary>
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
               <div className="rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
@@ -2522,6 +2516,8 @@ export const PartnershipSearchPage: React.FC = () => {
                 </div>
               </div>
             </div>
+            </details>
+            </>
           ) : null}
 
           {workspaceView === 'raw' ? (
@@ -2567,20 +2563,33 @@ export const PartnershipSearchPage: React.FC = () => {
             badges={[
               { label: 'Новые кандидаты', value: rawLeadCount },
               { label: 'В работе', value: pipelineLeadCount },
-              { label: 'Последний поиск', value: lastGeoSearchLeadCount },
+              { label: 'Групп поиска', value: searchTaskOptions.length + candidateSearchGroups.groups.filter((group) => !group.id.startsWith('task:')).length },
             ]}
           >
+            {selectedTask && <p className="mb-3 text-sm">Сырых результатов: {selectedTask.report?.found ?? selectedTask.report?.imported ?? 0}. Новых записей: {selectedTask.report?.imported ?? 0}. Подтверждено с рабочим контактом: {selectedTask.report?.eligible ?? 0}. Откройте сайт или источник, затем нажмите «В отбор» у интересной компании. Это ручной выбор для дальнейшей проверки, без писем и без отметки «подтверждено».</p>}
+            {candidateSearchGroups.groups.length > 0 && <p className="mb-3 text-xs text-muted-foreground">Метка показывает, каким поиском найдена запись. Страна компании, продаваемое направление и контакт проверяются отдельно.</p>}
             {rawLeads.length === 0 ? (
               <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-muted-foreground">
                 Кандидатов пока нет. Запустите поиск по радиусу, импортируйте список или добавьте ссылки вручную.
               </div>
             ) : (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {rawLeads.map((item) => (
+                {visibleRawLeads.map((item) => (
                   <PartnershipLeadCard
                     key={item.id}
                     lead={item}
                     mode="raw"
+                    searchLabel={selectedTask ? taskLabel(selectedTask) : candidateSearchGroups.labels.get(candidateSearchGroups.leadGroup.get(item.id) || '')}
+                    verification={selectedTask ? (() => {
+                      const taskPosition = selectedTask.state?.lead_ids?.indexOf(item.id) ?? -1;
+                      const workstreamId = String(taskPosition >= 0 ? selectedTask.state?.workstream_ids?.[taskPosition] || '' : '');
+                      const qualification = selectedTask.state?.qualifications?.[workstreamId];
+                      return {
+                        country: qualification?.criteria?.country,
+                        destination: qualification?.criteria?.destination,
+                        contactVerified: Boolean(workstreamId && selectedTask.state?.verified_contact_workstream_ids?.includes(workstreamId)),
+                      };
+                    })() : undefined}
                     dragging={false}
                     loading={loading}
                     nextStage={getNextPipelineStage(item)}
@@ -2601,6 +2610,13 @@ export const PartnershipSearchPage: React.FC = () => {
           ) : null}
 
           {workspaceView === 'analytics' ? (
+            <div className="space-y-3">
+              {Object.values(insightErrors).filter(Boolean).length > 0 ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950" role="status">
+                  <span>{Object.values(insightErrors).filter(Boolean).join(' ')}</span>
+                  <Button size="sm" variant="outline" onClick={() => void refreshInsightsData()} disabled={loading}>Повторить</Button>
+                </div>
+              ) : null}
             <PartnershipAnalyticsWorkspace
               loading={loading}
               health={health}
@@ -2643,6 +2659,7 @@ export const PartnershipSearchPage: React.FC = () => {
               onLoadBlockers={() => void loadBlockers()}
               onLoadOutcomes={() => void loadOutcomes()}
             />
+            </div>
           ) : null}
 
           {workspaceView === 'pipeline' ? (
@@ -2769,7 +2786,7 @@ export const PartnershipSearchPage: React.FC = () => {
             loading={loading}
             onDraftViewChange={(value) => setDraftView(toDraftView(value))}
             onRefresh={() => void loadDrafts()}
-            onBulkApprove={bulkApproveDrafts}
+            onBulkApprove={requestBulkDraftApproval}
             onBulkDelete={bulkDeleteDrafts}
             onToggleAll={toggleAllDraftSelection}
             onToggleDraft={toggleDraftSelection}
@@ -2888,6 +2905,32 @@ export const PartnershipSearchPage: React.FC = () => {
           ) : null}
         </>
       )}
+
+      <Dialog open={Boolean(draftApprovalReview)} onOpenChange={(open) => { if (!open) setDraftApprovalReview(null); }}>
+        <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Проверить письма перед утверждением</DialogTitle>
+            <DialogDescription>
+              Утверждение подготовит письма к ручной отправке. Ничего не будет отправлено автоматически.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-sm font-medium text-slate-700">Выбрано: {draftApprovalReview?.length || 0}</div>
+            {draftApprovalReview?.map((draft) => (
+              <article key={draft.id} className="rounded-xl border border-slate-200 p-3 text-sm">
+                <div className="font-semibold text-slate-950">{draft.leadName}</div>
+                <div className="mt-1 text-slate-600">Получатель: {draft.recipient} · Канал: {draft.channel}</div>
+                <div className="text-slate-600">Отправитель: {draft.sender} · Время: {draft.schedule}</div>
+                <p className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-50 p-2 text-slate-800">{draft.text}</p>
+              </article>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDraftApprovalReview(null)} disabled={loading}>Вернуться к редактированию</Button>
+            <Button onClick={() => void bulkApproveDrafts()} disabled={loading || !draftApprovalReview?.length}>Утвердить для ручной отправки</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {message && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">

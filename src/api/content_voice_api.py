@@ -5,6 +5,8 @@ import sys
 from flask import Blueprint, jsonify, request
 
 from auth_system import verify_session
+from core.auth_context import AuthContext
+from core.api_errors import internal_error_response
 from services.content_voice_service import (
     add_content_voice_example,
     delete_content_voice_example,
@@ -36,15 +38,15 @@ def content_voice_profile():
     if not business_id:
         return jsonify({"success": False, "error": "business_id обязателен"}), 400
     try:
-        user_id = str(user_data.get("user_id") or "")
-        profile = update_content_voice(user_id, business_id, data) if request.method == "PATCH" else get_content_voice(user_id, business_id)
+        auth = AuthContext.from_session(user_data)
+        profile = update_content_voice(auth, business_id, data) if request.method == "PATCH" else get_content_voice(auth, business_id)
         return jsonify({"success": True, "profile": profile})
     except PermissionError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
     except ValueError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось обработать настройки стиля")
 
 
 @content_voice_bp.route("/examples", methods=["POST"])
@@ -58,7 +60,7 @@ def content_voice_example_create():
         return jsonify({"success": False, "error": "business_id обязателен"}), 400
     try:
         example = add_content_voice_example(
-            str(user_data.get("user_id") or ""),
+            AuthContext.from_session(user_data),
             business_id,
             str(data.get("text") or ""),
             platform=str(data.get("platform") or ""),
@@ -71,7 +73,7 @@ def content_voice_example_create():
     except ValueError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось обработать настройки стиля")
 
 
 @content_voice_bp.route("/examples/<example_id>", methods=["DELETE"])
@@ -80,11 +82,73 @@ def content_voice_example_delete(example_id: str):
     if error_response:
         return error_response
     try:
-        delete_content_voice_example(str(user_data.get("user_id") or ""), example_id)
+        delete_content_voice_example(AuthContext.from_session(user_data), example_id)
         return jsonify({"success": True})
     except PermissionError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
     except ValueError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 404
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось обработать настройки стиля")
+
+
+@content_voice_bp.route('/rules', methods=['GET', 'POST', 'PATCH'])
+def content_rules():
+    user, error = _require_auth()
+    if error:
+        return error
+    from database_manager import DatabaseManager
+    from services import content_rules
+    from services.content_voice_service import _verify_access
+    data=request.get_json(silent=True) or {}
+    business_id=str(request.args.get('business_id') or data.get('business_id') or '')
+    db=DatabaseManager()
+    try:
+        cursor=db.conn.cursor()
+        auth=_verify_access(cursor,AuthContext.from_session(user),business_id)
+        if request.method=='GET':
+            rules=content_rules.load(cursor,business_id).get('content_rules',[])
+            ids=list({r.get('author_id') for r in rules if r.get('author_id')})
+            cursor.execute('SELECT id,name FROM users WHERE id=ANY(%s)',(ids,))
+            names={row['id']:row['name'] for row in cursor.fetchall()}
+            rules=[{**rule,'author_name':names.get(rule.get('author_id')) or 'Пользователь'} for rule in rules]
+            return jsonify({'rules':rules,'can_manage':content_rules.can_manage(cursor,auth.user_id,business_id),'timezone':content_rules.business_timezone(cursor,business_id)})
+        starts_at,ends_at=data.get('starts_at'),data.get('ends_at')
+        if 'starts_date' in data or 'ends_date' in data:
+            starts_at,ends_at=content_rules.dated_period(cursor,business_id,data.get('starts_date'),data.get('ends_date'))
+        rule=content_rules.change(cursor,business_id=business_id,user_id=auth.user_id,
+            request_id=str(data.get('request_id') or ''),text=str(data.get('text') or ''),
+            rule_id=data.get('rule_id'),expected_version=data.get('expected_version'),
+            status=data.get('status','active'),starts_at=starts_at,ends_at=ends_at)
+        db.conn.commit()
+        return jsonify({'rule':rule})
+    except content_rules.RuleConflict:
+        return jsonify({'error':str(sys.exception())}),409
+    except PermissionError:
+        return jsonify({'error':str(sys.exception())}),403
+    except ValueError:
+        return jsonify({'error':str(sys.exception())}),400
+    except Exception:
+        return internal_error_response('Не удалось сохранить правило')
+    finally:
+        db.close()
+
+
+@content_voice_bp.route('/rules/<rule_id>/history', methods=['GET'])
+def content_rule_history(rule_id):
+    user,error=_require_auth()
+    if error:
+        return error
+    from database_manager import DatabaseManager
+    from services.content_voice_service import _verify_access
+    from services.operator_conversations import _row
+    db=DatabaseManager()
+    try:
+        cursor=db.conn.cursor();business_id=request.args.get('business_id','')
+        _verify_access(cursor,AuthContext.from_session(user),business_id)
+        cursor.execute("SELECT snapshot,created_at FROM content_rule_history WHERE business_id=%s AND rule_id=%s AND event_type='changed' ORDER BY created_at DESC",(business_id,rule_id))
+        return jsonify({'history':[_row(cursor,row) for row in cursor.fetchall()]})
+    except PermissionError:
+        return jsonify({'error':'Нет доступа к правилам бизнеса'}),403
+    finally:
+        db.close()

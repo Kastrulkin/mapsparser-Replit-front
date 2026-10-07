@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
 from typing import Any
 from urllib.parse import quote, urlparse
@@ -168,6 +170,7 @@ def _load_media_file_s3(storage_path: str) -> bytes | None:
 def _s3_client() -> Any:
     try:
         import boto3
+        from botocore.config import Config
     except ImportError:
         raise RuntimeError("boto3 is required for MEDIA_STORAGE_BACKEND=s3")
 
@@ -177,13 +180,31 @@ def _s3_client() -> Any:
     secret_key = os.environ.get("MEDIA_S3_SECRET_ACCESS_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY")
     if not access_key or not secret_key:
         raise RuntimeError("MEDIA_S3_ACCESS_KEY_ID and MEDIA_S3_SECRET_ACCESS_KEY are required")
+    proxy_setting = str(os.environ.get("MEDIA_S3_HTTP_PROXY") or "").strip()
+    proxy_url = proxy_setting if proxy_setting and proxy_setting != "direct" else _outbound_proxy_url()
+    client_config = Config(
+        connect_timeout=12,
+        read_timeout=30,
+        retries={"max_attempts": 3, "mode": "standard"},
+        proxies={} if proxy_setting == "direct" else {"http": proxy_url, "https": proxy_url} if proxy_url else None,
+    )
     return boto3.client(
         "s3",
         endpoint_url=endpoint_url,
         region_name=region_name,
         aws_access_key_id=access_key,
         aws_secret_access_key=secret_key,
+        config=client_config,
     )
+
+
+def _outbound_proxy_url() -> str:
+    return str(
+        os.environ.get("OUTBOUND_HTTP_PROXY")
+        or os.environ.get("HTTPS_PROXY")
+        or os.environ.get("HTTP_PROXY")
+        or ""
+    ).strip()
 
 
 def _required_env(name: str) -> str:
@@ -199,6 +220,35 @@ def _public_s3_url(*, bucket: str, key: str) -> str:
         return ""
     encoded_key = "/".join(quote(part) for part in key.split("/"))
     return f"{base_url}/{encoded_key}"
+
+
+def build_media_delivery_url(*, asset_id: str, content_hash: str, variant: str = "original") -> str:
+    clean_asset_id = str(asset_id or "").strip()
+    clean_content_hash = str(content_hash or "").strip()
+    clean_variant = str(variant or "original").strip() or "original"
+    secret = str(os.environ.get("EXTERNAL_AUTH_SECRET_KEY") or "").strip()
+    if not clean_asset_id or not clean_content_hash or not secret:
+        return ""
+    message = f"{clean_asset_id}:{clean_variant}:{clean_content_hash}".encode("utf-8")
+    token = hmac.new(secret.encode("utf-8"), message, hashlib.sha256).hexdigest()
+    base_url = str(
+        os.environ.get("PUBLIC_BASE_URL")
+        or os.environ.get("FRONTEND_URL")
+        or "https://localos.pro"
+    ).strip().rstrip("/")
+    return f"{base_url}/api/media-intelligence/public/photos/{clean_asset_id}/file?variant={quote(clean_variant)}&token={token}"
+
+
+def verify_media_delivery_token(*, asset_id: str, content_hash: str, variant: str, token: str) -> bool:
+    expected_url = build_media_delivery_url(
+        asset_id=asset_id,
+        content_hash=content_hash,
+        variant=variant,
+    )
+    if not expected_url:
+        return False
+    expected_token = expected_url.rsplit("token=", 1)[-1]
+    return hmac.compare_digest(expected_token, str(token or "").strip())
 
 
 def _metadata_safe_value(value: str) -> str:

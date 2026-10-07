@@ -236,6 +236,17 @@ def update_userbot_session(cursor, account_id: str, auth_data: dict[str, Any]) -
     )
 
 
+def _retrieve_disconnect_exception(client: Any) -> None:
+    disconnected = getattr(client, "disconnected", None)
+    if disconnected is None:
+        return
+    try:
+        if disconnected.done() and not disconnected.cancelled():
+            disconnected.exception()
+    except Exception:
+        return
+
+
 async def _connect_client(auth_data: dict[str, Any]) -> TelegramClient:
     if TelegramClient is None or StringSession is None:
         raise RuntimeError("telethon is not installed")
@@ -287,6 +298,8 @@ async def _connect_client(auth_data: dict[str, Any]) -> TelegramClient:
                 await client.disconnect()
             except Exception:
                 pass
+            finally:
+                _retrieve_disconnect_exception(client)
     if last_error is not None:
         raise last_error
     raise RuntimeError("Telegram client connection failed")

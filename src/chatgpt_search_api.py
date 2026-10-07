@@ -6,7 +6,6 @@
 """
 from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager
-from subscription_manager import check_access
 from datetime import datetime, timedelta, time as dt_time
 import uuid
 import json
@@ -65,7 +64,11 @@ def chatgpt_search():
             LEFT JOIN Networks n ON b.network_id = n.id
             WHERE b.moderation_status = 'approved'
             AND b.chatgpt_enabled = 1
-            AND b.subscription_status = 'active'
+            AND LOWER(COALESCE(b.subscription_status, '')) IN ('active', 'trialing')
+            AND (b.subscription_ends_at IS NULL OR b.subscription_ends_at > CURRENT_TIMESTAMP)
+            AND LOWER(COALESCE(b.subscription_tier, '')) IN (
+                'professional', 'pro', 'concierge', 'enterprise', 'elite', 'promo'
+            )
             AND b.city LIKE %s AND (us.name LIKE %s OR b.name LIKE %s OR us.description LIKE %s OR us.keywords LIKE %s)
         """
         
@@ -872,4 +875,3 @@ def get_chatgpt_statistics():
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-

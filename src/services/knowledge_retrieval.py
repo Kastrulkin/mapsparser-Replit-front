@@ -148,6 +148,13 @@ def _vector_rows(cursor: Any, request: KnowledgeSearchRequest, vector: list[Any]
                    document.sensitivity_class, document.document_type,
                    source.id AS source_id, source.source_type, source.title AS source_title,
                    source.metadata_json AS source_metadata_json,
+                   EXISTS (
+                       SELECT 1
+                       FROM knowledge_source_subscriptions subscription
+                       WHERE subscription.source_id = source.id
+                         AND subscription.business_id = %s
+                         AND subscription.is_active IS TRUE
+                   ) AS subscribed_source,
                    (document.business_id IS NOT NULL) AS tenant_specific,
                    ROW_NUMBER() OVER (
                        PARTITION BY nearest.chunk_id
@@ -203,7 +210,7 @@ def _vector_rows(cursor: Any, request: KnowledgeSearchRequest, vector: list[Any]
         FROM top_candidates candidate
         ORDER BY candidate.distance
         """,
-        [vector_value, request.business_id, *params],
+        [vector_value, request.business_id, request.business_id, *params],
     )
     return [dict(row) for row in cursor.fetchall()]
 
@@ -214,7 +221,14 @@ def _lexical_rows(cursor: Any, request: KnowledgeSearchRequest) -> list[dict[str
         ts_rank_cd(
             to_tsvector('russian', chunk.content_text),
             plainto_tsquery('russian', %s)
-        ) AS lexical_rank
+        ) AS lexical_rank,
+        EXISTS (
+            SELECT 1
+            FROM knowledge_source_subscriptions subscription
+            WHERE subscription.source_id = source.id
+              AND subscription.business_id = %s
+              AND subscription.is_active IS TRUE
+        ) AS subscribed_source
     """
     cursor.execute(
         f"""
@@ -228,7 +242,7 @@ def _lexical_rows(cursor: Any, request: KnowledgeSearchRequest) -> list[dict[str
         ORDER BY candidate.lexical_rank DESC
         LIMIT 50
         """,
-        [request.query, *params, request.query],
+        [request.query, request.business_id, *params, request.query],
     )
     return [dict(row) for row in cursor.fetchall()]
 
@@ -251,6 +265,7 @@ def _rrf(vector_rows: list[dict[str, Any]], lexical_rows: list[dict[str, Any]]) 
             + 0.0005 * min(int(item.get("confirmation_count") or 0), 5)
             + 0.0005 * min(int(item.get("successful_uses") or 0), 5)
             + (0.0010 if bool(item.get("tenant_specific")) else 0.0)
+            + (0.0040 if bool(item.get("subscribed_source")) else 0.0)
         )
     return sorted(
         combined.values(),
@@ -340,6 +355,7 @@ def retrieve_knowledge(conn, request: KnowledgeSearchRequest) -> dict[str, Any]:
                 "source_title": str(row.get("source_title") or ""),
                 "modes": list(row.get("modes") or []),
                 "rrf_score": float(row.get("rrf_score") or 0),
+                "subscribed_source": bool(row.get("subscribed_source")),
             },
         )
         for row in selected

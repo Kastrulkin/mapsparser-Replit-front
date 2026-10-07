@@ -101,6 +101,7 @@ from services.sales_room_audit_offer_service import (
 )
 
 from api.prospecting.shared import admin_prospecting_bp
+from api.prospecting.partner_discovery import _should_use_lead_name_for_match
 
 class AuditQualityError(ValueError):
     def __init__(self, quality: dict[str, Any]):
@@ -150,7 +151,7 @@ TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS = max(1, int(os.environ.get("TELEGRAM_REPLY_SY
 TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT = max(1, min(int(os.environ.get("TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT", "12")), 50))
 TELEGRAM_REPLY_SYNC_TIMEOUT_SEC = max(5, int(os.environ.get("TELEGRAM_REPLY_SYNC_TIMEOUT_SEC", "12")))
 LEAD_OUTREACH_MODERATION_STATUS = "lead_outreach"
-PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr")
+PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr", "hy", "kk")
 PIPELINE_UNPROCESSED = "unprocessed"
 PIPELINE_IN_PROGRESS = "in_progress"
 PIPELINE_POSTPONED = "postponed"
@@ -825,6 +826,7 @@ def _create_shadow_business_for_lead(lead: dict[str, Any], user_id: str) -> dict
             "email": (str(lead.get("email") or "").strip() or None),
             "yandex_url": source_url or None,
             "moderation_status": LEAD_OUTREACH_MODERATION_STATUS,
+            "entity_group": "lead",
             "is_active": True,
         }
         if source_external_id and "yandex_org_id" in columns:
@@ -1140,7 +1142,16 @@ def _sync_partnership_lead_from_parsed_data(lead: dict[str, Any]) -> dict[str, A
     finally:
         conn.close()
 
-def _enqueue_parse_task_for_business(business_id: str, user_id: str, source_url: str) -> dict[str, Any]:
+def _enqueue_parse_task_for_business(
+    business_id: str,
+    user_id: str,
+    source_url: str,
+    *,
+    task_type: str = "parse_card",
+) -> dict[str, Any]:
+    normalized_task_type = str(task_type or "parse_card").strip().lower()
+    if normalized_task_type not in {"parse_card", "reviews_delta", "reviews_full"}:
+        raise ValueError(f"Unsupported parser task_type: {normalized_task_type}")
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -1149,7 +1160,7 @@ def _enqueue_parse_task_for_business(business_id: str, user_id: str, source_url:
             SELECT id, status, task_type, source, updated_at, retry_after
             FROM parsequeue
             WHERE business_id = %s
-              AND task_type IN ('parse_card', 'sync_yandex_business')
+              AND task_type IN ('parse_card', 'sync_yandex_business', 'reviews_delta', 'reviews_full')
               AND status IN ('pending', 'processing', 'captcha')
             ORDER BY created_at DESC
             LIMIT 1
@@ -1237,11 +1248,21 @@ def _enqueue_parse_task_for_business(business_id: str, user_id: str, source_url:
                     requested_by_business_id, force_refresh,
                     task_type, source, status, user_id, url, created_at, updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, TRUE, 'parse_card', %s, 'pending', %s, %s, NOW(), NOW())
+                VALUES (%s, %s, %s, %s, %s, TRUE, %s, %s, 'pending', %s, %s, NOW(), NOW())
                 RETURNING id, status, task_type, source, updated_at, retry_after,
                           company_location_id, external_profile_id
                 """,
-                (task_id, business_id, company_location_id, external_profile_id, requested_by_business_id, parse_source, user_id, source_url),
+                (
+                    task_id,
+                    business_id,
+                    company_location_id,
+                    external_profile_id,
+                    requested_by_business_id,
+                    normalized_task_type,
+                    parse_source,
+                    user_id,
+                    source_url,
+                ),
             )
         else:
             cur.execute(
@@ -1249,10 +1270,10 @@ def _enqueue_parse_task_for_business(business_id: str, user_id: str, source_url:
                 INSERT INTO parsequeue (
                     id, business_id, task_type, source, status, user_id, url, created_at, updated_at
                 )
-                VALUES (%s, %s, 'parse_card', %s, 'pending', %s, %s, NOW(), NOW())
+                VALUES (%s, %s, %s, %s, 'pending', %s, %s, NOW(), NOW())
                 RETURNING id, status, task_type, source, updated_at, retry_after
                 """,
-                (task_id, business_id, parse_source, user_id, source_url),
+                (task_id, business_id, normalized_task_type, parse_source, user_id, source_url),
             )
         created = dict(cur.fetchone())
         created["existing"] = False
@@ -1443,6 +1464,8 @@ def _language_label(language: str) -> str:
         "th": "ไทย",
         "ar": "العربية",
         "ha": "Hausa",
+        "hy": "Հայերեն",
+        "kk": "Қазақша",
     }
     return labels.get(language, "English")
 

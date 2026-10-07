@@ -3,8 +3,9 @@ import { DashboardSidebar } from './DashboardSidebar';
 import { DashboardHeader } from './DashboardHeader';
 import { useState, useEffect, useCallback } from 'react';
 import { newAuth, type User } from '../lib/auth_new';
-import { getAutomationAccessForBusiness } from '../lib/subscriptionAccess';
+import { getCapabilityAccessForBusiness, type SubscriptionCapability } from '../lib/subscriptionAccess';
 import { DemoModeBanner, GuidedTourProvider } from './guided-tour/GuidedTourProvider';
+import { featureFlags } from '../config/featureFlags';
 
 type DashboardBusiness = {
   id: string;
@@ -18,6 +19,8 @@ type DashboardBusiness = {
   subscription_ends_at?: string | null;
   network_id?: string | null;
   network_name?: string | null;
+  web_tracking_available?: boolean;
+  creator_promotion_available?: boolean;
 };
 
 export type ControlScope = {
@@ -26,18 +29,17 @@ export type ControlScope = {
   name: string;
 };
 
-const paidDashboardSections = [
-  { path: '/dashboard/content', title: 'Контент доступен после оплаты', hint: 'Можно посмотреть раздел, но генерация публикаций и контент-планов включается только на платном тарифе.' },
-  { path: '/dashboard/progress', title: 'Прогресс и аналитика доступны после оплаты', hint: 'Аудит, динамика и рекомендации появятся после подключения тарифа.' },
-  { path: '/dashboard/finance', title: 'Финансы доступны после оплаты', hint: 'Импорт, разбор показателей и рекомендации по выручке включаются на платном тарифе.' },
-  { path: '/dashboard/average-ticket', title: 'Средний чек доступен после оплаты', hint: 'Расчёты и рекомендации по среднему чеку включаются на платном тарифе.' },
-  { path: '/dashboard/ai-chat-promotion', title: 'Продвижение в AI-чатах доступно после оплаты', hint: 'Проверки и рекомендации по AI-выдаче включаются на платном тарифе.' },
-  { path: '/dashboard/partnerships', title: 'Поиск партнёров доступен после оплаты', hint: 'Подбор, подготовка и ведение партнёрских контактов включаются на платном тарифе.' },
-  { path: '/dashboard/operator', title: 'Оператор доступен после оплаты', hint: 'Единый рабочий центр задач и запусков включается на платном тарифе.' },
-  { path: '/dashboard/telegram-radar', title: 'Telegram-радар доступен после оплаты', hint: 'Мониторинг Telegram и обработка найденных сигналов включаются на платном тарифе.' },
-  { path: '/dashboard/agents', title: 'Агенты доступны после оплаты', hint: 'Настройка и запуск автоматизаций включаются на платном тарифе.' },
-  { path: '/dashboard/chats', title: 'Чаты доступны после оплаты', hint: 'Подключение и обработка сообщений включаются на платном тарифе.' },
-  { path: '/dashboard/network', title: 'Сеть доступна после оплаты', hint: 'Сводка по нескольким точкам и сетевые сценарии включаются на платном тарифе.' },
+const paidDashboardSections: Array<{ path: string; capability: SubscriptionCapability; title: string; hint: string }> = [
+  { path: '/dashboard/card', capability: 'maps', title: 'Работа с картами входит в тариф «Карты»', hint: 'Аудит, услуги, отзывы, фото и новости для карточки открываются на тарифе «Карты».' },
+  { path: '/dashboard/web-analytics', capability: 'web_analytics', title: 'Аналитика сайта входит в тариф «Карты»', hint: 'Установите tracker-скрипт и получите первые события поведения пользователей.' },
+  { path: '/dashboard/finance', capability: 'finance', title: 'Финансы входят в тариф «Управление»', hint: 'Импорт, показатели и рекомендации по выручке доступны на старшем тарифе.' },
+  { path: '/dashboard/average-ticket', capability: 'average_ticket', title: 'Средний чек входит в тариф «Управление»', hint: 'Пакеты услуг и сценарии допродажи доступны на старшем тарифе.' },
+  { path: '/dashboard/ai-chat-promotion', capability: 'ai_visibility', title: 'AI-видимость входит в тариф «Привлечение»', hint: 'Проверки и рекомендации по AI-выдаче входят в контур привлечения.' },
+  { path: '/dashboard/influencers/operations', capability: 'influencers', title: 'Полная работа с инфлюенсерами входит в тариф «Привлечение»', hint: 'Откроются сообщения, каналы, размещения и подтверждённая отправка.' },
+  { path: '/dashboard/operator', capability: 'operator', title: 'Оператор входит в тариф «Управление»', hint: 'Единый рабочий центр задач и запусков доступен на старшем тарифе.' },
+  { path: '/dashboard/telegram-radar', capability: 'telegram_radar', title: 'Telegram-радар входит в тариф «Карты»', hint: 'Сбор отраслевых публикаций доступен вместе с работой над карточкой.' },
+  { path: '/dashboard/agents', capability: 'agents', title: 'ИИ-сотрудники входят в тариф «Управление»', hint: 'Настройка и запуск автоматизаций доступны на старшем тарифе.' },
+  { path: '/dashboard/chats', capability: 'chats', title: 'Рабочие чаты входят в тариф «Управление»', hint: 'Подключение и обработка сообщений доступны на старшем тарифе.' },
 ];
 
 export const DashboardLayout = () => {
@@ -143,6 +145,11 @@ export const DashboardLayout = () => {
     window.localStorage.setItem('dashboard_sidebar_collapsed', sidebarCollapsed ? 'true' : 'false');
   }, [sidebarCollapsed]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || location.pathname === '/dashboard/profile') return;
+    window.sessionStorage.setItem('localos_checkout_return_to', `${location.pathname}${location.search}`);
+  }, [location.pathname, location.search]);
+
   const handleBusinessChange = async (businessId: string) => {
     const business = businesses.find(b => b.id === businessId);
     if (business) {
@@ -212,16 +219,27 @@ export const DashboardLayout = () => {
     return <Navigate to="/login" replace />;
   }
 
-  const automationAccess = getAutomationAccessForBusiness(currentBusiness);
   const lockedPaidSection = paidDashboardSections.find((section) => (
     location.pathname === section.path || location.pathname.startsWith(`${section.path}/`)
   ));
-  const shouldBlurPaidSection = Boolean(lockedPaidSection && !user.demo_mode && !user.is_superadmin && !automationAccess.automationAllowed);
+  const ownsBlockAccess = location.pathname === '/dashboard/influencers'
+    || location.pathname === '/dashboard/partnerships'
+    || location.pathname === '/dashboard/promotion/partnerships'
+    || location.pathname === '/dashboard/promotion';
+  const sectionAccess = lockedPaidSection ? getCapabilityAccessForBusiness(currentBusiness, lockedPaidSection.capability) : null;
+  const shouldBlurPaidSection = Boolean(lockedPaidSection && !ownsBlockAccess && !user.demo_mode && !user.is_superadmin && !sectionAccess?.allowed);
+  const paywallReturnTo = `${location.pathname}${location.search}`;
+  const paywallHref = `/dashboard/profile?focus=subscription&tier=${encodeURIComponent(sectionAccess?.requiredTier || 'starter')}&return_to=${encodeURIComponent(paywallReturnTo)}#subscription`;
 
   return (
     <GuidedTourProvider user={user}>
       <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.06),_transparent_30%),linear-gradient(180deg,_#f8fafc_0%,_#f6f8fc_100%)] text-slate-900">
-      <DashboardSidebar isMobile={false} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)} />
+      <DashboardSidebar
+        isMobile={false}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+        webTrackingAvailable={currentBusiness?.web_tracking_available === true}
+      />
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:pl-24' : 'md:pl-72'}`}>
         <DashboardHeader
           businesses={businesses}
@@ -237,7 +255,7 @@ export const DashboardLayout = () => {
         <main className="flex-1 p-3 sm:p-4 lg:p-6">
           <div className="mx-auto w-full max-w-[1600px]">
             <div className="relative min-h-[60vh]">
-              <div className={shouldBlurPaidSection ? 'pointer-events-none select-none blur-sm' : undefined} aria-hidden={shouldBlurPaidSection || undefined}>
+              <div className={shouldBlurPaidSection ? (featureFlags.blockAccessV2 ? 'pointer-events-none select-none opacity-55' : 'pointer-events-none select-none blur-sm') : undefined} aria-hidden={shouldBlurPaidSection || undefined}>
                 <Outlet context={{ user, demoMode: Boolean(user.demo_mode), currentBusinessId, currentBusiness, businesses, controlScope, onControlScopeChange: selectControlScope, updateBusiness, reloadBusinesses, setBusinesses, onBusinessChange: handleBusinessChange }} />
               </div>
               {shouldBlurPaidSection && lockedPaidSection ? (
@@ -259,10 +277,10 @@ export const DashboardLayout = () => {
                         Заполнить профиль
                       </a>
                       <a
-                        href="/dashboard/profile?focus=subscription#subscription"
+                        href={paywallHref}
                         className="inline-flex items-center justify-center rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
                       >
-                        Выбрать тариф
+                        Выбрать тариф{sectionAccess ? ` «${sectionAccess.requiredTierName}»` : ''}
                       </a>
                     </div>
                   </div>
@@ -276,6 +294,7 @@ export const DashboardLayout = () => {
       <DashboardSidebar
         isMobile={true}
         onClose={() => setSidebarOpen(false)}
+        webTrackingAvailable={currentBusiness?.web_tracking_available === true}
       />
       </div>
     </GuidedTourProvider>

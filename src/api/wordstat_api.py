@@ -11,6 +11,8 @@ import difflib
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database_manager import get_db_connection
 from auth_system import verify_session
+from core.api_errors import internal_error_response
+from core.db_helpers import assert_schema_columns
 from core.helpers import get_business_owner_id
 from core.seo_keywords import collect_ranked_keywords
 from service_categorizer import categorizer
@@ -459,19 +461,7 @@ def _load_live_wordstat_search(query: str, limit: int) -> list[dict]:
 def _save_live_wordstat_items(cursor, items: list[dict]) -> None:
     if not items:
         return
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS wordstatkeywords (
-            id TEXT PRIMARY KEY,
-            keyword TEXT UNIQUE NOT NULL,
-            views INTEGER DEFAULT 0,
-            category TEXT DEFAULT 'other',
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_wordstat_views ON wordstatkeywords(views DESC)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_wordstat_category ON wordstatkeywords(category)")
+    assert_schema_columns(cursor, "wordstatkeywords", ("id", "keyword", "views", "category", "updated_at"))
     for item in items:
         keyword = str(item.get("keyword") or "").strip()
         if not keyword:
@@ -546,78 +536,15 @@ def _wordstat_update_error_response(details: str, user_data):
 
 
 def _ensure_excluded_table(cursor):
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS wordstatkeywordsexcluded (
-            id TEXT PRIMARY KEY,
-            business_id TEXT NOT NULL,
-            keyword TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE (business_id, keyword)
-        )
-        """
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_wordstat_excluded_business ON wordstatkeywordsexcluded(business_id)"
-    )
+    assert_schema_columns(cursor, "wordstatkeywordsexcluded", ("id", "business_id", "keyword", "created_at"))
 
 
 def _ensure_custom_table(cursor):
-    # Avoid race errors on first concurrent requests that try to initialize the same table.
-    cursor.execute(
-        """
-        DO $$
-        BEGIN
-            CREATE TABLE wordstatkeywordscustom (
-                id TEXT PRIMARY KEY,
-                business_id TEXT NOT NULL,
-                keyword TEXT NOT NULL,
-                views INTEGER DEFAULT 0,
-                category TEXT DEFAULT 'custom',
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE (business_id, keyword)
-            );
-        EXCEPTION
-            WHEN duplicate_table OR unique_violation THEN
-                NULL;
-        END
-        $$;
-        """
-    )
-    cursor.execute(
-        """
-        DO $$
-        BEGIN
-            CREATE INDEX idx_wordstat_custom_business ON wordstatkeywordscustom(business_id);
-        EXCEPTION
-            WHEN duplicate_table OR duplicate_object THEN
-                NULL;
-        END
-        $$;
-        """
-    )
+    assert_schema_columns(cursor, "wordstatkeywordscustom", ("id", "business_id", "keyword", "views", "category", "updated_at", "created_at"))
 
 
 def _ensure_negative_table(cursor):
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS seonegativekeywords (
-            id TEXT PRIMARY KEY,
-            business_id TEXT NOT NULL,
-            phrase TEXT NOT NULL,
-            scope TEXT NOT NULL DEFAULT 'global',
-            category TEXT DEFAULT '',
-            is_active BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE (business_id, phrase, scope, category)
-        )
-        """
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_seo_negative_business ON seonegativekeywords(business_id)"
-    )
+    assert_schema_columns(cursor, "seonegativekeywords", ("id", "business_id", "phrase", "scope", "category", "is_active", "created_at", "updated_at"))
 
 
 def _load_negative_rows(cursor, business_id: str):
@@ -775,7 +702,7 @@ def get_keywords():
         
     except Exception as e:
         print(f"Error fetching wordstat keywords: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return internal_error_response("Не удалось получить SEO-ключи")
     finally:
         conn.close()
 
@@ -948,7 +875,7 @@ def search_keywords():
         return jsonify({'success': True, 'count': len(items), 'items': items})
     except Exception as e:
         conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return internal_error_response("Не удалось выполнить поиск SEO-ключей")
     finally:
         conn.close()
 
@@ -1017,7 +944,7 @@ def trigger_update():
     except Exception as e:
         if conn is not None:
             conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return internal_error_response("Не удалось обновить SEO-ключи")
     finally:
         if conn is not None:
             conn.close()
@@ -1063,7 +990,7 @@ def exclude_keyword():
         })
     except Exception as e:
         conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return internal_error_response("Не удалось исключить SEO-ключ")
     finally:
         conn.close()
 
@@ -1113,7 +1040,7 @@ def add_custom_keyword():
         return jsonify({'success': True, 'message': 'Ключевой запрос добавлен'})
     except Exception as e:
         conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return internal_error_response("Не удалось добавить SEO-ключ")
     finally:
         conn.close()
 
@@ -1133,7 +1060,7 @@ def get_metadata():
             return jsonify({'success': False, 'error': 'No metadata found'}), 404
             
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return internal_error_response("Не удалось получить метаданные SEO-ключей")
 
 
 @wordstat_bp.route('/negative-keywords', methods=['GET'])

@@ -3,28 +3,105 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from services.agent_blueprint_orchestrator import build_agent_blueprint_orchestrator
-from services.agent_blueprint_runner import AgentBlueprintRunner, parse_json_field
+from services.agent_canary_budget import evaluate_agent_canary_budget, pause_agent_canary_blueprint
+from services.agent_blueprint_runner import parse_json_field
 from services.agent_capability_handlers import capability_runtime_contract
 from services.agent_run_queue import async_agent_runs_enabled, enqueue_agent_run
 
 
-def dispatch_telegram_message_to_agent_blueprints(cursor: Any, business_id: str, telegram_event: Dict[str, Any]) -> Dict[str, Any]:
-    event_payload = _normalize_telegram_event(telegram_event)
+def _record_trigger_event(
+    cursor: Any,
+    *,
+    business_id: str,
+    source: str,
+    event_type: str,
+    payload: Dict[str, Any],
+    source_event_key: str = "",
+) -> tuple[str, bool, str]:
+    """Persist one provider event once, before matching it to many blueprints."""
     trigger_event_id = str(uuid.uuid4())
-    _ensure_trigger_event_table(cursor)
+    key = str(source_event_key or "").strip() or None
     cursor.execute(
         """
         INSERT INTO agent_trigger_events (
-            id, business_id, source, event_type, status, payload_json, reason_code
+            id, business_id, source, event_type, status, payload_json, reason_code, source_event_key
         )
-        VALUES (%s, %s, 'telegram', 'telegram.message.received', 'received', %s::jsonb, NULL)
+        VALUES (%s, %s, %s, %s, 'received', %s::jsonb, NULL, %s)
+        ON CONFLICT (business_id, source, source_event_key) WHERE source_event_key IS NOT NULL
+        DO UPDATE SET updated_at = NOW()
+        RETURNING id, status, (xmax = 0) AS created
         """,
-        (trigger_event_id, business_id, json.dumps(event_payload, ensure_ascii=False)),
+        (trigger_event_id, business_id, source, event_type, json.dumps(payload, ensure_ascii=False), key),
     )
+    row = cursor.fetchone() or {}
+    return (
+        str(row.get("id") or trigger_event_id),
+        bool(row.get("created", True)),
+        str(row.get("status") or "received"),
+    )
+
+
+def _record_trigger_run_link(
+    cursor: Any,
+    *,
+    trigger_event_id: str,
+    blueprint_id: str,
+    version_id: str,
+    run_id: str,
+    status: str,
+    reason_code: str = "",
+) -> None:
+    cursor.execute(
+        """
+        INSERT INTO agent_trigger_run_links (
+            id, trigger_event_id, blueprint_id, blueprint_version_id, run_id, status, reason_code
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (trigger_event_id, blueprint_id)
+        DO UPDATE SET run_id = EXCLUDED.run_id, status = EXCLUDED.status,
+            reason_code = EXCLUDED.reason_code, updated_at = NOW()
+        """,
+        (
+            str(uuid.uuid4()),
+            trigger_event_id,
+            blueprint_id,
+            version_id,
+            run_id or None,
+            status,
+            reason_code or None,
+        ),
+    )
+
+
+def _telegram_source_event_key(event_payload: Dict[str, Any]) -> str:
+    chat_id = str(event_payload.get("chat_id") or "").strip()
+    message_id = str(event_payload.get("message_id") or "").strip()
+    return f"telegram:{chat_id}:{message_id}" if chat_id and message_id else ""
+
+
+def dispatch_telegram_message_to_agent_blueprints(cursor: Any, business_id: str, telegram_event: Dict[str, Any]) -> Dict[str, Any]:
+    event_payload = _normalize_telegram_event(telegram_event)
+    trigger_event_id, created, _event_status = _record_trigger_event(
+        cursor,
+        business_id=business_id,
+        source="telegram",
+        event_type="telegram.message.received",
+        payload=event_payload,
+        source_event_key=_telegram_source_event_key(event_payload),
+    )
+    if not created:
+        return {
+            "success": True,
+            "trigger_event_id": trigger_event_id,
+            "matched_count": 0,
+            "started_runs": [],
+            "skipped": [{"reason": "duplicate_source_event"}],
+            "legacy_reply_should_continue": False,
+            "duplicate": True,
+        }
     blueprints = _load_candidate_blueprints(cursor, business_id)
     started_runs = []
     skipped = []
@@ -55,8 +132,21 @@ def dispatch_telegram_message_to_agent_blueprints(cursor: Any, business_id: str,
         for key, value in defaults.items():
             if value and not run_input.get(key):
                 run_input[key] = value
-        runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
-        result = runner.start_run(str(version.get("id") or ""), run_input, user_data)
+        if not async_agent_runs_enabled(str(blueprint.get("business_id") or "")):
+            result = {
+                "success": False,
+                "code": "AGENT_ASYNC_RUNTIME_DISABLED",
+                "error": "agent async runtime is not enabled for business",
+            }
+        else:
+            result = enqueue_agent_run(
+                cursor,
+                blueprint=blueprint,
+                version=version,
+                input_payload=run_input,
+                user_data=user_data,
+                idempotency_key=f"trigger:{trigger_event_id}:{blueprint.get('id')}",
+            )
         if result.get("success"):
             run = result.get("run") if isinstance(result.get("run"), dict) else {}
             run_id = str(run.get("id") or "")
@@ -72,15 +162,34 @@ def dispatch_telegram_message_to_agent_blueprints(cursor: Any, business_id: str,
                 """
                 UPDATE agent_trigger_events
                 SET blueprint_id = %s,
+                    blueprint_version_id = %s,
                     run_id = %s,
                     status = 'run_started',
                     updated_at = NOW()
                 WHERE id = %s
                 """,
-                (str(blueprint.get("id") or ""), run_id or None, trigger_event_id),
+                (str(blueprint.get("id") or ""), str(version.get("id") or ""), run_id or None, trigger_event_id),
+            )
+            _record_trigger_run_link(
+                cursor,
+                trigger_event_id=trigger_event_id,
+                blueprint_id=str(blueprint.get("id") or ""),
+                version_id=str(version.get("id") or ""),
+                run_id=run_id,
+                status="queued",
             )
         else:
-            skipped.append({"blueprint_id": blueprint.get("id"), "reason": result.get("error") or "run_start_failed"})
+            reason = str(result.get("code") or result.get("error") or "run_start_failed")
+            skipped.append({"blueprint_id": blueprint.get("id"), "reason": reason})
+            _record_trigger_run_link(
+                cursor,
+                trigger_event_id=trigger_event_id,
+                blueprint_id=str(blueprint.get("id") or ""),
+                version_id=str(version.get("id") or ""),
+                run_id="",
+                status="blocked",
+                reason_code=reason,
+            )
     if not started_runs:
         cursor.execute(
             """
@@ -111,22 +220,29 @@ def dispatch_scheduled_agent_blueprints(
 ) -> Dict[str, Any]:
     now = now or datetime.now(timezone.utc)
     now_text = now.isoformat().replace("+00:00", "Z")
-    trigger_event_id = str(uuid.uuid4())
-    _ensure_trigger_event_table(cursor)
     event_payload = {
         "trigger": trigger,
         "scheduled_at": now_text,
         "source": "scheduler",
     }
-    cursor.execute(
-        """
-        INSERT INTO agent_trigger_events (
-            id, business_id, source, event_type, status, payload_json, reason_code
-        )
-        VALUES (%s, %s, 'scheduler', %s, 'received', %s::jsonb, NULL)
-        """,
-        (trigger_event_id, business_id, trigger, json.dumps(event_payload, ensure_ascii=False)),
+    trigger_event_id, created, _event_status = _record_trigger_event(
+        cursor,
+        business_id=business_id,
+        source="scheduler",
+        event_type=trigger,
+        payload=event_payload,
+        source_event_key=f"scheduler:{business_id}:{trigger}:{now.date().isoformat()}",
     )
+    if not created:
+        return {
+            "success": True,
+            "trigger_event_id": trigger_event_id,
+            "matched_count": 0,
+            "started_runs": [],
+            "skipped": [{"reason": "duplicate_source_event"}],
+            "legacy_reply_should_continue": False,
+            "duplicate": True,
+        }
     blueprints = _load_candidate_blueprints(cursor, business_id)
     started_runs = []
     skipped = []
@@ -195,13 +311,31 @@ def dispatch_scheduled_agent_blueprints(
                 """,
                 (str(blueprint.get("id") or ""), run_id or None, trigger_event_id),
             )
+            _record_trigger_run_link(
+                cursor,
+                trigger_event_id=trigger_event_id,
+                blueprint_id=str(blueprint.get("id") or ""),
+                version_id=str(version.get("id") or ""),
+                run_id=run_id,
+                status="queued",
+            )
         else:
+            reason = str(result.get("code") or result.get("error") or "run_start_failed")
             skipped.append(
                 {
                     "blueprint_id": blueprint.get("id"),
-                    "reason": result.get("code") or result.get("error") or "run_start_failed",
+                    "reason": reason,
                     "preflight": result.get("preflight") if isinstance(result.get("preflight"), dict) else {},
                 }
+            )
+            _record_trigger_run_link(
+                cursor,
+                trigger_event_id=trigger_event_id,
+                blueprint_id=str(blueprint.get("id") or ""),
+                version_id=str(version.get("id") or ""),
+                run_id="",
+                status="blocked",
+                reason_code=reason,
             )
     if not started_runs:
         cursor.execute(
@@ -230,13 +364,51 @@ def dispatch_due_scheduled_agent_blueprints(
     now: datetime | None = None,
     business_limit: int = 50,
     trigger: str = "schedule.daily",
+    should_stop: Callable[[], bool] | None = None,
 ) -> Dict[str, Any]:
+    if should_stop and should_stop():
+        return {
+            "success": True,
+            "trigger": trigger,
+            "checked_businesses": 0,
+            "checked_blueprints": 0,
+            "dispatched_count": 0,
+            "skipped_count": 0,
+            "dispatched": [],
+            "skipped": [],
+        }
     now = now or datetime.now(timezone.utc)
-    _ensure_trigger_event_table(cursor)
     blueprints = _load_scheduled_blueprints(cursor, blueprint_limit=business_limit)
     dispatched = []
     skipped = []
+    checked_blueprints = []
     for blueprint in blueprints:
+        if should_stop and should_stop():
+            break
+        checked_blueprints.append(blueprint)
+        canary = evaluate_agent_canary_budget(
+            cursor,
+            blueprint=blueprint,
+            requested_credits=2,
+            now=now,
+        )
+        if canary.get("enabled") and not canary.get("allowed"):
+            reason = str(canary.get("reason") or "canary_blocked")
+            if reason != "not_started":
+                pause_agent_canary_blueprint(
+                    cursor,
+                    blueprint_id=str(blueprint.get("id") or ""),
+                    reason=reason,
+                    now=now,
+                )
+            skipped.append(
+                {
+                    "blueprint_id": str(blueprint.get("id") or ""),
+                    "business_id": str(blueprint.get("business_id") or ""),
+                    "reason": f"canary_{reason}",
+                }
+            )
+            continue
         version = _resolve_active_version(cursor, blueprint)
         if not version or not _matches_schedule_trigger(blueprint, version, trigger):
             continue
@@ -258,6 +430,8 @@ def dispatch_due_scheduled_agent_blueprints(
         if _scheduled_blueprint_event_already_recorded(cursor, blueprint_id, trigger, schedule_context):
             skipped.append({"blueprint_id": blueprint_id, "business_id": business_id, "reason": "already_recorded_for_schedule"})
             continue
+        if should_stop and should_stop():
+            break
         result = _dispatch_scheduled_blueprint(cursor, blueprint, version, now, trigger, schedule_context)
         if not result.get("success"):
             skipped.append(
@@ -281,8 +455,8 @@ def dispatch_due_scheduled_agent_blueprints(
     return {
         "success": True,
         "trigger": trigger,
-        "checked_businesses": len({str(item.get("business_id") or "") for item in blueprints}),
-        "checked_blueprints": len(blueprints),
+        "checked_businesses": len({str(item.get("business_id") or "") for item in checked_blueprints}),
+        "checked_blueprints": len(checked_blueprints),
         "dispatched_count": len(dispatched),
         "skipped_count": len(skipped),
         "dispatched": dispatched,
@@ -296,7 +470,19 @@ def _load_scheduled_blueprints(cursor: Any, *, blueprint_limit: int) -> list[Dic
         SELECT *
         FROM agent_blueprints
         WHERE status = 'active'
-          AND COALESCE(metadata_json->>'execution_mode', '') = 'scheduled'
+          AND (
+              EXISTS (
+                  SELECT 1
+                  FROM agent_blueprint_versions AS active_version
+                  WHERE active_version.id = NULLIF(agent_blueprints.metadata_json->>'active_version_id', '')
+                    AND active_version.blueprint_id = agent_blueprints.id
+                    AND active_version.trigger IN ('schedule.daily', 'schedule.weekly')
+              )
+              OR (
+                  COALESCE(metadata_json->>'active_version_id', '') = ''
+                  AND COALESCE(metadata_json->>'execution_mode', '') = 'scheduled'
+              )
+          )
         ORDER BY updated_at DESC, created_at DESC
         LIMIT %s
         """,
@@ -312,7 +498,9 @@ def _schedule_context(
 ) -> Dict[str, Any]:
     metadata = _metadata(blueprint)
     custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
-    schedule = custom_process.get("schedule") if isinstance(custom_process.get("schedule"), dict) else {}
+    schedule = parse_json_field(version.get("schedule_json"), {}) if "schedule_json" in version else {}
+    if not isinstance(schedule, dict) or not schedule:
+        schedule = custom_process.get("schedule") if isinstance(custom_process.get("schedule"), dict) else {}
     if not schedule:
         version_output = parse_json_field(version.get("output_schema_json"), {})
         schedule = version_output.get("schedule") if isinstance(version_output, dict) and isinstance(version_output.get("schedule"), dict) else {}
@@ -333,6 +521,22 @@ def _schedule_context(
     due_minute = due_hour * 60 + due_minute_value
     current_minute = local_now.hour * 60 + local_now.minute
     due_local = local_now.replace(hour=due_hour, minute=due_minute_value, second=0, microsecond=0)
+    trigger = str(version.get("trigger") or "schedule.daily").strip()
+    if trigger == "schedule.weekly":
+        weekday = schedule.get("weekday")
+        if not isinstance(weekday, int) or isinstance(weekday, bool) or weekday < 0 or weekday > 6:
+            return {"ready": False, "reason": "schedule_weekday_invalid"}
+        if local_now.weekday() != weekday:
+            return {
+                "ready": True,
+                "due": False,
+                "reason": "schedule_weekday_not_due",
+                "schedule_time": schedule_time,
+                "timezone": timezone_name,
+                "schedule_date": local_now.date().isoformat(),
+                "local_now": local_now.isoformat(),
+                "weekday": weekday,
+            }
     eligible_at = _schedule_eligible_at(metadata)
     if eligible_at:
         eligible_local = eligible_at.astimezone(local_now.tzinfo)
@@ -433,7 +637,6 @@ def _dispatch_scheduled_blueprint(
     trigger: str,
     schedule_context: Dict[str, Any],
 ) -> Dict[str, Any]:
-    trigger_event_id = str(uuid.uuid4())
     blueprint_id = str(blueprint.get("id") or "")
     business_id = str(blueprint.get("business_id") or "")
     event_payload = {
@@ -444,18 +647,36 @@ def _dispatch_scheduled_blueprint(
         "schedule_time": str(schedule_context.get("schedule_time") or ""),
         "timezone": str(schedule_context.get("timezone") or ""),
     }
-    cursor.execute(
-        """
-        INSERT INTO agent_trigger_events (
-            id, business_id, blueprint_id, source, event_type, status, payload_json, reason_code
-        )
-        VALUES (%s, %s, %s, 'scheduler', %s, 'received', %s::jsonb, NULL)
-        """,
-        (trigger_event_id, business_id, blueprint_id, trigger, json.dumps(event_payload, ensure_ascii=False)),
+    trigger_event_id, created, previous_status = _record_trigger_event(
+        cursor,
+        business_id=business_id,
+        source="scheduler",
+        event_type=trigger,
+        payload=event_payload,
+        source_event_key=(
+            f"scheduler:{blueprint_id}:{event_payload['schedule_date']}:"
+            f"{event_payload['schedule_time']}:{trigger}"
+        ),
     )
+    if not created and previous_status != "deferred":
+        return {
+            "success": True,
+            "trigger_event_id": trigger_event_id,
+            "run_id": "",
+            "run_status": "",
+            "reason": "duplicate_source_event",
+            "retryable": False,
+            "duplicate": True,
+        }
+    business_owner_id = str(blueprint.get("business_owner_id") or "")
+    if not business_owner_id:
+        cursor.execute("SELECT owner_id FROM businesses WHERE id = %s LIMIT 1", (business_id,))
+        business_row = cursor.fetchone() or {}
+        business_owner_id = str(business_row.get("owner_id") or "")
+    billing_user_id = business_owner_id or str(blueprint.get("created_by_user_id") or "")
     user_data = {
-        "user_id": str(blueprint.get("created_by_user_id") or ""),
-        "id": str(blueprint.get("created_by_user_id") or ""),
+        "user_id": billing_user_id,
+        "id": billing_user_id,
         "is_superadmin": False,
     }
     run_input = {
@@ -485,21 +706,38 @@ def _dispatch_scheduled_blueprint(
         if failure_reason == "AGENT_RUN_ALREADY_IN_PROGRESS"
         else "failed"
     )
+    if failure_reason == "AGENT_RUN_ALREADY_IN_PROGRESS" and (parse_json_field(version.get("runtime_config_json"), {}) or {}).get("outreach_config"):
+        # A recurring prospecting batch is skipped, never accumulated behind a
+        # slow previous batch. Other established schedule semantics are retained.
+        event_status = "skipped"
     cursor.execute(
         """
         UPDATE agent_trigger_events
-        SET run_id = %s,
+        SET blueprint_id = %s,
+            blueprint_version_id = %s,
+            run_id = %s,
             status = %s,
             reason_code = %s,
             updated_at = NOW()
         WHERE id = %s
         """,
         (
+            blueprint_id,
+            str(version.get("id") or ""),
             run_id or None,
             event_status,
             failure_reason,
             trigger_event_id,
         ),
+    )
+    _record_trigger_run_link(
+        cursor,
+        trigger_event_id=trigger_event_id,
+        blueprint_id=blueprint_id,
+        version_id=str(version.get("id") or ""),
+        run_id=run_id,
+        status=event_status,
+        reason_code=failure_reason or "",
     )
     return {
         "success": bool(result.get("success")),
@@ -509,29 +747,6 @@ def _dispatch_scheduled_blueprint(
         "reason": failure_reason,
         "retryable": event_status == "deferred",
     }
-
-
-def _ensure_trigger_event_table(cursor: Any) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS agent_trigger_events (
-            id TEXT PRIMARY KEY,
-            business_id TEXT NOT NULL,
-            blueprint_id TEXT,
-            run_id TEXT,
-            source TEXT NOT NULL,
-            event_type TEXT NOT NULL,
-            status TEXT NOT NULL,
-            payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            reason_code TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_agent_trigger_events_business_created ON agent_trigger_events(business_id, created_at DESC)"
-    )
 
 
 def _load_due_scheduled_businesses(
@@ -664,6 +879,8 @@ def _resolve_active_version(cursor: Any, blueprint: Dict[str, Any]) -> Dict[str,
 
 
 def _matches_telegram_trigger(blueprint: Dict[str, Any], version: Dict[str, Any]) -> bool:
+    if "trigger" in version:
+        return str(version.get("trigger") or "").strip() == "telegram.message.received"
     metadata = _metadata(blueprint)
     custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
     if str(custom_process.get("trigger") or "") == "telegram.message.received":
@@ -680,6 +897,8 @@ def _matches_telegram_trigger(blueprint: Dict[str, Any], version: Dict[str, Any]
 
 
 def _matches_schedule_trigger(blueprint: Dict[str, Any], version: Dict[str, Any], trigger: str) -> bool:
+    if "trigger" in version:
+        return str(version.get("trigger") or "").strip() == trigger
     metadata = _metadata(blueprint)
     if str(metadata.get("execution_mode") or "").strip().lower() != "scheduled":
         return False
@@ -687,7 +906,7 @@ def _matches_schedule_trigger(blueprint: Dict[str, Any], version: Dict[str, Any]
     if str(custom_process.get("trigger") or "") == trigger:
         return True
     schedule = custom_process.get("schedule") if isinstance(custom_process.get("schedule"), dict) else {}
-    if schedule and trigger == "schedule.daily":
+    if schedule and trigger in {"schedule.daily", "schedule.weekly"}:
         return True
     payload = parse_json_field(version.get("output_schema_json"), {})
     if isinstance(payload, dict) and str(payload.get("trigger") or "") == trigger:
@@ -706,7 +925,9 @@ def _scheduled_version_beta_gate(version: Dict[str, Any]) -> Dict[str, Any]:
 
 def _custom_process_defaults(blueprint: Dict[str, Any], version: Dict[str, Any]) -> Dict[str, Any]:
     metadata = _metadata(blueprint)
-    custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    custom_process = parse_json_field(version.get("runtime_config_json"), {}) if "runtime_config_json" in version else {}
+    if not isinstance(custom_process, dict) or not custom_process:
+        custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
     sheet = custom_process.get("google_sheets") if isinstance(custom_process.get("google_sheets"), dict) else {}
     payload = parse_json_field(version.get("output_schema_json"), {})
     defaults = {

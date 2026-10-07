@@ -62,6 +62,7 @@ from services.operator_credit_reservation import finalize_reserved_action_credit
 from services.prospecting_service import ProspectingService
 from services.lead_workstream_service import resolve_workstream, update_workstream
 from services.lead_preparation_progress_service import record_lead_preparation_step
+from services.outreach_safety_service import load_partnership_repeat_contact_guard
 from services.sales_room_helpers import (
     append_sales_room_link_to_outreach_text as _append_sales_room_link_to_outreach_text,
     make_sales_room_url as _make_sales_room_url,
@@ -152,7 +153,7 @@ TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS = max(1, int(os.environ.get("TELEGRAM_REPLY_SY
 TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT = max(1, min(int(os.environ.get("TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT", "12")), 50))
 TELEGRAM_REPLY_SYNC_TIMEOUT_SEC = max(5, int(os.environ.get("TELEGRAM_REPLY_SYNC_TIMEOUT_SEC", "12")))
 LEAD_OUTREACH_MODERATION_STATUS = "lead_outreach"
-PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr")
+PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr", "hy", "kk")
 PIPELINE_UNPROCESSED = "unprocessed"
 PIPELINE_IN_PROGRESS = "in_progress"
 PIPELINE_POSTPONED = "postponed"
@@ -240,15 +241,27 @@ _SLUG_PART_ALIASES = {
     "подковырова": "podkovirova",
 }
 
+
+def _serialize_timestamp_fields(row: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(row)
+    for key, value in payload.items():
+        if isinstance(value, (datetime, date)):
+            payload[key] = value.isoformat()
+    return payload
+
 _STREET_PREFIX_PATTERN = re.compile(
     r"^(ulitsa|ulitsa\.|ul\.|street|st\.|st|prospekt|pr\.|pr|pereulok|per\.|per|naberezhnaya|nab\.|nab|bulvar|boulevard|bulevard|shosse|sh\.)\s+",
     re.IGNORECASE,
 )
 
-def _load_partnership_send_snapshot(*, business_id: str) -> dict[str, Any]:
+def _load_partnership_send_snapshot(*, business_id: str, search_task_id: str = "") -> dict[str, Any]:
     conn = get_db_connection()
     try:
         cur = conn.cursor()
+        group_ids = None
+        if search_task_id:
+            from services.partnership_group_view import load_group_scope
+            group_ids = load_group_scope(cur, business_id, search_task_id)['lead_ids']
         cur.execute(
             """
             WITH draft_scope AS (
@@ -266,6 +279,7 @@ def _load_partnership_send_snapshot(*, business_id: str) -> dict[str, Any]:
                 WHERE d.status = %s
                   AND ws.client_business_id = %s
                   AND ws.workstream_type = 'client_partnership'
+                  AND (%s::text[] IS NULL OR l.id::text=ANY(%s::text[]))
                   AND COALESCE(ws.status, '') NOT IN ('not_relevant', 'disqualified', 'closed_lost')
                   AND COALESCE(l.status, '') NOT IN ('not_relevant', 'disqualified', 'rejected', 'shortlist_rejected')
                   AND COALESCE(l.partnership_stage, '') NOT IN ('rejected', 'shortlist_rejected')
@@ -294,7 +308,7 @@ def _load_partnership_send_snapshot(*, business_id: str) -> dict[str, Any]:
             WHERE draft_rank = 1
             ORDER BY updated_at DESC, created_at DESC
             """,
-            (DRAFT_APPROVED, business_id),
+            (DRAFT_APPROVED, business_id, group_ids, group_ids),
         )
         ready_drafts = [_serialize_draft(dict(row)) for row in cur.fetchall()]
 
@@ -305,11 +319,12 @@ def _load_partnership_send_snapshot(*, business_id: str) -> dict[str, Any]:
             JOIN outreachsendqueue q ON q.batch_id = b.id
             JOIN prospectingleads l ON l.id = q.lead_id
             WHERE l.business_id = %s
+              AND (%s::text[] IS NULL OR l.id::text=ANY(%s::text[]))
               AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
             ORDER BY b.batch_date DESC, b.created_at DESC
             LIMIT 20
             """,
-            (business_id,),
+            (business_id, group_ids, group_ids),
         )
         batch_rows = [_serialize_batch_row(dict(row)) for row in cur.fetchall()]
         batches_by_id = {row["id"]: row for row in batch_rows}
@@ -339,10 +354,11 @@ def _load_partnership_send_snapshot(*, business_id: str) -> dict[str, Any]:
                     ORDER BY rx.created_at DESC
                     LIMIT 1
                 ) r ON TRUE
-                WHERE q.batch_id = ANY(%s)
+                WHERE q.batch_id = ANY(%s) AND l.business_id=%s
+                  AND (%s::text[] IS NULL OR l.id::text=ANY(%s::text[]))
                 ORDER BY q.created_at ASC
                 """,
-                (list(batches_by_id.keys()),),
+                (list(batches_by_id.keys()), business_id, group_ids, group_ids),
             )
             for row in cur.fetchall():
                 payload = dict(row)
@@ -360,13 +376,30 @@ def _load_partnership_send_snapshot(*, business_id: str) -> dict[str, Any]:
             JOIN outreachsendqueue q ON q.id = r.queue_id
             JOIN prospectingleads l ON l.id = r.lead_id
             WHERE l.business_id = %s
+              AND (%s::text[] IS NULL OR l.id::text=ANY(%s::text[]))
               AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
             ORDER BY r.created_at DESC
             LIMIT 50
             """,
-            (business_id,),
+            (business_id, group_ids, group_ids),
         )
         reactions = [_serialize_timestamp_fields(dict(row)) for row in cur.fetchall()]
+        cur.execute("""SELECT i.id, l.id AS lead_id, l.name AS lead_name, i.channel,
+            i.raw_payload_json->>'raw_reply' AS raw_reply, i.occurred_at AS created_at,
+            CASE WHEN i.classification IN ('interested','positive','positive_reply') THEN 'positive'
+                 WHEN i.classification IN ('optout','hard_no','negative') THEN 'hard_no'
+                 ELSE 'question' END AS classified_outcome,
+            'native_inbound' AS source_type
+            FROM outreach_inbound_events i JOIN prospectingleads l ON l.id=i.lead_id
+            JOIN outreach_campaigns c ON c.id=i.campaign_id
+            WHERE c.business_id=%s AND i.is_human=TRUE
+              AND (%s::text[] IS NULL OR l.id::text=ANY(%s::text[]))
+              AND COALESCE(l.intent,'client_outreach')='partnership_outreach'
+            ORDER BY i.occurred_at DESC LIMIT 50""", (business_id, group_ids, group_ids))
+        legacy_leads = {str(row['lead_id']) for row in reactions}
+        reactions.extend(_serialize_timestamp_fields(dict(row)) for row in cur.fetchall() if str(row['lead_id']) not in legacy_leads)
+        reactions.sort(key=lambda row: str(row.get('created_at') or ''), reverse=True)
+        reactions.sort(key=lambda row: (row.get('human_confirmed_outcome') or row.get('classified_outcome')) != 'positive')
         return {"ready_drafts": ready_drafts, "batches": batch_rows, "reactions": reactions}
     finally:
         conn.close()
@@ -388,8 +421,10 @@ def partnership_send_batches():
                 return jsonify({"error": "Business not found or access denied"}), 403
         finally:
             conn.close()
-        snapshot = _load_partnership_send_snapshot(business_id=business_id)
+        snapshot = _load_partnership_send_snapshot(business_id=business_id, search_task_id=str(request.args.get("search_task_id") or "").strip())
         return jsonify({"success": True, "daily_cap": MAX_DAILY_OUTREACH_BATCH, **snapshot})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
     except Exception as e:
         print(f"Error loading partnership send batches: {e}")
         return jsonify({"error": str(e)}), 500
@@ -426,7 +461,7 @@ def partnership_create_send_batch():
 
             query = """
                 WITH draft_scope AS (
-                    SELECT d.id, d.lead_id, d.workstream_id, d.channel, d.created_at, d.updated_at
+                    SELECT d.id, d.lead_id, d.workstream_id, d.channel, d.created_at, d.updated_at, d.learning_note_json, d.approved_text
                     FROM outreachmessagedrafts d
                     JOIN prospectingleads l ON l.id = d.lead_id
                     JOIN lead_workstreams ws ON ws.id = d.workstream_id
@@ -450,7 +485,7 @@ def partnership_create_send_batch():
                            ) AS draft_rank
                     FROM draft_scope
                 )
-                SELECT id, lead_id, workstream_id, channel
+                SELECT id, lead_id, workstream_id, channel, learning_note_json, approved_text
                 FROM ranked_drafts
                 WHERE draft_rank = 1
             """
@@ -465,6 +500,30 @@ def partnership_create_send_batch():
             if not rows:
                 return jsonify({"error": "No approved partnership drafts available for queue"}), 400
 
+            blocked_rows = []
+            eligible_rows = []
+            for row in rows:
+                contact_guard = load_partnership_repeat_contact_guard(
+                    cur,
+                    lead_id=str(row.get("lead_id") or ""),
+                    workstream_id=str(row.get("workstream_id") or "") or None,
+                )
+                if contact_guard.get("blocked"):
+                    blocked_rows.append({
+                        "lead_id": str(row.get("lead_id") or ""),
+                        "draft_id": str(row.get("id") or ""),
+                        "contact_guard": contact_guard,
+                    })
+                else:
+                    eligible_rows.append(row)
+            rows = eligible_rows
+            if not rows:
+                return jsonify({
+                    "error": "Partner already has a conversation; continue the existing dialogue",
+                    "reason_code": "prior_partner_conversation",
+                    "blocked": blocked_rows,
+                }), 409
+
             batch_id = str(uuid.uuid4())
             cur.execute(
                 """
@@ -475,11 +534,31 @@ def partnership_create_send_batch():
                 (batch_id, MAX_DAILY_OUTREACH_BATCH, BATCH_DRAFT, user_data["user_id"]),
             )
             for row in rows:
+                origin = row.get("learning_note_json") or {}
+                sender_id = touch_id = None
+                if origin.get("campaign_id"):
+                    from services.outreach_draft_review import canonical_review
+                    reviewed = canonical_review(cur, {"lead_id": row["lead_id"], "learning_note_json": origin})
+                    if not reviewed or reviewed["hash"] != origin.get("reviewed_campaign_hash"):
+                        return jsonify({"error": "Получатель, отправитель или письмо изменились. Проверьте новую версию.", "code": "campaign_review_stale"}), 409
+                    cur.execute("""SELECT touch.id, touch.sender_account_id, touch.generated_text
+                        FROM outreach_campaign_touches touch
+                        JOIN outreach_campaigns campaign ON campaign.id=touch.campaign_id
+                        WHERE touch.id=%s AND campaign.id=%s AND campaign.business_id=%s
+                          AND campaign.status='draft' AND campaign.version=%s
+                        FOR UPDATE OF touch, campaign""",
+                        (origin.get("campaign_touch_id"), origin["campaign_id"], business_id, origin.get("campaign_version")))
+                    canonical = cur.fetchone()
+                    if not canonical or canonical["generated_text"] != row["approved_text"]:
+                        return jsonify({"error": "Письмо изменилось. Проверьте текущую версию перед отправкой.", "code": "campaign_review_stale"}), 409
+                    sender_id, touch_id = canonical["sender_account_id"], canonical["id"]
+                elif origin.get("search_task_id"):
+                    return jsonify({"error": "Старый черновик требует новой подготовки по собранным сведениям.", "code": "canonical_campaign_required"}), 409
                 cur.execute(
                     """
                     INSERT INTO outreachsendqueue (
-                        id, batch_id, lead_id, workstream_id, draft_id, channel, delivery_status
-                    ) VALUES (%s, %s, %s, NULLIF(%s, '')::uuid, %s, %s, %s)
+                        id, batch_id, lead_id, workstream_id, draft_id, channel, delivery_status, sender_account_id, campaign_touch_id
+                    ) VALUES (%s, %s, %s, NULLIF(%s, '')::uuid, %s, %s, %s, %s, %s)
                     """,
                     (
                         str(uuid.uuid4()),
@@ -489,13 +568,20 @@ def partnership_create_send_batch():
                         row["id"],
                         row["channel"],
                         QUEUE_STATUS_QUEUED,
+                        sender_id, touch_id,
                     ),
                 )
                 cur.execute(
                     """
                     UPDATE prospectingleads
-                    SET status = %s,
-                        partnership_stage = %s,
+                    SET status = CASE
+                            WHEN COALESCE(status, '') IN ('replied', 'responded', 'converted', 'suppressed') THEN status
+                            ELSE %s
+                        END,
+                        partnership_stage = CASE
+                            WHEN COALESCE(partnership_stage, '') IN ('replied', 'responded', 'converted', 'suppressed') THEN partnership_stage
+                            ELSE %s
+                        END,
                         updated_at = NOW()
                     WHERE id = %s
                     """,
@@ -507,7 +593,13 @@ def partnership_create_send_batch():
 
         snapshot = _load_partnership_send_snapshot(business_id=business_id)
         batch = next((item for item in snapshot["batches"] if item["id"] == batch_id), None)
-        return jsonify({"success": True, "daily_cap": MAX_DAILY_OUTREACH_BATCH, "batch": batch, **snapshot})
+        return jsonify({
+            "success": True,
+            "daily_cap": MAX_DAILY_OUTREACH_BATCH,
+            "batch": batch,
+            "blocked": blocked_rows,
+            **snapshot,
+        })
     except Exception as e:
         print(f"Error creating partnership send batch: {e}")
         return jsonify({"error": str(e)}), 500

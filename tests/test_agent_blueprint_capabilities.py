@@ -1747,6 +1747,7 @@ def test_due_scheduled_trigger_dispatcher_runs_each_business_once_per_day(monkey
         "category": "custom",
         "status": "active",
         "created_by_user_id": "user1",
+        "business_owner_id": "business-owner-1",
         "metadata_json": {
             "execution_mode": "scheduled",
             "active_version_id": "ver1",
@@ -1783,7 +1784,9 @@ def test_due_scheduled_trigger_dispatcher_runs_each_business_once_per_day(monkey
     assert first["dispatched_count"] == 1
     assert first["dispatched"][0]["blueprint_id"] == "bp1"
     assert first["dispatched"][0]["run_id"]
-    assert next(iter(cursor.tables["agent_runs"].values()))["input_json"]["preview_mode"] is False
+    scheduled_run = next(iter(cursor.tables["agent_runs"].values()))
+    assert scheduled_run["input_json"]["preview_mode"] is False
+    assert scheduled_run["created_by_user_id"] == "business-owner-1"
     assert second["dispatched_count"] == 0
     assert second["skipped"][0]["reason"] == "already_recorded_for_schedule"
     assert len(cursor.tables["agent_runs"]) == 1
