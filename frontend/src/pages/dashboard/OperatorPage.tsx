@@ -384,27 +384,42 @@ export const OperatorPage = () => {
 
   const sendOperatorChatMessage = async (overrideText?: string, source?: VoiceSubmission) => {
     const text = (overrideText || chatMessage).trim();
-    if (!currentBusinessId || !text || chatSendInFlightRef.current) return;
-    const asksAllClients = /всем\s+клиент|все\s+клиент|all\s+(clients|businesses)|every\s+client/i.test(text);
+    const platformScope = controlScope?.kind === 'platform';
+    if ((!currentBusinessId && !platformScope) || !text || chatSendInFlightRef.current) return;
+    const asksAllClients = /всем\s+клиент|все\s+клиент|всем\s+бизнес|все\s+бизнес|по\s+всем\s+(компан|точк)|all\s+(clients|businesses)|every\s+client/i.test(text);
     const platformContentRequest = controlScope?.kind === 'platform' || (asksAllClients && user?.is_superadmin === true);
     if (platformContentRequest) {
-      const asksTodayContent = /\b(today|today's)\b|сегодня|публикац|пост(ы|а|ов)?/i.test(text);
+      const asksContent = /\b(today|today's|posts?|publications?)\b|сегодня|публикац|пост(ы|а|ов)?|контент/i.test(text);
       chatSendInFlightRef.current = true;
       setChatLoading(true);
       try {
         if (!user?.is_superadmin) throw new Error('Обзор всех клиентских бизнесов доступен только администратору LocalOS.');
-        if (!asksTodayContent) {
-          appendPair(text, { status: 'unsupported', intent: 'platform_scope', chat_response: 'В области «LocalOS · все бизнесы» сейчас доступна общая сверка публикаций на сегодня. Для редактирования плана выберите конкретный бизнес — так изменение будет привязано к правильной компании.' });
+        if (!asksContent) {
+          appendPair(text, { status: 'unsupported', intent: 'platform_scope', chat_response: 'В области «LocalOS · все бизнесы» пока доступен обзор публикаций. Для правки конкретного плана выберите нужную точку — так изменение будет привязано к правильной компании.' });
         } else {
-          const response = await api.get('/operator/content/today', { params: { scope_type: 'platform' } });
+          const start = new Date();
+          const today = new Date(start.getTime() - start.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+          const days = /сегодня|\btoday\b/i.test(text) ? 0 : /недел|\bweek\b/i.test(text) ? 7 : /месяц|\bmonth\b|следующ|upcoming/i.test(text) ? 30 : 90;
+          const endDate = new Date(`${today}T00:00:00`);
+          endDate.setDate(endDate.getDate() + days);
+          const toDate = new Date(endDate.getTime() - endDate.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+          const response = await api.get('/operator/content/today', { params: {
+            scope_type: 'platform', from_date: today, to_date: toDate,
+          } });
           const entries = Array.isArray(response.data.businesses) ? response.data.businesses : [];
-          const lines = entries.map((entry: { name?: string; posts?: Array<{ title?: string; channel?: string; status?: string; scheduled_for?: string }> }) => {
+          const lines = entries.map((entry: { name?: string; address?: string; posts?: Array<{ title?: string; channel?: string; status?: string; scheduled_for?: string; local_date?: string; handoff_status?: string }> }) => {
             const posts = Array.isArray(entry.posts) ? entry.posts : [];
-            if (!posts.length) return `• ${entry.name}: на сегодня нет заведённых публикаций.`;
-            return `• ${entry.name}:\n${posts.map((post) => `  — ${post.title || 'Без темы'} · ${post.channel || 'канал не указан'} · ${post.status || 'статус неизвестен'}`).join('\n')}`;
+            const location = [entry.name, entry.address].filter(Boolean).join(' — ');
+            if (!posts.length) return `• ${location}: за выбранный период публикаций нет.`;
+            return `• ${location}:\n${posts.map((post) => {
+              const scheduledDate = post.local_date || (post.scheduled_for ? new Date(post.scheduled_for).toLocaleDateString() : 'дата не задана');
+              const handoff = post.handoff_status === 'delivered' ? 'передано сотруднику' : post.handoff_status === 'failed' ? 'ошибка передачи' : post.handoff_status === 'needs_reconciliation' ? 'передачу нужно сверить' : 'не передавалось';
+              return `  — ${scheduledDate} · ${post.title || 'Без темы'} · ${post.channel || 'канал не указан'} · публикация: ${post.status || 'статус неизвестен'} · передача: ${handoff}`;
+            }).join('\n')}`;
           });
           const warnings = Array.isArray(response.data.warnings) ? response.data.warnings : [];
-          appendPair(text, { status: 'completed', intent: 'platform_content_today', chat_response: `Сверка плана публикаций по всем бизнесам LocalOS на сегодня:\n\n${lines.join('\n') || 'Активных клиентских бизнесов не найдено.'}${warnings.length ? `\n\nПримечания: ${warnings.join(' ')}` : ''}\n\nЭто данные LocalOS о плане и статусах каналов, а не независимое подтверждение публикации на площадках.` });
+          const period = days === 0 ? today : `${today} — ${toDate}`;
+          appendPair(text, { status: 'completed', intent: 'platform_content_overview', chat_response: `Публикации по всем бизнесам и точкам LocalOS · ${period}:\n\n${lines.join('\n') || 'Активных клиентских бизнесов не найдено.'}${warnings.length ? `\n\nПримечания: ${warnings.join(' ')}` : ''}\n\nСтатус передачи сотруднику и статус публикации показаны отдельно. Данные LocalOS сами по себе не подтверждают размещение на внешней площадке.` });
         }
         if (!overrideText) setChatMessage('');
       } catch (err) {
@@ -818,7 +833,7 @@ export const OperatorPage = () => {
                       type="button"
                       className="h-12 w-full transition-transform active:scale-[0.96] lg:w-auto"
                       onClick={() => void sendOperatorChatMessage()}
-                      disabled={chatLoading || !currentBusinessId || !chatMessage.trim()}
+                      disabled={chatLoading || (!currentBusinessId && controlScope?.kind !== 'platform') || !chatMessage.trim()}
                     >
                       {chatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                       {copy.send}

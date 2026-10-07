@@ -211,6 +211,24 @@ describe('Agent workspace selected-request integrity', () => {
     expect(mocks.post).not.toHaveBeenCalled();
   });
 
+  it('does not request private migration or persona data in demo mode', async () => {
+    mocks.dashboardContext.demoMode = true;
+    try {
+      mount();
+      await act(async () => { await Promise.resolve(); });
+      expect(mocks.get).not.toHaveBeenCalledWith(
+        '/agent-blueprints/legacy-migration-plan',
+        expect.anything(),
+      );
+      expect(fetch).not.toHaveBeenCalledWith(
+        expect.stringContaining('/ai-agents/manage'),
+        expect.anything(),
+      );
+    } finally {
+      mocks.dashboardContext.demoMode = false;
+    }
+  });
+
   it('hides the old review when a registry refresh removes the selected employee', async () => {
     mount();
     await waitFor(() => expect(screen.getByTestId('review')).toHaveTextContent('Review A'));

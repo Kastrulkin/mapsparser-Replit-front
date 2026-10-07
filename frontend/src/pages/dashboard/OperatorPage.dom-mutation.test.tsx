@@ -22,6 +22,15 @@ const ContextRoute = () => (
   }} />
 );
 
+const PlatformContextRoute = () => (
+  <Outlet context={{
+    currentBusinessId: null,
+    currentBusiness: null,
+    controlScope: { kind: 'platform', id: 'platform', name: 'LocalOS' },
+    user: { is_superadmin: true },
+  }} />
+);
+
 const deferredResponse = <T,>() => {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((nextResolve) => {
@@ -34,6 +43,32 @@ describe('OperatorPage DOM ownership', () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.localStorage.setItem('language', 'ru');
+  });
+
+  it('allows a LocalOS-wide publication search without selecting a client business', async () => {
+    vi.mocked(api.get).mockImplementation(async (url) => {
+      if (url === '/operator/content/today') return { data: { businesses: [{
+        id: 'business-a', name: 'Клиент А', address: 'Улица, 1', posts: [{
+          id: 'post-a', title: 'Актуальная публикация', channel: 'telegram', status: 'needs_review',
+          local_date: '2026-10-07', handoff_status: 'delivered',
+        }],
+      }] } };
+      return { data: { messages: [], conversation: null } };
+    });
+    render(<MemoryRouter initialEntries={['/dashboard/operator']}><LanguageProvider><ErrorBoundary><Routes>
+      <Route element={<PlatformContextRoute />}><Route path="/dashboard/operator" element={<OperatorPage />} /></Route>
+    </Routes></ErrorBoundary></LanguageProvider></MemoryRouter>);
+
+    const input = await screen.findByRole('textbox');
+    fireEvent.change(input, { target: { value: 'Покажи публикации сегодня по всем клиентам' } });
+    fireEvent.click(screen.getByRole('button', { name: /Отправить|Send/ }));
+
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/operator/content/today', expect.objectContaining({
+      params: expect.objectContaining({ scope_type: 'platform' }),
+    })));
+    expect(await screen.findByText(/Клиент А — Улица, 1/)).toBeInTheDocument();
+    expect(screen.getByText(/публикация: needs_review · передача: передано сотруднику/)).toBeInTheDocument();
+    expect(api.post).not.toHaveBeenCalled();
   });
 
   it('stays usable when a browser translator moves the loading label', async () => {

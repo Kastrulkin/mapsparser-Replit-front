@@ -654,6 +654,65 @@ def test_deepseek_receives_complete_scoped_contract_for_required_tools() -> None
         assert isinstance(tool["approval_required"], bool)
 
 
+def test_find_only_outreach_tool_does_not_require_an_offer(monkeypatch) -> None:
+    states = []
+    from services import outreach_continuation
+    monkeypatch.setattr(outreach_continuation, "continuation_enabled", lambda _business_id: True)
+    route_operator_message(
+        ServiceCursor(),
+        business_id="business-1",
+        user_id="user-1",
+        message="Создай поиск турагентов",
+        channel="web",
+        tool_planner=lambda state: states.append(state) or {"action": "final", "message": "Готово."},
+    )
+
+    tool = next(item for item in states[0]["tools"] if item["name"] == "partnerships.continue_outreach")
+    config = tool["input_schema"]["properties"]["config"]
+    assert config["required"] == ["audience"]
+    assert "offer" in config["properties"]
+    assert "preview" in tool["input_schema"]["properties"]["operation"]["enum"]
+
+
+def test_search_preview_followup_creates_task_from_exact_saved_config(monkeypatch) -> None:
+    from services import outreach_continuation
+    config = {"audience": "Indian agencies selling Phuket", "agency_country": "India",
+              "sold_destination": "Phuket", "target_count": 10, "mode": "find_only"}
+    calls = []
+    def fake_operator_task(cursor, *, business_id, user_id, arguments, actor_context=None):
+        calls.append(arguments)
+        return {"status": "approval_required", "chat_response": "Подтвердите запуск.",
+                "task": {"id": "task-1", "status": "waiting_for_review"},
+                "approval": {"status": "pending", "envelope": {"task_id": "task-1"}}}
+    monkeypatch.setattr(outreach_continuation, "operator_task", fake_operator_task)
+    result, pending = route_operator_message(
+        ServiceCursor(), business_id="business-1", user_id="user-1", channel="web",
+        message="Начни поиск по показанным условиям",
+        pending_context={"capability": "partnerships.continue_outreach", "stage": "preview", "config": config},
+    )
+    assert calls == [{"operation": "create", "config": config}]
+    assert result["status"] == "approval_required"
+    assert pending == {}
+
+
+def test_search_preview_followup_recovers_existing_chat_preview(monkeypatch) -> None:
+    from services import outreach_continuation
+    config = {"audience": "Indian agencies selling Phuket", "target_count": 10, "mode": "find_only"}
+    calls = []
+    monkeypatch.setattr(outreach_continuation, "operator_task", lambda cursor, **kwargs:
+                        calls.append(kwargs["arguments"]) or {"status": "approval_required", "chat_response": "Подтвердите запуск."})
+    result, _ = route_operator_message(
+        ServiceCursor(), business_id="business-1", user_id="user-1", channel="web",
+        message="Начни поиск по показанным условиям", conversation_history=[
+            {"role": "operator", "result_json": {"capability": "partnerships.prepare_message",
+              "search_started": False, "config": config}},
+            {"role": "user", "content": "Начни поиск по показанным условиям"},
+        ],
+    )
+    assert result["status"] == "approval_required"
+    assert calls == [{"operation": "create", "config": config}]
+
+
 def test_crm_queries_open_aggregated_progress_instead_of_booking_management() -> None:
     result, pending = route_operator_message(
         ServiceCursor(),

@@ -31,7 +31,10 @@ class FakeCursor:
     def execute(self, query, params=None):
         normalized_query = " ".join(query.split()).lower()
         params = params or ()
-        if normalized_query.startswith(("savepoint ", "rollback to savepoint ", "release savepoint ", "select pg_advisory_xact_lock")):
+        if normalized_query.startswith("select pg_try_advisory_xact_lock"):
+            self.last_result = {"acquired": True}
+            return None
+        if normalized_query.startswith(("savepoint ", "rollback to savepoint ", "release savepoint ", "select pg_advisory_xact_lock", "select pg_advisory_lock", "select pg_advisory_unlock")):
             return None
         if "array_agg(column_name::text)" in normalized_query:
             self.last_result = {"columns": list(params[1])}
@@ -172,6 +175,10 @@ class FakeCursor:
         if normalized_query.startswith("select * from agent_blueprints where id"):
             self.last_result = self.tables["agent_blueprints"].get(params[0])
             return None
+        if normalized_query.startswith("select status from agent_blueprints where id"):
+            blueprint = self.tables["agent_blueprints"].get(params[0])
+            self.last_result = {"status": (blueprint or {}).get("status", "active")} if blueprint else None
+            return None
         if "from agent_integrations" in normalized_query:
             business_id = params[0]
             integration_ids = []
@@ -245,6 +252,17 @@ class FakeCursor:
                 "input_json": json.loads(params[6]),
                 "output_json": json.loads(params[7]),
             }
+            return None
+        if normalized_query.startswith("delete from agent_run_steps"):
+            step_id = params[0]
+            step = self.tables["agent_run_steps"].get(step_id)
+            if step and step.get("status") == "running":
+                self.tables["agent_run_steps"].pop(step_id, None)
+            return None
+        if normalized_query.startswith("update agent_runs set status='queued'"):
+            run = self.tables["agent_runs"].get(params[0])
+            if run and run.get("status") in {"running", "waiting_approval"}:
+                run.update(status="queued", error_text="automation_paused", lease_token=None, heartbeat_at=None)
             return None
         if normalized_query.startswith("insert into agent_artifacts"):
             self.tables["agent_artifacts"][params[0]] = {
@@ -1370,12 +1388,14 @@ class FakeActiveTelegramTriggerCursor(FakeCursor):
             )
             return None
         if normalized_query.startswith("select * from agent_blueprints where status = 'active'"):
-            limit = int(params[0])
+            allowlist = params[0] if len(params) > 1 else None
+            limit = int(params[-1])
             self.last_results = [
                 row
                 for row in self.tables["agent_blueprints"].values()
                 if row.get("status") == "active"
                 and row.get("metadata_json", {}).get("execution_mode") == "scheduled"
+                and (not allowlist or str(row.get("id") or "") in allowlist)
             ][:limit]
             return None
         if normalized_query.startswith("select id, business_id, metadata_json from agent_blueprints"):

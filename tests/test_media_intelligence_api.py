@@ -12,10 +12,12 @@ class FakeCursor:
         self.rowcount = rowcount
         self.query = ""
         self.params = ()
+        self.queries = []
 
     def execute(self, query, params=None):
         self.query = " ".join(str(query).split())
         self.params = params or ()
+        self.queries.append((self.query, self.params))
 
 
 def test_photo_selection_resets_approval_for_unpublished_platform_posts():
@@ -29,10 +31,12 @@ def test_photo_selection_resets_approval_for_unpublished_platform_posts():
     )
 
     assert changed == 3
-    assert "SET status = 'needs_review'" in cursor.query
-    assert "approved_at = NULL" in cursor.query
-    assert "status NOT IN ('published', 'publishing')" in cursor.query
-    assert cursor.params == ("photo-1", "biz-1", "item-1")
+    approval_query, approval_params = cursor.queries[0]
+    assert "SET status = 'needs_review'" in approval_query
+    assert "approved_at = NULL" in approval_query
+    assert "status NOT IN ('published', 'publishing')" in approval_query
+    assert approval_params == ("photo-1", "biz-1", "item-1")
+    assert "UPDATE contentplanitems SET updated_at = NOW()" in cursor.query
 
 
 def test_platform_photo_selection_only_resets_that_platform():
@@ -47,8 +51,109 @@ def test_platform_photo_selection_only_resets_that_platform():
     )
 
     assert changed == 1
-    assert "AND platform = %s" in cursor.query
-    assert cursor.params == ("photo-1", "biz-1", "item-1", "telegram")
+    approval_query, approval_params = cursor.queries[0]
+    assert "AND platform = %s" in approval_query
+    assert approval_params == ("photo-1", "biz-1", "item-1", "telegram")
+    assert "UPDATE contentplanitems SET updated_at = NOW()" in cursor.query
+
+
+@pytest.mark.parametrize("current_version", ["version-1", "version-2"])
+def test_publication_photo_selection_requires_current_content_version(monkeypatch, current_version):
+    class Cursor:
+        def __init__(self):
+            self.query = ""
+            self.rowcount = 0
+
+        def execute(self, query, _params=None):
+            self.query = " ".join(str(query).split())
+
+        def fetchone(self):
+            if "SELECT updated_at::text AS version" in self.query:
+                return {"version": current_version}
+            if "SELECT id FROM photo_assets" in self.query:
+                return {"id": "photo-1"}
+            return None
+
+    class Connection:
+        def __init__(self):
+            self.cursor_instance = Cursor()
+            self.committed = False
+            self.rolled_back = False
+
+        def cursor(self):
+            return self.cursor_instance
+
+        def commit(self):
+            self.committed = True
+
+        def rollback(self):
+            self.rolled_back = True
+
+    class Database:
+        def __init__(self):
+            self.conn = Connection()
+
+        def close(self):
+            return None
+
+    database = Database()
+    recorded = []
+    monkeypatch.setattr(media_intelligence_api, "DatabaseManager", lambda: database)
+    monkeypatch.setattr(media_intelligence_api, "require_auth_from_request", lambda: {"user_id": "owner-1"})
+    monkeypatch.setattr(media_intelligence_api, "_require_business", lambda *_args, **_kwargs: (True, None))
+    monkeypatch.setattr(media_intelligence_api, "record_photo_usage", lambda *_args, **kwargs: recorded.append(kwargs))
+    monkeypatch.setattr(media_intelligence_api, "_invalidate_social_approvals_for_photo_usage", lambda *_args, **_kwargs: 0)
+
+    response = _media_app().test_client().post(
+        "/api/media-intelligence/photos/photo-1/usage",
+        json={
+            "business_id": "business-1",
+            "usage_type": "publication",
+            "target_id": "item-1",
+            "expected_version": "version-1",
+        },
+    )
+
+    if current_version == "version-1":
+        assert response.status_code == 200
+        assert database.conn.committed is True
+        assert len(recorded) == 1
+    else:
+        assert response.status_code == 409
+        assert response.get_json()["code"] == "content_item_stale"
+        assert database.conn.committed is False
+        assert recorded == []
+
+
+def test_publication_photo_selection_requires_a_version(monkeypatch):
+    class Cursor:
+        pass
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            raise AssertionError("stale check must not commit")
+
+        def rollback(self):
+            return None
+
+    class Database:
+        conn = Connection()
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(media_intelligence_api, "DatabaseManager", Database)
+    monkeypatch.setattr(media_intelligence_api, "require_auth_from_request", lambda: {"user_id": "owner-1"})
+    monkeypatch.setattr(media_intelligence_api, "_require_business", lambda *_args, **_kwargs: (True, None))
+    response = _media_app().test_client().post(
+        "/api/media-intelligence/photos/photo-1/usage",
+        json={"business_id": "business-1", "usage_type": "publication", "target_id": "item-1"},
+    )
+    assert response.status_code == 428
+    assert response.get_json()["code"] == "content_item_version_required"
 
 
 def test_viewer_cannot_create_external_photo_asset(monkeypatch):

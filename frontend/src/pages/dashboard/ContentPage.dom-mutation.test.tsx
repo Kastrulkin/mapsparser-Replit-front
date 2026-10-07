@@ -129,6 +129,40 @@ describe('Content page DOM ownership', () => {
     expect(() => fireEvent.click(generateButton)).not.toThrow();
   });
 
+  it('keeps calendar previews compact and distinguishes linked channels from unavailable ones', async () => {
+    const calendarPlan = {
+      ...plan,
+      items: [{
+        ...plan.items[0],
+        theme: 'Праздничная причёска с деталями и длинным описанием темы',
+        metadata_json: { selected_channels: ['telegram', 'vk'] },
+      }],
+    };
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/content-plans/context')) return { context: {} };
+      if (path.startsWith('/content-plans?')) return { plans: [calendarPlan] };
+      if (path === '/content-plans/plan-1') return { plan: calendarPlan };
+      if (path === '/content-plans/plan-1/social-posts') return {
+        posts: [{
+          id: 'post-telegram',
+          content_plan_item_id: 'item-1',
+          platform: 'telegram',
+          external_account_id: 'account-telegram',
+          status: 'needs_review',
+        }],
+        summary: {},
+      };
+      if (path.startsWith('/media-intelligence/posts/')) return { recommendation: null };
+      return {};
+    });
+
+    renderContentPage();
+    const card = await screen.findByRole('button', { name: /Праздничная причёска/ });
+    expect(card.querySelector('.line-clamp-2')).toHaveTextContent('Праздничная причёска с деталями и длинным описанием темы');
+    expect(card.querySelector('[aria-label="Telegram: подключён"]')).toHaveClass('text-sky-600');
+    expect(card.querySelector('[aria-label="VK: не подключён"]')).toHaveClass('text-slate-300');
+  });
+
   it.each(['calendar', 'list', 'nearest'])('restores the %s invoker focus when the publication sheet closes', async (source) => {
     renderContentPage();
     await screen.findByRole('button', { name: /Тестовая тема публикации/ });
@@ -466,12 +500,52 @@ describe('Content page manual photo handoff', () => {
     expect(source).toContain('Скопировать фото');
     expect(source).toContain('Исходное фото скачано без уменьшения качества.');
   });
+
+  it('lets the user attach a media-library photo when its AI analysis failed without retrying analysis', async () => {
+    const photo = {
+      id: 'photo-analysis-failed',
+      category: 'interior',
+      analysis_status: 'analysis_failed',
+    };
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path, options) => {
+      if (path.startsWith('/content-plans/context')) return { context: {} };
+      if (path.startsWith('/content-plans?')) return { plans: [plan] };
+      if (path === '/content-plans/plan-1') return { plan };
+      if (path === '/content-plans/plan-1/social-posts') return { posts: [], summary: {} };
+      if (path.startsWith('/media-intelligence/posts/')) return { recommendation: null };
+      if (path.startsWith('/media-intelligence/photos?')) return { photos: [photo], coverage: null };
+      if (path === '/media-intelligence/photos/photo-analysis-failed/usage' && options?.method === 'POST') {
+        return { success: true, approvals_reset: 0 };
+      }
+      return {};
+    });
+
+    renderContentPage();
+    fireEvent.click(await screen.findByRole('button', { name: /Тестовая тема публикации/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Выбрать фото вручную' }));
+
+    expect(await screen.findByText('Анализ не удался — фото всё равно можно выбрать')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Выбрать фото из медиатеки: Интерьер' }));
+
+    await waitFor(() => expect(newAuth.makeRequest).toHaveBeenCalledWith('/media-intelligence/photos/photo-analysis-failed/usage', {
+      method: 'POST',
+      body: JSON.stringify({
+        business_id: 'business-1',
+        usage_type: 'publication',
+        target_id: 'item-1',
+        expected_version: '',
+        metadata: { source: 'content_publication_drawer', theme: 'Тестовая тема публикации' },
+      }),
+    }));
+    expect(vi.mocked(newAuth.makeRequest).mock.calls.some(([path]) => path.endsWith('/photo-analysis-failed/analyze'))).toBe(false);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Выбрать фото для публикации' })).not.toBeInTheDocument());
+  });
 });
 
 describe('Content page calendar scheduling', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  const renderScheduledPlan = (itemPosts: Array<Record<string, string>> = []) => {
+  const renderScheduledPlan = (itemPosts: Array<Record<string, unknown>> = []) => {
     vi.stubGlobal('fetch', vi.fn(async () => diskImportStatusResponse()));
     vi.mocked(newAuth.makeRequest).mockClear();
     window.localStorage.setItem('language', 'ru');
@@ -529,20 +603,21 @@ describe('Content page calendar scheduling', () => {
   it('keeps the full topic and every channel readable on the calendar card', async () => {
     renderScheduledPlan([
       { id: 'post-google', content_plan_item_id: 'item-1', platform: 'google_business', status: 'needs_review' },
-      { id: 'post-telegram', content_plan_item_id: 'item-1', platform: 'telegram', status: 'needs_review' },
+      { id: 'post-telegram', content_plan_item_id: 'item-1', platform: 'telegram', external_account_id: 'account-telegram', status: 'needs_review' },
       { id: 'post-vk', content_plan_item_id: 'item-1', platform: 'vk', status: 'needs_review' },
       { id: 'post-max', content_plan_item_id: 'item-1', platform: 'max', status: 'needs_review' },
     ]);
 
     const card = await screen.findByRole('button', { name: /Тестовая тема публикации/ });
-    expect(card).toHaveTextContent('Тестовая тема публикации');
-    expect(card).toHaveTextContent('Google');
-    expect(card).toHaveTextContent('Telegram');
-    expect(card).toHaveTextContent('VK');
-    expect(card).toHaveTextContent('MAX');
+    expect(card.querySelector('.line-clamp-2')).toHaveAttribute('title', 'Тестовая тема публикации');
+    expect(card.querySelector('[aria-label="Google: не подключён"]')).toBeInTheDocument();
+    expect(card.querySelector('[aria-label="Telegram: подключён"]')).toHaveClass('text-sky-600');
+    expect(card.querySelector('[aria-label="VK: не подключён"]')).toBeInTheDocument();
+    expect(card.querySelector('[aria-label="MAX: не подключён"]')).toBeInTheDocument();
     expect(card).toHaveClass('cursor-grab');
-    expect(card.querySelector('.line-clamp-2')).toBeNull();
+    expect(card.querySelector('.line-clamp-2')).toBeInTheDocument();
   });
+
 
   it('does not allow dragging an item whose channel post is already published', async () => {
     renderScheduledPlan([{

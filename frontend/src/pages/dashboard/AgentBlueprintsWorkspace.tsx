@@ -500,7 +500,7 @@ export const AgentBlueprintsWorkspace = () => {
   }, [currentBusinessId, loadBlueprints, selectBlueprint, usingTemplateKey]);
 
   const loadLegacyMigrationPlan = useCallback(async () => {
-    if (!currentBusinessId) {
+    if (!currentBusinessId || demoMode) {
       setLegacyMigrationPlan(null);
       return;
     }
@@ -511,14 +511,14 @@ export const AgentBlueprintsWorkspace = () => {
       console.error(requestError);
       setLegacyMigrationPlan(null);
     }
-  }, [currentBusinessId]);
+  }, [currentBusinessId, demoMode]);
 
   useEffect(() => {
     void loadLegacyMigrationPlan();
   }, [loadLegacyMigrationPlan]);
 
   const loadPersonaAgents = useCallback(async () => {
-    if (!currentBusinessId) {
+    if (!currentBusinessId || demoMode) {
       setAvailablePersonaAgents([]);
       return;
     }
@@ -554,7 +554,7 @@ export const AgentBlueprintsWorkspace = () => {
       console.error(requestError);
       setAvailablePersonaAgents([]);
     }
-  }, [currentBusinessId]);
+  }, [currentBusinessId, demoMode]);
 
   useEffect(() => {
     void loadPersonaAgents();
@@ -987,9 +987,13 @@ export const AgentBlueprintsWorkspace = () => {
         message: dialogBuilderInput.trim(),
         use_ai_compiler: true,
       });
-      const preview = response.data?.session?.preview || null;
+      const nextSession = response.data?.session || null;
+      if (!nextSession?.id || !nextSession?.preview) {
+        throw new Error('LocalOS не вернул проверку задачи. Черновик агента не создан — попробуйте ещё раз.');
+      }
+      const preview = nextSession.preview;
       const autoProviderRoutes = autoSelectBuilderProviderRoutes(preview);
-      setDialogBuilderSession(response.data?.session || null);
+      setDialogBuilderSession(nextSession);
       setSelectedBuilderConnectionBindings(autoSelectBuilderConnectionBindings(preview));
       setSelectedBuilderProviderRoutes(autoProviderRoutes);
       setAcceptedBuilderCompilerPlan(false);
@@ -1503,9 +1507,31 @@ export const AgentBlueprintsWorkspace = () => {
     setActionLoading(true);
     setError(null);
     try {
-      await api.post(`/agent-blueprints/${selectedBlueprint.id}/versions/${versionId}/${action}`, {
+      const activationPath = `/agent-blueprints/${selectedBlueprint.id}/versions/${versionId}/${action}`;
+      const activationBody = {
         reason: action === 'rollback' ? 'Откат из карточки агента' : 'Активировано из карточки агента',
-      });
+      };
+      const activationResponse = await api.post(activationPath, activationBody);
+      const confirmation = recordValue(activationResponse.data);
+      if (action === 'activate' && confirmation?.confirm_required === true) {
+        const message = typeof confirmation.confirmation_message === 'string'
+          ? confirmation.confirmation_message
+          : 'Сценарий будет выполнять внешнюю передачу сообщений по расписанию. Подтвердите точный scope перед включением.';
+        const digest = typeof confirmation.scope_digest === 'string' ? confirmation.scope_digest : '';
+        if (!digest || !window.confirm(message)) {
+          return;
+        }
+        const approved = await api.post(activationPath, {
+          ...activationBody,
+          external_send_consent_digest: digest,
+        });
+        const approvedData = recordValue(approved.data);
+        if (approvedData?.success !== true) {
+          throw new Error(typeof approvedData?.error === 'string' ? approvedData.error : 'Не удалось подтвердить область автоматической передачи.');
+        }
+      } else if (confirmation?.success === false) {
+        throw new Error(typeof confirmation.error === 'string' ? confirmation.error : 'Не удалось активировать версию агента.');
+      }
       if (feedbackVersionNotice?.version_id === versionId) {
         setFeedbackVersionNotice({
           ...feedbackVersionNotice,

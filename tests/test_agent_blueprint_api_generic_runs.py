@@ -38,7 +38,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "versions_count" in api_source
     assert "/api/agent-blueprints/draft" in api_source
     assert "build_agent_builder_state" in api_source
-    assert "direct_draft_envelope" in api_source
+    assert "direct_draft_envelope" in Path("src/services/agent_blueprint_creation.py").read_text(encoding="utf-8")
     assert "_direct_selected_connection_bindings" in api_source
     assert "_direct_missing_required_connection_choices" in api_source
     assert "_apply_direct_selected_connection_bindings" in api_source
@@ -70,12 +70,14 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "Ресурс из диалога" in agents_page_source
     assert "способ выбран" in agents_page_source
     assert "builderConnectionCardStatus" in agents_page_source
-    assert "AGENT_CONNECTION_CHOICE_REQUIRED" in api_source
-    assert "AGENT_PROVIDER_ROUTE_REQUIRED" in api_source
-    assert "AGENT_PROVIDER_ROUTES_CONFIRMATION_REQUIRED" in api_source
+    creation_source = Path("src/services/agent_blueprint_creation.py").read_text(encoding="utf-8")
+    assert "create_draft" in api_source
+    assert "AGENT_CONNECTION_CHOICE_REQUIRED" in creation_source
+    assert "AGENT_PROVIDER_ROUTE_REQUIRED" in creation_source
+    assert "AGENT_PROVIDER_ROUTES_CONFIRMATION_REQUIRED" in creation_source
     assert "\"post_create_handoff\": post_create_handoff" in api_source
-    assert "metadata[\"agent_builder_preview\"] = preview" in api_source
-    assert "metadata[\"openclaw_planner_context\"] = planner_context" in api_source
+    assert 'metadata["agent_builder_preview"]' in creation_source
+    assert 'metadata["openclaw_planner_context"]' in creation_source
     assert "\"connection_summary\": preview.get(\"connection_summary\")" in api_source
     assert "_load_direct_builder_connection_inventory" in api_source
     assert "/api/agent-blueprints/legacy-migration/apply" in api_source
@@ -168,15 +170,15 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
 
     direct_draft_start = api_source.index("def create_agent_blueprint_draft")
     direct_draft_endpoint = api_source[direct_draft_start:api_source.index("@agent_blueprints_bp.route", direct_draft_start + 1)]
-    assert "connection_inventory = _load_direct_builder_connection_inventory" in direct_draft_endpoint
-    assert "selected_bindings = _direct_selected_connection_bindings" in direct_draft_endpoint
-    assert "missing_connection_choices = _direct_missing_required_connection_choices" in direct_draft_endpoint
-    assert "selected_provider_routes = _selected_provider_routes" in direct_draft_endpoint
-    assert "missing_provider_routes = _missing_required_provider_routes" in direct_draft_endpoint
-    assert "accepted_provider_routes" in direct_draft_endpoint
-    assert "metadata = _apply_direct_selected_connection_bindings" in direct_draft_endpoint
-    assert "metadata = _apply_selected_provider_routes" in direct_draft_endpoint
-    assert "metadata[\"builder_provider_routes_accepted\"]" in direct_draft_endpoint
+    assert "create_draft(cursor" in direct_draft_endpoint
+    assert "inventory = _inventory" in creation_source
+    assert "_missing_connection_choices" in creation_source
+    assert "_selected_provider_routes" in creation_source
+    assert "_missing_required_provider_routes" in creation_source
+    assert "accepted_provider_routes" in creation_source
+    assert "metadata = _apply_bindings" in creation_source
+    assert "metadata = _apply_selected_provider_routes" in creation_source
+    assert 'metadata["builder_provider_routes_accepted"]' in creation_source
     assert "connection_preflight = build_agent_integration_preflight" in direct_draft_endpoint
     assert "post_create_handoff = _build_agent_post_connect_handoff" in direct_draft_endpoint
     assert "analyze_table_with_llm" in workspace_source

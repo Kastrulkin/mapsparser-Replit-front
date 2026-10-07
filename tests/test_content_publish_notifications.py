@@ -15,6 +15,7 @@ class Cursor:
         self.rows = []
         self.rowcount = 0
         self.metadata = {}
+        self.social_query_params = None
 
     def execute(self, sql, params=None):
         normalized = " ".join(sql.lower().split())
@@ -22,15 +23,16 @@ class Cursor:
             self.description = [("user_id",), ("telegram_id",), ("notification_preferences_json",)]
             self.rows = [("user-1", "123", {"business:biz-1": {"content_publications": True}})]
         elif "from social_posts sp" in normalized:
+            self.social_query_params = params
             self.description = [
                 ("id",), ("business_id",), ("content_plan_item_id",), ("platform",),
                 ("publish_mode",), ("status",), ("scheduled_for",), ("platform_text",),
-                ("metadata_json",), ("business_name",), ("business_address",),
+                ("metadata_json",), ("business_name",), ("business_address",), ("business_timezone",),
             ]
             self.rows = [(
                 "post-1", "biz-1", "item-1", "vk", "manual", "approved",
                 datetime(2026, 8, 23, tzinfo=timezone.utc), "Готовый текст", {},
-                "Весёлая расчёска", "проспект Энгельса, 154",
+                "Весёлая расчёска", "проспект Энгельса, 154", "Europe/Moscow",
             )]
         elif "from photo_asset_usage_events usage" in normalized:
             self.description = [
@@ -77,6 +79,34 @@ def test_collects_only_enabled_manual_handoff():
     assert handoffs[0]["platform"] == "vk"
     assert handoffs[0]["selected_photo"]["id"] == "photo-1"
     assert handoffs[0]["selected_photo"]["storage_path"] == "s3://media/photo.jpg"
+    assert handoffs[0]["business_timezone"] == "Europe/Moscow"
+
+
+def test_collects_approved_handoff_one_day_before_when_scope_requests_it():
+    connection = Connection()
+    connection.cursor_value.rows = []
+
+    original_execute = connection.cursor_value.execute
+
+    def execute(sql, params=None):
+        original_execute(sql, params)
+        if "from telegramcontrolpreferences" in " ".join(sql.lower().split()):
+            connection.cursor_value.rows = [(
+                "user-1",
+                "123",
+                {"business:biz-1": {"content_publications": True, "content_publications_lead_days": 1}},
+            )]
+
+    connection.cursor_value.execute = execute
+
+    handoffs = collect_due_content_publish_handoffs(
+        connection,
+        now=datetime(2026, 8, 22, 10, tzinfo=timezone.utc),
+    )
+
+    assert len(handoffs) == 1
+    assert handoffs[0]["lead_days"] == "1"
+    assert handoffs[0]["business_timezone"] == "Europe/Moscow"
 
 
 def test_formats_copy_ready_message_and_link():
