@@ -1,0 +1,73 @@
+[
+  {
+    "title": "İşletme Profili kontrol listesi",
+    "slug": "checklist-audita-kartochki-kompanii",
+    "excerpt": "İşletme profilinizin neden yeterli görüntüleme, arama veya rezervasyon getirmediğini anlamak için kısa bir kontrol listesi.",
+    "documentType": "Kontrol listeleri",
+    "tags": ["kontrol", "haritalar", "işletme profili"],
+    "publishedAt": "2026-04-19",
+    "updatedAt": "2026-04-19",
+    "seoTitle": "İşletme Profili kontrol listesi — LocalOS",
+    "seoDescription": "Kategoriler, hizmetler, fotoğraflar, yorumlar, fiyatlar ve müşteri işlemleri için pratik kontrol listesi.",
+    "downloadable": true,
+    "draft": false,
+    "inside": [
+      "kategori ve hizmet kontrolü",
+      "fotoğrafların ve güven unsurlarının değerlendirilmesi",
+      "yorumların hızlı kontrolü",
+      "bir haftalık temel iyileştirme planı"
+    ],
+    "body": [
+      { "title": "Nasıl kullanılır?", "body": "İşletme profilinizi açın ve maddeleri sırayla kontrol edin. Bir soruya net yanıt veremiyorsanız, iyileştirilmesi gereken bir nokta bulmuşsunuz demektir." },
+      { "title": "Hızlı kontroller", "items": ["ilk 10 saniyede ana hizmetiniz anlaşılıyor mu?", "temel hizmetlerin fiyatları görünüyor mu?", "yakın zamanda çekilmiş sonuç fotoğrafları var mı?", "son yorumlar yanıtlanmış mı?"] }
+    ],
+    "related": [
+      { "title": "Rakibiniz haritalarda neden daha üstte?", "href": "/articles/pochemu-konkurent-vyshe-na-kartah", "label": "Makale" },
+      { "title": "Ücretsiz LocalOS kontrolü", "href": "/#hero-form", "label": "Hizmet" }
+    ]
+  },
+  {
+    "title": "Yorumlara yanıt şablonları",
+    "slug": "shablony-otvetov-na-otzyvy",
+    "excerpt": "Olumlu, nötr ve zor yorumlar için resmî ve ruhsuz görünmeyen temel yanıt şablonları.",
+    "documentType": "Şablonlar",
+    "tags": ["yorumlar", "itibar", "şablonlar"],
+    "publishedAt": "2026-04-17",
+    "updatedAt": "2026-04-17",
+    "seoTitle": "Yorumlara yanıt şablonları — LocalOS",
+    "seoDescription": "Teşekkür, açıklama, şikâyet ve yeniden ziyaret daveti için kullanıma hazır yanıt yapıları.",
+    "downloadable": true,
+    "draft": false,
+    "inside": ["olumlu yoruma yanıt", "metinsiz kısa yoruma yanıt", "şikâyete yanıt", "yeniden ziyaret için doğal bir davet"],
+    "body": [
+      { "title": "Temel kural", "body": "Şablon, kopyalayıp olduğu gibi göndereceğiniz bir metin değil, başlangıç noktasıdır. Yanıtın insani görünmesi için yorumdaki belirli bir ayrıntıya mutlaka değinin." },
+      { "title": "Temel yapı", "items": ["müşteriye teşekkür edin", "belirttiği hizmete veya duruma değinin", "yazdıklarını dikkate aldığınızı kısa ve açık biçimde gösterin", "yeniden gelmesi için davet edin"] }
+    ],
+    "related": [
+      { "title": "Yorumlar müşteri akışını nasıl etkiler?", "href": "/articles/kak-otzyvy-vliyayut-na-potok-klientov", "label": "Makale" },
+      { "title": "Ücretsiz LocalOS kontrolü", "href": "/#hero-form", "label": "Hizmet" }
+    ]
+  },
+  {
+    "title": "Yerel pazarlama takip tablosu",
+    "slug": "tablica-kontrolya-lokalnogo-marketinga",
+    "excerpt": "İşletme profilini, yorumları, yayınları, iş birliklerini ve müşterilere yeniden ulaşmayı takip etmek için sade bir tablo.",
+    "documentType": "Tablolar",
+    "tags": ["tablo", "pazarlama", "takip"],
+    "publishedAt": "2026-04-14",
+    "updatedAt": "2026-04-14",
+    "seoTitle": "Yerel pazarlama takip tablosu — LocalOS",
+    "seoDescription": "İşletme profilini, yorumları, yayınları, iş birliklerini ve sonuçları düzenli takip etmek için tablo şablonu.",
+    "downloadable": true,
+    "draft": false,
+    "inside": ["haftalık İşletme Profili kontrolü", "yorum yanıtlarının durumu", "yayın planı", "iş birliklerinin ve sonuçların takibi"],
+    "body": [
+      { "title": "Tablo ne işe yarar?", "body": "Düzenli işleri unutmamanıza yardımcı olur. Yerel pazarlama bir günde bozulmaz; ancak profil, yorumlar ve içerik bir ay boyunca güncellenmediğinde hızla verimsizleşir." },
+      { "title": "Neleri takip etmelisiniz?", "items": ["İşletme Profilinin son güncellenme tarihi", "yeni ve yanıtlanan yorum sayısı", "yayınlanan içeriklerin konuları", "iş birliği yapılan işletmeler ve görüşmelerin durumu"] }
+    ],
+    "related": [
+      { "title": "İşletme Profili nasıl düzenlenir?", "href": "/articles/kak-oformit-kartochku-kompanii", "label": "Makale" },
+      { "title": "Ücretsiz LocalOS kontrolü", "href": "/#hero-form", "label": "Hizmet" }
+    ]
+  }
+]
