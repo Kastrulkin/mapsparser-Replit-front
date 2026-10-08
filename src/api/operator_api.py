@@ -2471,11 +2471,13 @@ def operator_content_today():
         if from_date and to_date and (to_date < from_date or (to_date - from_date).days > 90):
             return jsonify({"success": False, "error": "Период должен быть от 1 до 91 дня"}), 400
         cursor.execute(
-            """SELECT id, name, address, timezone
-               FROM businesses
-               WHERE entity_group = 'client' AND COALESCE(is_active, TRUE) = TRUE
-                 AND (%s OR id = ANY(%s))
-               ORDER BY name""",
+            """SELECT b.id, b.name, b.address,
+                      COALESCE(NULLIF(settings.timezone, ''), to_jsonb(b)->>'timezone') AS timezone
+               FROM businesses b
+               LEFT JOIN business_finance_settings settings ON settings.business_id = b.id
+               WHERE b.entity_group = 'client' AND COALESCE(b.is_active, TRUE) = TRUE
+                 AND (%s OR b.id = ANY(%s))
+               ORDER BY b.name""",
             (platform_scope, business_ids),
         )
         businesses = [dict(row) for row in cursor.fetchall() or []]

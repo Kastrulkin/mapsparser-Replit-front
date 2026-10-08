@@ -26,3 +26,11 @@ def test_compiler_uses_gateway_validated_json_instead_of_markdown(monkeypatch):
     result = compiled_script_artifact.generate_candidate_from_description('Compile', business_id='b', user_id='u')
     assert result['status'] == 'ready'
     assert result['candidate']['source'] == candidate['source']
+
+
+def test_generator_prompt_describes_actual_sandbox_attribute_limits():
+    prompts = []
+    compiled_script_artifact.generate_candidate_from_description('Compile', business_id='b', user_id='u',
+        generator=lambda prompt: prompts.append(prompt) or '{}')
+    assert 'set.add' in prompts[0]
+    assert 'get, strip, lower, upper, items, append, split, join ONLY' in prompts[0]

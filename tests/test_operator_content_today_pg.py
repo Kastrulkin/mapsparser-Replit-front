@@ -6,10 +6,16 @@ from api import operator_api
 
 
 @pytest.mark.parametrize('platform,admin,expected', [(True,True,{'b','b2'}),(False,False,{'b'}),(True,False,set())])
-def test_today_query_respects_resolved_scope_and_local_dates(db, monkeypatch, platform, admin, expected):
+@pytest.mark.parametrize('legacy_timezone', [True, False])
+def test_today_query_respects_resolved_scope_and_local_dates(db, monkeypatch, platform, admin, expected, legacy_timezone):
     conn, cursor = db
-    cursor.execute("ALTER TABLE businesses ADD COLUMN name TEXT,ADD COLUMN address TEXT,ADD COLUMN timezone TEXT,ADD COLUMN entity_group TEXT DEFAULT 'client'")
-    cursor.execute("UPDATE businesses SET name=id,address=id,timezone=CASE WHEN id='b' THEN 'Europe/Moscow' ELSE 'America/Los_Angeles' END")
+    cursor.execute("ALTER TABLE businesses ADD COLUMN name TEXT,ADD COLUMN address TEXT,ADD COLUMN entity_group TEXT DEFAULT 'client'")
+    cursor.execute("UPDATE businesses SET name=id,address=id")
+    cursor.execute('CREATE TABLE business_finance_settings(business_id TEXT PRIMARY KEY,timezone TEXT)')
+    cursor.execute("INSERT INTO business_finance_settings VALUES ('b','Europe/Moscow'),('b2','America/Los_Angeles')")
+    if legacy_timezone:
+        cursor.execute('ALTER TABLE businesses ADD COLUMN timezone TEXT')
+        cursor.execute("UPDATE businesses SET timezone='UTC'")
     cursor.execute('CREATE TABLE contentplans(id TEXT PRIMARY KEY,plan_status TEXT)')
     cursor.execute('CREATE TABLE contentplanitems(id TEXT PRIMARY KEY,plan_id TEXT,business_id TEXT,status TEXT,theme TEXT,scheduled_for TIMESTAMPTZ)')
     cursor.execute('CREATE TABLE social_posts(id TEXT PRIMARY KEY,business_id TEXT,content_plan_item_id TEXT,platform TEXT,status TEXT,publish_mode TEXT,scheduled_for TIMESTAMPTZ,platform_text TEXT,provider_post_url TEXT,metadata_json JSONB)')

@@ -160,6 +160,8 @@ JSON-serializable data. No imports, eval, exec, files, network, database clients
 runtime model calls. Include at least one fixture with input rows. The platform runs the approved source in a separate
 restricted runner and compares pilot fixtures with an independent oracle.
 Schemas support only type, properties, required, additionalProperties, items, enum and the documented size/number limits; do not emit other JSON Schema keywords.
+Attribute methods allowed by the sandbox: get, strip, lower, upper, items, append, split, join ONLY.
+Do not use set.add, dict.update, pop, keys, values or any other attribute. For deduplication use a list and membership checks.
 User process: """ + str(description or "")[:3000]
     if table_contract is not None:
         prompt += generation_instructions(table_contract)
