@@ -69,7 +69,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useLatestCallback } from '@/hooks/useLatestCallback';
-import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { useLanguage } from '@/i18n/LanguageContext';
 import { getPartnershipWorkspaceCopy } from '@/i18n/partnershipWorkspaceCopy';
 import { newAuth } from '@/lib/auth_new';
 import { errorMessage } from '@/lib/errorMessage';
@@ -2396,7 +2396,7 @@ export const PartnershipSearchPage: React.FC = () => {
         {selectedSearchGroup.startsWith('task:') && items.length < leadTotalCount && <Button type="button" variant="outline" disabled={loading} onClick={() => void loadMoreSearchLeads()}>Загрузить ещё</Button>}
       </div>}
 
-      {currentBusinessId && <OutreachContinuation key={currentBusinessId} businessId={currentBusinessId} compact selectedTaskId={selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : undefined} onTasksChange={handleSearchTasksChange} />}
+      {currentBusinessId && <OutreachContinuation key={currentBusinessId} businessId={currentBusinessId} compact selectedTaskId={selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : undefined} onTasksChange={handleSearchTasksChange} onTaskConfirmed={(taskId) => changeSearchGroup(`task:${taskId}`)} />}
 
       {currentBusinessId && journeyActions.length ? <details><summary className="min-h-10 cursor-pointer py-2 text-sm text-muted-foreground">Требуют внимания · {journeyActions.length}</summary><section aria-label="Текущий шаг по партнёрствам" className="space-y-3">{journeyActions.slice(0, 2).map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={() => void loadPartnershipJourneyActions()} />)}</section></details> : null}
 

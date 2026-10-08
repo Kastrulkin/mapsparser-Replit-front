@@ -1,4 +1,4 @@
-from services.partnership_group_view import presentation, load_group_scope, GroupNotFound
+from services.partnership_group_view import company_substeps, presentation, load_group_scope, GroupNotFound
 import pytest
 
 
@@ -127,3 +127,11 @@ def test_achievements_only_show_produced_outputs():
     assert [x['count'] for x in outputs] == [1, 2, 12]
     assert not any(x['id'] == 'sent' for x in outputs)
     assert achievements(task(report={}, state={})) == []
+
+
+def test_provider_search_is_running_between_polling_leases():
+    t = task(status="queued", state={"phase": "search_poll", "search_run": {"id": "provider-run"}})
+    result = presentation(t)
+    assert result["status"] == "running"
+    assert result["label"] == "Ищем компании"
+    assert company_substeps(t, [])[0]["status"] == "running"

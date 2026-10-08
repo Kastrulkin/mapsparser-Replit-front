@@ -63,7 +63,8 @@ def presentation(task, *, draft_job=None, available_credits=None):
     if stopped:
         blocker = None
     running = (search_active or draft_active) and not stopped
-    status = "queued" if task["status"] == "queued" or drafts.get("status") == "queued" else "running" if running else "stopped" if task["status"] == "cancelled" else "completed" if task["status"] == "completed" and not draft_blocked else "needs_attention" if blocker or drafts.get("status") == "failed" else "paused" if state.get("started") else "ready"
+    external_search_active = search_active and state.get("phase") == "search_poll" and bool((state.get("search_run") or {}).get("id")) and not blocker
+    status = "queued" if (task["status"] == "queued" and not external_search_active) or drafts.get("status") == "queued" else "running" if running else "stopped" if task["status"] == "cancelled" else "completed" if task["status"] == "completed" and not draft_blocked else "needs_attention" if blocker or drafts.get("status") == "failed" else "paused" if state.get("started") else "ready"
     label = labels[phase] if running else "Результаты готовы" if status == "completed" else "Требуется действие" if status == "needs_attention" else "Поиск остановлен" if status == "stopped" else "Результаты готовы" if status == "completed" else "На паузе" if status == "paused" else "Ожидает запуска"
     if status == "queued":
         label = "Ожидает запуска"
@@ -141,7 +142,7 @@ def company_substeps(task, jobs):
         return {"id": key, "label": label, "status": status, "processed": processed,
                 "remaining": max(0, total-processed), "total": total, "detail": detail}
     return [
-        {"id": "search", "label": "Поиск", "status": "running" if state.get("phase") == "search" and task.get("status") == "running" else "completed" if report.get("found") else "queued" if task.get("status") == "queued" else "pending",
+        {"id": "search", "label": "Поиск", "status": "running" if state.get("phase") in {"search", "search_poll"} and (task.get("status") == "running" or (task.get("status") == "queued" and bool((state.get("search_run") or {}).get("id")))) else "completed" if report.get("found") else "queued" if task.get("status") == "queued" else "pending",
          "processed": int(report.get("found") or 0), "detail": "Найденные кандидаты"},
         step("enrichment", "Контакты и сведения", collected, collecting, queued,
              f"Сведения собраны: {collected}; контакт выбран: {contacts}"),

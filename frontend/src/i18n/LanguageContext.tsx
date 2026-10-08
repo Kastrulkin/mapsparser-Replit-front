@@ -1,6 +1,8 @@
 import React, { ReactNode, useEffect, useMemo, useState } from "react";
 import { LanguageContext, type Language, type Translations } from './LanguageContext.logic';
 
+export { useLanguage } from './LanguageContext.logic';
+
 import { resolveInitialLanguage, urlWithLanguage } from './languagePreference';
 
 const isTranslationRecord = (value: unknown): value is Record<string, unknown> =>

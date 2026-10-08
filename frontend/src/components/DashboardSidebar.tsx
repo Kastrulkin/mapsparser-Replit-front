@@ -25,7 +25,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import logo from '../assets/images/logo.png';
 import { featureFlags } from '../config/featureFlags';
-import { useLanguage } from '../i18n/LanguageContext.logic';
+import { useLanguage } from '../i18n/LanguageContext';
 import { getDashboardNavigationCopy } from '../i18n/dashboardNavigationCopy';
 import { getDashboardShellCopy } from '../i18n/dashboardShellCopy';
 import { getDemoWorkspaceCopy } from '../i18n/demoWorkspaceCopy';

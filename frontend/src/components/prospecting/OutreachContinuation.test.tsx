@@ -30,10 +30,11 @@ describe('Outreach continuation', () => {
         config: { target_count: 10, agency_country: 'India', sold_destination: 'Phuket', mode: 'find_only' },
         credit_quote: { total_max: 65 }, approval: { action_id: 'approval-1' },
       };
-      if (path === '/operator/actions/approval-1/confirm') return { operator_result: { status: 'completed' } };
+      if (path === '/operator/actions/approval-1/confirm') return { operator_result: { status: 'completed', task: { id: 'created-task' } } };
       return { enabled: true, items: [] };
     });
-    render(<OutreachContinuation businessId="b" />);
+    const onTaskConfirmed = vi.fn();
+    render(<OutreachContinuation businessId="b" onTaskConfirmed={onTaskConfirmed} />);
     await userEvent.click(await screen.findByRole('button', { name: 'Новый поиск' }));
     await userEvent.click(screen.getByRole('radio', { name: 'Контакты подходящих компаний или специалистов' }));
     await userEvent.type(screen.getByLabelText('Кого ищем'), 'Travel agencies selling Phuket');
@@ -47,6 +48,7 @@ describe('Outreach continuation', () => {
     expect(request).not.toHaveBeenCalledWith('/operator/actions/approval-1/confirm', expect.anything());
     await userEvent.click(screen.getByRole('button', { name: 'Начать новый поиск' }));
     expect(request).toHaveBeenCalledWith('/operator/actions/approval-1/confirm', expect.objectContaining({ method: 'POST' }));
+    expect(onTaskConfirmed).toHaveBeenCalledWith('created-task');
   });
   it('shares the saved search membership with the candidate list', async () => {
     const onTasksChange = vi.fn();

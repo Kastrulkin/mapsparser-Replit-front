@@ -1,6 +1,6 @@
 import { Building2, Mail, Send, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { useLanguage } from '@/i18n/LanguageContext';
 import { getPartnershipWorkspaceCopy } from '@/i18n/partnershipWorkspaceCopy';
 
 type PartnershipWorkspaceOverviewProps = {
