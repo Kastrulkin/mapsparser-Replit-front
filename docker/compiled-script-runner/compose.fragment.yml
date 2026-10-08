@@ -30,7 +30,9 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=8m
     cap_drop: ["ALL"]
-    cap_add: ["SETUID", "SETGID"]
+    # Only the transport parent keeps KILL so it can stop its unprivileged
+    # child on a wall-clock timeout. The source child drops UID and capabilities.
+    cap_add: ["SETUID", "SETGID", "KILL"]
     security_opt: ["no-new-privileges:true"]
     init: true
     pids_limit: 32

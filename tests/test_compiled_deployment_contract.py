@@ -37,3 +37,14 @@ def test_image_inspection_rejects_self_asserted_digest_and_exposed_runtime():
         verify_container(changed, IMAGE, DIGEST, image, networks)
     with pytest.raises(ValueError):
         verify_container(container, IMAGE, DIGEST, image, {"compiled_internal": {"Internal": False}})
+
+
+def test_timeout_parent_can_kill_child_without_other_capabilities():
+    container = configuration()
+    container['HostConfig']['CapAdd'].append('KILL')
+    image = {'Id': container['Image'], 'RepoDigests': [IMAGE]}
+    networks = {'compiled_internal': {'Internal': True}}
+    assert verify_container(container, IMAGE, DIGEST, image, networks)['status'] == 'passed'
+    container['HostConfig']['CapAdd'].append('SYS_ADMIN')
+    with pytest.raises(ValueError):
+        verify_container(container, IMAGE, DIGEST, image, networks)

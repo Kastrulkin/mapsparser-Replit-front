@@ -1,9 +1,39 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/services/api';
+import { API_URL } from '@/config/api';
+import { newAuth } from '@/lib/auth_new';
 import type { AgentBlueprintDetails } from '@/pages/dashboard/agents/types';
 
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : {};
+
+export function HandoffPhotoPreview({ assetId }: { assetId: string }) {
+  const [image, setImage] = useState('');
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    let objectUrl = '';
+    setImage(''); setFailed(false);
+    const load = async () => {
+      try {
+        const token = newAuth.getToken();
+        const response = await fetch(`${API_URL}/api/media-intelligence/photos/${encodeURIComponent(assetId)}/file`, {
+          signal: controller.signal, headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        if (!response.ok) throw new Error('photo_unavailable');
+        const blob = await response.blob();
+        if (controller.signal.aborted) return;
+        objectUrl = URL.createObjectURL(blob); setImage(objectUrl);
+      } catch {
+        if (!controller.signal.aborted) setFailed(true);
+      }
+    };
+    void load();
+    return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [assetId]);
+  if (failed) return <p role="alert" className="text-sm text-red-700">Не удалось загрузить выбранное фото. Проверьте его в публикации перед утверждением.</p>;
+  return image ? <img src={image} alt="Фото для передачи через бот" className="mt-2 h-40 w-full rounded-xl bg-slate-50 object-contain" /> : <p role="status" className="text-sm text-slate-500">Загружаем выбранное фото…</p>;
+}
 
 export function hasContentHandoff(details: AgentBlueprintDetails | null | undefined) {
   const version = details?.candidate_version || details?.active_version;
@@ -93,7 +123,7 @@ export function ContentHandoffProgram({ blueprintId, details, onRunQueued }: {
       <Button disabled={Boolean(busy) || !exampleAccepted} onClick={() => void perform('compile')}>Создать программу по условиям</Button>
     </>}
     {state === 'checking' && <Button disabled={Boolean(busy)} onClick={() => void perform('preview')}>Проверить на текущем плане без отправки</Button>}
-    {posts.map((post: unknown) => { const row = record(post); return <div key={String(row.post_id)} className="border-t border-slate-100 pt-3 text-sm"><p className="font-medium">{String(row.platform || '')} · {row.eligible ? 'Готово к передаче' : String(row.blocked_reason || 'Не готово')}</p><p className="mt-1 whitespace-pre-wrap">{String(row.text || '')}</p><p className="text-slate-500">Фото: {row.photo_asset_id ? 'выбрано в публикации' : 'не выбрано'}</p></div>; })}
+    {posts.map((post: unknown) => { const row = record(post); return <div key={String(row.post_id)} className="border-t border-slate-100 pt-3 text-sm"><p className="font-medium">{String(row.platform || '')} · {row.eligible ? 'Готово к передаче' : String(row.blocked_reason || 'Не готово')}</p><p className="mt-1 whitespace-pre-wrap">{String(row.text || '')}</p>{row.photo_asset_id ? <HandoffPhotoPreview assetId={String(row.photo_asset_id)} /> : <p className="text-slate-500">Фото не выбрано</p>}</div>; })}
     {state === 'ready_approval' && <Button disabled={Boolean(busy)} onClick={() => void perform('approve')}>Утвердить программу и условия передачи</Button>}
     {(state === 'approved' || state === 'active') && <><p className="text-sm text-slate-600">Программа утверждена. Регулярное расписание включается отдельно; сейчас можно выполнить тест на выбранного получателя.</p><Button disabled={Boolean(busy) || details?.compiled_access?.execute !== true} onClick={() => void perform('run')}>Передать готовые материалы — тест</Button></>}
   </section>;

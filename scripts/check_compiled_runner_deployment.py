@@ -47,7 +47,7 @@ def verify_container(container, expected_image, digest, image_details, network_d
         raise ValueError("runner CPU limit is missing or too large")
     caps = {value.removeprefix("CAP_") for value in host.get("CapAdd", [])}
     drops = {value.removeprefix("CAP_") for value in host.get("CapDrop", [])}
-    if caps - {"SETUID", "SETGID"} or "ALL" not in drops or "no-new-privileges:true" not in host.get("SecurityOpt", []):
+    if caps - {"SETUID", "SETGID", "KILL"} or "ALL" not in drops or "no-new-privileges:true" not in host.get("SecurityOpt", []):
         raise ValueError("runner capability restrictions are missing")
     attached = set(container.get("NetworkSettings", {}).get("Networks", {}))
     if not attached or attached != set(network_details) or not all(network_details[name].get("Internal") for name in attached):
