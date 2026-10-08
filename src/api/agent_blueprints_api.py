@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, Response, has_request_context, jsonify, request
 
 from core.auth_helpers import require_auth_from_request, verify_business_access, verify_business_write_access
 from database_manager import DatabaseManager
@@ -87,6 +87,10 @@ AGENT_READ_ONLY_POST_ENDPOINTS = {
 
 
 def _agent_request_requires_write() -> bool:
+    # Internal chat operations have an authenticated actor, not an HTTP
+    # request. Require write access there; never downgrade to read access.
+    if not has_request_context():
+        return True
     return (
         request.method not in {"GET", "HEAD", "OPTIONS"}
         and request.endpoint not in AGENT_READ_ONLY_POST_ENDPOINTS

@@ -86,6 +86,27 @@ def test_adapter_does_not_fake_an_http_authentication(monkeypatch):
     assert calls[0][1]['user_id'] == 'owner'
 
 
+def test_internal_operations_require_write_access_without_http_request(monkeypatch):
+    from api import agent_blueprints_api
+    calls = []
+    monkeypatch.setattr(agent_blueprints_api, 'verify_business_write_access',
+        lambda *args: calls.append(args) or (True, 'owner'))
+    monkeypatch.setattr(agent_blueprints_api, 'verify_business_access',
+        lambda *args: pytest.fail('Internal writes cannot use read-only access'))
+    with Flask(__name__).app_context():
+        assert agent_blueprints_api._require_business_access(None, 'business', {'user_id': 'owner'}) == (True, None)
+    assert len(calls) == 1
+
+
+def test_http_get_keeps_read_access_and_post_requires_write():
+    from api import agent_blueprints_api
+    app = Flask(__name__)
+    with app.test_request_context('/api/agent-blueprints', method='GET'):
+        assert not agent_blueprints_api._agent_request_requires_write()
+    with app.test_request_context('/api/agent-blueprints', method='POST'):
+        assert agent_blueprints_api._agent_request_requires_write()
+
+
 @pytest.mark.parametrize('operation', ['snapshot', 'compile', 'preview', 'approve', 'run'])
 def test_common_operations_reject_demo_before_database(monkeypatch, operation):
     from api import agent_blueprints_api
