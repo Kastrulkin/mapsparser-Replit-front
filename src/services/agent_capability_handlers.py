@@ -1080,7 +1080,7 @@ def _handle_content_publish_handoff(envelope: Dict[str, Any], user_data: Dict[st
             collect_due_content_publish_handoffs,
             deliver_content_publish_handoff,
         )
-        from services.social_posts.media_delivery import send_telegram_photo_message
+        from services.social_post_service import send_telegram_photo_message
         from services.telegram_bot_sender import send_telegram_message_result
 
         scope = {
