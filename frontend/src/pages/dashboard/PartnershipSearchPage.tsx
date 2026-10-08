@@ -1,3 +1,4 @@
+import { OutreachDeliveryCard } from '@/components/prospecting/OutreachDeliveryCard';
 import { OutreachContinuation } from '@/components/prospecting/OutreachContinuation';
 import { buildCandidateSearchGroups, resolveSearchTask, taskLabel, type SearchTaskGroup } from '@/components/prospecting/partnershipSearchGroups';
 import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
@@ -2332,6 +2333,7 @@ export const PartnershipSearchPage: React.FC = () => {
   if (showDemoPartner && currentBusinessId) {
     return (
       <div className="space-y-6 pb-24" data-tour-target="partnership-workspace">
+      <OutreachDeliveryCard campaignId={searchParams.get("campaign_id")} businessId={currentBusinessId} />
         <PartnershipWorkspaceOverview
           workspaceView={workspaceView}
           currentBusinessId={currentBusinessId}
@@ -2373,6 +2375,7 @@ export const PartnershipSearchPage: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-24" data-tour-target="partnership-workspace">
+      <OutreachDeliveryCard campaignId={searchParams.get("campaign_id")} businessId={currentBusinessId} />
       <PartnershipWorkspaceOverview part="header"
         workspaceView={workspaceView}
         currentBusinessId={currentBusinessId}

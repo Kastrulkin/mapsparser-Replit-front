@@ -938,7 +938,9 @@ const OperatorResultActions = ({
   const appliedItems = 'applied_items' in result ? result.applied_items || [] : [];
   const drafts = 'drafts' in result ? result.drafts || [] : [];
   const billingUrl = 'billing_url' in result ? result.billing_url : undefined;
-  const resultRef = 'result_ref' in result ? result.result_ref : undefined;
+  const savedResultRef = 'result_ref' in result ? result.result_ref : undefined;
+  const resultRef = 'capability' in result && result.capability === 'communications.control_email' && savedResultRef?.entity_id
+    ? { ...savedResultRef, href: `/dashboard/partnerships?section=send&business_id=${encodeURIComponent(businessId)}&campaign_id=${encodeURIComponent(savedResultRef.entity_id)}` } : savedResultRef;
   const searchPreview = 'capability' in result && ['partnerships.prepare_message', 'partnerships.continue_outreach'].includes(result.capability || '')
     && 'search_started' in result && result.search_started === false;
   const searchTask = 'task' in result ? result.task : undefined;

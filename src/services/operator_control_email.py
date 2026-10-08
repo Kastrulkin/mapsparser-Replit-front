@@ -184,4 +184,4 @@ def execute(cursor, *, business_id, user_id, envelope, action_id):
         native.close()
     return {'status': 'completed', 'chat_response': 'Контрольное письмо поставлено в очередь. Это ещё не подтверждение отправки. Повторных касаний нет.',
             'campaign_id': campaign_id, 'delivery_status': 'queued', 'external_writes_performed': False,
-            'result_ref': {'entity_id': campaign_id, 'href': '/dashboard/partnerships?section=send&business_id=' + business_id, 'label': 'Проверить отправку'}}
+            'result_ref': {'entity_id': campaign_id, 'href': '/dashboard/partnerships?section=send&business_id=' + business_id + '&campaign_id=' + campaign_id, 'label': 'Проверить отправку'}}

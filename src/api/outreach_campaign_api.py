@@ -289,6 +289,7 @@ def _campaign_payload(cursor: Any, campaign_id: str) -> dict[str, Any] | None:
         """
         SELECT touch.*,
                contact.normalized_value AS recipient,
+               sender.sender_identity AS sender_identity,
                sender.status AS sender_status,
                sender.outreach_enabled AS sender_outreach_enabled,
                sender.health_status AS sender_health_status,
