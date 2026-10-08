@@ -9,6 +9,7 @@ services:
       COMPILED_SCRIPT_EXECUTE_ENABLED: ${COMPILED_SCRIPT_EXECUTE_ENABLED:-false}
       COMPILED_SCRIPT_PILOT_BUSINESS_IDS: ${COMPILED_SCRIPT_PILOT_BUSINESS_IDS:-}
       COMPILED_SCRIPT_ADVANCED_ENABLED: ${COMPILED_SCRIPT_ADVANCED_ENABLED:-false}
+      COMPILED_CONTENT_HANDOFF_BLUEPRINT_IDS: ${COMPILED_CONTENT_HANDOFF_BLUEPRINT_IDS:-}
   worker:
     networks: [default, compiled_script_internal]
     environment:
@@ -18,7 +19,8 @@ services:
       COMPILED_SCRIPT_PREVIEW_ENABLED: ${COMPILED_SCRIPT_PREVIEW_ENABLED:-false}
       COMPILED_SCRIPT_EXECUTE_ENABLED: ${COMPILED_SCRIPT_EXECUTE_ENABLED:-false}
       COMPILED_SCRIPT_PILOT_BUSINESS_IDS: ${COMPILED_SCRIPT_PILOT_BUSINESS_IDS:-}
-  worker-agent:
+      COMPILED_CONTENT_HANDOFF_BLUEPRINT_IDS: ${COMPILED_CONTENT_HANDOFF_BLUEPRINT_IDS:-}
+  operator-worker:
     networks: [default, compiled_script_internal]
   compiled-script-runner:
     # Build/push separately, validate reference before pull and inspect container
