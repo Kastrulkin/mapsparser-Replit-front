@@ -219,7 +219,7 @@ def collect_due_content_publish_handoffs(
               AND sp.status = ANY(%s)
               AND sp.scheduled_for IS NOT NULL
               AND ((sp.scheduled_for >= %s AND sp.scheduled_for < %s)
-                   OR (sp.scheduled_for > %s AND sp.metadata_json->'staff_handoff'->'telegram_deliveries' ? %s))
+                   OR (sp.scheduled_for > %s AND jsonb_exists(sp.metadata_json->'staff_handoff'->'telegram_deliveries', %s)))
             ORDER BY sp.scheduled_for, sp.created_at
             LIMIT %s
             """,
