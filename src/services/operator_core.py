@@ -138,6 +138,7 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("appointments.read", "Записи клиентов", "available", "read_only", "none", "/dashboard/progress", ("Покажи записи на завтра",), "appointments.read"),
     OperatorCapability("communications.manage", "Чаты и сообщения", "request_only", "communication", "separate_confirmation", "/dashboard/chats", ("Подготовь сообщение клиентам",), "communications.draft"),
     OperatorCapability("communications.draft", "Черновик сообщения", "draft_only", "draft", "none", "/dashboard/chats", ("Подготовь текст напоминания",), "communications.draft"),
+    OperatorCapability("communications.control_email", "Контрольное письмо", "approval_required", "external_send", "separate_confirmation", "/dashboard/partnerships", ("Подготовь контрольное письмо",)),
     OperatorCapability("communications.prepare_send", "Подготовка отправки", "approval_required", "external_send_request", "separate_confirmation", "/dashboard/chats", ("Подготовь отправку напоминания клиенту",), "communications.send_reminder"),
     OperatorCapability("partnerships.manage", "Партнёрства и outreach", "request_only", "external_send", "separate_confirmation", "/dashboard/partnerships", ("Найди партнёров рядом",), "partnership.draft_offer"),
     OperatorCapability("partnerships.read", "Партнёрские лиды", "available", "read_only", "none", "/dashboard/partnerships", ("Покажи партнёров в работе",)),
@@ -2087,6 +2088,13 @@ def route_operator_message(
     subscription_access: dict | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     clean_message = str(message or "").strip()
+    from services import operator_control_email
+    if operator_control_email.matches(clean_message):
+        blocked = operator_subscription_block(subscription_access, operator_control_email.CAPABILITY)
+        if blocked:
+            return blocked, {}
+        result = operator_control_email.preview(cursor, business_id=business_id, user_id=user_id, message=clean_message)
+        return standardize_operator_result(result, operator_control_email.CAPABILITY), {}
     tool_loop_active = _operator_tool_loop_enabled() or tool_planner is not None
     run_refresh = refresh_handler or refresh_reviews_from_operator
     run_ai_router = ai_router_handler or classify_operator_intent_with_ai
@@ -2615,6 +2623,13 @@ def confirm_pending_operator_action(
     if isinstance(envelope, str):
         envelope = json.loads(envelope)
     envelope = envelope if isinstance(envelope, dict) else {}
+    if capability == 'communications.control_email':
+        from services.operator_control_email import execute
+        result = standardize_operator_result(execute(cursor, business_id=business_id, user_id=user_id,
+            envelope=envelope, action_id=action_id), capability)
+        if result.get('status') == 'completed':
+            finish_operator_action(cursor, action_id=action_id, result=result)
+        return result, False
     if capability == 'content.handoff':
         from services.operator_content_handoffs import execute
         result=standardize_operator_result(execute(cursor,business_id=business_id,user_id=user_id,envelope=envelope,actor_context=actor_context),capability)

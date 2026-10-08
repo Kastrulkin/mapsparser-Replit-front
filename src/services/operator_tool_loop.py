@@ -344,6 +344,12 @@ def run_operator_tool_loop(
                 and _requested_content_date(message, last_outcome)
             ):
                 message_text = _fallback_read_response(last_tool_name, last_outcome, message)
+            # A model-only refusal is not completion of the requested work.
+            if not trace and re.search(r'не могу|не удалось|нет (?:функции|инструмента|возможности)|такого действия.+нет', message_text, re.I) and re.search(r'подготов|созда|отправ|запуст|найди|проверь', message, re.I):
+                return {'status': 'unsupported', 'capability': 'operator.help',
+                        'chat_response': message_text, 'blocked_reasons': ['requested_action_unavailable'],
+                        'tool_trace': [], 'tool_calls': 0, 'planner_steps': step_index + 1,
+                        'external_writes_performed': False}
             executed_intent = str(last_outcome.get("intent") or "")
             return {
                 **last_outcome,

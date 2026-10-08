@@ -42,6 +42,7 @@ type OperatorChatResult = {
   message_id?: string;
   input_type?: string;
   status: 'completed' | 'blocked' | 'unsupported' | string;
+  delivery_status?: string;
   search_started?: boolean;
   task?: {
     id: string;
@@ -983,7 +984,7 @@ const OperatorResultActions = ({
         >
           {searchPreview ? 'Ожидает запуска' : searchTask?.id
             ? status === 'approval_required' ? 'Ожидает подтверждения запуска' : 'Поручение сохранено'
-            : status || 'operator'}
+            : status === 'unsupported' ? 'Не выполнено' : status === 'blocked' ? 'Требуется действие' : status === 'approval_required' ? 'Ожидает подтверждения' : ('delivery_status' in result && result.delivery_status === 'queued') ? 'В очереди' : status || 'operator'}
         </span>
         {'credit_charged' in result && result.credit_charged ? <span>Списано {result.charged_credits || 0} кредитов</span> : null}
         {'manual_publication_only' in result && result.manual_publication_only ? <span>Публикация вручную</span> : null}
