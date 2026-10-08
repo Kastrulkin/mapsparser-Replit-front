@@ -10,6 +10,18 @@ def check(dist: Path) -> None:
     if not entry:
         raise ValueError('Frontend entry is missing')
     root = (dist / 'assets' / entry.group(1)).read_text()
+    # Check the actual route in the entry, rather than an unrelated newer file
+    # left in assets by a previous partial release.
+    pages = set(re.findall(r'(PartnershipSearchPage-[\w.-]+\.js)', root))
+    if not pages:
+        raise ValueError('Active partnerships page is missing')
+    for page in pages:
+        body = (dist / 'assets' / page).read_text()
+        for marker in ['Этапы аутрича', 'Компании', 'Письма', 'search_task_id']:
+            if marker not in body:
+                raise ValueError('Outdated partnerships page: ' + marker)
+        if 'btn-iridescent' not in body and '"brand"' not in body:
+            raise ValueError('Missing shared brand treatment in partnerships')
     layouts = set(re.findall(r'(DashboardLayout-[\w.-]+\.js)', root))
     if not layouts:
         raise ValueError('Active dashboard layout is missing')
