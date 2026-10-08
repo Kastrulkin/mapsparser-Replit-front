@@ -1,4 +1,5 @@
 import { OperatorActivity, OperatorReply } from '@/components/operator/OperatorActivity';
+import { HandoffPhotoPreview } from '@/components/agents/ContentHandoffProgram';
 import { OutreachGroupCard, type GroupPresentation } from '@/components/prospecting/OutreachGroupCard';
 import { OperatorRequestHistory } from '@/components/operator/OperatorRequestHistory';
 import { OperatorSpeech, OperatorVoiceInput, VoiceSubmission } from '@/components/operator/OperatorVoice';
@@ -60,6 +61,7 @@ type OperatorChatResult = {
   };
   intent?: string;
   chat_response?: string;
+  content_input?: { posts?: Array<{ post_id: string; platform?: string; text?: string; photo_asset_id?: string; eligible?: boolean; blocked_reason?: string }> };
   queue_id?: string;
   reply_text?: string;
   news_text?: string;
@@ -997,6 +999,7 @@ const OperatorResultActions = ({
   const drafts = 'drafts' in result ? result.drafts || [] : [];
   const billingUrl = 'billing_url' in result ? result.billing_url : undefined;
   const resultRef = 'result_ref' in result ? result.result_ref : undefined;
+  const handoffPosts = 'content_input' in result ? result.content_input?.posts || [] : [];
   const searchPreview = 'capability' in result && ['partnerships.prepare_message', 'partnerships.continue_outreach'].includes(result.capability || '')
     && 'search_started' in result && result.search_started === false;
   const searchTask = 'task' in result ? result.task : undefined;
@@ -1020,6 +1023,13 @@ const OperatorResultActions = ({
 
   return (
     <div className="mt-3 space-y-3">
+      {handoffPosts.length > 0 && <div className="space-y-3" aria-label="Материалы для передачи через бот">
+        {handoffPosts.map((post) => <div key={post.post_id} className="border-t border-slate-200 pt-3 text-sm">
+          <p className="font-medium">{post.platform} · {post.eligible ? 'Готово к передаче' : post.blocked_reason || 'Не готово'}</p>
+          <p className="mt-1 whitespace-pre-wrap">{post.text}</p>
+          {post.photo_asset_id && <HandoffPhotoPreview assetId={post.photo_asset_id} />}
+        </div>)}
+      </div>}
       <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
         <span
           className={cn(

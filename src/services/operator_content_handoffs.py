@@ -53,6 +53,10 @@ def operator_task(cursor, *, business_id, user_id, arguments, actor_context=None
     # preferences as a substitute for a compiled program.
     from services.operator_agent_management import configure, prepare_lifecycle
     operation = str(arguments.get('operation') or 'status')
+    if operation in {'compile', 'preview', 'approve', 'run'}:
+        from services.operator_compiled_content import prepare
+        return prepare(cursor, business_id=business_id, user_id=user_id,
+            arguments=arguments, actor_context=actor_context)
     if operation in {'pause', 'resume'}:
         return prepare_lifecycle(cursor, business_id=business_id, user_id=user_id,
             arguments={**arguments, 'operation': operation}, actor_context=actor_context)
@@ -68,6 +72,8 @@ def operator_task(cursor, *, business_id, user_id, arguments, actor_context=None
             return {'status':'clarification_required','chat_response':'Тест выполняется только на вашем подключённом Telegram. Переключение получателя требует отдельной проверки и утверждения.'}
         return configure(cursor, business_id=business_id, user_id=user_id, actor_context=actor_context,
             arguments={'operation':'create', 'name':'Передача готовых публикаций через бот',
+                'selected_provider_routes': {'telegram_delivery': {'provider': 'native_localos'}},
+                'accepted_provider_routes': True,
                 'description':'За день до публикации в 10:00 отправлять через подключённого бота готовые версии постов для Telegram, VK и MAX с выбранным фото. Получатель — мой подключённый аккаунт. Регулярный запуск оставить на паузе.'})
     return {'status':'blocked','blocked_reasons':['unsupported_operation']}
 
@@ -122,6 +128,10 @@ def legacy_operator_task(cursor, *, business_id, user_id, arguments, actor_conte
 
 
 def execute(cursor, *, business_id, user_id, envelope, actor_context=None):
+    if envelope.get('compiled_operation'):
+        from services import operator_compiled_content
+        return operator_compiled_content.execute(cursor, business_id=business_id, user_id=user_id,
+            envelope=envelope, actor_context=actor_context)
     actor=_authorized_actor(cursor,business_id=business_id,user_id=user_id,actor_context=actor_context)
     recipient=str(envelope.get('recipient_user_id') or '')
     if not actor or envelope.get('business_id')!=business_id or (not actor.get('is_superadmin') and recipient!=user_id):

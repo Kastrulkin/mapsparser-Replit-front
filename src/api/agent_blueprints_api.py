@@ -4833,16 +4833,19 @@ def get_agent_blueprint_version_diff(blueprint_id: str, version_id: str):
 
 @agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/snapshots", methods=["POST"])
 def create_agent_compiled_snapshot(blueprint_id: str):
-    from core.auth_context import AuthContext
-    from services.compiled_input_snapshots import create_snapshot, SnapshotUnavailable, SnapshotQuotaExceeded
-    from services.compiled_pilot_access import compiled_pilot_allowed
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    return compiled_snapshot_for_actor(blueprint_id, user_data, request.get_json(silent=True))
+
+
+def compiled_snapshot_for_actor(blueprint_id: str, user_data: dict, payload):
+    from core.auth_context import AuthContext
+    from services.compiled_input_snapshots import create_snapshot, SnapshotUnavailable, SnapshotQuotaExceeded
+    from services.compiled_pilot_access import compiled_pilot_allowed
     session_error = _require_compiled_standard_session(user_data)
     if session_error:
         return session_error
-    payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return _json_error("Ожидается таблица.", 400, "INVALID_JSON_PAYLOAD")
     db = DatabaseManager()
@@ -4887,6 +4890,13 @@ def create_agent_compiled_snapshot(blueprint_id: str):
 
 @agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/compile", methods=["POST"])
 def compile_agent_blueprint_script(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    return compiled_compile_for_actor(blueprint_id, user_data, request.get_json(silent=True))
+
+
+def compiled_compile_for_actor(blueprint_id: str, user_data: dict, payload):
     from services.compiled_generation_admission import (
         input_digest,
         mark_generation_failed,
@@ -4896,13 +4906,9 @@ def compile_agent_blueprint_script(blueprint_id: str):
     from services.compiled_pilot_access import compiled_pilot_allowed
     from services.compiled_table_contract import normalize_table_contract, normalize_table_input, table_manifest
     from services.compiled_script_runtime import execute_pilot
-    user_data, error_response = _require_auth()
-    if error_response:
-        return error_response
     session_error = _require_compiled_standard_session(user_data)
     if session_error:
         return session_error
-    payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
     description = str(payload.get("description") or "").strip()
@@ -4949,6 +4955,9 @@ def compile_agent_blueprint_script(blueprint_id: str):
         if content_requested:
             from services.compiled_content_program import contract_for
             base = _resolve_candidate_version(cursor, blueprint) or {}
+            if payload.get('expected_version_id') and str(base.get('id') or '') != str(payload['expected_version_id']):
+                return _json_error('Условия изменились. Загрузите актуальную версию.', 409, 'COMPILED_CONTENT_VERSION_CHANGED')
+            content_base_id = str(base.get('id') or '')
             try:
                 content_contract = contract_for(base, str(blueprint.get('business_id') or ''))
             except ValueError:
@@ -5075,6 +5084,10 @@ def compile_agent_blueprint_script(blueprint_id: str):
             return _json_error("Доступ к пилоту изменился.", 403, "COMPILED_PILOT_NOT_ALLOWED")
         cursor.execute("SELECT id FROM agent_blueprints WHERE id = %s FOR UPDATE", (blueprint_id,))
         base = _resolve_candidate_version(cursor, blueprint) or {}
+        if content_requested and (str(base.get('id') or '') != content_base_id or contract_for(base, str(blueprint.get('business_id') or '')) != content_contract):
+            mark_generation_failed(cursor, generation_request_id, 'COMPILED_CONTENT_VERSION_CHANGED')
+            db.conn.commit()
+            return _json_error('Условия изменились во время создания программы. Проверьте новую версию.', 409, 'COMPILED_CONTENT_VERSION_CHANGED')
         version_payload = build_version_payload_from_row(base)
         version_payload["goal"] = description
         version_payload["compiled_artifact"] = artifact
@@ -5099,17 +5112,20 @@ def compile_agent_blueprint_script(blueprint_id: str):
 
 @agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/preview", methods=["POST"])
 def preview_agent_blueprint_script(blueprint_id: str):
-    from services.compiled_pilot_access import compiled_pilot_allowed
-    from services.compiled_input_snapshots import resolve_snapshot, SnapshotUnavailable
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    return compiled_preview_for_actor(blueprint_id, user_data, request.get_json(silent=True))
+
+
+def compiled_preview_for_actor(blueprint_id: str, user_data: dict, payload):
+    from services.compiled_pilot_access import compiled_pilot_allowed
+    from services.compiled_input_snapshots import resolve_snapshot, SnapshotUnavailable
     session_error = _require_compiled_standard_session(user_data)
     if session_error:
         return session_error
     if str(os.getenv("COMPILED_SCRIPT_PREVIEW_ENABLED", "false")).lower() not in {"1", "true", "yes", "on"}:
         return _json_error("Preview compiled scripts пока выключен.", 404, "COMPILED_PREVIEW_DISABLED")
-    payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
     db = DatabaseManager()
@@ -5182,14 +5198,17 @@ def preview_agent_blueprint_script(blueprint_id: str):
 
 @agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/approve", methods=["POST"])
 def approve_agent_blueprint_script(blueprint_id: str):
-    from services.compiled_pilot_access import compiled_pilot_allowed
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    return compiled_approve_for_actor(blueprint_id, user_data, request.get_json(silent=True))
+
+
+def compiled_approve_for_actor(blueprint_id: str, user_data: dict, payload):
+    from services.compiled_pilot_access import compiled_pilot_allowed
     session_error = _require_compiled_standard_session(user_data)
     if session_error:
         return session_error
-    payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
     db = DatabaseManager()
@@ -5258,10 +5277,13 @@ def run_agent_blueprint_script(blueprint_id: str):
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    return compiled_run_for_actor(blueprint_id, user_data, request.get_json(silent=True))
+
+
+def compiled_run_for_actor(blueprint_id: str, user_data: dict, payload):
     session_error = _require_compiled_standard_session(user_data)
     if session_error:
         return session_error
-    payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
     db = DatabaseManager()

@@ -1372,9 +1372,9 @@ def _operator_tool_catalog(
         },
         {
             "name":"content.handoff", "capability":"content.handoff", "title":"Передача материалов через подключённого бота",
-            "description":"Создаёт черновик автоматизации передачи постов через общий конструктор; просмотр, проверка программы и утверждение доступны в той же карточке меню Автоматизация. Не включает старую настройку фоновой передачи. Пилот: за день до публикации в 10:00 Telegram/VK/MAX, тестовый получатель — текущий пользователь. Укажите blueprint_id для паузы существующего сценария.",
+            "description":"Общая compiled-AI автоматизация контента: configure создаёт черновик; compile предлагает сохранённую программу; preview проверяет текущий план без отправки; approve предлагает утверждение точной версии; run предлагает тестовую передачу после подтверждения. pause/resume управляют тем же расписанием. Укажите blueprint_id и expected_version_id из последнего status. Получатель пилота — текущий пользователь, не Ирина. Старые настройки фоновой передачи не меняются.",
             "input_schema":{"type":"object","additionalProperties":False,"properties":{
-                "operation":{"type":"string","enum":["status","configure","pause","resume"]},"recipient_user_id":{"type":"string"},"blueprint_id":{"type":"string"},
+                "operation":{"type":"string","enum":["status","configure","compile","preview","approve","run","pause","resume"]},"recipient_user_id":{"type":"string"},"blueprint_id":{"type":"string"},"expected_version_id":{"type":"string"},
                 "settings":{"type":"object","additionalProperties":False,"properties":{
                     "lead_days":{"type":"integer","minimum":0,"maximum":7},"time":{"type":"string"},
                     "platforms":{"type":"array","items":{"type":"string","enum":["vk","telegram","max"]},"minItems":1,"maxItems":3},"enabled":{"type":"boolean"}}}},"required":["operation"]},

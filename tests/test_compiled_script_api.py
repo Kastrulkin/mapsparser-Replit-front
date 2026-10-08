@@ -82,7 +82,7 @@ def test_public_insert_version_strips_forged_compiled_fields(monkeypatch):
     cursor.fetchone = fetchone
     payload = {"goal": "x", "steps": [], "compiled_state": "approved", "compiled_artifact": {"source": "bad"}, "compiled_artifact_hash": "sha256:forged"}
     version = agent_blueprints_api._insert_version(cursor, "b1", payload, {"user_id": "u1"})
-    insert_params = cursor.calls[1][1]
+    insert_params = next(params for query, params in cursor.calls if 'INSERT INTO agent_blueprint_versions' in query)
     assert insert_params[-4] == "{}"
     assert insert_params[-3] is None
     assert insert_params[-2] == "legacy"

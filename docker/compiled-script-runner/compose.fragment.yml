@@ -22,6 +22,14 @@ services:
       COMPILED_CONTENT_HANDOFF_BLUEPRINT_IDS: ${COMPILED_CONTENT_HANDOFF_BLUEPRINT_IDS:-}
   operator-worker:
     networks: [default, compiled_script_internal]
+    environment:
+      COMPILED_SCRIPT_RUNNER_URL: ${COMPILED_SCRIPT_RUNNER_URL:-http://compiled-script-runner:8091}
+      COMPILED_SCRIPT_RUNNER_SHARED_SECRET: ${COMPILED_SCRIPT_RUNNER_SHARED_SECRET:-}
+      COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST: ${COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST:-}
+      COMPILED_SCRIPT_PREVIEW_ENABLED: ${COMPILED_SCRIPT_PREVIEW_ENABLED:-false}
+      COMPILED_SCRIPT_EXECUTE_ENABLED: ${COMPILED_SCRIPT_EXECUTE_ENABLED:-false}
+      COMPILED_SCRIPT_PILOT_BUSINESS_IDS: ${COMPILED_SCRIPT_PILOT_BUSINESS_IDS:-}
+      COMPILED_CONTENT_HANDOFF_BLUEPRINT_IDS: ${COMPILED_CONTENT_HANDOFF_BLUEPRINT_IDS:-}
   compiled-script-runner:
     # Build/push separately, validate reference before pull and inspect container
     # with scripts/check_compiled_runner_deployment.py before enabling execution.
