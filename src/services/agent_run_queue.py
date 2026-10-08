@@ -320,17 +320,20 @@ def _validate_pinned_version(blueprint: dict[str, Any], version: dict[str, Any])
 
 
 def claim_next_agent_run(cursor: Any) -> dict[str, Any] | None:
+    allowed_ids = [value.strip() for value in os.getenv('AGENT_RUN_QUEUE_BLUEPRINT_IDS', '').split(',') if value.strip()]
+    cohort_filter = 'AND blueprint_id = ANY(%s)' if allowed_ids else ''
     # Do not issue one broad UPDATE over every stale run. A live runner can hold
     # its row lock while invoking a provider; SKIP LOCKED lets this worker claim
     # another runnable item instead of waiting behind it.
     lease_token = str(uuid.uuid4())
     cursor.execute(
-        """
+        f"""
         WITH stale_runs AS (
             SELECT id
             FROM agent_runs
             WHERE status = 'running'
               AND heartbeat_at < NOW() - INTERVAL '5 minutes'
+              {cohort_filter}
             ORDER BY heartbeat_at ASC
             FOR UPDATE SKIP LOCKED
             LIMIT 50
@@ -348,7 +351,7 @@ def claim_next_agent_run(cursor: Any) -> dict[str, Any] | None:
         FROM stale_runs
         WHERE run.id = stale_runs.id
         RETURNING run.*
-        """
+        """, (allowed_ids,) if allowed_ids else None
     )
     expired = cursor.fetchall() if hasattr(cursor, "fetchall") else []
     for expired_run in expired:
@@ -363,12 +366,13 @@ def claim_next_agent_run(cursor: Any) -> dict[str, Any] | None:
         current["reserved_credits"] = int(reservation.get("reserved_credits") or AGENT_RUN_ESTIMATED_CREDITS)
         finalize_agent_run_credits(cursor, run=current, actual_tokens=0)
     cursor.execute(
-        """
+        f"""
         WITH next_run AS (
             SELECT id
             FROM agent_runs
             WHERE (status = 'queued'
                OR (status = 'retry_wait' AND COALESCE(next_attempt_at, NOW()) <= NOW()))
+              {cohort_filter}
               AND EXISTS (SELECT 1 FROM agent_blueprints blueprint
                           WHERE blueprint.id = agent_runs.blueprint_id
                             AND blueprint.status IN ('active','draft'))
@@ -388,7 +392,7 @@ def claim_next_agent_run(cursor: Any) -> dict[str, Any] | None:
         WHERE r.id = next_run.id
         RETURNING r.*
         """,
-        (lease_token,),
+        (allowed_ids, lease_token) if allowed_ids else (lease_token,),
     )
     row = cursor.fetchone()
     return dict(row) if row else None
