@@ -843,3 +843,35 @@ def test_localized_sender_copy_cannot_replace_recipient_or_observation():
         generated[0]['localized_fields'] = {field: 'Invented fact'}
         with pytest.raises(ValueError, match='Unsupported localized'):
             _normalize_touches(generated, record)
+
+
+def _english_copy_record():
+    record = _request_record(motion='client_partnership', identity={'company_name': 'Agency'},
+        candidate={'evidence_id': 'source', 'source_url': 'https://agency.example/phuket',
+                   'observed_fact': 'Phuket and Krabi tours', 'relevance_to_offer': 'We offer Phuket transfers'},
+        founder_story={'story': 'We offer transfers', 'offer': 'Phuket transfers'},
+        sequence=[{'sequence_index': 0, 'channel': 'email', 'angle': 'signal'}], voice_examples=[])
+    record.update(copy_mode='deepseek_template', copy_language='en')
+    return record
+
+
+def test_english_copy_rejects_missing_question_and_untranslated_sender_copy():
+    import pytest
+    from services.outreach_personalization_ai import _normalize_touches
+    record = _english_copy_record()
+    item = {'sequence_index': 0, 'subject': 'Transfers for {{RECIPIENT}}',
+            'text_template': 'Hello {{RECIPIENT}}. Your website lists {{OBSERVATION}}. {{BRIDGE}}.'}
+    with pytest.raises(ValueError, match='exactly one CTA'):
+        _normalize_touches([item], record)
+    item['text_template'] += ' Обсудим сотрудничество?'
+    with pytest.raises(ValueError, match='untranslated wording'):
+        _normalize_touches([item], record)
+
+
+def test_english_copy_resolves_subject_and_preserves_one_concrete_question():
+    from services.outreach_personalization_ai import _normalize_touches
+    result = _normalize_touches([{'sequence_index': 0, 'subject': 'Transfers for {{RECIPIENT}}',
+        'text_template': 'Hello {{RECIPIENT}}. Your website lists {{OBSERVATION}}. {{BRIDGE}}. Could we discuss transfers for this itinerary?'}], _english_copy_record())
+    assert result[0]['subject'] == 'Transfers for Agency'
+    assert result[0]['text'].count('?') == 1
+    assert result[0]['relevance_bridge'] == 'We offer Phuket transfers'

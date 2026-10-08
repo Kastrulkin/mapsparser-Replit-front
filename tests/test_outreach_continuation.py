@@ -710,3 +710,28 @@ def test_reviewed_draft_uses_only_previously_confirmed_identity():
     assert _founder_story(profile, reviewed_draft=True) is not None
     profile['outreach_context_json'] = {}
     assert _founder_story(profile, reviewed_draft=True) is None
+
+
+def test_explicit_retry_archives_rejected_draft_and_preserves_approved_one(monkeypatch):
+    from services import outreach_continuation as continuation
+    cfg = normalize_config(config())
+    rejected = {'status': 'needs_revision', 'campaign_id': 'old-campaign'}
+    approved = {'status': 'ready', 'campaign_id': 'approved-campaign'}
+    row = {'id': 'task', 'status': 'waiting_for_review', 'payload_json': cfg,
+           'result_json': {'campaign_results': {'rejected': rejected, 'approved': approved},
+                           'draft_attempts': 10}}
+    class Cursor:
+        def execute(self, sql, params):
+            if sql.startswith('UPDATE operator_async_jobs SET status='):
+                row['status'], row['stage'] = params[0], params[1]
+                row['result_json'] = params[2].adapted
+        def fetchone(self):
+            return row
+    monkeypatch.setattr(continuation, 'view', lambda value: value)
+    result = continuation.control_task(Cursor(), task_id='task', business_id='business',
+        user_id='user', action='retry_failed', revision=config_hash(cfg))
+    state = result['result_json']
+    assert state['campaign_results'] == {'approved': approved}
+    assert state['draft_retry_history'][0]['result'] == rejected
+    assert state['draft_attempts'] == 10
+    assert result['status'] == 'waiting_for_review'

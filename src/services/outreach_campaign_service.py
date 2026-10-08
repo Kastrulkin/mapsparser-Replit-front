@@ -4725,7 +4725,8 @@ def build_preview(
                 touch["semantic_review_prompt_version"] = generation.get("review_prompt_version")
                 gate = _quality_gate(
                     touch["text"],
-                    primary_candidate,
+                    {**primary_candidate, "relevance_to_offer": generated_touch.get("relevance_bridge") or primary_candidate.get("relevance_to_offer"),
+                     "bridge": generated_touch.get("relevance_bridge") or primary_candidate.get("bridge")},
                     story,
                     channel=touch["channel"],
                     channel_status=touch["channel_status"],

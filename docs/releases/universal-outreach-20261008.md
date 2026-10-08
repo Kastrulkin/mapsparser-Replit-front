@@ -63,3 +63,18 @@ Rejected generated drafts now persist in the existing campaign as drafts, with f
 Final bounded pilot readback: 3 qualified companies; 10/10 draft attempts; 1 canonical EWS draft (`e92e4e95-2751-40e5-a0fc-c33841ef3be2`) saved for revision, 2 other letters not persisted. The EWS draft failed quality review (`WEAK_OFFER_BRIDGE`, `PROOF_SCOPE_MISMATCH`) and must not be sent. The last requirement-selection correction was deployed after this draft and has not been proved by another real generation. Preparation must continue through a newly reviewed retry allowance; do not erase actual prior calls. Search/check charge remains 93 credits (5 search + 88 check); this number does not assert a reconciled total for all copy-model usage.
 
 317 focused backend tests passed; diff whitespace checks passed. Production module hashes match the checkout for continuation, personalization and group presentation. Public page and entry `index-CWgAYutP-lo-u20261008c.js` return HTTP 200. Final native-browser validation remains blocked by an empty rendered tab and cannot be replaced by HTTP checks. No outreach emails were queued or sent in this follow-up.
+
+### Three additional draft attempts authorized
+
+The user explicitly authorized three additional attempts. The existing version service raised the draft allowance from 10 to 13 and resumed the same group in `prepare_only`. No geography/audience/target changes, new search, send grant, or duplicate group were created. `retry_failed` now archives rejected campaign results before retrying, keeps approved results, and allows a new draft version only for an unapproved draft with failed quality gates. Previous campaign versions remain intact.
+
+The three actual attempts produced canonical draft campaigns:
+- EWS Holidays: `7be9e69c-fdd1-42c6-9050-7d99cc2af251`, sales@ewsholidays.com.
+- Holiday Advisor: `e5a0bac1-ed37-4f72-a4b6-1239c1d9ba0f`, info@holidayadvisor.co.in.
+- Kingdom of Holidays: `9cb296bb-a0c1-4416-9ca0-84223947c428`, info@kingdomofholidays.com.
+
+All three generated copies failed review (missing CTA, weak/repeated offer, mixed language, or irrelevant proof expectation). They were corrected through the existing draft editor, using each sourced Phuket itinerary and the approved Riderra transfer offer. Original generated text is preserved. Editor metadata explicitly identifies `codex_assistant`; `approved_text` remains NULL, manual edit review is required, and quality gates are not force-approved. These are reviewable drafts, not proof of unattended successful AI copy generation.
+
+Further generation-contract fixes reject English copy containing untranslated sender wording or lacking exactly one CTA; resolve recipient subject placeholders and reject unknown fields; restore grounded fields after privacy substitution; preserve the localized bridge for quality comparison; and distinguish omitted optional proof from an unsupported proof claim. The latest fixes have not been tested by another paid generation because the authorized attempts are exhausted.
+
+Final readback: prepared=3, attempts=13, group `needs_attention`, next action “Проверить письма”, queue rows for these campaigns=0. Search/check charge remains 93 credits; copy-model costs are not asserted as zero or included in that number. 320 focused tests passed; production hashes match continuation and personalization source, with guarded campaign patch and rollback backups retained. Existing browser visual-verification limitation remains.

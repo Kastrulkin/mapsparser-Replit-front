@@ -428,10 +428,12 @@ def control_task(cursor: Any, *, task_id: str, business_id: str, user_id: str,
         if row["status"] in {"running", "queued"}:
             raise ValueError("pause_before_retry")
         changed = False
-        for field, statuses in (("qualifications", {"failed"}), ("campaign_results", {"failed", "needs_sender_setup", "observe", "needs_generation"})):
+        for field, statuses in (("qualifications", {"failed"}), ("campaign_results", {"failed", "needs_sender_setup", "observe", "needs_generation", "needs_revision"})):
             values = dict(state.get(field) or {})
             for key, value in list(values.items()):
                 if value.get("status") in statuses:
+                    if field == "campaign_results":
+                        state.setdefault("draft_retry_history", []).append({"workstream_id": key, "result": value, "at": datetime.now(timezone.utc).isoformat()})
                     del values[key]
                     changed = True
             state[field] = values
@@ -1039,7 +1041,7 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                         AND COALESCE((t.quality_gate_json->>'passed')::boolean,FALSE)=FALSE) AS quality_passed
                     FROM outreach_campaigns c WHERE c.workstream_id=%s ORDER BY c.created_at DESC LIMIT 1""", (target,))
                 campaign = cursor.fetchone()
-                if campaign:
+                if campaign and (campaign.get("quality_passed") or campaign.get("status") != "draft"):
                     result = {"campaign_id": str(campaign["id"]), "status": str(campaign["status"]) if campaign.get("quality_passed") else "needs_revision"}
                 else:
                     preview = build_preview(cursor, target, sender_mode="partner_business", generate_ai=True,

@@ -235,9 +235,10 @@ def generate_personalized_sequence(
                 return _failed("language_review_failed", "Текст требует языковой правки", retryable=False)
         if context:
             for touch in touches:
-                for field in ("text", "subject"):
+                for field in ("text", "subject", "observation", "relevance_bridge"):
                     if isinstance(touch.get(field), str):
                         touch[field] = context.restore(touch[field])
+                touch["localized_fields"] = {key: context.restore(value) for key, value in (touch.get("localized_fields") or {}).items()}
         return {
             "schema_version": SCHEMA_VERSION,
             "status": "ready",
@@ -423,6 +424,10 @@ def _generation_prompt(record: dict[str, Any]) -> str:
             "only when corresponding input values exist. Never invent facts, contacts, prices, discounts or promises. "
             "Attribute OBSERVATION to the recipient website (for example: your website lists). "
             "Never present a quoted recipient claim in the sender first person. "
+            "Include exactly one concrete question inviting discussion of the approved offer. "
+            "Do not duplicate BRIDGE and OFFER. Translate sender fragments into copy_language, "
+            "including localized_fields whenever necessary; do not leave foreign-language fragments. "
+            "The subject must be complete, without unresolved template fields. "
             "Respect the sender representation, channel word limit and one CTA. Do not claim approval or sending. "
             "INPUT_JSON:\n" + json.dumps(record, ensure_ascii=False, default=str)
         )
@@ -491,6 +496,8 @@ def _review_prompt(record: dict[str, Any]) -> str:
         "Верни только JSON без markdown: schema_version=1.0, reviews. "
         "Каждый элемент reviews обязан содержать sequence_index из touch, scores (объект "
         "со всеми девятью перечисленными критериями и целыми оценками 0..2), verdict, reason_codes, notes. "
+        "Необязательное доказательство опыта можно не включать: отсутствие такого утверждения не является SOURCE_MISSING или PROOF_SCOPE_MISMATCH. "
+        "Если опыт заявлен, проверь его факт и область применимости. "
         "Проверь faithful translation: перевод одобренного предложения и связи допустим, "
         "но добавление фактов и изменение коммерческих условий запрещены. "
         f"INPUT_JSON:\n{json.dumps(record, ensure_ascii=False, default=str)}"
@@ -611,6 +618,11 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
         generated_hypothesis = _clean(item.get("problem_hypothesis")) or None
         if generated_hypothesis and generated_hypothesis != expected_hypothesis:
             raise ValueError(f"Touch {index} introduced an unsupported hypothesis")
+        if request_record.get("copy_mode") == "deepseek_template":
+            if text.count("?") != 1:
+                raise ValueError(f"Touch {index} must contain exactly one CTA question")
+            if str(request_record.get("copy_language") or "").lower() == "en" and re.search(r"[А-Яа-яЁё]", text.replace(observation, "")):
+                raise ValueError(f"Touch {index} contains untranslated wording in an English letter")
         normalized.append({
             "sequence_index": index,
             "channel": channel,
@@ -621,7 +633,7 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
             "evidence_ids": evidence_ids,
             "observation": _clean(item.get("observation")) or observation,
             "problem_hypothesis": generated_hypothesis,
-            "relevance_bridge": _clean(item.get("relevance_bridge")) or relevance_bridge,
+            "relevance_bridge": _clean(localized.get("BRIDGE")) or relevance_bridge,
         })
     return normalized
 
@@ -911,7 +923,9 @@ def _generated_subject(item: dict[str, Any], channel: str, recipient: str, recor
         return _safe_subject(channel, recipient, record, angle)
     if channel != "email":
         return None
-    subject = str(item.get("subject") or "").strip()
+    subject = str(item.get("subject") or "").strip().replace("{{RECIPIENT}}", recipient)
+    if re.search(r"\{\{[^{}]+\}\}", subject):
+        raise ValueError("Email subject contains unresolved fields")
     if not 3 <= len(subject) <= 180 or any(char in subject for char in "\r\n"):
         raise ValueError("Email subject required in requested language")
     return subject
