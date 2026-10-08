@@ -31,6 +31,12 @@ def test_read_phrasings_and_publish_boundary():
         assert not operator_core._content_read_request(message), message
 
 
+def test_today_all_clients_does_not_fall_through_to_ai():
+    message = 'Покажи публикации на сегодня по всем клиентам и точкам LocalOS. Ничего не меняй и не отправляй.'
+    assert operator_core._content_read_request(message)
+    assert operator_core._is_all_business_content_request(message)
+
+
 @pytest.fixture(autouse=True)
 def explicit_business_timezone(monkeypatch):
     from services import business_input_settings

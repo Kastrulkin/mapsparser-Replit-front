@@ -1994,6 +1994,10 @@ def _content_read_request(message):
         return True
     if lowered in {'контент план', 'мой контент план', 'наш контент план'}:
         return True
+    if (re.search(r'сегодня|завтра', lowered)
+            and re.search(r'пост|публикаци', lowered)
+            and re.search(r'покажи|показать|посмотри|какие|что', lowered)):
+        return True
     return ((('контент план' in lowered) or any(word in lowered for word in ('следующ', 'ближайш', 'предстоящ', 'последн', 'крайний')))
             and any(word in lowered for word in ('покажи', 'показать', 'посмотри', 'пришли', 'видишь', 'увидеть', 'посмотреть', 'какой', 'какие', 'когда'))
             and any(word in lowered for word in ('пост', 'контент план', 'публикаци', 'новост')))
@@ -2076,6 +2080,8 @@ def _is_all_business_content_request(message: str) -> bool:
 
 
 def _read_all_business_content(cursor, message: str) -> dict[str, Any]:
+    if re.search(r'сегодня|завтра', message, re.I):
+        return _read_all_business_daily_content(cursor, message)
     cursor.execute(
         """SELECT id, name, address FROM businesses
            WHERE entity_group = 'client' AND COALESCE(is_active, TRUE) = TRUE
@@ -2135,6 +2141,52 @@ def _read_all_business_content(cursor, message: str) -> dict[str, Any]:
         "result_is_partial": partial or bool(warnings),
         "external_writes_performed": False,
     }
+
+
+def _read_all_business_daily_content(cursor, message: str) -> dict[str, Any]:
+    from services.content_delivery_status import delivery_status
+    offset = 1 if re.search(r'завтра', message, re.I) else 0
+    cursor.execute("""SELECT b.id, b.name, b.address, settings.timezone
+        FROM businesses b LEFT JOIN business_finance_settings settings ON settings.business_id = b.id
+        WHERE b.entity_group = 'client' AND COALESCE(b.is_active, TRUE) ORDER BY b.name, b.address""")
+    businesses = [dict(row) for row in cursor.fetchall() or []]
+    items = []
+    warnings = []
+    for business in businesses:
+        zone_name = str(business.get('timezone') or '')
+        try:
+            zone = ZoneInfo(zone_name)
+        except (ValueError, KeyError):
+            zone = ZoneInfo('UTC')
+            warnings.append(f"{business['name']}: часовой пояс не задан или неверен, использован UTC.")
+        day = datetime.now(zone).date() + timedelta(days=offset)
+        cursor.execute("""SELECT p.id, p.platform AS channel, p.status, p.scheduled_for, p.metadata_json,
+            COALESCE(NULLIF(i.theme, ''), NULLIF(p.platform_text, ''), 'Без темы') AS title
+            FROM social_posts p LEFT JOIN contentplanitems i ON i.id = p.content_plan_item_id
+            WHERE p.business_id = %s AND (p.scheduled_for AT TIME ZONE %s)::date = %s
+            UNION ALL SELECT i.id, 'каналы не подготовлены', i.status, i.scheduled_for, '{}'::jsonb, i.theme
+            FROM contentplanitems i JOIN contentplans plan ON plan.id = i.plan_id
+            WHERE i.business_id = %s AND COALESCE(plan.plan_status, '') <> 'archived'
+              AND COALESCE(i.status, '') NOT IN ('archived', 'published')
+              AND (i.scheduled_for AT TIME ZONE %s)::date = %s
+              AND NOT EXISTS (SELECT 1 FROM social_posts p WHERE p.content_plan_item_id = i.id
+                AND (p.scheduled_for AT TIME ZONE %s)::date = %s)
+            ORDER BY scheduled_for, channel""", (str(business['id']), zone.key, day,
+                str(business['id']), zone.key, day, zone.key, day))
+        for row in cursor.fetchall() or []:
+            item = dict(row)
+            item['business'] = business
+            item['handoff_status'] = delivery_status(item.pop('metadata_json', {}))
+            items.append(item)
+    lines = [f"• {item['business']['name']} — {item['business'].get('address') or 'адрес не задан'}: "
+             f"{item['title']} · {item['channel']} · {item['status']}" for item in items]
+    response = ('Публикации по всем бизнесам LocalOS на ' + ('завтра' if offset else 'сегодня') + ':\n' + '\n'.join(lines)
+                if lines else 'На указанный день публикаций по активным бизнесам LocalOS не найдено.')
+    response += '\n\nСтатус в плане не подтверждает публикацию на площадке. Передача через бот учитывается отдельно.'
+    if warnings:
+        response += '\n\n' + '\n'.join(warnings)
+    return {'status': 'completed', 'chat_response': response, 'items': items, 'count': len(items),
+            'external_writes_performed': False}
 
 
 def route_operator_message(

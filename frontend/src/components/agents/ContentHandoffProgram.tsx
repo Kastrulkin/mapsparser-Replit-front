@@ -83,6 +83,9 @@ export function ContentHandoffProgram({ blueprintId, details, onRunQueued }: {
         setPreview({ ...record(response.data.preview), input: snapshot.data.snapshot.input });
         setState(response.data.preview?.status === 'passed' ? 'ready_approval' : 'needs_fix');
       } else if (operation === 'approve') {
+        if (preview.status !== 'passed' || !preview.fixture_digest || !record(preview.delivery_context).digest) {
+          throw new Error('Сначала обновите предпросмотр материалов и получателя. Отправки при проверке нет.');
+        }
         await api.post(`/agent-blueprints/${selected}/compiled-script/approve`, { version_id: versionId, approval_digest: artifactHash, fixture_digest: preview.fixture_digest,
           delivery_context_digest: record(preview.delivery_context).digest });
         if (target.current === selected) setState('approved');
@@ -122,9 +125,9 @@ export function ContentHandoffProgram({ blueprintId, details, onRunQueued }: {
       <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={exampleAccepted} onChange={(event) => setExampleAccepted(event.target.checked)} />Ожидаемый результат: готовый комплект с фото передаётся; неполный пост и уже переданная версия пропускаются.</label>
       <Button disabled={Boolean(busy) || !exampleAccepted} onClick={() => void perform('compile')}>Создать программу по условиям</Button>
     </>}
-    {state === 'checking' && <Button disabled={Boolean(busy)} onClick={() => void perform('preview')}>Проверить на текущем плане без отправки</Button>}
+    {(state === 'checking' || state === 'ready_approval') && <Button variant={preview.status === 'passed' ? 'outline' : 'default'} disabled={Boolean(busy)} onClick={() => void perform('preview')}>Проверить на текущем плане без отправки</Button>}
     {posts.map((post: unknown) => { const row = record(post); return <div key={String(row.post_id)} className="border-t border-slate-100 pt-3 text-sm"><p className="font-medium">{String(row.platform || '')} · {row.eligible ? 'Готово к передаче' : String(row.blocked_reason || 'Не готово')}</p><p className="mt-1 whitespace-pre-wrap">{String(row.text || '')}</p>{row.photo_asset_id ? <HandoffPhotoPreview assetId={String(row.photo_asset_id)} /> : <p className="text-slate-500">Фото не выбрано</p>}</div>; })}
-    {state === 'ready_approval' && <Button disabled={Boolean(busy)} onClick={() => void perform('approve')}>Утвердить программу и условия передачи</Button>}
+    {state === 'ready_approval' && preview.status === 'passed' && <Button disabled={Boolean(busy)} onClick={() => void perform('approve')}>Утвердить программу и условия передачи</Button>}
     {(state === 'approved' || state === 'active') && <><p className="text-sm text-slate-600">Программа утверждена. Регулярное расписание включается отдельно; сейчас можно выполнить тест на выбранного получателя.</p><Button disabled={Boolean(busy) || details?.compiled_access?.execute !== true} onClick={() => void perform('run')}>Передать готовые материалы — тест</Button></>}
   </section>;
 }

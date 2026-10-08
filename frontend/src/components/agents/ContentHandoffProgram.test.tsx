@@ -1,8 +1,23 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { HandoffPhotoPreview } from './ContentHandoffProgram';
+import { ContentHandoffProgram, HandoffPhotoPreview } from './ContentHandoffProgram';
+import { api } from '@/services/api';
 
 vi.mock('@/lib/auth_new', () => ({ newAuth: { getToken: () => 'test-only-token' } }));
+vi.mock('@/services/api', () => ({ api: { post: vi.fn() } }));
+
+describe('restored handoff approval', () => {
+  it('requires a fresh preview after reopening a ready candidate', async () => {
+    vi.mocked(api.post).mockResolvedValueOnce({ data: { snapshot: { id: 'snapshot', input: { posts: [] } } } })
+      .mockResolvedValueOnce({ data: { preview: { status: 'passed', fixture_digest: 'fixtures', delivery_context: { digest: 'context', recipient_name: 'Owner' } } } });
+    render(<ContentHandoffProgram blueprintId="pilot" details={{ versions: [], runs: [], candidate_version: { id: 'version', compiled_state: 'ready_approval' } }} onRunQueued={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Утвердить программу и условия передачи' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Проверить на текущем плане без отправки' }));
+    expect(await screen.findByRole('button', { name: 'Утвердить программу и условия передачи' })).toBeEnabled();
+    expect(api.post).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(api.post).mock.calls.every(([url]) => !url.endsWith('/approve') && !url.endsWith('/run'))).toBe(true);
+  });
+});
 
 describe('handoff photo preview', () => {
   afterEach(() => vi.unstubAllGlobals());
