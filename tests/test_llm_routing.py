@@ -44,6 +44,8 @@ def test_registry_has_an_explicit_provider_for_every_supported_task():
         "lead_audit_enrichment",
         "knowledge_semantic_analysis",
         "outreach_corpus_pattern_extract",
+        "outreach_public_copy",
+        "outreach_audience_qualify",
     }
     expected_tasks = {
         "review_reply",
@@ -54,6 +56,7 @@ def test_registry_has_an_explicit_provider_for_every_supported_task():
         "service_optimization",
         "service_copy_generation",
         "outreach_personalization",
+        "outreach_language_review",
         "outreach_corpus_pattern_extract",
         "outreach_corpus_pattern_review",
         "community_topic_labeling",
@@ -726,3 +729,10 @@ def test_non_operator_recovery_preserves_format_repair():
     result = LLMTaskResult(status="schema_invalid", content='{"type":"json_object"}')
     prompt = gateway._recovery_prompt(request, get_task_definition(request.task_key), result)
     assert "Исправь только формат ответа" in prompt
+
+
+def test_outreach_copy_keeps_output_budget_for_letter_and_review():
+    definition = get_task_definition('outreach_public_copy')
+    assert definition.primary_provider == 'deepseek'
+    assert definition.thinking_enabled is False
+    assert definition.max_tokens == 4000

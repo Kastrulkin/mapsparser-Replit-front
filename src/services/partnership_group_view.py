@@ -24,6 +24,7 @@ def group_url(task, section="companies"):
 
 
 BLOCKERS = {
+    "draft_quality_review_required": "Черновики сохранены, но требуют правки по результатам проверки. Отправка не запускалась.",
     "draft_generation_failed": "Не удалось создать письма. Подходящие компании сохранены; проверьте причину в истории поиска.",
     "draft_sender_setup": "Для подготовки писем нужно заполнить сведения об отправителе. Подходящие компании сохранены.",
     "search_provider_timed_out": "Поисковый источник не успел вернуть компании. Измените условия поиска; результаты и фактические расходы сохранены.",
@@ -86,6 +87,8 @@ def presentation(task, *, draft_job=None, available_credits=None):
         pass
     elif blocker == "insufficient_credits" and (available_credits is None or required is None or available_credits < required):
         action = {"kind": "link", "label": "Пополнить баланс", "href": f"/dashboard/profile?business_id={task['business_id']}&focus=subscription#subscription"}
+    elif blocker == "draft_quality_review_required":
+        action = {"kind": "link", "label": "Проверить письма", "href": group_url(task, "drafts")}
     elif blocker == "draft_sender_setup":
         blocked = next((value for value in (state.get("campaign_results") or {}).values() if value.get("status") == "needs_sender_setup"), {})
         action = {"kind": "link", "label": "Настроить отправителя", "href": group_url(task) + "&lead=" + str(blocked.get("lead_id") or "")}

@@ -1023,20 +1023,24 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                     if (state.get("qualifications", {}).get(str(entry["id"])) or {}).get("status") == "qualified"
                     and (config.get("target_count") is None or str(entry["id"]) in qualified_contact_ids(state)[:config["target_count"]])
                     and str(entry["id"]) not in (state.get("campaign_results") or {}))
-                state["draft_attempts"] = int(state.get("draft_attempts", 0)) + 1
-                if state["draft_attempts"] > config["max_draft_attempts"]:
-                    _save(cursor, row, {**state, "blocker": "model_budget_exhausted"}, status="completed" if config.get("target_count") is not None else "waiting_for_review", stage="Лимит подготовки текстов исчерпан")
+                if int(state.get("draft_attempts", 0)) >= config["max_draft_attempts"]:
+                    _save(cursor, row, {**state, "blocker": "model_budget_exhausted"}, status="waiting_for_review", stage="Лимит подготовки текстов исчерпан")
                     conn.commit()
                     return {"status": "pending_human"}
+                state["draft_attempts"] = int(state.get("draft_attempts", 0)) + 1
                 state.setdefault("campaign_results", {})[target] = {"status": "preparing"}
                 cursor.execute("UPDATE operator_async_jobs SET result_json=%s WHERE id=%s", (Json(state), row["id"]))
                 conn.commit()
                 from services.outreach_campaign_service import build_preview, persist_preview
                 cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("outreach-draft:" + target,))
-                cursor.execute("SELECT id,status FROM outreach_campaigns WHERE workstream_id=%s ORDER BY created_at DESC LIMIT 1", (target,))
+                cursor.execute("""SELECT c.id,c.status,
+                    EXISTS (SELECT 1 FROM outreach_campaign_touches t WHERE t.campaign_id=c.id)
+                    AND NOT EXISTS (SELECT 1 FROM outreach_campaign_touches t WHERE t.campaign_id=c.id
+                        AND COALESCE((t.quality_gate_json->>'passed')::boolean,FALSE)=FALSE) AS quality_passed
+                    FROM outreach_campaigns c WHERE c.workstream_id=%s ORDER BY c.created_at DESC LIMIT 1""", (target,))
                 campaign = cursor.fetchone()
                 if campaign:
-                    result = {"campaign_id": str(campaign["id"]), "status": str(campaign["status"])}
+                    result = {"campaign_id": str(campaign["id"]), "status": str(campaign["status"]) if campaign.get("quality_passed") else "needs_revision"}
                 else:
                     preview = build_preview(cursor, target, sender_mode="partner_business", generate_ai=True,
                         sequence=[{"sequence_index": 0, "day_offset": 0, "channel": "email", "angle": "business_reputation"}])
@@ -1052,15 +1056,15 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                         conn.rollback()
                         return {"status": "lease_lost"}
                     _require_current_actor(cursor, row)
-                    if preview.get("status") in {"ready", "needs_channel_setup"}:
+                    if preview.get("status") in {"ready", "needs_channel_setup", "needs_revision"}:
                         campaign = persist_preview(cursor, preview, user_id=row["user_id"])
                         result["campaign_id"] = str(campaign["id"])
                 result["lead_id"] = str(next(entry["lead_id"] for entry in entries if str(entry["id"]) == target))
                 state["campaign_results"][target] = result
                 _save(cursor, row, state, stage="Черновик проверен; отправка требует согласования", delay=5)
-            elif any(value.get("status") == "needs_generation" for value in (state.get("campaign_results") or {}).values()):
-                state["blocker"] = "draft_generation_failed"
-                _save(cursor, row, state, status="waiting_for_review", stage="Не удалось создать письма; компании и причины сохранены")
+            elif any(value.get("status") in {"needs_generation", "needs_revision", "needs_evidence", "failed", "observe"} for value in (state.get("campaign_results") or {}).values()):
+                state["blocker"] = "draft_quality_review_required" if any(value.get("campaign_id") and value.get("status") == "needs_revision" for value in state.get("campaign_results", {}).values()) else "draft_generation_failed"
+                _save(cursor, row, state, status="waiting_for_review", stage="Письма требуют проверки; компании, черновики и причины сохранены")
             elif any(value.get("status") == "needs_sender_setup" for value in (state.get("campaign_results") or {}).values()):
                 state["blocker"] = "draft_sender_setup"
                 _save(cursor, row, state, status="waiting_for_review", stage="Подготовка писем ожидает настройки отправителя")

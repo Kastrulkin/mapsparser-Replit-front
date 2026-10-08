@@ -819,3 +819,27 @@ def test_constrained_fragments_reject_claims_in_ai_written_opening():
 
     assert result["status"] == "failed"
     assert "opening contains an unsupported claim" in result["error"]
+
+
+def test_localized_sender_copy_preserves_immutable_recipient_evidence():
+    from services.outreach_personalization_ai import _normalize_touches
+    record = _request_record(motion='client_partnership', identity={'company_name': 'Agency'},
+        candidate=_candidate(), founder_story=_story(), sequence=_sequence(), voice_examples=[])
+    generated = _generation_response()['touches']
+    generated[0]['localized_fields'] = {'BRIDGE': 'We can discuss a small cooperation pilot'}
+    result = _normalize_touches(generated, record)
+    assert OBSERVATION in result[0]['text']
+    assert 'We can discuss a small cooperation pilot' in result[0]['text']
+    assert record['personalization']['relevance_to_offer'] != 'We can discuss a small cooperation pilot'
+
+
+def test_localized_sender_copy_cannot_replace_recipient_or_observation():
+    import pytest
+    from services.outreach_personalization_ai import _normalize_touches
+    record = _request_record(motion='client_partnership', identity={'company_name': 'Agency'},
+        candidate=_candidate(), founder_story=_story(), sequence=_sequence(), voice_examples=[])
+    for field in ('RECIPIENT', 'OBSERVATION'):
+        generated = _generation_response()['touches']
+        generated[0]['localized_fields'] = {field: 'Invented fact'}
+        with pytest.raises(ValueError, match='Unsupported localized'):
+            _normalize_touches(generated, record)
