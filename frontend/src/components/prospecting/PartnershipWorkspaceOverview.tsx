@@ -33,8 +33,8 @@ export function PartnershipWorkspaceOverview({ workspaceView, rawLeadCount, pipe
     {part !== 'header' && <nav aria-label={language === 'ru' ? 'Этапы аутрича' : 'Outreach stages'} className="grid grid-cols-2 gap-1 border-b border-border bg-background sm:grid-cols-4">
       {stages.map(({ value, label, count, Icon }) => {
         const active = workspaceView === value || value === 'raw' && workspaceView === 'pipeline';
-        return <Button key={value} variant="ghost" aria-current={active ? 'page' : undefined} onClick={() => onWorkspaceChange(value)} className={`min-h-11 justify-center gap-2 rounded-none border-b-2 ${active ? 'border-primary bg-muted text-foreground' : 'border-transparent text-muted-foreground'}`}>
-          <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{label}</span><span className="min-w-[3ch] shrink-0 rounded bg-muted px-1.5 text-center text-xs tabular-nums">{count}</span>
+        return <Button key={value} variant={active ? "brand" : "ghost"} aria-current={active ? 'page' : undefined} onClick={() => onWorkspaceChange(value)} className={`min-h-11 justify-center gap-2 rounded-none border-b-2 ${active ? 'border-primary shadow-none hover:scale-100' : 'border-transparent text-muted-foreground'}`}>
+          <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{label}</span><span className="min-w-[3ch] shrink-0 rounded bg-muted px-1.5 text-center text-xs text-foreground tabular-nums">{count}</span>
         </Button>;
       })}
     </nav>}
