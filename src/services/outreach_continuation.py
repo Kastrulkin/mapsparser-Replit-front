@@ -253,7 +253,8 @@ def preparation_report(config: dict[str, Any], state: dict[str, Any]) -> dict[st
             "model_cost_status": "see_billing_ledger",
             "credit_limit": credits["total_max"] if credits else None,
             "credit_estimate_only": config.get("billing_mode") == "shared_balance_actual",
-            "credits_charged": int(state.get("search_credits_charged") or 0) + int(state.get("check_credits_charged") or 0),
+            "credits_charged": int(state.get("search_credits_charged") or 0) + int(state.get("check_credits_charged") or 0) + int(state.get("draft_credits_charged") or 0),
+            "draft_credits_charged": int(state.get("draft_credits_charged") or 0),
             "search_credits_charged": int(state.get("search_credits_charged") or 0),
             "check_credits_charged": int(state.get("check_credits_charged") or 0),
             "search_credits_each": credits["search_each"] if credits else None,
@@ -329,6 +330,13 @@ def list_tasks(cursor: Any, *, business_id: str, user_id: str) -> list[dict[str,
     cursor.execute("""SELECT * FROM operator_async_jobs WHERE kind=%s AND business_id=%s
         ORDER BY created_at DESC LIMIT 50""", (KIND, business_id))
     return [view(dict(row)) for row in cursor.fetchall()]
+
+
+def _release_draft_hold(cursor, row, result):
+    if result.get("credit_reservation_id"):
+        from services.outreach_credit_billing import charge_step
+        charge_step(cursor, row, reservation_id=result["credit_reservation_id"],
+                    credits=0, step="draft", key=result["credit_key"])
 
 
 def delivery_report(cursor, task):
@@ -1007,6 +1015,7 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
             elif any((value or {}).get("status") == "preparing" for value in (state.get("campaign_results") or {}).values()):
                 for value in state["campaign_results"].values():
                     if value.get("status") == "preparing":
+                        _release_draft_hold(cursor, row, value)
                         value.update(status="failed", reason="campaign_result_uncertain")
                 _save(cursor, row, state, stage="Прерванная подготовка отмечена; продолжается обработка остальных", delay=5)
             elif active and not goal_reached:
@@ -1029,8 +1038,17 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                     _save(cursor, row, {**state, "blocker": "model_budget_exhausted"}, status="waiting_for_review", stage="Лимит подготовки текстов исчерпан")
                     conn.commit()
                     return {"status": "pending_human"}
+                from services.outreach_credit_billing import DRAFT_CREDITS, reserve_step, charge_step
+                draft_key = f"{target}:{config_hash(config)}:{int(state.get('draft_attempts', 0)) + 1}"
+                reservation = reserve_step(cursor, row, step="draft", key=draft_key, credits=DRAFT_CREDITS)
+                if reservation.get("status") != "reserved":
+                    _save(cursor, row, {**state, "blocker": "insufficient_credits"}, status="waiting_for_review",
+                          stage="Недостаточно кредитов для подготовки следующего письма")
+                    conn.commit()
+                    return {"status": "pending_human", "reason_code": "insufficient_credits"}
                 state["draft_attempts"] = int(state.get("draft_attempts", 0)) + 1
-                state.setdefault("campaign_results", {})[target] = {"status": "preparing"}
+                state.setdefault("campaign_results", {})[target] = {"status": "preparing",
+                    "credit_reservation_id": reservation["reservation_id"], "credit_key": draft_key}
                 cursor.execute("UPDATE operator_async_jobs SET result_json=%s WHERE id=%s", (Json(state), row["id"]))
                 conn.commit()
                 from services.outreach_campaign_service import build_preview, persist_preview
@@ -1041,6 +1059,7 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                         AND COALESCE((t.quality_gate_json->>'passed')::boolean,FALSE)=FALSE) AS quality_passed
                     FROM outreach_campaigns c WHERE c.workstream_id=%s ORDER BY c.created_at DESC LIMIT 1""", (target,))
                 campaign = cursor.fetchone()
+                preview_created = False
                 if campaign and (campaign.get("quality_passed") or campaign.get("status") != "draft"):
                     result = {"campaign_id": str(campaign["id"]), "status": str(campaign["status"]) if campaign.get("quality_passed") else "needs_revision"}
                 else:
@@ -1060,8 +1079,26 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                     _require_current_actor(cursor, row)
                     if preview.get("status") in {"ready", "needs_channel_setup", "needs_revision"}:
                         campaign = persist_preview(cursor, preview, user_id=row["user_id"])
+                        preview_created = True
                         result["campaign_id"] = str(campaign["id"])
                 result["lead_id"] = str(next(entry["lead_id"] for entry in entries if str(entry["id"]) == target))
+                if result.get("campaign_id"):
+                    from services.partner_search_drafts import project_campaign_draft
+                    projection = project_campaign_draft(cursor, task_id=str(row["id"]),
+                        campaign_id=result["campaign_id"], business_id=str(row["business_id"]),
+                        user_id=str(row["user_id"]))
+                    result["draft_id"] = projection["draft_id"]
+                    result["quality_passed"] = projection["quality_passed"]
+                    if result["status"] == "needs_revision" and projection["quality_passed"]:
+                        result["status"] = "draft"
+                # The same native tariff as the existing batch drafting path.
+                # Reused copy costs nothing; only a newly saved text is charged.
+                billed = charge_step(cursor, row, reservation_id=reservation["reservation_id"],
+                    credits=DRAFT_CREDITS if result.get("campaign_id") and preview_created else 0,
+                    step="draft", key=draft_key)
+                if billed.get("status") not in {"charged", "already_finalized", "released"}:
+                    raise RuntimeError("draft_credit_settlement_failed")
+                state["draft_credits_charged"] = int(state.get("draft_credits_charged") or 0) + int(billed.get("charge_credits") or 0)
                 state["campaign_results"][target] = result
                 _save(cursor, row, state, stage="Черновик проверен; отправка требует согласования", delay=5)
             elif any(value.get("status") in {"needs_generation", "needs_revision", "needs_evidence", "failed", "observe"} for value in (state.get("campaign_results") or {}).values()):
@@ -1094,6 +1131,7 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                 if (state.get("qualifications", {}).get(target) or {}).get("status") == "checking":
                     state["qualifications"][target] = {"status": "failed", "reason": "qualification_unavailable" if isinstance(exc, QualificationUnavailable) else "qualification_failed"}
                 if (state.get("campaign_results", {}).get(target) or {}).get("status") == "preparing":
+                    _release_draft_hold(conn.cursor(), row, state["campaign_results"][target])
                     state["campaign_results"][target] = {"status": "failed", "reason": "campaign_preparation_failed"}
                 if isinstance(exc, QualificationUnavailable):
                     state["blocker"] = "qualification_unavailable"

@@ -129,3 +129,38 @@ def test_canonical_preview_rejects_inactive_preparation_before_generation(monkey
     preview = campaigns.build_preview(None, "workstream", preparation_job_id="stopped-job", generate_ai=True)
     assert preview["touches"] == []
     assert preview["reason_code"] == "draft_preparation_not_authorized"
+
+
+def test_campaign_projection_is_scoped_stable_and_keeps_quality_review():
+    class ProjectionCursor:
+        def __init__(self):
+            self.calls = []
+        def execute(self, sql, params):
+            self.calls.append((sql, params))
+        def fetchone(self):
+            return {'lead_id':'lead-1','workstream_id':'ws-1','touch_id':'touch-1',
+                    'version':2,'generated_text':'Canonical copy','subject':'Subject',
+                    'quality_gate_json':{'passed':False},'message_brief_json':{}}
+    cursor = ProjectionCursor()
+    a = drafts.project_campaign_draft(cursor, task_id='search-1',campaign_id='campaign-1',
+                                     business_id='business-1',user_id='user-1')
+    b = drafts.project_campaign_draft(cursor, task_id='search-1',campaign_id='campaign-1',
+                                     business_id='business-1',user_id='user-1')
+    assert a == b
+    assert not a['quality_passed']
+    assert 'c.business_id=%s' in cursor.calls[0][0]
+    assert "j.result_json->'lead_ids'" in cursor.calls[0][0]
+    assert 'ON CONFLICT (id) DO NOTHING' in cursor.calls[1][0]
+    metadata = cursor.calls[1][1][5].adapted
+    assert metadata['manual_review_required'] is True
+    assert metadata['campaign_touch_id'] == 'touch-1'
+    assert cursor.calls[1][1][3:5] == ('Canonical copy','Canonical copy')
+
+
+def test_campaign_projection_rejects_unrelated_group():
+    import pytest
+    class Missing:
+        def execute(self, *args): pass
+        def fetchone(self): return None
+    with pytest.raises(ValueError,match='campaign_outside_search_group'):
+        drafts.project_campaign_draft(Missing(),task_id='g',campaign_id='c',business_id='b',user_id='u')

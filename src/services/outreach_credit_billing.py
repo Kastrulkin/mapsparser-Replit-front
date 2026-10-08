@@ -9,6 +9,8 @@ from services.operator_paid_actions import APIFY_CREDIT_MULTIPLIER
 SEARCH_ACTION = "outreach_company_search"
 CHECK_ACTION = "outreach_company_check"
 CHECK_CREDITS = 1
+DRAFT_ACTION = "partnership_draft_generate"
+DRAFT_CREDITS = 1
 
 
 def search_credits_per_call(config: dict[str, Any]) -> int:
@@ -44,7 +46,8 @@ def credit_quote(config: dict[str, Any]) -> dict[str, int]:
 
 def reserve_step(cursor: Any, row: dict[str, Any], *, step: str, key: str, credits: int) -> dict[str, Any]:
     from services.operator_credit_reservation import reserve_paid_action_credits
-    action = SEARCH_ACTION if step == "search" else CHECK_ACTION
+    actions = {"search": SEARCH_ACTION, "check": CHECK_ACTION, "draft": DRAFT_ACTION}
+    action = actions[step]
     return reserve_paid_action_credits(cursor, business_id=str(row["business_id"]),
         user_id=str(row["user_id"]), action_key=action, estimated_credits=credits,
         idempotency_key=f"outreach:{row['id']}:{step}:{key}",

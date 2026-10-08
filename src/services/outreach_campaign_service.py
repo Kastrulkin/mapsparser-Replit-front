@@ -4147,7 +4147,7 @@ def build_preview(
         # Use the actual qualified public fact, not an unrelated map-rating opener.
         qualified_evidence = {**evidence, "fact": quote or evidence["fact"],
                               "id": "qualified-audience-fact", "kind": "public_signal",
-                              "status": "observed", "relevance": (preparation or {}).get("offer") or continuation["config"].get("offer"),
+                              "status": "observed", "relevance": "Предлагаем обсудить " + str((preparation or {}).get("offer") or continuation["config"].get("offer") or "") + " для клиентов, которым нужна эта услуга в рамках указанного на вашем сайте предложения.",
                               "observed_at": evidence.get("observed_at"), "freshness": "current_snapshot", "confidence": 0.8}
         ledger = [qualified_evidence] + [item for item in ledger
             if item.get("source_url") and item.get("fact")

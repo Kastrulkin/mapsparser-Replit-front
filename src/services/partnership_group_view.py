@@ -131,7 +131,7 @@ def achievements(task):
     values = [
         ("replies", report.get("replies"), "Получено ответов"),
         ("sent", report.get("confirmed_sent"), "Отправлено писем · подтверждено провайдером"),
-        ("letters", report.get("prepared"), "Письма готовы"),
+        ("letters", report.get("prepared"), "Черновики требуют проверки" if report.get("blocker") == "draft_quality_review_required" else "Письма подготовлены"),
         ("qualified", report.get("eligible"), "Подходят с подтверждённым контактом"),
         ("enriched", enrichment.get("processed"), "Собраны сведения о компаниях"),
         ("found", report.get("found", report.get("imported")), "Найдено кандидатов"),

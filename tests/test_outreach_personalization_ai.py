@@ -875,3 +875,34 @@ def test_english_copy_resolves_subject_and_preserves_one_concrete_question():
     assert result[0]['subject'] == 'Transfers for Agency'
     assert result[0]['text'].count('?') == 1
     assert result[0]['relevance_bridge'] == 'We offer Phuket transfers'
+
+
+def test_sender_localization_translates_only_approved_words_and_removes_old_draft():
+    from services.outreach_personalization_ai import _localize_approved_sender_words
+    record = _english_copy_record()
+    record['sender']['offer'] = 'Трансферы __LOCALOS_PRIVATE_2__ на Пхукете'
+    record['sender']['founder_story'] = 'Перевозка детей'
+    record['sender']['proof'] = ''
+    seen = []
+    def translate(prompt, **kwargs):
+        seen.append(prompt)
+        return json.dumps({'bridge': 'We offer Phuket transfers', 'offer': 'Transfers by __LOCALOS_PRIVATE_2__ in Phuket',
+                           'founder_story': 'Transporting children', 'proof': ''})
+    result = _localize_approved_sender_words(record, translate, business_id='b', user_id='u')
+    assert result['sender']['offer'] == 'Transfers by __LOCALOS_PRIVATE_2__ in Phuket'
+    assert result['personalization']['observation'] == record['personalization']['observation']
+    assert result['approved_sender_originals']['offer'] == record['sender']['offer']
+    assert 'deterministic_draft' not in result['sequence'][0]
+    assert 'Phuket and Krabi tours' not in seen[0]
+
+
+def test_sender_localization_rejects_changed_protected_name():
+    import pytest
+    from services.outreach_personalization_ai import _localize_approved_sender_words
+    record = _english_copy_record()
+    record['sender']['offer'] = 'Трансферы __LOCALOS_PRIVATE_2__'
+    def translate(prompt, **kwargs):
+        return json.dumps({'bridge': 'We offer Phuket transfers', 'offer': 'Transfers by another supplier',
+                           'founder_story': 'We offer transfers', 'proof': ''})
+    with pytest.raises(ValueError, match='protected values'):
+        _localize_approved_sender_words(record, translate, business_id='b', user_id='u')

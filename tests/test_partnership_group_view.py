@@ -156,3 +156,11 @@ def test_failed_generation_is_attention_even_when_company_goal_is_reached():
     assert result['status'] == 'needs_attention'
     assert result['label'] == 'Требуется действие'
     assert result['metrics']['prepared'] == 0
+
+
+def test_rejected_saved_drafts_are_not_labelled_ready():
+    t = task(status='waiting_for_review',state={'phase':'prepare','blocker':'draft_quality_review_required'},
+             report={'prepared':3,'blocker':'draft_quality_review_required'})
+    p = presentation(t)
+    assert p['achievements'][0]['label'] == 'Черновики требуют проверки'
+    assert p['label'] == 'Требуется действие'
