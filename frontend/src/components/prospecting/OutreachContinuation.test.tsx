@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { newAuth } from '@/lib/auth_new';
 import { OutreachContinuation } from './OutreachContinuation';
 
+afterEach(() => vi.restoreAllMocks());
+
 const presentation = { phase: 'companies', status: 'ready', label: 'Ожидает запуска', active: false, next_action: { kind: 'control', action: 'start', label: 'Начать поиск' }, metrics: { found: 0, eligible: 0, target: 10, needs_decision: 0, prepared: 0, queued: 0, sent: 0, replies: 0 }, expenses: { charged: 0 } };
 const task = { presentation, id: 'task-1', revision: 'revision-1', stage: 'Проверьте план', status: 'waiting_for_review', config: { audience: 'Agencies', offer: 'Transfers', language: 'en', queries: [{ query: 'agency', city: 'Delhi' }], max_search_calls: 1, max_candidates: 5, batch_size: 5, search_budget_cents: 100 }, state: {} };
 describe('Outreach continuation', () => {
@@ -33,18 +35,17 @@ describe('Outreach continuation', () => {
     });
     render(<OutreachContinuation businessId="b" />);
     await userEvent.click(await screen.findByRole('button', { name: 'Новый поиск' }));
-    await userEvent.click(screen.getByRole('radio', { name: 'Только найти и проверить компании' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Контакты подходящих компаний или специалистов' }));
     await userEvent.type(screen.getByLabelText('Кого ищем'), 'Travel agencies selling Phuket');
-    await userEvent.clear(screen.getByLabelText('Сколько новых подходящих компаний найти'));
-    await userEvent.type(screen.getByLabelText('Сколько новых подходящих компаний найти'), '10');
-    await userEvent.type(screen.getByLabelText('Страна компаний'), 'India');
-    await userEvent.type(screen.getByLabelText('Какое направление они продают'), 'Phuket');
+    await userEvent.clear(screen.getByLabelText('Сколько найти'));
+    await userEvent.type(screen.getByLabelText('Сколько найти'), '10');
+    await userEvent.type(screen.getByLabelText('Требования'), 'Продают туры на Пхукет');
     await userEvent.type(screen.getByLabelText('Поисковый запрос'), 'travel agency Phuket');
-    await userEvent.type(screen.getByLabelText('Города поиска — по одному на строку'), 'India');
+    await userEvent.type(screen.getByLabelText('Где ищем'), 'India');
     await userEvent.click(screen.getByRole('button', { name: 'Проверить план' }));
     expect(await screen.findByText(/Ориентир расходов — до 65 кредитов/)).toBeInTheDocument();
     expect(request).not.toHaveBeenCalledWith('/operator/actions/approval-1/confirm', expect.anything());
-    await userEvent.click(screen.getByRole('button', { name: 'Начать поиск' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Начать новый поиск' }));
     expect(request).toHaveBeenCalledWith('/operator/actions/approval-1/confirm', expect.objectContaining({ method: 'POST' }));
   });
   it('shares the saved search membership with the candidate list', async () => {
@@ -143,17 +144,17 @@ it('find-only does not require an offer and retains the qualified target in the 
   const request = vi.spyOn(newAuth, 'makeRequest').mockResolvedValue({ enabled: true, items: [] });
   render(<OutreachContinuation businessId="b" />);
   await userEvent.click(await screen.findByRole('button', { name: 'Новый поиск' }));
-  await userEvent.click(screen.getByRole('radio', { name: 'Только найти и проверить компании' }));
+  await userEvent.click(screen.getByRole('radio', { name: 'Контакты подходящих компаний или специалистов' }));
   expect(screen.queryByLabelText('Что предлагаем')).not.toBeInTheDocument();
   await userEvent.type(screen.getByLabelText('Кого ищем'), 'Travel agencies');
   await userEvent.type(screen.getByLabelText('Поисковый запрос'), 'Travel agency');
-  await userEvent.type(screen.getByLabelText('Города поиска — по одному на строку'), 'Delhi');
+  await userEvent.type(screen.getByLabelText('Где ищем'), 'Delhi');
   await userEvent.click(screen.getByRole('button', { name: 'Проверить план' }));
   const saved = request.mock.calls.find(([path, options]) => path === '/partnership/continuations' && options?.method === 'POST');
   expect(saved).toBeDefined();
   const payload = JSON.parse(String(saved?.[1]?.body));
   expect(payload.config.mode).toBe('find_only');
-  expect(payload.config.target_count).toBe(100);
+  expect(payload.config.target_count).toBe(10);
   expect(payload.config.offer).toBe('');
   expect(payload.config.billing_mode).toBe('shared_balance_actual');
   expect(payload.config.search_call_cap_cents).toBe(50);
@@ -167,5 +168,46 @@ it('compact overview keeps reading all groups but never silently chooses one', a
   expect(screen.queryByText('Agencies')).not.toBeInTheDocument();
   expect(onTasksChange).toHaveBeenCalledWith([task]);
   expect(request).toHaveBeenCalledTimes(1);
+  vi.restoreAllMocks();
+});
+
+ it('opens saved conditions immediately and restores focus on Escape', async () => {
+    const request = vi.spyOn(newAuth, 'makeRequest').mockResolvedValue({ enabled: true, items: [task] });
+    render(<OutreachContinuation businessId="b" />);
+    const edit = await screen.findByRole('button', { name: 'Изменить условия поиска' });
+    await userEvent.click(edit);
+    expect(screen.getByRole('dialog')).toBeVisible();
+    expect(screen.getByLabelText('Кого ищем')).toHaveValue('Agencies');
+    expect(screen.queryByLabelText('Какое направление они продают')).not.toBeInTheDocument();
+    expect(request).toHaveBeenCalledTimes(1);
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(edit).toHaveFocus();
+    vi.restoreAllMocks();
+ });
+
+it('submits changed geography and requirements and labels a new search explicitly', async () => {
+  const request = vi.spyOn(newAuth, 'makeRequest').mockImplementation(async (path, options) => {
+    if (options?.method === 'POST') {
+      const body = JSON.parse(String(options.body));
+      return { config: body.config, approval: { action_id: 'new-approval' }, credit_quote: { total_max: 30 }, creates_new_search: true };
+    }
+    return { enabled: true, items: [task] };
+  });
+  render(<OutreachContinuation businessId="b" />);
+  await userEvent.click(await screen.findByRole('button', { name: 'Изменить условия поиска' }));
+  await userEvent.clear(screen.getByLabelText('Кого ищем'));
+  await userEvent.type(screen.getByLabelText('Кого ищем'), 'Сантехники');
+  await userEvent.clear(screen.getByLabelText('Где ищем'));
+  await userEvent.type(screen.getByLabelText('Где ищем'), 'Москва');
+  await userEvent.type(screen.getByLabelText('Требования'), 'Выезжают на дом');
+  await userEvent.click(screen.getByRole('button', { name: 'Проверить план' }));
+  expect(await screen.findByText(/Будет создан новый поиск/)).toBeVisible();
+  const calls = request.mock.calls.filter(([, options]) => options?.method === 'POST');
+  const body = JSON.parse(String(calls[0][1]?.body));
+  expect(body.config.search_geography).toEqual(['Москва']);
+  expect(body.config.requirements).toEqual(['Выезжают на дом']);
+  expect(body.config.queries).toEqual([]);
+  expect(screen.getByRole('button', { name: 'Начать новый поиск' })).toBeVisible();
   vi.restoreAllMocks();
 });

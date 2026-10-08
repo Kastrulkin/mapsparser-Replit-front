@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 from core import outbound_network
 
 
-def collect_candidate_evidence(website: str, terms: list[str]) -> list[dict]:
+def collect_candidate_evidence(website: str, terms: list[str], *, requirements: list[str] | None = None) -> list[dict]:
     parsed = urlparse(website)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
         return []
@@ -39,12 +39,15 @@ def collect_candidate_evidence(website: str, terms: list[str]) -> list[dict]:
                 if urlparse(target).scheme not in {"http", "https"} or urlparse(target).hostname != parsed.hostname:
                     continue
                 label = (link.get_text(" ", strip=True) + " " + target).casefold()
-                if terms and any(term.casefold() in label for term in terms) and target not in queue:
+                relevant = any(term.casefold() in label for term in [*terms, *(requirements or [])])
+                if requirements is not None:
+                    relevant = relevant or any(term in label for term in ('service', 'product', 'about', 'contact', 'услуг', 'товар', 'контакт', 'о нас'))
+                if relevant and target not in queue:
                     queue.append(target)
                     if len(queue) >= 2:
                         break
         lines = [" ".join(text.split()) for text in soup.stripped_strings]
-        matching = [text for text in lines if 20 <= len(text) <= 1200 and (not terms or any(term.casefold() in text.casefold() for term in terms))]
+        matching = [text for text in lines if 20 <= len(text) <= 1200 and (requirements is not None or not terms or any(term.casefold() in text.casefold() for term in terms))]
         for text in matching[:6]:
             evidence.append({"id": hashlib.sha256((url + text).encode()).hexdigest()[:24],
                 "fact": text, "source_url": url, "source_type": "public_website",

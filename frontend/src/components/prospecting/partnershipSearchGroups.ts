@@ -8,8 +8,8 @@ export type SearchTaskGroup = {
   display_name?: string;
   report?: { found?: number; imported?: number; eligible?: number };
   created_at?: string;
-  config?: { audience?: string; agency_country?: string; sold_destination?: string };
-  state?: { lead_ids?: string[]; workstream_ids?: string[]; verified_contact_workstream_ids?: string[]; qualifications?: Record<string, { status?: string; criteria?: Record<string, { status?: string; source_url?: string; quote?: string }> }>; history?: Array<{ action?: string; at?: string }> };
+  config?: { requirements?: string[]; search_geography?: string[]; audience?: string; agency_country?: string; sold_destination?: string };
+  state?: { lead_ids?: string[]; workstream_ids?: string[]; verified_contact_workstream_ids?: string[]; qualifications?: Record<string, { status?: string; criteria?: Record<string, { label?: string; status?: string; source_url?: string; quote?: string }> }>; history?: Array<{ action?: string; at?: string }> };
 };
 
 export type CandidateSearchGroup = { id: string; label: string; count: number };
@@ -25,7 +25,7 @@ export const taskLabel = (task: SearchTaskGroup) => {
   const country = String(task.config?.agency_country || '').trim();
   const destination = String(task.config?.sold_destination || '').trim();
   const audience = String(task.config?.audience || '').trim();
-  const purpose = country && destination ? `${country} → ${destination}` : audience || 'Поиск компаний';
+  const purpose = country && destination ? `${country} → ${destination}` : [audience || 'Поиск компаний', ...(task.config?.search_geography || [])].join(' · ');
   const launch = [...(task.state?.history || [])].reverse().find((entry) => entry.action === 'start');
   return [purpose, shortDate(launch?.at || task.created_at)].filter(Boolean).join(' · ');
 };

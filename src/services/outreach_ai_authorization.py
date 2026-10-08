@@ -44,6 +44,12 @@ def normalize_rules(raw):
         if not isinstance(value, str) or not value.strip() or len(value) > 2000:
             raise ValueError('ai_rules_' + key + '_required')
         result[key] = value.strip()
+    for key in ('requirements', 'search_geography'):
+        if key in raw:
+            value = raw[key]
+            if not isinstance(value, list) or len(value) > 20 or any(not isinstance(item, str) or not item.strip() or len(item) > 300 for item in value):
+                raise ValueError('ai_rules_' + key + '_invalid')
+            result[key] = value
     for key, maximum in (('target_count', 1000), ('daily_limit', DAILY_LIMIT),
                          ('max_qualification_calls', 10000), ('max_draft_attempts', 10000), ('max_search_calls', 20), ('search_budget_cents', 1000)):
         value = raw.get(key)
@@ -241,6 +247,9 @@ def for_job(cursor, job, *, require_running=True):
         event_id = dict(cursor.fetchone() or {}).get('id')
     grant = load(cursor,str(event_id),require_running=require_running) if event_id else None
     if not grant:
+        return None
+    config = job.get('payload_json') or {}
+    if any(config.get(key) != grant['rules'].get(key) for key in ('requirements', 'search_geography')):
         return None
     process = grant['rules']['process']
     if process['type'] != process_type or process['id'] != process_id or (process_revision and process['revision'] != process_revision):

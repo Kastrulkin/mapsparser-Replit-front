@@ -41,7 +41,7 @@ def test_find_only_preview_shows_bounds_without_creating_a_task():
     assert result["result_ref"] == {"href": "/dashboard/operator", "label": "Условия показаны в чате"}
     russian = preview_task_config({"audience": "турагентства Индии, продающие Пхукет",
         "agency_country": "Индия", "sold_destination": "Пхукет", "target_count": 10, "mode": "find_only"})
-    assert russian["config"]["queries"] == [{"query": "travel agencies selling Phuket tours", "city": "India"}]
+    assert russian["config"]["queries"] == [{"query": "турагентства Индии, продающие Пхукет; Продают туры на Пхукет", "city": "Индия"}]
 
 
 def test_one_step_review_keeps_cost_estimate_and_versioned_terms():
@@ -474,5 +474,78 @@ def test_saved_group_revision_does_not_change_audience_silently():
     class Cursor:
         def execute(self, *args): pass
         def fetchone(self): return {"status": "completed", "payload_json": original, "result_json": {}}
-    with pytest.raises(ValueError, match="new_audience"):
-        prepare_revision_approval(Cursor(), business_id="business", task_id="saved-group", raw={"audience": "different audience"})
+    preview = prepare_revision_approval(Cursor(), business_id="business", task_id="saved-group", raw={"audience": "different audience"})
+    assert preview["creates_new_search"] is True
+    assert preview["approval"]["envelope"]["operation"] == "create_and_start"
+    assert "task_id" not in preview["approval"]["envelope"]
+
+
+@pytest.mark.parametrize("audience,requirement", [("Сантехники", "Выезжают на дом"), ("Поставщики косметики", "Оптовые поставки"), ("Салоны красоты", "Предлагают окрашивание")])
+def test_generic_search_generates_query_without_tourism(audience, requirement):
+    result = preview_task_config({"audience": audience, "search_geography": ["Москва"], "requirements": [requirement], "target_count": 3, "mode": "find_only"})
+    assert result["config"]["queries"] == [{"query": audience + "; " + requirement, "city": "Москва"}]
+    assert "travel agencies" not in result["chat_response"]
+    assert requirement in result["chat_response"]
+    assert "продаваемое направление" not in result["chat_response"]
+
+
+def test_legacy_conditions_are_read_without_mutating_hash():
+    from services.outreach_continuation import search_conditions
+    old = normalize_config({**config(), "target_count": 3, "agency_country": "India", "sold_destination": "Phuket"})
+    digest = config_hash(old)
+    assert search_conditions(old) == (["India"], ["Продают туры на Phuket"])
+    assert digest == config_hash(old)
+    assert "requirements" not in old
+
+
+def test_generic_qualification_requires_each_condition():
+    from types import SimpleNamespace
+    from services.outreach_continuation import qualify_audience
+    cfg = normalize_config({"audience": "Сантехники", "search_geography": ["Москва"], "requirements": ["Выезжают на дом", "Работают с юрлицами"], "target_count": 3, "mode": "find_only"})
+    text = "Сантехники в Москве. Выезжают на дом. Работают с юрлицами."
+    evidence = [{"id": "e", "fact": text, "source_url": "https://example.org/services"}]
+    criteria = {name: {"matches": True, "evidence_id": "e", "quote": text} for name in ["audience", "geography", "requirement_0", "requirement_1"]}
+    def runner(request): return SimpleNamespace(status="completed", provider="deepseek", parsed_data={"matches": True, "criteria": criteria}, content="")
+    assert qualify_audience(cfg, evidence, business_id="b", user_id="u", runner=runner)["status"] == "qualified"
+    criteria["requirement_1"] = {"matches": True, "evidence_id": "missing", "quote": text}
+    assert qualify_audience(cfg, evidence, business_id="b", user_id="u", runner=runner)["status"] == "needs_evidence"
+
+
+@pytest.mark.parametrize("field,value", [("requirements", ["x"] * 11), ("requirements", "x"), ("search_geography", []), ("search_geography", ["x"] * 21)])
+def test_invalid_generic_conditions_are_rejected(field, value):
+    with pytest.raises(ValueError, match="invalid_" + field):
+        normalize_config({**config(), field: value})
+
+
+def test_legacy_send_grant_does_not_cover_new_requirements(monkeypatch):
+    from services import outreach_ai_authorization as authorization
+    monkeypatch.setattr(authorization, 'load', lambda *args, **kwargs: {'rules': {}})
+    job = {'id': 'j', 'business_id': 'b', 'result_json': {'ai_authorization_id': 'grant'}, 'payload_json': {'requirements': ['Оптовые поставки']}}
+    assert authorization.for_job(None, job) is None
+
+
+def test_changed_requirements_preview_creates_separate_group():
+    from services.outreach_continuation import prepare_revision_approval
+    old = normalize_config({**config(), "requirements": ["Опт"], "search_geography": ["Москва"]})
+    class Cursor:
+        def execute(self, *args): pass
+        def fetchone(self): return {"status": "completed", "payload_json": old, "result_json": {}}
+    result = prepare_revision_approval(Cursor(), business_id="b", task_id="j", raw={"requirements": ["Выезжают на дом"]})
+    assert result['creates_new_search'] is True
+    assert result['approval']['envelope']['operation'] == 'create_and_start'
+    assert 'Выезжают на дом' in result['config']['queries'][0]['query']
+
+
+def test_generic_evidence_uses_requirements_and_service_pages(monkeypatch):
+    from types import SimpleNamespace
+    from services import outreach_public_evidence
+    calls = []
+    def get(url, **kwargs):
+        calls.append(url)
+        body = b'<p>Wholesale cosmetics available for businesses in Moscow.</p><a href="/services">Services</a><a href="https://other.example/services">Other</a>'
+        return SimpleNamespace(status_code=200, headers={'content-type': 'text/html'}, body=body)
+    monkeypatch.setattr(outreach_public_evidence.outbound_network, 'public_pinned_get', get)
+    result = outreach_public_evidence.collect_candidate_evidence('https://example.org', ['Phuket'], requirements=['Wholesale cosmetics'])
+    assert calls == ['https://example.org', 'https://example.org/services']
+    assert result and 'Wholesale' in result[0]['fact']
+    assert all(item['source_url'].startswith('https://example.org') for item in result)

@@ -2612,6 +2612,7 @@ export const PartnershipSearchPage: React.FC = () => {
                       const workstreamId = String(taskPosition >= 0 ? selectedTask.state?.workstream_ids?.[taskPosition] || '' : '');
                       const qualification = selectedTask.state?.qualifications?.[workstreamId];
                       return {
+                        criteria: selectedTask.config?.requirements !== undefined || selectedTask.config?.search_geography !== undefined ? [{ id: 'audience', label: selectedTask.config?.audience || 'Аудитория' }, { id: 'geography', label: `География: ${(selectedTask.config?.search_geography || []).join(', ')}` }, ...(selectedTask.config?.requirements || []).map((label, index) => ({ id: `requirement_${index}`, label }))].map(item => ({ ...qualification?.criteria?.[item.id], label: item.label })) : undefined,
                         country: qualification?.criteria?.country,
                         destination: qualification?.criteria?.destination,
                         contactVerified: Boolean(workstreamId && selectedTask.state?.verified_contact_workstream_ids?.includes(workstreamId)),

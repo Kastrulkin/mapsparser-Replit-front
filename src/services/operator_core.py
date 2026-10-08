@@ -1394,7 +1394,7 @@ def _operator_tool_catalog(
             "name": "partnerships.continue_outreach",
             "capability": "partnerships.continue_outreach",
             "title": "Продолжающийся поиск партнёров",
-            "description": "Если пользователь сказал только «найди лидов» без конечного этапа, сначала уточни: найти и проверить или также подготовить письма. Явное «только поиск» сохраняй как find_only. Для нового поиска вызови operation=preview: покажи условия и одно подтверждение запуска. До подтверждения задача не создаётся. Чтобы изменить объём, предложение или конечный этап выбранного поиска, используй revise_preview с task_id: одно подтверждение обновит условия и продолжит в той же группе. operation=create оставлен для старых клиентов. Режим find_only не готовит и не отправляет письма. Если указаны страна компаний и продаваемое направление, но нет городов, preview покажет широкий запрос по указанной стране. auto_send требует отдельного outreach.ai_rules.",
+            "description": "Если пользователь сказал только «найди лидов» без конечного этапа, сначала уточни: найти и проверить или также подготовить письма. Явное «только поиск» сохраняй как find_only. Для нового поиска вызови operation=preview: покажи условия и одно подтверждение запуска. До подтверждения задача не создаётся. Чтобы изменить объём, предложение или конечный этап выбранного поиска, используй revise_preview с task_id: одно подтверждение обновит условия и продолжит в той же группе. operation=create оставлен для старых клиентов. Режим find_only не готовит и не отправляет письма. Используй search_geography и requirements для любых клиентов, специалистов, поставщиков или партнёров. Изменение аудитории, географии или требований через revise_preview предложит новый поиск, сохранив прежнюю группу. Не задавай туристическое направление для нетуристического поиска. auto_send требует отдельного outreach.ai_rules.",
             "input_schema": {
                 "type": "object", "additionalProperties": False,
                 "properties": {
@@ -1404,7 +1404,9 @@ def _operator_tool_catalog(
                     "config": {"type": "object", "properties": {
                         "audience": {"type": "string", "maxLength": 500},
                         "target_count": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Цель: новые подходящие компании с подтверждённым каналом, не сырые результаты поиска"},
-                        "agency_country": {"type": "string", "description": "Страна самих компаний"},
+                        "search_geography": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 120}, "description": "Страны, регионы или города поиска"},
+                        "requirements": {"type": "array", "maxItems": 10, "items": {"type": "string", "maxLength": 300}, "description": "Обязательные условия пригодности компаний или специалистов; не выдумывать"},
+                        "agency_country": {"type": "string", "description": "Совместимость со старыми поисками: страна компании"},
                         "sold_destination": {"type": "string", "description": "Продаваемое направление, отдельно от страны поиска"},
                         "mode": {"type": "string", "enum": ["find_only", "prepare_only", "auto_send"]},
                         "max_qualification_calls": {"type": "integer", "minimum": 1, "maximum": 10000},
@@ -1531,7 +1533,7 @@ def _operator_tool_catalog(
                 "category": {"type": "string", "maxLength": 80}, "execution_mode": {"type": "string", "enum": ["one_off", "manual", "scheduled"]},
                 "schedule_time": {"type": "string"}, "schedule_timezone": {"type": "string"},
                 "schedule": {"type": "object", "properties": {"trigger": {"type": "string", "enum": ["schedule.daily", "schedule.weekly"]}, "time": {"type": "string"}, "timezone": {"type": "string"}, "weekday": {"type": "integer", "minimum": 0, "maximum": 6}}},
-                "outreach_config": {"type": "object", "description": "Для повторяющегося аутрича: audience, queries [{query,city}], target_count, agency_country, sold_destination, offer, language, mode find_only/prepare_only/auto_send, search_budget_cents, max_search_calls, max_candidates, max_qualification_calls, max_draft_attempts. Условия будут показаны до согласования. auto_send требует отдельного разрешения outreach.ai_rules на активную версию."},
+                "outreach_config": {"type": "object", "description": "Для повторяющегося аутрича: audience, search_geography, requirements, queries [{query,city}], target_count, legacy agency_country/sold_destination, offer, language, mode find_only/prepare_only/auto_send, search_budget_cents, max_search_calls, max_candidates, max_qualification_calls, max_draft_attempts. Условия будут показаны до согласования. auto_send требует отдельного разрешения outreach.ai_rules на активную версию."},
                 "selected_connection_bindings": {"type": "object"}, "selected_provider_routes": {"type": "object"},
                 "accepted_provider_routes": {"type": "boolean"}, "clone_from_blueprint_id": {"type": "string"}},
                 "required": ["description"]},

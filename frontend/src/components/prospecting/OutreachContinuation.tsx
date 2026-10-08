@@ -3,11 +3,12 @@ import { newAuth } from '@/lib/auth_new';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { OutreachGroupCard, type GroupPresentation } from './OutreachGroupCard';
 import type { SearchTaskGroup } from './partnershipSearchGroups';
 
-type Config = { mode?: 'find_only' | 'prepare_only' | 'auto_send'; billing_mode?: 'fixed_per_call' | 'shared_balance_actual'; search_call_cap_cents?: number; target_count?: number; agency_country?: string; sold_destination?: string; max_qualification_calls?: number; max_draft_attempts?: number; riderra_shortage_only?: boolean; evidence_terms: string[]; language: string; audience: string; offer: string; queries: { query: string; city: string }[]; max_search_calls: number; max_candidates: number; batch_size: number; search_budget_cents: number };
+type Config = { requirements?: string[]; search_geography?: string[]; mode?: 'find_only' | 'prepare_only' | 'auto_send'; billing_mode?: 'fixed_per_call' | 'shared_balance_actual'; search_call_cap_cents?: number; target_count?: number; agency_country?: string; sold_destination?: string; max_qualification_calls?: number; max_draft_attempts?: number; riderra_shortage_only?: boolean; evidence_terms: string[]; language: string; audience: string; offer: string; queries: { query: string; city: string }[]; max_search_calls: number; max_candidates: number; batch_size: number; search_budget_cents: number };
 type Task = { presentation?: GroupPresentation; id: string; display_name?: string; created_at?: string; updated_at?: string; report?: { found?: number; imported?: number; awaiting_check?: number; checking?: number; checked?: number; verification_failed?: number; excluded?: number; duplicates?: number; eligible: number; shortfall?: number; prepared: number; queued?: number; confirmed_sent?: number; replies?: number; delivery_uncertain?: number; ai_needs_review?: number; credit_limit?: number; credit_estimate_only?: boolean; credits_charged?: number }; revision: string; stage: string; status: string; config: Config; state: { history?: { action: string; at?: string }[]; started?: boolean; search_calls?: number; lead_ids?: string[]; blocker?: string; inflight_search?: boolean; search_credit_reservation_id?: string; qualifications?: Record<string, { status: string; reason?: string }>; campaign_results?: Record<string, { status: string; campaign_id?: string; lead_id?: string; reason_code?: string }> } };
 
 export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange, compact = false }: { businessId: string; selectedTaskId?: string; compact?: boolean; onTasksChange?: (tasks: SearchTaskGroup[]) => void }) {
@@ -27,13 +28,16 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
   const [maxSearchCalls, setMaxSearchCalls] = useState(10);
   const [targetCount, setTargetCount] = useState(100);
   const [agencyCountry, setAgencyCountry] = useState('');
+  const [requirements, setRequirements] = useState('');
+  const returnFocus = useRef<HTMLButtonElement | null>(null);
   const [soldDestination, setSoldDestination] = useState('');
   const scope = useRef(0);
   const [language, setLanguage] = useState('en');
   const [evidenceTerms, setEvidenceTerms] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [review, setReview] = useState<{ actionId: string; config: Config; creditLimit: number } | null>(null);
+  const [review, setReview] = useState<{ actionId: string; config: Config; creditLimit: number; createsNewSearch?: boolean } | null>(null);
   const [renamingId, setRenamingId] = useState('');
   const [newName, setNewName] = useState('');
   const load = useCallback(async () => {
@@ -45,7 +49,7 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
     let hasData = false;
     let inFlight = false;
     scope.current += 1;
-    setItems([]); setEnabled(false); setSupportsShortage(false); setShortageOnly(false); setError(''); setEditing(false); setEditingTask(null); setBusy(false); setReview(null); setRenamingId(''); setMode('prepare_only'); setAudience(''); setOffer(''); setQuery(''); setCity(''); setAgencyCountry(''); setSoldDestination('');
+    setFieldErrors({}); setItems([]); setEnabled(false); setSupportsShortage(false); setShortageOnly(false); setError(''); setEditing(false); setEditingTask(null); setBusy(false); setReview(null); setRenamingId(''); setMode('prepare_only'); setAudience(''); setOffer(''); setQuery(''); setCity(''); setAgencyCountry(''); setSoldDestination(''); setRequirements('');
     const refresh = async () => {
       if (inFlight) return;
       inFlight = true;
@@ -76,29 +80,40 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
     finally { if (epoch === scope.current) setBusy(false); }
   };
   const preview = async (config: Config) => {
+    const errors: Record<string, string> = {};
+    if (!config.audience.trim()) errors.audience = 'Укажите, кого найти.';
+    if (!config.search_geography?.length || config.search_geography.length > 20 || config.search_geography.some(value => value.length > 120)) errors.geography = 'Укажите до 20 мест поиска, до 120 символов каждое.';
+    if ((config.requirements?.length || 0) > 10 || config.requirements?.some(value => value.length > 300)) errors.requirements = 'Не более 10 требований, до 300 символов каждое.';
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) return;
+    const epoch = scope.current;
     setBusy(true); setError('');
     try {
       const result = await newAuth.makeRequest(editingTask ? `/partnership/continuations/${editingTask.id}` : '/partnership/continuations', {
         method: 'POST', body: JSON.stringify({ business_id: businessId, operation: 'preview', request_id: requestId, config }),
       });
+      if (epoch !== scope.current) return;
       if (!result.approval?.action_id) throw new Error('approval_missing');
-      setReview({ actionId: result.approval.action_id, config: result.config, creditLimit: result.credit_quote.total_max });
-    } catch { setError('Не удалось показать условия. Проверьте поля и повторите попытку.'); }
-    finally { setBusy(false); }
+      setReview({ actionId: result.approval.action_id, config: result.config, creditLimit: result.credit_quote.total_max, createsNewSearch: result.creates_new_search === true });
+    } catch { if (epoch === scope.current) setError('Не удалось показать условия. Проверьте поля и повторите попытку.'); }
+    finally { if (epoch === scope.current) setBusy(false); }
   };
   const confirmReview = async () => {
     if (!review) return;
+    const epoch = scope.current;
     setBusy(true); setError('');
     try {
       const result = await newAuth.makeRequest(`/operator/actions/${encodeURIComponent(review.actionId)}/confirm`, {
         method: 'POST', body: JSON.stringify({ business_id: businessId }),
       });
+      if (epoch !== scope.current) return;
       if (result.operator_result?.status !== 'completed') throw new Error('start_blocked');
       const refreshed = await load();
+      if (epoch !== scope.current) return;
       setItems(refreshed.items || []); onTasksChange?.(refreshed.items || []);
       setReview(null); setEditing(false); setEditingTask(null);
-    } catch { setError('Поиск не запущен. Обновите условия или проверьте доступный баланс.'); }
-    finally { setBusy(false); }
+    } catch { if (epoch === scope.current) setError('Поиск не запущен. Обновите условия или проверьте доступный баланс.'); }
+    finally { if (epoch === scope.current) setBusy(false); }
   };
   if (!enabled) return error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null;
   return <section aria-labelledby="outreach-continuation-title" className="space-y-3 rounded-lg border p-4">
@@ -120,14 +135,17 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
           <p>Поисковых запросов: {task.state.search_calls || 0} из {task.config.max_search_calls}</p>
         </div>
       </details>
-      {!['running', 'queued', 'cancelled'].includes(task.status) && <Button variant="outline" disabled={busy} onClick={() => {
-        setEditingTask(task); setEditing(true); setReview(null); setRequestId(crypto.randomUUID());
+      {!['running', 'queued', 'cancelled'].includes(task.status) && <Button variant="outline" disabled={busy} onClick={(event) => {
+        returnFocus.current = event.currentTarget;
+        setFieldErrors({}); setError(''); setEditingTask(task); setEditing(true); setReview(null); setRequestId(crypto.randomUUID());
         setAudience(task.config.audience); setAgencyCountry(task.config.agency_country || ''); setSoldDestination(task.config.sold_destination || '');
         setOffer(task.config.offer || ''); setLanguage(task.config.language); setMode(task.config.mode || 'find_only');
         setTargetCount(task.config.target_count || 10); setMaxSearchCalls(task.config.max_search_calls);
         setSearchCreditsPerCall(Math.ceil((task.config.search_call_cap_cents || 50) / 10));
         setQuery(task.config.queries[0]?.query || ''); setCity(task.config.queries.map(value => value.city).join('\n'));
         setEvidenceTerms((task.config.evidence_terms || []).join(','));
+        setRequirements((task.config.requirements ?? (task.config.sold_destination ? [`Продают туры на ${task.config.sold_destination}`] : [])).join('\n'));
+        setCity((task.config.search_geography ?? (task.config.agency_country ? [task.config.agency_country] : task.config.queries.map(value => value.city))).join('\n'));
       }}>Изменить условия поиска</Button>}
       <button className="min-h-10 text-sm underline" type="button" onClick={() => { setRenamingId(task.id); setNewName(task.display_name || task.config.audience); }}>Переименовать</button>
       {renamingId === task.id && <form className="flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); if (newName.trim()) { void mutate(`/partnership/continuations/${task.id}`, { action: 'rename', revision: task.revision, display_name: newName.trim() }); setRenamingId(''); } }}><Input aria-label="Название поиска" maxLength={120} value={newName} onChange={(event) => setNewName(event.target.value)} /><Button type="submit" disabled={busy || !newName.trim()}>Сохранить название</Button></form>}
@@ -148,27 +166,30 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
       </div>}
       </div></details>
     </div>)}
-    {!editing ? <Button variant={items.length ? 'outline' : 'default'} onClick={() => { setRequestId(crypto.randomUUID()); setReview(null); setEditingTask(null); setEditing(true); }}>Новый поиск</Button> : review ? <div className="space-y-3 rounded-lg border bg-muted/30 p-4"><h3 className="font-medium">Проверьте условия поиска</h3><p>Ищем {review.config.target_count} новых подходящих компаний: {review.config.agency_country} → {review.config.sold_destination}. {review.config.mode === 'find_only' ? 'Только поиск и проверка, без писем.' : 'Подготовка обращений по заданным условиям.'}</p><p>Ориентир расходов — до {review.creditLimit} кредитов с общего баланса; списание только по выполненным действиям.</p><p>До подтверждения поиск не запущен.</p><div className="flex gap-2"><Button disabled={busy} onClick={() => void confirmReview()}>{editingTask ? 'Согласовать и продолжить' : 'Начать поиск'}</Button><Button variant="outline" disabled={busy} onClick={() => { setReview(null); setRequestId(crypto.randomUUID()); }}>Изменить условия</Button></div></div> : <form className="space-y-3" onSubmit={event => { event.preventDefault(); void preview({ mode, billing_mode: 'shared_balance_actual', search_call_cap_cents: searchCreditsPerCall * 10, audience, offer, language, target_count: targetCount, agency_country: agencyCountry, sold_destination: soldDestination, riderra_shortage_only: supportsShortage && shortageOnly, evidence_terms: evidenceTerms.split(',').map(value => value.trim()).filter(Boolean), queries: editingTask ? editingTask.config.queries : city.split("\n").map(value => value.trim()).filter(Boolean).map(value => ({ query, city: value })), max_search_calls: maxSearchCalls, max_candidates: Math.max(targetCount * 5, editingTask?.config.max_candidates || 0), max_qualification_calls: Math.max(targetCount * 5, editingTask?.config.max_qualification_calls || 0), max_draft_attempts: targetCount, batch_size: 50, search_budget_cents: searchCreditsPerCall * 10 * maxSearchCalls }); }}>
-      <fieldset className="space-y-2"><legend className="mb-2 font-medium">Что выполнить</legend>
-        {([{ value: 'find_only', label: 'Только найти и проверить компании' }, { value: 'prepare_only', label: 'Найти и подготовить письма' }, ...(supportsShortage ? [{ value: 'auto_send', label: 'Полный аутрич по отдельно согласованным правилам' }] : [])] as const).map(option => <label key={option.value} className="flex items-start gap-2 text-sm"><input type="radio" name="continuation-mode" checked={mode === option.value} onChange={() => setMode(option.value as typeof mode)} />{option.label}</label>)}
+    <Button variant={items.length ? 'outline' : 'default'} onClick={(event) => { returnFocus.current = event.currentTarget; setRequestId(crypto.randomUUID()); setReview(null); setEditingTask(null); setAudience(''); setOffer(''); setQuery(''); setCity(''); setAgencyCountry(''); setSoldDestination(''); setRequirements(''); setError(''); setFieldErrors({}); setTargetCount(10); setMaxSearchCalls(3); setSearchCreditsPerCall(5); setLanguage('en'); setEvidenceTerms(''); setShortageOnly(false); setMode('find_only'); setEditing(true); }}>Новый поиск</Button>
+    <Dialog open={editing} onOpenChange={(open) => { if (!busy) setEditing(open); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" onCloseAutoFocus={(event) => { event.preventDefault(); returnFocus.current?.focus(); }}>
+      <DialogTitle>{review ? 'Проверьте условия' : editingTask ? 'Изменить условия поиска' : 'Новый поиск'}</DialogTitle>
+      <DialogDescription>Задайте аудиторию и требования. Работа начнётся после подтверждения.</DialogDescription>
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      {review ? <div className="space-y-3 rounded-lg border bg-muted/30 p-4"><h3 className="font-medium">Проверьте условия поиска</h3><p>Ищем {review.config.target_count} новых подходящих компаний: {review.config.audience}. География: {(review.config.search_geography ?? [review.config.agency_country]).filter(Boolean).join(', ')}. {review.config.mode === 'find_only' ? 'Только поиск и проверка, без писем.' : 'Подготовка обращений по заданным условиям.'}</p><p>Ориентир расходов — до {review.creditLimit} кредитов с общего баланса; списание только по выполненным действиям.</p><p>Требования: {(review.config.requirements ?? (review.config.sold_destination ? [`Продают туры на ${review.config.sold_destination}`] : [])).join('; ') || 'Соответствие указанной аудитории'}.</p>{review.createsNewSearch && <p role="status">Будет создан новый поиск. Предыдущие результаты и расходы сохраняются.</p>}<p>До подтверждения поиск не запущен.</p><div className="flex gap-2"><Button disabled={busy} onClick={() => void confirmReview()}>{editingTask && !review.createsNewSearch ? 'Согласовать и продолжить' : 'Начать новый поиск'}</Button><Button variant="outline" disabled={busy} onClick={() => { setReview(null); setRequestId(crypto.randomUUID()); }}>Изменить условия</Button></div></div> : <form className="space-y-3" onSubmit={event => { event.preventDefault(); void preview({ mode, billing_mode: 'shared_balance_actual', search_call_cap_cents: searchCreditsPerCall * 10, audience, offer, language, target_count: targetCount, agency_country: city === agencyCountry ? agencyCountry : '', sold_destination: requirements === `Продают туры на ${soldDestination}` ? soldDestination : '', requirements: requirements.split('\n').map(value => value.trim()).filter(Boolean), search_geography: city.split('\n').map(value => value.trim()).filter(Boolean), riderra_shortage_only: supportsShortage && shortageOnly, evidence_terms: evidenceTerms.split(',').map(value => value.trim()).filter(Boolean), queries: editingTask && requirements === (editingTask.config.requirements ?? (editingTask.config.sold_destination ? [`Продают туры на ${editingTask.config.sold_destination}`] : [])).join('\n') && audience === editingTask.config.audience && query === (editingTask.config.queries[0]?.query || '') && city === (editingTask.config.search_geography ?? (editingTask.config.agency_country ? [editingTask.config.agency_country] : editingTask.config.queries.map(value => value.city))).join('\n') ? editingTask.config.queries : query.trim() && (!editingTask || query !== (editingTask.config.queries[0]?.query || '')) ? city.split("\n").map(value => value.trim()).filter(Boolean).map(value => ({ query, city: value })) : [], max_search_calls: maxSearchCalls, max_candidates: Math.max(targetCount * 5, editingTask?.config.max_candidates || 0), max_qualification_calls: Math.max(targetCount * 5, editingTask?.config.max_qualification_calls || 0), max_draft_attempts: targetCount, batch_size: 50, search_budget_cents: searchCreditsPerCall * 10 * maxSearchCalls }); }}>
+      <fieldset className="space-y-2"><legend className="mb-2 font-medium">Что получить</legend>
+        {([{ value: 'find_only', label: 'Контакты подходящих компаний или специалистов' }, { value: 'prepare_only', label: 'Контакты и индивидуальные письма' }, ...(editingTask?.config.mode === 'auto_send' ? [{ value: 'auto_send', label: 'По действующим правилам отправки' }] : [])] as const).map(option => <label key={option.value} className="flex items-start gap-2 text-sm"><input type="radio" name="continuation-mode" checked={mode === option.value} onChange={() => setMode(option.value as typeof mode)} />{option.label}</label>)}
         {mode === 'auto_send' && <p className="text-sm text-muted-foreground">Сначала сохраните поиск. Затем согласуйте в чате правила писем: допустимые утверждения, отправителя и лимиты. До этого отправка заблокирована.</p>}
       </fieldset>
       <fieldset className="space-y-3"><legend className="mb-2 font-medium">1. Кого и сколько найти</legend>
-      <div><Label htmlFor="continuation-audience">Кого ищем</Label><Input id="continuation-audience" required maxLength={500} value={audience} onChange={e => setAudience(e.target.value)} placeholder="Например, турагентства, продающие Пхукет" /></div>
-      <div><Label htmlFor="continuation-target">Сколько новых подходящих компаний найти</Label><Input id="continuation-target" type="number" min={1} max={1000} required value={targetCount} onChange={e => setTargetCount(Number(e.target.value))} /></div>
-      <div><Label htmlFor="continuation-country">Страна компаний</Label><Input id="continuation-country" value={agencyCountry} onChange={e => setAgencyCountry(e.target.value)} placeholder="Индия" /></div>
-      <div><Label htmlFor="continuation-destination">Какое направление они продают</Label><Input id="continuation-destination" value={soldDestination} onChange={e => setSoldDestination(e.target.value)} placeholder="Пхукет" /></div>
-      </fieldset><fieldset className="space-y-3"><legend className="mb-2 font-medium">2. Где искать</legend>
-      <div><Label htmlFor="continuation-query">Поисковый запрос</Label><Input id="continuation-query" required maxLength={300} value={query} onChange={e => setQuery(e.target.value)} placeholder="Travel agency" /></div>
-      <div><Label htmlFor="continuation-city">Города поиска — по одному на строку</Label><Textarea id="continuation-city" required maxLength={2400} value={city} onChange={e => setCity(e.target.value)} placeholder="Delhi" /></div>
-      </fieldset>{mode !== 'find_only' && <fieldset className="space-y-3"><legend className="mb-2 font-medium">3. Какие письма подготовить</legend>
+      <div><Label htmlFor="continuation-audience">Кого ищем</Label><Input aria-invalid={Boolean(fieldErrors.audience)} aria-describedby={fieldErrors.audience ? 'continuation-audience-error' : undefined} id="continuation-audience" required maxLength={500} value={audience} onChange={e => setAudience(e.target.value)} placeholder="Например, сантехники, поставщики косметики или потенциальные клиенты" />{fieldErrors.audience && <p id="continuation-audience-error" role="alert" className="text-sm text-destructive">{fieldErrors.audience}</p>}</div>
+      <div><Label htmlFor="continuation-target">Сколько найти</Label><Input id="continuation-target" type="number" min={1} max={1000} required value={targetCount} onChange={e => setTargetCount(Number(e.target.value))} /></div>
+      <div><Label htmlFor="continuation-city">Где ищем</Label><Textarea aria-invalid={Boolean(fieldErrors.geography)} aria-describedby={fieldErrors.geography ? 'continuation-city-error' : undefined} id="continuation-city" required maxLength={2400} value={city} onChange={e => setCity(e.target.value)} placeholder="Страна, регион или город — по одному на строку" />{fieldErrors.geography && <p id="continuation-city-error" role="alert" className="text-sm text-destructive">{fieldErrors.geography}</p>}</div>
+      <div><Label htmlFor="continuation-requirements">Требования</Label><Textarea aria-invalid={Boolean(fieldErrors.requirements)} aria-describedby={fieldErrors.requirements ? 'continuation-requirements-error' : undefined} id="continuation-requirements" maxLength={3010} value={requirements} onChange={e => setRequirements(e.target.value)} placeholder="Например, выезжают на дом; работают с юридическими лицами. До 10 требований — по одному на строку." />{fieldErrors.requirements && <p id="continuation-requirements-error" role="alert" className="text-sm text-destructive">{fieldErrors.requirements}</p>}</div>
+      </fieldset>{mode !== 'find_only' && <fieldset className="space-y-3"><legend className="mb-2 font-medium">2. Какие письма подготовить</legend>
       <div><Label htmlFor="continuation-offer">Что предлагаем</Label><Textarea id="continuation-offer" required maxLength={2000} value={offer} onChange={e => setOffer(e.target.value)} /></div>
       <div><Label htmlFor="continuation-language">Язык письма</Label><Input id="continuation-language" required value={language} onChange={e => setLanguage(e.target.value)} placeholder="en или ru" /></div>
       </fieldset>}
       {supportsShortage && <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={shortageOnly} onChange={event => setShortageOnly(event.target.checked)} />Пополнять базу только при нехватке готовых кандидатов Riderra</label>}
-      <details><summary className="cursor-pointer text-sm">Лимиты и проверка аудитории</summary><Label htmlFor="continuation-evidence">Что искать на сайте компании</Label><Input id="continuation-evidence" value={evidenceTerms} onChange={e => setEvidenceTerms(e.target.value)} placeholder="Например, Phuket, Thailand" /><Label htmlFor="continuation-searches">Не более поисковых запросов</Label><Input id="continuation-searches" type="number" min={1} max={20} required value={maxSearchCalls} onChange={e => { const calls = Number(e.target.value); setMaxSearchCalls(calls); setSearchCreditsPerCall(value => Math.min(value, Math.floor(100 / Math.max(1, calls)))); }} /><Label htmlFor="continuation-budget">Кредитов на один поисковый вызов</Label><Input id="continuation-budget" type="number" min={1} max={Math.floor(100 / Math.max(1, maxSearchCalls))} required value={searchCreditsPerCall} onChange={e => setSearchCreditsPerCall(Number(e.target.value))} /></details>
-      <p className="text-sm text-muted-foreground">Цель — {targetCount} новых подходящих компаний с подтверждённым контактом. Дубли и неподходящие записи не засчитываются. Ориентир при полном использовании разрешённых действий — до {maxSearchCalls * searchCreditsPerCall + targetCount * 5} кредитов с общего баланса. Поиск списывается по подтверждённой стоимости, проверка — по 1 кредиту; при нехватке средств поиск остановится. {mode !== 'find_only' ? `Подготовка писем оплачивается отдельно; до ${targetCount} попыток.` : 'Письма не готовятся и не отправляются.'} Сначала будет показан план.</p>
+      <details><summary className="cursor-pointer text-sm">Настройки поиска и ограничения</summary><Label htmlFor="continuation-query">Поисковый запрос</Label><Input id="continuation-query" maxLength={300} value={query} onChange={e => setQuery(e.target.value)} placeholder="Можно оставить пустым — составим из аудитории и требований" /><Label htmlFor="continuation-evidence">Что искать на сайте компании</Label><Input id="continuation-evidence" value={evidenceTerms} onChange={e => setEvidenceTerms(e.target.value)} placeholder="Например, оптовые поставки, выезд на дом" /><Label htmlFor="continuation-searches">Не более поисковых запросов</Label><Input id="continuation-searches" type="number" min={1} max={20} required value={maxSearchCalls} onChange={e => { const calls = Number(e.target.value); setMaxSearchCalls(calls); setSearchCreditsPerCall(value => Math.min(value, Math.floor(100 / Math.max(1, calls)))); }} /><Label htmlFor="continuation-budget">Кредитов на один поисковый вызов</Label><Input id="continuation-budget" type="number" min={1} max={Math.floor(100 / Math.max(1, maxSearchCalls))} required value={searchCreditsPerCall} onChange={e => setSearchCreditsPerCall(Number(e.target.value))} /></details>
+      <p className="text-sm text-muted-foreground">Ориентир — до {maxSearchCalls * searchCreditsPerCall + targetCount * 5} кредитов за поиск и проверку. Списание по выполненным действиям с общего баланса. {mode !== 'find_only' ? 'Письма оплачиваются отдельно. Отправка требует отдельного согласования.' : 'Без писем и отправки.'}</p>
       <div className="flex gap-2"><Button disabled={busy}>Проверить план</Button><Button type="button" variant="ghost" onClick={() => setEditing(false)}>Отмена</Button></div>
     </form>}
+    </DialogContent></Dialog>
   </section>;
 }

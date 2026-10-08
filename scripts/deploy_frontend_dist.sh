@@ -74,6 +74,7 @@ cp -R "${dist_dir}/." "${snapshot_dist_dir}/"
 cp -R "${public_dist_dir}/." "${snapshot_public_dist_dir}/"
 
 "${repo_root}/scripts/verify_frontend_dist_integrity.sh" "${snapshot_dist_dir}"
+python3 "${repo_root}/scripts/check_outreach_navigation_release.py" "${snapshot_dist_dir}"
 "${repo_root}/scripts/verify_frontend_dist_integrity.sh" "${snapshot_public_dist_dir}" "${snapshot_public_dist_dir}/public-audit/index.html"
 
 if [[ "${skip_remote}" -eq 1 ]]; then

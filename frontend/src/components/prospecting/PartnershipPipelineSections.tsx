@@ -476,7 +476,7 @@ type PartnershipLeadCardProps = {
   mode: 'raw' | 'pipeline';
   compact?: boolean;
   searchLabel?: string;
-  verification?: { country?: { status?: string; source_url?: string; quote?: string }; destination?: { status?: string; source_url?: string; quote?: string }; contactVerified?: boolean };
+  verification?: { criteria?: { label?: string; status?: string; source_url?: string; quote?: string }[]; country?: { status?: string; source_url?: string; quote?: string }; destination?: { status?: string; source_url?: string; quote?: string }; contactVerified?: boolean };
   dragging: boolean;
   loading: boolean;
   nextStage: string;
@@ -519,8 +519,8 @@ export const PartnershipLeadCard = ({
   const pipelineStatus = String(lead.pipeline_status || '').toLowerCase();
   const isUnprocessed = !pipelineStatus || pipelineStatus === 'unprocessed' || pipelineStatus === 'qualified' || (!stageValue || stageValue === 'imported');
   const hasContacts = Boolean(lead.phone || lead.email || lead.telegram_url || lead.whatsapp_url);
-  const verifiedForSearch = !verification || (['verified', 'not_required'].includes(verification.country?.status || '')
-    && ['verified', 'not_required'].includes(verification.destination?.status || '') && verification.contactVerified === true);
+  const verifiedForSearch = !verification || (verification.criteria ? verification.criteria.length > 0 && verification.criteria.every(item => ['verified', 'not_required'].includes(item.status || '')) && verification.contactVerified === true : (['verified', 'not_required'].includes(verification.country?.status || '')
+    && ['verified', 'not_required'].includes(verification.destination?.status || '') && verification.contactVerified === true));
   const primaryActionLabel = mode === 'raw'
     ? (isUnprocessed ? 'Выбрать для работы' : 'Открыть компанию')
     : nextStage
@@ -540,7 +540,7 @@ export const PartnershipLeadCard = ({
     <div className="min-w-0"><h3 className="break-words text-base font-medium text-foreground">{lead.name || 'Без названия'}</h3><p className="text-sm text-muted-foreground">{lead.category || 'Без категории'} · {lead.city || '—'}</p><span className="text-xs text-muted-foreground">{stagePresentation.label}</span></div>
     <div className="min-w-0 text-sm"><p>{verification ? verifiedForSearch ? 'Соответствие подтверждено' : 'Соответствие не подтверждено' : 'Соответствие не проверено'}</p><p className="break-all text-xs text-muted-foreground">{recipient?.value || lead.email || lead.phone || 'Контакт не найден'} · {verification?.contactVerified ? 'контакт подтверждён' : 'контакт не проверен'}</p>
       <details className="mt-2"><summary className="min-h-10 cursor-pointer py-2 text-xs text-muted-foreground">Сведения и источники</summary><div className="space-y-2 py-2 text-xs text-muted-foreground">
-        {verification && <>{[{ label: 'Страна', criterion: verification.country }, { label: 'Направление', criterion: verification.destination }].map(({ label, criterion }) => <p key={label}>{label}: {criterion?.status === 'verified' ? 'подтверждено' : criterion?.status === 'not_required' ? 'не требуется' : 'не проверено'}{criterion?.source_url && /^https?:\/\//i.test(criterion.source_url) && <a href={criterion.source_url} target="_blank" rel="noreferrer" className="ml-2 underline">Источник</a>}</p>)}</>}
+        {verification && <>{(verification.criteria ? verification.criteria.map(criterion => ({ label: criterion.label || 'Требование', criterion })) : [{ label: 'Страна', criterion: verification.country }, { label: 'Направление', criterion: verification.destination }]).map(({ label, criterion }) => <p key={label}>{label}: {criterion?.status === 'verified' ? 'подтверждено' : criterion?.status === 'not_required' ? 'не требуется' : 'не проверено'}{criterion?.source_url && /^https?:\/\//i.test(criterion.source_url) && <a href={criterion.source_url} target="_blank" rel="noreferrer" className="ml-2 underline">Источник</a>}</p>)}</>}
         <p>{collecting ? 'Получаем контакты и сведения…' : intelligence?.research ? 'Сведения собраны' : 'Сведения ещё не собраны'}</p>
         {recipient?.source_url && /^https?:\/\//i.test(recipient.source_url) && <a href={recipient.source_url} target="_blank" rel="noreferrer" className="block underline">Источник контакта</a>}
         {lead.source_url && <a href={lead.source_url} target="_blank" rel="noreferrer" className="block underline">Источник компании</a>}
@@ -585,7 +585,7 @@ export const PartnershipLeadCard = ({
       </details>}
       {verification && <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-700">
         <div className="font-medium">Проверка для этого поиска</div>
-        {([['Страна компании', verification.country], ['Продаваемое направление', verification.destination]] as const).map(([label, criterion]) => (
+        {(verification.criteria ? verification.criteria.map(criterion => ({ label: criterion.label || 'Требование', criterion })) : [{ label: 'Страна компании', criterion: verification.country }, { label: 'Продаваемое направление', criterion: verification.destination }]).map(({ label, criterion }) => (
           <div key={label} className="mt-1">
             {label}: {criterion?.status === 'verified' ? 'подтверждено' : criterion?.status === 'not_required' ? 'не требуется' : 'не проверено'}
             {criterion?.status === 'verified' && /^https?:\/\//i.test(criterion.source_url || '') ? <a className="ml-1 underline" href={criterion.source_url} target="_blank" rel="noreferrer" title={criterion.quote || label}>Источник</a> : null}
