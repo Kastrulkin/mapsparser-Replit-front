@@ -81,3 +81,14 @@ describe('OutreachMessageQueue', () => {
     await waitFor(() => expect(newAuth.makeRequest).toHaveBeenCalledOnce());
   });
 });
+
+it('opens an exact letter inside the shared letters list with its full text', async () => {
+  vi.mocked(newAuth.makeRequest).mockResolvedValue({ items: [{ touch_id: 'control', campaign_id: 'campaign-1', lead_id: 'lead-1', workstream_id: 'work-1', recipient: 'demyanovap@yandex.ru', sender_identity: 'localosgo@gmail.com', subject: 'Проверка отправки LocalOS', message_text: 'Контрольное письмо', status: 'queued' }], summary: { all: 1, queued: 1 } });
+  render(<OutreachMessageQueue query="" scope="client_partnership" businessId="riderra" channel="" status="" campaignId="campaign-1" presentation="letters" onChannelChange={() => {}} onStatusChange={() => {}} onOpenLead={() => {}} />);
+  expect(await screen.findByText('Проверка отправки LocalOS')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Письма' })).toBeInTheDocument();
+  const request = String(vi.mocked(newAuth.makeRequest).mock.calls.at(-1)?.[0]);
+  expect(request).toContain('campaign_id=campaign-1');
+  expect(request).toContain('business_id=riderra');
+  expect(screen.getByText('Полный текст письма').parentElement?.hasAttribute('open')).toBe(true);
+});

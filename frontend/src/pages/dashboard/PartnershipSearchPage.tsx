@@ -1,4 +1,4 @@
-import { OutreachDeliveryCard } from '@/components/prospecting/OutreachDeliveryCard';
+import { OutreachMessageQueue } from '@/components/prospecting/OutreachMessageQueue';
 import { OutreachContinuation } from '@/components/prospecting/OutreachContinuation';
 import { buildCandidateSearchGroups, resolveSearchTask, taskLabel, type SearchTaskGroup } from '@/components/prospecting/partnershipSearchGroups';
 import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
@@ -191,6 +191,7 @@ type WorkflowTone = 'default' | 'success' | 'warning' | 'info' | 'danger';
 const toPartnershipWorkspaceView = (value: string): PartnershipWorkspaceView => {
   if (value === 'companies' || value === 'pipeline' || value === 'candidates') return 'raw';
   if (value === 'letters' || value === 'drafts') return 'drafts';
+  if (value === 'send') return 'queue';
   const matched = PARTNERSHIP_WORKSPACE_OPTIONS.find((option) => option.value === value);
   return matched ? matched.value : 'overview';
 };
@@ -2333,7 +2334,7 @@ export const PartnershipSearchPage: React.FC = () => {
   if (showDemoPartner && currentBusinessId) {
     return (
       <div className="space-y-6 pb-24" data-tour-target="partnership-workspace">
-      <OutreachDeliveryCard campaignId={searchParams.get("campaign_id")} businessId={currentBusinessId} />
+
         <PartnershipWorkspaceOverview
           workspaceView={workspaceView}
           currentBusinessId={currentBusinessId}
@@ -2375,7 +2376,7 @@ export const PartnershipSearchPage: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-24" data-tour-target="partnership-workspace">
-      <OutreachDeliveryCard campaignId={searchParams.get("campaign_id")} businessId={currentBusinessId} />
+
       <PartnershipWorkspaceOverview part="header"
         workspaceView={workspaceView}
         currentBusinessId={currentBusinessId}
@@ -2808,7 +2809,12 @@ export const PartnershipSearchPage: React.FC = () => {
 
           {(workspaceView === 'drafts' || workspaceView === 'queue') ? (
           <>
-          {workspaceView === 'drafts' ? (
+          <OutreachMessageQueue key={`${currentBusinessId}:${workspaceView}:${searchParams.get('campaign_id') || ''}`}
+            businessId={currentBusinessId || undefined} scope="client_partnership" query="" channel="" status=""
+            campaignId={searchParams.get('campaign_id')} presentation={workspaceView === 'drafts' ? 'letters' : 'send'}
+            onChannelChange={() => {}} onStatusChange={() => {}} onOpenLead={(id) => setSelectedLeadId(id)} />
+          {searchParams.get('campaign_id') && <Button variant="outline" onClick={() => { const next = new URLSearchParams(searchParams); next.delete('campaign_id'); setSearchParams(next); }}>Показать все письма</Button>}
+          {workspaceView === 'drafts' && !searchParams.get('campaign_id') ? (
           <PartnershipDraftsSection
             drafts={visibleDrafts}
             selectedDraftIds={selectedDraftIds}
@@ -2830,7 +2836,7 @@ export const PartnershipSearchPage: React.FC = () => {
           />
           ) : null}
 
-          {workspaceView === 'queue' ? (
+          {workspaceView === 'queue' && !searchParams.get('campaign_id') ? (
           <PartnershipQueueSection
             batches={visibleBatches}
             selectedQueueIds={selectedQueueIds}

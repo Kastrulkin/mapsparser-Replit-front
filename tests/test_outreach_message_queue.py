@@ -71,3 +71,27 @@ def test_messages_tab_uses_a_real_touch_queue_instead_of_the_lead_list() -> None
     assert "Прочитано" in queue_source
     assert "Получен ответ" in queue_source
     assert "Проверить в почте" in queue_source
+
+
+def test_specific_campaign_filter_preserves_business_access_and_filters_before_page(monkeypatch):
+    from flask import Flask
+    from api import outreach_campaign_api as module
+    calls = []
+    class Cursor:
+        def execute(self, sql, params): calls.append((sql, params))
+        def fetchall(self): return [{'touch_id': 'draft', 'touch_status': 'draft', 'campaign_status': 'draft'}, {'touch_id': 'queued', 'delivery_status': 'queued'}]
+    class Connection:
+        def cursor(self, **kwargs): return Cursor()
+        def close(self): pass
+    monkeypatch.setattr(module, '_require_auth', lambda: ({'id': 'user', 'is_superadmin': False}, None))
+    monkeypatch.setattr(module, '_resolve_business_for_user', lambda *args: 'riderra')
+    monkeypatch.setattr(module, 'get_db_connection', lambda: Connection())
+    with Flask(__name__).test_request_context('/api/outreach/messages?business_id=riderra&campaign_id=control&presentation=send&limit=1'):
+        response = module.get_outreach_message_queue()
+        data = response.get_json()
+    sql, params = calls[-1]
+    assert 'ranked.client_business_id = %s' in sql
+    assert 'ranked.id::text = %s' in sql
+    assert params == ('riderra', 'control')
+    assert data['total'] == 1
+    assert data['items'][0]['touch_id'] == 'queued'

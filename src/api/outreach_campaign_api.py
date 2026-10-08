@@ -455,6 +455,8 @@ def get_outreach_message_queue():
     if requested_workstream_type not in {"", "localos_sales", "client_partnership"}:
         return jsonify({"success": False, "error": "Unsupported workstream_type"}), 400
     requested_business_id = str(request.args.get("business_id") or "").strip() or None
+    requested_campaign_id = str(request.args.get("campaign_id") or "").strip()
+    presentation = str(request.args.get("presentation") or "").strip()
     requested_channel = str(request.args.get("channel") or "").strip().lower()
     requested_status = str(request.args.get("status") or "").strip().lower()
     search_query = str(request.args.get("q") or "").strip()
@@ -486,6 +488,9 @@ def get_outreach_message_queue():
         if resolved_business_id:
             where_clauses.append("ranked.client_business_id = %s")
             params.append(resolved_business_id)
+        if requested_campaign_id:
+            where_clauses.append("ranked.id::text = %s")
+            params.append(requested_campaign_id)
         if requested_channel:
             where_clauses.append("touch.channel = %s")
             params.append(requested_channel)
@@ -586,6 +591,8 @@ def get_outreach_message_queue():
         summary: dict[str, int] = {"all": 0}
         for item in raw_items:
             item["status"] = _message_queue_status(item)
+            if presentation == "send" and item["status"] == "draft":
+                continue
             summary["all"] += 1
             summary[item["status"]] = summary.get(item["status"], 0) + 1
             if requested_status and item["status"] != requested_status:
