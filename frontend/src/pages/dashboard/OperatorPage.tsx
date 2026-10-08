@@ -1,3 +1,4 @@
+import { useChatAutoScroll } from '@/components/operator/useChatAutoScroll';
 import { OperatorActivity, OperatorReply } from '@/components/operator/OperatorActivity';
 import { OutreachGroupCard, type GroupPresentation } from '@/components/prospecting/OutreachGroupCard';
 import { OperatorRequestHistory } from '@/components/operator/OperatorRequestHistory';
@@ -278,8 +279,7 @@ export const OperatorPage = () => {
   const [pendingChatPhase, setPendingChatPhase] = useState('Отправляем команду…');
   const [commandWaiting, setCommandWaiting] = useState(false);
   const [commandAccepted, setCommandAccepted] = useState(false);
-  const chatWindowRef = useRef<HTMLDivElement>(null);
-  const scrollToLatestRef = useRef(false);
+  const chatWindowRef = useChatAutoScroll(currentBusinessId);
   const chatSendInFlightRef = useRef(false);
   const pendingRequest = useRef({ businessId: "", text: "", groupId: "", id: "" });
   const [refreshCheckingQueueId, setRefreshCheckingQueueId] = useState<string | null>(null);
@@ -343,7 +343,6 @@ export const OperatorPage = () => {
       const storedMessages = Array.isArray(response.data.messages) ? response.data.messages : [];
       const loadedConversationId = storedConversationId || response.data.conversation?.id || null;
       setConversationId(loadedConversationId);
-      scrollToLatestRef.current = true;
       setMessages(mapStoredMessages(storedMessages));
       if (loadedConversationId) window.localStorage.setItem(storageKey, loadedConversationId);
     }).catch((error: unknown) => {
@@ -380,11 +379,6 @@ export const OperatorPage = () => {
     };
   }, [currentBusinessId, historyRetry]);
 
-  useEffect(() => {
-    if (!scrollToLatestRef.current || !chatWindowRef.current) return;
-    chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
-    scrollToLatestRef.current = false;
-  }, [messages, pendingChatMessage]);
 
   const appendPair = (userText: string, result: OperatorChatResult) => {
     const stamp = String(Date.now());
@@ -415,7 +409,6 @@ export const OperatorPage = () => {
     historyVersion.current++;
     setHistoryLoading(false);
     chatSendInFlightRef.current = true;
-    scrollToLatestRef.current = true;
     setPendingChatMessage(text);
     setPendingChatPhase('Отправляем команду…');
     setCommandAccepted(false);
@@ -446,7 +439,6 @@ export const OperatorPage = () => {
       });
       if(activeBusiness.current!==currentBusinessId)return;
       pendingRequest.current = { businessId: "", text: "", groupId: "", id: "" };
-      scrollToLatestRef.current = true;
       appendPair(text, result);
       if (result.task?.id && (!result.task.business_id || result.task.business_id === currentBusinessId)) {
         setSavedSearchTask({...result.task, business_id: currentBusinessId});
@@ -462,7 +454,6 @@ export const OperatorPage = () => {
     } catch (err) {
       if (activeBusiness.current !== currentBusinessId) return;
       if (source) throw err;
-      scrollToLatestRef.current = true;
       appendPair(text, {
         status: 'blocked',
         intent: 'error',
