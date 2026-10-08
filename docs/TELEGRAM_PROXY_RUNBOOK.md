@@ -49,60 +49,57 @@ HTML preview `https://t.me/s/<username>` остаётся fallback для чте
 
 ## LocalOS env
 
-После того как OpenClaw разрешил доступ с LocalOS, в `/opt/seo-app/.env` должны быть заданы:
+После того как OpenClaw разрешил доступ с LocalOS, в `/opt/seo-app/.env` должны быть заданы отдельные HTTP- и SOCKS5-учётные данные:
 
 ```env
-TELEGRAM_HTTP_PROXY=http://192.168.0.177:10809
-OUTBOUND_HTTP_PROXY=http://192.168.0.177:10809
-TELEGRAM_USERBOT_PROXY=socks5://192.168.0.177:10808
+TELEGRAM_HTTP_PROXY=http://<HTTP_USER>:<HTTP_PASSWORD>@192.168.0.177:10809
+OUTBOUND_HTTP_PROXY=http://<HTTP_USER>:<HTTP_PASSWORD>@192.168.0.177:10809
+TELEGRAM_USERBOT_PROXY=socks5://<SOCKS_USER>:<SOCKS_PASSWORD>@192.168.0.177:10808
+TELEGRAM_PROXY_URL=socks5://<SOCKS_USER>:<SOCKS_PASSWORD>@192.168.0.177:10808
 
 # Для parser/provider-контуров, которые читают эти параметры.
-APIFY_HTTP_PROXY=http://192.168.0.177:10809
-APIFY_HTTPS_PROXY=http://192.168.0.177:10809
+APIFY_HTTP_PROXY=http://<HTTP_USER>:<HTTP_PASSWORD>@192.168.0.177:10809
+APIFY_HTTPS_PROXY=http://<HTTP_USER>:<HTTP_PASSWORD>@192.168.0.177:10809
 ```
 
 `TELEGRAM_PROXY_URL` поддерживается как совместимый alias для Telegram userbot. Если заданы оба значения, `TELEGRAM_USERBOT_PROXY` имеет приоритет.
 
 LocalOS намеренно не задаёт глобальные `HTTP_PROXY`/`HTTPS_PROXY`: это предотвращает случайное проксирование внутренних запросов и callbacks.
 
+Храните реальные URL только в root-only `/opt/seo-app/.env` и защищённом Xray config. Не вставляйте пароли в команды, shell history, логи или отчёты. Firewall и пароль обязательны одновременно: firewall допускает только `192.168.0.90/32` на TCP `10808/10809` и UDP `10808`, а Xray требует аутентификацию.
+
 ## Firewall handoff
 
-Grimbird должен слушать private interface, а firewall OpenClaw должен разрешать TCP `10808` и `10809` только от LocalOS source IP/subnet.
+Grimbird должен слушать private interface. Выделенная служба `grimbird-proxy-firewall.service` поддерживает отдельную цепочку `GRIMBIRD_PROXY`: она пропускает только `192.168.0.90/32` к прокси-портам и не очищает общие firewall-цепочки или правила Fail2ban. Служба должна быть включена и запускаться до Xray.
 
-Текущий production source IP LocalOS:
+Текущий публичный egress IP LocalOS (для запросов через публичный интернет):
 
 ```text
 80.78.242.105
 ```
 
+LocalOS и OpenClaw сейчас соединены по private-сети `192.168.0.0/24`. При
+прямом подключении LocalOS к Grimbird `192.168.0.177` OpenClaw видит private
+source `192.168.0.90`, а не публичный egress IP выше. Для этого маршрута
+ограничивайте firewall source-адресом, который реально виден на private
+интерфейсе (`192.168.0.90/32` в текущей топологии). Перед изменением
+топологии перепроверьте адрес командой `ip route get 192.168.0.177` на LocalOS.
+
 Не открывайте proxy-порты в публичный интернет.
-
-## Проверка с LocalOS host
-
-Все server-команды выполняются из `/opt/seo-app`:
-
-```bash
-cd /opt/seo-app
-curl -x http://192.168.0.177:10809 -I --max-time 12 https://api.telegram.org
-curl --socks5-hostname 192.168.0.177:10808 -I --max-time 12 https://api.telegram.org
-```
-
-Ожидаемый результат:
-
-```text
-HTTP/2 302
-location: https://core.telegram.org/bots
-```
 
 ## Проверка из app и worker
 
 ```bash
 cd /opt/seo-app
 docker compose exec -T app sh -lc \
-  'curl -x http://192.168.0.177:10809 -I --max-time 12 https://api.telegram.org'
+  'curl -x "$TELEGRAM_HTTP_PROXY" -I --max-time 12 https://api.telegram.org'
 docker compose exec -T worker sh -lc \
-  'curl -x http://192.168.0.177:10809 -I --max-time 12 https://api.telegram.org'
+  'curl -x "$TELEGRAM_HTTP_PROXY" -I --max-time 12 https://api.telegram.org'
+docker compose exec -T app sh -lc \
+  'curl --proxy "$TELEGRAM_USERBOT_PROXY" --socks5-hostname -I --max-time 12 https://api.telegram.org'
 ```
+
+Все server-команды выполняются из `/opt/seo-app`. Ожидаемый для аутентифицированных проверок ответ — HTTP `302` с `location: https://core.telegram.org/bots`; проверка без пароля должна завершаться отказом прокси.
 
 Проверка фактической конфигурации приложения:
 
@@ -119,13 +116,13 @@ PY
 
 ## Активация
 
-1. OpenClaw разрешает `80.78.242.105` на TCP `10808/10809` по private network.
-2. Обе проверки с LocalOS host возвращают `HTTP/2 302`.
-3. Значения добавляются в `/opt/seo-app/.env`.
-4. `app` и `worker` пересоздаются, чтобы получить новые env.
-5. Host owner-bot перезапускается и проходит Telegram polling check.
-6. Выполняется read-only Telegram preflight в LocalOS.
-7. Только после успешной проверки удаляется или выключается legacy proxy runtime на LocalOS.
+1. Сверить private route и source address командой `ip route get 192.168.0.177` на LocalOS.
+2. На OpenClaw проверить `systemctl is-enabled grimbird-proxy-firewall.service` и правила цепочки `GRIMBIRD_PROXY`; не открывать proxy-порты для публичного egress IP.
+3. Убедиться, что запросы без пароля получают отказ, а аутентифицированные HTTP и SOCKS5 проверки возвращают `302` от Telegram.
+4. Добавить секретные URL в `/opt/seo-app/.env` с ограниченными правами.
+5. Пересоздать только затронутые `app`, `worker` и `telegram-bot`, затем проверить `docker compose ps`, логи, `curl -I http://localhost:8000` и polling heartbeat.
+6. Проверить read-only Telegram preflight; не отправлять тестовые сообщения без отдельного разрешения.
+7. Xray access log должен оставаться выключенным; error log и system journal ограничены ротацией/квотами.
 
 Команды применения:
 
@@ -145,4 +142,4 @@ curl -I http://localhost:8000
 - HTTP работает, SOCKS нет: Bot API сможет работать, но Telethon/userbot ещё не готов.
 - SOCKS работает, HTTP нет: Telethon сможет работать, но Bot API и social HTTP adapters ещё не готовы.
 
-При отказе передайте OpenClaw-агенту source IP `80.78.242.105` и попросите разрешить private TCP-доступ к `10808/10809`.
+При отказе проверьте private route, правила выделенной цепочки firewall, аутентификацию обоих входов и последние ошибки Xray/LocalOS. Не отключайте firewall и не возвращайте прокси без пароля для устранения ошибки.
