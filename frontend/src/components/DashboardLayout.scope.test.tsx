@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState, type ReactNode } from 'react';
-import { MemoryRouter, Outlet, Route, Routes, useOutletContext } from 'react-router-dom';
+import { MemoryRouter, Outlet, Route, Routes, useLocation, useOutletContext } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DashboardOutletContext } from '@/types/business';
@@ -33,7 +33,7 @@ vi.mock('../lib/auth_new', () => ({
 }));
 
 vi.mock('./DashboardHeader', () => ({
-  DashboardHeader: () => <div data-testid="dashboard-header" />,
+  DashboardHeader: ({ onBusinessChange }: { onBusinessChange: (id: string) => void }) => <button onClick={() => onBusinessChange('business-b')}>Сменить бизнес в меню</button>,
 }));
 
 vi.mock('./DashboardSidebar', () => ({
@@ -52,10 +52,12 @@ const businessB = { id: 'business-b', name: 'Бизнес B' };
 
 const ScopeProbe = () => {
   const { controlScope, currentBusinessId, onBusinessChange, reloadBusinesses } = useOutletContext<DashboardOutletContext>();
+  const location = useLocation();
   const [privateState, setPrivateState] = useState('чистое состояние');
 
   return (
     <>
+      <div data-testid="route">{location.search}</div>
       <div data-testid="current-business">{currentBusinessId || 'none'}</div>
       <div data-testid="control-scope">{controlScope ? `${controlScope.kind}:${controlScope.id}` : 'none'}</div>
       <div data-testid="private-state">{privateState}</div>
@@ -66,8 +68,8 @@ const ScopeProbe = () => {
   );
 };
 
-const renderLayout = () => render(
-  <MemoryRouter initialEntries={['/dashboard']}>
+const renderLayout = (entry = '/dashboard') => render(
+  <MemoryRouter initialEntries={[entry]}>
     <Routes>
       <Route path="/dashboard" element={<DashboardLayout />}>
         <Route index element={<ScopeProbe />} />
@@ -97,6 +99,27 @@ describe('DashboardLayout membership scope', () => {
     auth.getCurrentUser.mockReset();
     auth.makeRequest.mockReset();
     window.localStorage.clear();
+  });
+
+  it('clears the old search when the user selects another business', async () => {
+    configureInitialUser();
+    renderLayout('/dashboard?business_id=business-a&search_task_id=riderra-search&section=letters&company_filter=eligible');
+    await screen.findByText('business-a');
+    fireEvent.click(screen.getByRole('button', { name: 'Сменить бизнес в меню' }));
+    await waitFor(() => expect(screen.getByTestId('current-business')).toHaveTextContent('business-b'));
+    expect(screen.getByTestId('route')).toHaveTextContent('business_id=business-b');
+    expect(screen.getByTestId('route')).not.toHaveTextContent('search_task_id');
+    expect(screen.getByTestId('route')).not.toHaveTextContent('company_filter');
+    expect(screen.getByTestId('route')).toHaveTextContent('section=letters');
+    expect(window.localStorage.getItem('selectedBusinessId')).toBe('business-b');
+  });
+
+  it('still opens a deep link in its business with the linked search intact', async () => {
+    configureInitialUser();
+    window.localStorage.setItem('selectedBusinessId', businessA.id);
+    renderLayout('/dashboard?business_id=business-b&search_task_id=organic-search');
+    await waitFor(() => expect(screen.getByTestId('current-business')).toHaveTextContent('business-b'));
+    expect(screen.getByTestId('route')).toHaveTextContent('search_task_id=organic-search');
   });
 
   it('replaces a revoked current business and clears scope-bound child state', async () => {

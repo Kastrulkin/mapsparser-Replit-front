@@ -1,7 +1,7 @@
 import { useLatestCallback } from '@/hooks/useLatestCallback';
 import type { BusinessRecord } from '@/types/business';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { HttpError, newAuth, type User } from '../lib/auth_new';
 import { getCapabilityAccessForBusiness, type SubscriptionCapability } from '../lib/subscriptionAccess';
 import { DashboardHeader } from './DashboardHeader';
@@ -90,6 +90,7 @@ const LockedSectionPreview = ({ section, currentTierName, paywallHref }: { secti
 
 export const DashboardLayout = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [businesses, setBusinesses] = useState<DashboardBusiness[]>([]);
@@ -216,6 +217,20 @@ export const DashboardLayout = () => {
   });
 
   const appliedBusinessLink = useRef('');
+  // Explicit selection changes the workspace, not the owner of the old linked search.
+  // Update the URL in the same event so remounted pages cannot resolve the old group.
+  const selectBusinessFromMenu = useLatestCallback((businessId: string) => {
+    if (businessId === currentBusinessId || !businesses.some(business => business.id === businessId)) return;
+    const params = new URLSearchParams(location.search);
+    params.set('business_id', businessId);
+    params.delete('search_task_id');
+    params.delete('company_filter');
+    const search = `?${params.toString()}`;
+    appliedBusinessLink.current = `${location.pathname}${search}`;
+    navigate({ pathname: location.pathname, search, hash: location.hash }, { replace: true });
+    void handleBusinessChange(businessId);
+  });
+
   useEffect(() => {
     const requestedBusiness = new URLSearchParams(location.search).get('business_id');
     const linkKey = `${location.pathname}${location.search}`;
@@ -341,7 +356,7 @@ export const DashboardLayout = () => {
           businesses={businesses}
           currentBusinessId={currentBusinessId}
           currentBusiness={currentBusiness}
-          onBusinessChange={handleBusinessChange}
+          onBusinessChange={selectBusinessFromMenu}
           controlScope={controlScope}
           onControlScopeChange={selectControlScope}
           isSuperadmin={user.is_superadmin}
