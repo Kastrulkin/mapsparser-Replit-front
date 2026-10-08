@@ -1,56 +1,281 @@
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useOutletContext } from 'react-router-dom';
 import {
-	AlertTriangle,
-	CheckCircle2,
-	Loader2,
-	MessageSquareText,
-	ShieldCheck,
-	Sparkles,
-	Upload
+  Activity,
+  AlertTriangle,
+  ArrowDownUp,
+  Bot,
+  CheckCircle2,
+  Clock3,
+  Copy,
+  Database,
+  Download,
+  FileCheck2,
+  FileText,
+  LifeBuoy,
+  Loader2,
+  Mail,
+  MessageSquareText,
+  Play,
+  ReceiptText,
+  RefreshCw,
+  Search,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  Trash2,
+  Upload,
+  Users,
+  Wrench,
+  Workflow,
+  Zap,
 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
-	DialogFooter
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog';
-import { cn } from '@/lib/utils';
 import {
-	agentExecutionModeLabel,
-	humanizeCategory,
-	humanizeMeta,
-	humanizeStatus,
-	statusTone
+  DashboardActionPanel,
+  DashboardEmptyState,
+  DashboardPageHeader,
+  DashboardSection,
+} from '@/components/dashboard/DashboardPrimitives';
+import { newAuth } from '@/lib/auth_new';
+import { api } from '@/services/api';
+import { cn } from '@/lib/utils';
+import type {
+  DashboardContext,
+  AgentBlueprint,
+  AgentVoicePersona,
+  ProductAgentView,
+  AgentApproval,
+  AgentArtifact,
+  AgentRunStep,
+  AgentRunBillingAction,
+  AgentRunObservability,
+  AgentRun,
+  AgentRunInputField,
+  AgentRunInputSchema,
+  AgentServerTodaySummary,
+  AgentMetricsSummary,
+  AgentBillingBreakdownItem,
+  AgentUnifiedBillingLedger,
+  AgentBlueprintDetails,
+  AgentVersionDiff,
+  AgentLearningLoop,
+  AgentLearningEvent,
+  AgentVersionEvent,
+  AgentSource,
+  AgentSourceCatalogItem,
+  AgentIntegration,
+  AgentExternalAuthOption,
+  AgentIntegrationCatalogItem,
+  AgentIntegrationBindingStatus,
+  AgentIntegrationPreflight,
+  AgentProviderAction,
+  AgentProviderRoute,
+  AgentConnectionPlanItem,
+  AgentConnectionPlan,
+  AgentConnectionDecision,
+  AgentActivationGate,
+  AgentActivationPathStep,
+  AgentPostCreateHandoff,
+  AgentReviewSection,
+  AgentJournalEntry,
+  AgentReview,
+  AgentBuilderScenario,
+  PersonaAgent,
+  LegacyMigrationPlan,
+  AgentWorkspaceMode,
+  AgentTodaySummary,
+  AgentAttentionItem,
+  AgentBusinessStatus,
+  EmployeeStatus,
+  AgentExecutionMode,
+  EmployeeNextActionKind,
+  EmployeeWorkspaceState,
+  AgentRegistryFilter,
+  AgentRunAnimation,
+  EmployeeNextAction,
+  EmployeeTestResult,
+  EmployeeResponsibility,
+  AgentScenarioStep,
+  AgentConfidenceFact,
+  FeedbackVersionNotice,
+  AgentBuilderMessage,
+  AgentBuilderQuestion,
+  AgentBuilderConnectorPreview,
+  AgentBuilderFeasibility,
+  AgentBuilderSetupStep,
+  AgentBuilderSetupFlow,
+  AgentBuilderPlannerLoop,
+  AgentCompilerPolicyItem,
+  AgentCompilerWorkflowDraft,
+  AgentCompilerPolicyReview,
+  AgentConnectorIntelligence,
+  AgentConnectionSummary,
+  AgentConnectionReadinessService,
+  AgentConnectionReadiness,
+  AgentConnectionResolverItem,
+  AgentConnectionResolver,
+  AgentServiceIntelligenceItem,
+  AgentServiceIntelligence,
+  AgentBuilderPreview,
+  AgentBuilderSession
+} from './types';
+import {
+  getRequestErrorMessage,
+  objectValue,
+  recordValue,
+  getBlueprintMetadata,
+  getBlueprintBuilderPreview,
+  normalizeSpreadsheetInput,
+  normalizePostCreateHandoff,
+  normalizeAgentIntegrationPreflight,
+  normalizeConnectionPlan,
+  normalizeConnectionPlanItem,
+  normalizeProviderRoute,
+  formatPreflightBlock,
+  connectorLabel,
+  userFacingAgentTechText,
+  agentFlowStatusLabel,
+  autoSelectBuilderConnectionBindings,
+  autoSelectBuilderProviderRoutes,
+  builderRouteIsUsable,
+  builderRequiredProviderRouteKeys,
+  bindingResolutionLabel,
+  bindingUserFacingRole,
+  bindingActionHint,
+  connectionResourceFacts,
+  isReadyConnectionAction,
+  buildAgentConnectionDecision,
+  buildBuilderCreationDecision,
+  builderBlockingQuestions,
+  activationBlockerText,
+  buildActivationGateDecision,
+  buildActivationPathSteps
+} from './normalization';
+import {
+  getVersionNumber,
+  getLatestVersionNumber,
+  getActiveVersionNumber,
+  getActiveVersionId,
+  getLatestVersionId,
+  getRunnableVersionId,
+  agentExecutionMode,
+  agentExecutionModeLabel,
+  agentNextRunLabel,
+  businessResultPrimaryText,
+  estimatedAgentRunCredits,
+  workflowStepsForAnimation,
+  getAgentVoiceName,
+  runStatusFilters,
+  learningTriggerOptions,
+  agentPromptExamples,
+  agentScenarios,
+  statusTone,
+  statusLabels,
+  stepLabels,
+  metaLabels,
+  resultFieldLabels,
+  outreachProgressStages,
+  genericRunStages,
+  humanizeStatus,
+  humanizeStep,
+  humanizeMeta,
+  humanizeCategory,
+  explainApproval,
+  approvalActionLabels,
+  getApprovalPreviewItems,
+  approvalDecisionTitle,
+  getAgentListStatus,
+  formatShortDate,
+  formatLastRun,
+  isWithinLastDay,
+  buildTodaySummary,
+  initialRunParameters,
+  validateRunParameters,
+  buildAgentBusinessStatus,
+  buildEmployeeDescription,
+  buildEmployeeStatus,
+  buildEmployeeWorkspaceState,
+  buildEmployeeLastActivity,
+  buildEmployeeNextAction,
+  getMissingConnectorLabel,
+  buildEmployeePrimaryAction,
+  pushUniqueResponsibility,
+  buildEmployeeResponsibilities,
+  buildEmployeeWorkspaceStory,
+  buildAgentUserMode,
+  buildReasonCard,
+  buildBuildConfidenceFacts
 } from './model';
 import {
-	buildBuilderCreationDecision,
-	builderBlockingQuestions,
-	builderRequiredProviderRouteKeys,
-	connectorLabel,
-	userFacingAgentTechText
-} from './normalization';
-import type {
-	AgentBuilderConnectorPreview,
-	AgentBuilderFeasibility,
-	AgentBuilderPlannerLoop,
-	AgentBuilderScenario,
-	AgentBuilderSession,
-	AgentConnectionDecision,
-	AgentConnectionPlan,
-	AgentConnectorIntelligence,
-	AgentExecutionMode
-} from './types';
+  stringifyBusinessValue,
+  isTechnicalApprovalPayload,
+  toPlainRecord,
+  meaningfulResultKeys,
+  extractBusinessResultPayload,
+  findPreparedResultPayload,
+  hasPreparedMessageText,
+  resultPayloadStatus,
+  isBusinessBlockerPayload,
+  isBusinessBlockerApproval,
+  buildEmployeeTestResult,
+  versionHasGoogleSheetsReadStep,
+  detailsHaveGoogleSheetsReadStep,
+  needsScenarioRebuildForSourceResult,
+  needsGoogleSheetsSourceSetup,
+  needsGoogleAccessReconnect,
+  hasFreshGoogleSheetsAccessAfterResult,
+  buildEmployeeHistoryStory,
+  buildEmployeeAttentionItems,
+  buildAttentionInbox,
+  buildConfidenceFacts,
+  buildScenarioPipeline,
+  buildBusinessHistoryEvents,
+  humanizeSourceType,
+  humanizeSourceState,
+  formatSourceSize
+} from './results';
+import {
+  parseAgentConfig,
+  uploadAgentSource
+} from './api';
 
-import { BuilderCompilerPolicyReviewPanel, BuilderConnectionReadinessPanel, BuilderConnectionResolverPanel, BuilderConnectionSummaryPanel, BuilderRequiredConnectionsPanel, BuilderServiceIntelligencePanel, BuilderSetupFlowPanel } from './builder_setup';
-import { builderPreviewDataText } from './builder_setup.logic';
 import {
-	AgentConnectionPlanPanel
+  BuilderRequiredConnectionsPanel,
+  builderPreviewDataText,
+  BuilderCompilerPolicyReviewPanel,
+  BuilderServiceIntelligencePanel,
+  BuilderConnectionReadinessPanel,
+  BuilderConnectionResolverPanel,
+  BuilderSetupFlowPanel,
+  BuilderConnectionSummaryPanel
+} from './builder_setup';
+import {
+  ConnectorIntelligencePanel,
+  BuilderPlannerLoopPanel,
+  BuilderExecutionBoundaryPanel,
+  PreviewRow,
+  BuilderFeasibilityPanel,
+  agentExecutionModeOptions
+} from './employee';
+import {
+  AgentConnectionPlanPanel
 } from './connections';
-import { BuilderExecutionBoundaryPanel, BuilderFeasibilityPanel, BuilderPlannerLoopPanel, ConnectorIntelligencePanel, PreviewRow } from './employee';
-import { agentExecutionModeOptions } from './employee.logic';
-import { TimezoneSelect } from './timezone-select';
 import {
-	WizardTextArea
+  WizardTextArea
 } from './workspace';
+import { TimezoneSelect } from './timezone-select';
 
 const AGENT_BLUEPRINT_LEGACY_SOURCE_CONTRACT_LABELS = [
   'Preflight и preview run',
@@ -414,6 +639,7 @@ export const DialogAgentBuilder = ({
   reply,
   session,
   actionLoading,
+  error,
   onInputChange,
   onReplyChange,
   onStart,
@@ -440,6 +666,7 @@ export const DialogAgentBuilder = ({
   reply: string;
   session: AgentBuilderSession | null;
   actionLoading: boolean;
+  error?: string | null;
   onInputChange: (value: string) => void;
   onReplyChange: (value: string) => void;
   onStart: () => void;
@@ -580,6 +807,12 @@ export const DialogAgentBuilder = ({
         readyForDraft={canCreateDraft}
         created={false}
       />
+      {error ? (
+        <div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>{error}</span>
+        </div>
+      ) : null}
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
         <textarea
           className="min-h-28 resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm leading-6 outline-none transition focus:border-slate-400"
@@ -592,6 +825,12 @@ export const DialogAgentBuilder = ({
           {session ? 'Обновить понимание' : 'Начать диалог'}
         </Button>
       </div>
+      {actionLoading ? (
+        <div role="status" aria-live="polite" className="flex items-center gap-2 rounded-xl bg-sky-50 px-3 py-2 text-sm text-sky-900">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
+          <span>LocalOS разбирает задачу и проверяет, какие действия и подключения доступны. Результат появится здесь.</span>
+        </div>
+      ) : null}
 
       {session ? (
         <div className="space-y-4">

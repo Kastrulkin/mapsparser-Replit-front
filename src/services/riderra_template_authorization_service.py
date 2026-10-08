@@ -944,7 +944,10 @@ def is_riderra_template_lane(item: dict[str, Any]) -> bool:
 
 def reserve_daily_company_slot(cursor: Any, *, queue_id: str, item: dict[str, Any]) -> dict[str, Any]:
     """Count queued/reserved/sent/uncertain Riderra companies for Moscow day."""
-    if not is_riderra_template_lane(item):
+    ai_buyer_lane = ((item.get("policy_json") or {}).get("approval_mode") == "ai_rules"
+                     and str(item.get("business_id") or "") == BUSINESS_ID
+                     and str(item.get("workstream_type") or "") == "client_partnership")
+    if not is_riderra_template_lane(item) and not ai_buyer_lane:
         return {"allowed": False, "reason_code": "riderra_template_scope_invalid", "item": item}
     cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("riderra:buyer-daily:Europe/Moscow",))
     cursor.execute(

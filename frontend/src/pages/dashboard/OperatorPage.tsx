@@ -1,3 +1,5 @@
+import { OperatorActivity, OperatorReply } from '@/components/operator/OperatorActivity';
+import { OutreachGroupCard, type GroupPresentation } from '@/components/prospecting/OutreachGroupCard';
 import { OperatorRequestHistory } from '@/components/operator/OperatorRequestHistory';
 import { OperatorSpeech, OperatorVoiceInput, VoiceSubmission } from '@/components/operator/OperatorVoice';
 import { voiceHeaders, waitForOperatorResult } from '@/components/operator/OperatorVoice.logic';
@@ -14,13 +16,13 @@ import {
 	Send,
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 
 import { BetaFeedbackBanner } from '@/components/dashboard/BetaFeedbackBanner';
 import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { useLanguage } from '@/i18n/LanguageContext';
 import { cn } from '@/lib/utils';
 import { api } from '@/services/api';
 import {
@@ -30,6 +32,8 @@ import {
 
 type DashboardContext = {
   currentBusinessId: string | null;
+  controlScope?: { kind: string; id?: string; name?: string } | null;
+  user?: { is_superadmin?: boolean } | null;
   currentBusiness?: {
     id: string;
     name?: string;
@@ -40,6 +44,20 @@ type OperatorChatResult = {
   message_id?: string;
   input_type?: string;
   status: 'completed' | 'blocked' | 'unsupported' | string;
+  delivery_status?: string;
+  search_started?: boolean;
+  task?: {
+    id: string;
+    presentation?: GroupPresentation;
+    revision?: string;
+    business_id?: string;
+    status: string;
+    display_name?: string;
+    stage?: string;
+    config?: { target_count?: number; max_candidates?: number; max_search_calls?: number };
+    state?: { search_calls?: number };
+    report?: { found?: number; imported?: number; awaiting_check?: number; checking?: number; verification_failed?: number; excluded?: number; duplicates?: number; eligible?: number; shortfall?: number; credit_limit?: number; credits_charged?: number };
+  };
   intent?: string;
   chat_response?: string;
   queue_id?: string;
@@ -76,7 +94,9 @@ type OperatorChatResult = {
     status?: string;
     action_id?: string;
     summary?: string;
+    capability?: string;
   };
+  credit_quote?: { total_max?: number };
   ai_router?: {
     status?: string;
     intent?: string;
@@ -208,6 +228,7 @@ type ChatMessage = {
   id: string;
   role: 'user' | 'operator';
   text: string;
+  fresh?: boolean;
   result?: OperatorChatResult | RefreshResult;
 };
 
@@ -246,7 +267,7 @@ const mapStoredMessages = (items: Array<{
 }));
 
 export const OperatorPage = () => {
-  const { currentBusinessId, currentBusiness } = useOutletContext<DashboardContext>();
+  const { currentBusinessId, currentBusiness, controlScope, user } = useOutletContext<DashboardContext>();
   const { language } = useLanguage();
   const copy = operatorPageCopyForLanguage(language);
   const businessName = localizeDemoBusinessName(currentBusiness?.name || '', language) || copy.selectedBusiness;
@@ -255,8 +276,14 @@ export const OperatorPage = () => {
   const [chatMessage, setChatMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const [pendingChatMessage, setPendingChatMessage] = useState<string | null>(null);
+  const [pendingChatPhase, setPendingChatPhase] = useState('Отправляем команду…');
+  const [commandWaiting, setCommandWaiting] = useState(false);
+  const [commandAccepted, setCommandAccepted] = useState(false);
+  const chatWindowRef = useRef<HTMLDivElement>(null);
+  const scrollToLatestRef = useRef(false);
   const chatSendInFlightRef = useRef(false);
-  const pendingRequest = useRef({ businessId: "", text: "", id: "" });
+  const pendingRequest = useRef({ businessId: "", text: "", groupId: "", id: "" });
   const [refreshCheckingQueueId, setRefreshCheckingQueueId] = useState<string | null>(null);
   const [bulkGeneratingKey, setBulkGeneratingKey] = useState<string | null>(null);
   const [applyingServiceJobId, setApplyingServiceJobId] = useState<string | null>(null);
@@ -270,13 +297,35 @@ export const OperatorPage = () => {
   const [historyRetry, setHistoryRetry] = useState(0);
   const [confirmingActionId, setConfirmingActionId] = useState<string | null>(null);
   const [rejectingActionId, setRejectingActionId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchTasks, setSearchTasks] = useState<NonNullable<OperatorChatResult['task']>[]>([]);
+  const requestedSearchId = searchParams.get('search_task_id') || '';
+  const [selectedSearchId, setSelectedSearchId] = useState(requestedSearchId);
+  useEffect(() => { setSelectedSearchId(requestedSearchId); }, [requestedSearchId]);
+  const suggestedCommand = searchParams.get('command');
+  useEffect(() => { if (suggestedCommand) setChatMessage(suggestedCommand); }, [suggestedCommand]);
+  const [savedSearchTask, setSavedSearchTask] = useState<OperatorChatResult['task']>();
+  const activeSearchTask = selectedSearchId ? searchTasks.find(task => task.id === selectedSearchId && task.business_id === currentBusinessId) || (savedSearchTask?.id === selectedSearchId && savedSearchTask?.business_id === currentBusinessId ? savedSearchTask : undefined) : undefined;
+  useEffect(() => {
+    setSearchTasks([]); setSavedSearchTask(undefined);
+    if (!currentBusinessId) return;
+    let live = true;
+    const refresh = async () => {
+      try {
+        const response = await api.get('/partnership/continuations', { params: { business_id: currentBusinessId } });
+        if (live) setSearchTasks(response.data?.items || []);
+      } catch { if (live) setSavedSearchTask(undefined); }
+    };
+    void refresh();
+    return () => { live = false; };
+  }, [currentBusinessId]);
   useEffect(() => {
     if (!currentBusinessId) {
       setConversationId(null);
       setMessages([]);
       return;
     }
-    setMessages([]); setConversationId(null);
+    setMessages([]); setConversationId(null); setPendingChatMessage(null);
     chatSendInFlightRef.current = false; setChatLoading(false); setConfirmingActionId(null); setRejectingActionId(null);
     const storageKey = `localos_operator_conversation_${currentBusinessId}`;
     const storedConversationId = window.localStorage.getItem(storageKey);
@@ -296,6 +345,7 @@ export const OperatorPage = () => {
       const storedMessages = Array.isArray(response.data.messages) ? response.data.messages : [];
       const loadedConversationId = storedConversationId || response.data.conversation?.id || null;
       setConversationId(loadedConversationId);
+      scrollToLatestRef.current = true;
       setMessages(mapStoredMessages(storedMessages));
       if (loadedConversationId) window.localStorage.setItem(storageKey, loadedConversationId);
     }).catch((error: unknown) => {
@@ -332,12 +382,18 @@ export const OperatorPage = () => {
     };
   }, [currentBusinessId, historyRetry]);
 
+  useEffect(() => {
+    if (!scrollToLatestRef.current || !chatWindowRef.current) return;
+    chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
+    scrollToLatestRef.current = false;
+  }, [messages, pendingChatMessage]);
+
   const appendPair = (userText: string, result: OperatorChatResult) => {
     const stamp = String(Date.now());
     setMessages((current) => [
       ...current,
       { id: `${stamp}-user`, role: 'user', text: userText },
-      { id: `${stamp}-operator`, role: 'operator', text: resultText(result), result },
+      { id: `${stamp}-operator`, role: 'operator', text: resultText(result), fresh: true, result },
     ]);
   };
 
@@ -348,6 +404,7 @@ export const OperatorPage = () => {
         id: `${Date.now()}-${suffix}`,
         role: 'operator',
         text: resultText(result),
+        fresh: true,
         result,
       },
     ]);
@@ -355,11 +412,63 @@ export const OperatorPage = () => {
 
   const sendOperatorChatMessage = async (overrideText?: string, source?: VoiceSubmission) => {
     const text = (overrideText || chatMessage).trim();
-    if (!currentBusinessId || !text || chatSendInFlightRef.current) return;
-    if (pendingRequest.current.businessId !== currentBusinessId || pendingRequest.current.text !== text) pendingRequest.current = { businessId: currentBusinessId, text, id: crypto.randomUUID() };
+    const platformScope = controlScope?.kind === 'platform';
+    if ((!currentBusinessId && !platformScope) || !text || chatSendInFlightRef.current) return;
+    const asksAllClients = /всем\s+клиент|все\s+клиент|всем\s+бизнес|все\s+бизнес|по\s+всем\s+(компан|точк)|all\s+(clients|businesses)|every\s+client/i.test(text);
+    const platformContentRequest = platformScope || (asksAllClients && user?.is_superadmin === true);
+    if (platformContentRequest) {
+      const asksContent = /\b(today|today's|posts?|publications?)\b|сегодня|публикац|пост(ы|а|ов)?|контент/i.test(text);
+      chatSendInFlightRef.current = true;
+      setChatLoading(true);
+      try {
+        if (!user?.is_superadmin) throw new Error('Обзор всех клиентских бизнесов доступен только администратору LocalOS.');
+        if (!asksContent) {
+          appendPair(text, { status: 'unsupported', intent: 'platform_scope', chat_response: 'В области «LocalOS · все бизнесы» пока доступен обзор публикаций. Для правки конкретного плана выберите нужную точку — так изменение будет привязано к правильной компании.' });
+        } else {
+          const start = new Date();
+          const today = new Date(start.getTime() - start.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+          const days = /сегодня|\btoday\b/i.test(text) ? 0 : /недел|\bweek\b/i.test(text) ? 7 : /месяц|\bmonth\b|следующ|upcoming/i.test(text) ? 30 : 90;
+          const endDate = new Date(`${today}T00:00:00`);
+          endDate.setDate(endDate.getDate() + days);
+          const toDate = new Date(endDate.getTime() - endDate.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+          const response = await api.get('/operator/content/today', { params: days === 0
+            ? { scope_type: 'platform' }
+            : { scope_type: 'platform', from_date: today, to_date: toDate },
+          });
+          const entries = Array.isArray(response.data.businesses) ? response.data.businesses : [];
+          const lines = entries.map((entry: { name?: string; address?: string; posts?: Array<{ title?: string; channel?: string; status?: string; scheduled_for?: string; local_date?: string; handoff_status?: string }> }) => {
+            const posts = Array.isArray(entry.posts) ? entry.posts : [];
+            const location = [entry.name, entry.address].filter(Boolean).join(' — ');
+            if (!posts.length) return `• ${location}: за выбранный период публикаций нет.`;
+            return `• ${location}:\n${posts.map((post) => {
+              const scheduledDate = post.local_date || (post.scheduled_for ? new Date(post.scheduled_for).toLocaleDateString() : 'дата не задана');
+              const handoff = post.handoff_status === 'delivered' ? 'передано сотруднику' : post.handoff_status === 'partially_delivered' ? 'передано частично' : post.handoff_status === 'failed' ? 'ошибка передачи' : post.handoff_status === 'needs_reconciliation' ? 'передачу нужно сверить' : 'не передавалось';
+              return `  — ${scheduledDate} · ${post.title || 'Без темы'} · ${post.channel || 'канал не указан'} · публикация: ${post.status || 'статус неизвестен'} · передача: ${handoff}`;
+            }).join('\n')}`;
+          });
+          const warnings = Array.isArray(response.data.warnings) ? response.data.warnings : [];
+          const period = days === 0 ? 'сегодня по местному времени каждой точки' : `${today} — ${toDate}`;
+          appendPair(text, { status: 'completed', intent: 'platform_content_overview', chat_response: `Публикации по всем бизнесам и точкам LocalOS · ${period}:\n\n${lines.join('\n') || 'Активных клиентских бизнесов не найдено.'}${warnings.length ? `\n\nПримечания: ${warnings.join(' ')}` : ''}\n\nСтатус передачи сотруднику и статус публикации показаны отдельно. Данные LocalOS сами по себе не подтверждают размещение на внешней площадке.` });
+        }
+        if (!overrideText) setChatMessage('');
+      } catch (err) {
+        appendPair(text, { status: 'blocked', intent: 'platform_content_overview', chat_response: err instanceof Error ? err.message : 'Не удалось загрузить публикации по клиентам.' });
+      } finally {
+        chatSendInFlightRef.current = false;
+        setChatLoading(false);
+      }
+      return;
+    }
+    if (!currentBusinessId) return;
+    if (pendingRequest.current.businessId !== currentBusinessId || pendingRequest.current.text !== text || pendingRequest.current.groupId !== selectedSearchId) pendingRequest.current = { businessId: currentBusinessId, text, groupId: selectedSearchId, id: crypto.randomUUID() };
     historyVersion.current++;
     setHistoryLoading(false);
     chatSendInFlightRef.current = true;
+    scrollToLatestRef.current = true;
+    setPendingChatMessage(text);
+    setPendingChatPhase('Отправляем команду…');
+    setCommandAccepted(false);
+    setCommandWaiting(false);
     setChatLoading(true);
     try {
       const response = await api.post('/operator/chat', {
@@ -367,6 +476,7 @@ export const OperatorPage = () => {
         message: text,
         conversation_id: conversationId,
         channel: 'web',
+        search_task_id: selectedSearchId || null,
         request_id: pendingRequest.current.id,
         ...source,
       });
@@ -375,19 +485,33 @@ export const OperatorPage = () => {
         status: 'blocked',
         chat_response: 'Не получил ответ Operator.',
       };
-      const result=await waitForOperatorResult(initialResult,currentBusinessId,voiceHeaders,()=>activeBusiness.current===currentBusinessId);
+      setCommandAccepted(true);
+      setPendingChatPhase('Готовим ответ…');
+      const result=await waitForOperatorResult(initialResult,currentBusinessId,voiceHeaders,()=>activeBusiness.current===currentBusinessId, job => {
+        setCommandWaiting(job.status === 'queued' || job.status === 'waiting_for_review');
+        if (job.status === 'queued') setPendingChatPhase('Команда в очереди · ждёт запуска');
+        else if (job.status === 'running') setPendingChatPhase(job.stage || 'Выполняем команду…');
+        else if (job.status === 'waiting_for_review') setPendingChatPhase('Нужно ваше подтверждение');
+      });
       if(activeBusiness.current!==currentBusinessId)return;
-      pendingRequest.current = { businessId: "", text: "", id: "" };
+      pendingRequest.current = { businessId: "", text: "", groupId: "", id: "" };
+      scrollToLatestRef.current = true;
       appendPair(text, result);
+      if (result.task?.id && (!result.task.business_id || result.task.business_id === currentBusinessId)) {
+        setSavedSearchTask({...result.task, business_id: currentBusinessId});
+        setSelectedSearchId(result.task.id);
+        setSearchParams(current => { const next = new URLSearchParams(current); next.set('search_task_id', result.task.id); next.set('business_id', currentBusinessId); return next; }, { replace: true });
+      }
       const nextConversationId = response.data.conversation_id || result.conversation_id;
       if (nextConversationId) {
         setConversationId(nextConversationId);
         window.localStorage.setItem(`localos_operator_conversation_${currentBusinessId}`, nextConversationId);
       }
-      if (!overrideText) setChatMessage('');
+      if (!overrideText) setChatMessage((current) => current.trim() === text ? '' : current);
     } catch (err) {
       if (activeBusiness.current !== currentBusinessId) return;
       if (source) throw err;
+      scrollToLatestRef.current = true;
       appendPair(text, {
         status: 'blocked',
         intent: 'error',
@@ -397,6 +521,7 @@ export const OperatorPage = () => {
     } finally {
       if (activeBusiness.current === currentBusinessId) {
         chatSendInFlightRef.current = false;
+        setPendingChatMessage(null);
         setChatLoading(false);
       }
     }
@@ -627,16 +752,9 @@ export const OperatorPage = () => {
       {currentBusinessId && <OperatorRequestHistory key={currentBusinessId} businessId={currentBusinessId} language={language} />}
 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-4 py-3">
-          <div className="text-sm font-semibold text-slate-950">
-            {businessName}
-          </div>
-          <div className="mt-1 text-sm leading-6 text-slate-600">
-            {copy.safetyNote}
-          </div>
-        </div>
-
-        <div className="max-h-[62vh] min-h-[480px] space-y-4 overflow-y-auto bg-slate-50/70 px-4 py-4">
+        {currentBusinessId && searchTasks.length > 0 && <div className="border-t bg-background px-4 py-3"><label className="text-sm">Группа компаний<select aria-label="Группа компаний" className="ml-2 rounded-md border bg-background px-2 py-2" value={selectedSearchId} onChange={event => { setSelectedSearchId(event.target.value); const next = new URLSearchParams(searchParams); if (event.target.value) next.set('search_task_id', event.target.value); else next.delete('search_task_id'); next.set('business_id', currentBusinessId); setSearchParams(next, { replace: true }); }}><option value="">Выберите поиск</option>{searchTasks.map(task => <option key={task.id} value={task.id}>{task.display_name || task.id}</option>)}</select></label></div>}
+        {currentBusinessId && activeSearchTask?.id && <div className="border-t border-slate-200 bg-white px-4 py-3"><OutreachTaskStatus key={`${currentBusinessId}:${activeSearchTask.id}`} businessId={currentBusinessId} initialTask={activeSearchTask} /></div>}
+        <div ref={chatWindowRef} data-testid="operator-message-list" className="max-h-[62vh] min-h-[480px] space-y-4 overflow-y-auto bg-slate-50/70 px-4 py-4">
           {historyError ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="status">
               <span>{historyError}</span>
@@ -651,7 +769,7 @@ export const OperatorPage = () => {
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               <span translate="no" className="notranslate">{copy.loadingHistory}</span>
             </div>
-          ) : messages.length === 0 ? (
+          ) : messages.length === 0 && !pendingChatMessage ? (
             <div className="mx-auto flex min-h-[320px] max-w-2xl flex-col items-center justify-center text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white">
                 <Bot className="h-6 w-6" />
@@ -674,7 +792,7 @@ export const OperatorPage = () => {
               </div>
             </div>
           ) : (
-            messages.map((message) => (
+            messages.map((message, index) => (
               <div key={message.id} className={cn('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
                 <div
                   className={cn(
@@ -684,11 +802,15 @@ export const OperatorPage = () => {
                       : 'border border-slate-200 bg-white text-slate-800',
                   )}
                 >
-                  <div className="whitespace-pre-wrap">{message.text}</div>
+                  {message.role === 'operator' ? <OperatorReply animate={message.fresh} text={message.result && 'approval' in message.result && message.result.approval?.capability === 'partnerships.continue_outreach' && !('credit_quote' in message.result && message.result.credit_quote)
+                    ? 'Прежние условия поиска устарели. Откройте актуальную стоимость в кредитах LocalOS.'
+                    : message.text.replace(/DeepSeek/gi, 'ИИ')} /> : <div className="whitespace-pre-wrap">{message.text}</div>}
                   {message.role === 'operator' && currentBusinessId && <OperatorSpeech key={`${currentBusinessId}:${message.id}`} businessId={currentBusinessId} messageId={message.result?.message_id || message.id} prepare={message.result?.input_type === 'voice'} />}
                   {message.role === 'operator' && message.result ? (
                     <OperatorResultActions
                       result={message.result}
+                      businessId={currentBusinessId}
+                      canStartPreview={index === messages.length - 1}
                       copiedKey={copiedKey}
                       loading={{
                         refreshCheckingQueueId,
@@ -707,13 +829,23 @@ export const OperatorPage = () => {
                       onMarkManualPublished={markManualPublished}
                       onConfirmOperatorAction={confirmOperatorAction}
                       onRejectOperatorAction={rejectOperatorAction}
+                      onSendCommand={sendOperatorChatMessage}
+                      onEditPreview={() => setChatMessage('Измени условия последнего поиска: ')}
                     />
                   ) : null}
                 </div>
               </div>
             ))
           )}
+          {pendingChatMessage && <div className="flex justify-end">
+            <div className="max-w-3xl rounded-2xl bg-slate-950 px-4 py-3 text-sm leading-6 text-white shadow-sm">
+              <div className="whitespace-pre-wrap">{pendingChatMessage}</div>
+
+            </div>
+          </div>}
+          {pendingChatMessage && <OperatorActivity phase={pendingChatPhase} accepted={commandAccepted} waiting={commandWaiting} />}
         </div>
+
 
         <div className="border-t border-slate-200 bg-white px-4 py-4">
           {currentBusinessId && <OperatorVoiceInput key={currentBusinessId} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onSubmit={sendOperatorChatMessage} />}
@@ -740,7 +872,7 @@ export const OperatorPage = () => {
                       type="button"
                       className="h-12 w-full transition-transform active:scale-[0.96] lg:w-auto"
                       onClick={() => void sendOperatorChatMessage()}
-                      disabled={chatLoading || !currentBusinessId || !chatMessage.trim()}
+                      disabled={chatLoading || (!currentBusinessId && controlScope?.kind !== 'platform') || !chatMessage.trim()}
                     >
                       {chatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                       {copy.send}
@@ -760,8 +892,59 @@ export const OperatorPage = () => {
   );
 };
 
+type OutreachTask = NonNullable<OperatorChatResult['task']>;
+
+function OutreachTaskStatus({ businessId, initialTask }: { businessId: string; initialTask: OutreachTask }) {
+  const [task, setTask] = useState(initialTask);
+  const [refreshError, setRefreshError] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
+  const actionInFlight = useRef(false);
+  useEffect(() => {
+    let active = true;
+    let working = !!initialTask.presentation?.active;
+    let inFlight = false;
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const response = await api.get(`/partnership/continuations/${encodeURIComponent(initialTask.id)}`, { params: { business_id: businessId } });
+        if (!active) return;
+        const current = response.data as OutreachTask;
+        if (current) { working = !!current.presentation?.active; setTask(current); }
+        setRefreshError(!current);
+      } catch {
+        if (active) setRefreshError(true);
+      } finally { inFlight = false; }
+    };
+    void refresh();
+    let lastRefresh = Date.now();
+    const timer = window.setInterval(() => {
+      if (Date.now() - lastRefresh >= (working && !document.hidden ? 3000 : 15000)) { lastRefresh = Date.now(); void refresh(); }
+    }, 1000);
+    const focusRefresh = () => { if (!document.hidden) { lastRefresh = Date.now(); void refresh(); } };
+    document.addEventListener('visibilitychange', focusRefresh);
+    window.addEventListener('focus', focusRefresh);
+    return () => { active = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', focusRefresh); window.removeEventListener('focus', focusRefresh); };
+  }, [businessId, initialTask.id]);
+  return <div className="space-y-2">
+    <OutreachGroupCard name={task.display_name || 'Выбранный поиск'} presentation={task.presentation} busy={actionBusy} onAction={async action => {
+      if (actionInFlight.current) return;
+      actionInFlight.current = true; setActionBusy(true);
+      try {
+        await api.post(`/partnership/continuations/${task.id}`, { business_id: businessId, revision: task.revision, action: action.kind === 'draft_resume' ? 'resume_letters' : action.action });
+        const response = await api.get(`/partnership/continuations/${task.id}`, { params: { business_id: businessId } });
+        setTask(response.data); setRefreshError(false);
+      } catch { setRefreshError(true); }
+      finally { actionInFlight.current = false; setActionBusy(false); }
+    }} />
+    {refreshError && <p role="alert" className="text-sm text-destructive">Не удалось обновить состояние. Результаты сохранены; откройте поиск в «Партнёрствах».</p>}
+  </div>;
+}
+
 type OperatorResultActionsProps = {
   result: OperatorChatResult | RefreshResult;
+  businessId: string;
+  canStartPreview: boolean;
   copiedKey: string | null;
   loading: {
     refreshCheckingQueueId: string | null;
@@ -780,10 +963,14 @@ type OperatorResultActionsProps = {
   onMarkManualPublished: (draftId: string | undefined) => Promise<void>;
   onConfirmOperatorAction: (actionId: string | undefined) => Promise<void>;
   onRejectOperatorAction: (actionId: string | undefined) => Promise<void>;
+  onSendCommand: (text: string) => Promise<void>;
+  onEditPreview: () => void;
 };
 
 const OperatorResultActions = ({
   result,
+  businessId,
+  canStartPreview,
   copiedKey,
   loading,
   onCopy,
@@ -794,6 +981,8 @@ const OperatorResultActions = ({
   onMarkManualPublished,
   onConfirmOperatorAction,
   onRejectOperatorAction,
+  onSendCommand,
+  onEditPreview,
 }: OperatorResultActionsProps) => {
   const capabilityPanelId = useId();
   const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
@@ -808,12 +997,17 @@ const OperatorResultActions = ({
   const drafts = 'drafts' in result ? result.drafts || [] : [];
   const billingUrl = 'billing_url' in result ? result.billing_url : undefined;
   const resultRef = 'result_ref' in result ? result.result_ref : undefined;
+  const searchPreview = 'capability' in result && ['partnerships.prepare_message', 'partnerships.continue_outreach'].includes(result.capability || '')
+    && 'search_started' in result && result.search_started === false;
+  const searchTask = 'task' in result ? result.task : undefined;
   const approval = 'approval' in result ? result.approval : undefined;
+  const outdatedOutreachApproval = approval?.capability === 'partnerships.continue_outreach'
+    && !('credit_quote' in result && result.credit_quote?.total_max !== undefined);
   const capabilityCatalog = 'capability_catalog' in result ? result.capability_catalog || [] : [];
   const capabilityExamples = 'capabilities' in result ? result.capabilities || [] : [];
   const isOperatorHelp =
     ('intent' in result && result.intent === 'operator_help') || capabilityCatalog.length > 0 || capabilityExamples.length > 0;
-  const hasUsefulResultRef = Boolean(resultRef?.href && resultRef.href !== '/dashboard/operator');
+  const hasUsefulResultRef = !searchPreview && Boolean(resultRef?.href && resultRef.href !== '/dashboard/operator');
   const aiRouter = result.ai_router;
   const queueId = result.queue_id;
   const status = result.status || '';
@@ -837,7 +1031,9 @@ const OperatorResultActions = ({
                 : 'bg-amber-50 text-amber-800 ring-amber-200',
           )}
         >
-          {status || 'operator'}
+          {searchPreview ? 'Ожидает запуска' : searchTask?.id
+            ? status === 'approval_required' ? 'Ожидает подтверждения запуска' : 'Поручение сохранено'
+            : status === 'unsupported' ? 'Не выполнено' : status === 'blocked' ? 'Требуется действие' : status === 'approval_required' ? 'Ожидает подтверждения' : ('delivery_status' in result && result.delivery_status === 'queued') ? 'В очереди' : status || 'operator'}
         </span>
         {'credit_charged' in result && result.credit_charged ? <span>Списано {result.charged_credits || 0} кредитов</span> : null}
         {'manual_publication_only' in result && result.manual_publication_only ? <span>Публикация вручную</span> : null}
@@ -848,6 +1044,16 @@ const OperatorResultActions = ({
           </span>
         ) : null}
       </div>
+
+      {searchPreview && canStartPreview && !approval?.action_id ? (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-sky-950">
+          <p className="font-medium">Поиск ещё не начался</p>
+          <p className="mt-1">Условия и лимиты показаны выше. Подтвердите запуск.</p>
+          <Button type="button" size="sm" className="mt-2" onClick={() => void onSendCommand('Начни поиск по показанным условиям')}>
+            Начать поиск
+          </Button>
+        </div>
+      ) : null}
 
       {textToCopy ? (
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
@@ -978,7 +1184,15 @@ const OperatorResultActions = ({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        {approval?.action_id && approval.status === 'pending' ? (
+        {approval?.action_id && approval.status === 'pending' && outdatedOutreachApproval ? (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+            Условия этого подтверждения устарели. Стоимость поиска теперь указана в кредитах LocalOS.
+            <Button type="button" size="sm" variant="outline" className="mt-2 block" onClick={() => void onSendCommand('Покажи актуальные условия и стоимость в кредитах для последнего поручения по поиску компаний и подготовь новое подтверждение запуска')}>
+              Показать актуальные условия
+            </Button>
+          </div>
+        ) : null}
+        {approval?.action_id && approval.status === 'pending' && !outdatedOutreachApproval ? (
           <>
             <Button
               type="button"
@@ -987,17 +1201,17 @@ const OperatorResultActions = ({
               disabled={loading.confirmingActionId === approval.action_id || loading.rejectingActionId === approval.action_id}
             >
               {loading.confirmingActionId === approval.action_id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-              Подтвердить
+              {searchPreview ? 'Начать поиск' : 'Подтвердить'}
             </Button>
             <Button
               type="button"
               size="sm"
               variant="outline"
-              onClick={() => void onRejectOperatorAction(approval.action_id)}
+              onClick={() => { if (searchPreview) onEditPreview(); else void onRejectOperatorAction(approval.action_id); }}
               disabled={loading.confirmingActionId === approval.action_id || loading.rejectingActionId === approval.action_id}
             >
               {loading.rejectingActionId === approval.action_id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Отклонить
+              {searchPreview ? 'Изменить условия' : 'Отклонить'}
             </Button>
           </>
         ) : null}

@@ -14,7 +14,7 @@ EDITABLE = {'planned', 'draft_generated', 'edited'}
 
 def editorial_input(message):
     text = str(message).lower()
-    return bool(re.search(r'больше не (?:пиш|обещ|заяв)|правил.{0,20}(?:контент|пост)|не (?:пиши|обещай|заявляй)',text)) or bool(re.search(r'\bтон(?:а|е|ом|у)?\b|тональност',text)) or any(word in text for word in ('акцент', 'фокус', 'индивидуальност', 'запомни', 'факт о', 'факты о', 'моя история')) or (
+    return bool(re.search(r'больше не (?:пиш|обещ|заяв)|правил.{0,20}(?:контент|пост)|не (?:пиши|обещай|заявляй)',text)) or bool(re.search(r'\bтон(?:а|е|ом|у)?\b|тональност',text)) or any(word in text for word in ('акцент', 'фокус', 'индивидуальност', 'запомни', 'факт о', 'факты о', 'моя история')) or bool(re.search(r'(?:опубли|размест|поставь\s+в\s+план|подготовь\s+канал|проверь\s+публикац|уже\s+опубликован)',text)) or (
         any(word in text for word in ('пост', 'контент', 'публикац', 'тему')) and any(word in text for word in ('измен', 'помен', 'замен', 'переработ', 'перепиш', 'переведи', 'перевод', 'расскажу', 'придум', 'напиши')))
 
 
@@ -55,8 +55,138 @@ def read_context(cursor, business_id, user_id, arguments):
     cursor.execute('SELECT preferences_json FROM content_voice_profiles WHERE business_id=%s',(business_id,))
     profile=_row(cursor,cursor.fetchone())
     notes=(profile.get('preferences_json') or {}).get('editorial_notes') or []
-    return {'status':'completed','items':[{**{key:row.get(key) for key in (('id','plan_id','theme','goal','scheduled_for','status','plan_status') if arguments.get('include_details') else ('id','plan_id','theme','scheduled_for','status','plan_status'))},'version':_version(row)} for row in rows], 'plans':plans,
+    items=[]
+    for row in rows:
+        item={key:row.get(key) for key in (('id','plan_id','theme','goal','scheduled_for','status','draft_text','plan_status') if arguments.get('include_details') else ('id','plan_id','theme','scheduled_for','status','plan_status'))}
+        if arguments.get('include_details'):
+            metadata=row.get('metadata_json') if isinstance(row.get('metadata_json'),dict) else {}
+            item['selected_channels']=metadata.get('selected_channels') or []
+            item['selected_photo_asset_id']=metadata.get('selected_photo_asset_id') or ''
+        item['version']=_version(row)
+        items.append(item)
+    return {'status':'completed','items':items, 'plans':plans,
             'saved_notes':notes[-5:], 'external_writes_performed':False}
+
+
+def update_item_fields(cursor, business_id, user_id, arguments):
+    """Save one explicit editor change against the same content-plan row as the UI."""
+    authorize_actor(cursor, user_id, business_id)
+    rows = _items(cursor, business_id, arguments.get('plan_id'), lock=True, item_id=arguments.get('item_id'))
+    if len(rows) != 1 or rows[0].get('id') != arguments.get('item_id'):
+        return _result('Не удалось однозначно выбрать пост. Обновите список публикаций и выберите его снова.', 'clarification_required')
+    row = rows[0]
+    if row.get('status') not in EDITABLE or row.get('plan_status') == 'archived':
+        return _result('Этот пост уже утверждён, опубликован или архивирован; его нельзя изменить из чата.', 'blocked')
+    if arguments.get('version') != _version(row):
+        return _result('Пост изменился после просмотра. Обновите контекст и повторите правку.', 'blocked')
+
+    allowed = {'scheduled_for', 'draft_text', 'selected_channels', 'photo_asset_id'}
+    supplied = {key: value for key, value in arguments.items() if key in allowed and value is not None}
+    if not supplied:
+        return _result('Укажите, что изменить: дату, текст, каналы или фото.', 'clarification_required')
+    # Validate the complete edit before any mutation. A blocked photo/channel
+    # must not commit an earlier text edit from the same request.
+    if 'selected_channels' in supplied:
+        from services.content_plan_service import CONTENT_PLAN_PUBLISHING_CHANNELS
+        raw_channels = supplied['selected_channels']
+        if not isinstance(raw_channels, list) or any(str(value).strip() not in CONTENT_PLAN_PUBLISHING_CHANNELS for value in raw_channels):
+            return _result('Выберите только поддерживаемые площадки публикации.', 'clarification_required')
+    if 'photo_asset_id' in supplied:
+        asset_id = str(supplied['photo_asset_id'] or '').strip()
+        cursor.execute('SELECT id,metadata_json FROM photo_assets WHERE id=%s AND business_id=%s LIMIT 1', (asset_id, business_id))
+        asset = _row(cursor, cursor.fetchone())
+        if not asset_id or not asset or (asset.get('metadata_json') or {}).get('disk_import_available') is False:
+            return _result('Фото не найдено или файл недоступен в медиатеке выбранного бизнеса.', 'blocked')
+    updates = []
+    params = []
+    metadata = dict(row.get('metadata_json') or {})
+    if 'scheduled_for' in supplied:
+        try:
+            planned_date = date.fromisoformat(str(supplied['scheduled_for']))
+        except ValueError:
+            return _result('Дата должна быть указана в формате ГГГГ-ММ-ДД.', 'clarification_required')
+        if planned_date < date.today():
+            return _result('Нельзя перенести черновик на прошедшую дату.', 'blocked')
+        updates.append('scheduled_for=%s')
+        params.append(planned_date)
+    if 'draft_text' in supplied:
+        new_text = str(supplied['draft_text'] or '').strip()
+        if not new_text or len(new_text) > 12000:
+            return _result('Текст поста пустой или слишком длинный.', 'clarification_required')
+        updates.extend(['draft_text=%s', "status='edited'"])
+        params.append(new_text)
+        metadata['generation_source'] = 'operator_manual_edit'
+        metadata.pop('generation_error_reason', None)
+        cursor.execute('''UPDATE social_posts SET base_text=%s,status='needs_review',approved_at=NULL,approval_id=NULL,
+            automation_task_id=NULL,last_error=NULL,updated_at=NOW()
+            WHERE business_id=%s AND content_plan_item_id=%s AND status NOT IN ('published','publishing')''',
+            (new_text, business_id, row['id']))
+    if 'selected_channels' in supplied:
+        from services.content_plan_service import CONTENT_PLAN_PUBLISHING_CHANNELS
+        raw_channels = supplied['selected_channels']
+        if not isinstance(raw_channels, list):
+            return _result('Список площадок задан неверно.', 'clarification_required')
+        channels = list(dict.fromkeys(str(value).strip() for value in raw_channels))
+        if any(value not in CONTENT_PLAN_PUBLISHING_CHANNELS for value in channels):
+            return _result('Выберите только поддерживаемые площадки публикации.', 'clarification_required')
+        metadata['selected_channels'] = channels
+        cursor.execute('''UPDATE social_posts SET status='draft',approved_at=NULL,approval_id=NULL,
+            automation_task_id=NULL,last_error=NULL,updated_at=NOW()
+            WHERE business_id=%s AND content_plan_item_id=%s AND status NOT IN ('published','publishing')''',
+            (business_id, row['id']))
+    if 'photo_asset_id' in supplied:
+        asset_id = str(supplied['photo_asset_id'] or '').strip()
+        cursor.execute('SELECT id FROM photo_assets WHERE id=%s AND business_id=%s LIMIT 1', (asset_id, business_id))
+        if not asset_id or not cursor.fetchone():
+            return _result('Фото не найдено в медиатеке выбранного бизнеса.', 'blocked')
+        from services.media_intelligence import record_photo_usage
+        record_photo_usage(cursor, business_id=business_id, photo_asset_id=asset_id, usage_type='publication', target_id=str(row['id']))
+        metadata['selected_photo_asset_id'] = asset_id
+        metadata['media_selection_changed_at'] = datetime.now(timezone.utc).isoformat()
+        metadata['media_requires_review'] = True
+        cursor.execute('''UPDATE social_posts SET status='needs_review', approved_at=NULL, approval_id=NULL,
+            automation_task_id=NULL, last_error=NULL, metadata_json=COALESCE(metadata_json,'{}'::jsonb)||
+            jsonb_build_object('selected_photo_asset_id',%s,'media_selection_changed_at',NOW(),'media_requires_review',TRUE),
+            updated_at=NOW() WHERE business_id=%s AND content_plan_item_id=%s AND status NOT IN ('published','publishing')''',
+            (asset_id, business_id, row['id']))
+    if not updates and metadata == dict(row.get('metadata_json') or {}):
+        return _result('Изменений нет.')
+    if 'metadata_json' in row or metadata != dict(row.get('metadata_json') or {}):
+        updates.append('metadata_json=%s::jsonb')
+        params.append(json.dumps(metadata, ensure_ascii=False, default=str))
+    if not updates:
+        return _result('Изменений нет.')
+    updates.append('updated_at=clock_timestamp()')
+    params.append(row['id'])
+    cursor.execute('UPDATE contentplanitems SET '+', '.join(updates)+' WHERE id=%s', tuple(params))
+    if 'scheduled_for' in supplied:
+        cursor.execute("UPDATE social_posts SET scheduled_for=%s,status='needs_review',approved_at=NULL,approval_id=NULL,automation_task_id=NULL,last_error=NULL,updated_at=NOW() WHERE content_plan_item_id=%s AND status NOT IN ('publishing','published')",
+                       (planned_date, row['id']))
+    updated = _items(cursor, business_id, row['plan_id'], item_id=row['id'])[0]
+    changed = ', '.join(key for key in ('scheduled_for','draft_text','selected_channels','photo_asset_id') if key in supplied)
+    return _result('Сохранил правки поста в контент-плане LocalOS ('+changed+'). Откройте тот же пост в меню «Контент», чтобы проверить результат.',
+        item_id=row['id'], selected_item={'item_id':row['id'],'plan_id':row['plan_id'],'version':_version(updated)},
+        result_ref={'href':'/dashboard/content?plan_id='+str(row['plan_id']),'label':'Открыть пост','entity_type':'content'})
+
+
+def _read_photo_library(cursor, business_id, user_id, query):
+    authorize_actor(cursor, user_id, business_id)
+    from services.media_intelligence import list_photo_assets
+    needle = str(query or '').strip().casefold()
+    assets = list_photo_assets(cursor, business_id)
+    result = []
+    for asset in assets:
+        metadata = asset.get('metadata_json') if isinstance(asset.get('metadata_json'), dict) else {}
+        upload = metadata.get('upload') if isinstance(metadata.get('upload'), dict) else {}
+        name = str(upload.get('original_name') or '').strip()
+        item = {'asset_id':str(asset.get('id') or ''), 'name':name, 'category':str(asset.get('category') or 'unknown'),
+                'analysis_status':str(asset.get('analysis_status') or 'not_analyzed'), 'quality_score':asset.get('quality_score')}
+        searchable = ' '.join(str(value or '') for value in item.values()).casefold()
+        if not needle or needle in searchable:
+            result.append(item)
+        if len(result) >= 50:
+            break
+    return {'status':'completed','photos':result,'chat_response':f'В медиатеке найдено фото: {len(result)}. Выберите изображение по названию или категории; фото с ошибкой анализа тоже можно использовать. Анализ не запускал.','external_writes_performed':False}
 
 
 def _change(cursor,row,theme,brief,user_id,focus=None):
@@ -310,11 +440,36 @@ def editorial_tools(cursor,business_id,user_id,message,channel="web"):
     string=lambda maximum: {'type':'string','maxLength':maximum}
     target={'item_id':string(100),'plan_id':string(100),'version':string(64)}
     from services import operator_plan_revision
+    from services import operator_content_publication
     tools=[
         {'name':'content.editorial_context','capability':'content.history','title':'Посты и сохранённые сведения для редактирования',
          'description':'Перед правкой прочитай план: id, даты, темы, версии и заметки. Пользователю называй только даты и темы, без технических ID и названий инструментов. Если указан месяц, выбирай только его даты. Если цель неоднозначна, уточни. Возвращает до 200 записей выбранного или последнего плана.',
          'input_schema':{'type':'object','properties':{'plan_id':string(100),'include_details':{'type':'boolean'}}},'risk_class':'read_only',
          'execute':lambda args:read_context(cursor,business_id,user_id,args)},
+        {'name':'content.photo_library','capability':'content.history','title':'Выбрать фото из медиатеки',
+         'description':'По запросу о выборе фото покажи загруженные изображения текущего бизнеса. Возвращай asset_id, название файла, категорию и состояние анализа; изображения с ошибкой анализа также доступны. Не запускай анализ и не трать кредиты. Выбирать можно только после того, как пользователь назвал нужное фото или подтвердил выбор.',
+         'input_schema':{'type':'object','properties':{'query':string(200)}},'risk_class':'read_only','deterministic_response':True,
+         'execute':lambda args:_read_photo_library(cursor,business_id,user_id,args.get('query') or '')},
+        {'name':'content.channel_posts','capability':'content.history','title':'Посты по каналам',
+         'description':'Показывает сохранённые варианты текста, даты и статусы отдельно по каждому каналу. Перед публикацией используй этот инструмент, чтобы выбрать конкретные post_id и показать точный preview.',
+         'input_schema':{'type':'object','properties':{'item_id':string(100)}},'risk_class':'read_only',
+         'execute':lambda args:operator_content_publication.list_channel_posts(cursor,business_id=business_id,user_id=user_id,item_id=args.get('item_id') or '')},
+        {'name':'content.prepare_channels','capability':'content.item.edit','title':'Подготовить варианты по каналам',
+         'description':'По явной просьбе подготовь версии поста для указанных платформ. Это сохраняет черновики LocalOS, но ничего не публикует. Сначала прочитай план и выбери точный item_id. Для готового результата верни тексты по каналам.',
+         'input_schema':{'type':'object','required':['item_id','platforms'],'properties':{'item_id':string(100),'platforms':{'type':'array','minItems':1,'maxItems':8,'items':{'type':'string'}}}},
+         'risk_class':'write_internal_draft','execute':lambda args:operator_content_publication.prepare_channels(user_id=user_id,item_id=args.get('item_id'),platforms=args.get('platforms')),'deterministic_response':True},
+        {'name':'content.publish_posts','capability':'content.publish_external','title':'Разместить подтверждённые варианты',
+         'description':'Только если пользователь прямо просит опубликовать/разместить. Сначала вызови content.channel_posts, выбери только существующие post_id и подготовь предпросмотр с точным текстом, фото, датой, каналом и способом размещения. Эта операция только запрашивает отдельное подтверждение; до него внешняя отправка запрещена.',
+         'input_schema':{'type':'object','required':['post_ids'],'properties':{'post_ids':{'type':'array','minItems':1,'maxItems':20,'items':{'type':'string'}}}},
+         'risk_class':'write_external','approval_required':True,'explicit_intent_markers':['опубли','размест'],
+         'prepare_approval':lambda args:operator_content_publication.prepare_publish(cursor,business_id=business_id,user_id=user_id,post_ids=args.get('post_ids')),
+         'deterministic_preparation_response':True},
+        {'name':'content.reconcile_manual','capability':'content.publish_external','title':'Подтвердить ручную публикацию',
+         'description':'Только когда пользователь прямо сообщает, что проверил площадку и пост уже опубликован. Зафиксируй ровно один канал по post_id и ссылке или ID. Не использовать для черновика, модерации или запланированной публикации.',
+         'input_schema':{'type':'object','required':['post_id'],'properties':{'post_id':string(100),'provider_post_url':string(1000),'provider_post_id':string(200),'content_confirmed':{'type':'boolean'}}},
+         'risk_class':'write_internal','explicit_intent_markers':['опубликован','разместил','проверил на площадке'],
+         'execute':lambda args:operator_content_publication.reconcile_manual(user_id=user_id,post_id=args.get('post_id'),provider_post_url=args.get('provider_post_url') or '',provider_post_id=args.get('provider_post_id') or '',content_confirmed=args.get('content_confirmed') is True),
+         'deterministic_response':True},
         {'name':'content.restore_item','capability':'content.item.edit','title':'Вернуть предыдущий текст поста',
          'description':'Только по явной просьбе отменить последнюю правку или вернуть предыдущий текст выбранного неопубликованного поста. Требуется свежая версия из editorial_context.',
          'input_schema':{'type':'object','required':['item_id','version'],'properties':target},
@@ -327,6 +482,15 @@ def editorial_tools(cursor,business_id,user_id,message,channel="web"):
          'description':'Меняет один неопубликованный пост по явной просьбе пользователя. Только изменение темы без генерации текста. Если пользователь просит придумать или заменить сам пост, используй rewrite_item. theme и brief — точные цитаты надиктованной новой темы/информации, без слов команды и без выдуманных фактов. Нужна версия из editorial_context. Сохраняет старый текст в истории и помечает необходимость новой генерации. Не создаёт новый план.',
          'input_schema':{'type':'object','required':['item_id','version','theme'],'properties':{**target,'theme':string(500),'brief':string(6000)}},
          'risk_class':'write_internal_draft','execute':lambda args:edit_item(cursor,business_id,user_id,message,args),'deterministic_response':True},
+        {'name':'content.update_item_fields','capability':'content.item.edit','title':'Изменить дату, текст, площадки или фото поста',
+         'description':'Сохраняет явную правку одного неопубликованного поста в тех же данных, что и меню «Контент». Сначала вызови editorial_context с include_details=true и выбери точный item_id, plan_id и актуальную version. Передай только изменяемые поля. scheduled_for — дата ГГГГ-ММ-ДД. draft_text и photo_asset_id должны быть точно указаны пользователем или выбраны из показанного контекста; selected_channels — полный новый список площадок. Версия проверяется перед записью; внешнюю публикацию не запускает.',
+         'input_schema':{'type':'object','required':['item_id','plan_id','version'],'additionalProperties':False,'properties':{
+             **target,'scheduled_for':string(10),'draft_text':string(12000),'selected_channels':{'type':'array','items':string(40),'maxItems':12},'photo_asset_id':string(100)}},
+         'risk_class':'write_internal_draft','execute':lambda args:update_item_fields(cursor,business_id,user_id,args),'deterministic_response':True},
+        {'name':'content.edit_channel_text','capability':'content.item.edit','title':'Изменить текст версии канала',
+         'description':'Меняет текст одного уже подготовленного варианта для конкретной площадки. Сначала вызови content.channel_posts и выбери точный post_id. Новый текст должен быть точной формулировкой пользователя; дата и фото сохраняются. Версия записи проверяется, подтверждение публикации сбрасывается, внешняя публикация не запускается.',
+         'input_schema':{'type':'object','required':['post_id','text','version'],'additionalProperties':False,'properties':{'post_id':string(100),'text':string(12000),'version':string(64)}},
+         'risk_class':'write_internal_draft','execute':lambda args:operator_content_publication.edit_channel_text(cursor,business_id=business_id,user_id=user_id,message=message,arguments=args),'deterministic_response':True},
         {'name':'content.rebuild_plan','capability':'content.plan.refocus','title':'Переработать темы и расписание плана',
          'description':'Переработать текущий или выбранный план, изменить число постов, частоту и распределение тем. Одно подтверждение перед применением. Передай post_count и interval_days из команды (один в неделю = 7 дней); план сам вычислит даты. Если число неясно — уточни. Не создавать новый план вместо правки. По умолчанию выбран последний действующий план.',
          'input_schema':{'type':'object','required':['post_count','interval_days'],'properties':{'selector':{'type':'string','enum':['latest','today','current']},'plan_id':string(100),'post_count':{'type':'integer','minimum':1,'maximum':90},'interval_days':{'type':'integer','minimum':1,'maximum':90},'start_date':string(10),'extend_period':{'type':'boolean'}}},

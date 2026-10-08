@@ -10,7 +10,7 @@ from typing import Any
 from psycopg2.extras import Json
 
 from core.upload_security import upload_content_matches_type
-from services.media_file_storage import store_media_file
+from services.media_file_storage import build_media_delivery_url, store_media_file
 
 
 PHOTO_LIBRARY: dict[str, list[dict[str, str]]] = {
@@ -203,12 +203,13 @@ def create_uploaded_photo_asset(
         mime_type=mime_type,
     )
     content_hash = hashlib.sha256(content).hexdigest()
-    original_url = stored.get("public_url") or f"/api/media-intelligence/photos/{asset_id}/file?variant=original"
+    delivery_url = build_media_delivery_url(asset_id=asset_id, content_hash=content_hash)
+    original_url = stored.get("public_url") or delivery_url or f"/api/media-intelligence/photos/{asset_id}/file?variant=original"
     versions = {
         "original": {
             "storage_path": stored.get("storage_path"),
             "storage_key": stored.get("storage_key"),
-            "public_url": stored.get("public_url") or "",
+            "public_url": stored.get("public_url") or delivery_url,
             "mime_type": stored.get("mime_type") or mime_type,
             "size_bytes": stored.get("size_bytes") or len(content),
         },
@@ -470,10 +471,10 @@ def recommend_media_for_post(
         """
         SELECT id, theme, goal, draft_text, content_type
         FROM contentplanitems
-        WHERE id = %s
+        WHERE id = %s AND business_id = %s
         LIMIT 1
         """,
-        (content_plan_item_id,),
+        (content_plan_item_id, business_id),
     )
     item = _row_to_dict(cursor, cursor.fetchone())
     if not item:
@@ -482,10 +483,10 @@ def recommend_media_for_post(
         """
         SELECT platform
         FROM social_posts
-        WHERE content_plan_item_id = %s
+        WHERE content_plan_item_id = %s AND business_id = %s
         ORDER BY platform
         """,
-        (content_plan_item_id,),
+        (content_plan_item_id, business_id),
     )
     platforms = [str((_row_to_dict(cursor, row) or {}).get("platform") or "") for row in (cursor.fetchall() or [])]
     platforms = [platform for platform in platforms if platform]

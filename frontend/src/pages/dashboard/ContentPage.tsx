@@ -13,15 +13,21 @@ import {
 	Download,
 	Eye,
 	FileText,
+  GripVertical,
 	ImageIcon,
 	Lightbulb,
 	Loader2,
 	MessageCircleQuestion,
+	MapPinned,
+	MessageCircle,
+	MessagesSquare,
 	Plus,
+	Send,
 	Sparkles,
 	Star,
 	Trash2,
 	Upload,
+	Users,
 	Wand2,
 } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -75,12 +81,14 @@ type ContentPlanContext = {
 
 type PlanItem = {
   id: string;
+  version?: string;
   business_id?: string;
   scheduled_for?: string;
   theme?: string;
   goal?: string;
   draft_text?: string;
   status?: string;
+  updated_at?: string;
   content_type?: string;
   metadata_json?: {
     generation_source?: string;
@@ -159,6 +167,7 @@ type PlanPayload = {
 
 type SocialPost = {
   id: string;
+  updated_at?: string;
   content_plan_item_id?: string;
   platform?: string;
   platform_label?: string;
@@ -191,6 +200,12 @@ type SocialPost = {
     quality_issue_codes?: string[];
     quality_rules_version?: string;
     quality_text_hash?: string;
+    staff_handoff?: {
+      telegram_deliveries?: Record<string, {
+        sent_at?: string;
+        parts?: Record<string, { status?: string }>;
+      }>;
+    };
     platform_rule_readiness?: {
       label?: string;
       message?: string;
@@ -453,8 +468,7 @@ const normalizeIsoDate = (value?: string) => {
   return Number.isNaN(parsed.getTime()) ? '' : toIsoDate(parsed);
 };
 
-const DATE_LOCALES = { ru: 'ru-RU', en: 'en-US', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR', hy: 'hy-AM',
-kk: 'kk-KZ', };
+const DATE_LOCALES = { ru: 'ru-RU', en: 'en-US', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR', hy: 'hy-AM', kk:'kk-KZ' };
 
 const formatDate = (value: string | undefined, language: keyof typeof DATE_LOCALES = 'ru') => {
   if (!value) return '';
@@ -542,6 +556,17 @@ const postNeedsEditorialRewrite = (post: SocialPost) => (
 const getPostQualityIssueText = (post: SocialPost) => (
   (post.metadata_json?.quality_issues || []).filter(Boolean).join(' · ')
 );
+
+const getHandoffLabel = (post: SocialPost) => {
+  const deliveries = post.metadata_json?.staff_handoff?.telegram_deliveries;
+  const receipts = Object.values(deliveries || {});
+  const partStates = receipts.flatMap((receipt) => Object.values(receipt.parts || {}).map((part) => String(part.status || '')));
+  if (partStates.some((status) => status === 'attempting' || status === 'uncertain')) return 'Передачу нужно сверить';
+  if (receipts.length > 0 && receipts.every((receipt) => Boolean(receipt.sent_at))) return 'Передано сотруднику';
+  if (partStates.some((status) => status === 'sent') || receipts.some((receipt) => Boolean(receipt.sent_at))) return 'Передано частично';
+  if (partStates.some((status) => status === 'not_sent')) return 'Ошибка передачи';
+  return 'Не передавалось';
+};
 
 const getChannelNextAction = (post: SocialPost) => {
   if (String(post.status || '').toLowerCase() === 'publishing') return getPostNextAction(post);
@@ -775,6 +800,16 @@ const platformShortLabel = (post: SocialPost) => {
   return formatPlatformLabel(label);
 };
 
+const CALENDAR_CHANNEL_ICONS = {
+  yandex_maps: { Icon: MapPinned, active: 'text-red-600' },
+  google_business: { Icon: MapPinned, active: 'text-blue-600' },
+  telegram: { Icon: Send, active: 'text-sky-600' },
+  vk: { Icon: Users, active: 'text-blue-700' },
+  max: { Icon: MessageCircle, active: 'text-violet-600' },
+  instagram: { Icon: MessagesSquare, active: 'text-pink-600' },
+  facebook: { Icon: MessagesSquare, active: 'text-blue-700' },
+};
+
 const placementTargetUrl = (post: SocialPost) => String(
   post.metadata_json?.supervised_publish?.target_url
   || post.metadata_json?.manual_publish_handoff?.target_url
@@ -825,6 +860,9 @@ function ContentWorkspace() {
     return saved === 'media' || saved === 'audience' ? saved : 'calendar';
   });
   const [selectedItemId, setSelectedItemId] = useState('');
+  const [photoPickerOpen, setPhotoPickerOpen] = useState(false);
+  const [draggedItemId, setDraggedItemId] = useState('');
+  const [dropTargetDate, setDropTargetDate] = useState('');
   const [manualContentConfirmed, setManualContentConfirmed] = useState<Record<string, boolean>>({});
   const [channelDetailsOpen, setChannelDetailsOpen] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
@@ -841,6 +879,7 @@ function ContentWorkspace() {
   const [contentSetupStep, setContentSetupStep] = useState<ContentSetupStep>('business');
   const [voiceExampleInput, setVoiceExampleInput] = useState('');
   const [publicationChannels, setPublicationChannels] = useState<Record<string, boolean>>(() => buildChannelSelection());
+  const [publicationChannelsTouched, setPublicationChannelsTouched] = useState(false);
   const [platformTextEdits, setPlatformTextEdits] = useState<Record<string, string>>({});
   const [editingPlatformPostId, setEditingPlatformPostId] = useState('');
   const [mediaRecommendations, setMediaRecommendations] = useState<Record<string, MediaRecommendation>>({});
@@ -1138,6 +1177,7 @@ function ContentWorkspace() {
     const item = items.find((candidate) => candidate.id === selectedItemId) || null;
     const itemPosts = item ? postsByItem[item.id] || [] : [];
     setPublicationChannels(buildChannelSelection(resolveItemSelectedChannels(item, itemPosts, currentPlan)));
+    setPublicationChannelsTouched(false);
   }, [currentPlan, items, postsByItem, selectedItemId]);
 
 
@@ -1186,6 +1226,7 @@ function ContentWorkspace() {
     setThemeEdits((prev) => ({ ...prev, [item.id]: String(item.theme || item.goal || '') }));
     setDateEdits((prev) => ({ ...prev, [item.id]: getItemDateKey(item) }));
     setPublicationChannels(buildChannelSelection(resolveItemSelectedChannels(item, postsByItem[item.id] || [], currentPlan)));
+    setPublicationChannelsTouched(false);
   };
 
   const loadMediaRecommendation = useLatestCallback(async (itemId: string) => {
@@ -1456,6 +1497,7 @@ function ContentWorkspace() {
           business_id: currentBusinessId,
           usage_type: 'publication',
           target_id: selectedItem.id,
+          expected_version: selectedItem.version || '',
           metadata: {
             source: 'content_publication_drawer',
             theme: selectedItem.theme || selectedItem.goal || '',
@@ -1468,8 +1510,12 @@ function ContentWorkspace() {
           ? `Фото сохранено. Проверьте итоговый вид и подтвердите публикации заново: ${approvalsReset}.`
           : 'Фото сохранено для публикации. Повторный анализ и списание кредитов не нужны.',
       );
+      setPhotoPickerOpen(false);
       await loadMediaRecommendation(selectedItem.id);
-      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      if (currentPlan?.id) {
+        await loadCurrentPlan(currentPlan.id);
+        await loadSocialPosts(currentPlan.id);
+      }
       if (section === 'media') await loadMediaAssets();
     } catch (usageError) {
       setError(usageError instanceof Error ? usageError.message : 'Не удалось сохранить фото для публикации');
@@ -1484,6 +1530,12 @@ function ContentWorkspace() {
     await recordPhotoUsage(String(recommendation?.selected_asset?.id || ''));
   };
 
+  const openPhotoPicker = async () => {
+    if (!selectedItem) return;
+    setPhotoPickerOpen(true);
+    await loadMediaAssets();
+  };
+
   const saveSelectedItem = async () => {
     if (!selectedItem) return;
     setBusyAction('save');
@@ -1491,23 +1543,31 @@ function ContentWorkspace() {
     setActionMessage('');
     try {
       const selectedPlatforms = selectedChannelKeys(publicationChannels);
-      if (selectedPlatforms.length === 0) {
+      const storedPlatforms = resolveItemSelectedChannels(selectedItem, selectedPosts, currentPlan);
+      const channelsChanged = publicationChannelsTouched && !sameSelectedChannels(selectedPlatforms, storedPlatforms);
+      if (channelsChanged && selectedPlatforms.length === 0) {
         setError('Выберите хотя бы один канал публикации.');
         return;
       }
-      const storedPlatforms = resolveItemSelectedChannels(selectedItem, selectedPosts, currentPlan);
-      const channelsChanged = !sameSelectedChannels(selectedPlatforms, storedPlatforms);
+      const currentTheme = String(themeEdits[selectedItem.id] ?? selectedItem.theme ?? selectedItem.goal ?? '');
+      const currentDate = String(dateEdits[selectedItem.id] ?? getItemDateKey(selectedItem));
+      const currentDraft = String(draftEdits[selectedItem.id] ?? selectedItem.draft_text ?? '');
+      const payload: Record<string, unknown> = {};
+      if (selectedItem.version) payload.expected_version = selectedItem.version;
+      if (currentTheme !== String(selectedItem.theme ?? selectedItem.goal ?? '')) payload.theme = currentTheme;
+      if (normalizeIsoDate(currentDate) !== normalizeIsoDate(selectedItem.scheduled_for)) payload.scheduled_for = currentDate;
+      if (currentDraft !== String(selectedItem.draft_text ?? '')) payload.draft_text = currentDraft;
+      if (channelsChanged) payload.selected_channels = selectedPlatforms;
       const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}`, {
         method: 'PUT',
-        body: JSON.stringify({
-          theme: themeEdits[selectedItem.id],
-          scheduled_for: dateEdits[selectedItem.id],
-          draft_text: draftEdits[selectedItem.id],
-          selected_channels: selectedPlatforms,
-        }),
+        body: JSON.stringify(payload),
       });
       const plan = response.plan || null;
       setCurrentPlan(plan);
+      if (plan?.items) {
+        const savedItem = plan.items.find((entry: PlanItem) => entry.id === selectedItem.id);
+        if (savedItem) setDateEdits((previous) => ({ ...previous, [selectedItem.id]: getItemDateKey(savedItem) }));
+      }
       if (channelsChanged && selectedPosts.length > 0) {
         await newAuth.makeRequest('/content-plans/social-posts/bulk-prepare', {
           method: 'POST',
@@ -1524,6 +1584,35 @@ function ContentWorkspace() {
       setError(saveError instanceof Error ? saveError.message : 'Не удалось сохранить публикацию');
     } finally {
       setBusyAction('');
+    }
+  };
+
+  const moveCalendarItem = async (item: PlanItem, nextDate: string) => {
+    const currentDate = getItemDateKey(item);
+    if (!item.id || !nextDate || nextDate === currentDate || busyAction) return;
+    const itemPosts = postsByItem[item.id] || [];
+    if (itemPosts.some((post) => ['publishing', 'published'].includes(String(post.status || '').toLowerCase()))) {
+      setError('Уже опубликованную или размещаемую публикацию нельзя перенести из календаря.');
+      return;
+    }
+    setBusyAction(`move-${item.id}`);
+    setError('');
+    setActionMessage('');
+    try {
+      const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ scheduled_for: nextDate, expected_version: item.version }),
+      });
+      if (!response.plan) throw new Error('Сервер не подтвердил перенос публикации.');
+      setCurrentPlan(response.plan);
+      await loadSocialPosts(response.plan.id);
+      setActionMessage(`Публикация перенесена на ${formatDate(nextDate, language)}.`);
+    } catch (moveError) {
+      setError(moveError instanceof Error ? moveError.message : 'Не удалось перенести публикацию');
+    } finally {
+      setBusyAction('');
+      setDraggedItemId('');
+      setDropTargetDate('');
     }
   };
 
@@ -1676,6 +1765,7 @@ function ContentWorkspace() {
       const saveResponse = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}`, {
         method: 'PUT',
         body: JSON.stringify({
+          expected_version: selectedItem.version,
           theme: themeEdits[selectedItem.id] ?? selectedItem.theme ?? '',
           scheduled_for: dateEdits[selectedItem.id] ?? selectedItem.scheduled_for ?? '',
           draft_text: draftEdits[selectedItem.id] ?? selectedItem.draft_text ?? '',
@@ -1722,6 +1812,7 @@ function ContentWorkspace() {
         body: JSON.stringify({
           platform_text: platformTextEdits[post.id] ?? post.platform_text ?? '',
           base_text: post.base_text || draftEdits[selectedItem?.id || ''] || '',
+          expected_updated_at: post.updated_at || '',
         }),
       });
       await loadSocialPosts(currentPlan.id);
@@ -1826,7 +1917,7 @@ function ContentWorkspace() {
         return;
       }
       const storedPlatforms = resolveItemSelectedChannels(selectedItem, selectedPosts, currentPlan);
-      const channelsChanged = !sameSelectedChannels(selectedPlatforms, storedPlatforms);
+      const channelsChanged = publicationChannelsTouched && !sameSelectedChannels(selectedPlatforms, storedPlatforms);
       const draftChanged = currentDraftText !== String(selectedItem.draft_text ?? '');
       const itemChanged = draftChanged
         || currentTheme !== String(selectedItem.theme ?? '')
@@ -1837,6 +1928,7 @@ function ContentWorkspace() {
         const saveResponse = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}`, {
           method: 'PUT',
           body: JSON.stringify({
+            expected_version: selectedItem.version,
             theme: currentTheme,
             scheduled_for: currentDate,
             draft_text: currentDraftText,
@@ -2041,6 +2133,7 @@ function ContentWorkspace() {
 
   const togglePublicationChannel = (key: string) => {
     setPublicationChannels((previous) => ({ ...previous, [key]: !previous[key] }));
+    setPublicationChannelsTouched(true);
   };
 
   const renderPlanModal = () => (
@@ -2235,30 +2328,58 @@ function ContentWorkspace() {
   const renderCalendarCard = (item: PlanItem) => {
     const posts = postsByItem[item.id] || [];
     const calendarState = getCalendarItemState(item, posts);
-    const channels = posts.slice(0, 3).map(platformShortLabel);
+    const channels = resolveItemSelectedChannels(item, posts, currentPlan);
+    const canDrag = !posts.some((post) => ['publishing', 'published'].includes(String(post.status || '').toLowerCase()));
     return (
       <button
         key={item.id}
         type="button"
+        draggable={canDrag && !busyAction}
+        onDragStart={(event) => {
+          if (!canDrag) { event.preventDefault(); return; }
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', item.id);
+          setDraggedItemId(item.id);
+        }}
+        onDragEnd={() => { setDraggedItemId(''); setDropTargetDate(''); }}
         onClick={(event) => openItem(item, event.currentTarget)}
-        className="w-full min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-left shadow-sm transition-[border-color,box-shadow] hover:border-slate-300 hover:shadow-md"
+        aria-label={`${item.theme || item.goal || calendarCopy.publication}, ${formatDate(item.scheduled_for, language)}${canDrag ? ', перетащите, чтобы изменить дату' : ''}`}
+        title={canDrag ? 'Перетащите публикацию на другую дату' : 'Эту публикацию нельзя перенести: размещение уже началось или завершено'}
+        className={cn('w-full min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-left shadow-sm transition-[border-color,box-shadow,opacity] hover:border-slate-300 hover:shadow-md', canDrag && 'cursor-grab active:cursor-grabbing', draggedItemId === item.id && 'opacity-50')}
       >
-        <div className="line-clamp-2 break-words text-xs font-semibold leading-4 text-slate-950 [overflow-wrap:anywhere]">
-          {item.theme || item.goal || calendarCopy.publication}
-        </div>
-        <div className="mt-1 flex min-w-0 flex-wrap gap-1">
-          {(channels.length ? channels : [calendarCopy.content]).map((channel) => (
-            <span key={channel} className="inline-flex max-w-full min-w-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium leading-4 text-slate-600 [overflow-wrap:anywhere]">
-              {channel}
-            </span>
-          ))}
-        </div>
-        <div className="mt-1.5 flex min-w-0 flex-wrap gap-1">
-          <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-4 ring-1 [overflow-wrap:anywhere]', getStatusClassName(calendarState.status))}>
-            {localizeContentCalendarStatus(calendarState.status, calendarCopy)}
+        <div className="flex items-start gap-1">
+          {canDrag ? <GripVertical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" /> : null}
+          <span className="line-clamp-2 min-w-0 break-normal text-[13px] font-semibold leading-[1.35] text-slate-950" title={item.theme || item.goal || calendarCopy.publication}>
+            {item.theme || item.goal || calendarCopy.publication}
           </span>
-          <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-4 ring-1 [overflow-wrap:anywhere]', getStatusClassName(calendarState.action))}>
-            {localizeContentCalendarStatus(calendarState.action, calendarCopy)}
+        </div>
+        <div className="mt-2 flex min-h-6 min-w-0 flex-wrap items-center gap-1" aria-label="Каналы публикации">
+          {channels.map((channel) => {
+            const config = CALENDAR_CHANNEL_ICONS[channel];
+            if (!config) return null;
+            const channelPost = posts.find((post) => String(post.platform || '').trim() === channel);
+            const connected = Boolean(channelPost?.external_account_id);
+            const label = CHANNELS.find((entry) => entry.key === channel)?.label || channel;
+            const ChannelIcon = config.Icon;
+            return (
+              <span
+                key={channel}
+                role="img"
+                title={`${label} · ${connected ? 'подключён' : 'нет активного подключения'}`}
+                aria-label={`${label}: ${connected ? 'подключён' : 'не подключён'}`}
+                className={cn('grid h-6 w-6 shrink-0 place-items-center rounded-md bg-slate-50', connected ? config.active : 'text-slate-300')}
+              >
+                <ChannelIcon className="h-3.5 w-3.5" aria-hidden="true" />
+              </span>
+            );
+          })}
+        </div>
+        <div className="mt-1.5 flex min-w-0 flex-col items-start gap-1">
+          <span title={localizeContentCalendarStatus(calendarState.status, calendarCopy)} className={cn('inline-flex max-w-full min-w-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold leading-4 ring-1', getStatusClassName(calendarState.status))}>
+            <span className="line-clamp-1">{localizeContentCalendarStatus(calendarState.status, calendarCopy)}</span>
+          </span>
+          <span title={localizeContentCalendarStatus(calendarState.action, calendarCopy)} className={cn('inline-flex max-w-full min-w-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold leading-4 ring-1', getStatusClassName(calendarState.action))}>
+            <span className="line-clamp-1">{localizeContentCalendarStatus(calendarState.action, calendarCopy)}</span>
           </span>
         </div>
       </button>
@@ -2268,7 +2389,7 @@ function ContentWorkspace() {
   const renderCalendar = () => (
     <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
       <div className="-mx-1 overflow-x-auto overscroll-x-contain px-1 pb-2">
-        <div className="grid min-w-[700px] grid-cols-7 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 sm:min-w-0">
+        <div className="grid min-w-[1120px] grid-cols-7 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200">
           {calendarCopy.weekdays.map((day) => (
             <div key={day} className="min-w-0 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
               {day}
@@ -2281,9 +2402,28 @@ function ContentWorkspace() {
             return (
               <div
                 key={key}
+                data-calendar-date={key}
+                onDragOver={(event) => {
+                  if (!draggedItemId || busyAction) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'move';
+                  setDropTargetDate(key);
+                }}
+                onDragLeave={(event) => {
+                  if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropTargetDate('');
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const itemId = event.dataTransfer.getData('text/plain') || draggedItemId;
+                  const draggedItem = items.find((candidate) => candidate.id === itemId);
+                  setDraggedItemId('');
+                  setDropTargetDate('');
+                  if (draggedItem) void moveCalendarItem(draggedItem, key);
+                }}
                 className={cn(
-                  'min-w-0 overflow-hidden min-h-[150px] bg-white p-2',
+                  'min-w-0 overflow-hidden min-h-[150px] bg-white p-2 transition-colors',
                   !isCurrentMonth && view === 'month' ? 'bg-slate-50/70 text-slate-600' : '',
+                  dropTargetDate === key && 'bg-blue-50 ring-2 ring-inset ring-blue-400',
                 )}
               >
                 <div className="mb-2 text-xs font-semibold text-slate-600">
@@ -2664,7 +2804,7 @@ function ContentWorkspace() {
       hasUnsavedDraftChanges
       || String(themeEdits[item.id] ?? item.theme ?? '') !== String(item.theme ?? '')
       || normalizeIsoDate(dateEdits[item.id] ?? item.scheduled_for) !== normalizeIsoDate(item.scheduled_for)
-      || !sameSelectedChannels(currentItemChannels, storedItemChannels)
+      || publicationChannelsTouched && !sameSelectedChannels(currentItemChannels, storedItemChannels)
     );
     const hasFallbackDraft = itemGenerationSource(item) === 'fallback';
     const hasDraftText = Boolean(currentDraftText) && itemGenerationSource(item) !== 'fallback';
@@ -2747,8 +2887,70 @@ function ContentWorkspace() {
     const channelDetailsId = item ? `content-channels-${item.id}` : 'content-channels';
     const mediaRecommendation = item ? mediaRecommendations[item.id] : null;
     const selectedPhoto = mediaRecommendation?.selected_asset || null;
+    const photoPicker = (
+      <Dialog open={photoPickerOpen} onOpenChange={setPhotoPickerOpen}>
+        <DialogContent className="max-h-[88vh] overflow-y-auto rounded-3xl border-slate-200 sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Выбрать фото для публикации</DialogTitle>
+            <DialogDescription>
+              Выберите любое загруженное фото. Анализ не обязателен и кредиты за выбор не списываются.
+            </DialogDescription>
+          </DialogHeader>
+          {mediaError ? (
+            <div role="alert" className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-800">
+              {mediaError}
+            </div>
+          ) : null}
+          {mediaLoading ? (
+            <div className="py-10 text-center text-sm text-slate-500">Загружаем медиатеку…</div>
+          ) : mediaAssets.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {mediaAssets.map((asset) => {
+                const status = String(asset.analysis_status || 'not_analyzed');
+                const isSelected = String(asset.id || '') === String(selectedPhoto?.id || '');
+                return (
+                  <div key={asset.id} className="flex min-w-0 gap-3 rounded-2xl border border-slate-200 p-3">
+                    {photoImageSrc(asset) ? (
+                      <AuthenticatedImage
+                        src={photoImageSrc(asset)}
+                        alt={`Фото из медиатеки: ${formatPhotoCategoryLabel(asset.category)}`}
+                        className="h-24 w-24 shrink-0 rounded-xl object-cover ring-1 ring-black/10"
+                      />
+                    ) : (
+                      <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
+                        <ImageIcon className="h-6 w-6" aria-hidden="true" />
+                      </div>
+                    )}
+                    <div className="flex min-w-0 flex-1 flex-col items-start">
+                      <div className="font-semibold text-slate-900">{formatPhotoCategoryLabel(asset.category)}</div>
+                      <div className="mt-1 text-xs leading-5 text-slate-500">
+                        {status === 'analysis_failed' ? 'Анализ не удался — фото всё равно можно выбрать' : status === 'analyzed' ? 'Проанализировано' : 'Ожидает анализа — фото можно выбрать'}
+                      </div>
+                      <Button
+                        type="button"
+                        variant={isSelected ? 'secondary' : 'outline'}
+                        onClick={() => { void recordPhotoUsage(String(asset.id || '')); }}
+                        disabled={!asset.id || Boolean(busyAction)}
+                        aria-label={`Выбрать фото из медиатеки: ${formatPhotoCategoryLabel(asset.category)}`}
+                        className="mt-auto min-h-10 rounded-xl"
+                      >
+                        {busyAction === 'photo-usage' ? 'Сохраняем…' : isSelected ? 'Выбрано' : 'Выбрать'}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
+              В медиатеке пока нет фото. Сначала загрузите его в разделе «Медиатека», затем вернитесь к этой публикации.
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    );
     return (
-      <Sheet open={Boolean(item)} onOpenChange={(open) => { if (!open) setSelectedItemId(''); }}>
+      <Sheet open={Boolean(item)} onOpenChange={(open) => { if (!open) { setSelectedItemId(''); setPhotoPickerOpen(false); } }}>
         <SheetContent
           className="w-full overflow-y-auto sm:max-w-4xl"
           closeLabel={calendarCopy.close}
@@ -2997,6 +3199,15 @@ function ContentWorkspace() {
                     <Button
                       type="button"
                       variant="outline"
+                      onClick={() => { void openPhotoPicker(); }}
+                      disabled={!item || mediaLoading}
+                      className="mt-4 rounded-2xl"
+                    >
+                      Выбрать фото вручную
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
                       onClick={() => {
                         setSection('media');
                         setSelectedItemId('');
@@ -3099,6 +3310,9 @@ function ContentWorkspace() {
                                     </span>
                                   </div>
                                   <div className="mt-1 text-xs leading-5 text-slate-500">{getChannelNextAction(post)}</div>
+                                  <div className="mt-1 text-xs leading-5 text-slate-500" aria-label="Статус передачи сотруднику">
+                                    Передача сотруднику: {getHandoffLabel(post)}
+                                  </div>
                                   {normalizedPostStatus === 'publishing' ? (
                                     <PublicationReconciliation
                                       key={post.id}
@@ -3279,6 +3493,11 @@ function ContentWorkspace() {
                   ) : null}
                 </div>
                 <div className="grid gap-2">
+                  {hasUnsavedItemChanges ? (
+                    <Button type="button" variant="outline" onClick={saveSelectedItem} disabled={Boolean(busyAction)} className="min-h-11 rounded-2xl active:scale-[0.96] transition-transform">
+                      {busyAction === 'save' ? 'Сохраняем...' : 'Сохранить изменения'}
+                    </Button>
+                  ) : null}
                   {needsPlatformPreparation ? (
                     <Button type="button" onClick={() => { void prepareSelectedItem(); }} disabled={Boolean(busyAction)} className="min-h-12 rounded-2xl bg-slate-950 text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-500 active:scale-[0.96] transition-transform">
                       {busyAction === 'prepare'
@@ -3286,10 +3505,6 @@ function ContentWorkspace() {
                         : hasPosts
                           ? 'Обновить версии для каналов'
                           : 'Подготовить версии для каналов'}
-                    </Button>
-                  ) : hasUnsavedItemChanges ? (
-                    <Button type="button" variant="outline" onClick={saveSelectedItem} disabled={Boolean(busyAction)} className="min-h-11 rounded-2xl active:scale-[0.96] transition-transform">
-                      {busyAction === 'save' ? 'Сохраняем...' : 'Сохранить изменения'}
                     </Button>
                   ) : null}
                   {canApproveSelectedItem && !needsContext ? (
@@ -3379,6 +3594,7 @@ function ContentWorkspace() {
               </div>
             </div>
           ) : null}
+          {photoPicker}
         </SheetContent>
       </Sheet>
     );

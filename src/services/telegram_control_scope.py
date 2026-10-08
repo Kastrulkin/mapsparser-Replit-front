@@ -524,17 +524,34 @@ def save_scope_notification_preferences(
     user_id: str,
     telegram_id: str,
     scope: dict[str, Any],
-    notifications: dict[str, bool],
-) -> dict[str, bool]:
+    notifications: dict[str, Any],
+) -> dict[str, Any]:
     kind = str(scope.get("kind") or "").strip().lower()
     scope_id = str(scope.get("id") or "").strip() or None
     if kind not in SCOPE_TYPES:
         raise ValueError("unsupported_control_scope")
     allowed_keys = {"daily_digest", "reviews", "tasks", "errors", "agent_results", "finance_rhythm", "content_publications"}
     clean = {key: bool(value) for key, value in notifications.items() if key in allowed_keys}
+    if "content_publications_lead_days" in notifications:
+        try:
+            lead_days = int(notifications.get("content_publications_lead_days") or 0)
+        except (TypeError, ValueError):
+            lead_days = 0
+        clean["content_publications_lead_days"] = max(0, min(lead_days, 7))
+    if "content_publications_time" in notifications:
+        from datetime import datetime
+        value = str(notifications["content_publications_time"] or "").strip()
+        clean["content_publications_time"] = datetime.strptime(value, "%H:%M").strftime("%H:%M") if value else ""
+    if "content_publications_platforms" in notifications:
+        platforms = notifications["content_publications_platforms"]
+        if not isinstance(platforms, list) or any(value not in {"vk", "telegram", "max"} for value in platforms):
+            raise ValueError("invalid_content_publications_platforms")
+        clean["content_publications_platforms"] = sorted(set(platforms))
+    cursor.execute("SELECT user_id FROM telegramcontrolpreferences WHERE user_id=%s FOR UPDATE", (user_id,))
     current = _load_preference(cursor, user_id)
     all_preferences = dict(current.get("notification_preferences_json") or {})
     preference_key = f"{kind}:{scope_id or 'all'}"
+    clean = {**(all_preferences.get(preference_key) or {}), **clean}
     all_preferences[preference_key] = clean
     cursor.execute(
         """

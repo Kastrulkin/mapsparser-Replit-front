@@ -7,8 +7,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from core.action_orchestrator import ActionOrchestrator
 from core.action_policy import evaluate_risk_policy
-from core.capability_names import normalize_capability_name
-from services.agent_capability_handlers import CANONICAL_CAPABILITIES, build_capability_handlers
+from services.agent_capability_handlers import CANONICAL_CAPABILITIES, build_capability_handlers, normalize_capability_name
 from services.agent_run_billing import finalize_agent_run_credits
 from services.agent_domain_request_executors import execute_approved_domain_requests
 from services.agent_blueprint_workspace import (
@@ -26,6 +25,7 @@ from services.compiled_script_runtime import CompiledRuntimeUnavailable, execute
 
 
 RUNNING_STATUSES = {"running", "waiting_approval"}
+DANGEROUS_CAPABILITY_WORDS = ("send", "publish", "payment", "delete", "destructive", "mass")
 SHORTLIST_APPROVED = "shortlist_approved"
 SELECTED_FOR_OUTREACH = "selected_for_outreach"
 CHANNEL_SELECTED = "channel_selected"
@@ -363,6 +363,15 @@ class AgentBlueprintRunner:
     def _advance_run(self, run_id: str, user_data: Dict[str, Any]) -> None:
         run = self._load_run_header(run_id)
         if not run or run.get("status") not in RUNNING_STATUSES:
+            return
+        blueprint = self._load_blueprint(str(run.get("blueprint_id") or ""))
+        run_input = self._run_input(run)
+        if blueprint and str(blueprint.get("status") or "") == "paused" and run_input.get("preview_mode") is not True:
+            self.cursor.execute(
+                """UPDATE agent_runs SET status='queued', lease_token=NULL, heartbeat_at=NULL,
+                   error_text='automation_paused', updated_at=NOW() WHERE id=%s AND status IN ('running','waiting_approval')""",
+                (run_id,),
+            )
             return
         version = self._load_version(str(run.get("blueprint_version_id") or ""))
         if not version:
@@ -1084,11 +1093,25 @@ class AgentBlueprintRunner:
                              "summary": "Проверка завершена. Запись в таблицу не выполнялась."}, ensure_ascii=False), step_id),
             )
             return True
+        if canonical_capability == "content.publish_handoff" and (
+            run_input.get("preview_mode") is True or run_input.get("external_side_effects_allowed") is False
+        ):
+            step_id = self._insert_step(run, step, step_index, "completed", {}, {})
+            self.cursor.execute(
+                "UPDATE agent_run_steps SET completed_at=NOW(), output_json=%s::jsonb WHERE id=%s",
+                (json.dumps({"capability": capability, "status": "preview_only", "external_dispatch_performed": False,
+                             "publish_performed": False}, ensure_ascii=False), step_id),
+            )
+            return True
         required_type = str(step.get("required_approval_type") or "").strip()
         # A previous unrelated decision is not approval for this step. Legacy
         # writers must explicitly declare the decision type they depend on.
         approval_verified = bool(required_type) and self._has_required_approval(str(run.get("id")), step)
-        if self._capability_requires_approval(capability, step, payload) and not approval_verified:
+        standing_handoff_consent = (
+            canonical_capability == "content.publish_handoff"
+            and self._has_scheduled_content_handoff_consent(run, version, payload)
+        )
+        if self._capability_requires_approval(capability, step, payload) and not (approval_verified or standing_handoff_consent):
             error_text = f"approval required before capability: {capability}"
             if required_type:
                 error_text = f"approval required before capability: {capability} ({required_type})"
@@ -1096,6 +1119,8 @@ class AgentBlueprintRunner:
             self._fail_run(str(run.get("id")), error_text, step_id)
             return False
 
+        preview_only = run_input.get("preview_mode") is True or run_input.get("external_side_effects_allowed") is False
+        fence_key = f"agent-pause-fence:{run.get('blueprint_id')}"
         if canonical_capability == "outreach.send_batch":
             reviewed_drafts = self._approved_draft_snapshot(run)
             if not reviewed_drafts:
@@ -1106,6 +1131,31 @@ class AgentBlueprintRunner:
             # reviewed batch. Provider dispatch remains outside this runner.
             payload["draft_ids"] = [item["id"] for item in reviewed_drafts]
         step_id = self._insert_step(run, step, step_index, "running", {}, {})
+        if not preview_only:
+            # Keep the fence through provider requests AND durable child binding.
+            # Transaction scope cannot leak a session lock after a failed query.
+            self.cursor.execute("SELECT pg_try_advisory_xact_lock(hashtext(%s)) AS acquired", (fence_key,))
+            acquired = bool((self.cursor.fetchone() or {}).get("acquired"))
+            self.cursor.execute("SELECT status FROM agent_blueprints WHERE id=%s", (run.get("blueprint_id"),))
+            raw_blueprint = self.cursor.fetchone()
+            current_blueprint = dict(raw_blueprint) if raw_blueprint else {}
+            permitted_status = current_blueprint.get("status") == "active" or (
+                current_blueprint.get("status") == "draft" and version.get("execution_mode") == "one_off")
+            if not acquired or not permitted_status:
+                self.cursor.execute("DELETE FROM agent_run_steps WHERE id=%s AND status='running'", (step_id,))
+                if not acquired:
+                    self.cursor.execute(
+                        """UPDATE agent_runs SET status='retry_wait', lease_token=NULL, heartbeat_at=NULL,
+                           next_attempt_at=NOW()+INTERVAL '30 seconds', attempt_count=GREATEST(0,attempt_count-1),
+                           error_text='automation_lifecycle_busy', updated_at=NOW()
+                           WHERE id=%s AND status IN ('running','waiting_approval')""", (run.get('id'),))
+                    return False
+                self.cursor.execute(
+                    """UPDATE agent_runs SET status='queued', lease_token=NULL, heartbeat_at=NULL,
+                       error_text='automation_paused', updated_at=NOW() WHERE id=%s AND status IN ('running','waiting_approval')""",
+                    (run.get("id"),),
+                )
+                return False
         if self._is_maton_delivery_step(run, capability):
             return self._execute_maton_delivery_step(run, step, step_id, capability, payload, approval_verified=approval_verified)
         envelope = {
@@ -1119,10 +1169,18 @@ class AgentBlueprintRunner:
             "idempotency_key": f"agent-run:{run.get('id')}:{step.get('key')}",
             "capability": capability,
             "payload": payload,
-            "approval": {"source": "agent_blueprint", "run_id": run.get("id")},
+            "approval": {
+                "source": "agent_blueprint",
+                "run_id": run.get("id"),
+                "content_handoff_consent": standing_handoff_consent,
+            },
             "billing": {"source": "agent_blueprint"},
         }
-        orchestrator_result = self.orchestrator.execute(envelope, user_data, allow_execute_when_approved=approval_verified)
+        orchestrator_result = self.orchestrator.execute(
+            envelope,
+            user_data,
+            allow_execute_when_approved=approval_verified or standing_handoff_consent,
+        )
         if not orchestrator_result.get("success"):
             validation_error = str(orchestrator_result.get("error") or "orchestrator rejected capability")
             runtime_contract = self._production_action_runtime_contract(
@@ -1210,6 +1268,20 @@ class AgentBlueprintRunner:
                 ),
             )
             self._fail_run(str(run.get("id")), reason_code, step_id)
+            return False
+        if canonical_capability == 'outreach.continue':
+            if preview_only:
+                self.cursor.execute("UPDATE agent_run_steps SET status='completed',completed_at=NOW(),output_json=%s::jsonb WHERE id=%s",
+                    (json.dumps({'status':'preview_only','external_dispatch_performed':False}),step_id))
+                return True
+            from services.agent_outreach_continuation import bind
+            self.cursor.execute('SAVEPOINT outreach_step_binding')
+            try:
+                bind(self.cursor,run=run,version=version,step_id=step_id)
+                self.cursor.execute('RELEASE SAVEPOINT outreach_step_binding')
+            except (ValueError, PermissionError) as exc:
+                self.cursor.execute('ROLLBACK TO SAVEPOINT outreach_step_binding')
+                self._fail_run(str(run['id']), str(exc), step_id)
             return False
         approved_executor = {
             "executor": "agent_domain_request_executor_v1", "executed": 0, "items": [],
@@ -3390,6 +3462,42 @@ class AgentBlueprintRunner:
         risk = evaluate_risk_policy(canonical, effective_payload if isinstance(effective_payload, dict) else {}, {})
         return bool(metadata.get("approval_required") or risk.get("requires_human"))
 
+    def _has_scheduled_content_handoff_consent(
+        self,
+        run: Dict[str, Any],
+        version: Dict[str, Any],
+        payload: Dict[str, Any],
+    ) -> bool:
+        """A one-time activation consent applies only to the pinned scheduled scope."""
+        run_input = self._run_input(run)
+        source_event = run_input.get("source_event") if isinstance(run_input.get("source_event"), dict) else {}
+        if (
+            run_input.get("trigger") not in {"schedule.daily", "schedule.weekly"}
+            or source_event.get("source") != "scheduler"
+            or str(run.get("blueprint_version_id") or version.get("id") or "") != str(version.get("id") or "")
+            or str(version.get("execution_mode") or "") != "scheduled"
+        ):
+            return False
+        from services.compiled_content_handoff import handoff_scope, has_active_consent
+
+        self.cursor.execute("SELECT status, metadata_json FROM agent_blueprints WHERE id=%s LIMIT 1", (run.get("blueprint_id"),))
+        row = self.cursor.fetchone()
+        blueprint = dict(row) if row else {}
+        if blueprint.get("status") != "active":
+            return False
+        metadata = parse_json_field(blueprint.get("metadata_json"), {})
+        scope = handoff_scope(version, str(blueprint.get("business_id") or run.get("business_id") or ""))
+        if not scope or scope != {
+            "business_id": str(payload.get("business_id") or ""),
+            "recipient_user_id": str(payload.get("recipient_user_id") or ""),
+            "platforms": sorted(payload.get("platforms") or []),
+            "lead_days": payload.get("lead_days"),
+            "time": str(payload.get("time") or ""),
+            "timezone": str(payload.get("timezone") or ""),
+        }:
+            return False
+        return has_active_consent(metadata, version_id=str(version.get("id") or ""), scope=scope)
+
     def _build_approval_payload(self, run: Dict[str, Any], step: Dict[str, Any]) -> Dict[str, Any]:
         payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
         approval_type = str(step.get("approval_type") or step.get("key") or "").strip()
@@ -3515,6 +3623,15 @@ class AgentBlueprintRunner:
             (SELECTED_FOR_OUTREACH, PIPELINE_IN_PROGRESS, user_id or None, str(run.get("business_id") or ""), lead_ids),
         )
 
+    def _approved_draft_snapshot(self, run: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
+        self.cursor.execute(
+            "SELECT * FROM agent_approvals WHERE run_id = %s AND approval_type = 'drafts' AND status = 'approved' ORDER BY decided_at DESC, id DESC LIMIT 1",
+            (run.get("id"),),
+        )
+        approval = self.cursor.fetchone()
+        return self._validated_draft_snapshot(run, dict(approval)) if approval else None
+
+
     def _validated_draft_snapshot(self, run: Dict[str, Any], approval: Dict[str, Any], *, for_update: bool = False) -> Optional[List[Dict[str, Any]]]:
         payload = parse_json_field(approval.get("payload_json"), {})
         business_id = str(run.get("business_id") or "")
@@ -3544,13 +3661,6 @@ class AgentBlueprintRunner:
                 return None
         return items
 
-    def _approved_draft_snapshot(self, run: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
-        self.cursor.execute(
-            "SELECT * FROM agent_approvals WHERE run_id = %s AND approval_type = 'drafts' AND status = 'approved' ORDER BY decided_at DESC, id DESC LIMIT 1",
-            (run.get("id"),),
-        )
-        approval = self.cursor.fetchone()
-        return self._validated_draft_snapshot(run, dict(approval)) if approval else None
 
     def _apply_drafts_approval(self, run_id: str, user_id: str, reviewed_drafts: List[Dict[str, Any]]) -> None:
         run = self._load_run_header(run_id)

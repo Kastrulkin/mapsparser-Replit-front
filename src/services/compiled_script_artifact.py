@@ -84,6 +84,13 @@ def validate_candidate(source: Any, manifest: Any, fixtures: Any) -> dict[str, A
                 normalize_table_input(fixture.get("input"), clean_manifest["table_contract"]["columns"])
         except (ValueError, AttributeError):
             errors.append({"field": "manifest.table_contract", "code": "table_contract_invalid", "message": "Таблица и правила должны соответствовать утверждаемому формату."})
+    if 'content_handoff_contract' in clean_manifest:
+        try:
+            from services.compiled_content_program import manifest_for
+            if clean_manifest != manifest_for(clean_manifest['content_handoff_contract'], clean_manifest.get('runner_image_digest')):
+                raise ValueError('content_manifest_mismatch')
+        except (ValueError, TypeError):
+            errors.append({'field': 'manifest.content_handoff_contract', 'code': 'content_contract_invalid', 'message': 'Программа должна соответствовать условиям передачи контента.'})
     if clean_source:
         try:
             tree = ast.parse(clean_source, mode="exec")
@@ -143,6 +150,7 @@ def generate_candidate_from_description(
     runner_image_digest: str | None = None,
     table_contract: dict[str, Any] | None = None,
     validation_fixtures: list[dict[str, Any]] | None = None,
+    content_contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Use a model only at compile time and return a checked candidate, never a fallback script."""
     prompt = """You generate one LocalOS compiled Python script. Return JSON only with source, manifest and fixtures.
@@ -155,6 +163,9 @@ Schemas support only type, properties, required, additionalProperties, items, en
 User process: """ + str(description or "")[:3000]
     if table_contract is not None:
         prompt += generation_instructions(table_contract)
+    if content_contract is not None:
+        from services.compiled_content_program import manifest_for
+        prompt += '\nContent selection contract: process receives {posts: [...]} and returns {requests: [{post_id, revision}]}. Return exactly the posts whose eligible field is true, unchanged IDs and revisions, no duplicates. Never return text, recipients or network actions. Use this exact manifest: ' + canonical_json(manifest_for(content_contract, runner_image_digest))
     try:
         raw = generator(prompt) if generator else run_llm_task(
             LLMTaskRequest(task_key="compiled_script_generation", prompt=prompt, business_id=business_id, user_id=user_id, prompt_version="compiled_script_v1")
@@ -168,9 +179,11 @@ User process: """ + str(description or "")[:3000]
     manifest = parsed.get("manifest") if isinstance(parsed.get("manifest"), dict) else {}
     if table_contract is not None:
         parsed["manifest"] = table_manifest(table_contract, runner_image_digest)
+    elif content_contract is not None:
+        parsed['manifest'] = manifest_for(content_contract, runner_image_digest)
     elif runner_image_digest:
         parsed["manifest"] = {**manifest, "runner_image_digest": runner_image_digest}
-    if table_contract is not None and validation_fixtures is not None:
+    if (table_contract is not None or content_contract is not None) and validation_fixtures is not None:
         parsed["fixtures"] = validation_fixtures
     elif isinstance(parsed.get("fixtures"), list):
         parsed["fixtures"] = [{**fixture, "source":"generator"} for fixture in parsed["fixtures"] if isinstance(fixture, dict)]

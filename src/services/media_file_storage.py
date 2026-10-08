@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
 from typing import Any
 from urllib.parse import quote, urlparse
@@ -218,6 +220,35 @@ def _public_s3_url(*, bucket: str, key: str) -> str:
         return ""
     encoded_key = "/".join(quote(part) for part in key.split("/"))
     return f"{base_url}/{encoded_key}"
+
+
+def build_media_delivery_url(*, asset_id: str, content_hash: str, variant: str = "original") -> str:
+    clean_asset_id = str(asset_id or "").strip()
+    clean_content_hash = str(content_hash or "").strip()
+    clean_variant = str(variant or "original").strip() or "original"
+    secret = str(os.environ.get("EXTERNAL_AUTH_SECRET_KEY") or "").strip()
+    if not clean_asset_id or not clean_content_hash or not secret:
+        return ""
+    message = f"{clean_asset_id}:{clean_variant}:{clean_content_hash}".encode("utf-8")
+    token = hmac.new(secret.encode("utf-8"), message, hashlib.sha256).hexdigest()
+    base_url = str(
+        os.environ.get("PUBLIC_BASE_URL")
+        or os.environ.get("FRONTEND_URL")
+        or "https://localos.pro"
+    ).strip().rstrip("/")
+    return f"{base_url}/api/media-intelligence/public/photos/{clean_asset_id}/file?variant={quote(clean_variant)}&token={token}"
+
+
+def verify_media_delivery_token(*, asset_id: str, content_hash: str, variant: str, token: str) -> bool:
+    expected_url = build_media_delivery_url(
+        asset_id=asset_id,
+        content_hash=content_hash,
+        variant=variant,
+    )
+    if not expected_url:
+        return False
+    expected_token = expected_url.rsplit("token=", 1)[-1]
+    return hmac.compare_digest(expected_token, str(token or "").strip())
 
 
 def _metadata_safe_value(value: str) -> str:

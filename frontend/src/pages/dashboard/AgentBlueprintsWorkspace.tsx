@@ -1,4 +1,5 @@
 import { featureFlags } from '@/config/featureFlags';
+import { ContentHandoffProgram, hasContentHandoff } from '@/components/agents/ContentHandoffProgram';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { newAuth } from '@/lib/auth_new';
 import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
@@ -1975,7 +1976,8 @@ export const AgentBlueprintsWorkspace = () => {
   const activeRunOutput = recordValue(builderActiveRun?.output_json);
   const isCompiledTableRun = activeRunOutput?.schema === 'localos_compiled_script_result_v1'
     || Boolean(compiledRunContext && compiledRunContext.blueprintId === selectedBlueprint?.id);
-  const showCompiledBuilder = featureFlags.compiledScriptPreview
+  const contentHandoffProgram = hasContentHandoff(blueprintDetails);
+  const showCompiledBuilder = (featureFlags.compiledScriptPreview || contentHandoffProgram)
     && Boolean(selectedBlueprint)
     && ((workspaceMode === 'scenario' && blueprintDetails?.compiled_access?.preview === true)
       || ((workspaceMode === 'results' || explicitRunTarget?.blueprintId === selectedBlueprint?.id) && isCompiledTableRun));
@@ -2019,6 +2021,6 @@ export const AgentBlueprintsWorkspace = () => {
   return <div className="space-y-5">
     <p className="text-sm text-slate-600"><span className="font-medium text-slate-900">{secondaryWorkspace.selected}:</span> {selectedBlueprint.name}</p>
     <details className="rounded-2xl border border-slate-200 bg-white p-4" onToggle={(event) => setSecondaryWorkspaceOpen(event.currentTarget.open)}><summary className="block cursor-pointer touch-manipulation text-sm font-semibold text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2">{secondaryWorkspace.title}</summary>{secondaryWorkspaceOpen ? <div className="mt-4">{workspaceView}</div> : null}</details>
-    <CompiledScriptBuilder blueprintId={selectedBlueprint.id} blueprintDetails={blueprintDetails} activeRun={builderActiveRun} canPreview={blueprintDetails?.compiled_access?.preview === true} canExecute={blueprintDetails?.compiled_access?.execute === true} onRunQueued={(runId) => { setCompiledRunContext({ blueprintId: selectedBlueprint.id, runId }); setExplicitRunTarget({ blueprintId: selectedBlueprint.id, runId }); void loadRun(runId); }} />
+    {contentHandoffProgram ? <ContentHandoffProgram blueprintId={selectedBlueprint.id} details={blueprintDetails} onRunQueued={(runId) => { setCompiledRunContext({ blueprintId: selectedBlueprint.id, runId }); setExplicitRunTarget({ blueprintId: selectedBlueprint.id, runId }); void loadRun(runId); }} /> : <CompiledScriptBuilder blueprintId={selectedBlueprint.id} blueprintDetails={blueprintDetails} activeRun={builderActiveRun} canPreview={blueprintDetails?.compiled_access?.preview === true} canExecute={blueprintDetails?.compiled_access?.execute === true} onRunQueued={(runId) => { setCompiledRunContext({ blueprintId: selectedBlueprint.id, runId }); setExplicitRunTarget({ blueprintId: selectedBlueprint.id, runId }); void loadRun(runId); }} />}
   </div>;
 };

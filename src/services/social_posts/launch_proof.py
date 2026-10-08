@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import hashlib
+import json
 import os
 import sys
 import ipaddress
@@ -21,8 +21,8 @@ from services.media_file_storage import load_media_file
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
 from services.content_editorial_quality import review_content_text
 from services.social_posts.platform_variants import platform_variant_base_hash
+from services.social_posts.version_conflicts import SocialPostVersionConflict
 from core.ai_learning import record_ai_learning_event
-from services.social_posts.approval_binding import build_approval_snapshot, invalidate_queued_approval, queue_snapshot_is_current, run_post_batch
 
 
 SOCIAL_POST_PLATFORMS = [
@@ -39,6 +39,7 @@ SOCIAL_POST_PLATFORMS = [
 API_PLATFORMS = {"google_business", "telegram", "vk", "instagram", "facebook"}
 BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis", "max"}
 FIRST_API_PROOF_PLATFORMS = ("telegram", "vk")
+
 
 SOCIAL_POST_STATUSES = {
     "draft",
@@ -944,7 +945,6 @@ def _remove_unselected_social_posts(
     )
     removable_statuses = {"draft", "needs_review", "approved", "failed", "needs_manual_publish", "needs_supervised_publish"}
     removable_ids: list[str] = []
-    removable_platforms: dict[str, str] = {}
     removed_platforms: list[str] = []
     preserved_platforms: list[str] = []
     for row in cursor.fetchall() or []:
@@ -955,23 +955,11 @@ def _remove_unselected_social_posts(
         if status in removable_statuses and post_id:
             removable_ids.append(post_id)
             if platform:
-                removable_platforms[post_id] = platform
+                removed_platforms.append(platform)
         elif platform:
             preserved_platforms.append(platform)
     if removable_ids:
-        cursor.execute(
-            "DELETE FROM social_posts WHERE id = ANY(%s) AND status = ANY(%s) RETURNING id",
-            (removable_ids, sorted(removable_statuses)),
-        )
-        deleted_ids = {
-            str(_row_to_dict(cursor, row).get("id") or "").strip()
-            for row in cursor.fetchall() or []
-        }
-        for post_id, platform in removable_platforms.items():
-            if post_id in deleted_ids:
-                removed_platforms.append(platform)
-            else:
-                preserved_platforms.append(platform)
+        cursor.execute("DELETE FROM social_posts WHERE id = ANY(%s)", (removable_ids,))
     return removed_platforms, preserved_platforms
 
 def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
@@ -979,10 +967,10 @@ def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        post = _load_post_for_write(cursor, user_id, post_id)
+        post = _load_post_for_user(cursor, user_id, post_id)
         status = str(post.get("status") or "").strip()
-        if status in {"published", "publishing"}:
-            raise ValueError("Публикация уже размещена или ожидает ручной сверки")
+        if status == "published":
+            raise ValueError("Публикация уже опубликована")
         if not _social_post_has_text(post):
             raise ValueError("Перед подтверждением нужно заполнить текст публикации")
         quality_review = review_content_text(
@@ -994,33 +982,24 @@ def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             issues = "; ".join(str(value) for value in quality_review.get("quality_issues") or [] if str(value))
             raise ValueError(f"Текст нужно переписать: {issues}")
         metadata = _json_dict(post.get("metadata_json"))
-        metadata.pop("approval_publish_snapshot", None)
-        metadata.pop("publish_attempt", None)
-        metadata.pop("approval_binding_invalidated", None)
         metadata.update(quality_review)
         metadata["variant_status"] = "current"
         now = datetime.now(timezone.utc)
-        approval_id = _new_id()
-        if str(post.get("publish_mode") or "").strip() == "api":
-            metadata["approval_publish_snapshot"] = build_approval_snapshot(cursor, post, approval_id)
         cursor.execute(
             """
             UPDATE social_posts
             SET status = 'approved',
-                approved_at = %s,
-                approval_id = %s,
+                approved_at = COALESCE(approved_at, %s),
+                approval_id = COALESCE(NULLIF(approval_id, ''), %s),
                 metadata_json = %s,
                 last_error = NULL,
                 updated_at = NOW()
             WHERE id = %s
-              AND status = %s
             RETURNING *
             """,
-            (now, approval_id, _json_dumps(metadata), post_id, status),
+            (now, _new_id(), _json_dumps(metadata), post_id),
         )
         updated = _serialize_social_post(cursor, cursor.fetchone())
-        if not updated:
-            raise RuntimeError("Состояние публикации изменилось; обновите карточку перед подтверждением")
         metadata = _json_dict(updated.get("metadata_json"))
         record_ai_learning_event(
             capability="content_plan.publish",
@@ -1049,21 +1028,55 @@ def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
     finally:
         db.close()
 
-
 def approve_social_posts(user_id: str, post_ids: list[str]) -> dict[str, Any]:
-    return run_post_batch(post_ids, lambda post_id: approve_social_post(user_id, post_id), _normalize_ids, _summary_for_posts, build_social_queue_groups, lambda: str(sys.exc_info()[1]))
+    posts: list[dict[str, Any]] = []
+    failed: list[dict[str, str]] = []
+    for post_id in _normalize_ids(post_ids):
+        try:
+            posts.append(approve_social_post(user_id, post_id))
+        except Exception:
+            failed.append({"id": post_id, "error": str(sys.exc_info()[1])})
+    return {
+        "posts": posts,
+        "failed": failed,
+        "summary": _summary_for_posts(posts),
+        "queue_groups": build_social_queue_groups(posts),
+    }
 
 def update_social_post_text(
     user_id: str,
     post_id: str,
     platform_text: str,
     base_text: str = "",
+    expected_updated_at: str = "",
 ) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        post = _load_post_for_write(cursor, user_id, post_id)
+        post = _load_post_for_user(cursor, user_id, post_id)
+        expected_version = str(expected_updated_at or "").strip()
+        if expected_version:
+            current_version = post.get("updated_at")
+            try:
+                expected_timestamp = datetime.fromisoformat(expected_version.replace("Z", "+00:00"))
+                current_timestamp = (
+                    current_version
+                    if isinstance(current_version, datetime)
+                    else datetime.fromisoformat(str(current_version).replace("Z", "+00:00").replace(" ", "T"))
+                )
+            except (TypeError, ValueError):
+                raise SocialPostVersionConflict(
+                    "Не удалось проверить версию публикации. Обновите карточку и повторите правку."
+                ) from None
+            if expected_timestamp.tzinfo is None:
+                expected_timestamp = expected_timestamp.replace(tzinfo=timezone.utc)
+            if current_timestamp.tzinfo is None:
+                current_timestamp = current_timestamp.replace(tzinfo=timezone.utc)
+            if expected_timestamp != current_timestamp:
+                raise SocialPostVersionConflict(
+                    "Публикация изменилась после загрузки. Обновите карточку и повторите правку."
+                )
         current_status = str(post.get("status") or "").strip()
         if current_status in {"queued", "publishing", "published"}:
             raise ValueError("Нельзя менять текст после постановки в расписание или публикации")
@@ -1098,7 +1111,7 @@ def update_social_post_text(
                 last_error = NULL,
                 updated_at = NOW()
             WHERE id = %s
-              AND status = %s
+              AND (CAST(%s AS TIMESTAMPTZ) IS NULL OR updated_at = %s)
             RETURNING *
             """,
             (
@@ -1107,12 +1120,18 @@ def update_social_post_text(
                 next_status,
                 _json_dumps(metadata),
                 post_id,
-                current_status,
+                expected_timestamp if expected_version else None,
+                expected_timestamp if expected_version else None,
             ),
         )
-        updated = _serialize_social_post(cursor, cursor.fetchone())
-        if not updated:
-            raise RuntimeError("Состояние публикации изменилось; обновите карточку перед изменением текста")
+        updated_row = cursor.fetchone()
+        if not updated_row:
+            if expected_version:
+                raise SocialPostVersionConflict(
+                    "Публикация изменилась во время сохранения. Обновите карточку и повторите правку."
+                )
+            raise ValueError("Не удалось сохранить публикацию")
+        updated = _serialize_social_post(cursor, updated_row)
         db.conn.commit()
         return updated
     except Exception:
@@ -1126,18 +1145,12 @@ def queue_social_post(user_id: str, post_id: str) -> dict[str, Any]:
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        post = _load_post_for_write(cursor, user_id, post_id)
+        post = _load_post_for_user(cursor, user_id, post_id)
         status = str(post.get("status") or "").strip()
         if status == "published":
             raise ValueError("Публикация уже опубликована")
         if status not in {"approved", "queued"} or not post.get("approved_at"):
             raise PermissionError("Перед постановкой в расписание нужно подтверждение человека")
-        if str(post.get("publish_mode") or "").strip() == "api" and not queue_snapshot_is_current(cursor, post):
-            updated = _serialize_social_post(cursor, invalidate_queued_approval(cursor, post))
-            if updated:
-                db.conn.commit()
-                return updated
-            raise RuntimeError("Состояние публикации изменилось; обновите карточку перед постановкой в очередь")
         quality_review = review_content_text(
             str(post.get("platform_text") or post.get("base_text") or ""),
             source_text=str(post.get("base_text") or ""),
@@ -1155,9 +1168,7 @@ def queue_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             updated = _create_supervised_publish_task(cursor, post)
             db.conn.commit()
             return updated
-        snapshot_binding = _json_dict(metadata.get("approval_publish_snapshot")).get("binding")
-        connection_unbound = isinstance(snapshot_binding, dict) and snapshot_binding.get("state") == "connection_unbound"
-        queue_block = {} if connection_unbound else _queue_preflight_block(cursor, post)
+        queue_block = _queue_preflight_block(cursor, post)
         if queue_block:
             metadata = _json_dict(post.get("metadata_json"))
             metadata.update(_json_dict(queue_block.get("metadata_json")))
@@ -1169,19 +1180,15 @@ def queue_social_post(user_id: str, post_id: str) -> dict[str, Any]:
                     last_error = %s,
                     updated_at = NOW()
                 WHERE id = %s
-                  AND status = %s
                 RETURNING *
                 """,
                 (
                     _json_dumps(metadata),
                     str(queue_block.get("last_error") or "").strip(),
                     post_id,
-                    status,
                 ),
             )
             updated = _serialize_social_post(cursor, cursor.fetchone())
-            if not updated:
-                raise RuntimeError("Состояние публикации изменилось; обновите карточку перед постановкой в расписание")
             db.conn.commit()
             return updated
         cursor.execute(
@@ -1191,14 +1198,11 @@ def queue_social_post(user_id: str, post_id: str) -> dict[str, Any]:
                 last_error = NULL,
                 updated_at = NOW()
             WHERE id = %s
-              AND status = %s
             RETURNING *
             """,
-            (post_id, status),
+            (post_id,),
         )
         updated = _serialize_social_post(cursor, cursor.fetchone())
-        if not updated:
-            raise RuntimeError("Состояние публикации изменилось; обновите карточку перед постановкой в расписание")
         db.conn.commit()
         return updated
     except Exception:
@@ -1208,7 +1212,19 @@ def queue_social_post(user_id: str, post_id: str) -> dict[str, Any]:
         db.close()
 
 def queue_social_posts(user_id: str, post_ids: list[str]) -> dict[str, Any]:
-    return run_post_batch(post_ids, lambda post_id: queue_social_post(user_id, post_id), _normalize_ids, _summary_for_posts, build_social_queue_groups, lambda: str(sys.exc_info()[1]))
+    posts: list[dict[str, Any]] = []
+    failed: list[dict[str, str]] = []
+    for post_id in _normalize_ids(post_ids):
+        try:
+            posts.append(queue_social_post(user_id, post_id))
+        except Exception:
+            failed.append({"id": post_id, "error": str(sys.exc_info()[1])})
+    return {
+        "posts": posts,
+        "failed": failed,
+        "summary": _summary_for_posts(posts),
+        "queue_groups": build_social_queue_groups(posts),
+    }
 
 def create_supervised_publish_task(user_id: str, post_id: str, approved: bool = False) -> dict[str, Any]:
     if not approved:
@@ -1217,7 +1233,7 @@ def create_supervised_publish_task(user_id: str, post_id: str, approved: bool = 
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        post = _load_post_for_write(cursor, user_id, post_id)
+        post = _load_post_for_user(cursor, user_id, post_id)
         updated = _create_supervised_publish_task(cursor, post)
         db.conn.commit()
         return updated
@@ -1255,7 +1271,6 @@ def _create_supervised_publish_task(cursor: Any, post: dict[str, Any]) -> dict[s
             last_error = %s,
             updated_at = NOW()
         WHERE id = %s
-          AND status = %s
         RETURNING *
         """,
         (
@@ -1264,12 +1279,9 @@ def _create_supervised_publish_task(cursor: Any, post: dict[str, Any]) -> dict[s
             _json_dumps(metadata),
             supervised_state["last_error"],
             post_id,
-            status,
         ),
     )
     updated = _serialize_social_post(cursor, cursor.fetchone())
-    if not updated:
-        raise RuntimeError("Состояние публикации изменилось; обновите карточку перед контролируемым размещением")
     ledger_id = _record_social_supervised_handoff_ledger(cursor, post, updated, automation_task_id)
     outbox_id = ""
     if ledger_id:
@@ -1360,8 +1372,128 @@ def _record_knowledge_publish_event(cursor: Any, post: dict[str, Any], user_id: 
         cursor.execute("RELEASE SAVEPOINT knowledge_content_publish")
 
 
+def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_social_post_tables(cursor)
+        post = _load_post_for_user(cursor, user_id, post_id)
+        if not post.get("approved_at") and str(post.get("status") or "") not in {"approved", "queued"}:
+            raise PermissionError("Перед внешней публикацией нужно подтверждение человека")
+        if not _social_post_has_text(post):
+            cursor.execute(
+                """
+                UPDATE social_posts
+                SET status = 'needs_review',
+                    approved_at = NULL,
+                    approval_id = NULL,
+                    last_error = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING *
+                """,
+                ("Перед публикацией нужно заполнить текст и заново подтвердить preview", post_id),
+            )
+            updated = _serialize_social_post(cursor, cursor.fetchone())
+            db.conn.commit()
+            return updated
+        from services.social_posts.publish_guard import DISK_MANUAL_PUBLISH_MESSAGE, disk_video_requires_manual_publish, validate_content_rules
+        if disk_video_requires_manual_publish(cursor, post):
+            cursor.execute("UPDATE social_posts SET status='needs_manual_publish',last_error=%s,updated_at=NOW() WHERE id=%s RETURNING *",
+                (DISK_MANUAL_PUBLISH_MESSAGE,post_id))
+            updated = _serialize_social_post(cursor, cursor.fetchone())
+            db.conn.commit()
+            return updated
+        validate_content_rules(cursor, post, user_id)
+        platform = str(post.get("platform") or "").strip()
+        publish_mode = str(post.get("publish_mode") or "").strip()
+        metadata = _json_dict(post.get("metadata_json"))
+        if platform in BROWSER_OR_MANUAL_PLATFORMS:
+            updated = _create_supervised_publish_task(cursor, post)
+            db.conn.commit()
+            return updated
+        if publish_mode != "api":
+            cursor.execute(
+                """
+                UPDATE social_posts
+                SET status = 'needs_manual_publish',
+                    last_error = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING *
+                """,
+                ("Для канала не настроен API-адаптер", post_id),
+            )
+            updated = _serialize_social_post(cursor, cursor.fetchone())
+            db.conn.commit()
+            return updated
+        cursor.execute(
+            """
+            UPDATE social_posts
+            SET status = 'publishing',
+                metadata_json = %s,
+                last_error = NULL,
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (_json_dumps(metadata), post_id),
+        )
+        post = _serialize_social_post(cursor, cursor.fetchone())
+        publish_result = _publish_api_post(cursor, post)
+        metadata.update(_json_dict(post.get("metadata_json")))
+        metadata.update(_json_dict(publish_result.get("metadata_json")))
+        next_status = str(publish_result.get("status") or "failed")
+        if next_status not in SOCIAL_POST_STATUSES:
+            next_status = "failed"
+        published_at = datetime.now(timezone.utc) if next_status == "published" else None
+        cursor.execute(
+            """
+            UPDATE social_posts
+            SET status = %s,
+                published_at = COALESCE(published_at, %s),
+                provider_post_id = COALESCE(NULLIF(%s, ''), provider_post_id),
+                provider_post_url = COALESCE(NULLIF(%s, ''), provider_post_url),
+                metadata_json = %s,
+                last_error = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (
+                next_status,
+                published_at,
+                str(publish_result.get("provider_post_id") or "").strip(),
+                str(publish_result.get("provider_post_url") or "").strip(),
+                _json_dumps(metadata),
+                str(publish_result.get("last_error") or "").strip() or None,
+                post_id,
+            ),
+        )
+        updated = _serialize_social_post(cursor, cursor.fetchone())
+        _record_knowledge_publish_event(cursor, updated, user_id, "provider_api")
+        db.conn.commit()
+        return updated
+    except Exception:
+        db.conn.rollback()
+        raise sys.exc_info()[1]
+    finally:
+        db.close()
+
 def publish_social_posts(user_id: str, post_ids: list[str]) -> dict[str, Any]:
-    return run_post_batch(post_ids, lambda post_id: publish_social_post(user_id, post_id), _normalize_ids, _summary_for_posts, build_social_queue_groups, lambda: str(sys.exc_info()[1]))
+    posts: list[dict[str, Any]] = []
+    failed: list[dict[str, str]] = []
+    for post_id in _normalize_ids(post_ids):
+        try:
+            posts.append(publish_social_post(user_id, post_id))
+        except Exception:
+            failed.append({"id": post_id, "error": str(sys.exc_info()[1])})
+    return {
+        "posts": posts,
+        "failed": failed,
+        "summary": _summary_for_posts(posts),
+        "queue_groups": build_social_queue_groups(posts),
+    }
 
 def rehearse_social_post_publish(user_id: str, post_id: str) -> dict[str, Any]:
     db = DatabaseManager()
@@ -1405,26 +1537,17 @@ def mark_manual_published(
     provider_post_url: str = "",
     provider_post_id: str = "",
     content_confirmed: bool = False,
-    _allow_publishing_reconciliation: bool = True,
 ) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        _load_post_for_write(cursor, user_id, post_id)
-        cursor.execute("SELECT pg_try_advisory_xact_lock(hashtextextended(%s, 0))", (_publish_advisory_key(post_id),))
-        if not _advisory_lock_granted(cursor.fetchone()):
-            raise RuntimeError("Публикация сейчас сверяется; обновите карточку и не повторяйте отправку")
-        post = _load_post_for_write(cursor, user_id, post_id)
+        post = _load_post_for_user(cursor, user_id, post_id)
         status = str(post.get("status") or "").strip()
-        if status not in {"needs_supervised_publish", "needs_manual_publish", "publishing"}:
+        if status not in {"needs_supervised_publish", "needs_manual_publish"}:
             raise ValueError("Ручная отметка публикации доступна только для ручного или контролируемого размещения")
         if not content_confirmed:
             raise ValueError("Проверьте, что текст и медиа отображаются на площадке, и подтвердите размещение")
-        if status == "publishing" and not (str(provider_post_url or "").strip() or str(provider_post_id or "").strip()):
-            raise ValueError("Для сверки неопределённой API-публикации укажите ссылку или ID публикации")
-        if status == "publishing" and not _allow_publishing_reconciliation:
-            raise ValueError("Неопределённые API-публикации нельзя подтверждать одним общим receipt")
         confirmed_at = datetime.now(timezone.utc)
         metadata = _json_dict(post.get("metadata_json"))
         metadata["published_source"] = "manual_confirmation"
@@ -1433,19 +1556,6 @@ def mark_manual_published(
             "confirmed_at": confirmed_at.isoformat(),
             "confirmed_by": str(user_id or "").strip(),
         }
-        if status == "publishing":
-            attempt = _json_dict(metadata.get("publish_attempt"))
-            attempt_id = str(attempt.get("id") or "").strip()
-            if not attempt_id:
-                raise ValueError("Для сверки API-публикации нужен сохранённый идентификатор попытки")
-            attempt["state"] = "manual_confirmed"
-            attempt["manual_confirmed_at"] = confirmed_at.isoformat()
-            attempt["manual_confirmed_by"] = str(user_id or "").strip()
-            attempt["receipt"] = {
-                "provider_post_id": str(provider_post_id or "").strip(),
-                "provider_post_url": str(provider_post_url or "").strip(),
-            }
-            metadata["publish_attempt"] = attempt
         cursor.execute(
             """
             UPDATE social_posts
@@ -1457,24 +1567,11 @@ def mark_manual_published(
                 last_error = NULL,
                 updated_at = NOW()
             WHERE id = %s
-              AND status = %s
-              AND (%s <> 'publishing' OR metadata_json -> 'publish_attempt' ->> 'id' = %s)
             RETURNING *
             """,
-            (
-                confirmed_at,
-                provider_post_url,
-                provider_post_id,
-                _json_dumps(metadata),
-                post_id,
-                status,
-                status,
-                str(_json_dict(metadata.get("publish_attempt")).get("id") or "").strip(),
-            ),
+            (confirmed_at, provider_post_url, provider_post_id, _json_dumps(metadata), post_id),
         )
         updated = _serialize_social_post(cursor, cursor.fetchone())
-        if not updated:
-            raise RuntimeError("Состояние публикации изменилось; обновите карточку перед ручной сверкой")
         _record_knowledge_publish_event(cursor, updated, user_id, "manual_confirmation")
         db.conn.commit()
         return updated
@@ -1493,7 +1590,7 @@ def move_social_post_to_manual_publish(
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        post = _load_post_for_write(cursor, user_id, post_id)
+        post = _load_post_for_user(cursor, user_id, post_id)
         status = str(post.get("status") or "").strip()
         if status not in {
             "approved",
@@ -1525,14 +1622,11 @@ def move_social_post_to_manual_publish(
                 automation_task_id = NULL,
                 updated_at = NOW()
             WHERE id = %s
-              AND status = %s
             RETURNING *
             """,
-            (_json_dumps(metadata), post_id, status),
+            (_json_dumps(metadata), post_id),
         )
         updated = _serialize_social_post(cursor, cursor.fetchone())
-        if not updated:
-            raise RuntimeError("Состояние публикации изменилось; обновите карточку перед ручным размещением")
         db.conn.commit()
         return updated
     except Exception:
@@ -1551,7 +1645,7 @@ def mark_supervised_publish_blocked(
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        post = _load_post_for_write(cursor, user_id, post_id)
+        post = _load_post_for_user(cursor, user_id, post_id)
         platform = str(post.get("platform") or "").strip()
         status = str(post.get("status") or "").strip()
         if platform not in BROWSER_OR_MANUAL_PLATFORMS and status != "needs_supervised_publish":
@@ -1578,14 +1672,11 @@ def mark_supervised_publish_blocked(
                 last_error = %s,
                 updated_at = NOW()
             WHERE id = %s
-              AND status = %s
             RETURNING *
             """,
-            (_json_dumps(metadata), blocked_reason, post_id, status),
+            (_json_dumps(metadata), blocked_reason, post_id),
         )
         updated = _serialize_social_post(cursor, cursor.fetchone())
-        if not updated:
-            raise RuntimeError("Состояние публикации изменилось; обновите карточку перед ручным режимом")
         db.conn.commit()
         return updated
     except Exception:
@@ -1612,7 +1703,6 @@ def mark_manual_published_posts(
                     provider_post_url,
                     provider_post_id,
                     content_confirmed,
-                    False,
                 )
             )
         except Exception:
@@ -1678,7 +1768,7 @@ def record_social_post_attribution_event(
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        post = _load_post_for_write(cursor, user_id, post_id)
+        post = _load_post_for_user(cursor, user_id, post_id)
         normalized_event_type = str(event_type or "").strip().lower()
         event, metrics = _record_social_post_attribution_event_in_cursor(
             cursor,
@@ -1724,7 +1814,7 @@ def record_social_post_attribution_events(
         posts = []
         metrics_by_post = {}
         for post_id in requested_ids:
-            post = _load_post_for_write(cursor, user_id, post_id)
+            post = _load_post_for_user(cursor, user_id, post_id)
             event, metrics = _record_social_post_attribution_event_in_cursor(
                 cursor,
                 post,
@@ -1811,11 +1901,11 @@ def collect_social_post_metrics(user_id: str, business_id: str = "", post_id: st
         filters = ["sp.status = 'published'"]
         params: list[Any] = []
         if post_id:
-            post = _load_post_for_write(cursor, user_id, post_id)
+            post = _load_post_for_user(cursor, user_id, post_id)
             filters.append("sp.id = %s")
             params.append(post.get("id"))
         elif business_id:
-            _require_business_write_access(cursor, user_id, business_id)
+            _require_business_access(cursor, user_id, business_id)
             filters.append("sp.business_id = %s")
             params.append(business_id)
         else:

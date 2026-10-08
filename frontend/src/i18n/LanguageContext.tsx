@@ -140,3 +140,4 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
 };
 
 export type { Language } from './LanguageContext.logic';
+export { useLanguage } from './LanguageContext.logic';

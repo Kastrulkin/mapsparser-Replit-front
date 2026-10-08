@@ -53,6 +53,7 @@ def build_workflow_dsl_document(version_payload: Dict[str, Any], metadata: Dict[
         "compiled_process_schema": str(compiled_process.get("schema") or "compiled_agent_workflow_v1"),
         "goal": str(version_payload.get("goal") or "").strip(),
         "trigger": str(version_payload.get("trigger") or snapshot_dsl.get("trigger") or "manual.run").strip() or "manual.run",
+        "schedule": version_payload.get("schedule") if isinstance(version_payload.get("schedule"), dict) else {},
         "mode": str(version_payload.get("mode") or snapshot_dsl.get("mode") or "draft").strip() or "draft",
         "inputs_schema": (
             version_payload.get("inputs_schema")
@@ -130,6 +131,22 @@ def validate_workflow_dsl_document(document: Dict[str, Any]) -> Dict[str, Any]:
             capabilities_in_steps.add(capability)
             if capability not in capability_allowlist:
                 errors.append(_issue(f"steps[{index}].capability", "Capability is not present in capability_allowlist."))
+            if capability == "content.publish_handoff":
+                from services.compiled_content_handoff import handoff_scope
+
+                scope_version = {
+                    "execution_mode": "scheduled" if str(document.get("trigger") or "").startswith("schedule.") else "manual",
+                    "trigger": str(document.get("trigger") or ""),
+                    "steps_json": [step],
+                    "schedule": document.get("schedule") if isinstance(document.get("schedule"), dict) else {},
+                }
+                business_id = str((step.get("payload") or {}).get("business_id") or "") if isinstance(step.get("payload"), dict) else ""
+                if not handoff_scope(scope_version, business_id):
+                    errors.append(_issue(f"steps[{index}].payload", "Content handoff needs one fixed business, connected recipient, channels, lead time, local time and matching schedule timezone."))
+                if step.get("requires_approval") is not True or str(step.get("required_approval_type") or "") != "content_handoff_activation":
+                    errors.append(_issue(f"steps[{index}].required_approval_type", "Scheduled content handoff requires one-time activation approval bound to its exact scope."))
+                if "content_handoff_activation" not in approval_policy:
+                    errors.append(_issue("approval_policy.content_handoff_activation", "Declare the one-time external-send approval boundary."))
             provider_action_ref = str(step.get("provider_action_ref") or "").strip()
             if provider_action_ref:
                 provider = str(step.get("provider") or "").strip()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from services.agent_canary_budget import evaluate_agent_canary_budget, pause_agent_canary_blueprint
@@ -364,12 +364,28 @@ def dispatch_due_scheduled_agent_blueprints(
     now: datetime | None = None,
     business_limit: int = 50,
     trigger: str = "schedule.daily",
+    should_stop: Callable[[], bool] | None = None,
 ) -> Dict[str, Any]:
+    if should_stop and should_stop():
+        return {
+            "success": True,
+            "trigger": trigger,
+            "checked_businesses": 0,
+            "checked_blueprints": 0,
+            "dispatched_count": 0,
+            "skipped_count": 0,
+            "dispatched": [],
+            "skipped": [],
+        }
     now = now or datetime.now(timezone.utc)
     blueprints = _load_scheduled_blueprints(cursor, blueprint_limit=business_limit)
     dispatched = []
     skipped = []
+    checked_blueprints = []
     for blueprint in blueprints:
+        if should_stop and should_stop():
+            break
+        checked_blueprints.append(blueprint)
         canary = evaluate_agent_canary_budget(
             cursor,
             blueprint=blueprint,
@@ -414,6 +430,8 @@ def dispatch_due_scheduled_agent_blueprints(
         if _scheduled_blueprint_event_already_recorded(cursor, blueprint_id, trigger, schedule_context):
             skipped.append({"blueprint_id": blueprint_id, "business_id": business_id, "reason": "already_recorded_for_schedule"})
             continue
+        if should_stop and should_stop():
+            break
         result = _dispatch_scheduled_blueprint(cursor, blueprint, version, now, trigger, schedule_context)
         if not result.get("success"):
             skipped.append(
@@ -437,8 +455,8 @@ def dispatch_due_scheduled_agent_blueprints(
     return {
         "success": True,
         "trigger": trigger,
-        "checked_businesses": len({str(item.get("business_id") or "") for item in blueprints}),
-        "checked_blueprints": len(blueprints),
+        "checked_businesses": len({str(item.get("business_id") or "") for item in checked_blueprints}),
+        "checked_blueprints": len(checked_blueprints),
         "dispatched_count": len(dispatched),
         "skipped_count": len(skipped),
         "dispatched": dispatched,
@@ -688,6 +706,10 @@ def _dispatch_scheduled_blueprint(
         if failure_reason == "AGENT_RUN_ALREADY_IN_PROGRESS"
         else "failed"
     )
+    if failure_reason == "AGENT_RUN_ALREADY_IN_PROGRESS" and (parse_json_field(version.get("runtime_config_json"), {}) or {}).get("outreach_config"):
+        # A recurring prospecting batch is skipped, never accumulated behind a
+        # slow previous batch. Other established schedule semantics are retained.
+        event_status = "skipped"
     cursor.execute(
         """
         UPDATE agent_trigger_events

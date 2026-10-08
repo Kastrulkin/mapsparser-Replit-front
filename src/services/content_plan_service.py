@@ -2116,7 +2116,7 @@ def get_content_plan(user_id: str, plan_id: str) -> dict[str, Any]:
             """
             SELECT id, business_id, scheduled_for, content_type, theme, goal, source_kind, source_ref,
                    seo_keyword, service_id, transaction_id, seo_views, location_scope, draft_text, status, usernews_id,
-                   metadata_json, created_at, updated_at
+                   metadata_json, created_at, updated_at, updated_at::text AS version
             FROM contentplanitems
             WHERE plan_id = %s
             ORDER BY scheduled_for ASC, created_at ASC
@@ -2157,6 +2157,7 @@ def get_content_plan(user_id: str, plan_id: str) -> dict[str, Any]:
                 "metadata_json": _json_value(_row_get(row, "metadata_json", 16, {}), {}),
                 "created_at": _row_get(row, "created_at", 17),
                 "updated_at": _row_get(row, "updated_at", 18),
+                "version": str(_row_get(row, "version", 19, "") or ""),
             }
             item_payload["metadata_json"] = _annotate_story_facts_requirement(item_payload)
             items.append(item_payload)
@@ -2295,6 +2296,10 @@ def delete_content_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
         db.close()
 
 
+class ContentPlanItemConflict(ValueError):
+    """The item changed after the caller last loaded it."""
+
+
 def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any], *, auth_context=None) -> dict[str, Any]:
     if auth_context is not None and auth_context.user_id != user_id:
         raise PermissionError("Несовпадение пользователя операции")
@@ -2305,6 +2310,7 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
         cursor.execute(
             """
             SELECT i.id, i.plan_id, i.business_id, i.status, i.source_kind, i.content_type, i.theme, i.draft_text,
+                   i.updated_at::text AS version,
                    i.metadata_json, i.location_scope, p.business_id AS root_business_id
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
@@ -2317,6 +2323,10 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
         if not row:
             raise ValueError("Элемент плана не найден")
         data = _row_to_dict(cursor, row)
+        expected_version = str(payload.get("expected_version") or "").strip()
+        current_version = str(data.get("version") or "").strip()
+        if expected_version and expected_version != current_version:
+            raise ContentPlanItemConflict("Пост уже изменился. Обновите план и проверьте актуальную версию перед сохранением.")
         previous_status = str(data.get("status") or "").strip()
         cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
         has_access, _ = verify_business_write_access(
@@ -2947,7 +2957,6 @@ CONTENT_PLAN_LANGUAGE_LABELS = {
     "fr": "French",
     "tr": "Turkish",
     "hy": "Armenian",
-    "kk": "Kazakh",
     "it": "Italian",
     "pt": "Portuguese",
     "zh": "Chinese",

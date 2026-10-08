@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import uuid
 from datetime import date, datetime, timedelta
@@ -10,7 +11,6 @@ from typing import Any, Callable, Dict
 from zoneinfo import ZoneInfo
 
 from database_manager import DatabaseManager
-from core.capability_names import LEGACY_CAPABILITY_ALIASES, normalize_capability_name
 from core.db_helpers import assert_schema_columns
 from core.finance_imports import normalize_finance_import_rows
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
@@ -27,6 +27,7 @@ CapabilityHandler = Callable[[Dict[str, Any], Dict[str, Any]], Dict[str, Any]]
 
 
 CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
+    "outreach.continue": {"risk":"internal_request", "side_effects":"binds an approved workflow to its existing outreach job", "approval_required":False},
     'work.colleague.send': {'risk':'external_send','side_effects':'queues one reviewed colleague message','approval_required':True},
     "outreach.send_batch": {
         "risk": "external_send",
@@ -57,6 +58,11 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "risk": "internal_draft_write",
         "side_effects": "creates one LocalOS content-plan draft; never publishes externally",
         "approval_required": False,
+    },
+    "content.publish_handoff": {
+        "risk": "external_send",
+        "side_effects": "sends due, approved Telegram/VK/MAX post variants and their selected photos to one bound Telegram recipient; never publishes to those platforms",
+        "approval_required": True,
     },
     "appointments.read": {
         "risk": "read",
@@ -154,6 +160,7 @@ CAPABILITY_RUNTIME_STATUS = {
     "services.optimize": ("production_draft", True),
     "news.generate": ("production_draft", True),
     "content_plan.item.create_draft": ("production_internal_write", True),
+    "content.publish_handoff": ("production_external_write", True),
     "appointments.read": ("production_read", True),
     "communications.draft": ("production_draft", True),
     "support.export": ("production_read", True),
@@ -162,6 +169,7 @@ CAPABILITY_RUNTIME_STATUS = {
     "partnership.match_services": ("production_read", True),
     "partnership.draft_offer": ("production_draft", True),
     "outreach.send_batch": ("request_only", False),
+    "outreach.continue": ("production_internal_write", True),
     "reviews.reply.publish_request": ("request_only", False),
     "appointments.create_request": ("request_only", False),
     "communications.send_reminder": ("request_only", False),
@@ -175,6 +183,27 @@ CAPABILITY_RUNTIME_STATUS = {
     "finance.sales_import.apply_operator": ("production_internal_write", True),
     "billing.reserve": ("manual_only", False),
     "billing.settle": ("manual_only", False),
+}
+
+
+LEGACY_CAPABILITY_ALIASES = {
+    "reviews.reply": "reviews.reply.draft",
+    "appointments.create": "appointments.create_request",
+    "appointments.update": "appointments.create_request",
+    "appointments.cancel": "appointments.create_request",
+    "reminders.send": "communications.send_reminder",
+    "communications.send": "communications.send_reminder",
+    "google_sheets.append_row": "sheets.append_row_request",
+    "sheets.append_row": "sheets.append_row_request",
+    "google_sheets.read": "google_sheets.read_rows",
+    "finance.create_transaction": "finance.transaction.create",
+    "finance.manual_entry": "finance.transaction.create",
+    "finance.transaction.create_request": "finance.transaction.create",
+    "partners.audit_card": "partnership.audit_card",
+    "partners.match_services": "partnership.match_services",
+    "partners.draft_first_offer": "partnership.draft_offer",
+    "partners.draft_commercial_offer": "partnership.draft_offer",
+    "billing.reserve/settle": "billing.reserve",
 }
 
 
@@ -204,7 +233,7 @@ def build_capability_catalog() -> Dict[str, Any]:
 
 
 def capability_runtime_contract(name: str) -> Dict[str, Any]:
-    canonical = normalize_capability_name(name)
+    canonical = LEGACY_CAPABILITY_ALIASES.get(str(name or "").strip(), str(name or "").strip())
     runtime_status, beta_enabled = CAPABILITY_RUNTIME_STATUS.get(canonical, ("planned_gap", False))
     return {
         "capability": canonical,
@@ -215,14 +244,17 @@ def capability_runtime_contract(name: str) -> Dict[str, Any]:
 
 def build_capability_handlers() -> Dict[str, CapabilityHandler]:
     from services.operator_colleagues import handle
+    from services.agent_outreach_continuation import request as outreach_continue_request
     handlers: Dict[str, CapabilityHandler] = {
         'work.colleague.send': handle,
+        'outreach.continue': outreach_continue_request,
         OUTREACH_SEND_BATCH_CAPABILITY: handle_outreach_send_batch,
         "reviews.reply.draft": _handle_reviews_reply_draft,
         "reviews.reply.publish_request": _handle_reviews_reply_publish_request,
         "services.optimize": _handle_services_optimize,
         "news.generate": _handle_news_generate,
         "content_plan.item.create_draft": _handle_content_plan_item_create_draft,
+        "content.publish_handoff": _handle_content_publish_handoff,
         "appointments.read": _handle_appointments_read,
         "appointments.create_request": _handle_appointments_create_request,
         "communications.draft": _handle_communications_draft,
@@ -247,6 +279,11 @@ def build_capability_handlers() -> Dict[str, CapabilityHandler]:
         if target in handlers:
             handlers[alias] = handlers[target]
     return handlers
+
+
+def normalize_capability_name(value: Any) -> str:
+    name = str(value or "").strip()
+    return LEGACY_CAPABILITY_ALIASES.get(name, name)
 
 
 def _catalog_item(name: str, meta: Dict[str, Any]) -> Dict[str, Any]:
@@ -989,6 +1026,137 @@ def _handle_content_plan_item_create_draft(envelope: Dict[str, Any], user_data: 
         localos_write_performed=True,
         content_plan_url=f"/dashboard/content?plan_id={plan_id}",
     )
+
+
+def _handle_content_publish_handoff(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Deliver only the approved, due content kit to one connected Telegram recipient."""
+    payload = _payload(envelope)
+    business_id = str(envelope.get("tenant_id") or "").strip()
+    requested_business = str(payload.get("business_id") or "").strip()
+    recipient_user_id = str(payload.get("recipient_user_id") or "").strip()
+    platforms = payload.get("platforms")
+    if requested_business != business_id or not recipient_user_id:
+        return _result("blocked", reason_code="CONTENT_HANDOFF_SCOPE_REQUIRED", external_dispatch_performed=False)
+    if not isinstance(platforms, list) or not platforms or len(platforms) > 3 or any(
+        platform not in {"telegram", "vk", "max"} for platform in platforms
+    ) or len(set(platforms)) != len(platforms):
+        return _result("blocked", reason_code="CONTENT_HANDOFF_CHANNELS_INVALID", external_dispatch_performed=False)
+    try:
+        lead_days = int(payload.get("lead_days"))
+        handoff_time = datetime.strptime(str(payload.get("time") or ""), "%H:%M").strftime("%H:%M")
+        approved_timezone = str(payload.get("timezone") or "").strip()
+    except (TypeError, ValueError):
+        return _result("blocked", reason_code="CONTENT_HANDOFF_SCHEDULE_INVALID", external_dispatch_performed=False)
+    if lead_days != 1:
+        return _result("blocked", reason_code="CONTENT_HANDOFF_LEAD_TIME_UNSUPPORTED", external_dispatch_performed=False)
+    approval = envelope.get("approval") if isinstance(envelope.get("approval"), dict) else {}
+    if approval.get("content_handoff_consent") is not True:
+        return _result("blocked", reason_code="CONTENT_HANDOFF_CONSENT_REQUIRED", external_dispatch_performed=False)
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        from services.operator_audio import authorize_actor
+
+        actor_id = _actor_user_id(envelope, user_data)
+        if actor_id and not user_data.get("is_superadmin"):
+            authorize_actor(cursor, actor_id, business_id, check_subscription=False)
+        cursor.execute(
+            """SELECT p.user_id,p.telegram_id,u.is_active FROM telegramcontrolpreferences p
+               JOIN users u ON u.id=p.user_id WHERE p.user_id=%s LIMIT 1""",
+            (recipient_user_id,),
+        )
+        binding_row = cursor.fetchone()
+        binding = dict(binding_row) if binding_row else {}
+        if not binding or not binding.get("is_active") or not str(binding.get("telegram_id") or "").strip():
+            return _result("blocked", reason_code="CONTENT_HANDOFF_RECIPIENT_NOT_CONNECTED", external_dispatch_performed=False)
+        authorize_actor(cursor, recipient_user_id, business_id, check_subscription=False)
+        from services.business_input_settings import resolve
+        timezone_name = resolve(cursor, business_id).get("timezone")
+        if not timezone_name or timezone_name != approved_timezone:
+            return _result("blocked", reason_code="CONTENT_HANDOFF_TIMEZONE_REQUIRED", external_dispatch_performed=False)
+
+        from services.content_publish_notifications import (
+            collect_due_content_publish_handoffs,
+            deliver_content_publish_handoff,
+        )
+        from services.social_posts.media_delivery import send_telegram_photo_message
+        from services.telegram_bot_sender import send_telegram_message_result
+
+        scope = {
+            "business_id": business_id,
+            "user_id": recipient_user_id,
+            "telegram_id": str(binding["telegram_id"]),
+            "scope_type": "business",
+            "scope_id": business_id,
+            "lead_days": str(lead_days),
+            "handoff_time": handoff_time,
+            "required_platforms": sorted(platforms),
+            "business_timezone": timezone_name,
+            "timezone": timezone_name,
+        }
+        due = collect_due_content_publish_handoffs(
+            db.conn,
+            business_id=business_id,
+            recipient_user_id=recipient_user_id,
+            limit=1000,
+            compiled_scope=scope,
+        )
+        due = [item for item in due if item.get("platform") in platforms]
+        if 'requested_post_versions' in payload:
+            requested = payload['requested_post_versions']
+            if not isinstance(requested, list):
+                return _result('blocked', reason_code='CONTENT_HANDOFF_REQUESTS_INVALID', external_dispatch_performed=False)
+            allowed = {(str(item['id']), item['revision']): item for item in due if not item.get('blocked_reason')}
+            selected = []
+            seen = set()
+            for request_item in requested:
+                if not isinstance(request_item, dict):
+                    return _result('blocked', reason_code='CONTENT_HANDOFF_REQUESTS_INVALID', external_dispatch_performed=False)
+                identity = (str(request_item.get('post_id') or ''), request_item.get('revision'))
+                if identity not in allowed or identity in seen:
+                    return _result('blocked', reason_code='CONTENT_HANDOFF_SNAPSHOT_STALE', external_dispatch_performed=False)
+                seen.add(identity)
+                selected.append(allowed[identity])
+            due = selected
+            dispatch = payload.get('compiled_dispatch')
+            if not isinstance(dispatch, dict):
+                return _result('blocked', reason_code='CONTENT_HANDOFF_DISPATCH_REQUIRED', external_dispatch_performed=False)
+            scope['compiled_dispatch'] = dispatch
+        outcomes = []
+        bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+        for item in due:
+            outcome = deliver_content_publish_handoff(
+                db.conn,
+                {**item, **scope, "compiled_handoff": True},
+                send_photo=lambda post: send_telegram_photo_message(
+                    bot_token=bot_token,
+                    chat_id=str(binding["telegram_id"]),
+                    media_asset=post["selected_photo"],
+                    caption="",
+                ),
+                send_text=lambda chat_id, text, **kwargs: send_telegram_message_result(
+                    chat_id,
+                    text,
+                    kwargs.get("reply_markup"),
+                    include_outcome=True,
+                ),
+                compiled_scope=scope,
+            )
+            outcomes.append({"post_id": str(item.get("id") or ""), "platform": item.get("platform"), "status": outcome})
+        counts = {key: sum(1 for item in outcomes if item["status"] == key) for key in ("sent", "incomplete", "needs_attention", "needs_reconciliation", "uncertain")}
+        return _result(
+            "completed" if all(item["status"] == "sent" for item in outcomes) else "needs_attention" if outcomes else "nothing_due",
+            business_id=business_id,
+            recipient_user_id=recipient_user_id,
+            deliveries=outcomes,
+            counts=counts,
+            external_dispatch_performed=bool(outcomes and counts["sent"]),
+            publish_performed=False,
+            publication_status_unchanged=True,
+        )
+    finally:
+        db.close()
 
 
 def _handle_appointments_read(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:

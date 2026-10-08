@@ -18,6 +18,7 @@ import {
 import type React from 'react';
 import { Suspense, lazy, useEffect, useState } from 'react';
 import { agentExecutionModeOptions, employeeToneClass } from './employee.logic';
+export { agentExecutionModeOptions } from './employee.logic';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
