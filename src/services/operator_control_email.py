@@ -42,7 +42,8 @@ def parse(message):
         raise ValueError('Укажите адрес получателя и подключённого отправителя: «на email от email».')
     subject = re.search(r'Тема:\s*[«"]([^»"]+)[»"]', message, re.I)
     body = re.search(r'Текст:\s*[«"]([^»"]+)[»"]', message, re.I)
-    if body and body[1].strip() != BODY:
+    normalize = lambda text: re.sub(r'\s+', ' ', text).strip().rstrip('.!?…')
+    if body and normalize(body[1]) != normalize(BODY):
         raise ValueError('Для контрольной проверки используйте текст: «' + BODY + '». Произвольные письма готовятся в партнёрской кампании.')
     result = {'recipient': recipient[1].lower(), 'sender': sender[1].lower(),
               'subject': subject[1].strip() if subject else SUBJECT, 'body': BODY}
@@ -93,7 +94,7 @@ def preview(cursor, *, business_id, user_id, message):
             f"Тема: {fields['subject']}\n\n{fields['body']}\n\n"
             'Одно письмо, без повторных касаний. Пока не отправлено. Подтвердите постановку в очередь.')
     return {'status': 'approval_required', 'chat_response': text,
-            'approval': {'summary': text, 'envelope': envelope},
+            'approval': {'status': 'pending', 'capability': CAPABILITY, 'summary': text, 'envelope': envelope},
             'external_writes_performed': False}
 
 
@@ -183,4 +184,4 @@ def execute(cursor, *, business_id, user_id, envelope, action_id):
         native.close()
     return {'status': 'completed', 'chat_response': 'Контрольное письмо поставлено в очередь. Это ещё не подтверждение отправки. Повторных касаний нет.',
             'campaign_id': campaign_id, 'delivery_status': 'queued', 'external_writes_performed': False,
-            'result_ref': {'entity_id': campaign_id, 'href': '/dashboard/partnerships?section=send', 'label': 'Проверить отправку'}}
+            'result_ref': {'entity_id': campaign_id, 'href': '/dashboard/partnerships?section=send&business_id=' + business_id, 'label': 'Проверить отправку'}}

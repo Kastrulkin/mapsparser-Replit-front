@@ -82,3 +82,31 @@ def test_repeated_confirmation_returns_saved_result_without_new_queue(monkeypatc
     result,repeated=operator_core.confirm_pending_operator_action(None,action_id='action',business_id='riderra',user_id='owner')
     assert repeated is True
     assert result==saved
+
+
+@pytest.mark.parametrize('body',[control.BODY.rstrip('.'),control.BODY.replace(' ', '\u00a0'), '  '+control.BODY+'  '])
+def test_punctuation_and_spacing_do_not_reject_the_same_control_text(body):
+    message = 'Подготовь контрольное письмо на demyanovap@yandex.ru от localosgo@gmail.com. Текст: «'+body+'».'
+    assert control.parse(message)['body'] == control.BODY
+
+
+def test_validation_error_has_no_link_to_a_nonexistent_email(monkeypatch):
+    from services import operator_core
+    monkeypatch.setattr(control,'load_sender',lambda *a,**k:{'id':'sender-id'})
+    result,_=operator_core.route_operator_message(None,business_id='riderra',user_id='owner',channel='web',
+        message='Подготовь контрольное письмо на demyanovap@yandex.ru')
+    assert result['status']=='clarification_required'
+    assert not result['result_ref']['href']
+    assert not result['ui_actions']
+
+
+def test_unconfirmed_preview_has_no_phantom_link(monkeypatch):
+    from services import operator_core
+    monkeypatch.setattr(control,'load_sender',lambda *a,**k:{'id':'sender-id'})
+    result,_=operator_core.route_operator_message(None,business_id='riderra',user_id='owner',channel='web',message=MESSAGE)
+    assert result['status']=='approval_required'
+    assert result['approval']['envelope']
+    assert result['approval']['status'] == 'pending'
+    assert result['approval']['capability'] == control.CAPABILITY
+    assert not result['result_ref']['href']
+    assert not result['ui_actions']

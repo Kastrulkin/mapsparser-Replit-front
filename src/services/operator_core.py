@@ -295,6 +295,9 @@ def standardize_operator_result(result: dict[str, Any], capability: str) -> dict
         href=existing_ref.get("href"),
         label=existing_ref.get("label"),
     )
+    # A control preview or validation error has no persisted email to open.
+    if capability == 'communications.control_email' and not entity_id:
+        value['result_ref']['href'] = ''
     ui_actions = list(value.get("ui_actions") or [])
     if value["result_ref"]["href"] and not any(str(item.get("href") or "") == value["result_ref"]["href"] for item in ui_actions if isinstance(item, dict)):
         ui_actions.append(

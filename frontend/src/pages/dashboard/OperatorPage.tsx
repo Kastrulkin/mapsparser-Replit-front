@@ -958,7 +958,7 @@ const OperatorResultActions = ({
   const capabilityExamples = 'capabilities' in result ? result.capabilities || [] : [];
   const isOperatorHelp =
     ('intent' in result && result.intent === 'operator_help') || capabilityCatalog.length > 0 || capabilityExamples.length > 0;
-  const hasUsefulResultRef = !searchPreview && Boolean(resultRef?.href && resultRef.href !== '/dashboard/operator');
+  const hasUsefulResultRef = !searchPreview && (!('capability' in result) || result.capability !== 'communications.control_email' || Boolean(resultRef?.entity_id)) && Boolean(resultRef?.href && resultRef.href !== '/dashboard/operator');
   const aiRouter = result.ai_router;
   const queueId = result.queue_id;
   const status = result.status || '';
@@ -984,7 +984,7 @@ const OperatorResultActions = ({
         >
           {searchPreview ? 'Ожидает запуска' : searchTask?.id
             ? status === 'approval_required' ? 'Ожидает подтверждения запуска' : 'Поручение сохранено'
-            : status === 'unsupported' ? 'Не выполнено' : status === 'blocked' ? 'Требуется действие' : status === 'approval_required' ? 'Ожидает подтверждения' : ('delivery_status' in result && result.delivery_status === 'queued') ? 'В очереди' : status || 'operator'}
+            : status === 'clarification_required' ? 'Нужно уточнение' : status === 'unsupported' ? 'Не выполнено' : status === 'blocked' ? 'Требуется действие' : status === 'approval_required' ? 'Ожидает подтверждения' : ('delivery_status' in result && result.delivery_status === 'queued') ? 'В очереди' : status || 'operator'}
         </span>
         {'credit_charged' in result && result.credit_charged ? <span>Списано {result.charged_credits || 0} кредитов</span> : null}
         {'manual_publication_only' in result && result.manual_publication_only ? <span>Публикация вручную</span> : null}
