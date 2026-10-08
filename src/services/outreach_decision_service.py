@@ -342,6 +342,15 @@ def build_outreach_decision(
     elif sender_mode == "localos" and not ledger:
         action = "needs_evidence"
         reason_codes.append("recipient_evidence_missing")
+    elif (sender_mode == "partner_business"
+          and (context.get("continuation_contract") or {}).get("enabled")
+          and (context.get("continuation_contract") or {}).get("status") in {"running", "queued"}
+          and not (context.get("continuation_contract") or {}).get("blocker")
+          and (context.get("continuation_contract") or {}).get("config", {}).get("mode") == "prepare_only"
+          and (context.get("continuation_contract") or {}).get("config", {}).get("offer")
+          and (context.get("continuation_contract") or {}).get("qualification", {}).get("status") == "qualified"):
+        action = "write_now"
+        reason_codes.append("reviewed_search_draft_requested")
     elif sender_mode in {"partner_business", "localos_for_partner"} and operator_approved_reason:
         action = "write_now"
         reason_codes.append("operator_approved_partnership_reason")

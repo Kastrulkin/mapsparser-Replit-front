@@ -33,4 +33,21 @@ A real search-only pilot created task `857b24d6-348f-46ca-bc06-8214619bc671` wit
 
 The pilot also exposed two presentation issues fixed in the follow-up: confirmed creation selects its returned stable task ID, and a provider run being polled between worker leases displays “Ищем компании” rather than “Ожидает запуска”. Queued jobs without a provider run retain the waiting label.
 
-Final release verification: public entry `index-CWgAYutP-lo-u20261008c.js`, deployment exit 0, backups retained. Pilot reservation readback: 0 charged credits, 5 credits still reserved pending provider cost reconciliation; do not report the reserved amount as spent or start a blind duplicate run. The final browser refresh was blocked because the user's Mac was locked. The prior corrected build had passed the authenticated browser checks; final selection/progress changes passed types, build, 16 UI tests and 16 group-view tests, but the final browser refresh remains outstanding.
+Initial release verification: public entry `index-CWgAYutP-lo-u20261008c.js`, deployment exit 0, backups retained. Pilot reservation readback: 0 charged credits, 5 credits still reserved pending provider cost reconciliation; do not report the reserved amount as spent or start a blind duplicate run. The final browser refresh was blocked because the user's Mac was locked. The prior corrected build had passed the authenticated browser checks; final selection/progress changes passed types, build, 16 UI tests and 16 group-view tests, but the final browser refresh remains outstanding.
+
+
+## Completion follow-up — 8 October
+
+Terminal provider failures now keep the actual provider receipt and reconcile the existing reservation once. The timed-out pilot was reconciled to **1 charged credit**, releasing the other 4 from active reservation. Unknown receipts remain unresolved rather than being treated as free.
+
+The bounded public evidence collector discovers links before removing navigation, preserves footer addresses, prioritizes relevant fragments, and retains successful pages when another page times out or fails TLS checks. Same-host pinned networking and the three-fetch limit remain intact.
+
+The authenticated browser confirmed revision `e608b028-86d8-4b41-8cee-4c6fea278a4c` for saved group `e2252eb8-14f5-47bf-8256-f41c0ae10491`; its ID, old receipts and 41 unique companies remain intact. Generic qualification archives legacy results and check counts before a reviewed contract upgrade. Check reservation keys include the approved config revision. Compound audience wording must not add unrequested recipient/customer-type conditions.
+
+The real pass qualified **Kingdom of Holidays, EWS Holidays and Holiday Advisor**, using sourced geography, Phuket offering and email contact evidence. This proves qualification, not successful email generation or sending. Previously incorrect decisions were archived before bounded rechecks; no company was manually labelled qualified.
+
+Draft preparation now accepts the approved search offer, prior explicitly confirmed sender identity and approved profile facts without requiring a voice sample or a separate service catalog entry. This allowance is confined to draft preparation. Suppression, missing identity/proofs, send permissions, version checks and the warm-up restriction remain. The existing generator receives a precise source quote rather than a full scraped page chunk. Failed generation is retained with its error code and does not report letters as ready or the complete workflow as finished.
+
+The existing control reply `b303ca60-ac7c-4543-9161-a74148c11c1d` is a human inbound event linked to its campaign; the campaign is stopped with `recipient_replied`. The sender's reply sync is connected with a recent successful check and no error.
+
+Backend follow-up: **252 tests passed** across continuation, group presentation and existing campaign behavior; `git diff --check` passed. Changes were deployed through guarded module replacements and narrow campaign/decision patches, preserving unrelated production handlers. Backups: `/opt/seo-app/backups/outreach-terminal-receipt-20261008/`. The final browser visual check remains incomplete: native browser control was interrupted by user activity and the later screenshot showed an empty page. No claim of final visual acceptance or a completed three-email pilot is made from server-only evidence.

@@ -24,6 +24,11 @@ def group_url(task, section="companies"):
 
 
 BLOCKERS = {
+    "draft_generation_failed": "Не удалось создать письма. Подходящие компании сохранены; проверьте причину в истории поиска.",
+    "draft_sender_setup": "Для подготовки писем нужно заполнить сведения об отправителе. Подходящие компании сохранены.",
+    "search_provider_timed_out": "Поисковый источник не успел вернуть компании. Измените условия поиска; результаты и фактические расходы сохранены.",
+    "search_provider_run_failed": "Поисковый источник завершился с ошибкой. Проверьте условия поиска; повторный запуск не выполнен.",
+    "search_cost_receipt_missing": "Сверяем стоимость завершённого поиска. Резерв сохраняется до подтверждения расходов.",
     "insufficient_credits": "Не хватает кредитов для следующего действия. Прогресс сохранён.",
     "access_revoked": "Доступ к работе отозван. Проверьте права доступа.",
     "ai_rules_revoked_or_changed": "Правила отправки изменены или отозваны. Требуется согласование.",
@@ -72,7 +77,7 @@ def presentation(task, *, draft_job=None, available_credits=None):
         label = 'Ожидаем ответы' if not report.get('replies') else 'Есть ответы'
     elif not running and not stopped and not draft_blocked and phase == 'sending':
         label = 'Отправляем' if report.get('sending') else 'Отправка ожидает запуска'
-    elif not running and not stopped and not draft_blocked and phase == 'letters':
+    elif not running and not stopped and not draft_blocked and not blocker and phase == 'letters':
         label = 'Письма готовы'
     action = {"kind": "link", "label": "Посмотреть письма" if phase == "letters" else "Посмотреть ответы" if phase == "replies" else "Посмотреть отправку" if phase == "sending" else "Посмотреть компании",
               "href": group_url(task, {"companies": "companies", "letters": "drafts", "sending": "queue", "replies": "sent"}[phase])}
@@ -81,6 +86,11 @@ def presentation(task, *, draft_job=None, available_credits=None):
         pass
     elif blocker == "insufficient_credits" and (available_credits is None or required is None or available_credits < required):
         action = {"kind": "link", "label": "Пополнить баланс", "href": f"/dashboard/profile?business_id={task['business_id']}&focus=subscription#subscription"}
+    elif blocker == "draft_sender_setup":
+        blocked = next((value for value in (state.get("campaign_results") or {}).values() if value.get("status") == "needs_sender_setup"), {})
+        action = {"kind": "link", "label": "Настроить отправителя", "href": group_url(task) + "&lead=" + str(blocked.get("lead_id") or "")}
+    elif blocker in {"search_provider_timed_out", "search_provider_run_failed", "search_cost_receipt_missing"}:
+        action = {"kind": "link", "label": "Посмотреть условия поиска", "href": group_url(task)}
     elif drafts.get("status") == "waiting_for_review" and (not blocker or blocker == "insufficient_credits"):
         action = {"kind": "draft_resume", "label": "Продолжить подготовку писем", "job_id": str(drafts["id"])}
     elif not running and not draft_blocked and task["status"] in {"waiting_for_review", "failed"} and not unsettled and blocker not in NO_RESUME:

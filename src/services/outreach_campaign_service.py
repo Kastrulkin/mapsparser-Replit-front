@@ -2620,8 +2620,9 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
     return ledger
 
 
-def _founder_story(profile: dict[str, Any], evidence_text: str = "") -> dict[str, Any] | None:
-    if not profile or not profile.get("confirmed_at"):
+def _founder_story(profile: dict[str, Any], evidence_text: str = "", *, reviewed_draft: bool = False) -> dict[str, Any] | None:
+    identity_reviewed = isinstance(profile.get("outreach_context_json"), dict) and profile["outreach_context_json"].get("sender_identity_confirmed_by_user_at")
+    if not profile or not (profile.get("confirmed_at") or (reviewed_draft and identity_reviewed)):
         return None
     outreach_context = (
         profile.get("outreach_context_json")
@@ -2716,7 +2717,8 @@ def build_personalization_candidates(
         workstream_type=_text(context.get("workstream_type") or profile.get("workstream_type") or "localos_sales"),
         business_service_count=context.get("business_service_count") or profile.get("_business_service_count"),
     )
-    story = _founder_story(profile) if completeness["ready"] else None
+    reviewed_draft = context.get("reviewed_draft_ready") is True
+    story = _founder_story(profile, reviewed_draft=reviewed_draft) if completeness["ready"] or reviewed_draft else None
     if sender_mode == SENDER_MODE_LOCALOS_FOR_PARTNER:
         story = None
     if not ledger or (sender_mode != SENDER_MODE_LOCALOS_FOR_PARTNER and not story):
@@ -2796,6 +2798,7 @@ def build_personalization_candidates(
             relevant_story = _founder_story(
                 context.get("sender_profile") or {},
                 f"{evidence.get('fact') or ''} {evidence.get('relevance') or ''}",
+                reviewed_draft=reviewed_draft,
             ) or story
         problem_hypothesis = _text(evidence.get("hypothesis")) or None
         relevance_to_offer = _outreach_bridge(evidence)
@@ -4138,7 +4141,8 @@ def build_preview(
         if not evidence.get("fact") or not evidence.get("source_url"):
             return {"workstream_id": workstream_id, "status": "needs_evidence", "touches": [], "reason_code": "continuation_evidence_missing"}
         # Use the actual qualified public fact, not an unrelated map-rating opener.
-        qualified_evidence = {**evidence, "id": "qualified-audience-fact", "kind": "public_signal",
+        qualified_evidence = {**evidence, "fact": qualification.get("quote") or evidence["fact"],
+                              "id": "qualified-audience-fact", "kind": "public_signal",
                               "status": "observed", "relevance": (preparation or {}).get("offer") or continuation["config"].get("offer"),
                               "observed_at": evidence.get("observed_at"), "freshness": "current_snapshot", "confidence": 0.8}
         ledger = [qualified_evidence] + [item for item in ledger
@@ -4179,12 +4183,26 @@ def build_preview(
         workstream_type=_text(context.get("workstream_type") or "localos_sales"),
         business_service_count=context.get("business_service_count"),
     )
+    reviewed_draft_offer = (preparation or {}).get("offer") or (
+        (continuation or {}).get("config", {}).get("offer")
+        if (continuation or {}).get("config", {}).get("mode") == "prepare_only" else None
+    )
+    # An approved draft offer supplies the service scope. A voice example is
+    # optional for neutral drafts; identity, proof and prohibited claims remain required.
+    if reviewed_draft_offer and context.get("sender_mode") == SENDER_MODE_PARTNER_BUSINESS:
+        profile_completeness = {
+            **profile_completeness,
+            "missing_items": [item for item in profile_completeness["missing_items"]
+                              if item["code"] not in {"sender_voice", "sender_services"}],
+        }
+        profile_completeness["ready"] = not profile_completeness["missing_items"]
     profile_ready = bool(profile_completeness["ready"])
     if context.get("sender_mode") == SENDER_MODE_LOCALOS_FOR_PARTNER:
         platform_profile = context.get("platform_sender_profile") or {}
         profile_ready = bool(platform_profile.get("confirmed_at"))
+    context["reviewed_draft_ready"] = bool(reviewed_draft_offer and profile_ready and context.get("sender_mode") == SENDER_MODE_PARTNER_BUSINESS)
     story = (
-        _founder_story(context.get("sender_profile") or {})
+        _founder_story(context.get("sender_profile") or {}, reviewed_draft=context["reviewed_draft_ready"])
         if profile_ready and context.get("sender_mode") != SENDER_MODE_LOCALOS_FOR_PARTNER
         else None
     )
@@ -4208,9 +4226,9 @@ def build_preview(
     offers = offer_candidates(context, _text(context.get("sender_mode")))
     trusts = trust_candidates(context, _text(context.get("sender_mode")))
     selected_offer = select_offer(offers, offer_id)
-    if preparation:
-        selected_offer = {"id": "reviewed_search_offer", "text": preparation["offer"],
-                          "source": "confirmed_draft_job"}
+    if reviewed_draft_offer:
+        selected_offer = {"id": "reviewed_search_offer", "text": reviewed_draft_offer,
+                          "source": "confirmed_draft_job" if preparation else "confirmed_search_conditions"}
     selected_trust = select_trust(trusts, trust_strategy)
     candidates = build_personalization_candidates(
         context,

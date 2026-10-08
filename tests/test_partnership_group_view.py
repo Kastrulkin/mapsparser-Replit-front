@@ -135,3 +135,24 @@ def test_provider_search_is_running_between_polling_leases():
     assert result["status"] == "running"
     assert result["label"] == "Ищем компании"
     assert company_substeps(t, [])[0]["status"] == "running"
+
+
+def test_blocked_letter_setup_never_claims_letters_are_ready():
+    value = task(status='waiting_for_review', config={'mode': 'prepare_only', 'target_count': 3},
+        state={'phase': 'prepare', 'started': True, 'blocker': 'draft_sender_setup',
+               'campaign_results': {'ws': {'status': 'needs_sender_setup', 'lead_id': 'lead'}}},
+        report={'eligible': 1, 'awaiting_check': 0, 'checking': 0, 'prepared': 0})
+    result = presentation(value)
+    assert result['label'] == 'Требуется действие'
+    assert result['next_action']['label'] == 'Настроить отправителя'
+    assert result['next_action']['href'].endswith('&lead=lead')
+
+
+def test_failed_generation_is_attention_even_when_company_goal_is_reached():
+    value = task(status='waiting_for_review', config={'mode': 'prepare_only', 'target_count': 3},
+        state={'phase': 'prepare', 'started': True, 'blocker': 'draft_generation_failed'},
+        report={'eligible': 3, 'awaiting_check': 0, 'checking': 0, 'prepared': 0})
+    result = presentation(value)
+    assert result['status'] == 'needs_attention'
+    assert result['label'] == 'Требуется действие'
+    assert result['metrics']['prepared'] == 0

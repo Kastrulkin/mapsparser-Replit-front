@@ -549,3 +549,164 @@ def test_generic_evidence_uses_requirements_and_service_pages(monkeypatch):
     assert calls == ['https://example.org', 'https://example.org/services']
     assert result and 'Wholesale' in result[0]['fact']
     assert all(item['source_url'].startswith('https://example.org') for item in result)
+
+
+def test_terminal_timeout_preserves_receipt_and_settles_once(monkeypatch):
+    from services import outreach_continuation, prospecting_service, outreach_credit_billing
+    class Provider:
+        def __init__(self, source): pass
+        def get_run(self, run_id):
+            return {"status": "TIMED-OUT", "usageTotalUsd": 0.0002}
+    monkeypatch.setattr(prospecting_service, "ProspectingService", Provider)
+    run = {"id": "same-run"}
+    with pytest.raises(outreach_continuation.SearchProviderFailed):
+        outreach_continuation._poll_search(run, 5)
+    assert run["provider_status"] == "TIMED-OUT"
+    calls = []
+    def charge(*args, **kwargs):
+        calls.append(kwargs)
+        return {"status": "charged", "charge_credits": 1}
+    monkeypatch.setattr(outreach_credit_billing, "charge_step", charge)
+    config = normalize_config({**globals()["config"](), "billing_mode": "shared_balance_actual", "search_call_cap_cents": 50})
+    state = {"search_run": run, "search_credit_reservation_id": "hold", "search_reservation_key": "1:1"}
+    outreach_continuation.settle_failed_search(None, {}, config, state)
+    outreach_continuation.settle_failed_search(None, {}, config, state)
+    assert len(calls) == 1
+    assert calls[0]["credits"] == 1
+    assert state["blocker"] == "search_provider_timed_out"
+    assert "search_credit_reservation_id" not in state
+
+
+def test_failed_provider_requires_terminal_receipt_and_preserves_unknown_cost():
+    from services.outreach_continuation import settle_failed_search
+    with pytest.raises(ValueError, match="terminal_provider_receipt_required"):
+        settle_failed_search(None, {}, {}, {"search_run": {"provider_status": "RUNNING"}})
+    state = {"search_run": {"provider_status": "FAILED"}, "search_credit_reservation_id": "hold"}
+    settle_failed_search(None, {}, {"billing_mode": "shared_balance_actual"}, state)
+    assert state["search_credit_reservation_id"] == "hold"
+    assert state["blocker"] == "search_cost_receipt_missing"
+
+
+def test_evidence_discovers_product_in_navigation_and_keeps_footer(monkeypatch):
+    from types import SimpleNamespace
+    from services import outreach_public_evidence
+    pages = {
+        "https://example.org": '<nav><a href="/phuket">Phuket holidays</a><a href="/contact">Contact</a></nav><p>Welcome to our travel agency.</p><footer>Our registered office is in New Delhi, India.</footer>',
+        "https://example.org/phuket": '<p>We sell Phuket holidays and airport transfers to our travel customers.</p>',
+        "https://example.org/contact": '<p>Our travel agency operates from New Delhi, India. Email: info@example.org.</p>',
+    }
+    calls = []
+    def fetch(url, **kwargs):
+        calls.append(url)
+        return SimpleNamespace(status_code=200, headers={"content-type": "text/html"}, body=pages[url].encode())
+    monkeypatch.setattr(outreach_public_evidence.outbound_network,"public_pinned_get",fetch)
+    result = outreach_public_evidence.collect_candidate_evidence("https://example.org",["Phuket"])
+    assert calls == list(pages)
+    assert any("registered office" in item["fact"] for item in result)
+    assert any(item["source_url"].endswith('/phuket') for item in result)
+
+
+def test_unavailable_child_page_keeps_collected_evidence(monkeypatch):
+    from types import SimpleNamespace
+    from urllib3.exceptions import ReadTimeoutError
+    from services import outreach_public_evidence
+    def fetch(url, **kwargs):
+        if url.endswith('/services'):
+            raise ReadTimeoutError(None, url, 'timed out')
+        return SimpleNamespace(status_code=200, headers={'content-type': 'text/html'},
+            body=b'<p>Our office is in Delhi, India.</p><a href="/services">Services</a><a href="/contact">Contact</a>')
+    monkeypatch.setattr(outreach_public_evidence.outbound_network, 'public_pinned_get', fetch)
+    result = outreach_public_evidence.collect_candidate_evidence('https://example.org', [])
+    assert {item['source_url'] for item in result} == {'https://example.org', 'https://example.org/contact'}
+    assert any('Delhi, India' in item['fact'] for item in result)
+
+
+def test_approved_generic_upgrade_preserves_spend_and_archives_old_checks(monkeypatch):
+    from services import outreach_continuation, partnership_leads_service
+    old = normalize_config(config())
+    new = normalize_config({**old, 'requirements': ['Wholesale supply'], 'search_geography': ['Delhi']})
+    state = {'lead_ids': ['lead'], 'qualifications': {'ws': {'status': 'needs_evidence'}},
+             'llm_calls': 41, 'check_credits_charged': 41}
+    class Cursor:
+        saved = None
+        def execute(self, sql, params=None):
+            if sql.startswith('UPDATE operator_async_jobs SET payload_json='):
+                self.saved = params[1].adapted
+        def fetchone(self):
+            return {'id': 'task', 'status': 'waiting_for_review', 'payload_json': old, 'result_json': state}
+    monkeypatch.setattr(outreach_continuation, 'continuation_enabled', lambda *args: True)
+    monkeypatch.setattr(outreach_continuation, 'actor_can_write', lambda *args: True)
+    monkeypatch.setattr(partnership_leads_service, 'get_capability_access', lambda *args: {'allowed': True})
+    monkeypatch.setattr(outreach_continuation, 'prepare_revision_approval', lambda *args, **kwargs: {'config': new, 'creates_new_search': False})
+    monkeypatch.setattr(outreach_continuation, 'control_task', lambda *args, **kwargs: {'id': 'task'})
+    cursor = Cursor()
+    result = outreach_continuation.confirm_task_start(cursor, business_id='business', user_id='user',
+        envelope={'business_id': 'business', 'task_id': 'task', 'operation': 'revise_and_start',
+                  'previous_revision': config_hash(old), 'revision': config_hash(new), 'config': new, 'credit_terms_version': 1})
+    assert result['status'] == 'completed'
+    assert cursor.saved['llm_calls'] == 0
+    assert cursor.saved['check_credits_charged'] == 41
+    assert cursor.saved['qualification_history'][0]['llm_calls'] == 41
+
+
+@pytest.mark.parametrize('mode,missing,ready', [
+    ('prepare_only', ['sender_voice', 'sender_services'], True),
+    ('auto_send', ['sender_voice', 'sender_services'], False),
+    ('prepare_only', ['sender_identity', 'sender_voice'], False),
+])
+def test_reviewed_draft_offer_does_not_require_voice_but_keeps_identity_guard(monkeypatch, mode, missing, ready):
+    from services import outreach_campaign_service as campaign, outreach_continuation
+    context = {'workstream_type': 'client_partnership', 'lead_id': 'lead',
+               'continuation_managed': True, 'sender_mode': 'partner_business', 'sender_profile': {}}
+    monkeypatch.setattr(campaign, '_load_context', lambda *args: dict(context))
+    monkeypatch.setattr(campaign, '_apply_sender_mode', lambda ctx, mode: ctx)
+    monkeypatch.setattr(campaign, '_context_source_fact_fingerprint', lambda ctx: 'facts')
+    monkeypatch.setattr(outreach_continuation, 'load_workstream_contract', lambda *args: {
+        'enabled': True, 'status': 'running', 'config': {'mode': mode, 'offer': 'Reviewed transfer offer'},
+        'qualification': {'status': 'qualified', 'evidence': {'fact': 'Sells Phuket holidays', 'source_url': 'https://example.org'}}})
+    monkeypatch.setattr(campaign, 'build_evidence_ledger', lambda *args: [])
+    monkeypatch.setattr(campaign, 'evaluate_sender_profile_completeness', lambda *args, **kw: {
+        'ready': False, 'missing_items': [{'code': key} for key in missing]})
+    monkeypatch.setattr(campaign, 'channel_availability', lambda *args: {})
+    monkeypatch.setattr(campaign, '_suppression_status', lambda *args: {'suppressed': False})
+    captured = {}
+    def decision(*args, **kwargs):
+        captured.update(kwargs)
+        return {'action': 'needs_contact'}
+    monkeypatch.setattr(campaign, 'build_outreach_decision', decision)
+    for name in ('offer_candidates', 'trust_candidates', 'build_personalization_candidates'):
+        monkeypatch.setattr(campaign, name, lambda *args, **kw: [])
+    for name in ('select_offer', 'select_trust'):
+        monkeypatch.setattr(campaign, name, lambda *args: None)
+    result = campaign.build_preview(None, 'ws', generate_ai=False)
+    assert captured['profile_ready'] is ready
+    if mode == 'prepare_only':
+        assert result['selected_offer']['text'] == 'Reviewed transfer offer'
+    assert result['touches'] == []
+
+
+@pytest.mark.parametrize('mode,qualified,expected', [('prepare_only', True, 'write_now'), ('auto_send', True, 'observe'), ('prepare_only', False, 'observe')])
+def test_reviewed_qualified_draft_does_not_require_an_unrequested_pain_signal(mode, qualified, expected):
+    from services.outreach_decision_service import build_outreach_decision
+    context = {'contacts': [{'verification_status': 'confirmed_source'}],
+        'continuation_contract': {'enabled': True, 'status': 'running',
+          'config': {'mode': mode, 'offer': 'Airport transfers'},
+          'qualification': {'status': 'qualified' if qualified else 'needs_evidence'}}}
+    result = build_outreach_decision(context, [], {'email': {'status': 'ready'}}, {'suppressed': False},
+        sender_mode='partner_business', profile_ready=True)
+    assert result['action'] == expected
+    blocked = build_outreach_decision(context, [], {'email': {'status': 'ready'}}, {'suppressed': True},
+        sender_mode='partner_business', profile_ready=True)
+    assert blocked['action'] == 'excluded'
+
+
+def test_reviewed_draft_uses_only_previously_confirmed_identity():
+    from services.outreach_campaign_service import _founder_story
+    profile = {'display_name': 'Alex', 'company_name': 'Riderra',
+        'outreach_context_json': {'sender_identity_confirmed_by_user_at': '2026-08-13'},
+        'proof_points_json': [{'fact': 'Transfers for delegations', 'status': 'approved'}],
+        'allowed_offers_json': [{'fact': 'Airport transfers', 'status': 'approved'}]}
+    assert _founder_story(profile) is None
+    assert _founder_story(profile, reviewed_draft=True) is not None
+    profile['outreach_context_json'] = {}
+    assert _founder_story(profile, reviewed_draft=True) is None
