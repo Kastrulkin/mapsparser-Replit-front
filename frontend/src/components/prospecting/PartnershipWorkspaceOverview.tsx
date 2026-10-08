@@ -34,7 +34,7 @@ export function PartnershipWorkspaceOverview({ workspaceView, rawLeadCount, pipe
       {stages.map(({ value, label, count, Icon }) => {
         const active = workspaceView === value || value === 'raw' && workspaceView === 'pipeline';
         return <Button key={value} variant="ghost" aria-current={active ? 'page' : undefined} onClick={() => onWorkspaceChange(value)} className={`min-h-11 justify-center gap-2 rounded-none border-b-2 ${active ? 'border-primary bg-muted text-foreground' : 'border-transparent text-muted-foreground'}`}>
-          <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{label}</span><span className="rounded bg-muted px-1.5 text-xs tabular-nums">{count}</span>
+          <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{label}</span><span className="min-w-[3ch] shrink-0 rounded bg-muted px-1.5 text-center text-xs tabular-nums">{count}</span>
         </Button>;
       })}
     </nav>}

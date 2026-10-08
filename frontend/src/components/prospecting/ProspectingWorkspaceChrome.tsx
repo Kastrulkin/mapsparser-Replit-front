@@ -52,10 +52,10 @@ export function ProspectingWorkspaceTabs({
               ].join(' ')}
               aria-pressed={isActive}
             >
-              <div className="flex min-w-0 flex-wrap items-baseline gap-2">
+              <div className="flex min-w-0 items-center justify-between gap-2">
                 <span className="min-w-0 text-lg font-semibold leading-tight">{workspace.label}</span>
                 {workspace.count !== undefined ? (
-                  <span className={isActive ? 'shrink-0 text-sm font-medium text-primary-foreground/85' : 'shrink-0 text-sm font-medium text-muted-foreground'}>
+                  <span className={isActive ? 'min-w-[3ch] shrink-0 text-right text-sm font-medium tabular-nums text-primary-foreground/85' : 'min-w-[3ch] shrink-0 text-right text-sm font-medium tabular-nums text-muted-foreground'}>
                     {workspace.count}
                   </span>
                 ) : null}
