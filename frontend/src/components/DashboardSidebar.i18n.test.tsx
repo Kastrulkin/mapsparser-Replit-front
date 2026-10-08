@@ -24,16 +24,17 @@ describe('DashboardSidebar localization', () => {
     );
 
     expect(await screen.findByRole('link', { name: 'Σήμερα' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Δημιουργοί' })).toHaveAttribute('href', '/dashboard/influencers');
-    expect(container.querySelector('a[href="/dashboard/content"]')).toBeInTheDocument();
-    expect(container.querySelector('a[href="/dashboard/influencers"]')).toBeInTheDocument();
-    expect(container.querySelector('a[href="/dashboard/partnerships"]')).toBeInTheDocument();
-    expect(container.querySelector('a[href="/dashboard/agents"]')).toBeInTheDocument();
+    expect(container.querySelector('a[href="/dashboard/growth-paths"]')).toBeInTheDocument();
+    expect(container.querySelector('a[href="/dashboard/progress"]')).toBeInTheDocument();
     expect(container.querySelector('a[href="/dashboard/more"]')).toBeInTheDocument();
+    expect(container.querySelector('a[href="/dashboard/content"]')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Профиль и бизнес' })).not.toBeInTheDocument();
+    expect(container.querySelector('a[href="/dashboard/finance"]')).not.toBeInTheDocument();
+    expect(container.querySelector('a[href="/dashboard/chats"]')).not.toBeInTheDocument();
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 
-  it('keeps Growth Paths out of the stable Russian sidebar', async () => {
+  it('shows the compact scenario-based Russian navigation', async () => {
     window.localStorage.setItem('language', 'ru');
     render(
       <MemoryRouter initialEntries={['/dashboard/content']}>
@@ -46,10 +47,10 @@ describe('DashboardSidebar localization', () => {
     );
 
     expect(await screen.findByRole('link', { name: 'Ещё' })).toHaveAttribute('href', '/dashboard/more');
-    expect(screen.queryByRole('link', { name: 'Пути роста' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Управление через чат' })).toHaveAttribute('href', '/dashboard/operator');
-    expect(screen.getByRole('link', { name: 'Контент' })).toHaveAttribute('href', '/dashboard/content');
-    expect(screen.getByRole('link', { name: 'Инфлюенсеры' })).toHaveAttribute('href', '/dashboard/influencers');
+    expect(screen.getByRole('link', { name: 'Пути роста' })).toHaveAttribute('href', '/dashboard/growth-paths');
+    expect(screen.getByRole('link', { name: 'Результаты' })).toHaveAttribute('href', '/dashboard/progress');
+    expect(screen.queryByRole('link', { name: 'Инфлюенсеры' })).not.toBeInTheDocument();
   });
 
   it('keeps direct work areas in the Turkish navigation', async () => {
@@ -65,9 +66,8 @@ describe('DashboardSidebar localization', () => {
     );
 
     await screen.findAllByRole('link');
-    expect(document.querySelector('a[href="/dashboard/content"]')).toBeInTheDocument();
-    expect(document.querySelector('a[href="/dashboard/influencers"]')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'İçerik üreticileri' })).toHaveAttribute('href', '/dashboard/influencers');
-    expect(document.querySelector('a[href="/dashboard/agents"]')).toBeInTheDocument();
+    expect(document.querySelector('a[href="/dashboard/growth-paths"]')).toBeInTheDocument();
+    expect(document.querySelector('a[href="/dashboard/more"]')).toBeInTheDocument();
+    expect(document.querySelector('a[href="/dashboard/progress"]')).toBeInTheDocument();
   });
 });
