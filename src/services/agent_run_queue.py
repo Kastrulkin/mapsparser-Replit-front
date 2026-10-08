@@ -557,6 +557,16 @@ def execute_claimed_compiled_agent_run(run: dict[str, Any]) -> dict[str, Any] | 
         except Exception:
             # The receipts own uncertain provider outcomes. Never retry a send
             # merely because finalization or the delivery boundary failed.
+            exception = sys.exception()
+            frames = []
+            traceback = exception.__traceback__
+            while traceback is not None:
+                frames.append({'function': traceback.tb_frame.f_code.co_name,
+                               'line': traceback.tb_lineno})
+                traceback = traceback.tb_next
+            print(json.dumps({'event': 'compiled_content_dispatch_failed',
+                              'run_id': run_id, 'error_type': type(exception).__name__,
+                              'frames': frames}), flush=True)
             return _finish_compiled_claim(run_id, lease_token, error='compiled_content_dispatch_needs_attention')
     return _finish_compiled_claim(run_id, lease_token, result=result)
 
