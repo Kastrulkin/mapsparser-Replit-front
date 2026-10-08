@@ -167,10 +167,14 @@ User process: """ + str(description or "")[:3000]
         from services.compiled_content_program import manifest_for
         prompt += '\nContent selection contract: process receives {posts: [...]} and returns {requests: [{post_id, revision}]}. Return exactly the posts whose eligible field is true, unchanged IDs and revisions, no duplicates. Never return text, recipients or network actions. Use this exact manifest: ' + canonical_json(manifest_for(content_contract, runner_image_digest))
     try:
-        raw = generator(prompt) if generator else run_llm_task(
-            LLMTaskRequest(task_key="compiled_script_generation", prompt=prompt, business_id=business_id, user_id=user_id, prompt_version="compiled_script_v1")
-        ).content
-        parsed = json.loads(str(raw or ""))
+        if generator:
+            parsed = json.loads(str(generator(prompt) or ""))
+        else:
+            result = run_llm_task(LLMTaskRequest(task_key="compiled_script_generation", prompt=prompt,
+                business_id=business_id, user_id=user_id, prompt_version="compiled_script_v1"))
+            if result.status != "completed":
+                return {"status": "generation_failed", "error": result.fallback_reason or result.status}
+            parsed = result.parsed_data if isinstance(result.parsed_data, dict) else json.loads(result.content)
     except Exception as error:
         return {"status": "generation_failed", "error": str(error)}
     if not isinstance(parsed, dict):

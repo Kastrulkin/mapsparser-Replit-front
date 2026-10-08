@@ -237,6 +237,15 @@ def _task(
 
 
 TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
+    "compiled_script_generation": _task(
+        "compiled_script_generation", provider="deepseek", profile="deepseek_reasoning",
+        data_class="business_internal", response_kind="json",
+        schema={"type": "object", "properties": {"source": {"type": "string"},
+            "manifest": {"type": "object"}, "fixtures": {"type": "array"}},
+            "required": ["source", "manifest", "fixtures"]},
+        max_tokens=6000, timeout=60, temperature=0.1, prompt_version="compiled_script_v1",
+        thinking_enabled=False,
+    ),
     "review_reply": _task("review_reply", data_class="pii", prompt_version="review_reply_v1", allow_text_fallback=True, fallback_data_class="business_internal", pipeline_stage="copy"),
     "news_generation": _task("news_generation", data_class="public", prompt_version="news_generation_v1", allow_text_fallback=True, pipeline_stage="copy"),
     "content_plan_direction": _task(
@@ -260,8 +269,8 @@ TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
     "social_post_generation": _task("social_post_generation", data_class="public", prompt_version="social_post_generation_v1", allow_text_fallback=True, pipeline_stage="copy", thinking_enabled=False),
     "service_optimization": _task("service_optimization", prompt_version="service_optimization_v1", allow_text_fallback=True, pipeline_stage="copy"),
     "service_copy_generation": _task("service_copy_generation", response_kind="json", allow_text_fallback=True, pipeline_stage="copy"),
-    "outreach_audience_qualify": _task("outreach_audience_qualify", provider="deepseek", profile="deepseek_fast", data_class="business_internal", response_kind="json", schema={"type": "object", "properties": {"matches": {"type": "boolean"}, "evidence_id": {"type": "string"}, "quote": {"type": "string"}, "reason": {"type": "string"}}, "required": ["matches", "evidence_id", "quote", "reason"]}, max_tokens=800, timeout=30, prompt_version="outreach_audience_qualify_v1"),
-    "outreach_public_copy": _task("outreach_public_copy", provider="deepseek", profile="deepseek_reasoning", data_class="business_internal", prompt_version="outreach_public_copy_v1", pipeline_stage="copy"),
+    "outreach_audience_qualify": _task("outreach_audience_qualify", provider="deepseek", profile="deepseek_fast", data_class="business_internal", response_kind="json", schema={"type": "object", "properties": {"matches": {"type": "boolean"}, "country": {"type": "object", "properties": {"matches": {"type": "boolean"}, "evidence_id": {"type": "string"}, "quote": {"type": "string"}}}, "destination": {"type": "object", "properties": {"matches": {"type": "boolean"}, "evidence_id": {"type": "string"}, "quote": {"type": "string"}}}, "evidence_id": {"type": "string"}, "quote": {"type": "string"}, "reason": {"type": "string"}}, "required": ["matches", "reason"]}, max_tokens=1600, timeout=30, prompt_version="outreach_audience_qualify_v2", thinking_enabled=False),
+    "outreach_public_copy": _task("outreach_public_copy", provider="deepseek", profile="deepseek_reasoning", data_class="business_internal", prompt_version="outreach_public_copy_v2", pipeline_stage="copy", thinking_enabled=False),
     "outreach_language_review": _task("outreach_language_review", provider="gigachat", profile="gigachat_max", data_class="business_internal", prompt_version="outreach_language_review_v1", pipeline_stage="review"),
     "outreach_personalization": _task("outreach_personalization", data_class="pii", prompt_version="outreach_personalization_v13", pipeline_stage="copy"),
     "outreach_corpus_pattern_extract": _task(
