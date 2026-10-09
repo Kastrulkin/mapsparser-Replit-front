@@ -75,7 +75,7 @@ def test_validation_feedback_revises_preview_without_applying():
 
 
 def test_plan_constraint_is_not_a_request_to_write_a_permanent_rule():
-    result=run_operator_tool_loop(business_id='b',user_id='u',message='Дай план на два часа. Не предлагай окна вне графика.',tools=[{'name':'plan','risk_class':'read_only','deterministic_response':True,'execute':lambda args:{'status':'completed','chat_response':'План на 120 минут'}}],planner=lambda state:{'action':'tool_call','tool':'plan','arguments':{},'remaining_actions':[]})
+    result=run_operator_tool_loop(business_id='b',user_id='u',message='Дай план на два часа. Не предлагай окна вне графика.',tools=[{'name':'plan','risk_class':'read_only','deterministic_response':True,'execute':lambda args:{'status':'completed','chat_response':'План на 120 минут'}}],planner=lambda state:({'action':'final','message':'План на 120 минут','remaining_actions':[]} if state['observations'] else {'action':'tool_call','tool':'plan','arguments':{},'remaining_actions':[]}))
     assert result['status']=='completed' and result['chat_response']=='План на 120 минут'
 
 
@@ -84,7 +84,7 @@ def test_selected_context_does_not_change_literal_command():
     def planner(state):
         assert state['message']==message
         assert state['input_context']['attachment_ids']==['attachment-1']
-        return {'action':'tool_call','tool':'read','arguments':{},'remaining_actions':[]}
+        return {'action':'final','message':'Данные файла','remaining_actions':[]} if state['observations'] else {'action':'tool_call','tool':'read','arguments':{},'remaining_actions':[]}
     result=run_operator_tool_loop(business_id='b',user_id='u',message=message,input_context={'attachment_ids':['attachment-1']},tools=[{'name':'read','risk_class':'read_only','deterministic_response':True,'execute':lambda args:{'status':'completed','chat_response':'Данные файла'}}],planner=planner)
     assert result['status']=='completed'
 
@@ -101,3 +101,19 @@ def test_remaining_steps_are_constrained_to_catalog_names(monkeypatch):
     monkeypatch.setattr(operator_tool_loop,'run_llm_task',lambda request:captured.append(request) or LLMTaskResult(status='completed',parsed_data={'action':'final','message':'Готово','remaining_actions':[]}))
     operator_tool_loop.plan_operator_step({'tools':[{'name':'read'},{'name':'prepare'}]})
     assert captured[0].response_schema['properties']['remaining_actions']['items']['enum']==['read','prepare']
+
+
+def test_compound_reads_do_not_finish_after_first_deterministic_result():
+    calls=[]
+    decisions=iter([{'action':'tool_call','tool':'tasks','arguments':{},'remaining_actions':[]},
+                    {'action':'tool_call','tool':'finance','arguments':{},'remaining_actions':[]},
+                    {'action':'final','message':'Задача завершена; 15000 рублей, 7 чеков','remaining_actions':[]}])
+    def execute(name):
+        def call(args):
+            calls.append(name)
+            return {'status':'completed','chat_response':name}
+        return call
+    result=run_operator_tool_loop(business_id='b',user_id='u',message='Покажи продажи и задачи',tools=[{'name':name,'risk_class':'read_only','deterministic_response':True,'execute':execute(name)} for name in ['tasks','finance']],planner=lambda state:next(decisions))
+    assert calls==['tasks','finance']
+    assert result['status']=='completed'
+    assert '15000' in result['chat_response']

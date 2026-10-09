@@ -589,7 +589,7 @@ def run_operator_tool_loop(
                 'chat_response': str(outcome.get('chat_response') or outcome.get('error') or 'Уточните условия задачи.'),
                 'tool_trace': trace, 'tool_calls': len(trace), 'planner_steps': step_index + 1,
                 'external_writes_performed': False}
-        if not remaining_actions and not (requires_write and tool.get("risk_class") in {"read_only","privileged_read","support_read"}) and bool(tool.get("deterministic_response")) and outcome_status not in {
+        if not remaining_actions and (tool.get("risk_class") not in {"read_only","privileged_read","support_read"} or (tool_name == "partnerships.continue_outreach" and arguments.get("operation") == "preview")) and (bool(tool.get("deterministic_response")) or (tool_name == "partnerships.continue_outreach" and arguments.get("operation") == "preview")) and outcome_status not in {
             "blocked",
             "denied",
             "error",
