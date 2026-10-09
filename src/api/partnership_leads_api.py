@@ -196,6 +196,8 @@ def partnership_continuations(task_id=None):
                        raw=data.get('config'), request_id=str(data.get('request_id') or '')) if task_id else
                        prepare_new_task_approval(data.get('config'), business_id=business_id,
                                                 request_id=str(data.get('request_id') or '')))
+            if not preview.get('approval'):
+                return jsonify(preview)
             conversation = find_latest_operator_conversation(cursor, business_id=business_id,
                                                               user_id=user_id, channel='web')
             if not conversation:

@@ -78,6 +78,7 @@ export type PartnershipLead = {
 };
 
 export type PartnershipDraft = {
+  learning_note_json?: { campaign_id?: string; search_task_id?: string; manual_review_required?: boolean };
   id: string;
   lead_id: string;
   created_at?: string;

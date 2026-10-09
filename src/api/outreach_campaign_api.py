@@ -456,6 +456,7 @@ def get_outreach_message_queue():
         return jsonify({"success": False, "error": "Unsupported workstream_type"}), 400
     requested_business_id = str(request.args.get("business_id") or "").strip() or None
     requested_campaign_id = str(request.args.get("campaign_id") or "").strip()
+    requested_search_task_id = str(request.args.get("search_task_id") or "").strip()
     presentation = str(request.args.get("presentation") or "").strip()
     requested_channel = str(request.args.get("channel") or "").strip().lower()
     requested_status = str(request.args.get("status") or "").strip().lower()
@@ -488,6 +489,16 @@ def get_outreach_message_queue():
         if resolved_business_id:
             where_clauses.append("ranked.client_business_id = %s")
             params.append(resolved_business_id)
+        if requested_search_task_id:
+            if not resolved_business_id:
+                return jsonify({"success": False, "error": "business_required"}), 400
+            from services.partnership_group_view import load_group_scope, GroupNotFound
+            try:
+                group = load_group_scope(cursor, resolved_business_id, requested_search_task_id)
+            except GroupNotFound:
+                return jsonify({"success": False, "error": "search_task_not_found"}), 404
+            where_clauses.append("ranked.lead_id::text = ANY(%s::text[])")
+            params.append(group["lead_ids"])
         if requested_campaign_id:
             where_clauses.append("ranked.id::text = %s")
             params.append(requested_campaign_id)

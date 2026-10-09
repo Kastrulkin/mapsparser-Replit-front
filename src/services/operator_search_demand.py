@@ -69,6 +69,9 @@ def tools(cursor, business_id, user_id):
 
 
 def matches(message):
+    text = str(message)
+    if not re.search(r'wordstat|вордстат', text, re.I) and re.search(r'аутрич|outreach|веб[- ]?поиск|поисков.{0,10}api|партн[её]р|турагент|tavily|exa', text, re.I):
+        return False
     return bool(re.search(r'wordstat|вордстат|поисков.{0,15}запрос|seo|сео', str(message), re.I))
 
 

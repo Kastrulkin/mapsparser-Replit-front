@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   CalendarClock,
@@ -49,6 +49,7 @@ export interface OutreachMessageQueueItem {
 
 interface OutreachMessageQueueProps {
   campaignId?: string | null;
+  searchTaskId?: string | null;
   presentation?: 'letters' | 'send';
   query: string;
   scope: 'all' | 'localos_sales' | 'client_partnership';
@@ -176,6 +177,7 @@ const StatusIcon = ({ status }: { status: string }) => {
 
 export function OutreachMessageQueue({
   campaignId,
+  searchTaskId,
   presentation,
   query,
   scope,
@@ -195,12 +197,15 @@ export function OutreachMessageQueue({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const requestVersion = useRef(0);
   const loadMessages = useCallback(async () => {
+    const version = ++requestVersion.current;
     setLoading(true);
     setError('');
     try {
       const params = new URLSearchParams({ limit: '500' });
       if (campaignId) params.set('campaign_id', campaignId);
+      if (searchTaskId) params.set('search_task_id', searchTaskId);
       if (presentation) params.set('presentation', presentation);
       if (query.trim()) params.set('q', query.trim());
       if (scope !== 'all') params.set('workstream_type', scope);
@@ -208,22 +213,24 @@ export function OutreachMessageQueue({
       if (effectiveChannel) params.set('channel', effectiveChannel);
       if (effectiveStatus) params.set('status', effectiveStatus);
       const payload: QueuePayload = await newAuth.makeRequest(`/outreach/messages?${params.toString()}`);
+      if (version !== requestVersion.current) return;
       setItems(Array.isArray(payload?.items) ? payload.items : []);
       setSummary(payload?.summary || {});
     } catch (requestError) {
+      if (version !== requestVersion.current) return;
       setItems([]);
       setSummary({});
       setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить сообщения');
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
-  }, [businessId, campaignId, presentation, effectiveChannel, query, scope, effectiveStatus]);
+  }, [businessId, campaignId, searchTaskId, presentation, effectiveChannel, query, scope, effectiveStatus]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadMessages();
     }, query.trim() ? 250 : 0);
-    return () => window.clearTimeout(timer);
+    return () => { requestVersion.current += 1; window.clearTimeout(timer); };
   }, [loadMessages, query]);
 
   const visibleCount = useMemo(() => items.length, [items]);

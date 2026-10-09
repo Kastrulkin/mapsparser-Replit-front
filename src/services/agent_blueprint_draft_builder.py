@@ -2260,3 +2260,11 @@ def _communication_capability_allowlist(send_capability: str) -> List[str]:
     if send_capability and send_capability not in allowlist:
         allowlist.append(send_capability)
     return allowlist
+
+
+def requires_native_outreach(description: str, category: str = '') -> bool:
+    text = str(description or '').lower()
+    audience = category in {'partnerships', 'outreach'} or bool(re.search(r'аутрич|outreach|лид|турагент|партн[её]р|компани', text))
+    drafting = bool(re.search(r'(?:подготов|созда|состав).{0,80}(?:письм|черновик)|(?:prepare|draft).{0,60}(?:email|letter)', text))
+    enrichment = bool(re.search(r'контакт|сведени|обога|соответств|источник|найти|найди|поиск|найт|enrich|contact|find', text))
+    return audience and drafting and enrichment

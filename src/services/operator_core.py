@@ -2353,6 +2353,12 @@ def route_operator_message(
                            'offer': pending['offer'], 'revision': pending['revision'], 'count': pending['count']},
                 actor_context=actor_context)
             return standardize_operator_result(result, 'partnerships.prepare_search_drafts'), {}
+    from services import outreach_web_search
+    if outreach_web_search.readiness_request(clean_message):
+        blocked = operator_subscription_block(subscription_access, 'partnerships.read')
+        if blocked:
+            return blocked, {}
+        return standardize_operator_result(outreach_web_search.readiness(), 'partnerships.read'), {}
     from services import operator_search_demand
     if operator_search_demand.matches(clean_message):
         blocked = operator_subscription_block(subscription_access, 'services.read')

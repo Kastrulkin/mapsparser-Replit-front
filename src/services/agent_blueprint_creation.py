@@ -344,6 +344,11 @@ def preview_creation(cursor: Any, *, business_id: str, user_id: str, actor_conte
         clone_metadata = {key: source_metadata[key] for key in ("agent_sources", "agent_integration_ids", "agent_integration_bindings", "agent_binding_provider_routes", "required_integration_bindings", "agent_setup") if key in source_metadata}
     if len(description) < 8:
         return {"status": "clarification_required", "code": "VALIDATION_ERROR", "error": "Опишите повторяющуюся работу, которую должен выполнять ИИ-сотрудник."}
+    from services.agent_blueprint_draft_builder import requires_native_outreach
+    if not conditions.get("outreach_config") and requires_native_outreach(description, str(payload.get("category") or "")):
+        return {"status": "clarification_required", "code": "OUTREACH_CONDITIONS_REQUIRED",
+                "error": "Для поиска, проверки компаний и подготовки писем нужны согласованные условия аутрича. Обычная сводка бизнеса эту работу не выполняет. Настройте условия в поиске компаний и передайте их в автоматизацию.",
+                "result_ref": {"href": "/dashboard/partnerships?business_id=" + business_id, "label": "Настроить поиск"}}
     inventory = _inventory(cursor, business_id)
     config = conditions.get("outreach_config")
     builder_description = _outreach_builder_context(description, config, conditions) if config else description

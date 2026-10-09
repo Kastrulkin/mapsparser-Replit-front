@@ -573,10 +573,12 @@ export const PartnershipSearchPage: React.FC = () => {
   useEffect(() => { setCompanyFilter(requestedCompanyFilter); }, [requestedCompanyFilter]);
   const changeWorkspace = (value: string) => {
     setWorkspaceView(toPartnershipWorkspaceView(value));
-    const next = new URLSearchParams(searchParams);
-    next.set('section', value === 'raw' || value === 'pipeline' ? 'companies' : value);
-    if (currentBusinessId) next.set('business_id', currentBusinessId);
-    setSearchParams(next, { replace: true });
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set('section', value === 'raw' || value === 'pipeline' ? 'companies' : value);
+      if (currentBusinessId) next.set('business_id', currentBusinessId);
+      return next;
+    }, { replace: true });
   };
   const handleSearchTasksChange = useCallback((tasks: SearchTaskGroup[]) => {
     setSearchTasks((current) => [...tasks, ...current.filter((task) => task.id === requestedSearchTaskId && !tasks.some((item) => item.id === task.id))]);
@@ -735,7 +737,8 @@ export const PartnershipSearchPage: React.FC = () => {
   })), [searchTasks]);
   const selectedTask = searchTasks.find((task) => selectedSearchGroup === `task:${task.id}`);
   const selectedTaskLeadIds = selectedSearchGroup.startsWith('task:') ? new Set(selectedTask?.state?.lead_ids || []) : null;
-  const visibleDrafts = selectedTaskLeadIds ? unscopedDrafts.filter((draft) => selectedTaskLeadIds.has(draft.lead_id)) : unscopedDrafts;
+  const legacyDrafts = unscopedDrafts.filter((draft) => !draft.learning_note_json?.campaign_id);
+  const visibleDrafts = selectedTaskLeadIds ? legacyDrafts.filter((draft) => selectedTaskLeadIds.has(draft.lead_id)) : legacyDrafts;
   const visibleBatches = selectedTaskLeadIds ? unscopedBatches.map((batch) => ({
     ...batch, items: (batch.items || []).filter((item) => item.lead_id && selectedTaskLeadIds.has(item.lead_id)),
   })).filter((batch) => batch.items.length > 0) : unscopedBatches;
@@ -2809,8 +2812,8 @@ export const PartnershipSearchPage: React.FC = () => {
 
           {(workspaceView === 'drafts' || workspaceView === 'queue') ? (
           <>
-          <OutreachMessageQueue key={`${currentBusinessId}:${workspaceView}:${searchParams.get('campaign_id') || ''}`}
-            businessId={currentBusinessId || undefined} scope="client_partnership" query="" channel="" status=""
+          <OutreachMessageQueue key={`${currentBusinessId}:${requestedSearchTaskId || ''}:${workspaceView}:${searchParams.get('campaign_id') || ''}`}
+            searchTaskId={requestedSearchTaskId} businessId={currentBusinessId || undefined} scope="client_partnership" query="" channel="" status=""
             campaignId={searchParams.get('campaign_id')} presentation={workspaceView === 'drafts' ? 'letters' : 'send'}
             onChannelChange={() => {}} onStatusChange={() => {}} onOpenLead={(id) => setSelectedLeadId(id)} />
           {searchParams.get('campaign_id') && <Button variant="outline" onClick={() => { const next = new URLSearchParams(searchParams); next.delete('campaign_id'); setSearchParams(next); }}>Показать все письма</Button>}

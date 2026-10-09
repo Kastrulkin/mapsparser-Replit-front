@@ -93,6 +93,11 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
         method: 'POST', body: JSON.stringify({ business_id: businessId, operation: 'preview', request_id: requestId, config }),
       });
       if (epoch !== scope.current) return;
+      if (result.status === 'blocked' || result.status === 'clarification_required') {
+        setReview(null);
+        setError(result.chat_response || 'Запуск пока недоступен. Проверьте подключение источника.');
+        return;
+      }
       if (!result.approval?.action_id) throw new Error('approval_missing');
       setReview({ actionId: result.approval.action_id, config: result.config, creditLimit: result.credit_quote.total_max, createsNewSearch: result.creates_new_search === true });
     } catch { if (epoch === scope.current) setError('Не удалось показать условия. Проверьте поля и повторите попытку.'); }

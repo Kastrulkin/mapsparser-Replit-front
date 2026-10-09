@@ -7,6 +7,7 @@ EXA_FREE_ONLY_VERIFIED is an operator attestation, not inferred from an API key.
 from __future__ import annotations
 
 import os
+import re
 from urllib.parse import urlparse
 import requests
 
@@ -25,6 +26,24 @@ def _providers() -> list[str]:
 
 def configured() -> bool:
     return bool(_providers())
+
+
+def readiness_request(message: str) -> bool:
+    text = str(message or '')
+    return (bool(re.search(r'веб[- ]?поиск|web search|поисков.{0,12}api|tavily|exa', text, re.I))
+            and bool(re.search(r'подключ|готовност|провер.{0,20}(?:api|квот|источник)|connection|readiness', text, re.I)))
+
+
+def readiness() -> dict:
+    providers = _providers()
+    connected = bool(providers)
+    text = ('Веб-поиск подключён: ' + ', '.join(providers) + '. Остаток бесплатной квоты сейчас не проверялся.'
+            if connected else 'Веб-поиск не подключён. Нужен ключ поискового API с подтверждённым бесплатным тарифом.')
+    return {'status': 'completed' if connected else 'blocked',
+            'reason_code': '' if connected else 'web_search_not_configured',
+            'chat_response': text + ' Поиск, карты и платные запросы не запускались; списаний за поиск нет.',
+            'providers': providers, 'quota_status': 'unknown', 'search_started': False,
+            'external_calls_performed': False, 'paid_actions_performed': False}
 
 
 def _check_response(response, quota_statuses: set[int]) -> None:
