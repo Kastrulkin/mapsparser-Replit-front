@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import re
+from urllib.parse import urlparse
 import uuid
 from typing import Any
 
@@ -73,6 +75,13 @@ def build_operator_map_refresh_plan(
     source = _clean_text(source_override).lower() or _map_refresh_source()
     if source not in {"apify_yandex", "yandex_maps"}:
         source = _map_refresh_source()
+    parsed = urlparse(url)
+    if url and ('demo' in url.lower()):
+        blocked.append('demo_map_link')
+    elif url and not (parsed.hostname and (parsed.hostname == 'yandex.ru' or parsed.hostname.endswith('.yandex.ru') or parsed.hostname == 'yandex.com' or parsed.hostname.endswith('.yandex.com'))):
+        blocked.append('unsupported_map_provider')
+    elif url and not re.search(r'/org/(?:[^/]+/)?\d+(?:/|$|[?#])', parsed.path + ('?' + parsed.query if parsed.query else '')):
+        blocked.append('map_organization_id_required')
     if require_runtime_flag and source == "apify_yandex" and not OPERATOR_APIFY_REFRESH_ENABLED:
         blocked.append("operator_apify_refresh_disabled")
 
@@ -193,6 +202,9 @@ def enqueue_paid_operator_map_refresh(
     explicit_consent: bool = False,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    plan = build_operator_map_refresh_plan(cursor, business_id=business_id, user_id=user_id, explicit_url=explicit_url, require_runtime_flag=False)
+    if plan['status'] != 'ready':
+        return {**plan, 'queue_id': None, 'paid_actions_performed': False}
     clean_estimate = estimated_credits if estimated_credits not in (None, "") else DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS
     queue_id = str(uuid.uuid4())
     preflight = build_paid_action_preflight(

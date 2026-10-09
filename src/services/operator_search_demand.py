@@ -78,9 +78,19 @@ def review_refresh_preview(cursor, business_id, user_id):
     targets = query_business_ids(cursor, business_id, user_id)
     plans = [build_operator_map_refresh_plan(cursor, business_id=target, user_id=user_id) for target in targets]
     lines = ['Обновление пока не запущено. Возможность обновления по доступным точкам:']
+    names = {}
+    if cursor is not None:
+        cursor.execute('SELECT id,name FROM businesses WHERE id=ANY(%s)', (targets,))
+        names = {str(row['id']): row['name'] for row in cursor.fetchall()}
+    reasons = {'demo_map_link': 'демонстрационная ссылка; нужен настоящий адрес карточки', 'unsupported_map_provider': 'эта площадка не поддерживается данным запуском обновления Яндекс.Карт', 'map_organization_id_required': 'в ссылке нет идентификатора организации Яндекс.Карт', 'map_link_required': 'ссылка карты не задана', 'operator_apify_refresh_disabled': 'обновление отключено'}
+    available = 0
     for plan in plans:
-        reason = ', '.join(plan.get('blocked_reasons') or [])
-        lines.append(f"• {plan['business_id']}: {plan.get('url') or 'ссылка карты не задана'}; " + (f"недоступно ({reason})" if reason else f"оценка до {DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS} кредитов за карточку"))
+        blocked = plan.get('blocked_reasons') or []
+        reason = ', '.join(reasons.get(value, value) for value in blocked)
+        name = names.get(str(plan['business_id']), 'Выбранный бизнес')
+        lines.append(f"• {name}: {plan.get('url') or 'ссылка карты не задана'}; " + (f"недоступно ({reason})" if reason else f"оценка до {DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS} кредитов за карточку"))
+        available += not bool(blocked)
+    lines.append(f'Доступных карточек: {available}. Общая предварительная оценка: до {available * DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS} кредитов. Резерв не создан.')
     lines.append('Фактическая стоимость зависит от объёма данных. Для запуска выберите конкретную доступную точку и подтвердите платное обновление. Публикации в карты не выполняются.')
     return {'status': 'completed', 'chat_response': '\n'.join(lines), 'refresh_plans': plans,
             'external_calls_performed': False, 'external_writes_performed': False, 'paid_actions_performed': False,

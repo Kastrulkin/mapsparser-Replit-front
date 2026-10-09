@@ -8,10 +8,10 @@ from services.operator_mobile_modules import list_operator_mobile_module
 
 OPERATOR_QUERY_SCHEMA = "localos_operator_query_v1"
 QUERY_RESOURCES = {"services", "reviews", "content"}
-QUERY_OPERATORS = {"eq", "contains", "gte", "lte", "is_empty"}
+QUERY_OPERATORS = {"eq", "contains", "not_contains", "gte", "lte", "is_empty"}
 QUERY_FIELDS = {
     "services": {"title", "category", "source", "status", "price", "updated_at"},
-    "reviews": {"author_name", "source", "rating", "has_response", "text", "published_at", "created_at"},
+    "reviews": {"author_name", "source", "rating", "has_response", "text", "published_at", "created_at", "business_name"},
     "content": {"title", "status", "content_type", "scheduled_for", "updated_at"},
 }
 QUERY_SORT_FIELDS = {
@@ -45,9 +45,9 @@ def operator_query_tool_contract() -> dict[str, Any]:
             "Универсально читает услуги, отзывы или элементы контент-плана выбранного бизнеса. "
             "Скомпилируйте запрос пользователя в resource, filters, sort_by, sort_direction, limit и view. "
             "services fields: title, category, source, status, price, updated_at. "
-            "reviews fields: author_name, source, rating, has_response, text, published_at, created_at. "
+            "reviews fields: author_name, source, rating, has_response, text, published_at, created_at, business_name. "
             "content fields: title, status, content_type, scheduled_for, updated_at. "
-            "filters use operator eq, contains, gte, lte or is_empty. "
+            "filters use operator eq, contains, not_contains, gte, lte or is_empty. "
             "Для последней записи используйте sort_direction=desc и limit=1. "
             "Относительные даты переводите в YYYY-MM-DD с учётом current_time из состояния."
         ),
@@ -63,7 +63,7 @@ def operator_query_tool_contract() -> dict[str, Any]:
                         "required": ["field", "operator"],
                         "properties": {
                             "field": {"type": "string"},
-                            "operator": {"type": "string", "enum": ["eq", "contains", "gte", "lte", "is_empty"]},
+                            "operator": {"type": "string", "enum": ["eq", "contains", "not_contains", "gte", "lte", "is_empty"]},
                             "value": {},
                         },
                     },
@@ -275,6 +275,10 @@ def _matches(item: dict[str, Any], query_filter: dict[str, Any]) -> bool:
         return actual_number <= expected_number
     actual_text = _normalized(actual)
     expected_text = _normalized(expected)
+    if field == "source":
+        actual_text = actual_text.replace("two_gis", "2gis").replace("2_gis", "2gis").replace("2гис", "2gis")
+    if operator == "not_contains":
+        return expected_text not in actual_text
     if operator == "contains":
         return expected_text in actual_text
     if operator == "eq":
@@ -300,6 +304,7 @@ def _render_service(item: dict[str, Any], *, full: bool) -> str:
     title = str(item.get("title") or item.get("name") or "Услуга").strip()
     details = " · ".join(
         value for value in (
+            str(item.get("business_name") or "").strip(),
             str(item.get("category") or "").strip(),
             str(item.get("price") or "").strip(),
             str(item.get("source") or "").strip(),
@@ -459,8 +464,23 @@ def read_reviews_request(cursor, business_id, message, user_id=None):
         text='Сохранённых черновиков ответов на отзывы пока нет.' if not items else 'Сохранённые ответы на отзывы:\n'+'\n\n'.join(str(i+1)+'. '+str(item.get('author_name') or 'Клиент')+' — '+str(item.get('status') or 'черновик')+'\n'+str(item.get('generated_text') or '') for i,item in enumerate(items[:10]))
         return {'status':'completed','chat_response':text,'items':items,'resource':'reviews','result_ref':{'href':RESOURCE_HREFS['reviews'],'label':'Открыть отзывы'},'external_writes_performed':False}
     filters=[]
-    for word,value in [('google','google'),('гугл','google'),('яндекс','yandex')]:
-        if re.search(word,message,re.I):filters.append({'field':'source','operator':'contains','value':value});break
+    # Interpret source clauses separately: exclusions must not become inclusions.
+    for clause in re.split(r'[.!?;\n]|(?=не включ|исключ|кроме)', message, flags=re.I):
+        excluded = bool(re.search(r'не включ|исключ|кроме|без отзыв', clause, re.I))
+        for pattern, value in [(r'google|гугл', 'google'), (r'яндекс|yandex', 'yandex'), (r'2\s*(?:гис|gis)|дубльгис|two_gis', '2gis')]:
+            if re.search(pattern, clause, re.I):
+                filters.append({'field': 'source', 'operator': 'not_contains' if excluded else 'contains', 'value': value})
+    branch_match = re.search(r'филиал[а-я]*\s*[«"“]([^»"”]+)', message, re.I)
+    if branch_match:
+        requested = _normalized(branch_match.group(1))
+        allowed = query_business_ids(cursor, business_id, user_id)
+        cursor.execute('SELECT id,name FROM businesses WHERE id=ANY(%s)', (allowed,))
+        candidates = [_row(cursor, row) for row in cursor.fetchall()]
+        exact = [row for row in candidates if _normalized(row.get('name')) == requested]
+        matches = exact or [row for row in candidates if _normalized(row.get('name')).endswith('— ' + requested)]
+        if len(matches) != 1:
+            return {'status': 'needs_clarification', 'chat_response': 'Уточните филиал: ' + ', '.join(str(row.get('name')) for row in candidates), 'external_writes_performed': False}
+        filters.append({'field': 'business_name', 'operator': 'eq', 'value': matches[0]['name']})
     if re.search(r'без ответа|не отвеч|неотвеч',message,re.I):filters.append({'field':'has_response','operator':'eq','value':False})
     if re.search(r'негатив|плох|низк',message,re.I):filters.append({'field':'rating','operator':'lte','value':3})
     if re.search(r'положитель|хорош|высок',message,re.I):filters.append({'field':'rating','operator':'gte','value':4})

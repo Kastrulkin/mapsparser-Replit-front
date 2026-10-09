@@ -1,3 +1,4 @@
+import { businessResultHref } from '@/components/operator/businessResultHref';
 import { OperatorRequestHistory } from '@/components/operator/OperatorRequestHistory';
 import { OperatorSpeech, OperatorVoiceInput, VoiceSubmission } from '@/components/operator/OperatorVoice';
 import { voiceHeaders, waitForOperatorResult } from '@/components/operator/OperatorVoice.logic';
@@ -622,7 +623,7 @@ export const OperatorPage = () => {
         businessName={businessName}
       />
 
-      {currentBusinessId && <Link to="/dashboard/profile" target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline">{language === 'ru' ? 'Город и валюта — в «Профиль и бизнес»' : 'City and currency — Profile and business'}</Link>}
+      {currentBusinessId && <Link to={businessResultHref("/dashboard/profile", currentBusinessId)} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline">{language === 'ru' ? 'Город и валюта — в «Профиль и бизнес»' : 'City and currency — Profile and business'}</Link>}
 
       {currentBusinessId && <OperatorRequestHistory key={currentBusinessId} businessId={currentBusinessId} language={language} />}
 
@@ -1019,7 +1020,7 @@ const OperatorResultActions = ({
           </Button>
         ) : hasUsefulResultRef && resultRef?.href ? (
           <Button type="button" size="sm" asChild>
-            <Link to={resultRef.href} target="_blank" rel="noopener noreferrer">
+            <Link to={businessResultHref(resultRef.href, businessId)} target="_blank" rel="noopener noreferrer">
               {resultRef.label || 'Открыть результат'}
               <ExternalLink className="ml-2 h-3.5 w-3.5" />
             </Link>
@@ -1103,7 +1104,7 @@ const OperatorResultActions = ({
 
         {billingUrl ? (
           <Button type="button" size="sm" variant="outline" asChild>
-            <Link to={billingUrl} target="_blank" rel="noopener noreferrer">
+            <Link to={businessResultHref(billingUrl, businessId)} target="_blank" rel="noopener noreferrer">
               Пополнить счёт
               <ExternalLink className="ml-2 h-3.5 w-3.5" />
             </Link>

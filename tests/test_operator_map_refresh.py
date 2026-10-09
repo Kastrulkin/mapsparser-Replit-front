@@ -3,7 +3,7 @@ from services.operator_map_refresh import build_operator_map_refresh_plan, enque
 
 
 class FakeCursor:
-    def __init__(self, *, map_url="https://yandex.ru/maps/org/oliver", balance=100):
+    def __init__(self, *, map_url="https://yandex.ru/maps/org/oliver/12345/", balance=100):
         self.map_url = map_url
         self.balance = balance
         self.last_query = ""
