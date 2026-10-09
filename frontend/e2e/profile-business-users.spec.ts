@@ -6,6 +6,7 @@ test('profile lists business users and grants staff access only after confirmati
   let previews = 0;
   const errors: string[] = [];
   page.on('pageerror',error=>errors.push(error.message));
+  await page.route(/^https:\/\/mc\.yandex\.ru\/metrika\/tag\.js(?:\?.*)?$/,route=>route.fulfill({contentType:'application/javascript',body:''}));
   const business = {id:'business',name:'Тестовый салон',owner_id:'owner',subscription_tier:'concierge',subscription_status:'active'};
   await page.addInitScript(() => {
     localStorage.setItem('auth_token','profile-test');localStorage.setItem('selectedBusinessId','business');localStorage.setItem('language','ru');
