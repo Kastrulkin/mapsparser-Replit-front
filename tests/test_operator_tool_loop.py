@@ -1,5 +1,31 @@
 from services.operator_tool_loop import run_operator_tool_loop
 
+def test_team_email_reference_is_restored_before_approval_preparation():
+    import json
+    import re
+    from services.llm.policy import prepare_prompt_for_provider
+    email = 'browser-test-20261009@example.com'
+    calls = []
+    tool = _tool('settings.prepare_user', None, approval_required=True)
+    tool['input_schema'] = {'type': 'object', 'properties': {'email': {'type': 'string'}}}
+    tool['prepare_approval'] = lambda args: calls.append(args) or {
+        'status': 'approval_required', 'chat_response': 'Проверьте доступ',
+        'approval': {'action_id': 'test-action'}}
+
+    def planner(state):
+        safe = prepare_prompt_for_provider(json.dumps(state), provider='deepseek', data_class='business_internal')
+        assert safe.allowed and email not in safe.prompt
+        assert '[EMAIL_REDACTED]' not in safe.prompt
+        reference = re.search(r'@ref\d+', state['message']).group(0)
+        return {'action': 'tool_call', 'tool': 'settings.prepare_user', 'arguments': {'email': reference}}
+
+    result = run_operator_tool_loop(business_id='business-1', user_id='owner',
+        message='Добавь мастера ' + email, tools=[tool], planner=planner)
+    assert result['status'] == 'approval_required'
+    assert calls == [{'email': email}]
+    assert result['external_writes_performed'] is False
+
+
 
 def _tool(name, execute, approval_required=False):
     return {

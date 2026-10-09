@@ -1,5 +1,6 @@
 """Request-local planner context. Authorization and execution retain full server data."""
 import re
+from services.llm.policy import EMAIL_PATTERN
 
 DOMAINS = {
     'content': r'\bпост(?:а|ы|ов|е|у|ом)?\b|контент|публикац|новост',
@@ -33,6 +34,15 @@ class PlannerContext:
                 ref = '@ref' + str(len(self.references) + 1)
                 self.references[ref] = value; self.reverse[value] = ref
             return self.reverse[value]
+        if isinstance(value, str):
+            def contact_reference(match):
+                contact = match.group(0)
+                if contact not in self.reverse:
+                    ref = '@ref' + str(len(self.references) + 1)
+                    self.references[ref] = contact
+                    self.reverse[contact] = ref
+                return self.reverse[contact]
+            return EMAIL_PATTERN.sub(contact_reference, value)
         return value
 
     def decode(self, value):
