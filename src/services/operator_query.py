@@ -97,11 +97,28 @@ def _iso(value: Any) -> Any:
     return value
 
 
-def _load_module_items(cursor: Any, *, business_id: str, module: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def query_business_ids(cursor, business_id, user_id=None):
+    """Expand a network parent only into locations the current actor can read."""
+    if not user_id:
+        return [business_id]
+    from services.business_permissions import load_actor, require_permission
+    from core.auth_helpers import verify_business_access
+    user = load_actor(cursor, user_id)
+    require_permission(cursor, business_id, user, 'business.read')
+    cursor.execute('SELECT network_id FROM businesses WHERE id=%s', (business_id,))
+    row = _row(cursor, cursor.fetchone())
+    if str(row.get('network_id') or '') != str(business_id):
+        return [business_id]
+    cursor.execute('SELECT id FROM businesses WHERE network_id=%s OR id=%s ORDER BY id', (business_id, business_id))
+    candidates = [str(_row(cursor, row)['id']) for row in cursor.fetchall()]
+    return [target for target in candidates if verify_business_access(cursor, target, user)[0]]
+
+
+def _load_module_items(cursor: Any, *, business_id: str, module: str, user_id=None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     result = list_operator_mobile_module(
         cursor,
         module=module,
-        scope={"kind": "business", "id": business_id, "business_ids": [business_id]},
+        scope={"kind": "business", "id": business_id, "business_ids": query_business_ids(cursor, business_id, user_id)},
     )
     items = [dict(item) for item in result.get("items") or [] if isinstance(item, dict)]
     is_truncated = len(items) >= 200
@@ -117,26 +134,31 @@ def _load_module_items(cursor: Any, *, business_id: str, module: str) -> tuple[l
     }
 
 
-def _load_reviews(cursor: Any, *, business_id: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _load_reviews(cursor: Any, *, business_id: str, user_id=None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    business_ids = query_business_ids(cursor, business_id, user_id)
     cursor.execute(
         """
-        SELECT id, business_id, source, external_review_id, rating, author_name,
-               text, response_text, published_at, created_at, updated_at
-        FROM externalbusinessreviews
-        WHERE business_id = %s
-          AND COALESCE(TRIM(text), '') <> ''
-        ORDER BY published_at DESC NULLS LAST, created_at DESC
+        SELECT r.id, r.business_id, r.source, r.external_review_id, r.rating, r.author_name,
+               r.text, r.response_text, r.published_at, r.created_at, r.updated_at, b.name AS business_name
+        FROM externalbusinessreviews r JOIN businesses b ON b.id=r.business_id
+        WHERE r.business_id = ANY(%s)
+          AND COALESCE(TRIM(r.text), '') <> ''
+        ORDER BY r.published_at DESC NULLS LAST, r.created_at DESC
         LIMIT 500
         """,
-        (business_id,),
+        (business_ids,),
     )
     items = []
     latest_seen_at = None
+    last_updated_at = None
     for value in cursor.fetchall() or []:
         item = _row(cursor, value)
         published_at = item.get("published_at") or item.get("created_at")
         if latest_seen_at is None and published_at is not None:
             latest_seen_at = _iso(published_at)
+        updated_at = _iso(item.get("updated_at"))
+        if updated_at and (not last_updated_at or updated_at > last_updated_at):
+            last_updated_at = updated_at
         response_text = str(item.get("response_text") or "").strip()
         items.append(
             {
@@ -153,7 +175,7 @@ def _load_reviews(cursor: Any, *, business_id: str) -> tuple[list[dict[str, Any]
     is_truncated = len(items) >= 500
     return items, {
         "as_of": datetime.now(timezone.utc).isoformat(),
-        "freshness": {"status": "stored_snapshot", "latest_seen_at": latest_seen_at},
+        "freshness": {"status": "stored_snapshot", "latest_seen_at": latest_seen_at, "last_updated_at": last_updated_at},
         "data_warnings": (
             ["Поиск выполнен по первым 500 отзывам сохранённого снимка."]
             if is_truncated
@@ -294,7 +316,8 @@ def _render_review(item: dict[str, Any], *, full: bool) -> str:
     published_at = str(item.get("published_at") or item.get("created_at") or "").strip()[:10]
     source = str(item.get("source") or "").strip()
     details = " · ".join(value for value in (published_at, f"{rating}/5" if rating else "", source) if value)
-    line = author + (f" — {details}" if details else "")
+    branch = str(item.get("business_name") or "").strip()
+    line = author + (f" — {branch}" if branch else "") + (f" — {details}" if details else "")
     text = str(item.get("text") or item.get("subtitle") or "").strip()
     if full and text:
         line += f"\n{text}"
@@ -345,7 +368,7 @@ def render_operator_query(
     return response
 
 
-def execute_operator_query(cursor: Any, *, business_id: str, arguments: Any) -> dict[str, Any]:
+def execute_operator_query(cursor: Any, *, business_id: str, arguments: Any, user_id=None) -> dict[str, Any]:
     try:
         query = compile_operator_query(arguments)
     except ValueError as exc:
@@ -358,9 +381,9 @@ def execute_operator_query(cursor: Any, *, business_id: str, arguments: Any) -> 
             "external_writes_performed": False,
         }
     if query["resource"] == "reviews":
-        items, metadata = _load_reviews(cursor, business_id=business_id)
+        items, metadata = _load_reviews(cursor, business_id=business_id, user_id=user_id)
     else:
-        items, metadata = _load_module_items(cursor, business_id=business_id, module=query["resource"])
+        items, metadata = _load_module_items(cursor, business_id=business_id, module=query["resource"], user_id=user_id)
     matched = [item for item in items if all(_matches(item, query_filter) for query_filter in query["filters"])]
     reverse = query["sort_direction"] == "desc"
     matched.sort(key=lambda item: _sort_value(item, query["sort_by"])[1], reverse=reverse)
@@ -380,6 +403,8 @@ def execute_operator_query(cursor: Any, *, business_id: str, arguments: Any) -> 
             if latest_seen_at
             else "В сохранённом снимке пока нет даты последнего отзыва."
         )
+        last_updated_at = (metadata.get('freshness') or {}).get('last_updated_at')
+        freshness_note += f" Последнее сохранённое обновление: {str(last_updated_at)[:10]}." if last_updated_at else " Дата обновления неизвестна."
         chat_response += (
             "\n\n"
             + freshness_note
@@ -419,9 +444,11 @@ def execute_operator_query(cursor: Any, *, business_id: str, arguments: Any) -> 
     }
 
 
-def read_reviews_request(cursor, business_id, message):
+def read_reviews_request(cursor, business_id, message, user_id=None):
     """Read requests must never be routed to paid draft generation."""
     import re
+    if re.search(r'обнов|синхрон|парс|платн|стоимост',message,re.I):
+        return None
     if not re.search(r'отзыв',message,re.I) or not re.search(r'покажи|сколько|показать|какие|истори',message,re.I):
         return None
     if re.search(r'подготовь|создай|сгенер|опубликуй|отправь',message,re.I):return None
@@ -437,4 +464,4 @@ def read_reviews_request(cursor, business_id, message):
     if re.search(r'без ответа|не отвеч|неотвеч',message,re.I):filters.append({'field':'has_response','operator':'eq','value':False})
     if re.search(r'негатив|плох|низк',message,re.I):filters.append({'field':'rating','operator':'lte','value':3})
     if re.search(r'положитель|хорош|высок',message,re.I):filters.append({'field':'rating','operator':'gte','value':4})
-    return execute_operator_query(cursor,business_id=business_id,arguments={'resource':'reviews','filters':filters,'limit':10,'sort_by':'published_at','sort_direction':'desc','view':'count' if re.search('сколько',message,re.I) else 'full'})
+    return execute_operator_query(cursor,business_id=business_id,user_id=user_id,arguments={'resource':'reviews','filters':filters,'limit':10,'sort_by':'published_at','sort_direction':'desc','view':'count' if re.search('сколько',message,re.I) else 'full'})

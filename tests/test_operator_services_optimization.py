@@ -1,3 +1,11 @@
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def stored_search_evidence(monkeypatch):
+    monkeypatch.setattr('services.operator_search_demand.stored_demand', lambda *args, **kwargs: {'items': [], 'period_comparison_available': False})
+
+
 from services.operator_services_optimization import (
     apply_service_optimization_suggestions,
     classify_services_apply_intent,
