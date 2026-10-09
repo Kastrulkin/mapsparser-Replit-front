@@ -1037,10 +1037,10 @@ def _operator_tool_catalog(
             "name": "content.generate_social_post_draft",
             "capability": "social_post.generate",
             "title": "Черновик поста",
-            "description": "Создаёт внутренний черновик поста выбранного бизнеса без внешней отправки.",
+            "description": "Создаёт внутренний черновик поста без внешней отправки. Если указан другой филиал, передай его точное название в business. Для объявления о свободных местах сначала прочитай work.day_plan и учти график точки в brief. Перед подготовкой подтверждения составного поручения сначала создай этот черновик.",
             "input_schema": {
                 "type": "object",
-                "properties": {"brief": {"type": "string", "maxLength": 2000}},
+                "properties": {"brief": {"type": "string", "maxLength": 2000}, "business": {"type":"string","maxLength":240}},
             },
             "risk_class": "paid_compute",
             "approval_required": False,
@@ -1051,6 +1051,8 @@ def _operator_tool_catalog(
                 user_id=user_id,
                 message=str(arguments.get("brief") or message),
                 channel=channel,
+                business_reference=str(arguments.get("business") or ""),
+                original_message=message,
             ),
         },
         {

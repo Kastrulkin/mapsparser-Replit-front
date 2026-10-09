@@ -240,6 +240,9 @@ def prepare_focus(cursor,business_id,user_id,message,arguments):
 
 
 def apply_focus(cursor,business_id,user_id,envelope):
+    if envelope.get('kind')=='draft_corrections':
+        from services.operator_content_corrections import apply
+        return apply(cursor,business_id,user_id,envelope)
     if envelope.get('kind')=='revision':
         from services.operator_plan_revision import apply
         return apply(cursor,business_id,user_id,envelope)
@@ -346,6 +349,8 @@ def editorial_tools(cursor,business_id,user_id,message,channel="web"):
          'description':'Сохраняет только реальные сведения о выбранном бизнесе со слов пользователя, его историю или пожелание к тону для будущих текстов. Не сохраняй примеры, гипотезы, вопросы и отрицания. quote — точная полная цитата из текущего сообщения. Не сокращай историю и не добавляй факты. kind company_fact/founder_story/tone. Не использовать для акцента одного месяца — это refocus_plan.',
          'input_schema':{'type':'object','required':['kind','quote'],'properties':{'kind':{'type':'string','enum':['company_fact','founder_story','tone']},'quote':string(6000)}},
          'risk_class':'write_internal_draft','execute':lambda args:remember(cursor,business_id,user_id,message,args),'deterministic_response':True}]
+    from services import operator_content_corrections
+    tools.extend(operator_content_corrections.tools(cursor,business_id,user_id,message))
     from services.content_rules import change, load, prepare_network
     def rule_change(args):
         cursor.execute("SELECT id FROM operatormessages WHERE business_id=%s AND user_id=%s AND role='user' ORDER BY created_at DESC,id DESC LIMIT 1",(business_id,user_id))

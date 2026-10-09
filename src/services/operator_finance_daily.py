@@ -65,7 +65,7 @@ def read(cursor,business_id,user_id,args):
 def tools(cursor,business_id,user_id,message,channel,message_ref,orchestrator=None,previous_draft=None):
     def prepare(arguments):
         if aggregate_input(message):return aggregate_result()
-        if re.search(r'\bне\s+(?:сохраня|вноси|записыва|добавля)',message,re.I) or re.match(r'\s*(?:если|например|допустим)',message,re.I):
+        if re.search(r'\bне\s+(?:сохраня|вноси|записыва)',message,re.I) or (re.search(r'\bне\s+добавля',message,re.I) and arguments.get('kind')!='daily') or re.match(r'\s*(?:если|например|допустим)',message,re.I):
             return observation('Финансовые данные не записаны. Для записи дайте явную команду.','clarification_required')
         try:
             from services.operator_finance_amounts import verify_currency, verify_revenue

@@ -102,3 +102,44 @@ def test_question_reads_plan_without_saving_again(workday):
     assert 'Следующие действия' in result['chat_response']
     with pytest.raises(ValueError,match='Вопрос'):operator_day_facts.tools(c,'b','u','web','Что мне делать сегодня?','question')[0]['execute']({'quote':'два кресла','operational':{'kind':'capacity'}})
     assert len(operator_day_facts.read(c,'b','u','2026-09-14'))==1
+
+
+def test_master_returns_with_actual_hours(workday):
+    _,c=workday
+    message='Мастер Первый вернулся, работает с 12:00 до 18:00'
+    args={'quote':message,'operational':{'kind':'availability','date':'2026-09-14','master':'Первый','start':'12:00','end':'18:00'}}
+    outcome=operator_day_facts.tools(c,'b','u','web',message,'return')[0]['execute'](args)
+    assert 'Первый работает 12:00–18:00' in outcome['chat_response']
+    assert operator_day_facts.read(c,'b','u','2026-09-14')[0]['facts_json']['operational']['kind']=='availability'
+
+
+def test_plan_limits_capacity_to_open_hours_and_time_budget(workday,monkeypatch):
+    from services import operator_owner_actions
+    _,c=workday
+    save(c)
+    c.execute("ALTER TABLE journey_actions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ready', ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()")
+    monkeypatch.setattr(operator_owner_actions,'effective_hours',lambda *args:{'time':'11:00','end':'16:00','timezone':'Europe/Moscow'})
+    result=operator_day_facts.plan(c,'b','u',{'date':'2026-09-14','duration_minutes':120})
+    assert 'В 15:00–16:00' in result['chat_response'] or 'уже завершилось' in result['chat_response']
+    assert 'План на 120 минут' in result['chat_response']
+    monkeypatch.setattr(operator_owner_actions,'effective_hours',lambda *args:{'closed':True,'timezone':'Europe/Moscow'})
+    assert 'не являются доступными окнами' in operator_day_facts.plan(c,'b','u',{'date':'2026-09-14'})['chat_response']
+
+
+def test_plan_never_offers_elapsed_part_of_capacity_window(workday,monkeypatch):
+    from datetime import datetime
+    from services import operator_owner_actions
+    _,c=workday
+    save(c)
+    c.execute("ALTER TABLE journey_actions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ready', ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()")
+    monkeypatch.setattr(operator_owner_actions,'effective_hours',lambda *args:{'time':'11:00','end':'16:00','timezone':'Europe/Moscow'})
+    class Clock:
+        @staticmethod
+        def now(zone):return datetime(2026,9,14,15,30,tzinfo=zone)
+    monkeypatch.setattr(operator_day_facts,'datetime',Clock)
+    assert 'В 15:30–16:00 доступны' in operator_day_facts.plan(c,'b','u',{'date':'2026-09-14'})['chat_response']
+    class ClosedClock:
+        @staticmethod
+        def now(zone):return datetime(2026,9,14,16,30,tzinfo=zone)
+    monkeypatch.setattr(operator_day_facts,'datetime',ClosedClock)
+    assert 'уже завершилось' in operator_day_facts.plan(c,'b','u',{'date':'2026-09-14'})['chat_response']

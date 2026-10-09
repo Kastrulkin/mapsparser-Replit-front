@@ -67,7 +67,9 @@ def tools(cursor, business_id, user_id, message, channel, orchestrator=None, ses
     def list_team(_arguments):
         from services.business_member_directory import list_business_members
         require_permission(cursor, business_id, load_actor(cursor, user_id), 'business.read')
-        return {'status': 'completed', 'members': list_business_members(cursor, business_id), 'roles': business_team_management.role_options(), 'external_writes_performed': False}
+        target=business_chat_changes.resolve_target(cursor,load_actor(cursor,user_id),_arguments.get('business'),business_id)
+        require_permission(cursor,target,load_actor(cursor,user_id),'business.read')
+        return {'status': 'completed', 'members': list_business_members(cursor, target), 'roles': business_team_management.role_options(), 'external_writes_performed': False}
 
     return [
         {'name': 'settings.get_profile', 'capability': 'settings.read', 'title': 'Настройки бизнеса',
@@ -85,12 +87,12 @@ def tools(cursor, business_id, user_id, message, channel, orchestrator=None, ses
          'risk_class': 'owner_profile_write', 'approval_required': True, 'deterministic_preparation_response': True,
          'prepare_approval': lambda arguments: preview(cursor,business_id,user_id,arguments,kind='settings',channel=channel,message=message,orchestrator=orchestrator,session=session)},
         {'name': 'settings.list_users', 'capability': 'team.read', 'title': 'Пользователи бизнеса',
-         'description': 'Читает владельца и сотрудников выбранного бизнеса, роли и доступ через сеть.',
-         'input_schema': {'type': 'object', 'properties': {}}, 'risk_class': 'read_only', 'approval_required': False, 'execute': list_team},
+         'description': 'Читает владельца и сотрудников выбранного или явно названного бизнеса (business), роли и доступ через сеть. При поиске человека в филиале передай название филиала. Если человека нет, не создавай нового вместо изменения доступа.',
+         'input_schema': {'type': 'object', 'properties': {'business':{'type':'string'}}}, 'risk_class': 'read_only', 'approval_required': False, 'execute': list_team},
         {'name': 'settings.prepare_user', 'capability': 'team.manage', 'title': 'Добавить сотрудника или изменить роль',
-         'description': 'Готовит подтверждение добавления сотрудника или изменения его роли. Только владелец. Нужны email, роль и область доступа. admin=администратор, master=мастер, viewer=наблюдатель. scope=network только по явному запросу на всю сеть выбранного бизнеса, иначе конкретные бизнесы. Отправку приглашения включай только по явному поручению; покажи её отдельно. Заблокированные аккаунты не активирует, владельца не меняет.',
-         'input_schema': {'type': 'object', 'additionalProperties': False, 'required': ['email','role','scope','send_invitation'], 'properties': {
-             'email': {'type': 'string'}, 'name': {'type': 'string'}, 'role': {'type': 'string', 'enum': list(business_team_management.ASSIGNABLE_ROLES)},
+         'description': 'Готовит подтверждение добавления сотрудника, изменения его роли или снятия доступа (operation=remove) только в названной области. Для remove существующий email, role не нужен. Остальные филиалы сохраняют доступ. Сначала найди человека через list_users с business явно названного филиала. Только владелец. Нужны email, роль и область доступа. admin=администратор, master=мастер, viewer=наблюдатель. scope=network только по явному запросу на всю сеть выбранного бизнеса, иначе конкретные бизнесы. Отправку приглашения включай только по явному поручению; покажи её отдельно. Заблокированные аккаунты не активирует, владельца не меняет.',
+         'input_schema': {'type': 'object', 'additionalProperties': False, 'required': ['email','scope','send_invitation'], 'properties': {
+             'operation':{'type':'string','enum':['grant','remove']},'email': {'type': 'string'}, 'name': {'type': 'string'}, 'role': {'type': 'string', 'enum': list(business_team_management.ASSIGNABLE_ROLES)},
              'scope': {'type': 'string', 'enum': ['business','network']}, 'businesses': {'type': 'array', 'maxItems': 20, 'items': {'type': 'string'}}, 'send_invitation': {'type': 'boolean'}}},
          'risk_class': 'access_change', 'approval_required': True, 'deterministic_preparation_response': True,
          'prepare_approval': lambda arguments: preview(cursor,business_id,user_id,arguments,kind='team',channel=channel,message=message,orchestrator=orchestrator,session=session)},

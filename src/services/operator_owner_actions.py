@@ -40,9 +40,9 @@ def result(text,status='completed',**extra):
 
 def source_dates(message,zone):
     days=set(re.findall(r'\b\d{4}-\d{2}-\d{2}\b',message))
-    for match in re.finditer(r'\b(\d{1,2})\s+('+'|'.join(MONTHS)+r')\s+(20\d{2})\b',message,re.I):
-        days.add(date(int(match[3]),MONTHS.index(match[2].lower())+1,int(match[1])).isoformat())
     local=now().astimezone(ZoneInfo(zone)).date()
+    for match in re.finditer(r'\b(\d{1,2})\s+('+'|'.join(MONTHS)+r')(?:\s+(20\d{2}))?\b',message,re.I):
+        days.add(date(int(match[3] or local.year),MONTHS.index(match[2].lower())+1,int(match[1])).isoformat())
     for word,offset in (('сегодня',0),('завтра',1),('послезавтра',2)):
         if re.search(r'\b'+word+r'\b',message,re.I):days.add((local+timedelta(days=offset)).isoformat())
     return days
@@ -66,8 +66,10 @@ def normalize(cursor,business,args,message):
     day=str(args.get('date') or '')
     if day not in source_dates(message,zone):raise ValueError('Укажите точную дату и год или «завтра».')
     date.fromisoformat(day)
-    start=str(args.get('time') or '')
-    if not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d',start) or start not in message:
+    closed=kind=='hours' and args.get('closed') is True
+    if closed and not re.search(r'закрыт|не\s+работа',quote,re.I):raise ValueError('Закрытие должно быть явно указано.')
+    start='00:00' if closed else str(args.get('time') or '')
+    if not closed and (not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d',start) or start not in message):
         raise ValueError('Укажите время в формате ЧЧ:ММ.')
     due=datetime.fromisoformat(day+'T'+start).replace(tzinfo=ZoneInfo(zone))
     # Local times in a DST gap or repeated hour require a precise offset.
@@ -79,10 +81,10 @@ def normalize(cursor,business,args,message):
     if not 1<=len(title)<=160 or not 1<=len(text)<=3000:raise ValueError('Сократите название или текст задачи.')
     data={'kind':kind,'date':day,'time':start,'timezone':zone,'due_at':due.isoformat(),'title':title,'text':text,'quote':quote}
     if kind=='hours':
-        end=str(args.get('end') or '')
-        if not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d',end) or end not in message or end<=start:
+        end='23:59' if closed else str(args.get('end') or '')
+        if not closed and (not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d',end) or end not in message or end<=start):
             raise ValueError('Укажите время закрытия после времени открытия.')
-        data.update(end=end,delivery='in_app')
+        data.update(end=end,closed=closed,delivery='in_app')
     else:
         delivery=args.get('delivery') or 'in_app'
         if delivery not in {'in_app','telegram'}:raise ValueError('Выберите «Сегодня» или свой подключённый Telegram.')
@@ -105,6 +107,9 @@ def permanent_hours(cursor,business):
 
 
 def read(cursor,business,user,args):
+    if args.get('business'):
+        from services.business_chat_changes import resolve_target
+        business=resolve_target(cursor,load_actor(cursor,user),args['business'],business)
     authorize(cursor,business,user)
     cursor.execute('''SELECT id,version,status,title,description,due_at,payload_json FROM journey_actions
         WHERE business_id=%s AND (user_id=%s OR entity_type='business_hours_override')
@@ -123,30 +128,58 @@ def read(cursor,business,user,args):
 
 
 def prepare(cursor,business,user,args,message):
-    if args.get('operation')=='cancel':
+    if args.get('items'):
+        if not isinstance(args['items'],list) or not 1<=len(args['items'])<=10:raise ValueError('Одно подтверждение включает от 1 до 10 поручений.')
+        if any(not isinstance(item,dict) or item.get('items') for item in args['items']):raise ValueError('Вложенные пакеты поручений недопустимы.')
+        ids=[item['id'] for item in args['items'] if item.get('id')]
+        if len(ids)!=len(set(ids)):raise ValueError('Одно поручение нельзя изменить дважды в одном подтверждении.')
+        previews=[prepare(cursor,business,user,item,message) for item in args['items']]
+        envelope={'operation':'batch','business_id':business,'user_id':user,'items':[item['approval']['envelope'] for item in previews]}
+        envelope['fingerprint']=digest(envelope)
+        text='\n\n'.join(item['chat_response'] for item in previews)
+        return result(text,'approval_required',approval={'summary':text,'capability':'work.owner_action','envelope':envelope})
+    anchor=business
+    if args.get('business'):
+        from services.business_chat_changes import resolve_target
+        business=resolve_target(cursor,load_actor(cursor,user),args['business'],business)
+    operation=args.get('operation') or 'create'
+    if operation not in {'create','cancel','complete','reschedule'}:raise ValueError('Неизвестное действие с поручением.')
+    if operation in {'cancel','complete','reschedule'}:
         authorize(cursor,business,user)
         cursor.execute('SELECT * FROM journey_actions WHERE id=%s AND business_id=%s AND user_id=%s AND entity_type=ANY(%s)',
             (args.get('id'),business,user,list(ENTITY.values())))
         row=_row(cursor,cursor.fetchone())
         if not row or row.get('version')!=args.get('version'):raise ValueError('Задача изменилась. Сначала прочитайте её актуальную версию.')
         authorize(cursor,business,user,(row.get('payload_json') or {}).get('kind','task'))
-        envelope={'operation':'cancel','business_id':business,'user_id':user,'id':str(row['id']),'version':row['version']}
-        text='Отменить «'+row['title']+'»?'
+        if row['status'] not in {'ready','waiting','in_progress'}:raise ValueError('Поручение уже завершено или отменено.')
+        envelope={'operation':operation,'business_id':anchor,'target_business_id':business,'user_id':user,'id':str(row['id']),'version':row['version']}
+        text=('Завершить' if operation=='complete' else 'Отменить')+' «'+row['title']+'»?'
+        if operation=='reschedule':
+            previous=row['payload_json']
+            if previous['kind']=='hours':raise ValueError('Сначала отмените прежний временный график и подготовьте новый.')
+            data=normalize(cursor,business,{**previous,**args,'kind':previous['kind']},message)
+            data.update(title=previous['title'],text=previous['text'])
+            envelope['data']=data
+            if previous.get('delivery')=='telegram':data['telegram_id']=telegram_target(cursor,user)
+            text=f"Перенести «{row['title']}»: {previous['date']} {previous['time']} → {data['date']} {data['time']} ({data['timezone']}). Сохраняется то же поручение, новое не создаётся."
     else:
         authorize(cursor,business,user,args.get('kind','task'))
         data=normalize(cursor,business,args,message)
         authorize(cursor,business,user,data['kind'])
         if data['delivery']=='telegram':data['telegram_id']=telegram_target(cursor,user)
-        envelope={'operation':'create','business_id':business,'user_id':user,'data':data}
+        envelope={'operation':'create','business_id':anchor,'target_business_id':business,'user_id':user,'data':data}
         if data['kind']=='hours':
             envelope['permanent_hours_version']=digest(permanent_hours(cursor,business))
-            text=f"Только {data['date']}: {data['time']}–{data['end']} ({data['timezone']}). Постоянный график сохранится; в остальные дни действует он."
+            label='закрыто весь день' if data.get('closed') else data['time']+'–'+data['end']
+            text=f"Только {data['date']}: {label} ({data['timezone']}). Постоянный график сохранится; в остальные дни действует он."
         else:
             channel='раздел «Сегодня» в LocalOS' if data['delivery']=='in_app' else 'ваш подключённый Telegram'
             text=f"{data['title']}\n{data['text']}\n{data['date']} в {data['time']} ({data['timezone']})\nДоставка: {channel}."
         text+='\nПодтвердите сохранение. До подтверждения ничего не создано.'
+    cursor.execute('SELECT name FROM businesses WHERE id=%s',(business,))
+    text=str(_row(cursor,cursor.fetchone()).get('name') or business)+'\n'+text
     envelope['fingerprint']=digest(envelope)
-    return result(text,'approval_required',approval={'summary':text,'capability':'work.owner_action','envelope':envelope})
+    return result(text,'approval_required',approval={'summary':text,'capability':'work.owner_action','envelope':envelope},result_ref={'href':'/dashboard/today?business_id='+business,'label':'Открыть задачи, напоминания и временный график'})
 
 
 def session_write_guard(session):
@@ -159,16 +192,34 @@ def apply(cursor,business,user,envelope,action_id,session=None):
     if envelope.get('business_id')!=business or envelope.get('user_id')!=user:raise PermissionError('Неверная область задачи.')
     unsigned={k:v for k,v in envelope.items() if k!='fingerprint'}
     if digest(unsigned)!=envelope.get('fingerprint'):raise ValueError('Условия подтверждения изменились.')
-    if envelope['operation']=='cancel':
+    if envelope['operation']=='batch':
+        cursor.execute('SAVEPOINT owner_action_batch')
+        try:
+            results=[apply(cursor,business,user,item,action_id,session) for item in envelope['items']]
+        except Exception:
+            cursor.execute('ROLLBACK TO SAVEPOINT owner_action_batch')
+            raise
+        cursor.execute('RELEASE SAVEPOINT owner_action_batch')
+        return result('\n'.join(item['chat_response'] for item in results),owner_action_results=results)
+    business=envelope.get('target_business_id') or business
+    if envelope['operation'] in {'cancel','complete','reschedule'}:
         authorize(cursor,business,user)
         cursor.execute('SELECT * FROM journey_actions WHERE id=%s AND business_id=%s AND user_id=%s FOR UPDATE',(envelope['id'],business,user))
         row=_row(cursor,cursor.fetchone())
         if not row:raise PermissionError('Задача недоступна.')
         authorize(cursor,business,user,(row.get('payload_json') or {}).get('kind','task'))
-        if row['status']=='cancelled':return result('Задача уже отменена.',idempotent=True)
+        terminal='completed' if envelope['operation']=='complete' else 'cancelled'
+        if envelope['operation']!='reschedule' and row['status']==terminal:return result('Поручение уже обработано.',idempotent=True)
+        if envelope['operation']=='reschedule' and row['payload_json']==envelope['data']:return result('Перенос уже сохранён.',idempotent=True)
         if row['version']!=envelope['version']:raise ValueError('Задача изменилась. Подготовьте отмену снова.')
-        cursor.execute("UPDATE journey_actions SET status='cancelled',version=version+1,updated_at=NOW() WHERE id=%s",(row['id'],))
-        return result('Задача отменена. Отложенная доставка остановлена.')
+        if envelope['operation']=='reschedule':
+            data=envelope['data']
+            if datetime.fromisoformat(data['due_at'])<=now():raise ValueError('Время уже прошло.')
+            if data['delivery']=='telegram' and telegram_target(cursor,user)!=data['telegram_id']:raise ValueError('Telegram изменился.')
+            cursor.execute("UPDATE journey_actions SET due_at=%s,payload_json=%s::jsonb,version=version+1,updated_at=NOW() WHERE id=%s",(data['due_at'],json.dumps(data,ensure_ascii=False),row['id']))
+            return result('Перенос сохранён: '+data['date']+' '+data['time']+'. Старое время больше не действует.',owner_action_id=str(row['id']))
+        cursor.execute("UPDATE journey_actions SET status=%s,version=version+1,updated_at=NOW() WHERE id=%s",(terminal,row['id']))
+        return result('Задача завершена.' if terminal=='completed' else 'Задача отменена. Отложенная доставка остановлена.')
     data=envelope['data']
     authorize(cursor,business,user,data['kind'])
     identifier=str(uuid.uuid5(uuid.NAMESPACE_URL,'owner-action:'+business+':'+user+':'+digest(data)))
@@ -187,7 +238,7 @@ def apply(cursor,business,user,envelope,action_id,session=None):
         VALUES (%s,%s,%s,'work_journal',%s,%s,'owner_action','ready',%s,%s,'Открыть задачу',%s::jsonb,%s::jsonb,%s,%s)''',
         (identifier,business,user,ENTITY[data['kind']],identifier,data['title'],data['text'],
          json.dumps({'href':'/dashboard/operator','business_id':business}),json.dumps(data,ensure_ascii=False),'owner-action:'+identifier,data['due_at']))
-    text='Временные часы сохранены только на '+data['date']+'. Постоянный график не изменён.' if data['kind']=='hours' else 'Поручение сохранено на '+data['date']+' '+data['time']+' ('+data['timezone']+').'
+    text='Временные часы сохранены только на '+data['date']+'. Постоянный график не изменён.' if data['kind']=='hours' else ('Задача «'+data['title']+'» сохранена' if data['kind']=='task' else 'Напоминание «'+data['title']+'» сохранено')+' на '+data['date']+' '+data['time']+' ('+data['timezone']+').'
     if data['delivery']=='telegram':text+=' Доставка запланирована; сообщение ещё не отправлено.'
     else:text+=' Результат доступен в «Сегодня» и через чтение задач в чате.'
     return result(text,owner_action_id=identifier,result_ref={'href':'/dashboard/today?business_id='+business,'entity_id':identifier,'label':'Открыть задачи'})
@@ -238,11 +289,11 @@ def tools(cursor,business,user,message,session=None):
         except (ValueError,ZoneInfoNotFoundError):return result(str(sys.exception()),'clarification_required')
     return [
         {'name':'work.prepare_owner_action','capability':'work.owner_action','title':'Задача, напоминание или часы на один день',
-         'description':'Подготовить подтверждение задачи с дедлайном, разового напоминания владельцу или временного графика на один день. kind task/reminder/hours. Дата ISO, time ЧЧ:ММ, timezone IANA; quote точный текст поручения. Для hours end — закрытие. delivery in_app (раздел Сегодня, без push) или telegram только по явному выбору собственного подключённого Telegram. Не отправляет клиентам, не меняет постоянный график. Повторяющиеся сводки создавай через agents.create. operation=cancel требует id/version из read_owner_actions.',
-         'input_schema':{'type':'object','properties':{**{key:text for key in ('kind','date','time','end','timezone','quote','title','text','delivery','id','operation')},'version':{'type':'integer'}}},
+         'description':'Подготовить подтверждение задачи с дедлайном, разового напоминания владельцу или временного графика на один день. kind task/reminder/hours. Дата ISO, time ЧЧ:ММ, timezone IANA; quote точный текст поручения. Для hours end — закрытие. delivery in_app (раздел Сегодня, без push) или telegram только по явному выбору собственного подключённого Telegram. Не отправляет клиентам, не меняет постоянный график. Повторяющиеся сводки создавай через agents.create. operation=create создаёт, reschedule переносит ТО ЖЕ поручение, complete завершает задачу, cancel отменяет; сначала read_owner_actions, затем id/version. При переносе никогда не выбирай create. items — массив до 10 таких операций для одного подтверждения. Для закрытия всего дня hours closed=true без time/end. business — точное название явно указанного филиала, иначе выбранный бизнес.',
+         'input_schema':{'type':'object','properties':{**{key:text for key in ('kind','date','time','end','timezone','quote','title','text','delivery','id','operation','business')},'closed':{'type':'boolean'},'items':{'type':'array','maxItems':10,'items':{'type':'object'}},'version':{'type':'integer'}}},
          'risk_class':'internal_write','approval_required':True,'deterministic_preparation_response':True,'prepare_approval':preview},
         {'name':'work.read_owner_actions','capability':'work.owner_action','title':'Прочитать задачи и напоминания',
-         'description':'Читает сохранённые задачи, напоминания и временный график выбранного бизнеса; date опционально. Показывает id/version для отмены.',
-         'input_schema':{'type':'object','properties':{'date':text}},'risk_class':'read_only','deterministic_response':True,
+         'description':'Читает сохранённые задачи, напоминания и временный график выбранного бизнеса; date опционально. Показывает id/version для переноса, отмены и завершения. business — явно названный филиал. Не заменяет изменение поручений их чтением.',
+         'input_schema':{'type':'object','properties':{'date':text,'business':text}},'risk_class':'read_only','deterministic_response':True,
          'execute':lambda args:read(cursor,business,user,args)},
     ]

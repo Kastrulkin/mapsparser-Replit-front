@@ -230,3 +230,37 @@ def test_today_items_visible_without_workspace_toggle_and_scope_safe(owner_day):
     assert not actions.today_items(c,{'kind':'business','id':'other','business_ids':['other']},'u')
     assert not actions.today_items(c,{'kind':'business','id':'b','business_ids':['b']},'viewer')
     assert len(actions.today_items(c,{'kind':'network','id':'network','business_ids':[]},'u'))==1
+
+def test_transfer_same_record_complete_batch_and_atomic_stale(owner_day):
+    _,c=owner_day
+    args=arguments()
+    first=actions.apply(c,'b','u',actions.prepare(c,'b','u',args,args['quote'])['approval']['envelope'],'first')
+    row=actions.read(c,'b','u',{})['owner_actions'][0]
+    message='Перенеси напоминание на 12 октября 2026 в 11:00'
+    transfer=actions.prepare(c,'b','u',{'operation':'reschedule','id':row['id'],'version':1,'date':'2026-10-12','time':'11:00','quote':message},message)['approval']['envelope']
+    actions.apply(c,'b','u',transfer,'move')
+    assert actions.apply(c,'b','u',transfer,'move')['idempotent']
+    rows=actions.read(c,'b','u',{})['owner_actions']
+    assert len(rows)==1 and rows[0]['id']==first['owner_action_id']
+    assert rows[0]['version']==2 and rows[0]['payload_json']['date']=='2026-10-12'
+    task_args=arguments('task')
+    task=actions.apply(c,'b','u',actions.prepare(c,'b','u',task_args,task_args['quote'])['approval']['envelope'],'task')
+    batch=actions.prepare(c,'b','u',{'items':[{'operation':'complete','id':task['owner_action_id'],'version':1},{'operation':'cancel','id':row['id'],'version':2}]},'Заверши задачу и отмени напоминание')['approval']['envelope']
+    c.execute('UPDATE journey_actions SET version=version+1 WHERE id=%s',(row['id'],))
+    with pytest.raises(ValueError):actions.apply(c,'b','u',batch,'stale')
+    c.execute('SELECT status FROM journey_actions WHERE id=%s',(task['owner_action_id'],))
+    assert c.fetchone()['status']=='ready'
+    batch=actions.prepare(c,'b','u',{'items':[{'operation':'complete','id':task['owner_action_id'],'version':1},{'operation':'cancel','id':row['id'],'version':3}]},'Заверши задачу и отмени напоминание')['approval']['envelope']
+    actions.apply(c,'b','u',batch,'batch')
+    c.execute('SELECT status FROM journey_actions ORDER BY status')
+    assert [item['status'] for item in c.fetchall()]==['cancelled','completed']
+
+
+def test_day_closed_is_not_permanent_hours(owner_day):
+    _,c=owner_day
+    message='Завтра 10 октября 2026 закрыто весь день'
+    preview=actions.prepare(c,'b','u',{'kind':'hours','date':'2026-10-10','closed':True,'quote':message},message)
+    actions.apply(c,'b','u',preview['approval']['envelope'],'closed')
+    assert actions.effective_hours(c,'b','2026-10-10')['closed'] is True
+    assert actions.effective_hours(c,'b','2026-10-11') is None
+    assert actions.permanent_hours(c,'b')=='09:00–19:00'

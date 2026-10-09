@@ -80,7 +80,10 @@ def prepare(cursor, anchor_id, user_id, arguments, session=None):
     if not isinstance(email, str) or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email.strip()) or len(email) > 254:
         raise ValueError('Укажите email сотрудника.')
     email = email.strip().lower()
+    operation=arguments.get('operation','grant')
+    if operation not in {'grant','remove'}:raise ValueError('Выберите выдачу или снятие доступа.')
     role = arguments.get('role')
+    if operation=='remove':role='viewer'
     if role not in ASSIGNABLE_ROLES:
         raise ValueError('Выберите роль: администратор, мастер или наблюдатель.')
     name = arguments.get('name', '')
@@ -91,13 +94,20 @@ def prepare(cursor, anchor_id, user_id, arguments, session=None):
         raise ValueError('Укажите, отправлять ли приглашение.')
     scopes = scopes_for(cursor, anchor_id, user, arguments)
     before = snapshot(cursor, email, scopes)
+    if operation=='remove':
+        if not before['user_id']:raise ValueError('Сотрудник не найден. Новый аккаунт не создаётся.')
+        if before['inherited']:raise ValueError('Есть доступ через сеть. Снятие прямого доступа к филиалу не ограничит сетевой доступ; уточните область.')
+        if any(item.get('status')!='active' for item in before['memberships']):raise ValueError('В выбранной области нет активного прямого доступа.')
+        send_invitation=False
     return {'anchor_business_id': anchor_id, 'actor_user_id': user_id, 'email': email, 'name': before['name'] if before['user_id'] else name.strip(),
-            'role': role, 'scopes': scopes, 'before_hash': digest(before),
+            'operation':operation,'role': role, 'scopes': scopes, 'before_hash': digest(before),
             'before_memberships': before['memberships'], 'inherited': before['inherited'],
             'send_invitation': send_invitation, 'account_created': not bool(before['user_id'])}
 
 
 def preview_text(payload):
+    if payload.get('operation')=='remove':
+        return 'Снять доступ сотрудника '+payload['name']+' · '+payload['email']+' только к: '+', '.join(scope['name'] for scope in payload['scopes'])+'. Остальные области не изменятся. Подтвердите снятие доступа.'
     permission_text = ', '.join(PERMISSION_LABELS[key] for key in sorted(ROLE_PERMISSIONS[payload['role']]))
     lines = ['Добавить сотрудника в LocalOS:', payload['name'] + ' · ' + payload['email'],
              'Роль: ' + ROLE_LABELS[payload['role']],
@@ -147,6 +157,7 @@ def apply(cursor, anchor_id, user_id, payload, action_id):
     account = row(cursor, cursor.fetchone())
     if account.get('is_active') is False:
         raise PermissionError('Аккаунт отключён.')
+    if payload.get('operation')=='remove' and not account:raise ValueError('Сотрудник уже недоступен. Новый аккаунт не создаётся.')
     target_id = account.get('id') or str(uuid.uuid4())
     if not account:
         token = secrets.token_urlsafe(32)
@@ -158,7 +169,9 @@ def apply(cursor, anchor_id, user_id, payload, action_id):
         table = 'business_members' if scope['kind'] == 'business' else 'network_members'
         column = 'business_id' if scope['kind'] == 'business' else 'network_id'
         before = next((item for item in payload['before_memberships'] if item['scope'] == scope['id']),{})
-        if before.get('role'):
+        if payload.get('operation')=='remove':
+            cursor.execute('UPDATE '+table+" SET status='revoked',updated_at=NOW() WHERE "+column+'=%s AND user_id=%s AND role=%s AND status=%s',(scope['id'],target_id,before['role'],before['status']))
+        elif before.get('role'):
             cursor.execute('UPDATE ' + table + " SET role=%s,status='active',updated_at=NOW() WHERE " + column + '=%s AND user_id=%s AND role=%s AND status=%s',
                            (payload['role'],scope['id'],target_id,before['role'],before['status']))
         else:
@@ -166,7 +179,7 @@ def apply(cursor, anchor_id, user_id, payload, action_id):
                            (str(uuid.uuid4()),scope['id'],target_id,payload['role'],user_id))
         if cursor.rowcount != 1:
             raise ValueError('Права сотрудника изменились. Подготовьте новое подтверждение.')
-    result = {'status': 'completed', 'chat_response': 'Доступ сотрудника сохранён. ' + ('Приглашение подготовлено к отправке.' if payload['send_invitation'] else 'Приглашение не отправлялось.'),
+    result = {'status': 'completed', 'chat_response': ('Доступ сотрудника снят в выбранных областях. ' if payload.get('operation')=='remove' else 'Доступ сотрудника сохранён. ') + ('Приглашение подготовлено к отправке.' if payload['send_invitation'] else 'Приглашение не отправлялось.'),
               'user_id': target_id, 'membership_saved': True, 'invitation_status': 'pending' if payload['send_invitation'] else 'not_requested',
               'localos_write_performed': True, 'provider_write_performed': False}
     save_receipt(cursor, action_id, user_id, anchor_id, payload, result)

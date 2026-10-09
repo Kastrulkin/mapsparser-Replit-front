@@ -15,14 +15,17 @@ def read_request(cursor,business_id,user_id,message):
     facts_request=bool(re.match(r'\s*(?:покажи|прочитай|выведи|сколько|какие)',message,re.I) and re.search(r'кресл|рабоч.{0,20}(?:сведен|факт)|отсутств',message,re.I))
     if not plan_request and not facts_request:return None
     explicit=re.search(r'\b\d{4}-\d{2}-\d{2}\b',message)
-    day=explicit.group() if explicit else 'yesterday' if re.search(r'\bвчера\b',message,re.I) else 'today'
+    from services.operator_owner_actions import source_dates
+    zone=finance_daily.settings(cursor,business_id).get('timezone')
+    days=source_dates(message,zone) if zone else set()
+    day=explicit.group() if explicit else next(iter(days)) if len(days)==1 else 'yesterday' if re.search(r'\bвчера\b',message,re.I) else 'today'
     if not explicit and re.search(r'\bзавтра\b',message,re.I):
         day=(date.fromisoformat(work_journal.local_day(cursor,business_id))+timedelta(days=1)).isoformat()
     return plan(cursor,business_id,user_id,{'date':day}) if plan_request else facts_result(cursor,business_id,user_id,{'date':day})
 
 
 def validate(cursor, business_id, data, quote):
-    if not isinstance(data, dict) or data.get('kind') not in {'capacity','absence'}:
+    if not isinstance(data, dict) or data.get('kind') not in {'capacity','absence','availability'}:
         raise ValueError('Укажите доступность рабочих мест или отсутствие мастера.')
     day=work_journal.local_day(cursor,business_id,data.get('date'))
     clean={'kind':data['kind'],'date':day}
@@ -46,8 +49,15 @@ def validate(cursor, business_id, data, quote):
         master=str(data.get('master') or '').strip()
         if not master or len(master)>100 or master.casefold() not in quote.casefold():
             raise ValueError('Укажите имя отсутствующего мастера в сообщении.')
-        if not re.search(r'отсутств|забол|не (?:вый|работа)|недоступ',quote,re.I):
+        if data['kind']=='absence' and not re.search(r'отсутств|забол|не (?:вый|работа)|недоступ',quote,re.I):
             raise ValueError('Укажите отсутствие мастера явно.')
+        if data['kind']=='availability':
+            if not re.search(r'вернул|работает|вышел|доступен',quote,re.I):raise ValueError('Укажите доступность мастера явно.')
+            for key in ('start','end'):
+                value=str(data.get(key) or '')
+                if not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d',value) or value not in quote:raise ValueError('Укажите часы работы мастера.')
+                clean[key]=value
+            if clean['end']<=clean['start']:raise ValueError('Конец работы должен быть позже начала.')
         clean['master']=master
     # Retain operational availability, not a diagnosis or inferred medical detail.
     return clean
@@ -57,9 +67,9 @@ def read(cursor,business_id,user_id,day):
     actor=work_journal.scope(cursor,business_id,user_id)
     if not actor['all_visits']:
         raise PermissionError('Рабочую доступность всей точки читает владелец или администратор.')
-    cursor.execute("""SELECT id,version,facts_json,created_at FROM business_work_journal
+    cursor.execute("""SELECT id,version,facts_json,created_at,updated_at FROM business_work_journal
         WHERE business_id=%s AND NOT is_voided AND facts_json->'operational'->>'date'=%s
-        ORDER BY created_at,id LIMIT 501""",(business_id,day))
+        ORDER BY updated_at,created_at,id LIMIT 501""",(business_id,day))
     rows=[_row(cursor,row) for row in cursor.fetchall()]
     if len(rows)>500:raise ValueError('Слишком много фактов дня. Уточните период.')
     return rows
@@ -68,6 +78,7 @@ def read(cursor,business_id,user_id,day):
 def describe(row):
     fact=row['facts_json']['operational']
     if fact['kind']=='capacity':return f"{fact['start']}–{fact['end']}: свободных рабочих мест — {fact['count']}."
+    if fact['kind']=='availability':return f"Мастер {fact['master']} работает {fact['start']}–{fact['end']}."
     return 'Отсутствует мастер: '+fact['master']+'.'
 
 
@@ -83,14 +94,20 @@ def plan(cursor,business_id,user_id,args):
     day=work_journal.local_day(cursor,business_id,args.get('date'))
     rows=read(cursor,business_id,user_id,day)
     snapshot=operator_workday.schedule(cursor,business_id,day)
-    absent={row['facts_json']['operational']['master'].casefold() for row in rows if row['facts_json']['operational']['kind']=='absence'}
+    staff={}
+    for row in rows:
+        fact=row['facts_json']['operational']
+        if fact['kind'] in {'absence','availability'}:staff[fact['master'].casefold()]=fact
+    absent={master for master,fact in staff.items() if fact['kind']=='absence'}
     entries=snapshot.get('entries_json') or []
     conflicts=[entry for entry in entries if entry.get('master','').casefold() in absent]
     lines=['План дня на '+day+'.','Сохранённые рабочие факты:']
     from services.operator_owner_actions import effective_hours
     hours=effective_hours(cursor,business_id,day)
     if hours:
-        lines.append('Временные часы работы: '+hours['time']+'–'+hours['end']+' ('+hours['timezone']+'). В другие дни действует постоянный график.')
+        lines.append('Временные часы работы: '+('закрыто весь день' if hours.get('closed') else hours['time']+'–'+hours['end'])+' ('+hours['timezone']+'). В другие дни действует постоянный график.')
+        for master,fact in staff.items():
+            if fact['kind']=='availability' and (hours.get('closed') or fact['start']<hours['time'] or fact['end']>hours['end']):lines.append('Проверьте часы мастера '+fact['master']+': они выходят за часы работы точки. Запись за пределами графика не предлагать.')
     lines.extend(describe(row) for row in rows)
     if not rows:lines.append('Доступность рабочих мест и отсутствие мастеров не указаны.')
     lines.append('Записей в проверенном расписании: '+str(len(entries))+'.' if snapshot else 'Проверенного расписания на этот день пока нет.')
@@ -101,6 +118,15 @@ def plan(cursor,business_id,user_id,args):
         for currency,values in report['currencies'].items():
             lines.append(f"{currency}: выручка {values.get('revenue')}, чеки {values.get('checks')}, средний чек {values.get('average_check')}.")
     lines.append('Следующие действия:')
+    cursor.execute("SELECT to_regclass('journey_actions') present")
+    if _row(cursor,cursor.fetchone()).get('present'):
+        cursor.execute("SELECT title,status,payload_json FROM journey_actions WHERE business_id=%s AND user_id=%s AND entity_type=ANY(%s) AND status IN ('ready','waiting','in_progress') ORDER BY due_at LIMIT 10",(business_id,user_id,['owner_task','owner_reminder']))
+        tasks=[_row(cursor,item) for item in cursor.fetchall()]
+        lines.extend('Незавершённое поручение: '+item['title']+' · '+str(item['payload_json'].get('date'))+' '+str(item['payload_json'].get('time')) for item in tasks)
+    cursor.execute("SELECT to_regclass('contentplanitems') present")
+    if _row(cursor,cursor.fetchone()).get('present'):
+        cursor.execute("SELECT theme,status FROM contentplanitems WHERE business_id=%s AND scheduled_for=%s AND status<>'archived' ORDER BY updated_at DESC LIMIT 10",(business_id,day))
+        lines.extend('Материал плана (не подтверждает действующую акцию): '+item['theme']+' · '+item['status'] for item in [_row(cursor,item) for item in cursor.fetchall()])
     if absent:
         lines.append('1. Исключите отсутствующих мастеров из доступного состава на этот день. Автоматических переносов и назначений нет.')
     if conflicts:
@@ -109,11 +135,28 @@ def plan(cursor,business_id,user_id,args):
     zone=finance_daily.settings(cursor,business_id).get('timezone')
     now=datetime.now(ZoneInfo(zone)) if zone else None
     for capacity in capacities:
-        past=now is not None and (date.fromisoformat(day)<now.date() or (date.fromisoformat(day)==now.date() and capacity['end']<=now.strftime('%H:%M')))
+        start,end=capacity['start'],capacity['end']
+        if hours:
+            if hours.get('closed'):
+                lines.append('Точка закрыта: свободные кресла не являются доступными окнами для записи.')
+                continue
+            start,end=max(start,hours['time']),min(end,hours['end'])
+        if start>=end:
+            lines.append('Свободные кресла указаны вне графика точки; запись в это время не предлагайте.')
+            continue
+        past=now is not None and (date.fromisoformat(day)<now.date() or (date.fromisoformat(day)==now.date() and end<=now.strftime('%H:%M')))
         if past:
             lines.append(f"Окно {capacity['start']}–{capacity['end']} уже завершилось; не предлагайте запись в прошедшее время.")
         elif capacity['count']:
-            lines.append(f"В {capacity['start']}–{capacity['end']} доступны {capacity['count']} рабочих места. До предложения записи проверьте присутствующего мастера и длительность услуги: свободное кресло не означает свободного сотрудника.")
+            if now is not None and date.fromisoformat(day)==now.date():start=max(start,now.strftime('%H:%M'))
+            lines.append(f"В {start}–{end} доступны {capacity['count']} рабочих места в пределах графика точки. До предложения записи проверьте присутствующего мастера и длительность услуги: свободное кресло не означает свободного сотрудника.")
+    budget=args.get('duration_minutes')
+    if isinstance(budget,int) and not isinstance(budget,bool) and 15<=budget<=480:
+        lines.append('План на '+str(budget)+' минут; это оценка времени владельца, а не обещание результата:')
+        for minutes,action in [(15,'Проверьте график, присутствующих мастеров и конфликты записей.'),(15,'Сверьте свободные места с длительностью услуг; исключите закрытые и прошедшие окна.'),(30,'Подготовьте предложение по подтверждённым услугам и условиям акции. Черновик плана сам по себе не подтверждает акцию.'),(30,'Проверьте черновик поста и согласуйте канал публикации. До одобрения ничего не отправляйте.'),(30,'Проверьте оставшиеся поручения и сравните выручку и число чеков с сохранённым итогом.')]:
+            if budget<minutes:break
+            lines.append(str(minutes)+' мин: '+action);budget-=minutes
+        if budget:lines.append(str(budget)+' мин: резерв для выполнения выбранного приоритетного действия.')
     if not snapshot:lines.append('Добавьте полное расписание дня, чтобы проверить конфликты и длительность свободных окон.')
     elif not capacities:lines.append('Укажите доступность рабочих мест и время работы присутствующих мастеров; свободные часы не выдуманы.')
     lines.append('Ничего не опубликовано, клиенты и сотрудники не уведомлены, записи не перенесены.')
@@ -144,15 +187,15 @@ def tools(cursor,business_id,user_id,channel,message,request_key):
         return operator_workday.result('Рабочий факт отменён.' if row['is_voided'] else 'Сохранил рабочий факт на '+row['facts_json']['operational']['date']+':\n'+describe(row),
             day_facts=[row],result_ref={'href':'/dashboard/work-journal?business_id='+business_id+'&entry='+row['id'],'label':'Открыть рабочий факт'})
     text={'type':'string'}
-    operational={'type':'object','required':['kind','date'],'properties':{'kind':{'type':'string','enum':['capacity','absence']},'date':text,'count':{'type':'integer'},'start':text,'end':text,'master':text}}
+    operational={'type':'object','required':['kind','date'],'properties':{'kind':{'type':'string','enum':['capacity','absence','availability']},'date':text,'count':{'type':'integer'},'start':text,'end':text,'master':text}}
     return [
         {'name':'work.save_day_fact','title':'Доступность и отсутствие мастеров','capability':'work.journal','risk_class':'internal_observation_write',
-         'description':'Сохранить фактическую доступность кресел/рабочих мест (capacity: count,start,end) или отсутствие мастера (absence: master) на конкретный день. Это рабочие факты, не заметки контента, не CRM-перенос и не диагноз. date=today/yesterday или точная дата. quote — точный фрагмент сообщения, не вопрос и не пример. Для исправления/отмены нужны id/version из read_day_facts; void=true отменяет. Не придумывай число, время и имя; уточняй недостающие поля. При конфликте интервалов предложи исправить существующий факт.',
+         'description':'Сохранить доступность кресел (capacity: count,start,end), отсутствие мастера (absence: master) или возвращение/часы мастера (availability: master,start,end) на конкретный день. Новая availability заменяет отсутствие этого мастера в расчёте дня, историю не стирает. date ISO из поручения пользователя. quote точная цитата. Для исправления/отмены существующего факта id/version; void=true. Не заменяет создание поста: если оно также поручено, выполняй отдельно. Свободное кресло не означает свободного мастера.',
          'input_schema':{'type':'object','properties':{'quote':text,'operational':operational,'id':text,'version':{'type':'integer'},'void':{'type':'boolean'}}},'execute':save,'deterministic_response':True},
         {'name':'work.read_day_facts','title':'Прочитать рабочую доступность','capability':'work.schedule','risk_class':'read_only',
          'description':'Прочитать сохранённые факты доступности рабочих мест и отсутствия мастеров за date, включая id/version для исправления. Не используй историю чата вместо базы.',
          'input_schema':{'type':'object','properties':{'date':text}},'execute':lambda a:facts_result(cursor,business_id,user_id,a),'deterministic_response':True},
         {'name':'work.day_plan','title':'Что делать сегодня','capability':'work.schedule','risk_class':'read_only',
          'description':'Дать план следующих действий по сохранённым рабочим фактам дня, проверенному расписанию и дневным финансовым итогам. Выявляет записи отсутствующих мастеров. Ничего не переносит и не отправляет.',
-         'input_schema':{'type':'object','properties':{'date':text}},'execute':lambda a:plan(cursor,business_id,user_id,a),'deterministic_response':True},
+         'input_schema':{'type':'object','properties':{'date':text,'duration_minutes':{'type':'integer','minimum':15,'maximum':480}}},'execute':lambda a:plan(cursor,business_id,user_id,a),'deterministic_response':True},
     ]

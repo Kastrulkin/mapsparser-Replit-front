@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from typing import Any, Callable
 
 from services.llm import analyze_text_with_gigachat
@@ -104,6 +105,13 @@ def validate_operational_claims(post_text, source_text):
             raise ValueError('В пост добавлены рабочие условия, которых нет в текущем поручении.')
 
 
+def validate_operating_window(post_text,hours):
+    if hours and re.search(r'свободн.{0,50}(?:кресл|мест|окн)',post_text,re.I):
+        times=re.findall(r'\b(?:[01]\d|2[0-3]):[0-5]\d\b',post_text)
+        if hours.get('closed') or any(value<hours['time'] or value>hours['end'] for value in times):
+            raise ValueError('Предложено окно вне графика точки.')
+
+
 def _default_social_post_generator(prompt: str, *, business_id: str, user_id: str) -> str:
     return analyze_text_with_gigachat(
         prompt,
@@ -121,7 +129,18 @@ def generate_social_post_draft_from_operator(
     message: Any,
     channel: str = "web",
     post_generator: Callable[..., str] | None = None,
+    business_reference: str = "",
+    original_message: str = "",
 ) -> dict[str, Any]:
+    if business_reference:
+        from services.business_chat_changes import resolve_target
+        from services.business_permissions import load_actor
+        if business_reference.casefold() not in str(original_message or message).casefold():
+            return {"status":"clarification_required","chat_response":"Укажите бизнес для этого черновика явно.","external_writes_performed":False}
+        try:
+            business_id=resolve_target(cursor,load_actor(cursor,user_id),business_reference,business_id)
+        except (ValueError,PermissionError):
+            return {"status":"clarification_required","chat_response":str(sys.exception()),"external_writes_performed":False}
     source_text = extract_social_post_source_text(message)
     if len(source_text) < 8:
         return {
@@ -200,6 +219,17 @@ def generate_social_post_draft_from_operator(
     )
     post_prompt = _build_social_post_prompt(source_text=source_text, business=business)
     post_prompt += '\nРабочие окна, доступность кресел и отсутствие мастеров можно упоминать только из текущей исходной информации. Исторические заметки не подтверждают доступность сегодня.'
+    operational_hours=None
+    if re.search(r'свободн.{0,50}(?:кресл|мест|окн)',source_text,re.I):
+        from services.operator_owner_actions import source_dates,effective_hours
+        from services.finance_daily import settings
+        zone=settings(cursor,business_id).get('timezone')
+        days=source_dates(source_text,zone) if zone else set()
+        if len(days)==1:
+            operational_hours=effective_hours(cursor,business_id,next(iter(days)))
+        if operational_hours:
+            post_prompt+='\nПроверенный временный график точки на указанную дату: '+json.dumps(operational_hours,ensure_ascii=False)+'. Свободные кресла НЕ разрешают запись вне графика. В посте сократи окно до пересечения с графиком. Если точка закрыта — не предлагай свободные места.'
+        post_prompt+='\nНе добавляй неподтверждённые удобства, детские занятия или описание аудитории. Напиши короткое фактическое объявление о времени.'
     from services.operator_editorial import editorial_prompt
     post_prompt += '\n\n' + editorial_prompt(cursor,business_id)
     if knowledge_context:
@@ -216,9 +246,11 @@ def generate_social_post_draft_from_operator(
         )
         post_text = _normalize_social_post_text(generated)
         validate_operational_claims(post_text,source_text)
+        validate_operating_window(post_text,operational_hours)
         from services.content_rules import enforce
         post_text = enforce(cursor,business_id,user_id,post_text,generator,source_text)
         validate_operational_claims(post_text,source_text)
+        validate_operating_window(post_text,operational_hours)
     except Exception:
         release = finalize_reserved_action_credits(
             cursor,
@@ -295,7 +327,7 @@ def generate_social_post_draft_from_operator(
         "intent": SOCIAL_POST_GENERATE_ACTION_KEY,
         "social_post_draft": social_post_draft,
         "social_post_text": post_text,
-        "result_ref": {"href":draft_href,"label":"Открыть черновик поста","entity_id":social_post_draft["id"]},
+        "result_ref": {"href":draft_href,"label":"Открыть черновик поста","entity_id":social_post_draft['id']},
         "preflight": preflight,
         "reservation_result": reservation,
         "finalization_result": finalization,
