@@ -101,13 +101,10 @@ def _content(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
     cursor.execute(
         """
         WITH current_plans AS (
-            SELECT id, business_id, title, period_days,
-                   ROW_NUMBER() OVER (
-                       PARTITION BY business_id
-                       ORDER BY created_at DESC, updated_at DESC, id
-                   ) AS plan_rank
+            SELECT id, business_id, title, period_days
             FROM contentplans
             WHERE (%s OR business_id = ANY(%s))
+              AND COALESCE(plan_status, '') <> 'archived'
         )
         SELECT i.id, i.business_id, b.name AS business_name,
                COALESCE(NULLIF(TRIM(i.theme), ''), 'Элемент контент-плана') AS title,
@@ -115,7 +112,7 @@ def _content(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
                i.status, i.updated_at, i.plan_id, p.title AS plan_title, p.period_days AS plan_period_days,
                i.scheduled_for, i.content_type, i.draft_text
         FROM contentplanitems i
-        JOIN current_plans p ON p.id = i.plan_id AND p.plan_rank = 1
+        JOIN current_plans p ON p.id = i.plan_id AND p.business_id = i.business_id
         JOIN businesses b ON b.id = i.business_id
         ORDER BY i.scheduled_for ASC, i.updated_at DESC LIMIT 200
         """,

@@ -151,7 +151,7 @@ def test_analytics_module_returns_real_period_metrics_and_daily_series():
     }
 
 
-def test_content_module_only_loads_the_latest_plan_for_each_business():
+def test_content_module_loads_all_non_archived_plans_for_each_business():
     cursor = ModuleCursor(
         "contentplanitems",
         [{"id": "item-1", "business_id": "b-1", "title": "Тема", "plan_id": "plan-new", "scheduled_for": date(2026, 7, 24)}],
@@ -166,5 +166,6 @@ def test_content_module_only_loads_the_latest_plan_for_each_business():
 
     assert result["counts"]["total"] == 1
     assert result["items"][0]["scheduled_for"] == "2026-07-24"
-    assert "row_number() over" in cursor.query
-    assert "p.plan_rank = 1" in cursor.query
+    assert "plan_rank" not in cursor.query
+    assert "coalesce(plan_status, '') <> 'archived'" in cursor.query
+    assert "p.business_id = i.business_id" in cursor.query

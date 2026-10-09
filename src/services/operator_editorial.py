@@ -40,10 +40,11 @@ def _items(cursor, business_id, plan_id=None, lock=False, item_id=None):
         i.usernews_id,i.metadata_json,i.updated_at,i.content_type,i.source_kind,i.source_ref,i.seo_keyword,i.service_id,i.transaction_id,p.plan_status FROM contentplanitems i
         JOIN contentplans p ON p.id=i.plan_id
         WHERE i.business_id=%s AND p.business_id=%s
-        AND i.plan_id=COALESCE(%s,(SELECT id FROM contentplans WHERE business_id=%s ORDER BY created_at DESC,id DESC LIMIT 1))
+        AND i.plan_id=COALESCE(%s,i.plan_id)
+        AND (%s OR COALESCE(p.plan_status,'') <> 'archived')
         AND i.id=COALESCE(%s,i.id)
         ORDER BY i.scheduled_for,i.id LIMIT 200''' + (' FOR UPDATE OF i' if lock else ''),
-        (business_id,business_id,plan_id,business_id,item_id))
+        (business_id,business_id,plan_id,bool(plan_id or item_id),item_id))
     return [_row(cursor,row) for row in cursor.fetchall()]
 
 
@@ -312,7 +313,7 @@ def editorial_tools(cursor,business_id,user_id,message,channel="web"):
     from services import operator_plan_revision
     tools=[
         {'name':'content.editorial_context','capability':'content.history','title':'Посты и сохранённые сведения для редактирования',
-         'description':'Перед правкой прочитай план: id, даты, темы, версии и заметки. Пользователю называй только даты и темы, без технических ID и названий инструментов. Если указан месяц, выбирай только его даты. Если цель неоднозначна, уточни. Возвращает до 200 записей выбранного или последнего плана.',
+         'description':'Перед правкой прочитай планы: id, даты, темы, версии и заметки. Без plan_id возвращает до 200 записей всех неархивированных планов выбранного бизнеса, а не только самого нового. Для конкретного плана передай plan_id. Пользователю называй только даты и темы, без технических ID и названий инструментов. Если указан месяц, выбирай только его даты. Если цель неоднозначна, уточни. Не предлагай создавать дубль поста, пока не проверены действующие планы.',
          'input_schema':{'type':'object','properties':{'plan_id':string(100),'include_details':{'type':'boolean'}}},'risk_class':'read_only',
          'execute':lambda args:read_context(cursor,business_id,user_id,args)},
         {'name':'content.restore_item','capability':'content.item.edit','title':'Вернуть предыдущий текст поста',
