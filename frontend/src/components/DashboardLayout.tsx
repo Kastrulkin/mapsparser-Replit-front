@@ -1,3 +1,4 @@
+import { resolveDashboardBusinessScope } from '../lib/dashboardBusinessScope';
 import { useLatestCallback } from '@/hooks/useLatestCallback';
 import type { BusinessRecord } from '@/types/business';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -24,7 +25,7 @@ const clearStoredDashboardScope = (demoMode: boolean) => {
 };
 
 export type ControlScope = {
-  kind: 'business' | 'network';
+  kind: 'business' | 'network' | 'platform';
   id: string;
   name: string;
 };
@@ -159,19 +160,9 @@ export const DashboardLayout = () => {
 
           setCurrentBusinessId(businessToSelect.id);
           setCurrentBusiness(businessToSelect);
-          const savedScopeValue = localStorage.getItem(controlScopeStorageKey(Boolean(currentUser.demo_mode)));
-          let restoredScope: ControlScope = { kind: 'business', id: businessToSelect.id, name: businessToSelect.name };
-          if (savedScopeValue) {
-            try {
-              const parsed = JSON.parse(savedScopeValue);
-              if (parsed?.kind === 'network' && parsed?.id && businessToSelect.network_id === parsed.id) {
-                restoredScope = { kind: 'network', id: parsed.id, name: parsed.name || businessToSelect.network_name || 'Сеть' };
-              }
-            } catch {
-              localStorage.removeItem(controlScopeStorageKey(Boolean(currentUser.demo_mode)));
-            }
-          }
+          const restoredScope = resolveDashboardBusinessScope(businessToSelect);
           setControlScope(restoredScope);
+          localStorage.setItem(controlScopeStorageKey(Boolean(currentUser.demo_mode)), JSON.stringify(restoredScope));
           localStorage.setItem(selectedBusinessStorageKey(Boolean(currentUser.demo_mode)), businessToSelect.id);
         } else {
           setBusinesses([]);
@@ -208,7 +199,7 @@ export const DashboardLayout = () => {
       scopeRevisionRef.current += 1;
       setCurrentBusinessId(businessId);
       setCurrentBusiness(business);
-      const nextScope: ControlScope = { kind: 'business', id: business.id, name: business.name };
+      const nextScope = resolveDashboardBusinessScope(business);
       setControlScope(nextScope);
       localStorage.setItem(controlScopeStorageKey(Boolean(user?.demo_mode)), JSON.stringify(nextScope));
       localStorage.setItem(selectedBusinessStorageKey(Boolean(user?.demo_mode)), businessId);
@@ -243,9 +234,14 @@ export const DashboardLayout = () => {
   };
 
   const selectControlScope = (nextScope: ControlScope) => {
-    scopeRevisionRef.current += 1;
-    setControlScope(nextScope);
-    localStorage.setItem(controlScopeStorageKey(Boolean(user?.demo_mode)), JSON.stringify(nextScope));
+    if (nextScope.kind === 'platform' && user?.is_superadmin) {
+      scopeRevisionRef.current += 1;
+      setControlScope(nextScope);
+      localStorage.setItem(controlScopeStorageKey(Boolean(user?.demo_mode)), JSON.stringify(nextScope));
+      return;
+    }
+    const target = businesses.find((business) => business.id === nextScope.id);
+    if (target) void handleBusinessChange(target.id);
   };
 
   const reloadBusinesses = async () => {
@@ -271,7 +267,7 @@ export const DashboardLayout = () => {
           }
         } else {
           const replacementBusiness = businessesData[0];
-          const nextScope: ControlScope = { kind: 'business', id: replacementBusiness.id, name: replacementBusiness.name };
+          const nextScope = resolveDashboardBusinessScope(replacementBusiness);
           setCurrentBusinessId(replacementBusiness.id);
           setCurrentBusiness(replacementBusiness);
           setControlScope(nextScope);

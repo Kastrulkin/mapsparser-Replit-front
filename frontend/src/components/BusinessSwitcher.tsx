@@ -76,7 +76,7 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
   const hasBusinesses = visibleBusinesses.length > 0;
 
   return (
-    <div ref={switcherRef} className="relative min-w-0 shrink">
+    <div ref={switcherRef} className="relative min-w-0 shrink-0">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
@@ -85,7 +85,7 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
         className="flex h-12 w-[clamp(11rem,18vw,16rem)] min-w-0 max-w-full items-center gap-3 rounded-xl border border-gray-300 bg-white px-3 py-2 transition-colors hover:bg-gray-50"
       >
         <Building2 className="h-5 w-5 shrink-0 text-gray-600" />
-        <div className="min-w-0 text-left">
+        <div className="min-w-0 flex-1 text-left">
           <div className="truncate text-sm font-medium text-gray-900">
             {selectedBusiness ? getBusinessDisplayName(selectedBusiness) : 'Выберите бизнес'}
           </div>

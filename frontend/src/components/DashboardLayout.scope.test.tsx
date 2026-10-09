@@ -167,7 +167,7 @@ describe('DashboardLayout membership scope', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Текущий бизнес сохранён');
     expect(screen.getByRole('button', { name: 'Повторить' })).toBeVisible();
     expect(screen.getByTestId('current-business')).toHaveTextContent('business-a');
-    expect(screen.getByTestId('control-scope')).toHaveTextContent('network:network-a');
+    expect(screen.getByTestId('control-scope')).toHaveTextContent('business:business-a');
     expect(window.localStorage.getItem('selectedBusinessId')).toBe('business-a');
   });
 

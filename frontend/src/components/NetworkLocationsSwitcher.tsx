@@ -120,7 +120,7 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
     }
 
     return (
-        <div ref={switcherRef} className="relative min-w-0 shrink">
+        <div ref={switcherRef} className="relative min-w-0 shrink-0">
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
