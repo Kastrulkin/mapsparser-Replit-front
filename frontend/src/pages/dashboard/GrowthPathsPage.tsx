@@ -69,7 +69,7 @@ export const GrowthPathsPage = () => {
   useEffect(() => { void load(); }, [currentBusinessId, load]);
 
   const paths = useMemo(() => {
-    const items = (data?.paths || []).filter((path) => path.flow_type !== 'maps_content');
+    const items = (data?.paths || []).filter((path) => path && path.flow_type !== 'maps_content' && Object.prototype.hasOwnProperty.call(pathMeta, path.flow_type));
     const focusFlow = data?.focus_action?.flow_type;
     return [...items].sort((left, right) => Number(right.flow_type === focusFlow) - Number(left.flow_type === focusFlow));
   }, [data]);
