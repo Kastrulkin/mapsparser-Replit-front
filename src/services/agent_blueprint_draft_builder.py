@@ -24,6 +24,11 @@ def _contains_any(text: str, words: List[str]) -> bool:
     return any(word in lowered for word in words)
 
 
+def _mentions_reviews(text: str) -> bool:
+    lowered = text.lower()
+    return "отзыв" in lowered or bool(re.search(r"\breviews?\b", lowered))
+
+
 def _extract_requested_date(description: str) -> str:
     iso_match = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", description)
     if iso_match:
@@ -110,6 +115,8 @@ def infer_blueprint_category(description: str) -> str:
         return "custom"
     if _is_problem_digest_request(text):
         return "custom"
+    if _is_internal_summary_request(text):
+        return "custom"
     if _is_client_reactivation_request(text):
         return "communications"
     if _is_customer_data_quality_request(text):
@@ -117,6 +124,8 @@ def infer_blueprint_category(description: str) -> str:
     if _is_localos_finance_monitoring_request(text):
         return "custom"
     if _is_review_based_content_request(text):
+        return "custom"
+    if _is_content_draft_request(text):
         return "custom"
     if _contains_any(text, ["контент-план", "темы постов", "тема пост", "постов для карточ", "посты для карточ"]):
         return "custom"
@@ -146,7 +155,7 @@ def infer_blueprint_category(description: str) -> str:
         return "documents"
     if _is_email_authoring_request(text):
         return "email"
-    if _contains_any(text, ["отзыв", "review"]):
+    if _mentions_reviews(text):
         return "reviews"
     if _contains_any(text, ["услуг", "сервис", "пустые описан", "названия", "отсутствующие цены"]):
         return "services"
@@ -191,6 +200,13 @@ def compile_agent_blueprint(
     category = _normalized_category(preferred_category) or infer_blueprint_category(request_text)
     if category == "communications":
         return _communications_compilation(request_text)
+    direct_sheets_write = _direct_google_sheets_append_intent(request_text)
+    if direct_sheets_write:
+        draft = _source_destination_compilation(request_text, direct_sheets_write)
+        metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
+        metadata["compiler_source"] = "deterministic_google_sheets_write"
+        draft["metadata"] = metadata
+        return draft
     ai_result = {}
     content_analytics_request = _is_telegram_content_analytics_request(request_text)
     rich_localos_workflow_request = _is_rich_localos_workflow_request(request_text)
@@ -206,7 +222,7 @@ def compile_agent_blueprint(
         if ai_intent and _intent_is_supported_by_text(request_text, ai_intent):
             draft = _source_destination_compilation(request_text, ai_intent)
             metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
-            metadata["compiler_source"] = "gigachat_intent_extractor"
+            metadata["compiler_source"] = f"{str(ai_result.get('source') or 'llm')}_intent_extractor"
             metadata["llm_intent"] = {
                 "status": ai_result.get("status"),
                 "source": ai_result.get("source"),
@@ -241,24 +257,44 @@ def compile_agent_blueprint(
             "summary": _summary(category, ["prospectingleads", "business_profile"], version_payload["steps"]),
         }
 
+    internal_summary = _is_internal_summary_request(request_text.lower())
+    internal_result = internal_summary or _is_internal_only_result_request(request_text.lower())
     sources = _sources_for_request(category, request_text)
     required_bindings = _generic_required_integration_bindings(sources)
+    trigger = (
+        "schedule.daily"
+        if _contains_any(request_text.lower(), ["каждый", "каждое", "каждую", "ежеднев", "schedule", "daily"])
+        else "manual.run"
+    )
     version_payload = {
         "goal": request_text,
+        "trigger": trigger,
         "inputs_schema": {
             "type": "object",
             "properties": {
-                "request": {"type": "string"},
+                "request": {
+                    "type": "string",
+                    "title": "Уточнение для этого запуска",
+                    "description": "Необязательно: уточните, какую строку или поездку использовать в этот раз.",
+                },
                 "files": {"type": "array"},
                 "source_ids": {"type": "array"},
             },
         },
         "steps": _generic_steps(category, request_text, sources),
         "capability_allowlist": [],
-        "approval_policy": {
-            "required_for": ["final_output", "external_delivery"],
-            "external_delivery": "manual_approval_required",
-        },
+        "approval_policy": (
+            {
+                "required_for": [],
+                "external_delivery": "manual_approval_required",
+                "mode": "external_actions_only",
+            }
+            if internal_result
+            else {
+                "required_for": ["final_output", "external_delivery"],
+                "external_delivery": "manual_approval_required",
+            }
+        ),
         "output_schema": {
             "type": "object",
             "properties": {
@@ -276,16 +312,33 @@ def compile_agent_blueprint(
             if str(binding.get("capability") or "").strip()
         ]
     metadata = _metadata(request_text, category, sources)
+    if internal_result:
+        metadata["approval_boundaries"] = ["external_delivery"]
+    if internal_summary:
+        metadata["draft_category"] = "business_summary"
+        metadata["outputs"] = [_output_format_for_category("business_summary")]
     if required_bindings:
         metadata["required_integration_bindings"] = required_bindings
-    _attach_compiled_metadata(metadata, version_payload, f"compiled_{category}_workflow_v1", "final_output")
+    _attach_compiled_metadata(
+        metadata,
+        version_payload,
+        f"compiled_{category}_workflow_v1",
+        "external_actions_only" if internal_result else "final_output",
+    )
+    summary = _summary(category, sources, version_payload["steps"])
+    if internal_result:
+        summary["approval_boundaries"] = ["external_delivery"]
+        summary["approval_required"] = False
+    if internal_summary:
+        summary["category"] = "business_summary"
+        summary["outputs"] = [_output_format_for_category("business_summary")]
     return {
         "name": _draft_name(request_text, _default_name_for_category(category)),
         "category": category,
         "description": request_text,
         "metadata": metadata,
         "version_payload": version_payload,
-        "summary": _summary(category, sources, version_payload["steps"]),
+        "summary": summary,
     }
 
 
@@ -403,6 +456,13 @@ def _sources_for_request(category: str, request_text: str) -> List[str]:
         result = ["localos_digest", "business_profile"]
         if _contains_any(lowered, ["telegram", "телеграм", "присыла", "отправ", "шл", "уведом"]):
             result.append("telegram")
+        return result
+    if category == "custom" and _is_internal_summary_request(lowered):
+        result = ["business_profile"]
+        if _contains_any(lowered, ["услуг", "сервис", "прайс", "цен"]):
+            result.append("services")
+        if _contains_any(lowered, ["отзыв", "рейтинг", "репутац"]):
+            result.append("external_reviews")
         return result
     if _is_cancellation_risk_request(lowered):
         return ["appointments", "clients", "business_profile"]
@@ -540,6 +600,8 @@ def _attach_compiled_metadata(metadata: Dict[str, Any], version_payload: Dict[st
     metadata["compiler_contract"] = {
         "llm_usage": "design_time_only",
         "runtime_truth": "agent_blueprint_versions.steps_json",
+        "runtime_planner_required": False,
+        "runtime_model_steps": [],
         "runtime_llm_required": False,
         "runtime_executes_compiled_steps": True,
     }
@@ -778,6 +840,66 @@ def _infer_integration_intent(description: str) -> Dict[str, Any]:
     }
 
 
+def _direct_google_sheets_append_intent(description: str) -> Dict[str, Any]:
+    lowered = description.lower()
+    if _contains_any(lowered, ["telegram", "телеграм", "бот", "webhook"]):
+        return {}
+    mentions_sheets = _contains_any(
+        lowered,
+        ["google sheets", "google-таблиц", "google таблиц", "гугл таблиц", "spreadsheet", "docs.google"],
+    )
+    requests_append = _contains_any(lowered, ["добав", "append", "вставь строк", "запиши строк", "записать строк"])
+    mentions_row = _contains_any(lowered, ["строк", "row"])
+    if not mentions_sheets or not requests_append or not mentions_row:
+        return {}
+
+    sheet_name = _extract_google_sheet_name(description)
+    row_values = _extract_google_sheet_row_values(description)
+    destination = dict(_spec_by_key("google_sheets", DESTINATION_SPECS))
+    default_config = dict(destination.get("default_config") or {})
+    if sheet_name:
+        default_config["sheet_name"] = sheet_name
+    destination["default_config"] = default_config
+    if row_values:
+        destination["default_row_values"] = row_values
+    source = {
+        "key": "manual_context",
+        "binding_key": "manual_context",
+        "provider": "business_profile",
+        "direction": "local_context",
+        "default_capability": "",
+        "default_config": {},
+        "required_config": [],
+    }
+    return {
+        "source": source,
+        "destination": destination,
+        "trigger": "manual.run",
+        "schedule": {},
+        "compiled_template_key": "manual_to_google_sheets_append",
+    }
+
+
+def _extract_google_sheet_name(description: str) -> str:
+    patterns = [
+        r"(?:на\s+)?лист(?:е|а)?\s*[«\"']([^\u00bb\"']{1,100})[»\"']",
+        r"sheet\s*[«\"']([^\u00bb\"']{1,100})[»\"']",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, description, flags=re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    return ""
+
+
+def _extract_google_sheet_row_values(description: str) -> List[str]:
+    match = re.search(r"(?:строку|row)\s*:\s*(.+)", description, flags=re.IGNORECASE | re.DOTALL)
+    if not match:
+        return []
+    raw_values = re.split(r"\.\s*(?:ничего|не\s+удал|не\s+меня|без\s+измен)", match.group(1), maxsplit=1, flags=re.IGNORECASE)[0]
+    return [item.strip(" \t\n\r«»\"'") for item in raw_values.split(",") if item.strip(" \t\n\r«»\"'")]
+
+
 def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[str, Any]:
     source = intent.get("source") if isinstance(intent.get("source"), dict) else {}
     trigger = str(intent.get("trigger") or "manual.run")
@@ -786,7 +908,7 @@ def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[s
     source_step_key = f"read_{source.get('key') or 'source'}"
     save_to_content_plan = _contains_any(
         description.lower(),
-        ["контент-план", "контент план", "content plan"],
+        ["контент-план", "контент план", "конент-план", "конент план", "content plan"],
     ) and _contains_any(description.lower(), ["сохран", "добав", "запиш", "созда"])
     scheduled_for = _extract_requested_date(description)
     steps = [
@@ -917,6 +1039,8 @@ def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[s
     metadata["compiler_contract"] = {
         "llm_usage": "design_time_only",
         "runtime_truth": "agent_blueprint_versions.steps_json",
+        "runtime_planner_required": False,
+        "runtime_model_steps": [],
         "runtime_llm_required": False,
         "runtime_executes_compiled_steps": True,
     }
@@ -931,30 +1055,10 @@ def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[s
         "version_payload": version_payload,
         "summary": _summary("custom", sources, steps),
     }
-    if (source.get("key") == "telegram" or destination.get("key") == "telegram") and not _contains_any(lowered, ["telegram", "телеграм", "бот", "webhook"]):
-        return {}
-    if source.get("key") == destination.get("key") and source.get("key") != "telegram":
-        return {}
-    action_words = ["связ", "процесс", "workflow", "автомат", "редакт", "добав", "строк", "append", "занос", "созда", "запис", "импорт", "каждый", "ежеднев"]
-    if not _contains_any(lowered, action_words):
-        return {}
-    trigger = str(source.get("trigger") or "")
-    schedule = {}
-    if _contains_any(lowered, ["каждый", "ежеднев", "вечер", "утро", "день", "schedule", "daily"]):
-        trigger = "schedule.daily"
-        schedule = {"time": "19:00", "timezone": "business_timezone"}
-    if not trigger:
-        trigger = "manual.run"
-    return {
-        "source": source,
-        "destination": destination,
-        "trigger": trigger,
-        "schedule": schedule,
-    }
 
 
 def _review_telegram_delivery_intent(lowered: str) -> Dict[str, Any]:
-    if not _contains_any(lowered, ["отзыв", "review"]):
+    if not _mentions_reviews(lowered):
         return {}
     if not _contains_any(lowered, ["telegram", "телеграм"]):
         return {}
@@ -1105,7 +1209,7 @@ def _is_partner_replies_request(text: str) -> bool:
 
 
 def _is_review_location_analysis_request(text: str) -> bool:
-    if not _contains_any(text, ["отзыв", "review"]):
+    if not _mentions_reviews(text):
         return False
     if _contains_any(text, ["выруч", "расход", "финанс"]) and _contains_any(text, ["запис", "рекомендац", "следующую неделю"]):
         return False
@@ -1113,9 +1217,21 @@ def _is_review_location_analysis_request(text: str) -> bool:
 
 
 def _is_review_based_content_request(text: str) -> bool:
-    if not _contains_any(text, ["отзыв", "review"]):
+    if not _mentions_reviews(text):
         return False
-    return _contains_any(text, ["идеи пост", "идея пост", "3 идеи", "три идеи", "постов", "контент"])
+    return _contains_any(
+        text,
+        [
+            "идеи пост",
+            "идея пост",
+            "3 идеи",
+            "три идеи",
+            "пост",
+            "контент",
+            "новост",
+            "публикац",
+        ],
+    )
 
 
 def _is_photo_quality_request(text: str) -> bool:
@@ -1255,6 +1371,53 @@ def _is_problem_digest_request(text: str) -> bool:
     return sum(1 for marker in markers if marker in text) >= 2
 
 
+def _is_internal_summary_request(text: str) -> bool:
+    if not _contains_any(
+        text,
+        ["внутренняя сводка", "внутреннюю сводку", "краткая сводка", "краткую сводку", "сводка бизнеса", "сводка профиля"],
+    ):
+        return False
+    action_text = re.sub(
+        r"(?:ничего\s+)?не\s+(?:будет\s+)?(?:отправ\w*|публик\w*|присыл\w*)",
+        "",
+        text,
+    )
+    if _contains_any(action_text, ["отправ", "пришл", "telegram", "телеграм", "whatsapp", "опублику", "публикац"]):
+        return False
+    return _contains_any(text, ["прочит", "собер", "собир", "подготов", "сохран", "профил", "услуг", "отзыв"])
+
+
+def _is_internal_only_result_request(text: str) -> bool:
+    if _contains_any(text, ["без подтвержден", "без подтверждён"]):
+        return False
+    if _contains_any(text, ["внутренний черновик", "внутренний результат", "внутри localos"]):
+        return True
+    if _contains_any(text, ["не публи", "без публикац"]) and _contains_any(text, ["не отправ", "без отправ"]):
+        return True
+    return _is_content_draft_request(text)
+
+
+def _is_content_draft_request(text: str) -> bool:
+    if not _contains_any(text, ["новост", "пост", "контент", "публикац"]):
+        return False
+    if not _contains_any(text, ["подготов", "созда", "напиш", "черновик", "иде", "тем"]):
+        return False
+    explicit_external_action = _contains_any(
+        text,
+        [
+            "опубликуй",
+            "опубликовать",
+            "размести",
+            "разместить",
+            "отправь",
+            "отправить",
+            "выложи",
+            "выложить",
+        ],
+    )
+    return not explicit_external_action
+
+
 def _is_rich_localos_workflow_request(text: str) -> bool:
     lowered = text.lower()
     return any(
@@ -1378,7 +1541,11 @@ def _transform_step(source: Dict[str, Any], destination: Dict[str, Any]) -> Dict
                 "localos_write_performed": False,
             },
         }
-    if source.get("key") == "telegram" and destination.get("key") == "google_sheets":
+    if source.get("key") in {"manual_context", "telegram"} and destination.get("key") == "google_sheets":
+        default_config = destination.get("default_config") if isinstance(destination.get("default_config"), dict) else {}
+        default_row_values = destination.get("default_row_values") if isinstance(destination.get("default_row_values"), list) else []
+        if not default_row_values:
+            default_row_values = ["{{received_at}}", "{{telegram_username}}", "{{message_text}}"]
         return {
             "key": "prepare_sheet_row",
             "type": "artifact",
@@ -1388,8 +1555,9 @@ def _transform_step(source: Dict[str, Any], destination: Dict[str, Any]) -> Dict
                 "status": "draft",
                 "operation": "append_row",
                 "integration_binding": str(destination.get("binding_key") or "google_sheets_append"),
-                "columns": ["received_at", "telegram_username", "message_text"],
-                "row_values": ["{{received_at}}", "{{telegram_username}}", "{{message_text}}"],
+                "sheet_name": str(default_config.get("sheet_name") or "Leads"),
+                "columns": [f"Значение {index + 1}" for index in range(len(default_row_values))],
+                "row_values": list(default_row_values),
                 "provider_write_performed": False,
             },
         }
@@ -1462,9 +1630,13 @@ def _destination_capability_step(source: Dict[str, Any], destination: Dict[str, 
             }
         ]
     if destination_key == "google_sheets":
+        default_config = destination.get("default_config") if isinstance(destination.get("default_config"), dict) else {}
+        default_row_values = destination.get("default_row_values") if isinstance(destination.get("default_row_values"), list) else []
+        if not default_row_values:
+            default_row_values = ["{{received_at}}", "{{telegram_username}}", "{{message_text}}"]
         payload["operation"] = "append_row"
-        payload["sheet_name"] = "Leads"
-        payload["row_values"] = ["{{received_at}}", "{{telegram_username}}", "{{message_text}}"]
+        payload["sheet_name"] = str(default_config.get("sheet_name") or "Leads")
+        payload["row_values"] = list(default_row_values)
         payload["daily_append_cap"] = int((destination.get("default_limits") or {}).get("daily_append_cap") or 50)
     if destination_key == "telegram":
         payload["message_type"] = "telegram_post_draft"
@@ -1523,6 +1695,7 @@ def _source_destination_compilation(description: str, intent: Dict[str, Any]) ->
     schedule = intent.get("schedule") if isinstance(intent.get("schedule"), dict) else {}
     source_binding = _source_binding(source, trigger)
     destination_binding = _destination_binding(destination)
+    required_bindings = [destination_binding] if source.get("key") == "manual_context" else [source_binding, destination_binding]
     steps = [
         _source_step(source, trigger),
         _transform_step(source, destination),
@@ -1553,8 +1726,20 @@ def _source_destination_compilation(description: str, intent: Dict[str, Any]) ->
                 "spreadsheet_id": {"type": "string"},
                 "sheet_name": {"type": "string"},
                 "rows": {"type": "array"},
+                "row_values": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "title": "Значения новой строки",
+                    "description": "По одному значению на строку. Перед записью LocalOS покажет итоговую строку.",
+                    **({"default": list(destination.get("default_row_values") or [])} if destination.get("default_row_values") else {}),
+                },
                 "request": {"type": "string"},
             },
+            **(
+                {"required": ["row_values"]}
+                if source.get("key") == "manual_context" and destination.get("key") == "google_sheets"
+                else {}
+            ),
         },
         "steps": steps,
         "capability_allowlist": capability_allowlist,
@@ -1565,7 +1750,7 @@ def _source_destination_compilation(description: str, intent: Dict[str, Any]) ->
             "ambiguous_data": "manual_approval_required",
             "mode": "approved_request_only",
         },
-        "required_integration_bindings": [source_binding, destination_binding],
+        "required_integration_bindings": required_bindings,
         "limits": limits,
         "output_schema": {
             "type": "object",
@@ -1594,7 +1779,7 @@ def _source_destination_compilation(description: str, intent: Dict[str, Any]) ->
     }
     metadata["compiled_process"] = {
         "schema": "compiled_source_destination_workflow_v1",
-        "source_binding": str(source_binding.get("key") or ""),
+        "source_binding": "" if source.get("key") == "manual_context" else str(source_binding.get("key") or ""),
         "destination_binding": str(destination_binding.get("key") or ""),
         "runtime_truth": "agent_blueprint_versions.steps_json",
         "approval_boundary": approval_type,
@@ -1602,6 +1787,8 @@ def _source_destination_compilation(description: str, intent: Dict[str, Any]) ->
     metadata["compiler_contract"] = {
         "llm_usage": "design_time_only",
         "runtime_truth": "agent_blueprint_versions.steps_json",
+        "runtime_planner_required": False,
+        "runtime_model_steps": [],
         "runtime_llm_required": False,
         "runtime_executes_compiled_steps": True,
     }
@@ -1643,6 +1830,7 @@ def _custom_integration_compilation(description: str) -> Dict[str, Any]:
                 "status": "draft",
                 "operation": "append_row",
                 "integration_binding": "google_sheets_append",
+                "sheet_name": "Leads",
                 "columns": ["received_at", "telegram_username", "message_text"],
                 "row_values": ["{{received_at}}", "{{telegram_username}}", "{{message_text}}"],
                 "provider_write_performed": False,
@@ -1773,7 +1961,10 @@ def _custom_integration_compilation(description: str) -> Dict[str, Any]:
 
 
 def _generic_steps(category: str, description: str, sources: List[str]) -> List[Dict[str, Any]]:
-    return [
+    internal_summary = _is_internal_summary_request(description.lower())
+    internal_result = internal_summary or _is_internal_only_result_request(description.lower())
+    output_category = "business_summary" if internal_summary else category
+    steps = [
         {
             "key": "collect_inputs",
             "type": "artifact",
@@ -1783,7 +1974,7 @@ def _generic_steps(category: str, description: str, sources: List[str]) -> List[
                 "status": "draft",
                 "request": description,
                 "sources": sources,
-                "category": category,
+                "category": output_category,
             },
         },
         {
@@ -1804,15 +1995,10 @@ def _generic_steps(category: str, description: str, sources: List[str]) -> List[
             "artifact_type": "agent_output_draft",
             "payload": {
                 "status": "draft",
-                "format": _output_format_for_category(category),
+                "category": output_category,
+                "format": _output_format_for_category(output_category),
                 "external_dispatch_performed": False,
             },
-        },
-        {
-            "key": "approve_output",
-            "type": "approval",
-            "title": "Подтвердить результат",
-            "approval_type": "final_output",
         },
         {
             "key": "save_result",
@@ -1820,12 +2006,23 @@ def _generic_steps(category: str, description: str, sources: List[str]) -> List[
             "title": "Сохранить итог",
             "artifact_type": "agent_final_result",
             "payload": {
-                "status": "pending_approval",
+                "status": "saved" if internal_result else "pending_approval",
                 "external_dispatch_performed": False,
-                "delivery_state": "not_dispatched",
+                "delivery_state": "internal_only" if internal_result else "not_dispatched",
             },
         },
     ]
+    if not internal_result:
+        steps.insert(
+            -1,
+            {
+                "key": "approve_output",
+                "type": "approval",
+                "title": "Подтвердить результат",
+                "approval_type": "final_output",
+            },
+        )
+    return steps
 
 
 def _output_format_for_category(category: str) -> str:
@@ -1838,6 +2035,7 @@ def _output_format_for_category(category: str) -> str:
         "partnerships": "proposal_draft",
         "booking": "booking_rules_summary",
         "services": "service_optimization_plan",
+        "business_summary": "internal_business_summary",
     }
     return formats.get(category, "custom_artifact")
 
@@ -2025,6 +2223,8 @@ def _communications_compilation(request_text: str, preferred_template_key: str =
     metadata["compiler_contract"] = {
         "llm_usage": "design_time_only",
         "runtime_truth": "agent_blueprint_versions.steps_json",
+        "runtime_planner_required": False,
+        "runtime_model_steps": [],
         "runtime_llm_required": False,
         "runtime_executes_compiled_steps": True,
     }
