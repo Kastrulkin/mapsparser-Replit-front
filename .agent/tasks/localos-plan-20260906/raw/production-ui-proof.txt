@@ -1,3 +1,0 @@
-Production-flags frontend build passed; source/output hashes recorded.
-
-EXIT=0

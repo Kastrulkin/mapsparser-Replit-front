@@ -1,8 +1,0 @@
-Build/import verification
-=========================
-
-Local:
-python3 -m py_compile scripts/audit_approval_boundaries.py
-
-Result:
-PASS

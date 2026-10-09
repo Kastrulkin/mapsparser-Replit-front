@@ -1,3 +1,0 @@
-python3 -m py_compile src/services/telegram_dashboard.py src/services/telegram_response_router.py src/telegram_bot.py
-
-Result: PASS

@@ -1,8 +1,0 @@
-{
-  "path": "scripts/verify_frontend_dist_integrity.sh",
-  "git_mode": "100755",
-  "snapshot_mode_before": "0600",
-  "snapshot_mode_after": "0700",
-  "content_sha256": "a351b5cc083697d4953d6d1e9d59b88e0b8c8e5353077912f3dd767e3e059741",
-  "scope": "owned temporary source snapshot only"
-}

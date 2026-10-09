@@ -1,9 +1,0 @@
-Command:
-python3 .agent/tasks/production-readiness-20260917/support/native_hflypi_child_checks.py
-
-Captured stdout (exit 0):
-native_hflypi_child_checks: negative_control=expected_unpatched_assertion green=pure_helpers_passed
-
-The negative control is a fake-Popen assertion against the pre-patch behavior;
-it is not presented as an executed native-child failure.  The green check is
-AST-isolated and did not import sitecustomize or start processes/services.

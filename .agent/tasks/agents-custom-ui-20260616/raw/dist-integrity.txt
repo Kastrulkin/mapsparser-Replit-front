@@ -1,3 +1,0 @@
-OK: frontend/dist integrity check passed
-JS: /assets/index-NwrtCAXx.js
-CSS: /assets/index-BJmnE2sp.css

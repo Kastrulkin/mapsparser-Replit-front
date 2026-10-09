@@ -1,2 +1,0 @@
-[smoke] docker compose ps
-Cannot connect to the Docker daemon at unix:///Users/alexdemyanov/.docker/run/docker.sock. Is the docker daemon running?

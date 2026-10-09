@@ -1,8 +1,0 @@
-{
-  "guard_sha256": "07d3e2dc19cbb0f9e542a6d0835ea17b5efcc5713391c152a833e6efefd61150",
-  "previous_guard_backup": "/private/tmp/localos-readiness-20260921.hfLYPi/native/native_hflypi_sitecustomize_v1.py",
-  "previous_guard_sha256": "f622117b6dec26bd134d69fda873846902c6146d0877966910cf1704c0241f3e",
-  "probe_sha256": "f25959cf72b135115b130747db7fd60a1eabf2594f9507f1ca310267551487fd",
-  "scope": "Diagnostic reporting only; same enforcement; negative probe only.",
-  "tracked_files": 5720
-}

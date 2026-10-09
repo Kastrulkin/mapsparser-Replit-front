@@ -1,3 +1,0 @@
-No migrated-DB API integration test was run in this pass.
-
-Reason: endpoints depend on the pending Alembic migration. Parser, normalization, duplicate-key tests, backend syntax, migration syntax and frontend build passed.

@@ -1,7 +1,0 @@
-{
-  "mismatched_pins": {},
-  "pinned_constraint_count": 101,
-  "resolved_distribution_count": 133,
-  "resolved_metadata_equal": true,
-  "scope": "Metadata equality and pinned-constraint parity only; no package or LocalOS import."
-}

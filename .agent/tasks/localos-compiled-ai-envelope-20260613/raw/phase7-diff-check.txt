@@ -1,5 +1,0 @@
-Command:
-git diff --check
-
-Result:
-No whitespace errors.

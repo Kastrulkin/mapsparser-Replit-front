@@ -1,9 +1,0 @@
-Command:
-npm run build
-Working directory:
-frontend/
-
-Result:
-Vite production build completed successfully.
-Primary changed chunk:
-dist/assets/AgentBlueprintsPage-foqck9Ni.js

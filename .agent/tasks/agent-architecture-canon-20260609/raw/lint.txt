@@ -1,2 +1,0 @@
-No lint output captured yet.
-PASS: git diff --check -- README.md docs/LOCALOS_AGENT_ARCHITECTURE_V1.md

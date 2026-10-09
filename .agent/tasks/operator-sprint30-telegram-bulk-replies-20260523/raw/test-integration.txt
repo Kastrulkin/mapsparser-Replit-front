@@ -1,1 +1,0 @@
-Not run: Telegram handler integration is covered by service formatter tests and production import smoke after deploy.

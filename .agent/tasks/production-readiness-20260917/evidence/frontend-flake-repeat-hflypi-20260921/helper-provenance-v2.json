@@ -1,7 +1,0 @@
-{
-  "executed_helper_sha256": "84aafb714d27c04ae9f38f0023dcfe303b22350686fbc0beef9ca421fe07207e",
-  "executed_raw_capture_count": 9,
-  "final_helper_sha256": "a436ddb44f0a6c7e47c2b1acff989a89e8f059f9cd30c7d567f1189fe6b7fa51",
-  "final_helper_execution": "not rerun; this version hardens acceptance and cleanup behavior only",
-  "raw_capture_policy": "repeat-1.json through repeat-5.json and existing preflight, pre/post identity, summary remain immutable evidence from the executed helper."
-}

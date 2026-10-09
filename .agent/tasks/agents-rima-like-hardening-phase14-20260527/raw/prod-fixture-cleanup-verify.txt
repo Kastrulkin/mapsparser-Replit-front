@@ -1,5 +1,0 @@
- users | businesses | blueprints | runs | builder_sessions 
--------+------------+------------+------+------------------
-     0 |          0 |          0 |    0 |                0
-(1 row)
-

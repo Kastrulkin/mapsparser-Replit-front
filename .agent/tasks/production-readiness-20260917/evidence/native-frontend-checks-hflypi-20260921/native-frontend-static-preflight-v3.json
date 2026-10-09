@@ -1,8 +1,0 @@
-{
-  "initial_free_bytes": 6823415808,
-  "minimum_live_bytes": 2147483648,
-  "minimum_start_bytes": 5368709120,
-  "package_json_sha256": "21671716cdd1edc4ded1a3a7935b055de6142608f523c2e1725e8bfbb3212052",
-  "package_lock_sha256": "a4e1362910fe02f286e950840fd79141fd411533b7743aa79f8c1a450ddece8b",
-  "scope": "Frozen source frontend static checks only; unit tests intentionally excluded pending an explicit no-network harness review."
-}

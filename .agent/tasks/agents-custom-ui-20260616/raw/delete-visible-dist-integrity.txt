@@ -1,3 +1,0 @@
-OK: frontend/dist integrity check passed
-JS: /assets/index-DkhYrzHT.js
-CSS: /assets/index-DVUNK_Xc.css

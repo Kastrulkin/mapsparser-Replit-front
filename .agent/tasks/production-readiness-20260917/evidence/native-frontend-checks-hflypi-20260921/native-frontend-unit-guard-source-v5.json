@@ -1,6 +1,0 @@
-{
-  "copied_guard_path": "/private/tmp/localos-readiness-20260921.hfLYPi/native/evidence/unit_network_guard_v5.cjs",
-  "guard_path": "/private/tmp/localos-readiness-20260921.hfLYPi/native/unit_network_guard_v5.cjs",
-  "guard_sha256": "0af671c1a0302ec5f1357c5c25336044599ca771796ba219b4e6661521b6c547",
-  "scope": "Standard Node API no-network guard for trusted frozen unit tests; not an adversarial sandbox."
-}

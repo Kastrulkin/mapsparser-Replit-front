@@ -1,9 +1,0 @@
-RESTORE-PORTS-TEMP-01: shell here-string redirection failure can bypass the original loopback-only admission loop.
-No real Docker, network or database action: all probes supply a synthetic fake Docker executable and outer deny-all sandbox.
-Patched helper e0ff17d52dc828bdfbc6919b54d5e4e2e2cfdcd430aa48f15d7f0aaf95573fc3.
-Patched tests 9033247b3d4f56318d698b0dd02b451030753b2e94815ea57ebb02cb0bb5e530.
-Negative baseline/patch wrapper64760c5c94f6d17dcf81f2ea76dc2265b112b1e09b161804d21edfa9ef2a3de1.
-Identical owned BASH_ENV read-return2 fixture simulates unavailable read; it is not a claim that attacker-controlled BASH_ENV is a supported trust boundary.
-Baseline helper comes from immutable e44bd538 snapshot; current helper changes only binding iteration, not identity/confirmation/archive/admission policy.
-Root adjacent39 v3 follows the same exact33 previously hook-blocked cases plus6 leaf tests; prior38pass1fail v2 remains archived separately.
-No deploy, push, production/existing DB mutation, credential use or repeated cleanup.

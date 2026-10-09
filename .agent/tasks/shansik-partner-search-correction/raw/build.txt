@@ -1,2 +1,0 @@
-venv/bin/python -m py_compile src/api/admin_prospecting.py
-PASS

@@ -1,1 +1,0 @@
-{'user_id': 'smoke-agents-ux-ui-user-20260527', 'business_id': 'smoke-agents-ux-ui-business-20260527', 'email': 'smoke-agents-ux-ui-20260527@example.invalid'}

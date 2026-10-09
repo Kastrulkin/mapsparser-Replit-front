@@ -1,2 +1,0 @@
-OCI candidate mapper controls: layer identity, same-path separate layers, missing, duplicate, truncation, hash and raw-value absence PASS
-EXIT=0

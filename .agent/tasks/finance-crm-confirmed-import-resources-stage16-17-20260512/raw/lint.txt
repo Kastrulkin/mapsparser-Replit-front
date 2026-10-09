@@ -1,2 +1,0 @@
-cd frontend && npm exec -- eslint src/components/FinanceCrmPanel.tsx
-passed with no output

@@ -301,11 +301,14 @@ export const OperatorPage = () => {
       const node = workspaceRef.current;
       if (!node) return;
       const viewport = window.visualViewport;
-      setWorkspaceHeight(Math.max(160, (viewport?.height || window.innerHeight) + (viewport?.offsetTop || 0) - node.getBoundingClientRect().top - 12));
+      setWorkspaceHeight(Math.max(160, (viewport?.height || window.innerHeight) + (viewport?.offsetTop || 0) - node.getBoundingClientRect().top - 12 - (window.matchMedia("(max-width: 767px)").matches ? 40 : 0)));
     };
     resize();
     const observer = new ResizeObserver(resize);
     if (workspaceRef.current?.parentElement) observer.observe(workspaceRef.current.parentElement);
+    observer.observe(document.body);
+    const shellHeader = document.querySelector("header");
+    if (shellHeader) observer.observe(shellHeader);
     window.addEventListener("resize", resize);
     window.visualViewport?.addEventListener("resize", resize);
     window.visualViewport?.addEventListener("scroll", resize);
@@ -794,7 +797,7 @@ export const OperatorPage = () => {
               <div key={message.id} className={cn('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
                 <div
                   className={cn(
-                    'min-w-0 max-w-full lg:max-w-3xl rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm',
+                    'min-w-0 max-w-full lg:max-w-3xl [&_button]:max-w-full [&_button]:whitespace-normal [&_a]:max-w-full [&_a]:whitespace-normal rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm',
                     message.role === 'user'
                       ? 'bg-slate-950 text-white'
                       : 'border border-slate-200 bg-white text-slate-800',

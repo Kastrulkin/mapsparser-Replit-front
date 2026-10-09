@@ -1,9 +1,0 @@
-Finding TEST-LEAF-GUARD-01: permanent sys.addaudithook installed by one leaf diagnostic test class survives the class and blocks later tests.
-Full current offline evidence identifies33 AssertionError failures at that hook, separate from already-preserved foreign parser diagnostic test changes.
-Owned production diff is ONLY tests/test_legacy_parser_leaf_diagnostics.py (test code, no runtime product change).
-Patched SHA152c0163f04a4072b469c7a36883a947a3ea49cca7785459e6abbc5b6c32b422 frozen for review and root aggregate.
-Exact same original3-test suite and post-suite socket probe used for baseline and patch; only source root/read permission changes.
-Baseline source is immutable /private/tmp/localos-current-full-aB5f/source; patched source is workspace.
-Inherited OS sandbox denies network/user reads/unowned writes; clean environment excludes HOME/real DSNs/dotenv/plugin autoload.
-Root adjacent v2 uses a nonconnectable metadata-only localhost:1 DSN for imports and exact33 failing node IDs, not native DB operations.
-Full original snapshot remains untouched; all13foreignpaths remain unstaged and preserved.

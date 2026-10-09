@@ -1,3 +1,0 @@
-Command: PYTHONPATH=src python3 -m py_compile src/services/agent_capability_handlers.py
-Result: PASS
-Output: no output

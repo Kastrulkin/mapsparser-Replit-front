@@ -1,2 +1,0 @@
-growth blueprint: growth_api
-sync service: YandexSyncService

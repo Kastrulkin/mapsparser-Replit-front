@@ -1,5 +1,0 @@
-Command:
-cd frontend && npm run build
-
-Result:
-PASS. Vite built production dist successfully.
