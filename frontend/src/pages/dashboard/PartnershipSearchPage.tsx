@@ -560,6 +560,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [items, setItems] = useState<PartnershipLead[]>([]);
   const [leadTotalCount, setLeadTotalCount] = useState(0);
   const [searchTasks, setSearchTasks] = useState<SearchTaskGroup[]>([]);
+  const [canonicalLetterCount, setCanonicalLetterCount] = useState(0);
   const [selectedSearchGroup, setSelectedSearchGroup] = useState(requestedSearchTaskId ? `task:${requestedSearchTaskId}` : 'all');
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
@@ -735,6 +736,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const searchTaskOptions = useMemo(() => searchTasks.map((task) => ({
     id: `task:${task.id}`, label: taskLabel(task), count: task.report?.imported || 0,
   })), [searchTasks]);
+  useEffect(() => { setCanonicalLetterCount(0); }, [currentBusinessId, selectedSearchGroup]);
   const selectedTask = searchTasks.find((task) => selectedSearchGroup === `task:${task.id}`);
   const selectedTaskLeadIds = selectedSearchGroup.startsWith('task:') ? new Set(selectedTask?.state?.lead_ids || []) : null;
   const legacyDrafts = unscopedDrafts.filter((draft) => !draft.learning_note_json?.campaign_id);
@@ -2491,7 +2493,7 @@ export const PartnershipSearchPage: React.FC = () => {
                     {
                       key: 'drafts',
                       title: '3. Письма',
-                      count: visibleDrafts.length,
+                      count: visibleDrafts.length + canonicalLetterCount,
                       text: 'Проверить первое письмо и КП.',
                     },
                     {
@@ -2813,11 +2815,11 @@ export const PartnershipSearchPage: React.FC = () => {
           {(workspaceView === 'drafts' || workspaceView === 'queue') ? (
           <>
           <OutreachMessageQueue key={`${currentBusinessId}:${selectedSearchGroup}:${workspaceView}:${searchParams.get('campaign_id') || ''}`}
-            searchTaskId={selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : null} businessId={currentBusinessId || undefined} scope="client_partnership" query="" channel="" status=""
+            onCountChange={setCanonicalLetterCount} searchTaskId={selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : null} businessId={currentBusinessId || undefined} scope="client_partnership" query="" channel="" status=""
             campaignId={searchParams.get('campaign_id')} presentation={workspaceView === 'drafts' ? 'letters' : 'send'}
             onChannelChange={() => {}} onStatusChange={() => {}} onOpenLead={(id) => setSelectedLeadId(id)} />
           {searchParams.get('campaign_id') && <Button variant="outline" onClick={() => { const next = new URLSearchParams(searchParams); next.delete('campaign_id'); setSearchParams(next); }}>Показать все письма</Button>}
-          {workspaceView === 'drafts' && !searchParams.get('campaign_id') ? (
+          {workspaceView === 'drafts' && visibleDrafts.length > 0 && !searchParams.get('campaign_id') ? (
           <PartnershipDraftsSection
             drafts={visibleDrafts}
             selectedDraftIds={selectedDraftIds}

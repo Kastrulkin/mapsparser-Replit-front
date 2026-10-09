@@ -50,6 +50,7 @@ export interface OutreachMessageQueueItem {
 interface OutreachMessageQueueProps {
   campaignId?: string | null;
   searchTaskId?: string | null;
+  onCountChange?: (count: number) => void;
   presentation?: 'letters' | 'send';
   query: string;
   scope: 'all' | 'localos_sales' | 'client_partnership';
@@ -178,6 +179,7 @@ const StatusIcon = ({ status }: { status: string }) => {
 export function OutreachMessageQueue({
   campaignId,
   searchTaskId,
+  onCountChange,
   presentation,
   query,
   scope,
@@ -216,6 +218,7 @@ export function OutreachMessageQueue({
       if (version !== requestVersion.current) return;
       setItems(Array.isArray(payload?.items) ? payload.items : []);
       setSummary(payload?.summary || {});
+      onCountChange?.(payload?.summary?.all || 0);
     } catch (requestError) {
       if (version !== requestVersion.current) return;
       setItems([]);
@@ -224,7 +227,7 @@ export function OutreachMessageQueue({
     } finally {
       if (version === requestVersion.current) setLoading(false);
     }
-  }, [businessId, campaignId, searchTaskId, presentation, effectiveChannel, query, scope, effectiveStatus]);
+  }, [businessId, campaignId, searchTaskId, onCountChange, presentation, effectiveChannel, query, scope, effectiveStatus]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
