@@ -57,9 +57,12 @@ try:
 except ImportError:
     from database_manager import DatabaseManager
 from pg_db_utils import get_db_connection
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import analyze_text_with_gigachat
+from services.outreach_sender_profile_service import evaluate_sender_profile_completeness
+from services.lead_preparation_progress_service import record_lead_preparation_step
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.prospecting_service import ProspectingService
+from services.outreach_draft_review import draft_review_digest, canonical_review
 from services.sales_room_helpers import (
     append_sales_room_link_to_outreach_text as _append_sales_room_link_to_outreach_text,
     make_sales_room_url as _make_sales_room_url,
@@ -99,6 +102,7 @@ from services.sales_room_audit_offer_service import (
     serialize_public_audit_offer as _serialize_public_audit_offer,
     serialize_sales_room_participant as _serialize_sales_room_participant,
 )
+from api.prospecting.public_offer_reader import load_public_offer_row
 
 from api.prospecting.shared import admin_prospecting_bp
 
@@ -150,7 +154,7 @@ TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS = max(1, int(os.environ.get("TELEGRAM_REPLY_SY
 TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT = max(1, min(int(os.environ.get("TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT", "12")), 50))
 TELEGRAM_REPLY_SYNC_TIMEOUT_SEC = max(5, int(os.environ.get("TELEGRAM_REPLY_SYNC_TIMEOUT_SEC", "12")))
 LEAD_OUTREACH_MODERATION_STATUS = "lead_outreach"
-PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr")
+PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr", "hy", "kk")
 PIPELINE_UNPROCESSED = "unprocessed"
 PIPELINE_IN_PROGRESS = "in_progress"
 PIPELINE_POSTPONED = "postponed"
@@ -272,6 +276,46 @@ def _tokenize_match_text(text: str) -> set[str]:
     import re
     return {t.lower() for t in re.findall(r"[a-zA-Zа-яА-ЯёЁ0-9]{4,}", str(text or ""))}
 
+
+_MATCH_TOKEN_SUFFIXES = (
+    "иями", "ями", "ами", "ого", "ему", "ому", "ыми", "ими", "иях",
+    "ах", "ях", "ий", "ый", "ая", "яя", "ое", "ее", "ые", "ие",
+    "ой", "ей", "ам", "ям", "ом", "ем", "ов", "ев", "а", "я",
+    "ы", "и", "у", "ю", "е", "о",
+)
+_AUDIENCE_MARKERS = {
+    "families_with_children": ("дет", "ребен", "ребён", "родител", "семей", "подрост"),
+    "health": ("медицин", "клиник", "врач", "здоров", "стомат", "реабилит", "анализ"),
+    "beauty": ("красот", "космет", "волос", "парикмах", "маник", "педик", "бьюти", "спа"),
+    "sport": ("спорт", "фитнес", "танц", "йога", "бассейн", "секци", "трениров"),
+    "pets": ("ветеринар", "питом", "животн", "собак", "кошк"),
+    "food": ("ресторан", "кафе", "еда", "питан", "пекар", "доставк"),
+    "events": ("праздник", "свадеб", "фото", "мероприят", "развлеч"),
+    "education": ("обучен", "образован", "школ", "курс", "репетитор", "язык"),
+}
+
+
+def _normalized_match_tokens(text: str) -> set[str]:
+    tokens: set[str] = set()
+    for raw in _tokenize_match_text(text):
+        token = raw.replace("ё", "е")
+        for suffix in _MATCH_TOKEN_SUFFIXES:
+            if token.endswith(suffix) and len(token) - len(suffix) >= 4:
+                token = token[:-len(suffix)]
+                break
+        if len(token) >= 4 and not token.isdigit():
+            tokens.add(token)
+    return tokens
+
+
+def _audience_tags(text: str) -> set[str]:
+    normalized = str(text or "").lower().replace("ё", "е")
+    return {
+        tag
+        for tag, markers in _AUDIENCE_MARKERS.items()
+        if any(marker.replace("ё", "е") in normalized for marker in markers)
+    }
+
 def _extract_partner_service_names_from_snapshot(snapshot: dict[str, Any]) -> list[str]:
     services_preview = snapshot.get("services_preview") if isinstance(snapshot, dict) else []
     if not isinstance(services_preview, list):
@@ -317,7 +361,11 @@ def _normalize_match_result(
         score = 0
     score = max(0, min(100, score))
 
-    reason_codes: list[str] = []
+    reason_codes = [
+        str(item).strip()
+        for item in data.get("reason_codes") or []
+        if str(item or "").strip()
+    ]
     if own_services_count <= 0:
         reason_codes.append("NO_OUR_SERVICES")
     if partner_services_count <= 0:
@@ -364,6 +412,19 @@ def _normalize_match_result(
         offer_angles = []
     offer_angles = [str(x).strip() for x in offer_angles if str(x).strip()]
 
+    sender_profile_incomplete = "SENDER_PROFILE_INCOMPLETE" in reason_codes
+    source_url = str(data.get("source_url") or "").strip() or None
+    recipient_observation = str(data.get("recipient_observation") or "").strip() or None
+    if sender_profile_incomplete:
+        readiness_code = "needs_sender_profile"
+        next_action = "Заполните и подтвердите профиль отправителя"
+    elif score < 40 or not recipient_observation or not str(source_url or "").lower().startswith(("http://", "https://")):
+        readiness_code = "needs_evidence"
+        next_action = "Соберите недостающие публичные факты и повторите проверку"
+    else:
+        readiness_code = "ready"
+        next_action = "Проверьте предложение и подготовьте цепочку касаний"
+
     normalized = {
         "match_score": score,
         "overlap": overlap[:30],
@@ -379,8 +440,80 @@ def _normalize_match_result(
         },
         "reason_codes": reason_codes,
         "score_explanation": " ".join(explanation_parts).strip(),
+        "recipient_observation": recipient_observation,
+        "compatibility_hypothesis": str(data.get("compatibility_hypothesis") or "").strip() or None,
+        "relevance_bridge": str(data.get("relevance_bridge") or "").strip() or None,
+        "source_url": source_url,
+        "score_breakdown": data.get("score_breakdown") if isinstance(data.get("score_breakdown"), dict) else {},
+        "profile_completeness": data.get("profile_completeness") if isinstance(data.get("profile_completeness"), dict) else {},
+        "direct_competitor": bool(data.get("direct_competitor")),
+        "readiness_code": readiness_code,
+        "next_action": next_action,
     }
     return normalized
+
+
+def _partnership_match_needs_evidence(match: dict[str, Any] | None) -> bool:
+    data = match if isinstance(match, dict) else {}
+    try:
+        score = int(data.get("match_score") or 0)
+    except (TypeError, ValueError):
+        score = 0
+    source_url = str(data.get("source_url") or "").strip().lower()
+    return (
+        score < 40
+        or not str(data.get("recipient_observation") or "").strip()
+        or not source_url.startswith(("http://", "https://"))
+    )
+
+
+def _resolve_preparation_workstream_id(
+    cursor,
+    *,
+    lead_id: str,
+    business_id: str,
+    requested_workstream_id: str | None,
+) -> str | None:
+    cursor.execute(
+        """
+        SELECT id
+        FROM lead_workstreams
+        WHERE lead_id = %s
+          AND workstream_type = 'client_partnership'
+          AND client_business_id = %s
+          AND (%s IS NULL OR id = %s)
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC
+        LIMIT 1
+        """,
+        (lead_id, business_id, requested_workstream_id, requested_workstream_id),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return None
+    value = row.get("id") if hasattr(row, "get") else row[0]
+    return str(value) if value else None
+
+
+def _save_partnership_match_assessment(
+    cur,
+    *,
+    lead_id: str,
+    audit_json: dict[str, Any],
+    match_result: dict[str, Any],
+) -> None:
+    """Persist a visible assessment without promoting the lead to matched."""
+
+    cur.execute(
+        """
+        INSERT INTO partnershipleadartifacts (lead_id, audit_json, match_json, updated_at)
+        VALUES (%s, %s, %s, NOW())
+        ON CONFLICT (lead_id) DO UPDATE
+        SET audit_json = EXCLUDED.audit_json,
+            match_json = EXCLUDED.match_json,
+            updated_at = NOW()
+        """,
+        (lead_id, Json(audit_json), Json(match_result)),
+    )
 
 def _extract_openclaw_result_blob(resp: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(resp, dict):
@@ -442,6 +575,15 @@ def _partnership_next_best_action(lead: dict[str, Any]) -> dict[str, Any]:
     )
     has_channel = bool(str(lead.get("selected_channel") or "").strip())
 
+    if str(lead.get("parsed_identity_status") or "").strip().lower() == "mismatch":
+        candidate_name = str(lead.get("parsed_candidate_name") or "другая компания").strip()
+        return {
+            "code": "repair_recipient_identity_mapping",
+            "label": "Найти правильную карточку компании",
+            "hint": f"Сейчас к лиду привязана карточка «{candidate_name}». LocalOS выполнит поиск заново перед парсингом.",
+            "priority": "high",
+        }
+
     if parse_status == "captcha":
         return {
             "code": "resolve_captcha",
@@ -450,6 +592,21 @@ def _partnership_next_best_action(lead: dict[str, Any]) -> dict[str, Any]:
             "priority": "high",
         }
     if parse_status == "error":
+        parse_error = str(lead.get("parse_error") or "").strip().lower()
+        if "business_closed" in parse_error or "permanent_closed" in parse_error:
+            return {
+                "code": "mark_closed_not_relevant",
+                "label": "Компания закрыта — отметить неактуальной",
+                "hint": "Повторный парсинг не поможет: публичная карточка сообщает о закрытии компании.",
+                "priority": "high",
+            }
+        if "apify_empty_dataset" in parse_error or "empty dataset" in parse_error:
+            return {
+                "code": "find_alternate_public_source",
+                "label": "Найти другой публичный источник",
+                "hint": "Карточка не вернула данные после повторной проверки. Нужна другая ссылка на карты, официальный сайт или ручное подтверждение фактов.",
+                "priority": "high",
+            }
         return {
             "code": "inspect_parse_error",
             "label": "Разобрать ошибку парсинга",
@@ -471,6 +628,13 @@ def _partnership_next_best_action(lead: dict[str, Any]) -> dict[str, Any]:
             "priority": "high",
         }
     if stage == "imported":
+        if _partnership_source_requires_map_match(lead.get("source_url")):
+            return {
+                "code": "resolve_and_parse",
+                "label": "Найти карточку и собрать данные",
+                "hint": "LocalOS сначала подтвердит карточку компании на карте, затем соберёт услуги и контакты.",
+                "priority": "high",
+            }
         return {
             "code": "run_parse",
             "label": "Запустить парсинг карточки",
@@ -549,7 +713,193 @@ def _compute_partnership_match_result(
 ) -> dict[str, Any]:
     own_services = _collect_business_service_names(cur, business_id)
     partner_services = _extract_partner_service_names_from_snapshot(audit_json)
+    cur.execute(
+        """
+        SELECT * FROM outreach_sender_profiles
+        WHERE workstream_type = 'client_partnership'
+          AND client_business_id = %s AND is_active = TRUE
+        LIMIT 1
+        """,
+        (business_id,),
+    )
+    sender_row = cur.fetchone()
+    sender_profile = dict(sender_row) if sender_row else {}
+    profile_completeness = evaluate_sender_profile_completeness(
+        sender_profile,
+        workstream_type="client_partnership",
+        business_service_count=len(own_services),
+    )
+    sender_profile_ready = bool(
+        sender_profile.get("confirmed_at") and profile_completeness["ready"]
+    )
+
+    cur.execute(
+        """
+        SELECT name, category, city, address, source_url, website, updated_at,
+               search_payload_json
+        FROM prospectingleads WHERE id = %s LIMIT 1
+        """,
+        (lead_id,),
+    )
+    lead_row = cur.fetchone()
+    lead = dict(lead_row) if lead_row else {}
+    sender_context = (
+        sender_profile.get("outreach_context_json")
+        if isinstance(sender_profile.get("outreach_context_json"), dict)
+        else {}
+    )
+    desired_partner_types = [
+        str(item).strip()
+        for item in sender_context.get("desired_partner_types") or []
+        if str(item or "").strip()
+    ]
+    match_context_source = "sender_profile"
+    search_payload = (
+        lead.get("search_payload_json")
+        if isinstance(lead.get("search_payload_json"), dict)
+        else {}
+    )
+    if not desired_partner_types:
+        desired_partner_types = list(dict.fromkeys(
+            str(search_payload.get(key) or "").strip()
+            for key in ("category", "query", "category_source")
+            if str(search_payload.get(key) or "").strip()
+        ))
+        match_context_source = "partner_search" if desired_partner_types else "missing"
+    if not desired_partner_types and str(lead.get("category") or "").strip():
+        # Legacy curated partner lists predate structured search context. Their
+        # public category remains a valid compatibility input and is kept
+        # separate from the founder-profile readiness gate.
+        desired_partner_types = [str(lead.get("category") or "").strip()]
+        match_context_source = "lead_category"
+    recipient_descriptor = " ".join([
+        str(lead.get("category") or ""),
+        " ".join(partner_services),
+    ]).strip()
+    recipient_tokens = _normalized_match_tokens(recipient_descriptor)
+    matched_partner_types: list[str] = []
+    for desired_type in desired_partner_types:
+        desired_tokens = _normalized_match_tokens(desired_type)
+        if desired_tokens and len(desired_tokens.intersection(recipient_tokens)) / len(desired_tokens) >= 0.5:
+            matched_partner_types.append(desired_type)
+
+    audience_text = " ".join([
+        str(sender_context.get("audience") or ""),
+        " ".join(str(item) for item in sender_context.get("segments") or []),
+    ])
+    common_audience_tags = sorted(_audience_tags(audience_text).intersection(_audience_tags(recipient_descriptor)))
+    search_geography = " ".join([
+        str(search_payload.get("city") or ""),
+        str(search_payload.get("location") or ""),
+    ]).strip()
+    geography_tokens = _normalized_match_tokens(
+        str(sender_context.get("geography") or search_geography)
+    )
+    recipient_geography_tokens = _normalized_match_tokens(
+        " ".join([str(lead.get("city") or ""), str(lead.get("address") or "")])
+    )
+    geography_match = bool(geography_tokens.intersection(recipient_geography_tokens))
+
+    own_tokens = _normalized_match_tokens(" ".join(own_services))
+    partner_tokens = _normalized_match_tokens(" ".join(partner_services))
+    overlap_tokens = sorted(own_tokens.intersection(partner_tokens))
+    overlap_ratio = len(overlap_tokens) / max(1, min(len(own_tokens), len(partner_tokens)))
+    direct_competitor = overlap_ratio >= 0.35 and not matched_partner_types
+    public_source_url = ""
+    for source_candidate in (lead.get("source_url"), lead.get("website")):
+        normalized_source = str(source_candidate or "").strip()
+        if normalized_source.lower().startswith(("http://", "https://")):
+            public_source_url = normalized_source
+            break
+    score_breakdown = {
+        "desired_partner_type": 45 if matched_partner_types else 0,
+        "audience_overlap_hypothesis": 20 if common_audience_tags else 0,
+        "geography": 15 if geography_match else 0,
+        "public_service_evidence": 10 if public_source_url and (partner_services or lead.get("category")) else 0,
+        "service_complement": 10 if (matched_partner_types or common_audience_tags) and overlap_ratio < 0.2 else 0,
+        "competition_penalty": -35 if direct_competitor else 0,
+    }
+    score = max(0, min(100, sum(score_breakdown.values())))
+    recipient_observation_parts = []
+    if public_source_url and lead.get("category"):
+        recipient_observation_parts.append(
+            f"В публичной карточке указана категория «{str(lead.get('category')).strip()}»"
+        )
+    if public_source_url and partner_services:
+        recipient_observation_parts.append(
+            "указаны услуги: " + ", ".join(partner_services[:3])
+        )
+    recipient_observation = "; ".join(recipient_observation_parts)
+    if recipient_observation:
+        recipient_observation += "."
+    hypothesis_parts = []
+    if matched_partner_types:
+        hypothesis_parts.append(
+            "компания соответствует указанному типу партнёров "
+            + ", ".join(matched_partner_types[:2])
+        )
+    if common_audience_tags:
+        hypothesis_parts.append("у компаний может пересекаться аудитория")
+    compatibility_hypothesis = (
+        "Гипотеза для проверки: " + "; ".join(hypothesis_parts) + "."
+        if hypothesis_parts else ""
+    )
+    if score >= 40 and match_context_source == "sender_profile":
+        relevance_bridge = (
+            "Это соответствует подтверждённому профилю партнёрского поиска "
+            "и подходит для одного безопасного совместного теста."
+        )
+    elif score >= 40 and match_context_source in {"partner_search", "lead_category"}:
+        relevance_bridge = (
+            "Это соответствует сохранённому контексту подбора партнёров и подходит "
+            "для одного безопасного совместного теста."
+        )
+    else:
+        relevance_bridge = ""
+    profile_risk = (
+        []
+        if sender_profile_ready
+        else [
+            "Профиль бизнеса не готов для отправки от его имени; оценка совместимости "
+            "может использоваться в режиме LocalOS за партнёра."
+        ]
+    )
     match_result: dict[str, Any] | None = None
+    deterministic_result = {
+        "match_score": score,
+        "overlap": overlap_tokens[:30],
+        "complement": {
+            "our_strength_tokens": sorted(list(own_tokens - partner_tokens))[:30],
+            "partner_strength_tokens": sorted(list(partner_tokens - own_tokens))[:30],
+        },
+        "risks": profile_risk + [
+            "Низкая точность, если у партнёра мало структурированных услуг."
+            if not partner_services
+            else "Проверьте каннибализацию по пересекающимся услугам."
+        ],
+        "offer_angles": ["Один безопасный совместный тест"],
+        "recipient_observation": recipient_observation,
+        "compatibility_hypothesis": compatibility_hypothesis,
+        "relevance_bridge": relevance_bridge,
+        "source_url": public_source_url,
+        "score_breakdown": score_breakdown,
+        "profile_completeness": profile_completeness,
+        "direct_competitor": direct_competitor,
+        "reason_codes": [
+            "DESIRED_PARTNER_TYPE_MATCH" if matched_partner_types else "DESIRED_PARTNER_TYPE_MISSING",
+            "AUDIENCE_OVERLAP_HYPOTHESIS" if common_audience_tags else "AUDIENCE_OVERLAP_MISSING",
+            "MATCH_CONTEXT_SENDER_PROFILE"
+            if match_context_source == "sender_profile"
+            else "MATCH_CONTEXT_PARTNER_SEARCH"
+            if match_context_source == "partner_search"
+            else "MATCH_CONTEXT_LEAD_CATEGORY"
+            if match_context_source == "lead_category"
+            else "MATCH_CONTEXT_MISSING",
+            "PARTNER_SENDER_PROFILE_READY"
+            if sender_profile_ready
+            else "PARTNER_SENDER_PROFILE_INCOMPLETE",
+        ],
+    }
 
     if _is_partnership_openclaw_enabled():
         openclaw_result = _call_partnership_openclaw_capability(
@@ -569,39 +919,28 @@ def _compute_partnership_match_result(
             result_blob = _extract_openclaw_result_blob(openclaw_result)
             candidate_match = result_blob.get("match")
             if isinstance(candidate_match, dict) and candidate_match:
-                match_result = candidate_match
+                match_result = dict(candidate_match)
 
     if not match_result:
-        own_tokens = _tokenize_match_text(" ".join(own_services))
-        partner_tokens = _tokenize_match_text(" ".join(partner_services))
-        overlap_tokens = sorted(list(own_tokens & partner_tokens))
-        own_unique = sorted(list(own_tokens - partner_tokens))
-        partner_unique = sorted(list(partner_tokens - own_tokens))
-
-        denominator = max(1, len(own_tokens | partner_tokens))
-        score = int(round((len(overlap_tokens) / denominator) * 100))
-        match_result = {
-            "match_score": score,
-            "overlap": overlap_tokens[:30],
-            "complement": {
-                "our_strength_tokens": own_unique[:30],
-                "partner_strength_tokens": partner_unique[:30],
-            },
-            "risks": [
-                "Низкая точность, если у партнёра мало структурированных услуг."
-                if not partner_services
-                else "Проверьте каннибализацию по пересекающимся услугам."
-            ],
-            "offer_angles": [
-                "Кросс-рекомендации по непересекающимся услугам",
-                "Пакетные предложения с взаимной скидкой",
-                "Совместный контент/новости для карт и соцсетей",
-            ],
-            "source_counts": {
-                "our_services": len(own_services),
-                "partner_services": len(partner_services),
-            },
-        }
+        match_result = deterministic_result
+    else:
+        # AI may improve wording and angles, but it cannot replace the deterministic
+        # score, sourced recipient observation, or campaign sender-profile gate.
+        ai_reason_codes = match_result.get("reason_codes")
+        if not isinstance(ai_reason_codes, list):
+            ai_reason_codes = []
+        match_result.update({
+            "match_score": deterministic_result["match_score"],
+            "overlap": deterministic_result["overlap"],
+            "recipient_observation": deterministic_result["recipient_observation"],
+            "compatibility_hypothesis": deterministic_result["compatibility_hypothesis"],
+            "relevance_bridge": deterministic_result["relevance_bridge"],
+            "source_url": deterministic_result["source_url"],
+            "score_breakdown": deterministic_result["score_breakdown"],
+            "profile_completeness": deterministic_result["profile_completeness"],
+            "direct_competitor": deterministic_result["direct_competitor"],
+            "reason_codes": list(deterministic_result["reason_codes"]) + ai_reason_codes,
+        })
 
     return _normalize_match_result(
         match_result,
@@ -617,6 +956,8 @@ def partnership_audit_lead(lead_id):
     try:
         data = request.get_json(silent=True) or {}
         requested_business_id = str(data.get("business_id") or "").strip() or None
+        requested_workstream_id = str(data.get("workstream_id") or "").strip() or None
+        audit_progress = None
         conn = get_db_connection()
         try:
             _ensure_partnership_columns(conn)
@@ -629,6 +970,14 @@ def partnership_audit_lead(lead_id):
             if not lead:
                 return jsonify({"error": "Lead not found"}), 404
             lead = _sync_partnership_lead_from_parsed_data(lead)
+            if str(lead.get("parsed_identity_status") or "") == "mismatch":
+                conn.rollback()
+                return jsonify({
+                    "error": "К лиду привязана карточка другой компании.",
+                    "code": "PARTNER_RECIPIENT_IDENTITY_MISMATCH",
+                    "candidate_name": lead.get("parsed_candidate_name"),
+                    "next_action": "rerun_parse_to_rematch",
+                }), 409
             snapshot = build_lead_card_preview_snapshot(lead)
             snapshot = _to_json_compatible(snapshot)
             quality = evaluate_audit_quality(
@@ -672,6 +1021,19 @@ def partnership_audit_lead(lead_id):
                 """,
                 ("audited", "audited", lead_id),
             )
+            workstream_id = _resolve_preparation_workstream_id(
+                cur,
+                lead_id=lead_id,
+                business_id=business_id,
+                requested_workstream_id=requested_workstream_id,
+            )
+            if workstream_id:
+                audit_progress = record_lead_preparation_step(
+                    cur,
+                    workstream_id=workstream_id,
+                    step_code="audit",
+                    label="Аудит создан",
+                )
             conn.commit()
         finally:
             conn.close()
@@ -684,6 +1046,7 @@ def partnership_audit_lead(lead_id):
                 "audit_profile": snapshot.get("audit_profile"),
                 "quality": quality,
                 "page": page_json,
+                "preparation_step": audit_progress,
             }
         )
     except AuditQualityError as quality_error:
@@ -706,6 +1069,7 @@ def partnership_match_lead(lead_id):
     try:
         data = request.get_json(silent=True) or {}
         requested_business_id = str(data.get("business_id") or "").strip() or None
+        requested_workstream_id = str(data.get("workstream_id") or "").strip() or None
         conn = get_db_connection()
         try:
             _ensure_partnership_columns(conn)
@@ -717,6 +1081,15 @@ def partnership_match_lead(lead_id):
             lead = _load_partnership_lead(cur, lead_id=lead_id, business_id=business_id)
             if not lead:
                 return jsonify({"error": "Lead not found"}), 404
+            lead = _sync_partnership_lead_from_parsed_data(lead)
+            if str(lead.get("parsed_identity_status") or "") == "mismatch":
+                conn.rollback()
+                return jsonify({
+                    "error": "К лиду привязана карточка другой компании.",
+                    "code": "PARTNER_RECIPIENT_IDENTITY_MISMATCH",
+                    "candidate_name": lead.get("parsed_candidate_name"),
+                    "next_action": "rerun_parse_to_rematch",
+                }), 409
 
             cur.execute("SELECT audit_json FROM partnershipleadartifacts WHERE lead_id = %s", (lead_id,))
             artifact_row = cur.fetchone()
@@ -732,17 +1105,65 @@ def partnership_match_lead(lead_id):
                 lead_id=lead_id,
                 audit_json=audit_json,
             )
+            workstream_id = _resolve_preparation_workstream_id(
+                cur,
+                lead_id=lead_id,
+                business_id=business_id,
+                requested_workstream_id=requested_workstream_id,
+            )
+            if "SENDER_PROFILE_INCOMPLETE" in (match_result.get("reason_codes") or []):
+                _save_partnership_match_assessment(
+                    cur,
+                    lead_id=lead_id,
+                    audit_json=audit_json,
+                    match_result=match_result,
+                )
+                match_progress = record_lead_preparation_step(
+                    cur,
+                    workstream_id=workstream_id,
+                    step_code="compatibility",
+                    label="Совместимость проверена",
+                    metadata={"result_status": "needs_sender_profile"},
+                ) if workstream_id else None
+                conn.commit()
+                return jsonify({
+                    "success": True,
+                    "status": "needs_sender_profile",
+                    "code": "SENDER_PROFILE_INCOMPLETE",
+                    "result": match_result,
+                    "profile_completeness": match_result.get("profile_completeness") or {},
+                    "next_action": match_result.get("next_action"),
+                    "preparation_step": match_progress,
+                })
+            if _partnership_match_needs_evidence(match_result):
+                _save_partnership_match_assessment(
+                    cur,
+                    lead_id=lead_id,
+                    audit_json=audit_json,
+                    match_result=match_result,
+                )
+                match_progress = record_lead_preparation_step(
+                    cur,
+                    workstream_id=workstream_id,
+                    step_code="compatibility",
+                    label="Совместимость проверена",
+                    metadata={"result_status": "needs_evidence"},
+                ) if workstream_id else None
+                conn.commit()
+                return jsonify({
+                    "success": True,
+                    "status": "needs_evidence",
+                    "code": "PARTNERSHIP_MATCH_NEEDS_EVIDENCE",
+                    "result": match_result,
+                    "next_action": match_result.get("next_action"),
+                    "preparation_step": match_progress,
+                })
 
-            cur.execute(
-                """
-                INSERT INTO partnershipleadartifacts (lead_id, audit_json, match_json, updated_at)
-                VALUES (%s, %s, %s, NOW())
-                ON CONFLICT (lead_id) DO UPDATE
-                SET audit_json = EXCLUDED.audit_json,
-                    match_json = EXCLUDED.match_json,
-                    updated_at = NOW()
-                """,
-                (lead_id, Json(audit_json), Json(match_result)),
+            _save_partnership_match_assessment(
+                cur,
+                lead_id=lead_id,
+                audit_json=audit_json,
+                match_result=match_result,
             )
             cur.execute(
                 """
@@ -754,10 +1175,21 @@ def partnership_match_lead(lead_id):
                 """,
                 ("matched", "matched", lead_id),
             )
+            match_progress = record_lead_preparation_step(
+                cur,
+                workstream_id=workstream_id,
+                step_code="compatibility",
+                label="Совместимость проверена",
+                metadata={"result_status": "ready"},
+            ) if workstream_id else None
             conn.commit()
         finally:
             conn.close()
-        return jsonify({"success": True, "result": match_result})
+        return jsonify({
+            "success": True,
+            "result": match_result,
+            "preparation_step": match_progress,
+        })
     except Exception as e:
         print(f"Error partnership match lead: {e}")
         return jsonify({"error": str(e)}), 500
@@ -789,15 +1221,28 @@ def partnership_bulk_match_leads():
                 return jsonify({"error": "Business not found or access denied"}), 403
 
             matched_count = 0
+            assessment_count = 0
             skipped_count = 0
             results: list[dict[str, Any]] = []
             errors: list[dict[str, Any]] = []
+            needs_attention: list[dict[str, Any]] = []
 
             for lead_id in normalized_ids:
                 lead = _load_partnership_lead(cur, lead_id=lead_id, business_id=business_id)
                 if not lead:
                     skipped_count += 1
                     errors.append({"lead_id": lead_id, "error": "Lead not found"})
+                    continue
+                lead = _sync_partnership_lead_from_parsed_data(lead)
+                if str(lead.get("parsed_identity_status") or "") == "mismatch":
+                    skipped_count += 1
+                    errors.append({
+                        "lead_id": lead_id,
+                        "code": "PARTNER_RECIPIENT_IDENTITY_MISMATCH",
+                        "error": "К лиду привязана карточка другой компании.",
+                        "candidate_name": lead.get("parsed_candidate_name"),
+                        "next_action": "rerun_parse_to_rematch",
+                    })
                     continue
 
                 cur.execute("SELECT audit_json FROM partnershipleadartifacts WHERE lead_id = %s", (lead_id,))
@@ -816,16 +1261,43 @@ def partnership_bulk_match_leads():
                         lead_id=lead_id,
                         audit_json=audit_json,
                     )
-                    cur.execute(
-                        """
-                        INSERT INTO partnershipleadartifacts (lead_id, audit_json, match_json, updated_at)
-                        VALUES (%s, %s, %s, NOW())
-                        ON CONFLICT (lead_id) DO UPDATE
-                        SET audit_json = EXCLUDED.audit_json,
-                            match_json = EXCLUDED.match_json,
-                            updated_at = NOW()
-                        """,
-                        (lead_id, Json(audit_json), Json(match_result)),
+                    if "SENDER_PROFILE_INCOMPLETE" in (match_result.get("reason_codes") or []):
+                        _save_partnership_match_assessment(
+                            cur,
+                            lead_id=lead_id,
+                            audit_json=audit_json,
+                            match_result=match_result,
+                        )
+                        assessment_count += 1
+                        skipped_count += 1
+                        needs_attention.append({
+                            "lead_id": lead_id,
+                            "code": "SENDER_PROFILE_INCOMPLETE",
+                            "next_action": match_result.get("next_action"),
+                            "profile_completeness": match_result.get("profile_completeness") or {},
+                        })
+                        continue
+                    if _partnership_match_needs_evidence(match_result):
+                        _save_partnership_match_assessment(
+                            cur,
+                            lead_id=lead_id,
+                            audit_json=audit_json,
+                            match_result=match_result,
+                        )
+                        assessment_count += 1
+                        skipped_count += 1
+                        needs_attention.append({
+                            "lead_id": lead_id,
+                            "code": "PARTNERSHIP_MATCH_NEEDS_EVIDENCE",
+                            "next_action": match_result.get("next_action"),
+                            "result": match_result,
+                        })
+                        continue
+                    _save_partnership_match_assessment(
+                        cur,
+                        lead_id=lead_id,
+                        audit_json=audit_json,
+                        match_result=match_result,
                     )
                     cur.execute(
                         """
@@ -854,8 +1326,10 @@ def partnership_bulk_match_leads():
                 {
                     "success": True,
                     "matched_count": matched_count,
+                    "assessment_count": assessment_count,
                     "skipped_count": skipped_count,
                     "results": results,
+                    "needs_attention": needs_attention,
                     "errors": errors,
                 }
             )
@@ -974,32 +1448,8 @@ def partnership_public_offer_page(slug):
         normalized_slug = _slugify_company_name(slug)
         conn = get_db_connection()
         try:
-            _ensure_partnership_public_offers_table(conn)
-            _ensure_admin_prospecting_public_offers_table(conn)
             cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT slug, page_json, updated_at
-                FROM partnershippublicoffers
-                WHERE slug = %s
-                  AND is_active = TRUE
-                LIMIT 1
-                """,
-                (normalized_slug,),
-            )
-            row = cur.fetchone()
-            if not row:
-                cur.execute(
-                    """
-                    SELECT slug, page_json, generated_json, published_json, updated_at
-                    FROM adminprospectingleadpublicoffers
-                    WHERE slug = %s
-                      AND is_active = TRUE
-                    LIMIT 1
-                    """,
-                    (normalized_slug,),
-                )
-                row = cur.fetchone()
+            row = load_public_offer_row(cur, normalized_slug)
             if not row:
                 return jsonify({"error": "Offer page not found"}), 404
             row_dict = dict(row) if row and hasattr(row, "keys") else {}
@@ -1486,6 +1936,17 @@ def partnership_list_drafts():
             """
             query += ACTIVE_PARTNERSHIP_LEAD_SQL
             params: list[Any] = [business_id]
+            task_id = str(request.args.get("search_task_id") or "").strip()
+            if task_id:
+                from services.partnership_group_view import load_group_scope, GroupNotFound
+                try:
+                    group = load_group_scope(cur, business_id, task_id)
+                except GroupNotFound:
+                    return jsonify({"error": "search_task_not_found"}), 404
+                query += " AND l.id::text=ANY(%s::text[])"
+                params.append(group['lead_ids'])
+            limit = max(1, min(int(request.args.get('limit') or 200), 500))
+            offset = max(0, int(request.args.get('offset') or 0))
             if status_filter:
                 query += " AND d.status = %s"
                 params.append(status_filter)
@@ -1505,17 +1966,28 @@ def partnership_list_drafts():
                     learning_note_json, created_at, updated_at,
                     lead_name, category, city, email,
                     selected_channel, lead_status,
-                    lead_pipeline_status, lead_partnership_stage
+                    lead_pipeline_status, lead_partnership_stage, COUNT(*) OVER() AS total_count
                 FROM ranked_drafts
                 WHERE draft_rank = 1
                 ORDER BY updated_at DESC, created_at DESC
-                LIMIT 200
+                LIMIT %s OFFSET %s
             """
+            params.extend([limit, offset])
             cur.execute(query, tuple(params))
             rows = [_serialize_draft(dict(row)) for row in cur.fetchall()]
+            for row in rows:
+                try:
+                    row["canonical_review"] = canonical_review(cur, row)
+                    if row["canonical_review"]:
+                        row["generated_text"] = row["canonical_review"]["text"]
+                        row["edited_text"] = row["canonical_review"]["text"]
+                        row["approved_text"] = row["canonical_review"]["text"] if row.get("status") == DRAFT_APPROVED else None
+                except ValueError:
+                    row["canonical_review"] = {"stale": True}
+                row["review_digest"] = draft_review_digest(row)
         finally:
             conn.close()
-        return jsonify({"success": True, "drafts": rows, "count": len(rows)})
+        return jsonify({"success": True, "drafts": rows, "count": len(rows), "total_count": int(rows[0].get("total_count") or 0) if rows else 0})
     except Exception as e:
         print(f"Error listing partnership drafts: {e}")
         return jsonify({"error": str(e)}), 500
@@ -1530,6 +2002,9 @@ def partnership_approve_draft(draft_id):
         data = request.get_json(silent=True) or {}
         requested_business_id = str(data.get("business_id") or "").strip() or None
         approved_text = str(data.get("approved_text") or "").strip()
+        expected_review_digest = data.get("expected_review_digest")
+        if not isinstance(expected_review_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_review_digest):
+            return jsonify({"error": "Обновите список и проверьте текущую версию письма перед утверждением.", "code": "draft_review_required"}), 400
         if not approved_text:
             return jsonify({"error": "approved_text is required"}), 400
 
@@ -1543,13 +2018,15 @@ def partnership_approve_draft(draft_id):
                 return jsonify({"error": "Business not found or access denied"}), 403
             cur.execute(
                 """
-                SELECT d.id, d.lead_id, d.generated_text, d.edited_text, d.status, d.learning_note_json
+                SELECT d.id, d.lead_id, d.generated_text, d.edited_text, d.status, d.learning_note_json,
+                       d.approved_text, d.updated_at, d.channel, l.email, l.selected_channel
                 FROM outreachmessagedrafts d
                 JOIN prospectingleads l ON l.id = d.lead_id
                 WHERE d.id = %s
                   AND l.business_id = %s
                   AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
                 LIMIT 1
+                FOR UPDATE OF d, l
                 """,
                 (draft_id, business_id),
             )
@@ -1557,8 +2034,33 @@ def partnership_approve_draft(draft_id):
             if not row:
                 return jsonify({"error": "Draft not found"}), 404
             draft_row = dict(row) if hasattr(row, "keys") else {
-                "id": row[0], "lead_id": row[1], "generated_text": row[2], "edited_text": row[3], "status": row[4], "learning_note_json": row[5]
+                "id": row[0], "lead_id": row[1], "generated_text": row[2], "edited_text": row[3], "status": row[4], "learning_note_json": row[5],
+                "approved_text": row[6], "updated_at": row[7], "channel": row[8], "email": row[9], "selected_channel": row[10]
             }
+            draft_origin = draft_row.get("learning_note_json")
+            if isinstance(draft_origin, dict) and draft_origin.get("search_task_id") and draft_origin.get("manual_review_required"):
+                conn.rollback()
+                return jsonify({"error": "Это черновик по поиску. Сначала подтвердите соответствие компании и контакт, затем отдельно согласуйте отправку.",
+                                "code": "search_draft_not_send_ready"}), 409
+            draft_row["canonical_review"] = canonical_review(cur, draft_row)
+            if expected_review_digest != draft_review_digest(draft_row):
+                conn.rollback()
+                return jsonify({"error": "Черновик или контакт изменился. Обновите список и проверьте письмо ещё раз.", "code": "draft_review_stale"}), 409
+
+            if isinstance(draft_origin, dict) and draft_origin.get("campaign_id"):
+                from services.outreach_campaign_service import update_draft_campaign_touch
+                cur.execute("""SELECT touch.generated_text FROM outreach_campaign_touches touch
+                    JOIN outreach_campaigns campaign ON campaign.id=touch.campaign_id
+                    WHERE touch.id=%s AND campaign.id=%s AND campaign.business_id=%s
+                      AND campaign.status='draft' FOR UPDATE OF touch, campaign""",
+                    (draft_origin.get("campaign_touch_id"), draft_origin["campaign_id"], business_id))
+                canonical = cur.fetchone()
+                if not canonical:
+                    return jsonify({"error": "Письмо уже изменено или отправка согласована. Обновите группу.", "code": "campaign_review_stale"}), 409
+                if canonical["generated_text"] != approved_text:
+                    update_draft_campaign_touch(cur, campaign_id=draft_origin["campaign_id"],
+                        touch_id=draft_origin["campaign_touch_id"], subject=draft_origin.get("subject"),
+                        generated_text=approved_text, user_id=user_data["user_id"])
 
             edited_text = str(draft_row.get("edited_text") or "")
             generated_text = str(draft_row.get("generated_text") or "")
@@ -1572,8 +2074,10 @@ def partnership_approve_draft(draft_id):
             learning_note = draft_row.get("learning_note_json")
             if not isinstance(learning_note, dict):
                 learning_note = {}
+            reviewed = canonical_review(cur, draft_row)
             accepted_learning_note = {
                 **learning_note,
+                "reviewed_campaign_hash": (reviewed or {}).get("hash"),
                 "intent": "partnership_outreach",
                 "accepted": True,
                 "edited_before_accept": edited_before_accept,
