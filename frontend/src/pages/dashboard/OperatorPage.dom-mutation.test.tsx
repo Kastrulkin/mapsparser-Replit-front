@@ -125,8 +125,9 @@ describe('OperatorPage DOM ownership', () => {
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/operator/chat', expect.objectContaining({
       message: 'Начни поиск по показанным условиям', conversation_id: 'conversation-1',
     })));
-    expect(await screen.findByText('Проверяем компании и контакты')).toBeInTheDocument();
-    expect(screen.getByText('Подтверждены · цель').nextElementSibling).toHaveTextContent('2 / 10');
+    expect((await screen.findAllByText('Проверяем компании и контакты')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Найдено: 41. Подходят: 2 из 10. Письма: 0.')[0]).toBeVisible();
+    expect(screen.getAllByRole('button', { name: 'Продолжить в чате' })[0]).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Начать поиск' })).toBeInTheDocument();
   });
 
@@ -160,8 +161,13 @@ describe('OperatorPage DOM ownership', () => {
         </Route></Routes></ErrorBoundary></LanguageProvider>
       </MemoryRouter>,
     );
-    expect(await screen.findByText('Проверяем компании и контакты')).toBeInTheDocument();
-    expect(screen.getByText('Подтверждены · цель').nextElementSibling).toHaveTextContent('2 / 10');
+    expect((await screen.findAllByText('Проверяем компании и контакты')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Найдено: 41. Подходят: 2 из 10. Письма: 0.')[0]).toBeVisible();
+    expect(screen.getAllByRole('button', { name: 'Продолжить в чате' })[0]).toBeEnabled();
+    const postedBefore = vi.mocked(api.post).mock.calls.length;
+    fireEvent.click(screen.getAllByRole('button', { name: 'Продолжить в чате' })[0]);
+    expect(screen.getByRole('textbox')).toHaveValue('Покажи краткий результат этого поиска и предложи следующий шаг.');
+    expect(api.post).toHaveBeenCalledTimes(postedBefore);
   });
 
   it('keeps a submitted message visible while waiting and shows its saved reply', async () => {
