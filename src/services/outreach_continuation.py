@@ -59,6 +59,9 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("invalid_config")
     audience = str(raw.get("audience") or "").strip()
     offer = str(raw.get("offer") or "").strip()
+    search_source = raw.get("search_source", "web")
+    if search_source not in {"web", "maps"}:
+        raise ValueError("invalid_search_source")
     conditions = {}
     for key, maximum, length in (("search_geography", 20, 120), ("requirements", 10, 300)):
         if key in raw:
@@ -107,7 +110,7 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
     if not re.fullmatch(r"[a-z]{2,3}(?:-[a-z]{4})?", language):
         raise ValueError("invalid_language")
     result: dict[str, Any] = {"riderra_shortage_only": shortage_only, "evidence_terms": [term.strip() for term in terms], "language": language, "version": CONFIG_VERSION, "audience": audience,
-                            "offer": offer, "queries": cleaned, "mode": "prepare_only"}
+                            "offer": offer, "queries": cleaned, "mode": "prepare_only", "search_source": search_source}
     if goal is not None:
         result.update(version=2, target_count=goal,
                       agency_country=str(raw.get("agency_country") or "").strip(),
@@ -142,7 +145,10 @@ def preview_task_config(raw: dict[str, Any]) -> dict[str, Any]:
     from services.outreach_credit_billing import credit_quote
     credits = credit_quote(config)
     geography, requirements = search_conditions(config)
+    warning = (f"Поиск на картах оплачивается отдельно и может потребовать дополнительных кредитов с общего баланса. Оценка: до {credits['search_max']} кредитов; фактическое списание — по выполненной работе." if config["search_source"] == "maps" else None)
     lines = [
+        "Источник: поиск на картах." if config["search_source"] == "maps" else "Источник: веб-поиск сайтов компаний.",
+        *([warning] if warning else []),
         f"Аудитория: {config['audience']}",
         f"Где ищем: {'; '.join(geography)}. Требования: {'; '.join(requirements) or 'Соответствие указанной аудитории'}",
         f"Цель: {config.get('target_count', config['max_candidates'])} новых подходящих компаний с подтверждённым рабочим контактом; дубли и неподходящие не засчитываются.",
@@ -150,7 +156,7 @@ def preview_task_config(raw: dict[str, Any]) -> dict[str, Any]:
         "Поисковые запросы: " + "; ".join(f"{item['city']}: {item['query']}" for item in config["queries"]),
         f"Лимиты: до {config['max_search_calls']} поисковых вызовов, {config['max_candidates']} кандидатов, {config['max_qualification_calls']} проверок.",
         (f"Ориентир по стоимости поиска и проверки: до {credits['total_max']} кредитов при использовании всех разрешённых действий. "
-         "Кредиты берутся с общего баланса по одному действию; фактический расход поиска определяется после отчёта провайдера. "
+         + ("Кредиты берутся с общего баланса по одному действию; фактический расход поиска определяется после отчёта провайдера. " if config["search_source"] == "maps" else "Кредиты списываются с общего баланса только за выполненные поисковые запросы и проверки. ")
          if config['billing_mode'] == 'shared_balance_actual' else f"Стоимость в LocalOS: до {credits['total_max']} кредитов за поиск и проверку. ")
         + ("" if config['mode'] == 'find_only' else "Подготовка писем оплачивается отдельно. ")
         + f"Поиск — до {credits['search_each']} кредитов за вызов, максимум {credits['search_max']}; "
@@ -158,7 +164,7 @@ def preview_task_config(raw: dict[str, Any]) -> dict[str, Any]:
         "Списания происходят по мере выполнения; дубли и неподходящие компании не засчитываются в цель.",
         "Ожидает запуска: задача не создана, поиск не запущен, списаний за поиск нет.",
     ]
-    return {"status": "completed", "chat_response": "\n".join(lines), "config": config, "credit_quote": credits,
+    return {"status": "completed", "chat_response": "\n".join(lines), "config": config, "credit_quote": credits, "search_warning": warning,
             "result_ref": {"href": "/dashboard/operator", "label": "Условия показаны в чате"},
             "external_writes_performed": False, "search_started": False}
 
@@ -166,6 +172,9 @@ def preview_task_config(raw: dict[str, Any]) -> dict[str, Any]:
 def prepare_new_task_approval(raw: dict[str, Any], *, business_id: str, request_id: str = "") -> dict[str, Any]:
     preview = preview_task_config(raw)
     config = preview["config"]
+    from services.outreach_web_search import configured
+    if config["search_source"] == "web" and not configured():
+        return {**preview, "status": "blocked", "reason_code": "web_search_not_configured", "chat_response": "Веб-поиск пока не подключён. Поиск на картах не запускался; списаний за поиск нет. Нужно подключить поисковый API.", "approval": None}
     geography, requirements = search_conditions(config)
     target = config.get("target_count", config["max_candidates"])
     mode = "Только поиск и проверка; письма не готовятся и не отправляются." if config["mode"] == "find_only" else "Подготовка обращений по заданным условиям."
@@ -175,12 +184,14 @@ def prepare_new_task_approval(raw: dict[str, Any], *, business_id: str, request_
                f"Ориентир расходов — до {preview['credit_quote']['total_max']} кредитов с общего баланса; "
                "фактически списываются только выполненные действия.\n"
                "Поиск ещё не запущен.")
+    if preview.get("search_warning"):
+        summary = preview["search_warning"] + "\n\n" + summary
     return {**preview, "status": "approval_required", "capability": "partnerships.continue_outreach",
             "approval": {"status": "pending", "capability": "partnerships.continue_outreach",
                          "summary": summary, "envelope": {
-                             "operation": "create_and_start", "business_id": business_id,
+                             "operation": "create_and_start", "business_id": business_id, "search_policy_version": 1,
                              "config": config, "revision": config_hash(config),
-                             "credit_terms_version": 2 if config.get("billing_mode") == "shared_balance_actual" else 1,
+                             "credit_terms_version": 3 if config.get("search_source") == "maps" else 2 if config.get("billing_mode") == "shared_balance_actual" else 1,
                              "request_id": request_id or str(uuid.uuid4())}},
             "chat_response": summary, "result_ref": None}
 
@@ -199,16 +210,19 @@ def prepare_revision_approval(cursor, *, business_id, task_id, raw, request_id="
         merged.pop("queries", None)
     config = normalize_config(merged)
     # A saved group cannot silently become a different audience or an auto-send grant.
-    identity = ("audience", "queries")
+    identity = ("audience", "queries", "search_source")
     if config["mode"] == "auto_send":
         raise ValueError("new_audience_or_send_rules_require_separate_review")
-    if any(config.get(key) != previous.get(key) for key in identity) or search_conditions(config) != search_conditions(previous):
+    if any(config.get(key) != previous.get(key, "web" if key == "search_source" else None) for key in identity) or search_conditions(config) != search_conditions(previous):
         preview = prepare_new_task_approval(config, business_id=business_id, request_id=request_id)
         preview["creates_new_search"] = True
         preview["chat_response"] += " Это новый поиск. Предыдущая группа, результаты и расходы сохраняются."
-        preview["approval"]["summary"] = preview["chat_response"]
+        if preview.get("approval"):
+            preview["approval"]["summary"] = preview["chat_response"]
         return preview
     preview = prepare_new_task_approval(config, business_id=business_id, request_id=request_id)
+    if not preview.get("approval"):
+        return preview
     preview["approval"]["envelope"].update(operation="revise_and_start", task_id=str(task_id),
                                            previous_revision=config_hash(previous))
     preview["chat_response"] += " Сохранённые компании и расходы остаются в этой группе; сначала обрабатываем их."
@@ -615,12 +629,15 @@ def search_provider_minimum_gap(config: dict[str, Any], minimum_usd: Any) -> boo
 
 
 def settle_actual_search(cursor: Any, row: dict[str, Any], config: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
-    """Finalize a shared-balance hold only from the completed provider receipt."""
+    """Settle completed web execution or the reported Maps receipt."""
     from services.outreach_credit_billing import actual_search_credits, charge_step, credit_quote
-    receipt = (state.get("search_run") or {}).get("usage_total_usd")
-    if receipt is None:
-        raise ValueError("search_cost_receipt_missing")
-    credits = actual_search_credits(receipt, credit_quote(config)["search_each"])
+    if (state.get("search_run") or {}).get("source") == "web":
+        credits = credit_quote(config)["search_each"]
+    else:
+        receipt = (state.get("search_run") or {}).get("usage_total_usd")
+        if receipt is None:
+            raise ValueError("search_cost_receipt_missing")
+        credits = actual_search_credits(receipt, credit_quote(config)["search_each"])
     billed = charge_step(cursor, row, reservation_id=state["search_credit_reservation_id"],
         credits=credits, step="search", key=str(state["search_reservation_key"]))
     if billed.get("status") not in {"charged", "released", "already_finalized"}:
@@ -647,6 +664,12 @@ def settle_failed_search(cursor: Any, row: dict[str, Any], config: dict[str, Any
 
 
 def _start_search(config: dict[str, Any], index: int) -> dict[str, Any]:
+    if config.get("search_source", "web") == "web":
+        from services.outreach_web_search import search
+        query = config["queries"][index % len(config["queries"])]
+        items = search(query["query"], query["city"], search_window_size(config, index), index // len(config["queries"]))
+        return {"id": "web:" + str(uuid.uuid4()), "source": "web", "items": items,
+                "requested_limit": min(search_window_size(config, index), 20), "query_index": index % len(config["queries"])}
     from decimal import Decimal
     from services.prospecting_service import ProspectingService
     service = ProspectingService(source="apify_google")
@@ -676,6 +699,8 @@ def _start_search(config: dict[str, Any], index: int) -> dict[str, Any]:
 
 
 def _poll_search(run: dict[str, Any], limit: int) -> list[dict[str, Any]] | None:
+    if run.get("source") == "web":
+        return list(run.get("items") or [])[:limit]
     from services.prospecting_service import ProspectingService
     service = ProspectingService(source="apify_google")
     result = service.get_run(run["id"])
@@ -793,8 +818,15 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                     _save(cursor, row, {**state, "blocker": "candidate_budget_exhausted"}, status="completed" if config.get("target_count") is not None else "waiting_for_review", stage="Лимит обработки исчерпан; целевое количество не достигнуто")
                     conn.commit()
                     return {"status": "pending_human"}
-                minimum = _provider_search_minimum_usd()
-                if search_provider_minimum_gap(config, minimum):
+                from services.outreach_web_search import configured
+                if config.get("search_source", "web") == "web" and not configured():
+                    _save(cursor, row, {**state, "blocker": "web_search_not_configured"}, status="waiting_for_review", stage="Веб-поиск не подключён. Поиск на картах не запускался; новых списаний нет.")
+                    conn.commit()
+                    return {"status": "pending_human", "reason_code": "web_search_not_configured"}
+                if config.get("search_source") == "maps" and not current["payload_json"].get("search_source"):
+                    raise ValueError("maps_search_requires_explicit_review")
+                minimum = _provider_search_minimum_usd() if config.get("search_source") == "maps" else 0
+                if config.get("search_source") == "maps" and search_provider_minimum_gap(config, minimum):
                     from decimal import ROUND_CEILING
                     from services.operator_paid_actions import APIFY_CREDIT_MULTIPLIER
                     required = int((minimum * APIFY_CREDIT_MULTIPLIER).to_integral_value(rounding=ROUND_CEILING))
@@ -823,7 +855,24 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                 exhausted=set(state.get('exhausted_query_indices') or [])
                 while search_index % len(config['queries']) in exhausted and len(exhausted)<len(config['queries']):
                     search_index+=1
-                run = _start_search(config, search_index)
+                try:
+                    run = _start_search(config, search_index)
+                except Exception as exc:
+                    if config.get("search_source", "web") != "web":
+                        raise
+                    if not _lock_current(cursor, row):
+                        conn.rollback()
+                        return {"status": "lease_lost"}
+                    from services.outreach_credit_billing import charge_step
+                    charge_step(cursor, row, reservation_id=state["search_credit_reservation_id"],
+                                credits=0, step="search", key=reservation_key)
+                    state.pop("search_credit_reservation_id", None)
+                    state.pop("search_reservation_key", None)
+                    reason = str(exc) if str(exc) in {"web_search_access_or_quota", "web_search_not_configured", "web_search_access_denied", "web_search_rate_limited", "web_search_free_plan_unverified", "web_search_free_quota_exhausted"} else "web_search_failed"
+                    state.update(inflight_search=False, blocker=reason)
+                    _save(cursor, row, state, status="waiting_for_review", stage="Веб-поиск не выполнен. Карты не запускались; списаний за этот поиск нет.")
+                    conn.commit()
+                    return {"status": "pending_human", "reason_code": reason}
                 state['next_search_index']=search_index+1
                 if not _lock_current(cursor, row):
                     conn.rollback()
@@ -870,7 +919,7 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                 return {"status": "lease_lost"}
             _require_current_actor(cursor, row)
             if config.get("billing_mode") == "shared_balance_actual" and state.get("search_credit_reservation_id"):
-                if state["search_run"].get("usage_total_usd") is None:
+                if state["search_run"].get("source") != "web" and state["search_run"].get("usage_total_usd") is None:
                     _save(cursor, row, {**state, "blocker": "search_cost_receipt_missing"},
                           status="waiting_for_review", stage="Результат поиска получен; ожидается подтверждение стоимости")
                     conn.commit()
@@ -884,7 +933,7 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
             state["search_results_total"] = state.get("search_results_total", 0) + len(items)
             run_info=state['search_run']
             state.setdefault('search_cost_receipts',{})[run_info['id']]=run_info.get('usage_total_usd')
-            if config.get('target_count') is not None and run_info.get('requested_limit') and len(items)<run_info['requested_limit']:
+            if run_info.get('source') != 'web' and config.get('target_count') is not None and run_info.get('requested_limit') and len(items)<run_info['requested_limit']:
                 exhausted=set(state.get('exhausted_query_indices') or [])
                 exhausted.add(run_info['query_index'])
                 state['exhausted_query_indices']=sorted(exhausted)
@@ -902,9 +951,9 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                     category=item.get("category"), website=item.get("website"), phone=item.get("phone"),
                     external_place_id=item.get("google_id"), external_source_id=item.get("source_external_id"),
                     lat=item.get("geo_lat"), lon=item.get("geo_lon"),
-                    source="apify_google", source_kind="geo_search", source_provider="apify_google",
+                    source=item.get("source_provider", "web_search") if run_info.get("source") == "web" else "apify_google", source_kind="web_search" if run_info.get("source") == "web" else "geo_search", source_provider=item.get("source_provider", "web_search") if run_info.get("source") == "web" else "apify_google",
                     search_payload={"continuation_id": row["id"], "audience": config["audience"], "requirements": search_conditions(config)[1], "search_geography": search_conditions(config)[0],
-                                    "qualification_required": True})
+                                    "qualification_required": True, "search_snippet": item.get("search_snippet"), "source_provider": item.get("source_provider")})
                 if not created or not lead_id or lead_id in lead_ids:
                     state["duplicates"] = state.get("duplicates", 0) + 1
                     continue
@@ -1309,6 +1358,9 @@ def prepare_task_start(cursor: Any, *, business_id: str, user_id: str, task_id: 
     if task["status"] in {"completed", "cancelled", "running", "queued"}:
         return {"status": "completed", "task": task, "chat_response": task["stage"]}
     config = task["config"]
+    from services.outreach_web_search import configured
+    if config.get("search_source", "web") == "web" and not configured():
+        return {"status": "blocked", "reason_code": "web_search_not_configured", "chat_response": "Веб-поиск пока не подключён. Карты не запускаются; новых списаний нет.", "task": task}
     from services.outreach_credit_billing import credit_quote
     credits = credit_quote(config)
     where = f" в {config['agency_country']}" if config.get('agency_country') else ""
@@ -1326,12 +1378,14 @@ def prepare_task_start(cursor: Any, *, business_id: str, user_id: str, task_id: 
                   if config.get('billing_mode') == 'shared_balance_actual' else "Списание по мере работы. ")
                + "При нехватке кредитов поручение остановится."
                + ("" if config['mode'] == 'find_only' else " Подготовка писем оплачивается отдельно по условиям кампании."))
+    if config.get("search_source") == "maps":
+        summary = "Поиск на картах оплачивается отдельно и может потребовать дополнительных кредитов. Оценка: до " + str(credits["search_max"]) + " кредитов с общего баланса.\n\n" + summary
     return {"status": "approval_required", "chat_response": summary,
             "credit_quote": credits,
             "approval": {"status": "pending", "capability": "partnerships.continue_outreach", "summary": summary,
-                         "envelope": {"task_id": task_id, "revision": task["revision"], "operation": operation,
+                         "envelope": {"task_id": task_id, "revision": task["revision"], "operation": operation, "search_policy_version": 1,
                                       "config": config, "business_id": business_id,
-                                      "credit_terms_version": 2 if config.get('billing_mode') == 'shared_balance_actual' else 1}},
+                                      "credit_terms_version": 3 if config.get("search_source") == "maps" else 2 if config.get('billing_mode') == 'shared_balance_actual' else 1}},
             "external_dispatch_performed": False}
 
 
@@ -1348,7 +1402,9 @@ def confirm_task_start(cursor: Any, *, business_id: str, user_id: str, envelope:
         return {"status": "blocked", "blocked_reasons": ["access_revoked"]}
     if envelope.get("operation") not in {"start", "resume", "create_and_start", "revise_and_start"}:
         return {"status": "blocked", "blocked_reasons": ["invalid_operation"]}
-    expected_terms = 2 if (envelope.get('config') or {}).get('billing_mode') == 'shared_balance_actual' else 1
+    if envelope.get("search_policy_version") != 1:
+        return {"status": "blocked", "blocked_reasons": ["search_source_review_required"], "chat_response": "Источник поиска обновлён. Покажите условия заново: веб-поиск по умолчанию; карты требуют отдельного согласования расходов."}
+    expected_terms = 3 if (envelope.get('config') or {}).get('search_source') == 'maps' else 2 if (envelope.get('config') or {}).get('billing_mode') == 'shared_balance_actual' else 1
     if envelope.get("credit_terms_version") != expected_terms:
         return {"status": "blocked", "chat_response": "Условия в кредитах обновились. Попросите показать их заново перед запуском.",
                 "blocked_reasons": ["credit_terms_changed"]}
@@ -1490,3 +1546,4 @@ def advance_ai_campaign(conn, cursor, row, state, grant):
             _save(cursor,row,state,stage='Письмо требует рассмотрения; остальные продолжают обрабатываться',delay=5)
             conn.commit()
     return True
+

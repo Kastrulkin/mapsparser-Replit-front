@@ -14,6 +14,8 @@ DRAFT_CREDITS = 1
 
 
 def search_credits_per_call(config: dict[str, Any]) -> int:
+    if config.get("search_source", "web") == "web":
+        return 1  # One successfully executed web search; never an Apify tariff.
     provider_cap = provider_call_cap_usd(config)
     return max(1, int((provider_cap * APIFY_CREDIT_MULTIPLIER).to_integral_value(rounding=ROUND_CEILING)))
 
@@ -59,3 +61,4 @@ def charge_step(cursor: Any, row: dict[str, Any], *, reservation_id: str, credit
     return finalize_reserved_action_credits(cursor, reservation_id=reservation_id,
         business_id=str(row["business_id"]), user_id=str(row["user_id"]),
         actual_credits=credits, external_id=f"outreach:{row['id']}:{step}:{key}")
+
