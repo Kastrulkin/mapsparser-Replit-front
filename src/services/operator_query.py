@@ -447,9 +447,9 @@ def execute_operator_query(cursor: Any, *, business_id: str, arguments: Any, use
 def read_reviews_request(cursor, business_id, message, user_id=None):
     """Read requests must never be routed to paid draft generation."""
     import re
-    if re.search(r'обнов|синхрон|парс|платн|стоимост',message,re.I):
+    if re.search(r'\b(?:обнови|обновить|запусти|запустить|синхронизируй|спарси)\b|платн|стоимост',message,re.I):
         return None
-    if not re.search(r'отзыв',message,re.I) or not re.search(r'покажи|сколько|показать|какие|истори',message,re.I):
+    if not re.search(r'отзыв',message,re.I) or not re.search(r'покажи|выведи|вывести|сколько|показать|какие|истори',message,re.I):
         return None
     if re.search(r'подготовь|создай|сгенер|опубликуй|отправь',message,re.I):return None
     if re.search(r'черновик|подготовлен|истори\w*\s+ответ',message,re.I):

@@ -89,3 +89,9 @@ def test_review_refresh_preview_is_read_only(monkeypatch):
     assert 'Обновление пока не запущено' in result['chat_response']
     assert result['paid_actions_performed'] is False
     assert result['external_calls_performed'] is False
+
+
+def test_last_update_date_is_a_read_request(monkeypatch):
+    monkeypatch.setattr(operator_query, 'execute_operator_query', lambda *args, **kwargs: {'status': 'completed'})
+    assert operator_query.read_reviews_request(None, 'root', 'Выведи последние отзывы. Укажи дату последнего обновления данных.', user_id='user')['status'] == 'completed'
+    assert operator_query.read_reviews_request(None, 'root', 'Обнови отзывы на картах', user_id='user') is None
