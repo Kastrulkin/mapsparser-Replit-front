@@ -7,6 +7,12 @@ from services.operator_query import compile_operator_query, execute_operator_que
 from services.operator_tool_loop import run_operator_tool_loop
 
 
+@pytest.fixture(autouse=True)
+def authorized_query_scope(monkeypatch):
+    # These catalogue/query tests isolate filtering; network authorization has its own regression tests.
+    monkeypatch.setattr(operator_query, 'query_business_ids', lambda cursor, business_id, user_id=None: [business_id])
+
+
 def _module_result(items):
     return {
         "status": "available",
@@ -308,7 +314,7 @@ def test_query_paraphrases_reach_one_universal_contract(monkeypatch, message, re
     monkeypatch.setattr(
         operator_core,
         "execute_operator_query",
-        lambda _cursor, *, business_id, arguments: calls.append((business_id, arguments)) or {
+        lambda _cursor, *, business_id, arguments, user_id=None: calls.append((business_id, arguments)) or {
             "status": "completed",
             "intent": "operator.query",
             "resource": arguments["resource"],

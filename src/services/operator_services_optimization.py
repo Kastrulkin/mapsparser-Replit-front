@@ -90,7 +90,7 @@ def _load_services(cursor: Any, *, business_id: str, limit: int) -> list[dict[st
     return services
 
 
-def _build_services_prompt(services: list[dict[str, Any]]) -> str:
+def _build_services_prompt(services: list[dict[str, Any]], search_demand=None) -> str:
     payload = []
     for item in services:
         payload.append(
@@ -110,6 +110,8 @@ def _build_services_prompt(services: list[dict[str, Any]]) -> str:
             "Верни СТРОГО JSON: {\"services\": [{\"service_id\": \"...\", \"optimized_name\": \"...\", \"seo_description\": \"...\"}]}",
             "",
             json.dumps(payload, ensure_ascii=False),
+            "Сохранённые запросы Wordstat (не текущие тренды; город бизнеса не означает регион частотности). Используй только запросы, точно соответствующие смыслу конкретной услуги; не добавляй неподтверждённые виды животных, процедуры или свойства. Не используй частотность как доказательство роста:",
+            json.dumps(search_demand or {}, ensure_ascii=False, default=str),
         ]
     )
 
@@ -270,6 +272,8 @@ def optimize_services_from_operator(
             "blocked_reasons": ["services_not_found"],
         }
 
+    from services.operator_search_demand import stored_demand
+    search_demand = stored_demand(cursor, business_id, user_id, services=services)
     estimated_credits = len(services) * SERVICES_OPTIMIZE_CREDITS_PER_SERVICE
     preflight = build_paid_action_preflight(
         cursor,
@@ -346,7 +350,7 @@ def optimize_services_from_operator(
         consumer="service_optimization",
         pipeline_id=idempotency_key,
     )
-    services_prompt = _build_services_prompt(services)
+    services_prompt = _build_services_prompt(services, search_demand)
     if knowledge_context:
         services_prompt += (
             "\n\nПодтверждённый контекст из памяти LocalOS. Используй только релевантные факты "

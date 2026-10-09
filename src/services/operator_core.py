@@ -890,6 +890,7 @@ def _operator_tool_catalog(
         cursor,
         business_id=business_id,
         arguments=arguments,
+        user_id=user_id,
     )
     tools = [
         query_tool,
@@ -1609,6 +1610,8 @@ def _operator_tool_catalog(
     from services.outreach_continuation import continuation_enabled
     if not continuation_enabled(business_id):
         tools = [tool for tool in tools if tool["name"] != "partnerships.continue_outreach"]
+    from services import operator_search_demand
+    tools.extend(operator_search_demand.tools(cursor, business_id, user_id))
     return [_normalize_tool_contract(tool, business_id=business_id) for tool in tools]
 
 
@@ -2015,11 +2018,32 @@ def route_operator_message(
     setup = route_setup(cursor, business_id, user_id, channel, clean_message, pending, conversation_id, action_orchestrator)
     if setup:
         return setup
+    from services import operator_search_demand
+    if operator_search_demand.matches(clean_message):
+        blocked = operator_subscription_block(subscription_access, 'services.read')
+        if blocked:
+            return blocked, {}
+        proposal = bool(re.search(r'предлож|подготов|оптимиз|улучш|переимен|измен.{0,30}назван|помен.{0,30}назван', clean_message, re.I))
+        if not proposal:
+            return standardize_operator_result(operator_search_demand.read_demand(cursor, business_id, user_id, {}), 'services.read'), {}
+        selected = _operator_tool_catalog(cursor, business_id=business_id, user_id=user_id, message=clean_message,
+            channel=channel, limit=limit, refresh_handler=run_refresh, action_orchestrator=action_orchestrator)
+        selected = [tool for tool in selected if tool['name'].startswith(('seo.', 'services.', 'localos.', 'operator.'))
+                    and not operator_subscription_block(subscription_access, tool.get('capability') or tool['name'])]
+        arguments = dict(business_id=business_id, user_id=user_id, message=clean_message, conversation_id=conversation_id,
+            conversation_history=conversation_history, actor_context=actor_context, pending_approvals=pending_approvals, tools=selected)
+        outcome = run_paid_operator_tool_loop(cursor, **arguments) if tool_planner is None else run_operator_tool_loop(**arguments, planner=tool_planner)
+        return standardize_operator_result(outcome, outcome.get('capability') or 'services.optimize'), {}
+    if re.search(r'отзыв', clean_message, re.I) and re.search(r'до запуска|стоимост|не запускай|без подтверждения|возможност.{0,20}обнов', clean_message, re.I):
+        blocked = operator_subscription_block(subscription_access, 'reviews.read')
+        if blocked:
+            return blocked, {}
+        return standardize_operator_result(operator_search_demand.review_refresh_preview(cursor, business_id, user_id), 'reviews.read'), {}
     from services.operator_query import read_reviews_request
     if tool_planner is None and re.search(r'отзыв',clean_message,re.I):
         blocked=operator_subscription_block(subscription_access,'reviews.read')
         if blocked:return blocked, {}
-        review_result=read_reviews_request(cursor,business_id,clean_message)
+        review_result=read_reviews_request(cursor,business_id,clean_message,user_id=user_id)
         if review_result is not None:return standardize_operator_result(review_result,'reviews.read'), {}
     if tool_planner is None and _content_read_request(clean_message):
         blocked = operator_subscription_block(subscription_access, 'content.read')
