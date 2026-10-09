@@ -87,6 +87,10 @@ def plan(cursor,business_id,user_id,args):
     entries=snapshot.get('entries_json') or []
     conflicts=[entry for entry in entries if entry.get('master','').casefold() in absent]
     lines=['План дня на '+day+'.','Сохранённые рабочие факты:']
+    from services.operator_owner_actions import effective_hours
+    hours=effective_hours(cursor,business_id,day)
+    if hours:
+        lines.append('Временные часы работы: '+hours['time']+'–'+hours['end']+' ('+hours['timezone']+'). В другие дни действует постоянный график.')
     lines.extend(describe(row) for row in rows)
     if not rows:lines.append('Доступность рабочих мест и отсутствие мастеров не указаны.')
     lines.append('Записей в проверенном расписании: '+str(len(entries))+'.' if snapshot else 'Проверенного расписания на этот день пока нет.')

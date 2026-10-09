@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Callable
 
 from services.llm import analyze_text_with_gigachat
@@ -94,6 +95,13 @@ def _normalize_social_post_text(value: Any) -> str:
     if isinstance(parsed, dict) and "post" in parsed:
         return _clean_text(parsed.get("post"))
     return _normalize_news_text(raw).strip()
+
+
+def validate_operational_claims(post_text, source_text):
+    patterns=(r'свободн.{0,50}(?:кресл|мест|окн)',r'(?:мастер|сотрудник).{0,50}(?:боле|отсутств)')
+    for pattern in patterns:
+        if re.search(pattern,post_text,re.I) and not re.search(pattern,source_text,re.I):
+            raise ValueError('В пост добавлены рабочие условия, которых нет в текущем поручении.')
 
 
 def _default_social_post_generator(prompt: str, *, business_id: str, user_id: str) -> str:
@@ -191,6 +199,7 @@ def generate_social_post_draft_from_operator(
         pipeline_id=idempotency_key,
     )
     post_prompt = _build_social_post_prompt(source_text=source_text, business=business)
+    post_prompt += '\nРабочие окна, доступность кресел и отсутствие мастеров можно упоминать только из текущей исходной информации. Исторические заметки не подтверждают доступность сегодня.'
     from services.operator_editorial import editorial_prompt
     post_prompt += '\n\n' + editorial_prompt(cursor,business_id)
     if knowledge_context:
@@ -206,8 +215,10 @@ def generate_social_post_draft_from_operator(
             user_id=user_id,
         )
         post_text = _normalize_social_post_text(generated)
+        validate_operational_claims(post_text,source_text)
         from services.content_rules import enforce
         post_text = enforce(cursor,business_id,user_id,post_text,generator,source_text)
+        validate_operational_claims(post_text,source_text)
     except Exception:
         release = finalize_reserved_action_credits(
             cursor,
@@ -260,6 +271,7 @@ def generate_social_post_draft_from_operator(
         generated_text=post_text,
         prompt_key="operator_social_post_generate",
     )
+    draft_href='/dashboard/card?tab=news&business_id='+business_id+'&news_id='+str(social_post_draft['id'])
     finalization = finalize_reserved_action_credits(
         cursor,
         reservation_id=_clean_text(reservation.get("reservation_id")),
@@ -283,6 +295,7 @@ def generate_social_post_draft_from_operator(
         "intent": SOCIAL_POST_GENERATE_ACTION_KEY,
         "social_post_draft": social_post_draft,
         "social_post_text": post_text,
+        "result_ref": {"href":draft_href,"label":"Открыть черновик поста","entity_id":social_post_draft["id"]},
         "preflight": preflight,
         "reservation_result": reservation,
         "finalization_result": finalization,
@@ -293,7 +306,7 @@ def generate_social_post_draft_from_operator(
         "manual_publication_only": True,
         "ui_actions": [
             _build_ui_action("copy_social_post", "Скопировать пост", payload={"text": post_text}),
-            _build_ui_action("open_news_drafts", "Открыть черновики", href=NEWS_DRAFTS_URL),
+            _build_ui_action("open_news_drafts", "Открыть черновики", href=draft_href),
         ],
         "chat_response": "\n".join(response_lines),
         "blocked_reasons": [],

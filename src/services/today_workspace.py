@@ -202,6 +202,15 @@ def attach_today_workspace(cursor, *, scope, user_id, payload, now):
             warnings.append({"code":"today_source_unavailable","flow":flow})
         finally:
             cursor.execute("RELEASE SAVEPOINT today_workspace_source")
+    if 'automation' in allowed:
+        for action in payload.get('active_work') or []:
+            if action.get('kind') != 'owner_action':
+                continue
+            due=datetime.fromisoformat(action['due_at'])
+            items.append(work_item(entity_type='journey_action',entity_id=action['entity_id'],flow='automation',business_id=action['business_id'],
+                title=action['title'],description=action['description'],status=action['status'],due_at=due,
+                updated_at=action['occurred_at'],now=now,urgent=due<=now,
+                url='/dashboard/operator?'+urlencode({'business_id':action['business_id'],'journey_action':action['entity_id']})))
     # Other tracks use their existing next-action records, with existing approval URLs.
     for action in payload.get("journey_actions") or []:
         flow = normalize_flow(action.get("flow_type"))

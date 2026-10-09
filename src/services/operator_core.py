@@ -124,6 +124,8 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("services.price.update", "Изменение цены одной услуги", "available", "write_internal", "explicit_command", "/dashboard/card?tab=services", ("Измени цену услуги Маникюр на 1500",)),
     OperatorCapability("work.journal", "Рабочий журнал", "available", "internal_observation_write", "none", "/dashboard/work-journal", ("Клиент отказался от ухода, дорого",)),
     OperatorCapability("work.schedule", "Планёрка и расписание", "approval_required", "internal_write", "separate_confirmation", "/dashboard/operator", ("Проведи планёрку на сегодня",)),
+    OperatorCapability("agents.create", "Создание ИИ-сотрудника", "approval_required", "paid_compute", "separate_confirmation", "/dashboard/agents", ("Создай автоматизацию, которая каждый день готовит сводку",)),
+    OperatorCapability("work.owner_action", "Задачи, напоминания и временный график", "approval_required", "internal_write", "separate_confirmation", "/dashboard/today", ("Напомни мне завтра", "Создай задачу с дедлайном")),
     OperatorCapability("work.colleague", "Сообщение по планёрке", "approval_required", "external_send", "separate_confirmation", "/dashboard/operator", ("Подготовь сообщение коллеге",)),
     OperatorCapability("work.policy", "Правила рекомендаций", "approval_required", "owner_policy_write", "separate_confirmation", "/dashboard/work-journal", ("Не предлагайте домашний набор",), "work.policy.apply"),
     OperatorCapability("settings.input", "Город, валюта и часовой пояс бизнеса", "approval_required", "internal_write", "separate_confirmation", "/dashboard/operator", ("Укажи валюту и часовой пояс бизнеса",), "finance.daily.apply_operator"),
@@ -1594,9 +1596,28 @@ def _operator_tool_catalog(
             "approval_required": False,
             "execute": lambda _arguments: build_operator_help_response(),
         },
+        {
+            "name": "agents.create", "capability": "agents.create", "title": "Подготовить нового ИИ-сотрудника",
+            "description": "Проверяет цель, подключения, допустимые provider routes и стоимость, затем просит отдельное подтверждение перед созданием черновика. Ничего не активирует и не запускает.",
+            "input_schema": {"type": "object", "additionalProperties": False, "properties": {
+                "name": {"type": "string", "maxLength": 160}, "description": {"type": "string", "minLength": 8, "maxLength": 4000},
+                "category": {"type": "string", "maxLength": 80}, "execution_mode": {"type": "string", "enum": ["one_off", "manual", "scheduled"]},
+                "schedule_time": {"type": "string"}, "schedule_timezone": {"type": "string"},
+                "schedule": {"type": "object", "properties": {"trigger": {"type": "string", "enum": ["schedule.daily", "schedule.weekly"]}, "time": {"type": "string"}, "timezone": {"type": "string"}, "weekday": {"type": "integer", "minimum": 0, "maximum": 6}}},
+                "outreach_config": {"type": "object", "description": "Для повторяющегося аутрича: audience, search_geography, requirements, queries [{query,city}], target_count, legacy agency_country/sold_destination, offer, language, mode find_only/prepare_only/auto_send, search_budget_cents, max_search_calls, max_candidates, max_qualification_calls, max_draft_attempts. Условия будут показаны до согласования. auto_send требует отдельного разрешения outreach.ai_rules на активную версию."},
+                "selected_connection_bindings": {"type": "object"}, "selected_provider_routes": {"type": "object"},
+                "accepted_provider_routes": {"type": "boolean"}, "clone_from_blueprint_id": {"type": "string"}},
+                "required": ["description"]},
+            "risk_class": "paid_compute", "approval_required": True, "required_permission": "business.write",
+            "prepare_approval": lambda arguments: __import__("services.agent_blueprint_creation", fromlist=["prepare_creation"]).prepare_creation(
+                cursor, business_id=business_id, user_id=user_id, actor_context=actor_context, payload=arguments),
+        },
     ]
     from services import operator_business_management
     tools.extend(operator_business_management.tools(cursor,business_id,user_id,message,channel,action_orchestrator,actor_context))
+    from services import operator_owner_actions, operator_workday
+    if operator_workday.enabled(business_id):
+        tools.extend(operator_owner_actions.tools(cursor,business_id,user_id,message,actor_context))
     from services.operator_editorial import editorial_tools
     tools.extend(editorial_tools(cursor,business_id,user_id,message,channel))
     from services import finance_daily, operator_finance_daily
@@ -2005,11 +2026,27 @@ def route_operator_message(
         if workday_result:
             return workday_result
     from services import operator_business_management
+    if pending.get('capability')=='content.plan.clarification':
+        from services.operator_context import PlannerContext
+        if not PlannerContext(clean_message).domains or 'content' in PlannerContext(clean_message).domains:
+            source=str(pending.get('source_message') or '')+'\nУточнение: '+clean_message
+            outcome=_create_content_plan(business_id=business_id,user_id=user_id,message=source,
+                request_id=str((action_payload or {}).get('request_id') or '') or None)
+            return outcome,({'capability':'content.plan.clarification','source_message':source} if outcome.get('status')=='clarification_required' else {})
+    if _is_content_plan_intent(clean_message):
+        blocked = operator_subscription_block(subscription_access, 'content.create_plan')
+        if blocked:
+            return blocked, {}
+        outcome=_create_content_plan(business_id=business_id,user_id=user_id,message=clean_message,
+            request_id=str((action_payload or {}).get('request_id') or '') or None)
+        return outcome,({'capability':'content.plan.clarification','source_message':clean_message} if outcome.get('status')=='clarification_required' else {})
     business_followup = pending.get('capability') == 'settings.profile.clarification' and not re.search(r'пост|контент|отзыв|новост|услуг|финанс|выруч|расход', clean_message, re.I)
     if business_followup and clean_message.casefold().strip() in {'отмена','отмени','стоп','/cancel'}:
         return standardize_operator_result({'status':'cancelled','chat_response':'Изменение отменено.'},'settings.profile'), {}
     if operator_business_management.matches(clean_message) or business_followup:
-        selected = operator_business_management.tools(cursor,business_id,user_id,clean_message,channel,action_orchestrator,actor_context)
+        selected = _operator_tool_catalog(cursor,business_id=business_id,user_id=user_id,message=clean_message,
+            channel=channel,limit=limit,refresh_handler=run_refresh,action_orchestrator=action_orchestrator,actor_context=actor_context)
+        selected = [tool for tool in selected if not operator_subscription_block(subscription_access,tool.get('capability') or tool['name'])]
         literal = operator_business_management.timezone_lines(clean_message)
         blocked = operator_subscription_block(subscription_access, 'settings.profile')
         if blocked:
@@ -2139,7 +2176,8 @@ def route_operator_message(
         source_message = (str(pending.get('source_message') or '')+'\nУточнение: '+clean_message) if finance_pending else clean_message
         message_ref=next((item.get('id') for item in reversed(conversation_history or []) if item.get('role')=='user'),None)
         selected = operator_finance_daily.tools(cursor,business_id,user_id,source_message,channel,message_ref,action_orchestrator,pending.get('draft') if finance_pending else None)
-        selected.extend(tool for tool in _operator_tool_catalog(cursor,business_id=business_id,user_id=user_id,message=source_message,channel=channel,limit=limit,refresh_handler=run_refresh,action_orchestrator=action_orchestrator) if tool.get('name')=='finance.ingest_sales')
+        selected.extend(_operator_tool_catalog(cursor,business_id=business_id,user_id=user_id,message=source_message,channel=channel,limit=limit,refresh_handler=run_refresh,action_orchestrator=action_orchestrator,actor_context=actor_context))
+        selected = list({tool['name']:tool for tool in reversed(selected) if not operator_subscription_block(subscription_access,tool.get('capability') or tool['name'])}.values())
         arguments = dict(business_id=business_id,user_id=user_id,message=source_message,conversation_id=conversation_id,
             conversation_history=conversation_history,actor_context=actor_context,pending_approvals=pending_approvals,
             business_timezone=finance_daily.settings(cursor,business_id).get("timezone"),
@@ -2173,6 +2211,8 @@ def route_operator_message(
         request_key = str((action_payload or {}).get('request_id') or hashlib.sha256(source_message.encode()).hexdigest())
         request_key = str(conversation_id or channel)+':'+request_key
         selected_tools = [_normalize_tool_contract(tool,business_id=business_id) for tool in operator_service_creation.tools(cursor,business_id,user_id,source_message,request_key)]
+        selected_tools.extend(_operator_tool_catalog(cursor,business_id=business_id,user_id=user_id,message=source_message,channel=channel,limit=limit,refresh_handler=run_refresh,action_orchestrator=action_orchestrator,actor_context=actor_context))
+        selected_tools = list({tool['name']:tool for tool in reversed(selected_tools) if not operator_subscription_block(subscription_access,tool.get('capability') or tool['name'])}.values())
         arguments = dict(business_id=business_id,user_id=user_id,message=source_message,conversation_id=conversation_id,
             conversation_history=conversation_history,actor_context=actor_context,pending_approvals=pending_approvals,tools=selected_tools)
         outcome = run_paid_operator_tool_loop(cursor, **arguments) if tool_planner is None else run_operator_tool_loop(**arguments, planner=tool_planner)
@@ -2191,7 +2231,9 @@ def route_operator_message(
         source_message = (str(pending.get('source_message') or '') + '\nУточнение: ' + clean_message) if editorial_pending else clean_message
         if pending.get('selected_item'):
             source_message+='\nВыбранный пост (серверный контекст): '+json.dumps(pending['selected_item'],ensure_ascii=False)
-        tools = [_normalize_tool_contract(tool,business_id=business_id) for tool in editorial_tools(cursor,business_id,user_id,source_message,channel)]
+        tools = _operator_tool_catalog(cursor,business_id=business_id,user_id=user_id,message=source_message,
+            channel=channel,limit=limit,refresh_handler=run_refresh,action_orchestrator=action_orchestrator,actor_context=actor_context)
+        tools = [tool for tool in tools if not operator_subscription_block(subscription_access,tool.get('capability') or tool['name'])]
         arguments = dict(business_id=business_id,user_id=user_id,message=source_message,conversation_id=conversation_id,
             conversation_history=conversation_history,actor_context=actor_context,pending_approvals=pending_approvals,tools=tools)
         from services.operator_plan_revision import explicit_schedule
@@ -2273,7 +2315,8 @@ def route_operator_message(
     if "опублик" in lowered_message and any(marker in lowered_message for marker in ("новост", "пост", "канал", "соцсет")):
         return _manual_result("content.publish_external"), {}
     if _is_content_plan_intent(clean_message):
-        return _create_content_plan(business_id=business_id, user_id=user_id, message=clean_message, request_id=str((action_payload or {}).get('request_id') or '') or None), {}
+        outcome=_create_content_plan(business_id=business_id,user_id=user_id,message=clean_message,request_id=str((action_payload or {}).get('request_id') or '') or None)
+        return outcome,({'capability':'content.plan.clarification','source_message':clean_message} if outcome.get('status')=='clarification_required' else {})
     if classify_product_explanation_intent(clean_message):
         return standardize_operator_result(
             build_product_feature_explanation(clean_message),
@@ -2530,6 +2573,20 @@ def confirm_pending_operator_action(
     if capability == 'work.schedule':
         from services import operator_workday
         result = standardize_operator_result(operator_workday.apply(cursor,business_id,user_id,envelope,action_id),capability)
+        if result.get('status') == 'completed':
+            finish_operator_action(cursor,action_id=action_id,result=result)
+        return result, False
+    if capability == 'agents.create':
+        from services.agent_blueprint_creation import create_draft
+        result = standardize_operator_result(create_draft(cursor, business_id=business_id, user_id=user_id,
+            actor_context={**(actor_context or {}), "operator_confirmation": True}, payload=envelope.get("payload") if isinstance(envelope.get("payload"), dict) else {},
+            idempotency_key=str(envelope.get("idempotency_key") or "")), capability)
+        if result.get('status') == 'completed':
+            finish_operator_action(cursor, action_id=action_id, result=result)
+        return result, False
+    if capability == 'work.owner_action':
+        from services.operator_owner_actions import apply
+        result = standardize_operator_result(apply(cursor,business_id,user_id,envelope,action_id,actor_context),capability)
         if result.get('status') == 'completed':
             finish_operator_action(cursor,action_id=action_id,result=result)
         return result, False

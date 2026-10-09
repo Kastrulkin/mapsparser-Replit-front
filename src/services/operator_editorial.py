@@ -293,12 +293,18 @@ def editorial_prompt(cursor,business_id):
     return _editorial_profile_prompt(cursor,business_id)+prompt(cursor,business_id)
 
 
+def durable_note(note):
+    # Dated availability is working data, not an evergreen company fact.
+    text=str(note.get('text') or '')
+    return not bool(re.search(r'свободн.{0,50}(?:кресл|мест|окн)|(?:мастер|сотрудник).{0,50}(?:боле|отсутств)|(?:сегодня|завтра).{0,70}(?:работаем|открыт|закрыт)',text,re.I))
+
+
 def _editorial_profile_prompt(cursor,business_id):
     cursor.execute('SELECT preferences_json FROM content_voice_profiles WHERE business_id=%s',(business_id,))
     preferences=(_row(cursor,cursor.fetchone()).get('preferences_json') or {})
     notes=preferences.get('editorial_notes') or []
     selected=[];size=0
-    for note in reversed([note for note in notes if note.get('kind')!='tone'][-20:]):
+    for note in reversed([note for note in notes if note.get('kind')!='tone' and durable_note(note)][-20:]):
         length=len(json.dumps(note,ensure_ascii=False))
         if size+length>16000: continue
         selected.insert(0,note);size+=length
@@ -393,7 +399,7 @@ def editorial_evidence(cursor,business_id):
     cursor.execute('SELECT preferences_json FROM content_voice_profiles WHERE business_id=%s',(business_id,))
     notes=((_row(cursor,cursor.fetchone()).get('preferences_json') or {}).get('editorial_notes') or [])
     return [{'id':'owner_note_'+note['id'],'type':'owner','label':'Со слов пользователя','fact':note['text'],
-        'story_evidence':note.get('kind')=='founder_story'} for note in notes if note.get('kind') in {'company_fact','founder_story'}][-6:]
+        'story_evidence':note.get('kind')=='founder_story'} for note in notes if note.get('kind') in {'company_fact','founder_story'} and durable_note(note)][-6:]
 
 
 def _invoke(handler,arguments):

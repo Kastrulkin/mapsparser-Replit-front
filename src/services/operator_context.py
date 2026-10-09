@@ -20,10 +20,9 @@ class PlannerContext:
         self.reverse = {}
 
     def tools(self, tools):
-        if not self.domains:
-            return tools
-        selected = [tool for tool in tools if tool['name'].split('.')[0] in self.domains or tool['name'].startswith(('operator.', 'settings.', 'localos.'))]
-        return selected or tools
+        # Domains help with history, never with authority or availability.
+        # A finance request may create an automation; a review may create a post.
+        return tools
 
     def encode(self, value):
         if isinstance(value, dict):

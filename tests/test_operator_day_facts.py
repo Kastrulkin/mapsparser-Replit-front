@@ -33,6 +33,7 @@ def test_plan_joins_finance_schedule_and_absence(workday):
     operator_workday.apply(c,'b','u',prepare(c),'schedule')
     envelope=finance_daily.prepare(c,'b','u',{'kind':'daily','date':'2026-09-14','currency':'RUB','values':{'revenue':'12000','checks':6}},'web','finance')
     finance_daily.apply(c,'b','u',envelope,'finance')
+    c.execute("ALTER TABLE journey_actions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ready', ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()")
     plan=operator_day_facts.plan(c,'b','u',{'date':'2026-09-14'})
     assert len(plan['schedule_conflicts'])==2
     assert '15:00–17:00' in plan['chat_response']
@@ -96,6 +97,7 @@ def test_void_legacy_transaction_preserves_unknown_currency(workday):
 def test_question_reads_plan_without_saving_again(workday):
     _,c=workday
     save(c)
+    c.execute("ALTER TABLE journey_actions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ready', ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()")
     result=operator_day_facts.read_request(c,'b','u','Что мне делать сегодня дальше? Учти два кресла с 15:00 до 17:00')
     assert 'Следующие действия' in result['chat_response']
     with pytest.raises(ValueError,match='Вопрос'):operator_day_facts.tools(c,'b','u','web','Что мне делать сегодня?','question')[0]['execute']({'quote':'два кресла','operational':{'kind':'capacity'}})

@@ -14,10 +14,17 @@ def extract(message):
     text=re.sub(r'\bна\s+неделю\b','на 1 неделю',text)
     frequency=re.search(r'\b(\d+)\s+пост\w*\s+в\s+недел',text)
     if not frequency:
+        daily=re.search(r'\b(\d+)\s+пост\w*\s+в\s+день',text)
+        if daily and int(daily[1]) != 1:
+            raise PlanClarification('В одном плане поддерживается не более одного поста в день. Укажите меньшую частоту.')
+    else:
+        daily=None
+    daily_requested=bool(daily or re.search(r'\bежедневно\b',text))
+    if not frequency and not daily_requested:
         if re.search(r'\bс\s+\d|\bна\s+\d+\s+(?:недел|пост)',text):
             raise PlanClarification('Как часто публиковать посты в указанном периоде? Например: один пост в неделю.')
         return None
-    per_week=int(frequency[1])
+    per_week=int(frequency[1]) if frequency else 7
     if not 1<=per_week<=7:raise PlanClarification('Укажите от одного до семи постов в неделю или точные даты публикаций.')
     start_match=re.search(r'\bс\s+(\d{4}-\d{2}-\d{2})',text)
     try:

@@ -77,6 +77,9 @@ def _planner_prompt(state: dict[str, Any]) -> str:
             "Не придумывай данные и не утверждай, что действие выполнено, пока нет observation.",
             "Вызывай по одному инструменту за шаг. Для ответа используй только факты из контекста и observations.",
             "Если инструмента нет, честно объясни ограничение. Не запрашивай и не раскрывай секреты.",
+            "Цель определяй по всей команде, а не по отдельному слову: название и часовой пояс автоматизации не означают изменение профиля бизнеса. Для напоминания владельцу используй work.prepare_owner_action. Для повторяющейся автоматизации — agents.create. Не заменяй напоминание сообщением клиентам.",
+            "Если инструмент просит уточнение, передай вопрос пользователю, не повторяй тот же вызов. Ограничения текста (не обещай компенсацию, не публикуй) не являются сменой задачи или правил бизнеса.",
+            "В сообщении о переносе различай дату существующей записи и новую дату: если новая дата не указана, попроси удобное время, не назначай перенос на завтра.",
             "Ссылки @refN — точные серверные ссылки. Передавай их без изменений в параметры инструментов.",
             "Верни только JSON одного из видов:",
             '{"action":"tool_call","tool":"tool.name","arguments":{}}',
@@ -319,9 +322,13 @@ def run_operator_tool_loop(
             ):
                 message_text = _fallback_read_response(last_tool_name, last_outcome, message)
             executed_intent = str(last_outcome.get("intent") or "")
+            refusal = bool(re.search(r'не могу|не удалось|не поддержива|нет (?:функци|инструмент|возможност)|нечем', message_text, re.I))
+            final_status = str(last_outcome.get("status") or "completed")
+            if refusal and final_status == 'completed':
+                final_status = 'unsupported' if not trace else 'blocked'
             return {
                 **last_outcome,
-                "status": str(last_outcome.get("status") or "completed"),
+                "status": final_status,
                 "intent": "operator_tool_loop",
                 "executed_intent": executed_intent,
                 "capability": str(tool_map.get(trace[-1]["tool"], {}).get("capability") or "operator.help") if trace else "operator.help",
@@ -474,7 +481,7 @@ def run_operator_tool_loop(
                         "risk_class": str(tool.get("risk_class") or "write"),
                     })
                     last_outcome = dict(outcome)
-                    if bool(tool.get("deterministic_preparation_response")):
+                    if outcome.get("status") == "clarification_required" or bool(tool.get("deterministic_preparation_response")):
                         return {
                             **last_outcome,
                             "status": str(last_outcome.get("status") or "blocked"),
@@ -553,6 +560,12 @@ def run_operator_tool_loop(
             "risk_class": str(tool.get("risk_class") or "read_only"),
         })
         outcome_status = str(outcome.get("status") or "completed").strip().lower()
+        if outcome_status == 'clarification_required':
+            return {**last_outcome, 'status': 'clarification_required', 'intent': 'operator_tool_loop',
+                'capability': str(tool.get('capability') or tool_name),
+                'chat_response': str(outcome.get('chat_response') or outcome.get('error') or 'Уточните условия задачи.'),
+                'tool_trace': trace, 'tool_calls': len(trace), 'planner_steps': step_index + 1,
+                'external_writes_performed': False}
         if bool(tool.get("deterministic_response")) and outcome_status not in {
             "blocked",
             "denied",

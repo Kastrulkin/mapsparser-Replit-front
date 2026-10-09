@@ -111,6 +111,7 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "approval_required": True,
     },
     "work.policy.apply": {"risk":"owner_policy_write","approval_required":True,"side_effects":"versioned owner rules after approval"},
+    "finance.summary.read": {"risk":"read","side_effects":"reads saved daily finance; never sends or writes finance","approval_required":False},
     "finance.daily.apply_operator": {"risk": "localos_finance_write", "side_effects": "applies one versioned finance fact after explicit approval", "approval_required": True},
     "finance.transaction.apply_operator": {
         "risk": "localos_finance_write",
@@ -175,6 +176,7 @@ CAPABILITY_RUNTIME_STATUS = {
     "finance.transaction.create": ("request_only", False),
     "work.policy.apply": ("production_internal_write",True),
     "finance.daily.apply_operator": ("production_internal_write", True),
+    "finance.summary.read": ("production_read", True),
     "finance.transaction.apply_operator": ("production_internal_write", True),
     "finance.sales_import.apply_operator": ("production_internal_write", True),
     "billing.reserve": ("manual_only", False),
@@ -239,6 +241,7 @@ def build_capability_handlers() -> Dict[str, CapabilityHandler]:
         "finance.transaction.create": _handle_finance_transaction_create,
         "work.policy.apply": _handle_work_policy,
         "finance.daily.apply_operator": _handle_finance_daily_apply_operator,
+        "finance.summary.read": _handle_finance_summary_read,
         'business.settings.apply_operator': _handle_business_settings,
         'business.team.apply_operator': _handle_business_team,
         "finance.transaction.apply_operator": _handle_finance_transaction_apply_operator,
@@ -2099,6 +2102,22 @@ def _count_recipients(payload: Dict[str, Any]) -> int:
     if isinstance(audience, list):
         return len(audience)
     return 0
+
+
+def _handle_finance_summary_read(envelope,user_data):
+    from services.operator_finance_daily import read
+    from services.finance_daily import enabled
+    business=str(envelope['tenant_id'])
+    if not enabled(business):
+        return {'status':'blocked','blocked_reasons':['finance_input_not_enabled']}
+    payload=envelope.get('payload') or {}
+    day=payload.get('day') or 'today'
+    db=DatabaseManager()
+    try:
+        summary=read(db.conn.cursor(),business,_actor_user_id(envelope,user_data),{'start':day,'end':day})
+        return _result('read_completed',financial_daily=summary.get('financial_daily'),summary=summary['chat_response'])
+    finally:
+        db.close()
 
 
 def _handle_finance_daily_apply_operator(envelope, user_data):

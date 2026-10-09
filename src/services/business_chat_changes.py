@@ -114,7 +114,14 @@ def read_profile(cursor, business_id):
         values[key] = contacts.get(key) or ''
     for key in ('currency', 'timezone'):
         values[key] = defaults.get(key) or ''
+    temporary=None
+    if defaults.get('timezone'):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        from services.operator_owner_actions import effective_hours
+        temporary=effective_hours(cursor,business_id,datetime.now(ZoneInfo(defaults['timezone'])).date().isoformat())
     return {'business_id': business_id, 'name': business.get('name') or business_id,
+            'temporary_working_hours': temporary,
             'values': values, 'coordinates': {'geo_lat': business.get('geo_lat'), 'geo_lon': business.get('geo_lon')},
             'profile_revision': business.get('updated_at'), 'contacts_revision': contacts.get('updated_at'),
             'defaults_version': defaults.get('version', 0), 'default_conflicts': defaults.get('conflicts', [])}

@@ -49,6 +49,7 @@ def route(cursor, *, business_id, user_id, message, channel, payload, pending,
     if message.casefold().strip() in {'стоп','отмена','/cancel','не надо'}:
         cursor.execute("UPDATE operatorconversations SET input_context_json='{}'::jsonb WHERE id=%s",(conversation_id,))
         return operator_workday.result('Текущий ввод отменён. Сохранённые результаты остались в истории.','cancelled'),{}
+    message=(str(pending.get('source_message') or '')+'\nУточнение: '+message) if followup and pending.get('source_message') else message
     operator_workday.authorize(cursor,business_id,user_id)
     direct_read=operator_day_facts.read_request(cursor,business_id,user_id,message)
     if direct_read is not None:
@@ -75,7 +76,7 @@ def route(cursor, *, business_id, user_id, message, channel, payload, pending,
         'execute':lambda a:operator_attachments.classify(cursor,business_id,user_id,a['attachment_id'],a['purpose'],conversation_id)})
     tools.extend(_operator_tool_catalog(cursor,business_id=business_id,user_id=user_id,message=message,channel=channel,limit=10,
         refresh_handler=refresh_reviews_from_operator,action_orchestrator=orchestrator,
-        work_request_key=payload.get('request_id'),work_message_id=next((m.get('id') for m in reversed(conversation_history or []) if m.get('role')=='user'),None)))
+        actor_context=actor_context,work_request_key=payload.get('request_id'),work_message_id=next((m.get('id') for m in reversed(conversation_history or []) if m.get('role')=='user'),None)))
     # This lane must never fall back to appointment/client audience selection.
     from services.operator_audio import authorize_actor
     from services.operator_core import operator_subscription_block
@@ -97,7 +98,7 @@ def route(cursor, *, business_id, user_id, message, channel, payload, pending,
         selected={'selected_object':{'type':'schedule','date':outcome['date']}}
         cursor.execute('UPDATE operatorconversations SET input_context_json=%s::jsonb WHERE id=%s AND business_id=%s AND user_id=%s',
                        (json.dumps(selected),conversation_id,business_id,user_id))
-    next_context={'capability':'operator.workday','stage':'approval' if outcome.get('status')=='approval_required' else 'clarification'} if outcome.get('status') in {'approval_required','clarification_required'} else {}
+    next_context={'capability':'operator.workday','source_message':message,'stage':'approval' if outcome.get('status')=='approval_required' else 'clarification'} if outcome.get('status') in {'approval_required','clarification_required'} else {}
     return standardize_operator_result(outcome,outcome.get('capability') or 'operator.help'),next_context
 
 

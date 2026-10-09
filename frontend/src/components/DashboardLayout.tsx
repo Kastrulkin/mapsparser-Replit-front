@@ -143,9 +143,11 @@ export const DashboardLayout = () => {
         if (businessesData.length > 0) {
           setBusinesses(businessesData);
 
-          // Приоритет: бизнес из админской страницы > сохраненный > первый
+          // Resolve deep links against the authenticated business list first.
           let businessToSelect;
-          if (adminSelectedBusinessId) {
+          const linkedBusinessId = new URLSearchParams(window.location.search).get('business_id');
+          if (linkedBusinessId) businessToSelect = businessesData.find((business) => business.id === linkedBusinessId);
+          if (!businessToSelect && adminSelectedBusinessId) {
             businessToSelect = businessesData.find((business) => business.id === adminSelectedBusinessId);
           }
 

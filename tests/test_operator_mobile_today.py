@@ -8,6 +8,8 @@ import services.operator_mobile_today as mobile_today
 def legacy_today_contract(monkeypatch):
     # These tests isolate the existing builder sources; new adapters have real-PG tests.
     monkeypatch.setenv("LOCALOS_TODAY_PERSONALIZATION_ENABLED", "false")
+    from services import operator_owner_actions
+    monkeypatch.setattr(operator_owner_actions, "today_items", lambda *args: [])
 
 
 def _growth(priority=80):
