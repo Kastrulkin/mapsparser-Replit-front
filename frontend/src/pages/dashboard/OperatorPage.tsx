@@ -765,7 +765,7 @@ export const OperatorPage = () => {
                       </div>
                       <div className="whitespace-pre-wrap text-sm leading-6">{operatorMessageText(message)}</div>
                       {currentBusinessId && blockerNeedsBusinessSettings(message.result) ? (
-                        <Link to="/dashboard/profile" className="inline-flex min-h-9 items-center rounded-lg bg-white px-3 text-sm font-semibold text-amber-950 underline ring-1 ring-amber-300">
+                        <Link to="/dashboard/profile" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center rounded-lg bg-white px-3 text-sm font-semibold text-amber-950 underline ring-1 ring-amber-300">
                           {language === 'ru' ? 'Проверить данные бизнеса' : 'Check business details'}
                         </Link>
                       ) : null}
@@ -896,7 +896,7 @@ function OutreachTaskStatus({ businessId, initialTask }: { businessId: string; i
       <div className="h-full bg-sky-600 transition-[width]" style={{ width: `${Math.min(100, eligible / target * 100)}%` }} />
     </div> : null}
     {refreshError ? <p className="mt-1 text-amber-800">Не удалось обновить прогресс. Проверьте задачу в разделе «Партнёрства».</p> : null}
-    <Link className="mt-2 inline-block font-medium underline" to="/dashboard/partnerships">Открыть задачу</Link>
+    <Link className="mt-2 inline-block font-medium underline" to="/dashboard/partnerships" target="_blank" rel="noopener noreferrer">Открыть задачу</Link>
   </div>;
 }
 
@@ -1191,7 +1191,7 @@ const OperatorResultActions = ({
           </Button>
         ) : hasUsefulResultRef && resultRef?.href ? (
           <Button type="button" size="sm" asChild>
-            <Link to={resultRef.href}>
+            <Link to={resultRef.href} target="_blank" rel="noopener noreferrer">
               {resultRef.label || 'Открыть результат'}
               <ExternalLink className="ml-2 h-3.5 w-3.5" />
             </Link>
@@ -1275,7 +1275,7 @@ const OperatorResultActions = ({
 
         {billingUrl ? (
           <Button type="button" size="sm" variant="outline" asChild>
-            <Link to={billingUrl}>
+            <Link to={billingUrl} target="_blank" rel="noopener noreferrer">
               Пополнить счёт
               <ExternalLink className="ml-2 h-3.5 w-3.5" />
             </Link>
