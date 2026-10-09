@@ -120,7 +120,7 @@ def read(cursor,business,user,args):
     lines=[]
     for row in items:
         data=row['payload_json']
-        time_label=data['time']+('–'+data['end'] if data.get('end') else '')
+        time_label='закрыто весь день' if data.get('closed') else data['time']+('–'+data['end'] if data.get('end') else '')
         delivery='Telegram' if data.get('delivery')=='telegram' else 'Сегодня в LocalOS'
         lines.append(f"{row['title']} — {data['date']} {time_label} ({data['timezone']}), {row['status']}; {delivery}; id {row['id']}, версия {row['version']}")
     return result('\n'.join(lines) or 'Сохранённых задач, напоминаний и временных часов нет.',owner_actions=items,
@@ -263,7 +263,7 @@ def today_items(cursor,scope,user):
             authorize(cursor,row['business_id'],user,(row['payload_json'] or {}).get('kind','task'))
         except PermissionError:
             continue
-        data=row['payload_json'];time_label=data['time']+('–'+data['end'] if data.get('end') else '')
+        data=row['payload_json'];time_label='закрыто весь день' if data.get('closed') else data['time']+('–'+data['end'] if data.get('end') else '')
         items.append({'id':'owner-action:'+str(row['id']),'kind':'owner_action','entity_id':str(row['id']),
             'title':row['title'],'description':row['description'],
             'stage':data['date']+' '+time_label+' ('+data['timezone']+')',

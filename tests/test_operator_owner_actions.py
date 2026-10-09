@@ -231,6 +231,7 @@ def test_today_items_visible_without_workspace_toggle_and_scope_safe(owner_day):
     assert not actions.today_items(c,{'kind':'business','id':'b','business_ids':['b']},'viewer')
     assert len(actions.today_items(c,{'kind':'network','id':'network','business_ids':[]},'u'))==1
 
+
 def test_transfer_same_record_complete_batch_and_atomic_stale(owner_day):
     _,c=owner_day
     args=arguments()
@@ -264,3 +265,14 @@ def test_day_closed_is_not_permanent_hours(owner_day):
     assert actions.effective_hours(c,'b','2026-10-10')['closed'] is True
     assert actions.effective_hours(c,'b','2026-10-11') is None
     assert actions.permanent_hours(c,'b')=='09:00–19:00'
+
+
+def test_closed_day_is_labelled_in_chat_and_today(owner_day):
+    _,c=owner_day
+    message='Завтра 10 октября 2026 закрыто весь день'
+    preview=actions.prepare(c,'b','u',{'kind':'hours','date':'2026-10-10','closed':True,'quote':message},message)
+    actions.apply(c,'b','u',preview['approval']['envelope'],'closed-label')
+    assert 'закрыто весь день' in actions.read(c,'b','u',{})['chat_response']
+    items=actions.today_items(c,{'kind':'business','id':'b','business_ids':['b']},'u')
+    assert 'закрыто весь день' in items[0]['stage']
+    assert '00:00' not in items[0]['stage']
