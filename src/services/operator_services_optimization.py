@@ -405,6 +405,7 @@ def optimize_services_from_operator(
         "status": "completed",
         "intent": SERVICES_OPTIMIZE_ACTION_KEY,
         "optimization_job": job,
+        "search_demand": search_demand,
         "service_suggestions": job.get("items") or suggestions,
         "preflight": preflight,
         "reservation_result": reservation,
@@ -419,6 +420,8 @@ def optimize_services_from_operator(
         "chat_response": "\n".join(
             [
                 f"Подготовил предложения по услугам: {len(job.get('items') or suggestions)}.",
+                *[f"{item.get('before_name')} → {item.get('optimized_name')}" for item in (job.get('items') or suggestions)],
+                "Основа: релевантные сохранённые запросы Wordstat; рост спроса и регион частотности не подтверждены.",
                 f"Списано кредитов: {charged}.",
                 "Изменения не применялись: применение названий и описаний должно идти отдельным подтверждённым действием.",
             ]

@@ -2030,6 +2030,7 @@ def route_operator_message(
             channel=channel, limit=limit, refresh_handler=run_refresh, action_orchestrator=action_orchestrator)
         selected = [tool for tool in selected if tool['name'].startswith(('seo.', 'services.', 'localos.', 'operator.'))
                     and not operator_subscription_block(subscription_access, tool.get('capability') or tool['name'])]
+        selected = [{**tool, 'deterministic_response': False} if tool.get('risk_class') == 'read_only' else tool for tool in selected]
         arguments = dict(business_id=business_id, user_id=user_id, message=clean_message, conversation_id=conversation_id,
             conversation_history=conversation_history, actor_context=actor_context, pending_approvals=pending_approvals, tools=selected)
         outcome = run_paid_operator_tool_loop(cursor, **arguments) if tool_planner is None else run_operator_tool_loop(**arguments, planner=tool_planner)

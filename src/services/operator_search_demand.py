@@ -11,6 +11,8 @@ def relevant_candidates(items, services):
     for service in services:
         category = detect_service_keyword_category(service)
         filtered = filter_wordstat_candidates(items, category, limit=50)['allowed']
+        if category == 'grooming':
+            filtered = [item for item in filtered if not re.search(r'\b(?:паста|корм|брит|таблетки|витамины|купить|доставка)\b|вывода шерсти', normalize_query_text(item.get('keyword')))]
         if category == 'generic':
             terms = [word for word in normalize_query_text(str(service.get('name') or '')).split()
                      if len(word) >= 4 and word not in {'услуга', 'услуги', 'маска'}]
@@ -62,7 +64,7 @@ def tools(cursor, business_id, user_id):
     return [{'name': 'seo.search_demand', 'capability': 'services.read', 'title': 'Поисковые запросы Wordstat',
              'description': 'Читает сохранённые релевантные запросы Wordstat, частотность, дату и доступные точки. Не обновляет источник. Новизна, рост и регион частотности не подтверждены без истории и метаданных источника.',
              'input_schema': {'type': 'object', 'properties': {'limit': {'type': 'integer', 'minimum': 1, 'maximum': 50}}},
-             'risk_class': 'read_only', 'approval_required': False, 'deterministic_response': True,
+             'risk_class': 'read_only', 'approval_required': False,
              'execute': lambda arguments: read_demand(cursor, business_id, user_id, arguments)}]
 
 

@@ -95,3 +95,31 @@ def test_last_update_date_is_a_read_request(monkeypatch):
     monkeypatch.setattr(operator_query, 'execute_operator_query', lambda *args, **kwargs: {'status': 'completed'})
     assert operator_query.read_reviews_request(None, 'root', 'Выведи последние отзывы. Укажи дату последнего обновления данных.', user_id='user')['status'] == 'completed'
     assert operator_query.read_reviews_request(None, 'root', 'Обнови отзывы на картах', user_id='user') is None
+
+
+def test_pet_products_are_not_service_rename_evidence():
+    services = [{'name': 'SPA-маска для шерсти', 'description': 'Груминг собак'}]
+    candidates = [{'keyword': 'паста для вывода шерсти', 'views': 9850}, {'keyword': 'spa уход для собак', 'views': 1200}]
+    assert [item['keyword'] for item in operator_search_demand.relevant_candidates(candidates, services)] == ['spa уход для собак']
+
+
+def test_compound_wordstat_proposal_continues_after_reads(monkeypatch):
+    from services import operator_core
+    calls = []
+    def read(arguments):
+        calls.append('read')
+        return {'status': 'completed', 'chat_response': 'Сохранённые запросы', 'items': []}
+    def prepare(arguments):
+        calls.append('prepare')
+        return {'status': 'completed', 'chat_response': 'Старое → Новое. Изменения не применялись.', 'service_suggestions': [{'before_name': 'Старое', 'optimized_name': 'Новое'}]}
+    monkeypatch.setattr(operator_core, '_operator_tool_catalog', lambda *args, **kwargs: [
+        {'name': 'seo.search_demand', 'capability': 'services.read', 'risk_class': 'read_only', 'deterministic_response': True, 'execute': read},
+        {'name': 'services.prepare_updates', 'capability': 'services.prepare_updates', 'risk_class': 'paid_compute', 'execute': prepare}])
+    decisions = iter([{'action': 'tool_call', 'tool': 'seo.search_demand', 'arguments': {}},
+                      {'action': 'tool_call', 'tool': 'services.prepare_updates', 'arguments': {}},
+                      {'action': 'final', 'message': 'Старое → Новое. Изменения не применялись.'}])
+    result, pending = operator_core.route_operator_message(object(), business_id='root', user_id='user',
+        message='Подготовь предложения названий услуг по Wordstat', channel='web', tool_planner=lambda state: next(decisions))
+    assert calls == ['read', 'prepare']
+    assert 'Старое → Новое' in result['chat_response']
+    assert result['external_writes_performed'] is False
