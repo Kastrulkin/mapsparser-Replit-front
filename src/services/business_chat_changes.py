@@ -45,15 +45,55 @@ def owned_businesses(cursor, user):
     return [row(cursor, raw) for raw in cursor.fetchall()]
 
 
+def search_businesses(cursor, user, reference=None, *, exact=False, id_only=False, limit=51):
+    """Search authorized rows before limiting; never resolve from a catalogue page."""
+    condition = ''
+    params = [user['user_id'], user['user_id'], bool(user.get('is_superadmin')),
+              user['user_id'], user['user_id'], user.get('session_kind') == 'demo', user.get('scope_business_id')]
+    if reference:
+        if id_only:
+            condition = ' AND b.id=%s'
+            params.append(reference)
+        elif exact:
+            condition = ' AND (b.id=%s OR LOWER(b.name)=LOWER(%s) OR LOWER(n.name)=LOWER(%s))'
+            params.extend([reference, reference, reference])
+        else:
+            condition = ' AND (b.id=%s OR POSITION(LOWER(%s) IN LOWER(b.name))>0 OR POSITION(LOWER(%s) IN LOWER(n.name))>0)'
+            params.extend([reference, reference, reference])
+    params.append(limit)
+    cursor.execute("""SELECT b.id,b.name,b.network_id,n.name network_name FROM businesses b
+        LEFT JOIN networks n ON n.id=b.network_id
+        WHERE b.is_active IS DISTINCT FROM FALSE
+          AND (b.owner_id=%s OR n.owner_id=%s OR %s
+               OR EXISTS(SELECT 1 FROM business_members m WHERE m.business_id=b.id AND m.user_id=%s AND m.status='active')
+               OR EXISTS(SELECT 1 FROM network_members m WHERE m.network_id=b.network_id AND m.user_id=%s AND m.status='active'))
+          AND (NOT %s OR b.id=%s)""" + condition + ' ORDER BY b.name,b.id LIMIT %s', tuple(params))
+    return [row(cursor, raw) for raw in cursor.fetchall()]
+
+
+def selected_business(cursor, user, anchor_id):
+    return next((business for business in search_businesses(cursor,user,anchor_id,id_only=True)
+                 if business['id'] == anchor_id), None)
+
+
 def resolve_target(cursor, user, reference, anchor_id):
     if not reference:
         return anchor_id
     if not isinstance(reference, str):
         raise ValueError('Укажите название или идентификатор бизнеса.')
-    businesses = owned_businesses(cursor, user)
-    matches = [business for business in businesses if business['id'] == reference or (business.get('name') or '').casefold() == reference.strip().casefold()]
+    reference = reference.strip()
+    selected = selected_business(cursor,user,anchor_id)
+    if selected and reference.casefold() in {selected['id'].casefold(), (selected.get('network_name') or '').casefold()}:
+        return anchor_id
+    businesses = search_businesses(cursor,user,reference,exact=True)
+    by_id = [business for business in businesses if business['id'] == reference]
+    if by_id:
+        return by_id[0]['id']
+    matches = [business for business in businesses if (business.get('name') or '').casefold() == reference.casefold()]
     if not matches:
-        matches = [business for business in businesses if reference.strip().casefold() in (business.get('name') or '').casefold()]
+        matches = businesses
+    if not matches:
+        matches = search_businesses(cursor,user,reference)
     if len(matches) != 1:
         raise ValueError('Уточните бизнес «' + reference + '».' + (' Варианты: ' + ', '.join(business['name'] for business in matches[:10]) if matches else ''))
     return matches[0]['id']

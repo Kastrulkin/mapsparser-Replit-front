@@ -44,13 +44,25 @@ def tools(cursor, business_id, user_id, message, channel, orchestrator=None, ses
         return {'status': 'completed', 'profile': business_chat_changes.read_profile(cursor, target),
                 'fields': public_registry(), 'external_writes_performed': False}
 
-    def list_targets(_arguments):
+    def list_targets(arguments):
         user = load_actor(cursor, user_id)
+        if session:
+            user.update({key: session[key] for key in ('session_kind', 'scope_business_id') if key in session})
         require_permission(cursor, business_id, user, 'business.read')
-        items = business_chat_changes.owned_businesses(cursor, user)
-        if session and session.get('session_kind') == 'demo':
-            items = [item for item in items if item['id'] == session.get('scope_business_id')]
-        return {'status': 'completed', 'businesses': items, 'external_writes_performed': False}
+        query = arguments.get('query')
+        if query is not None and not isinstance(query,str):
+            raise ValueError('Укажите название для поиска.')
+        query = (query or '').strip()
+        selected = business_chat_changes.selected_business(cursor,user,business_id)
+        items = business_chat_changes.search_businesses(cursor,user,query)
+        has_more = len(items) > 50
+        items = items[:50]
+        if not query and selected and not any(item['id'] == selected['id'] for item in items):
+            has_more = has_more or len(items) == 50
+            items = items[:49]
+            items.insert(0,selected)
+        return {'status': 'completed', 'businesses': items, 'selected_business':selected,
+                'query':query, 'has_more':has_more, 'external_writes_performed': False}
 
     def list_team(_arguments):
         from services.business_member_directory import list_business_members
@@ -59,12 +71,12 @@ def tools(cursor, business_id, user_id, message, channel, orchestrator=None, ses
 
     return [
         {'name': 'settings.get_profile', 'capability': 'settings.read', 'title': 'Настройки бизнеса',
-         'description': 'Читает профиль и единый реестр изменяемых полей. Другой бизнес указывай только по поручению пользователя.',
+         'description': 'Читает профиль и единый реестр изменяемых полей. Без business читает выбранный филиал. Название его сети также означает выбранный филиал; для всей сети нужен явный запрос. Другой бизнес указывай только по поручению пользователя. Не требуй наличия бизнеса в предварительном списке: этот инструмент ищет напрямую.',
          'input_schema': {'type': 'object', 'properties': {'business': {'type': 'string'}}}, 'risk_class': 'read_only',
          'approval_required': False, 'execute': read},
         {'name': 'settings.list_businesses', 'capability': 'settings.read', 'title': 'Бизнесы для изменения настроек',
-         'description': 'Возвращает названия и идентификаторы доступных владельцу бизнесов. Не выбирай первый при неоднозначном имени.',
-         'input_schema': {'type': 'object', 'properties': {}}, 'risk_class': 'read_only', 'approval_required': False, 'execute': list_targets},
+         'description': 'Ищет доступные бизнесы и сети напрямую в БД. Если пользователь назвал бизнес, передай его название в query. selected_business — текущий выбранный филиал; название его сети означает этот филиал, а не отсутствие бизнеса. Список ограничен 50 совпадениями: has_more=true требует более точного поиска. Не выбирай первый при неоднозначном имени.',
+         'input_schema': {'type': 'object', 'properties': {'query': {'type':'string','description':'Название бизнеса или сети из запроса пользователя'}}}, 'risk_class': 'read_only', 'approval_required': False, 'execute': list_targets},
         {'name': 'settings.prepare_changes', 'capability': 'settings.profile', 'title': 'Изменить настройки бизнеса',
          'description': 'Готовит подтверждение настроек одного или нескольких явно названных бизнесов: название, адрес, город, сайт, контакты, график, валюта и часовой пояс. Реестр полей доступен через settings.get_profile. Значения извлекай из поручения пользователя. UTC из предупреждения «использован UTC» не сохраняй. Для пояса Москва=Europe/Moscow, Дубай=Asia/Dubai, Орхус=Europe/Copenhagen. Не меняет внешние карты. Уточни недостающие сведения. Не обещай выполнение до подтверждения.',
          'input_schema': {'type': 'object', 'additionalProperties': False, 'required': ['changes'], 'properties': {
