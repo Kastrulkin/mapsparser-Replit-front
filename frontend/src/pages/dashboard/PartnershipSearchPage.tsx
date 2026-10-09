@@ -2812,8 +2812,8 @@ export const PartnershipSearchPage: React.FC = () => {
 
           {(workspaceView === 'drafts' || workspaceView === 'queue') ? (
           <>
-          <OutreachMessageQueue key={`${currentBusinessId}:${requestedSearchTaskId || ''}:${workspaceView}:${searchParams.get('campaign_id') || ''}`}
-            searchTaskId={requestedSearchTaskId} businessId={currentBusinessId || undefined} scope="client_partnership" query="" channel="" status=""
+          <OutreachMessageQueue key={`${currentBusinessId}:${selectedSearchGroup}:${workspaceView}:${searchParams.get('campaign_id') || ''}`}
+            searchTaskId={selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : null} businessId={currentBusinessId || undefined} scope="client_partnership" query="" channel="" status=""
             campaignId={searchParams.get('campaign_id')} presentation={workspaceView === 'drafts' ? 'letters' : 'send'}
             onChannelChange={() => {}} onStatusChange={() => {}} onOpenLead={(id) => setSelectedLeadId(id)} />
           {searchParams.get('campaign_id') && <Button variant="outline" onClick={() => { const next = new URLSearchParams(searchParams); next.delete('campaign_id'); setSearchParams(next); }}>Показать все письма</Button>}
