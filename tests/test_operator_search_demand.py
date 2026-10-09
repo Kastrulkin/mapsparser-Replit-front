@@ -123,3 +123,15 @@ def test_compound_wordstat_proposal_continues_after_reads(monkeypatch):
     assert calls == ['read', 'prepare']
     assert 'Старое → Новое' in result['chat_response']
     assert result['external_writes_performed'] is False
+
+
+def test_single_service_wordstat_preview_is_persisted_not_free_text(monkeypatch):
+    from services import operator_core, operator_services_optimization
+    monkeypatch.setattr(operator_services_optimization, '_load_services', lambda *args, **kwargs: [{'id': 'one', 'name': 'SPA-маска для шерсти'}])
+    calls = []
+    monkeypatch.setattr(operator_core, 'optimize_services_from_operator', lambda *args, **kwargs: calls.append(kwargs) or {'status': 'completed', 'chat_response': 'Старое → Новое; не применено', 'optimization_job': {'id': 'job'}})
+    result, pending = operator_core.route_operator_message(object(), business_id='root', user_id='user',
+        message='Подготовь предпросмотр улучшения названия одной услуги по Wordstat', channel='web')
+    assert calls[0]['limit'] == 1
+    assert result['optimization_job']['id'] == 'job'
+    assert result['capability'] == 'services.prepare_updates'
