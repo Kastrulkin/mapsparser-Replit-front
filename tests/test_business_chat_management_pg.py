@@ -237,3 +237,57 @@ def test_profile_management_schema_exposes_only_owner_controls(managed,monkeypat
     assert response.json['can_manage_team'] and response.json['can_edit']
     assert not response.json['can_manage_network']
     assert {'admin','master','viewer'} <= {role['key'] for role in response.json['roles']}
+
+
+@pytest.mark.parametrize('channel',['web','telegram'])
+def test_named_lookup_and_selected_network_work_beyond_catalog_limit(managed,channel):
+    _,c=managed
+    c.execute("INSERT INTO businesses(id,name,owner_id) SELECT 'bulk-'||n, 'Ааа', 'u' FROM generate_series(1,1100) n")
+    c.execute("INSERT INTO networks(id,name,owner_id) VALUES ('roga','Рога и копыта','u')")
+    c.execute("UPDATE businesses SET name='Рога и копыта',network_id='roga' WHERE id='b'")
+    c.execute("UPDATE businesses SET name='Рога и копыта — Красивых партизан',network_id='roga' WHERE id='b2'")
+    c.execute("UPDATE users SET is_superadmin=TRUE WHERE id='u'")
+    actor=load_actor(c,'u')
+    catalog=business_chat_changes.owned_businesses(c,actor)
+    assert len(catalog)==1000
+    assert not any('Рога' in business['name'] for business in catalog)
+    assert business_chat_changes.resolve_target(c,actor,'Рога и копыта','b2')=='b2'
+    assert business_chat_changes.resolve_target(c,actor,'b','b2')=='b'
+    assert business_chat_changes.resolve_target(c,actor,'Рога и копыта — Красивых партизан','b3')=='b2'
+    tools=operator_business_management.tools(c,'b2','u','Покажи настройки бизнеса Рога и копыта',channel)
+    find=next(tool for tool in tools if tool['name']=='settings.list_businesses')
+    result=find['execute']({'query':'Рога и копыта'})
+    assert result['selected_business']['id']=='b2'
+    assert {business['id'] for business in result['businesses']}=={'b','b2'}
+    assert result['has_more'] is False
+    assert find['execute']({'query':'Несуществующая организация'})['businesses']==[]
+    read=next(tool for tool in tools if tool['name']=='settings.get_profile')
+    assert read['execute']({'business':'Рога и копыта'})['profile']['business_id']=='b2'
+    decisions=iter([
+        {'action':'tool_call','tool':'settings.list_businesses','arguments':{'query':'Рога и копыта'}},
+        {'action':'tool_call','tool':'settings.get_profile','arguments':{'business':'Рога и копыта'}},
+        {'action':'final','message':'Настройки выбранного филиала прочитаны.'}])
+    result,_=operator_core.route_operator_message(c,business_id='b2',user_id='u',channel=channel,
+        message='Покажи настройки бизнеса Рога и копыта',tool_planner=lambda state:next(decisions))
+    assert result['status']=='completed'
+
+
+def test_name_search_respects_member_access_and_demo_scope(managed):
+    _,c=managed
+    c.execute("INSERT INTO users(id,email) VALUES ('reader','reader@example.ru')")
+    c.execute("INSERT INTO business_members(id,business_id,user_id,role) VALUES ('read','b2','reader','viewer')")
+    reader=load_actor(c,'reader')
+    assert business_chat_changes.resolve_target(c,reader,'My journey Together','b2')=='b2'
+    assert business_chat_changes.search_businesses(c,reader,'Весёлая')==[]
+    owner=load_actor(c,'u')
+    owner.update({'session_kind':'demo','scope_business_id':'b2'})
+    assert business_chat_changes.search_businesses(c,owner,'Весёлая')==[]
+    with pytest.raises(ValueError):business_chat_changes.resolve_target(c,owner,'b','b2')
+
+
+def test_unselected_network_requires_location_selection(managed):
+    _,c=managed
+    c.execute("INSERT INTO networks(id,name,owner_id) VALUES ('n','Одинаковая сеть','u')")
+    c.execute("UPDATE businesses SET network_id='n' WHERE id IN ('b2','b3')")
+    with pytest.raises(ValueError,match='Уточните бизнес'):
+        business_chat_changes.resolve_target(c,load_actor(c,'u'),'Одинаковая сеть','b')
