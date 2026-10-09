@@ -11,7 +11,9 @@ from services.operator_conversations import _row
 
 
 def enabled(business_id):
-    return business_id in {v.strip() for v in os.getenv('OPERATOR_WORK_JOURNAL_BUSINESS_IDS','').split(',') if v.strip()}
+    if os.getenv('OPERATOR_BUSINESS_INFORMATION_ENABLED', '').casefold() in {'1','true'}:
+        return True
+    return business_id in {value.strip() for value in os.getenv('OPERATOR_WORK_JOURNAL_BUSINESS_IDS', '').split(',') if value.strip()}
 
 
 def installed(cursor):
@@ -190,6 +192,11 @@ def save_note(cursor,business_id,user_id,channel,message_id,request_key,original
             raise ValueError('Вопрос или предположение не сохраняется как произошедшее событие.')
     elif not before:raise ValueError('Укажите запись для отмены.')
     facts=dict(before.get('facts_json') or {})
+    if 'operational' in args:
+        from services.operator_day_facts import validate
+        facts['operational']=validate(cursor,business_id,args['operational'],quote)
+    elif before and quote and quote != facts.get('quote'):
+        facts.pop('operational',None)
     if quote and quote!=facts.get('quote') and before and 'outcome' not in args:
         facts.update(outcome='note',reason=None,addon_service_id=None)
     for key in ('outcome','reason','addon_service_id'):

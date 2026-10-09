@@ -81,6 +81,8 @@ def daily_statement(message, previous=None):
     """Parse only explicit local-day totals; ambiguous or detailed sales use the planner."""
     if re.search(r'\?|\b(?:если|допустим|пример)\b|не (?:записывай|сохраняй)|итог месяца|за месяц',message,re.I):
         return None
+    if re.match(r'\s*(?:покажи|покажите|сколько|прочитай|выведи|какая|какой)\b',message,re.I):
+        return None
     if not re.search(r'\b(?:сегодня|вчера)\b',message,re.I) or not re.search(r'выручк|чек',message,re.I):
         return None
     if re.search(r'добавь|ещ[её]|увелич|отмен',message,re.I):

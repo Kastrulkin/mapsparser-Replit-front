@@ -70,6 +70,8 @@ def tools(cursor,business_id,user_id,message,channel,message_ref,orchestrator=No
         try:
             from services.operator_finance_amounts import verify_currency, verify_revenue
             arguments=verify_revenue(message, verify_currency(message, arguments))
+            if arguments.get('kind')=='transaction' and arguments.get('mode')=='void':
+                arguments.pop('currency',None)
             if previous_draft and arguments.get('date') in {None,'','today','сегодня'} and previous_draft.get('date'):
                 arguments['date']=previous_draft['date']
             envelope=finance_daily.prepare(cursor,business_id,user_id,arguments,channel,message_ref)

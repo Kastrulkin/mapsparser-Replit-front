@@ -15,7 +15,9 @@ FIELDS = MONEY + COUNTS
 
 
 def enabled(business_id):
-    return business_id in {value.strip() for value in os.getenv('OPERATOR_FINANCE_INPUT_BUSINESS_IDS','').split(',') if value.strip()}
+    if os.getenv('OPERATOR_BUSINESS_INFORMATION_ENABLED', '').casefold() in {'1','true'}:
+        return True
+    return business_id in {value.strip() for value in os.getenv('OPERATOR_FINANCE_INPUT_BUSINESS_IDS', '').split(',') if value.strip()}
 
 
 def installed(cursor):
@@ -93,6 +95,7 @@ def prepare(cursor,business_id,user_id,args,channel,message_ref):
     else:
         authorize(cursor,business_id,user_id,True)
     config=settings(cursor,business_id)
+    cancelling_transaction=kind=='transaction' and args.get('mode')=='void' and bool(args.get('transaction_id'))
     if kind=='transaction' and args.get('transaction_id'):
         cursor.execute('SELECT to_jsonb(t) data FROM financialtransactions t WHERE id=%s AND business_id=%s',(args['transaction_id'],business_id))
         original=_row(cursor,cursor.fetchone()).get('data') or {}
@@ -109,7 +112,9 @@ def prepare(cursor,business_id,user_id,args,channel,message_ref):
     if kind not in {'daily','transaction'}:
         raise ValueError('Неизвестный вид финансовой записи.')
     currency=(args.get('currency') or config.get('currency') or '').upper()
-    if not re.fullmatch('[A-Z]{3}',currency):
+    if cancelling_transaction:
+        currency=original.get('currency')
+    if not cancelling_transaction and not re.fullmatch('[A-Z]{3}',currency):
         raise ValueError('Укажите валюту или сохраните её в настройках финансов.')
     target_date=args.get('date')
     if target_date in {'today','yesterday','сегодня','вчера',None,''}:
@@ -186,7 +191,7 @@ def preview_text(envelope):
         return 'Сохранить настройки бизнеса: '+settings_summary(envelope['data'])+'?'
     if envelope['kind']=='transaction':
         data=envelope['data']
-        return ('Отменить' if envelope['mode']=='void' else 'Сохранить')+f" операцию { {'income':'доход', 'expense':'расход', 'refund':'возврат'}[data['transaction_type']] } за {data['transaction_date']}: {data['amount']} {data['currency']}? {data['description']}"
+        return ('Отменить' if envelope['mode']=='void' else 'Сохранить')+f" операцию { {'income':'доход', 'expense':'расход', 'refund':'возврат'}[data['transaction_type']] } за {data['transaction_date']}: {data['amount']} {data['currency'] or 'валюта не указана'}? {data['description']}"
     labels={'revenue':'Выручка до возвратов','refunds':'Возвраты','expenses':'Расходы','checks':'Всего чеков','upsell_checks':'Чеков с допродажей'}
     values=envelope['data']
     lines=[('Отменить сводку' if envelope['mode']=='void' else 'Сохранить итог')+f" за {envelope['date']} ({envelope['currency']})?"]
@@ -238,6 +243,14 @@ def apply(cursor,business_id,user_id,envelope,action_id):
                 version=finance_daily_summaries.version+1,user_id=EXCLUDED.user_id,channel=EXCLUDED.channel,message_ref=EXCLUDED.message_ref,updated_at=NOW()
             RETURNING *''',(target_id,business_id,envelope['date'],envelope['currency'],json.dumps(data),envelope['mode']=='void',user_id,envelope['channel'],envelope.get('message_ref')))
         after=_row(cursor,cursor.fetchone())
+    elif kind=='transaction' and envelope['mode']=='void':
+        target_id=envelope['target_id']
+        cursor.execute('SELECT to_jsonb(t) data FROM financialtransactions t WHERE id=%s AND business_id=%s FOR UPDATE',(target_id,business_id))
+        before=_row(cursor,cursor.fetchone()).get('data') or {}
+        if not before or fingerprint(before)!=envelope['before_hash']:
+            raise ValueError('Операция изменилась. Подготовьте новое подтверждение.')
+        cursor.execute('UPDATE financialtransactions SET is_voided=TRUE WHERE id=%s AND business_id=%s',(target_id,business_id))
+        after={**before,'is_voided':True}
     elif kind=='transaction':
         number(data.get('amount'))
         if data.get('transaction_type') not in {'income','expense','refund'} or Decimal(data['amount'])<=0:

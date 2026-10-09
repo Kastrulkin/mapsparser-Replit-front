@@ -1995,6 +1995,15 @@ def route_operator_message(
                 conversation_history=conversation_history,actor_context=actor_context,pending_approvals=pending_approvals,tools=selected)
             outcome = run_paid_operator_tool_loop(cursor,**arguments) if tool_planner is None else run_operator_tool_loop(**arguments,planner=tool_planner)
             return standardize_operator_result(outcome,outcome.get('capability') or 'operator.help'), {}
+    from services import operator_workday
+    if operator_workday.enabled(business_id):
+        from services import operator_workday_router
+        workday_result = operator_workday_router.route(cursor,business_id=business_id,user_id=user_id,
+            message=clean_message,channel=channel,payload=action_payload or {},pending=pending_context or {},
+            conversation_id=conversation_id,conversation_history=conversation_history,actor_context=actor_context,
+            pending_approvals=pending_approvals,orchestrator=action_orchestrator,planner=tool_planner)
+        if workday_result:
+            return workday_result
     from services import operator_business_management
     business_followup = pending.get('capability') == 'settings.profile.clarification' and not re.search(r'пост|контент|отзыв|новост|услуг|финанс|выруч|расход', clean_message, re.I)
     if business_followup and clean_message.casefold().strip() in {'отмена','отмени','стоп','/cancel'}:
@@ -2067,14 +2076,6 @@ def route_operator_message(
         return followup
     if pending.get('capability') == 'settings.input':
         pending = {}
-    if business_id in {value.strip() for value in os.getenv('OPERATOR_WORKDAY_BUSINESS_IDS','').split(',') if value.strip()}:
-        from services import operator_workday_router
-        workday_result = operator_workday_router.route(cursor,business_id=business_id,user_id=user_id,
-            message=clean_message,channel=channel,payload=action_payload or {},pending=pending_context or {},
-            conversation_id=conversation_id,conversation_history=conversation_history,actor_context=actor_context,
-            pending_approvals=pending_approvals,orchestrator=action_orchestrator,planner=tool_planner)
-        if workday_result:
-            return workday_result
     from services import work_journal, operator_work_journal
     if tool_planner is None and work_journal.enabled(business_id):
         ban=operator_work_journal.ban_request(cursor,business_id,user_id,channel,clean_message,action_orchestrator)
@@ -2128,6 +2129,9 @@ def route_operator_message(
     from services import finance_daily, operator_finance_daily
     finance_pending = pending.get('capability') == 'finance.daily.input' and (pending.get('stage')!='approval' or (bool(pending_approvals) and bool(re.match(r'нет\b|исправ|вернее|точнее|[0-9]',clean_message,re.I))))
     if finance_daily.enabled(business_id) and (operator_finance_daily.finance_input(clean_message) or finance_pending):
+        if re.match(r'\s*(?:покажи|покажите|сколько|прочитай|выведи|какая|какой)\b',clean_message,re.I) and re.search(r'\b(?:сегодня|вчера)\b',clean_message,re.I):
+            day='yesterday' if re.search(r'\bвчера\b',clean_message,re.I) else 'today'
+            return standardize_operator_result(operator_finance_daily.read(cursor,business_id,user_id,{'start':day,'end':day}),'finance.read'), {}
         if operator_finance_daily.aggregate_input(clean_message):
             return standardize_operator_result(operator_finance_daily.aggregate_result(),'finance.daily.write'), {}
         if clean_message.casefold().strip() in {'отмена','отмени','стоп','не надо','не нужно','/cancel'}:
@@ -2143,6 +2147,9 @@ def route_operator_message(
         from services.operator_finance_amounts import daily_statement
         try:
             literal=daily_statement(source_message,pending.get('draft') if finance_pending else None) if tool_planner is None else None
+            transaction_match=re.search(r'\b[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\b',clean_message)
+            if tool_planner is None and transaction_match and re.search(r'отмен',clean_message,re.I) and re.search(r'операци',clean_message,re.I) and not re.search(r'не\s+отмен',clean_message,re.I):
+                literal={'kind':'transaction','mode':'void','transaction_id':transaction_match.group()}
             if literal is not None:
                 outcome=next(tool for tool in selected if tool['name']=='finance.prepare_facts')['prepare_approval'](literal)
             else:
