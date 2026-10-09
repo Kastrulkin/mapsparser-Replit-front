@@ -38,6 +38,14 @@ def _row_value(row: Any, index: int, key: str, default: Any = None) -> Any:
 def check_tenant_access(cursor, tenant_id: str, actor_user_id: str, is_superadmin: bool, capability: str = '') -> Dict[str, Any]:
     if not tenant_id:
         return {"ok": False, "code": "TENANT_REQUIRED", "reason": "tenant_id is required"}
+    if capability in {'business.settings.apply_operator', 'business.team.apply_operator'}:
+        from services.business_permissions import load_actor, require_permission
+        try:
+            permission = 'team.manage' if capability == 'business.team.apply_operator' else 'business.settings.write'
+            require_permission(cursor, tenant_id, load_actor(cursor, actor_user_id), permission)
+            return {'ok': True}
+        except PermissionError:
+            return {'ok': False, 'code': 'ACCESS_DENIED', 'reason': 'Owner permission required'}
 
     cursor.execute("SELECT owner_id FROM businesses WHERE id = %s LIMIT 1", (tenant_id,))
     row = cursor.fetchone()
@@ -98,6 +106,8 @@ def evaluate_risk_policy(capability: str, payload: Dict[str, Any], approval: Dic
         return {"ok": True, "requires_human": True, "reason": "external spreadsheet write request requires review"}
 
     if capability in {
+        'business.settings.apply_operator',
+        'business.team.apply_operator',
         "work.policy.apply",
         "finance.daily.apply_operator",
         "finance.transaction.create",

@@ -40,6 +40,10 @@ def authorize_actor(cursor, user_id, business_id, check_subscription=True, *, re
     allowed, owner = access_verifier(cursor, business_id, user)
     if not allowed:
         raise PermissionError('Нет доступа к бизнесу')
+    owns_network = False
+    if owner != user_id and not user.get('is_superadmin'):
+        cursor.execute('SELECT n.owner_id FROM networks n JOIN businesses b ON b.network_id=n.id WHERE b.id=%s', (business_id,))
+        owns_network = _row(cursor,cursor.fetchone()).get('owner_id') == user_id
     cursor.execute('SELECT subscription_tier, subscription_status, subscription_ends_at FROM businesses WHERE id=%s', (business_id,))
     business = _row(cursor, cursor.fetchone())
     access = build_subscription_capabilities(tier=business.get('subscription_tier') or '',
@@ -47,7 +51,7 @@ def authorize_actor(cursor, user_id, business_id, check_subscription=True, *, re
         is_superadmin=bool(user.get('is_superadmin')))
     if check_subscription and not capability_access_payload(access, 'operator').get('allowed'):
         raise PermissionError('Оператор недоступен на текущем тарифе')
-    return {'role': 'business_owner' if owner == user_id else 'business_user',
+    return {'role': 'business_owner' if owner == user_id or owns_network else 'business_user',
             'is_superadmin': bool(user.get('is_superadmin')), 'permissions': ['business.access']}, access
 
 

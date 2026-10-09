@@ -30,19 +30,18 @@ def scope(cursor,business_id,user_id,write=False,owner_only=False):
     owner=actor.get('role')=='business_owner' or bool(actor.get('is_superadmin'))
     role='owner' if owner else 'viewer'
     if not owner:
-        cursor.execute("SELECT role FROM business_members WHERE business_id=%s AND user_id=%s AND status='active'",(business_id,user_id))
-        membership=_row(cursor,cursor.fetchone())
-        if not membership:
-            cursor.execute("""SELECT m.role FROM network_members m JOIN businesses b ON b.network_id=m.network_id
-                WHERE b.id=%s AND m.user_id=%s AND m.status='active'""",(business_id,user_id))
-            membership=_row(cursor,cursor.fetchone())
-        if not membership:raise PermissionError('Доступ сотрудника к бизнесу отозван.')
-        role=membership.get('role') or 'viewer'
+        cursor.execute("""SELECT role FROM business_members WHERE business_id=%s AND user_id=%s AND status='active'
+            UNION ALL SELECT m.role FROM network_members m JOIN businesses b ON b.network_id=m.network_id
+            WHERE b.id=%s AND m.user_id=%s AND m.status='active'""",(business_id,user_id,business_id,user_id))
+        roles={_row(cursor,row).get('role') for row in cursor.fetchall()}
+        if not roles:raise PermissionError('Доступ сотрудника к бизнесу отозван.')
+        role=next((value for value in ('owner','admin','manager','member','master','viewer') if value in roles),'viewer')
     if owner_only and not owner:raise PermissionError('Правила и привязки сотрудников изменяет владелец бизнеса.')
-    if write and role not in {'owner','manager','member'}:raise PermissionError('Нет права вносить рабочие сведения.')
+    from services.business_permissions import roles_allow
+    if write and not roles_allow([role], 'work.facts.write'):raise PermissionError('Нет права вносить рабочие сведения.')
     cursor.execute('SELECT master_id FROM business_master_bindings WHERE business_id=%s AND user_id=%s',(business_id,user_id))
     master_id=_row(cursor,cursor.fetchone()).get('master_id')
-    return {'user_id':user_id,'role':role,'all_visits':role in {'owner','manager'},'master_id':master_id}
+    return {'user_id':user_id,'role':role,'all_visits':role in {'owner','manager','admin'},'master_id':master_id}
 
 
 def local_day(cursor,business_id,value=None):

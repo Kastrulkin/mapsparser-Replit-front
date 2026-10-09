@@ -28,6 +28,8 @@ CapabilityHandler = Callable[[Dict[str, Any], Dict[str, Any]], Dict[str, Any]]
 
 
 CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
+    'business.settings.apply_operator': {'risk': 'owner_profile_write', 'approval_required': True, 'side_effects': 'applies versioned owner-approved LocalOS profile changes'},
+    'business.team.apply_operator': {'risk': 'access_change', 'approval_required': True, 'side_effects': 'grants reviewed membership and optionally sends an approved invitation'},
     "outreach.continue": {"risk":"internal_request", "side_effects":"binds an approved workflow to its existing outreach job", "approval_required":False},
     'work.colleague.send': {'risk':'external_send','side_effects':'queues one reviewed colleague message','approval_required':True},
     "outreach.send_batch": {
@@ -156,6 +158,8 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
 
 
 CAPABILITY_RUNTIME_STATUS = {
+    'business.settings.apply_operator': ('production_internal_write', True),
+    'business.team.apply_operator': ('production_external_write', True),
     'work.colleague.send': ('production_external_write',True),
     "reviews.reply.draft": ("production_draft", True),
     "services.optimize": ("production_draft", True),
@@ -247,6 +251,8 @@ def build_capability_handlers() -> Dict[str, CapabilityHandler]:
         "finance.transaction.create": _handle_finance_transaction_create,
         "work.policy.apply": _handle_work_policy,
         "finance.daily.apply_operator": _handle_finance_daily_apply_operator,
+        'business.settings.apply_operator': _handle_business_settings,
+        'business.team.apply_operator': _handle_business_team,
         "finance.transaction.apply_operator": _handle_finance_transaction_apply_operator,
         "finance.sales_import.apply_operator": _handle_finance_sales_import_apply_operator,
         "partnership.audit_card": _handle_partnership_audit_card,
@@ -2220,6 +2226,16 @@ def _count_recipients(payload: Dict[str, Any]) -> int:
 
 def _handle_finance_daily_apply_operator(envelope, user_data):
     from services.finance_daily import handle_apply
+    return handle_apply(envelope, user_data)
+
+
+def _handle_business_settings(envelope, user_data):
+    from services.business_chat_changes import handle_apply
+    return handle_apply(envelope, user_data)
+
+
+def _handle_business_team(envelope, user_data):
+    from services.business_team_management import handle_apply
     return handle_apply(envelope, user_data)
 
 

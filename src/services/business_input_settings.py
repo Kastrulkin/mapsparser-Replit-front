@@ -6,9 +6,10 @@ from services.operator_conversations import _row
 
 def authorize_write(cursor, business_id, user_id):
     from services.operator_audio import authorize_actor
-    actor, _ = authorize_actor(cursor, user_id, business_id, False)
-    if actor.get('role') != 'business_owner' and not actor.get('is_superadmin'):
-        raise PermissionError('Сохранить валюту и часовой пояс может владелец бизнеса.')
+    actor, _ = authorize_actor(cursor,user_id,business_id,False)
+    if actor.get('role') == 'business_owner' or actor.get('is_superadmin'):
+        return
+    raise PermissionError('Сохранить настройки может владелец бизнеса или сети.')
 
 
 # Cities are explicit user input, never inferred from a business name or location.
@@ -22,6 +23,7 @@ CITY_ZONES = {
     'берлин': ('Берлин', 'Europe/Berlin'), 'париж': ('Париж', 'Europe/Paris'),
     'алматы': ('Алматы', 'Asia/Almaty'), 'тбилиси': ('Тбилиси', 'Asia/Tbilisi'),
     'ереван': ('Ереван', 'Asia/Yerevan'), 'минск': ('Минск', 'Europe/Minsk'),
+    'орхус': ('Орхус', 'Europe/Copenhagen'), 'aarhus': ('Орхус', 'Europe/Copenhagen'),
     'екатеринбург': ('Екатеринбург', 'Asia/Yekaterinburg'), 'новосибирск': ('Новосибирск', 'Asia/Novosibirsk'),
 }
 

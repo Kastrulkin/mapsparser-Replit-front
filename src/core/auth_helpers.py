@@ -1,5 +1,5 @@
 """Auth helper functions for API endpoints."""
-from flask import request
+from flask import request, has_request_context
 from auth_system import verify_session
 
 
@@ -99,6 +99,18 @@ def verify_business_access(cursor, business_id: str, user_data: dict) -> tuple[b
         or owns_network
         or user_data.get('is_superadmin', False)
     )
+    # Restricted staff must not gain writes through legacy routes using this
+    # read boundary. Chat/work adapters enforce per-action permissions themselves.
+    if (has_access and has_request_context() and request.method in {'POST','PUT','PATCH','DELETE'}
+            and owner_id != user_id and not user_data.get('is_superadmin') and not owns_network
+            and request.path != '/api/operator/chat'
+            and not request.path.startswith(('/api/operator/actions/', '/api/work-journal'))):
+        cursor.execute("""SELECT role FROM business_members WHERE business_id=%s AND user_id=%s AND status='active'
+            UNION ALL SELECT nm.role FROM network_members nm JOIN businesses b ON b.network_id=nm.network_id
+            WHERE b.id=%s AND nm.user_id=%s AND nm.status='active'""", (business_id,user_id,business_id,user_id))
+        roles = [item.get('role') if hasattr(item,'keys') else item[0] for item in cursor.fetchall()]
+        from services.business_permissions import roles_allow
+        has_access = roles_allow(roles,'operations.write')
     
     return has_access, owner_id
 
@@ -151,4 +163,5 @@ def verify_business_write_access(cursor, business_id: str, user_data: dict) -> t
         if role:
             roles.append(str(role).strip().lower())
 
-    return any(role != 'viewer' for role in roles), owner_id
+    from services.business_permissions import roles_allow
+    return roles_allow(roles, 'operations.write'), owner_id

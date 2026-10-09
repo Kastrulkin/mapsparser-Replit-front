@@ -1366,7 +1366,7 @@ def operator_chat():
             channel=str(payload.get("channel") or "web"), message=message, payload=payload,
             router=route_operator_message,
             subscription_access=_scope_subscription_access(cursor, business_scope, bool(user_data.get("is_superadmin"))),
-            actor_context={"role": "business_owner" if owner_id == user_id else "business_user", "is_superadmin": bool(user_data.get("is_superadmin")), "permissions": ["business.access"], "session_kind": user_data.get("session_kind", "standard"), "impersonating": bool(user_data.get("impersonating") or user_data.get("impersonated_by"))},
+            actor_context={"role": "business_owner" if owner_id == user_id else "business_user", "is_superadmin": bool(user_data.get("is_superadmin")), "permissions": ["business.access"], "session_kind": user_data.get("session_kind", "standard"), "scope_business_id": user_data.get('scope_business_id'), "impersonating": bool(user_data.get("impersonating") or user_data.get("impersonated_by"))},
             refresh_handler=refresh_reviews_from_operator, ai_router_handler=classify_operator_intent_with_ai,
             manual_review_handler=process_operator_chat_message,
         )
@@ -4621,3 +4621,7 @@ register_workday_routes(operator_bp)
 
 from api.operator_input_settings_api import register_input_settings_routes
 register_input_settings_routes(operator_bp)
+from api.business_member_directory_api import register_member_directory_routes
+register_member_directory_routes(operator_bp)
+from api.business_management_api import register_business_management_routes
+register_business_management_routes(operator_bp)
