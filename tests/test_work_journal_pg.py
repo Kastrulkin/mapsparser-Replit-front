@@ -195,6 +195,18 @@ def test_network_membership_fallback_respects_role_status_and_tenant(journal, ro
         assert cursor.fetchone()['n'] == 0
 
 
+def test_network_manager_is_not_overridden_by_direct_viewer(journal):
+    _, cursor = journal
+    cursor.execute("UPDATE business_members SET role='viewer' WHERE user_id='master'")
+    cursor.execute("INSERT INTO networks(id,owner_id,name) VALUES ('network-a','u','A')")
+    cursor.execute("UPDATE businesses SET network_id='network-a' WHERE id='b'")
+    cursor.execute("INSERT INTO network_members(id,network_id,user_id,role,status) VALUES ('combined','network-a','master','manager','active')")
+    actor = work_journal.scope(cursor, 'b', 'master', write=True)
+    assert actor['role'] == 'manager'
+    assert actor['all_visits'] is True
+    assert note(cursor, key='combined-roles')['id']
+
+
 def test_changed_request_and_policy_replay_rejected(journal):
     _,c=journal;note(c)
     with pytest.raises(ValueError):note(c,outcome='interested')

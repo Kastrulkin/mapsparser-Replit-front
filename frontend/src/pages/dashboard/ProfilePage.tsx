@@ -1,4 +1,6 @@
 import { SubscriptionManagement } from '@/components/SubscriptionManagement';
+import { BusinessMembers } from '@/components/dashboard/BusinessMembers';
+import { BusinessAdditionalSettings } from '@/components/dashboard/BusinessAdditionalSettings';
 import { UserTokenUsageSummary } from '@/components/UserTokenUsageSummary';
 import {
 	DashboardPageHeader,
@@ -1498,6 +1500,9 @@ export const ProfilePage = () => {
           </div>
         )}
       </DashboardSection>
+
+      <BusinessMembers businessId={effectiveBusinessId} isRu={isRu} />
+      <BusinessAdditionalSettings businessId={effectiveBusinessId} isRu={isRu} />
 
       {/* Тарифы */}
       <div id="subscription" ref={subscriptionSectionRef} className="scroll-mt-24">

@@ -67,7 +67,7 @@ def operator_subscription_block(access, capability):
         'finance': 'finance', 'average_ticket': 'average_ticket',
         'partnerships': 'partnerships', 'communications': 'partnerships',
         'agents': 'agents', 'crm': 'progress', 'network': 'progress',
-        'appointments': 'management', 'settings': 'operator', 'support': 'operator',
+        'appointments': 'management', 'settings': 'operator', 'team': 'operator', 'support': 'operator',
     }.get(prefix, 'management')
     if capability in {'operator.help', 'operator.product_explain'}:
         required = 'operator'
@@ -127,6 +127,9 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("work.colleague", "Сообщение по планёрке", "approval_required", "external_send", "separate_confirmation", "/dashboard/operator", ("Подготовь сообщение коллеге",)),
     OperatorCapability("work.policy", "Правила рекомендаций", "approval_required", "owner_policy_write", "separate_confirmation", "/dashboard/work-journal", ("Не предлагайте домашний набор",), "work.policy.apply"),
     OperatorCapability("settings.input", "Город, валюта и часовой пояс бизнеса", "approval_required", "internal_write", "separate_confirmation", "/dashboard/operator", ("Укажи валюту и часовой пояс бизнеса",), "finance.daily.apply_operator"),
+    OperatorCapability('settings.profile', 'Настройки бизнеса', 'approval_required', 'owner_profile_write', 'separate_confirmation', '/dashboard/profile', ('Измени адрес бизнеса', 'Проставь часовые пояса'), 'business.settings.apply_operator'),
+    OperatorCapability('team.read', 'Пользователи бизнеса', 'available', 'read_only', 'none', '/dashboard/profile', ('Покажи пользователей бизнеса',)),
+    OperatorCapability('team.manage', 'Добавление сотрудников и роли', 'approval_required', 'access_change', 'separate_confirmation', '/dashboard/profile', ('Добавь Анну администратором',), 'business.team.apply_operator'),
     OperatorCapability("finance.daily.write", "Дневные итоги и финансовые операции", "approval_required", "financial", "separate_confirmation", "/dashboard/finance", ("Сегодня 10 продаж, 2 допа, выручка 350 евро",), "finance.daily.apply_operator"),
     OperatorCapability("finance.manage", "Финансы и импорты", "request_only", "financial", "separate_confirmation", "/dashboard/finance", ("Добавь расход", "Покажи финансовый итог"), "finance.transaction.create"),
     OperatorCapability("finance.read", "Финансовая сводка", "available", "read_only", "none", "/dashboard/finance", ("Покажи выручку и расходы за 30 дней",)),
@@ -880,6 +883,7 @@ def _operator_tool_catalog(
     refresh_handler: Callable[..., dict[str, Any]],
     action_orchestrator: ActionOrchestrator | None = None,
     work_request_key=None, work_message_id=None, work_saved=None,
+    actor_context: dict | None = None,
 ) -> list[dict[str, Any]]:
     query_tool = operator_query_tool_contract()
     query_tool["execute"] = lambda arguments: execute_operator_query(
@@ -1590,6 +1594,8 @@ def _operator_tool_catalog(
             "execute": lambda _arguments: build_operator_help_response(),
         },
     ]
+    from services import operator_business_management
+    tools.extend(operator_business_management.tools(cursor,business_id,user_id,message,channel,action_orchestrator,actor_context))
     from services.operator_editorial import editorial_tools
     tools.extend(editorial_tools(cursor,business_id,user_id,message,channel))
     from services import finance_daily, operator_finance_daily
@@ -1970,6 +1976,41 @@ def route_operator_message(
     run_ai_router = ai_router_handler or classify_operator_intent_with_ai
     run_manual_review = manual_review_handler or process_operator_chat_message
     pending = pending_context if isinstance(pending_context, dict) else {}
+    if (actor_context or {}).get('role') == 'business_user' and not (actor_context or {}).get('is_superadmin'):
+        from services.business_permissions import actor_roles, load_actor, roles_allow
+        roles = actor_roles(cursor,business_id,load_actor(cursor,user_id))
+        if not roles_allow(roles,'operations.write'):
+            selected = _operator_tool_catalog(cursor,business_id=business_id,user_id=user_id,message=clean_message,
+                channel=channel,limit=limit,refresh_handler=run_refresh,action_orchestrator=action_orchestrator,actor_context=actor_context)
+            work_tools = {'work.context','work.results'}
+            if roles_allow(roles,'work.facts.write'):
+                work_tools.update({'work.save_observation','work.recommend'})
+            selected = [tool for tool in selected if (tool['name'] in work_tools or
+                (not tool['name'].startswith('work.') and tool.get('risk_class') in {'read_only','support_read','identity_read'}))
+                and not operator_subscription_block(subscription_access,tool.get('capability') or tool['name'])]
+            arguments = dict(business_id=business_id,user_id=user_id,message=clean_message,conversation_id=conversation_id,
+                conversation_history=conversation_history,actor_context=actor_context,pending_approvals=pending_approvals,tools=selected)
+            outcome = run_paid_operator_tool_loop(cursor,**arguments) if tool_planner is None else run_operator_tool_loop(**arguments,planner=tool_planner)
+            return standardize_operator_result(outcome,outcome.get('capability') or 'operator.help'), {}
+    from services import operator_business_management
+    business_followup = pending.get('capability') == 'settings.profile.clarification' and not re.search(r'пост|контент|отзыв|новост|услуг|финанс|выруч|расход', clean_message, re.I)
+    if business_followup and clean_message.casefold().strip() in {'отмена','отмени','стоп','/cancel'}:
+        return standardize_operator_result({'status':'cancelled','chat_response':'Изменение отменено.'},'settings.profile'), {}
+    if operator_business_management.matches(clean_message) or business_followup:
+        selected = operator_business_management.tools(cursor,business_id,user_id,clean_message,channel,action_orchestrator,actor_context)
+        literal = operator_business_management.timezone_lines(clean_message)
+        blocked = operator_subscription_block(subscription_access, 'settings.profile')
+        if blocked:
+            return blocked, {}
+        if literal:
+            outcome = operator_business_management.preview(cursor,business_id,user_id,literal,kind='settings',channel=channel,message=clean_message,orchestrator=action_orchestrator,session=actor_context)
+        else:
+            arguments = dict(business_id=business_id,user_id=user_id,message=clean_message,conversation_id=conversation_id,
+                conversation_history=conversation_history,actor_context=actor_context,pending_approvals=pending_approvals,
+                tools=[_normalize_tool_contract(tool,business_id=business_id) for tool in selected])
+            outcome = run_paid_operator_tool_loop(cursor,**arguments) if tool_planner is None else run_operator_tool_loop(**arguments,planner=tool_planner)
+        context = {'capability': 'settings.profile.clarification'} if outcome.get('status') == 'clarification_required' else {}
+        return standardize_operator_result(outcome,outcome.get('capability') or 'settings.profile'), context
     from services.business_input_settings import route_setup
     setup = route_setup(cursor, business_id, user_id, channel, clean_message, pending, conversation_id, action_orchestrator)
     if setup:
@@ -2300,6 +2341,7 @@ def route_operator_message(
             refresh_handler=run_refresh,
             action_orchestrator=action_orchestrator,
             work_request_key=str((action_payload or {}).get("request_id") or work_message_id or uuid.uuid4()),work_message_id=work_message_id,work_saved=work_saved,
+            actor_context=actor_context,
         )
         tools = [tool for tool in tools if not operator_subscription_block(subscription_access, tool.get('capability') or tool['name'])]
         if tool_planner is None:
@@ -2410,6 +2452,7 @@ def confirm_pending_operator_action(
     user_id: str,
     action_orchestrator: ActionOrchestrator | None = None,
     subscription_access: dict | None = None,
+    actor_context: dict | None = None,
 ) -> tuple[dict[str, Any], bool]:
     action = get_operator_action(cursor, action_id=action_id, business_id=business_id, user_id=user_id)
     if not action:
@@ -2430,6 +2473,12 @@ def confirm_pending_operator_action(
     if expires and expires <= datetime.now(timezone.utc):
         return {"status": "blocked", "chat_response": "Срок подтверждения истёк. Подготовьте действие заново.", "blocked_reasons": ["approval_expired"]}, False
     capability = str(action.get("capability") or "")
+    if (actor_context or {}).get('role') == 'business_user' or ((actor_context or {}).get('user_id') or (actor_context or {}).get('id')):
+        from services.business_permissions import load_actor, require_permission
+        try:
+            require_permission(cursor,business_id,load_actor(cursor,user_id),'operations.write')
+        except PermissionError:
+            return {'status':'blocked','chat_response':'Нет права подтверждать это изменение.','blocked_reasons':['permission_denied']}, False
     blocked = operator_subscription_block(subscription_access, capability)
     if blocked:
         return blocked, False
@@ -2490,7 +2539,7 @@ def confirm_pending_operator_action(
                 "external_writes_performed": False,
             }, False
         backend_result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
-        if capability in {"finance.daily.write","work.policy","settings.input"} and backend_result.get("status") in {"blocked","error","failed"}:
+        if capability in {"finance.daily.write","work.policy","settings.input","settings.profile","team.manage"} and backend_result.get("status") in {"blocked","error","failed"}:
             return standardize_operator_result(backend_result,capability), False
         backend_chat_response = str(backend_result.get("chat_response") or "").strip()
         if backend_chat_response:

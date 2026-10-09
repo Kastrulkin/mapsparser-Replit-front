@@ -511,8 +511,16 @@ def client_info():
         allowed, owner_id = verify_business_access(cursor, business_id, user_data)
         if not allowed or (owner_id != user_id and not user_data.get('is_superadmin')):
             return jsonify({'error': 'Нет права изменять профиль бизнеса'}), 403
-        if any(data.get(field) for field in ('currency', 'timezone')):
-            save_profile_settings(cursor, business_id, user_id, data, str(data.get('settingsRequestId') or uuid.uuid4()))
+        from services.business_settings_registry import FIELDS, normalize_patch
+        from services.business_chat_changes import save_values, read_profile
+        field_names = set(FIELDS) | {alias for spec in FIELDS.values() for alias in spec['aliases']}
+        profile_patch = {key:value for key,value in data.items() if key in field_names and value is not None and not (key in {'currency','timezone'} and not value)}
+        location_changed = False
+        if profile_patch:
+            profile_patch = normalize_patch(profile_patch)
+            before_profile = read_profile(cursor,business_id)
+            location_changed = any(key in profile_patch and profile_patch[key] != before_profile['values'][key] for key in ('address','city'))
+            save_values(cursor,business_id,user_id,profile_patch,'profile:' + str(data.get('settingsRequestId') or uuid.uuid4()),data.get('settingsVersion'))
 
         # Сохраняем ссылки на карты в businessmaplinks (Postgres-only, ClientInfo не используется)
         map_links = None
@@ -571,7 +579,7 @@ def client_info():
 
             # Парсим ll=lon,lat из первой ссылки на Яндекс.Карты и сохраняем в businesses
             for url in valid_links:
-                if "yandex" in (url or "").lower() and "ll=" in (url or ""):
+                if not location_changed and "yandex" in (url or "").lower() and "ll=" in (url or ""):
                     geo_lon, geo_lat = parse_ll_from_maps_url(url)
                     if geo_lon is not None and geo_lat is not None:
                         cursor.execute(
@@ -668,43 +676,7 @@ def client_info():
                     if city_value is not None and _looks_like_url(city_value):
                         raise ValueError("Поле «Город» не должно содержать ссылку. Добавьте ссылку в блок «Ссылки на карты».")
 
-                    # Обновляем данные бизнеса
-                    updates = []
-                    params = []
-                    website_value = data.get('website') if 'website' in data else data.get('site') if 'site' in data else None
-                    if data.get('businessName') is not None:
-                        updates.append('name = %s'); params.append(data.get('businessName'))
-                    if data.get('address') is not None:
-                        updates.append('address = %s'); params.append(data.get('address'))
-                    if data.get('workingHours') is not None:
-                        updates.append('working_hours = %s'); params.append(data.get('workingHours'))
-                    if website_value is not None:
-                        normalized_website = str(website_value or "").strip()
-                        updates.append('site = %s'); params.append(normalized_website or None)
-                        updates.append('website = %s'); params.append(normalized_website or None)
-                    if data.get('businessType') is not None:
-                        business_type_value = data.get('businessType')
-                        print(f"📋 Сохраняем businessType в businesses: {business_type_value}")
-                        updates.append('business_type = %s'); params.append(business_type_value)
-                    # city: ручной приоритет; если не передан и в БД пусто — подсказка из address
-                    if 'city' in data:
-                        updates.append('city = %s'); params.append((data.get('city') or "").strip() or None)
-                    else:
-                        cursor.execute("SELECT city, address FROM businesses WHERE id = %s", (business_id,))
-                        cur_row = cursor.fetchone()
-                        cur_dict = _row_to_dict(cursor, cur_row) if cur_row else {}
-                        current_city = (cur_dict.get("city") or "").strip() if cur_dict else ""
-                        if not current_city:
-                            addr = data.get('address') or (cur_dict.get("address") or "")
-                            suggested = suggest_city_from_address(addr)
-                            if suggested:
-                                updates.append('city = %s'); params.append(suggested)
-                    if updates:
-                        updates.append('updated_at = CURRENT_TIMESTAMP')
-                        params.append(business_id)
-                        cursor.execute(f"UPDATE businesses SET {', '.join(updates)} WHERE id = %s", params)
-                        # Commit with the complete profile response.
-                        print(f"✅ Обновлён бизнес: {business_id}")
+                    # Profile values were validated and saved through the shared registry above.
         except Exception as e:
             print(f"⚠️ Ошибка синхронизации с Businesses: {e}")
             import traceback
