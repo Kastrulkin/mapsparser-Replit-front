@@ -272,9 +272,9 @@ def run_operator_tool_loop(
             "business_id": business_id,
             "user_id": user_id,
             "conversation_id": conversation_id,
-            "message": str(message or "").strip(),
+            "message": context_builder.encode(str(message or "").strip()),
             "actor": _clean_actor_context(actor_context),
-            "conversation_history": context_builder.history(_clean_history(conversation_history)),
+            "conversation_history": context_builder.encode(context_builder.history(_clean_history(conversation_history))),
             "pending_approvals": _clean_pending_approvals(pending_approvals),
             "tools": context_builder.tools([
                 _public_tool(tool)

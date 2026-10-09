@@ -1,6 +1,23 @@
 from services.operator_context import PlannerContext
 
 
+def test_employee_email_survives_provider_redaction_without_disclosure():
+    from services.llm.policy import prepare_prompt_for_provider
+    import json
+    email = 'browser-test-20261009@example.com'
+    context = PlannerContext('Добавь мастера')
+    encoded = context.encode({'message': 'Добавь мастера ' + email,
+                              'history': [{'content': email}], 'email': email})
+    safe = prepare_prompt_for_provider(json.dumps(encoded), provider='deepseek', data_class='business_internal')
+    assert safe.allowed
+    assert email not in safe.prompt
+    assert '[EMAIL_REDACTED]' not in safe.prompt
+    assert context.decode({'email': encoded['email']}) == {'email': email}
+    other = context.encode({'email': 'second@example.com'})
+    assert other['email'] != encoded['email']
+    assert PlannerContext('Другой запрос').decode(encoded['email']) == encoded['email']
+
+
 def test_domain_words_and_lossless_request_local_references():
     tools=[{'name':'content.read'},{'name':'finance.read'},{'name':'work.context'}]
     assert PlannerContext('Сопоставь данные').tools(tools)==tools
