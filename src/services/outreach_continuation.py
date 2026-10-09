@@ -62,6 +62,9 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
     search_source = raw.get("search_source", "web")
     if search_source not in {"web", "maps"}:
         raise ValueError("invalid_search_source")
+    web_provider = raw.get('web_search_provider')
+    if web_provider not in {None, 'yandex'} or (web_provider and search_source != 'web'):
+        raise ValueError('invalid_web_search_provider')
     conditions = {}
     for key, maximum, length in (("search_geography", 20, 120), ("requirements", 10, 300)):
         if key in raw:
@@ -115,6 +118,8 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
         result.update(version=2, target_count=goal,
                       agency_country=str(raw.get("agency_country") or "").strip(),
                       sold_destination=str(raw.get("sold_destination") or "").strip())
+    if web_provider:
+        result['web_search_provider'] = web_provider
     result.update(conditions)
     for key, (low, high, default) in bounds.items():
         value = raw.get(key, default)
@@ -146,6 +151,8 @@ def preview_task_config(raw: dict[str, Any]) -> dict[str, Any]:
     credits = credit_quote(config)
     geography, requirements = search_conditions(config)
     warning = (f"Поиск на картах оплачивается отдельно и может потребовать дополнительных кредитов с общего баланса. Оценка: до {credits['search_max']} кредитов; фактическое списание — по выполненной работе." if config["search_source"] == "maps" else None)
+    if config.get('web_search_provider') == 'yandex':
+        warning = "Источник: Яндекс. Его веб-поиск платный и не входит в бесплатную ротацию. Поисковые запросы оплачиваются в кредитах по условиям ниже. Карты не запускаются."
     lines = [
         "Источник: поиск на картах." if config["search_source"] == "maps" else "Источник: веб-поиск сайтов компаний.",
         *([warning] if warning else []),
@@ -173,7 +180,7 @@ def prepare_new_task_approval(raw: dict[str, Any], *, business_id: str, request_
     preview = preview_task_config(raw)
     config = preview["config"]
     from services.outreach_web_search import configured
-    if config["search_source"] == "web" and not configured():
+    if config["search_source"] == "web" and not configured(config.get("web_search_provider")):
         return {**preview, "status": "blocked", "reason_code": "web_search_not_configured", "chat_response": "Веб-поиск пока не подключён. Поиск на картах не запускался; списаний за поиск нет. Нужно подключить поисковый API.", "approval": None}
     geography, requirements = search_conditions(config)
     target = config.get("target_count", config["max_candidates"])
@@ -210,7 +217,7 @@ def prepare_revision_approval(cursor, *, business_id, task_id, raw, request_id="
         merged.pop("queries", None)
     config = normalize_config(merged)
     # A saved group cannot silently become a different audience or an auto-send grant.
-    identity = ("audience", "queries", "search_source")
+    identity = ("audience", "queries", "search_source", "web_search_provider")
     if config["mode"] == "auto_send":
         raise ValueError("new_audience_or_send_rules_require_separate_review")
     if any(config.get(key) != previous.get(key, "web" if key == "search_source" else None) for key in identity) or search_conditions(config) != search_conditions(previous):
@@ -667,7 +674,10 @@ def _start_search(config: dict[str, Any], index: int) -> dict[str, Any]:
     if config.get("search_source", "web") == "web":
         from services.outreach_web_search import search
         query = config["queries"][index % len(config["queries"])]
-        items = search(query["query"], query["city"], search_window_size(config, index), index // len(config["queries"]))
+        search_arguments = {}
+        if config.get('web_search_provider') == 'yandex':
+            search_arguments = {'provider': 'yandex', 'paid_search_approved': True}
+        items = search(query["query"], query["city"], search_window_size(config, index), index // len(config["queries"]), **search_arguments)
         return {"id": "web:" + str(uuid.uuid4()), "source": "web", "items": items,
                 "requested_limit": min(search_window_size(config, index), 20), "query_index": index % len(config["queries"])}
     from decimal import Decimal
@@ -819,7 +829,7 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                     conn.commit()
                     return {"status": "pending_human"}
                 from services.outreach_web_search import configured
-                if config.get("search_source", "web") == "web" and not configured():
+                if config.get("search_source", "web") == "web" and not configured(config.get("web_search_provider")):
                     _save(cursor, row, {**state, "blocker": "web_search_not_configured"}, status="waiting_for_review", stage="Веб-поиск не подключён. Поиск на картах не запускался; новых списаний нет.")
                     conn.commit()
                     return {"status": "pending_human", "reason_code": "web_search_not_configured"}
@@ -1359,7 +1369,7 @@ def prepare_task_start(cursor: Any, *, business_id: str, user_id: str, task_id: 
         return {"status": "completed", "task": task, "chat_response": task["stage"]}
     config = task["config"]
     from services.outreach_web_search import configured
-    if config.get("search_source", "web") == "web" and not configured():
+    if config.get("search_source", "web") == "web" and not configured(config.get("web_search_provider")):
         return {"status": "blocked", "reason_code": "web_search_not_configured", "chat_response": "Веб-поиск пока не подключён. Карты не запускаются; новых списаний нет.", "task": task}
     from services.outreach_credit_billing import credit_quote
     credits = credit_quote(config)

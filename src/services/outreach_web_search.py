@@ -7,6 +7,9 @@ EXA_FREE_ONLY_VERIFIED is an operator attestation, not inferred from an API key.
 from __future__ import annotations
 
 import os
+import base64
+import binascii
+import xml.etree.ElementTree as ET
 import re
 from urllib.parse import urlparse
 import requests
@@ -24,18 +27,23 @@ def _providers() -> list[str]:
             and os.getenv(f'{name.upper()}_FREE_ONLY_VERIFIED', 'false').lower() == 'true']
 
 
-def configured() -> bool:
+def configured(provider: str | None = None) -> bool:
+    if provider == 'yandex':
+        return (os.getenv('OUTREACH_WEB_SEARCH_ENABLED', 'false').lower() == 'true'
+                and os.getenv('YANDEX_SEARCH_PAID_REQUESTS_ENABLED', 'false').lower() == 'true'
+                and bool(os.getenv('YANDEX_SEARCH_API_KEY') and os.getenv('YANDEX_SEARCH_FOLDER_ID')))
     return bool(_providers())
 
 
 def readiness_request(message: str) -> bool:
     text = str(message or '')
-    return (bool(re.search(r'веб[- ]?поиск|web search|поисков.{0,12}api|tavily|exa', text, re.I))
+    return (bool(re.search(r'веб[- ]?поиск|web search|поисков.{0,12}api|tavily|exa|яндекс.{0,15}(?:поиск|api)|yandex.{0,15}(?:search|api)', text, re.I))
             and bool(re.search(r'подключ|готовност|провер.{0,20}(?:api|квот|источник)|connection|readiness', text, re.I)))
 
 
 def readiness() -> dict:
     providers = _providers()
+    yandex_credentials = bool(os.getenv('YANDEX_SEARCH_API_KEY') and os.getenv('YANDEX_SEARCH_FOLDER_ID'))
     connected = bool(providers)
     text = ('Веб-поиск подключён: ' + ', '.join(providers) + '. Остаток бесплатной квоты сейчас не проверялся.'
             if connected else 'Веб-поиск не подключён. Нужен ключ поискового API с подтверждённым бесплатным тарифом.')
@@ -43,7 +51,9 @@ def readiness() -> dict:
             'reason_code': '' if connected else 'web_search_not_configured',
             'chat_response': text + ' Поиск, карты и платные запросы не запускались; списаний за поиск нет.',
             'providers': providers, 'quota_status': 'unknown', 'search_started': False,
-            'external_calls_performed': False, 'paid_actions_performed': False}
+            'external_calls_performed': False, 'paid_actions_performed': False,
+            'yandex': {'credentials_present': yandex_credentials, 'billing': 'paid',
+                       'automatic_fallback': False, 'requires_separate_approval': True}}
 
 
 def _check_response(response, quota_statuses: set[int]) -> None:
@@ -97,6 +107,48 @@ def _exa(query: str, limit: int) -> list[dict]:
     return response.json().get('results') or []
 
 
+def _yandex(query: str, limit: int) -> list[dict]:
+    """One synchronous web request; no images, maps or generative snippets."""
+    if not os.getenv('YANDEX_SEARCH_API_KEY') or not os.getenv('YANDEX_SEARCH_FOLDER_ID'):
+        raise RuntimeError('web_search_not_configured')
+    if len(query) > 400:
+        raise ValueError('web_search_query_too_long')
+    search_type = os.getenv('YANDEX_SEARCH_TYPE', 'SEARCH_TYPE_COM')
+    if search_type not in {'SEARCH_TYPE_RU', 'SEARCH_TYPE_COM', 'SEARCH_TYPE_TR',
+                            'SEARCH_TYPE_KK', 'SEARCH_TYPE_BE', 'SEARCH_TYPE_UZ'}:
+        raise ValueError('web_search_invalid_search_type')
+    response = requests.post('https://searchapi.api.cloud.yandex.net/v2/web/search',
+        headers={'Authorization': f"Api-Key {os.environ['YANDEX_SEARCH_API_KEY']}"},
+        json={'query': {'searchType': search_type, 'queryText': query,
+                        'familyMode': 'FAMILY_MODE_MODERATE', 'page': '0'},
+              'groupSpec': {'groupMode': 'GROUP_MODE_DEEP',
+                            'groupsOnPage': str(max(1, min(limit, 100))), 'docsInGroup': '1'},
+              'maxPassages': '2', 'folderId': os.environ['YANDEX_SEARCH_FOLDER_ID'],
+              'responseFormat': 'FORMAT_XML'}, timeout=30)
+    # 429 is a rate limit, not evidence of exhausted free quota. Never fall back.
+    _check_response(response, set())
+    raw = response.json().get('rawData')
+    if not isinstance(raw, str) or not raw or len(raw) > 4_000_000:
+        raise RuntimeError('web_search_invalid_response')
+    try:
+        data = base64.b64decode(raw, validate=True)
+        if b'<!DOCTYPE' in data.upper() or b'<!ENTITY' in data.upper():
+            raise ValueError('xml_entities_not_allowed')
+        root = ET.fromstring(data)
+    except (binascii.Error, ET.ParseError, ValueError):
+        raise RuntimeError('web_search_invalid_response') from None
+    if root.find('.//error') is not None:
+        raise RuntimeError('web_search_failed')
+    results = []
+    for doc in root.findall('.//doc'):
+        title = doc.find('title')
+        url = doc.findtext('url') or ''
+        passages = doc.findall('./passages/passage')
+        results.append({'title': ''.join(title.itertext()) if title is not None else '',
+                        'url': url, 'content': ' '.join(''.join(p.itertext()) for p in passages)})
+    return results
+
+
 def _normalize(items: list[dict], provider: str, limit: int) -> list[dict]:
     results, seen = [], set()
     for item in items:
@@ -118,7 +170,21 @@ def _normalize(items: list[dict], provider: str, limit: int) -> list[dict]:
     return results[:limit]
 
 
-def search(query: str, geography: str, limit: int, index: int = 0) -> list[dict]:
+def search(query: str, geography: str, limit: int, index: int = 0, *,
+           provider: str | None = None, paid_search_approved: bool = False) -> list[dict]:
+    # Existing outreach tasks stay on the free-only route. A Yandex key alone
+    # must never make an old task or exhausted free quota start paid requests.
+    if provider == 'yandex':
+        if (not paid_search_approved
+                or os.getenv('YANDEX_SEARCH_PAID_REQUESTS_ENABLED', 'false').lower() != 'true'):
+            raise RuntimeError('web_search_paid_approval_required')
+        if os.getenv('OUTREACH_WEB_SEARCH_ENABLED', 'false').lower() != 'true':
+            raise RuntimeError('web_search_not_configured')
+        if limit < 1:
+            return []
+        return _normalize(_yandex(f'{query} {geography}'.strip(), limit), 'yandex', limit)
+    if provider is not None:
+        raise ValueError('web_search_invalid_provider')
     providers = _providers()
     if not providers:
         raise RuntimeError('web_search_not_configured')
