@@ -28,9 +28,9 @@ coverage boundary; it must not be used to imply unsupported provider writes.
 | Network | `network.manage` | `manual` | Manual section | `/dashboard/network` |
 | Agents | `agents.manage` | `manual` | Manual section | `/dashboard/agents` |
 | Settings | `settings.manage` | `manual` | Manual section | `/dashboard/settings` |
-| Business profile | `settings.profile` | `approval_required` | Registry-driven profile preview; owner checks, stale-data fingerprint, atomic multi-business apply through `business.settings.apply_operator`. Local implementation requires the `20261009_business_chat` migration before rollout. | `/dashboard/profile` |
-| Business users | `team.read` | `available` | Tenant-scoped owner/direct/network directory; duplicate people combined. Requires backend rollout. | `/dashboard/profile` |
-| Business users | `team.manage` | `approval_required` | Owner-reviewed membership role/scope through `business.team.apply_operator`; optional invitation delivery is separate from saved access. Requires migration and rollout. | `/dashboard/profile` |
+| Business profile | `settings.profile` | `approval_required` | Registry-driven profile preview; owner checks, stale-data fingerprint, atomic multi-business apply through `business.settings.apply_operator`. Production beta with migration `20261009_business_chat`; see the release record. | `/dashboard/profile` |
+| Business users | `team.read` | `available` | Tenant-scoped owner/direct/network directory; duplicate people combined. Production beta; see the release record. | `/dashboard/profile` |
+| Business users | `team.manage` | `approval_required` | Owner-reviewed membership role/scope through `business.team.apply_operator`; optional invitation delivery is separate from saved access. Production beta; see the release record. | `/dashboard/profile` |
 | Support | `support.manage` | `manual` | Manual section with support-safe details | `/dashboard/settings/integrations` |
 
 ## Status contract

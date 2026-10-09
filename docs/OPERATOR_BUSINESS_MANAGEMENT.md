@@ -1,8 +1,8 @@
 # Настройки бизнеса и сотрудники через Оператора
 
-Статус: `beta`, реализовано и проверяется локально. Production rollout требует
-отдельного согласования, backup PostgreSQL и Alembic-миграции
-`20261009_business_chat`. Этот документ не подтверждает production-выкладку.
+Статус: `beta`, выложено на localos.pro 2026-10-09 с backup PostgreSQL и
+Alembic-миграцией `20261009_business_chat`. Проверки и ограничения:
+[production release](releases/BUSINESS_MANAGEMENT_20261009.md).
 
 ## Пользовательский сценарий
 
