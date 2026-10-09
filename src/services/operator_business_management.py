@@ -64,12 +64,25 @@ def tools(cursor, business_id, user_id, message, channel, orchestrator=None, ses
         return {'status': 'completed', 'businesses': items, 'selected_business':selected,
                 'query':query, 'has_more':has_more, 'external_writes_performed': False}
 
-    def list_team(_arguments):
+    def list_team(arguments):
         from services.business_member_directory import list_business_members
-        require_permission(cursor, business_id, load_actor(cursor, user_id), 'business.read')
-        target=business_chat_changes.resolve_target(cursor,load_actor(cursor,user_id),_arguments.get('business'),business_id)
-        require_permission(cursor,target,load_actor(cursor,user_id),'business.read')
-        return {'status': 'completed', 'members': list_business_members(cursor, target), 'roles': business_team_management.role_options(), 'external_writes_performed': False}
+        actor = load_actor(cursor, user_id)
+        if session:
+            actor.update({key: session[key] for key in ('session_kind', 'scope_business_id') if key in session})
+        references = arguments.get('businesses') or [arguments.get('business')]
+        targets = []
+        for reference in references:
+            target = business_chat_changes.resolve_target(cursor, actor, reference, business_id)
+            require_permission(cursor, target, actor, 'business.read')
+            if target not in targets:
+                targets.append(target)
+        groups = [{'business_id': target, 'profile': business_chat_changes.read_profile(cursor, target),
+                   'members': list_business_members(cursor, target)} for target in targets]
+        result = {'status': 'completed', 'businesses': groups, 'roles': business_team_management.role_options(),
+                  'external_writes_performed': False}
+        if len(groups) == 1:
+            result['members'] = groups[0]['members']
+        return result
 
     return [
         {'name': 'settings.get_profile', 'capability': 'settings.read', 'title': 'Настройки бизнеса',
@@ -87,8 +100,8 @@ def tools(cursor, business_id, user_id, message, channel, orchestrator=None, ses
          'risk_class': 'owner_profile_write', 'approval_required': True, 'deterministic_preparation_response': True,
          'prepare_approval': lambda arguments: preview(cursor,business_id,user_id,arguments,kind='settings',channel=channel,message=message,orchestrator=orchestrator,session=session)},
         {'name': 'settings.list_users', 'capability': 'team.read', 'title': 'Пользователи бизнеса',
-         'description': 'Читает владельца и сотрудников выбранного или явно названного бизнеса (business), роли и доступ через сеть. При поиске человека в филиале передай название филиала. Если человека нет, не создавай нового вместо изменения доступа.',
-         'input_schema': {'type': 'object', 'properties': {'business':{'type':'string'}}}, 'risk_class': 'read_only', 'approval_required': False, 'execute': list_team},
+         'description': 'Читает владельца и сотрудников выбранного или явно названного бизнеса (business), роли и доступ через сеть. Для нескольких названных филиалов передай их точные названия в businesses одним вызовом. Для одного — business. Нельзя вызывать с пустыми параметрами, если пользователь назвал филиал. Если человека нет, не создавай нового вместо изменения доступа.',
+         'input_schema': {'type': 'object', 'properties': {'business':{'type':'string'}, 'businesses':{'type':'array','minItems':1,'maxItems':20,'items':{'type':'string'}}}}, 'risk_class': 'read_only', 'approval_required': False, 'execute': list_team},
         {'name': 'settings.prepare_user', 'capability': 'team.manage', 'title': 'Добавить сотрудника или изменить роль',
          'description': 'Готовит подтверждение добавления сотрудника, изменения его роли или снятия доступа (operation=remove) только в названной области. Для remove существующий email, role не нужен. Остальные филиалы сохраняют доступ. Сначала найди человека через list_users с business явно названного филиала. Только владелец. Нужны email, роль и область доступа. admin=администратор, master=мастер, viewer=наблюдатель. scope=network только по явному запросу на всю сеть выбранного бизнеса, иначе конкретные бизнесы. Отправку приглашения включай только по явному поручению; покажи её отдельно. Заблокированные аккаунты не активирует, владельца не меняет.',
          'input_schema': {'type': 'object', 'additionalProperties': False, 'required': ['email','scope','send_invitation'], 'properties': {
