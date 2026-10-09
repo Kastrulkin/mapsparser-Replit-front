@@ -2345,7 +2345,7 @@ export const PartnershipSearchPage: React.FC = () => {
           currentBusinessId={currentBusinessId}
           rawLeadCount={rawLeadCount}
           pipelineLeadCount={pipelineLeadCount}
-          visibleDraftsCount={visibleDrafts.length}
+          visibleDraftsCount={visibleDrafts.length + canonicalLetterCount}
           visibleBatchesCount={visibleBatches.length}
           visibleReactionsCount={visibleReactions.length}
           onWorkspaceChange={(value) => changeWorkspace(value)}
@@ -2387,7 +2387,7 @@ export const PartnershipSearchPage: React.FC = () => {
         currentBusinessId={currentBusinessId}
         rawLeadCount={rawLeadCount}
         pipelineLeadCount={pipelineLeadCount}
-        visibleDraftsCount={visibleDrafts.length}
+        visibleDraftsCount={visibleDrafts.length + canonicalLetterCount}
         visibleBatchesCount={visibleBatches.length}
         visibleReactionsCount={visibleReactions.length}
         onWorkspaceChange={(value) => changeWorkspace(value)}
@@ -2414,7 +2414,7 @@ export const PartnershipSearchPage: React.FC = () => {
         currentBusinessId={currentBusinessId}
         rawLeadCount={rawLeadCount}
         pipelineLeadCount={pipelineLeadCount}
-        visibleDraftsCount={visibleDrafts.length}
+        visibleDraftsCount={visibleDrafts.length + canonicalLetterCount}
         visibleBatchesCount={visibleBatches.length}
         visibleReactionsCount={visibleReactions.length}
         onWorkspaceChange={(value) => changeWorkspace(value)}
