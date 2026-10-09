@@ -2026,6 +2026,15 @@ def route_operator_message(
         proposal = bool(re.search(r'предлож|подготов|оптимиз|улучш|переимен|измен.{0,30}назван|помен.{0,30}назван', clean_message, re.I))
         if not proposal:
             return standardize_operator_result(operator_search_demand.read_demand(cursor, business_id, user_id, {}), 'services.read'), {}
+        if tool_planner is None:
+            from services.operator_services_optimization import _load_services
+            candidates = _load_services(cursor, business_id=business_id, limit=2)
+            if len(candidates) == 1:
+                blocked = operator_subscription_block(subscription_access, 'services.prepare_updates')
+                if blocked:
+                    return blocked, {}
+                outcome = optimize_services_from_operator(cursor, business_id=business_id, user_id=user_id, limit=1, channel=channel)
+                return standardize_operator_result(outcome, 'services.prepare_updates'), {}
         selected = _operator_tool_catalog(cursor, business_id=business_id, user_id=user_id, message=clean_message,
             channel=channel, limit=limit, refresh_handler=run_refresh, action_orchestrator=action_orchestrator)
         selected = [tool for tool in selected if tool['name'].startswith(('seo.', 'services.', 'localos.', 'operator.'))
