@@ -77,9 +77,9 @@ const english: Record<string, string> = {
   "Что вы имели в виду и что получилось?": "What did you mean, and what happened?"
 };
 
-export function OperatorRequestHistory({ businessId, language = 'ru' }: { businessId: string; language?: string }) {
+export function OperatorRequestHistory({ businessId, language = 'ru', initiallyOpen = false }: { businessId: string; language?: string; initiallyOpen?: boolean }) {
   const t = useCallback((text: string) => language === 'ru' ? text : text === 'История обращений' && language === 'el' ? 'Ιστορικό αιτημάτων' : english[text] || text, [language]);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initiallyOpen);
   const [items, setItems] = useState<Entry[]>([]);
   const [selected, setSelected] = useState<Entry | null>(null);
   const [channel, setChannel] = useState(''); const [inputType, setInputType] = useState('');
@@ -126,7 +126,7 @@ export function OperatorRequestHistory({ businessId, language = 'ru' }: { busine
     } catch (failure) { setNotice(failure instanceof Error ? failure.message : t("Ошибка")); }
     finally { setBusy(false); }
   };
-  return <details className="rounded-xl border bg-card p-4" onToggle={(event) => setOpen(event.currentTarget.open)}>
+  return <details open={open} className="rounded-xl border bg-card p-4" onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary className="cursor-pointer font-medium">{t("История обращений")}</summary>
     {open && <div className="mt-4 space-y-4">
       <p className="text-sm text-muted-foreground">{t("Посмотрите, что было распознано, какой ответ получен и где возникла ошибка. Прежняя переписка также доступна; подробный разбор собирается с момента включения пилота. Дата — по часовому поясу устройства.")}</p>
@@ -165,3 +165,4 @@ export function OperatorRequestHistory({ businessId, language = 'ru' }: { busine
     </div>}
   </details>;
 }
+

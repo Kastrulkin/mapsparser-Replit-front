@@ -1,36 +1,28 @@
-import { fireEvent, render, act, cleanup } from '@testing-library/react';
-import { afterEach, expect, it } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
 import { useChatAutoScroll } from './useChatAutoScroll';
-function Chat({ business = 'riderra', text = 'History' }) {
-  const ref = useChatAutoScroll(business);
-  return <div ref={ref} data-testid="chat"><p>{text}</p></div>;
+function Chat({ business, count }: { business: string; count: number }) {
+  const scroll = useChatAutoScroll(business, count);
+  return <><div data-testid="history" ref={scroll.ref} /><span>{scroll.readingHistory ? 'reading' : 'following'}</span><span>{scroll.hasNewMessages ? 'new' : 'none'}</span><button onClick={scroll.scrollToLatest}>latest</button></>;
 }
-afterEach(cleanup);
-it('follows history and new replies without interrupting manual reading', async () => {
-  const view = render(<Chat />);
-  const node = view.getByTestId('chat');
-  Object.defineProperties(node, { scrollHeight: { configurable: true, value: 1000 }, clientHeight: { value: 200 } });
-  view.rerender(<Chat text="Loaded history" />);
-  expect(node.scrollTop).toBe(1000);
-  node.scrollTop = 800; fireEvent.scroll(node);
-  Object.defineProperty(node, 'scrollHeight', { value: 1200 });
-  view.rerender(<Chat text="New reply" />);
-  expect(node.scrollTop).toBe(1200);
-  node.scrollTop = 100; fireEvent.scroll(node);
-  view.rerender(<Chat text="More reply text" />);
-  await act(async () => {});
-  expect(node.scrollTop).toBe(100);
-  node.scrollTop = 1000; fireEvent.scroll(node);
-  Object.defineProperty(node, 'scrollHeight', { value: 1500 });
-  await act(async () => { node.firstChild!.textContent = 'Streaming reply'; });
-  expect(node.scrollTop).toBe(1500);
-});
-it('resets following when switching businesses', () => {
-  const view = render(<Chat />);
-  const node = view.getByTestId('chat');
-  Object.defineProperties(node, { scrollHeight: { value: 1000 }, clientHeight: { value: 200 } });
-  node.scrollTop = 100; fireEvent.scroll(node);
-  view.rerender(<Chat business="organica" />);
-  expect(node.scrollTop).toBe(1000);
-  view.unmount();
+describe('chat following', () => {
+  it('preserves reading position, signals new messages and resets for a different business', () => {
+    const view = render(<Chat business="one" count={1} />);
+    const history = screen.getByTestId('history');
+    Object.defineProperty(history, 'scrollHeight', { configurable: true, value: 1000 });
+    Object.defineProperty(history, 'clientHeight', { configurable: true, value: 300 });
+    history.scrollTop = 200;
+    fireEvent.scroll(history);
+    view.rerender(<Chat business="one" count={2} />);
+    expect(history.scrollTop).toBe(200);
+    expect(screen.getByText('new')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('latest'));
+    expect(history.scrollTop).toBe(1000);
+    expect(screen.getByText('following')).toBeInTheDocument();
+    history.scrollTop = 100;
+    fireEvent.scroll(history);
+    act(() => view.rerender(<Chat business="two" count={2} />));
+    expect(screen.getByText('following')).toBeInTheDocument();
+    expect(screen.getByText('none')).toBeInTheDocument();
+  });
 });

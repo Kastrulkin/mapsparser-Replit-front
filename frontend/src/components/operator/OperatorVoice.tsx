@@ -17,8 +17,8 @@ async function waitJob(jobId: string, businessId: string, headers: HeadersProvid
   throw new Error('Обработка занимает больше времени. Результат доступен в заданиях.');
 }
 
-export function OperatorVoiceInput({ businessId, channel, conversationId, disabled, directSubmit = true, onSubmit, headers = voiceHeaders }: {
-  businessId: string; channel: string; conversationId?: string | null; disabled?: boolean; directSubmit?: boolean;
+export function OperatorVoiceInput({ businessId, channel, conversationId, disabled, directSubmit = true, onSubmit, headers = voiceHeaders, compact = false }: {
+  businessId: string; channel: string; conversationId?: string | null; disabled?: boolean; directSubmit?: boolean; compact?: boolean;
   onSubmit: (text: string, source: VoiceSubmission) => Promise<void>; headers?: HeadersProvider;
 }) {
   const [available, setAvailable] = useState(false);
@@ -124,12 +124,12 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
   };
   if (!available) return null;
   return <div className="space-y-2" aria-label="Голосовая команда">
-    {showExamples && <div className="text-sm text-muted-foreground"><p>Можно сказать: «Покажи ближайший пост», «Запомни для будущих текстов: …», «Есть пожелание клиента: …».</p><Button type="button" variant="ghost" onClick={()=>{sessionStorage.setItem('localos-voice-examples-hidden','true');setShowExamples(false);}}>Скрыть подсказки</Button></div>}
+    {!compact && showExamples && <div className="text-sm text-muted-foreground"><p>Можно сказать: «Покажи ближайший пост», «Запомни для будущих текстов: …», «Есть пожелание клиента: …».</p><Button type="button" variant="ghost" onClick={()=>{sessionStorage.setItem('localos-voice-examples-hidden','true');setShowExamples(false);}}>Скрыть подсказки</Button></div>}
     {!clip && !source && <div className="flex flex-wrap items-center gap-2">
-      <Button type="button" variant="outline" disabled={disabled || busy} onClick={() => recording ? recorder.current?.stop() : void start()}>
-        {recording ? <Square className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}{recording ? `Остановить · ${seconds} с` : 'Записать голосом'}
+      <Button type="button" variant="ghost" size={compact && !recording ? "icon" : "default"} aria-label={recording ? "Остановить запись" : "Записать голосом"} title="Записать голосом" disabled={disabled || busy} onClick={() => recording ? recorder.current?.stop() : void start()}>
+        {recording ? <Square className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}{recording ? `Остановить · ${seconds} с` : compact ? null : 'Записать голосом'}
       </Button>
-      <Button type="button" variant="outline" disabled={disabled || busy || recording} onClick={() => fileInput.current?.click()}>Загрузить аудио</Button>
+      <Button type="button" variant="ghost" className={compact ? "px-2" : undefined} disabled={disabled || busy || recording} onClick={() => fileInput.current?.click()}>Загрузить аудио</Button>
       <input ref={fileInput} className="sr-only" aria-label="Загрузить аудио" type="file" accept="audio/*,.webm,.m4a" disabled={disabled || busy || recording} onChange={(event) => { setSource(null); setClip(event.target.files?.[0] || null); }} />
     </div>}
     {clipUrl && <audio controls src={clipUrl} preload="metadata" />}
@@ -140,7 +140,7 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
     {(clip || recording || busy || source) && !(busy && source) && <Button type="button" variant="ghost" className="!bg-transparent !text-muted-foreground hover:!bg-muted" onClick={cancel}>Отменить запись</Button>}
     {busy && <p role="status">{delayed && asset.current ? 'Задание сохранено, ещё выполняется. Повторять сообщение не нужно.' : source ? 'Обрабатываю команду…' : 'Распознаю запись…'}</p>}
     {error && <p role="alert" className="text-sm">{error}</p>}
-    <p className="text-xs text-muted-foreground">До 2 минут. Распознавание — Яндекс SpeechKit. Рабочая заметка сохранится с возможностью отмены. Финансовые записи и публикации потребуют подтверждения.</p>
+    {(!compact || recording || clip || busy || source) && <p className="text-xs text-muted-foreground">Запись до 2 минут. Перед отправкой можно проверить распознанный текст.</p>}
   </div>;
 }
 
@@ -171,3 +171,4 @@ export function OperatorSpeech({ messageId, businessId, prepare = false, headers
   if (!available || !url) return null;
   return <div className="mt-2"><audio aria-label="Озвученный ответ" controls src={url} /></div>;
 }
+

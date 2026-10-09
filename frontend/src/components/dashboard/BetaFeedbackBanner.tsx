@@ -23,6 +23,10 @@ type BetaFeedbackBannerProps = {
   description: string;
   businessId?: string | null;
   businessName?: string | null;
+  dialogOnly?: boolean;
+  onCloseAutoFocus?: (event: Event) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 export const BetaFeedbackBanner = ({
@@ -31,12 +35,18 @@ export const BetaFeedbackBanner = ({
   description,
   businessId,
   businessName,
+  dialogOnly = false,
+  onCloseAutoFocus,
+  open: controlledOpen,
+  onOpenChange,
 }: BetaFeedbackBannerProps) => {
   const location = useLocation();
   const { toast } = useToast();
   const { language } = useLanguage();
   const copy = operatorPageCopyForLanguage(language).feedback;
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
+  const setOpen = (value: boolean) => { setLocalOpen(value); onOpenChange?.(value); };
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -79,7 +89,7 @@ export const BetaFeedbackBanner = ({
 
   return (
     <>
-      <div className="rounded-3xl border border-amber-200/80 bg-amber-50/90 px-5 py-4 shadow-sm">
+      {!dialogOnly && <div className="rounded-3xl border border-amber-200/80 bg-amber-50/90 px-5 py-4 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 space-y-1.5">
             <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">
@@ -96,10 +106,10 @@ export const BetaFeedbackBanner = ({
             </Button>
           </div>
         </div>
-      </div>
+      </div>}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl rounded-3xl border-slate-200 p-0">
+        <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="max-w-2xl rounded-3xl border-slate-200 p-0">
           <div className="px-6 py-6">
             <DialogHeader>
               <DialogTitle>{copy.title}</DialogTitle>
@@ -132,3 +142,4 @@ export const BetaFeedbackBanner = ({
     </>
   );
 };
+

@@ -7,8 +7,8 @@ import { voiceHeaders } from './OperatorVoice.logic';
 type Config = { enabled: boolean; can_configure: boolean; recipient_user_id?: string; version: number; recipients: { id: string; name: string }[] };
 type Disk = { configured: boolean; connection: { status: string }; photos: { status: string; count: number }[] };
 
-export function OperatorWorkdayInput({ businessId, channel, conversationId, disabled, headers = voiceHeaders, onConversation }: {
-  businessId: string; channel: string; conversationId?: string | null; disabled?: boolean;
+export function OperatorWorkdayInput({ businessId, channel, conversationId, disabled, headers = voiceHeaders, onConversation, compact = false }: {
+  businessId: string; channel: string; conversationId?: string | null; disabled?: boolean; compact?: boolean;
   headers?: () => Record<string, string>; onConversation: (id: string) => void;
 }) {
   const [config, setConfig] = useState<Config | null>(null);
@@ -73,17 +73,17 @@ export function OperatorWorkdayInput({ businessId, channel, conversationId, disa
     if (input.current) input.current.value = '';
   }
   if (!config?.enabled) return null;
-  return <div className="space-y-2 py-2">
+  return <div className={compact ? "space-y-2" : "space-y-2 py-2"}>
     <div className="flex flex-wrap gap-2">
-      <Button type="button" variant="outline" disabled={disabled || busy} onClick={() => input.current?.click()}><Paperclip className="mr-2 h-4 w-4" />Фото или файл</Button>
-      <Button type="button" variant="ghost" disabled={disabled || busy || !conversationId} onClick={() => void perform(async () => {
+      <Button type="button" variant="ghost" size={compact ? "icon" : "default"} aria-label="Фото или файл" title="Фото или файл" disabled={disabled || busy} onClick={() => input.current?.click()}><Paperclip className="mr-2 h-4 w-4" />{!compact && "Фото или файл"}</Button>
+      <details><summary className="cursor-pointer py-2 text-sm text-muted-foreground">Материалы</summary><Button type="button" variant="ghost" disabled={disabled || busy || !conversationId} onClick={() => void perform(async () => {
         await request('workday/clear-input', { business_id: businessId, conversation_id: conversationId }); setNotice('Текущий материал завершён. Можно начать новую задачу.');
-      })}>Завершить текущий материал</Button>
+      })}>Завершить текущий материал</Button></details>
       <input ref={input} className="hidden" type="file" multiple accept="image/jpeg,image/png,image/webp,.pdf,.xlsx,.csv" aria-label="Фото или файл для Оператора" onChange={event => void upload(event.target.files)} />
     </div>
     {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-    {config.can_configure && <details className="text-sm"><summary className="cursor-pointer py-2">Настройки рабочего пилота</summary>
+    {config.can_configure && <details className="text-sm"><summary className="cursor-pointer py-2">Настройки материалов</summary>
       <div className="space-y-3 py-2">
         <label className="block space-y-1"><span>Получатель тестовых сообщений</span><select className="min-h-11 w-full rounded-md border bg-background px-3" value={recipient} onChange={event => setRecipient(event.target.value)}>
           <option value="">Отправка выключена</option>{config.recipients.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}
@@ -118,3 +118,4 @@ export function OperatorWorkdayInput({ businessId, channel, conversationId, disa
     </details>}
   </div>;
 }
+

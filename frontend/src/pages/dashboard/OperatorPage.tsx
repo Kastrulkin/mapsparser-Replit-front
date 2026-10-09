@@ -14,14 +14,19 @@ import {
 	ExternalLink,
 	Loader2,
 	MessageSquareText,
+  MoreHorizontal,
+  ListTodo,
+  ArrowDown,
 	RefreshCw,
 	Send,
 } from 'lucide-react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useId, useRef, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 
 import { BetaFeedbackBanner } from '@/components/dashboard/BetaFeedbackBanner';
-import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
@@ -54,6 +59,8 @@ type OperatorChatResult = {
     status: string;
     display_name?: string;
     stage?: string;
+    created_at?: string;
+    updated_at?: string;
     config?: { target_count?: number; max_candidates?: number; max_search_calls?: number };
     state?: { search_calls?: number };
     report?: { found?: number; imported?: number; awaiting_check?: number; checking?: number; verification_failed?: number; excluded?: number; duplicates?: number; eligible?: number; shortfall?: number; credit_limit?: number; credits_charged?: number };
@@ -281,7 +288,33 @@ export const OperatorPage = () => {
   const [pendingChatPhase, setPendingChatPhase] = useState('Отправляем команду…');
   const [commandWaiting, setCommandWaiting] = useState(false);
   const [commandAccepted, setCommandAccepted] = useState(false);
-  const chatWindowRef = useChatAutoScroll(currentBusinessId);
+  const chatScroll = useChatAutoScroll(currentBusinessId, messages.length + (pendingChatMessage ? 1 : 0));
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const [workspaceHeight, setWorkspaceHeight] = useState<number>();
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const [tasksOpen, setTasksOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  useLayoutEffect(() => {
+    const resize = () => {
+      const node = workspaceRef.current;
+      if (!node) return;
+      const viewport = window.visualViewport;
+      setWorkspaceHeight(Math.max(160, (viewport?.height || window.innerHeight) + (viewport?.offsetTop || 0) - node.getBoundingClientRect().top - 12));
+    };
+    resize();
+    const observer = new ResizeObserver(resize);
+    if (workspaceRef.current?.parentElement) observer.observe(workspaceRef.current.parentElement);
+    window.addEventListener("resize", resize);
+    window.visualViewport?.addEventListener("resize", resize);
+    window.visualViewport?.addEventListener("scroll", resize);
+    return () => { observer.disconnect(); window.removeEventListener("resize", resize); window.visualViewport?.removeEventListener("resize", resize); window.visualViewport?.removeEventListener("scroll", resize); };
+  }, []);
+  useLayoutEffect(() => {
+    const input = chatInputRef.current;
+    if (input) { input.style.height = "auto"; input.style.height = `${Math.min(144, input.scrollHeight)}px`; }
+  }, [chatMessage]);
   const chatSendInFlightRef = useRef(false);
   const pendingRequest = useRef({ businessId: "", text: "", groupId: "", id: "" });
   const [refreshCheckingQueueId, setRefreshCheckingQueueId] = useState<string | null>(null);
@@ -304,6 +337,7 @@ export const OperatorPage = () => {
   useEffect(() => { setSelectedSearchId(requestedSearchId); }, [requestedSearchId]);
   const suggestedCommand = searchParams.get('command');
   useEffect(() => { if (suggestedCommand) setChatMessage(suggestedCommand); }, [suggestedCommand]);
+  useEffect(() => { setTasksOpen(false); setHistoryOpen(false); setHelpOpen(false); setFeedbackOpen(false); }, [currentBusinessId]);
   const [savedSearchTask, setSavedSearchTask] = useState<OperatorChatResult['task']>();
   const activeSearchTask = selectedSearchId ? searchTasks.find(task => task.id === selectedSearchId && task.business_id === currentBusinessId) || (savedSearchTask?.id === selectedSearchId && savedSearchTask?.business_id === currentBusinessId ? savedSearchTask : undefined) : undefined;
   useEffect(() => {
@@ -685,34 +719,40 @@ export const OperatorPage = () => {
   };
 
   return (
-    <div className="space-y-5" data-tour-target="operator-overview">
-      <DashboardPageHeader
-        eyebrow="LocalOS"
-        title={copy.title}
-        description={copy.description}
-        icon={Bot}
-      />
-
-      <BetaFeedbackBanner
-        area="operator"
-        title={copy.betaTitle}
-        description={copy.betaDescription}
-        businessId={currentBusinessId}
-        businessName={businessName}
-      />
-
-      {currentBusinessId && <Link to="/dashboard/profile" className="text-sm text-primary underline">{language === 'ru' ? 'Город и валюта — в «Профиль и бизнес»' : 'City and currency — Profile and business'}</Link>}
-
-      {currentBusinessId && <OperatorRequestHistory key={currentBusinessId} businessId={currentBusinessId} language={language} />}
-
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        {currentBusinessId && searchTasks.length > 0 && <div className="border-t bg-background px-4 py-3"><label className="text-sm">Группа компаний<select aria-label="Группа компаний" className="ml-2 rounded-md border bg-background px-2 py-2" value={selectedSearchId} onChange={event => { setSelectedSearchId(event.target.value); const next = new URLSearchParams(searchParams); if (event.target.value) next.set('search_task_id', event.target.value); else next.delete('search_task_id'); next.set('business_id', currentBusinessId); setSearchParams(next, { replace: true }); }}><option value="">Выберите поиск</option>{searchTasks.map(task => <option key={task.id} value={task.id}>{task.display_name || task.id}</option>)}</select></label></div>}
-        {currentBusinessId && activeSearchTask?.id && <div className="border-t border-slate-200 bg-white px-4 py-3"><OutreachTaskStatus key={`${currentBusinessId}:${activeSearchTask.id}`} businessId={currentBusinessId} initialTask={activeSearchTask} onContinue={command => {
+    <div ref={workspaceRef} style={{ height: workspaceHeight }} className="flex min-h-0 min-w-0 flex-col gap-2" data-tour-target="operator-overview">
+      <header className="flex shrink-0 items-center justify-between gap-2">
+        <div className="flex items-center gap-2"><h1 className="text-xl font-semibold">{copy.title}</h1><span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">Beta</span></div>
+        <div className="flex items-center gap-1">
+          <Sheet open={tasksOpen} onOpenChange={setTasksOpen}>
+            <SheetTrigger asChild><Button variant="ghost"><ListTodo aria-hidden="true" />Задачи</Button></SheetTrigger>
+            <SheetContent className="flex w-full max-w-full flex-col sm:max-w-md">
+              <SheetHeader><SheetTitle>Задачи</SheetTitle><SheetDescription>Выберите поиск, чтобы продолжить работу в чате.</SheetDescription></SheetHeader>
+              <div className="min-h-0 space-y-2 overflow-y-auto py-4">
+                <Button className="w-full justify-start" variant="ghost" onClick={() => { setSelectedSearchId(''); const next = new URLSearchParams(searchParams); next.delete('search_task_id'); setSearchParams(next, { replace: true }); setTasksOpen(false); }}>Без выбранного поиска</Button>
+                {!searchTasks.length && <p className="text-sm text-muted-foreground">Поисков пока нет. Опишите задачу в чате.</p>}
+                {searchTasks.map(task => <button key={task.id} type="button" aria-pressed={selectedSearchId === task.id} className="w-full rounded-lg border border-input p-3 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => {
+                  setSelectedSearchId(task.id); const next = new URLSearchParams(searchParams); next.set('search_task_id', task.id); if (currentBusinessId) next.set('business_id', currentBusinessId); setSearchParams(next, { replace: true }); setTasksOpen(false);
+                }}><span className="block break-words font-medium">{task.display_name || 'Поиск компаний'}</span><span className="mt-1 block text-xs text-muted-foreground">{task.presentation?.label || 'Открыть состояние'}{(task.updated_at || task.created_at) && ` · ${new Date(task.updated_at || task.created_at || '').toLocaleDateString()}`}</span></button>)}
+              </div>
+            </SheetContent>
+          </Sheet>
+          <DropdownMenu><DropdownMenuTrigger asChild><Button ref={menuTriggerRef} size="icon" variant="ghost" aria-label="Меню Оператора"><MoreHorizontal aria-hidden="true" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => setFeedbackOpen(true)}>Сообщить о проблеме</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setHistoryOpen(true)}>История обращений</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setHelpOpen(true)}>Как пользоваться</DropdownMenuItem>
+          </DropdownMenuContent></DropdownMenu>
+        </div>
+      </header>
+      <BetaFeedbackBanner dialogOnly onCloseAutoFocus={event => { event.preventDefault(); menuTriggerRef.current?.focus(); }} open={feedbackOpen} onOpenChange={setFeedbackOpen} area="operator" title={copy.title} description={copy.betaDescription} businessId={currentBusinessId} businessName={businessName} />
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}><DialogContent onCloseAutoFocus={event => { event.preventDefault(); menuTriggerRef.current?.focus(); }} className="max-h-[90dvh] max-w-3xl overflow-y-auto"><DialogHeader><DialogTitle>История обращений</DialogTitle><DialogDescription>Сохранённые команды, ответы и распознавание голоса.</DialogDescription></DialogHeader>{historyOpen && currentBusinessId && <OperatorRequestHistory key={currentBusinessId} initiallyOpen businessId={currentBusinessId} language={language} />}</DialogContent></Dialog>
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}><DialogContent onCloseAutoFocus={event => { event.preventDefault(); menuTriggerRef.current?.focus(); }}><DialogHeader><DialogTitle>Как пользоваться</DialogTitle><DialogDescription>Напишите задачу обычным языком или запишите голосом.</DialogDescription></DialogHeader><p className="text-sm">Оператор покажет результат или уточнит недостающее. Для продолжения поиска выберите его в «Задачах». Отправка писем и другие внешние действия требуют подтверждения.</p></DialogContent></Dialog>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-sm">
+        {currentBusinessId && activeSearchTask?.id && <div className="shrink-0 border-b border-border px-3 py-2"><OutreachTaskStatus key={`${currentBusinessId}:${activeSearchTask.id}`} businessId={currentBusinessId} initialTask={activeSearchTask} onChange={() => setTasksOpen(true)} onContinue={command => {
           setSelectedSearchId(activeSearchTask.id);
           setChatMessage(command);
           chatInputRef.current?.focus();
         }} /></div>}
-        <div ref={chatWindowRef} data-testid="operator-message-list" className="max-h-[62vh] min-h-[480px] space-y-4 overflow-y-auto bg-slate-50/70 px-4 py-4">
+        <div ref={chatScroll.ref} data-testid="operator-message-list" className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-muted/30 px-3 py-4 [overflow-wrap:anywhere]">
           {historyError ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="status">
               <span>{historyError}</span>
@@ -723,21 +763,21 @@ export const OperatorPage = () => {
             </div>
           ) : null}
           {historyLoading && messages.length === 0 ? (
-            <div className="flex min-h-[320px] items-center justify-center text-sm text-slate-500">
+            <div className="flex min-h-full items-center justify-center text-sm text-slate-500">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               <span translate="no" className="notranslate">{copy.loadingHistory}</span>
             </div>
           ) : messages.length === 0 && !pendingChatMessage ? (
-            <div className="mx-auto flex min-h-[320px] max-w-2xl flex-col items-center justify-center text-center">
+            <div className="mx-auto flex min-h-full max-w-2xl flex-col items-center justify-center text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white">
                 <Bot className="h-6 w-6" />
               </div>
               <h2 className="mt-4 text-lg font-semibold text-slate-950">{copy.emptyTitle}</h2>
               <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">
-                {copy.emptyDescription}
+                {"Опишите, что нужно сделать. Можно начать с примера."}
               </p>
               <div className="mt-4 flex flex-wrap justify-center gap-2">
-                {copy.examples.map((command) => (
+                {['Найди 3 компании для сотрудничества', 'Подготовь пост о наших услугах', 'Покажи отзывы без ответа'].map((command) => (
                   <button
                     key={command}
                     type="button"
@@ -754,7 +794,7 @@ export const OperatorPage = () => {
               <div key={message.id} className={cn('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
                 <div
                   className={cn(
-                    'max-w-3xl rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm',
+                    'min-w-0 max-w-full lg:max-w-3xl rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm',
                     message.role === 'user'
                       ? 'bg-slate-950 text-white'
                       : 'border border-slate-200 bg-white text-slate-800',
@@ -763,18 +803,11 @@ export const OperatorPage = () => {
                   {message.role === 'operator' ? <OperatorReply animate={message.fresh} text={message.result && 'approval' in message.result && message.result.approval?.capability === 'partnerships.continue_outreach' && !('credit_quote' in message.result && message.result.credit_quote)
                     ? 'Прежние условия поиска устарели. Откройте актуальную стоимость в кредитах LocalOS.'
                     : message.text.replace(/DeepSeek/gi, 'ИИ')} /> : <div className="whitespace-pre-wrap">{message.text}</div>}
-                  {message.role === 'operator' && currentBusinessId && message.result && 'task' in message.result && message.result.task?.id
-                    && (!message.result.task.business_id || message.result.task.business_id === currentBusinessId)
-                    && !messages.slice(index + 1).some(later => searchTaskFromResult(later.result)?.id === searchTaskFromResult(message.result)?.id)
-                    && <div className="mt-3 border-t pt-3"><OutreachTaskStatus businessId={currentBusinessId} initialTask={message.result.task} onContinue={command => {
-                      const task = searchTaskFromResult(message.result);
-                      if (!task) return;
-                      setSavedSearchTask({ ...task, business_id: currentBusinessId });
-                      setSelectedSearchId(task.id);
-                      setSearchParams(current => { const next = new URLSearchParams(current); next.set('search_task_id', task.id); next.set('business_id', currentBusinessId); return next; }, { replace: true });
-                      setChatMessage(command);
-                      chatInputRef.current?.focus();
-                    }} /></div>}
+                  {message.role === 'operator' && currentBusinessId && message.result && 'task' in message.result && message.result.task?.id && message.result.task.id !== selectedSearchId && (!message.result.task.business_id || message.result.task.business_id === currentBusinessId) && <Button size="sm" variant="ghost" onClick={() => {
+                    const task = searchTaskFromResult(message.result); if (!task) return;
+                    setSavedSearchTask({ ...task, business_id: currentBusinessId }); setSelectedSearchId(task.id);
+                    const next = new URLSearchParams(searchParams); next.set('search_task_id', task.id); next.set('business_id', currentBusinessId); setSearchParams(next, { replace: true });
+                  }}>Показать текущий результат поиска</Button>}
                   {message.role === 'operator' && currentBusinessId && <OperatorSpeech key={`${currentBusinessId}:${message.id}`} businessId={currentBusinessId} messageId={message.result?.message_id || message.id} prepare={message.result?.input_type === 'voice'} />}
                   {message.role === 'operator' && message.result ? (
                     <OperatorResultActions
@@ -816,18 +849,21 @@ export const OperatorPage = () => {
           {pendingChatMessage && <OperatorActivity phase={pendingChatPhase} accepted={commandAccepted} waiting={commandWaiting} />}
         </div>
 
-
-        <div className="border-t border-slate-200 bg-white px-4 py-4">
-          {currentBusinessId && <OperatorVoiceInput key={currentBusinessId} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onSubmit={sendOperatorChatMessage} />}
-          {currentBusinessId && <OperatorWorkdayInput key={`inputs:${currentBusinessId}`} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onConversation={setConversationId} />}
-
-          <div className="flex flex-col gap-3 lg:flex-row">
+        {chatScroll.readingHistory && <div className="flex shrink-0 justify-center border-t border-border py-1"><Button size="sm" variant="ghost" onClick={chatScroll.scrollToLatest}><ArrowDown aria-hidden="true" />{chatScroll.hasNewMessages ? 'Новые сообщения · К последним' : 'К последним сообщениям'}</Button></div>}
+        <div className="shrink-0 space-y-2 border-t border-border bg-background px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          <div className="flex max-h-[30dvh] flex-wrap items-start gap-2 overflow-y-auto">
+            {currentBusinessId && <OperatorVoiceInput compact key={currentBusinessId} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onSubmit={sendOperatorChatMessage} />}
+            {currentBusinessId && <OperatorWorkdayInput compact key={`inputs:${currentBusinessId}`} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onConversation={setConversationId} />}
+          </div>
+          <div className="flex min-w-0 items-end gap-2">
             <textarea
               ref={chatInputRef}
-              className="min-h-[96px] flex-1 resize-y rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-950 outline-none ring-sky-200 placeholder:text-slate-400 focus:ring-2"
+              rows={1}
+              aria-label="Задача для Оператора"
+              className="min-h-12 max-h-36 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-input bg-background px-3 py-3 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
               value={chatMessage}
               onChange={(event) => setChatMessage(event.target.value)}
-              placeholder={copy.placeholder}
+              placeholder="Напишите, что нужно сделать…"
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
                   event.preventDefault();
@@ -838,15 +874,16 @@ export const OperatorPage = () => {
             <TooltipProvider delayDuration={180}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="block lg:self-end">
+                  <span className="block shrink-0">
                     <Button
                       type="button"
-                      className="h-12 w-full transition-transform active:scale-[0.96] lg:w-auto"
+                      className="btn-iridescent h-12 w-12 p-0 sm:w-auto sm:px-4"
+                      aria-label={copy.send}
                       onClick={() => void sendOperatorChatMessage()}
                       disabled={chatLoading || !currentBusinessId || !chatMessage.trim()}
                     >
                       {chatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                      {copy.send}
+                      <span className="hidden sm:inline">{copy.send}</span>
                     </Button>
                   </span>
                 </TooltipTrigger>
@@ -869,7 +906,9 @@ function searchTaskFromResult(result?: OperatorChatResult | RefreshResult) {
   return result && 'task' in result ? result.task : undefined;
 }
 
-function OutreachTaskStatus({ businessId, initialTask, onContinue }: { businessId: string; initialTask: OutreachTask; onContinue?: (command: string) => void }) {
+function OutreachTaskStatus({ businessId, initialTask, onContinue, onChange }: { businessId: string; initialTask: OutreachTask; onContinue?: (command: string) => void; onChange?: () => void }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [task, setTask] = useState(initialTask);
   const [refreshError, setRefreshError] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
@@ -900,9 +939,9 @@ function OutreachTaskStatus({ businessId, initialTask, onContinue }: { businessI
     document.addEventListener('visibilitychange', focusRefresh);
     window.addEventListener('focus', focusRefresh);
     return () => { active = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', focusRefresh); window.removeEventListener('focus', focusRefresh); };
-  }, [businessId, initialTask.id]);
+  }, [businessId, initialTask.id, refreshVersion]);
   return <div className="space-y-2">
-    {onContinue ? <OutreachChatSummary name={task.display_name || 'Выбранный поиск'} presentation={task.presentation} onContinue={onContinue} /> : <OutreachGroupCard compact name={task.display_name || 'Выбранный поиск'} presentation={task.presentation} busy={actionBusy} onAction={async action => {
+    {onContinue ? <OutreachChatSummary name={task.display_name || 'Выбранный поиск'} presentation={task.presentation} onContinue={onContinue} onChange={onChange} onDetails={() => setDetailsOpen(true)} /> : <OutreachGroupCard compact name={task.display_name || 'Выбранный поиск'} presentation={task.presentation} busy={actionBusy} onAction={async action => {
       if (actionInFlight.current) return;
       actionInFlight.current = true; setActionBusy(true);
       try {
@@ -912,7 +951,8 @@ function OutreachTaskStatus({ businessId, initialTask, onContinue }: { businessI
       } catch { setRefreshError(true); }
       finally { actionInFlight.current = false; setActionBusy(false); }
     }} />}
-    {refreshError && <p role="alert" className="text-sm text-destructive">Не удалось обновить состояние. Результаты сохранены; откройте поиск в «Партнёрствах».</p>}
+    <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}><DialogContent className="max-h-[85dvh] overflow-y-auto"><DialogHeader><DialogTitle>Подробности поиска</DialogTitle><DialogDescription>{task.display_name || "Выбранный поиск"}</DialogDescription></DialogHeader><OutreachGroupCard name={task.display_name || "Выбранный поиск"} presentation={task.presentation} /><details><summary className="cursor-pointer py-2 text-sm">Условия поиска</summary><p className="text-sm text-muted-foreground">Цель: {task.config?.target_count ?? "не указана"} · До {task.config?.max_candidates ?? "—"} кандидатов · До {task.config?.max_search_calls ?? "—"} поисковых запросов</p></details><Button variant="outline" asChild><Link to={`/dashboard/partnerships?search_task_id=${encodeURIComponent(task.id)}&business_id=${encodeURIComponent(businessId)}`}>Компании и история поиска</Link></Button></DialogContent></Dialog>
+    {refreshError && <p role="alert" className="text-sm text-destructive">Не удалось обновить состояние. Показаны последние сохранённые данные{task.presentation?.updated_at ? ` · ${new Date(task.presentation.updated_at).toLocaleTimeString()}` : ""}. <Button size="sm" variant="ghost" onClick={() => setRefreshVersion(value => value + 1)}>Повторить</Button></p>}
   </div>;
 }
 
@@ -1009,8 +1049,8 @@ const OperatorResultActions = ({
           )}
         >
           {searchPreview ? 'Ожидает запуска' : searchTask?.id
-            ? status === 'approval_required' ? 'Ожидает подтверждения запуска' : 'Поручение сохранено'
-            : status === 'clarification_required' ? 'Нужно уточнение' : status === 'unsupported' ? 'Не выполнено' : status === 'blocked' ? 'Требуется действие' : status === 'approval_required' ? 'Ожидает подтверждения' : ('delivery_status' in result && result.delivery_status === 'queued') ? 'В очереди' : status || 'operator'}
+            ? status === 'approval_required' ? 'Ожидает подтверждения запуска' : 'Поиск сохранён'
+            : status === 'clarification_required' ? 'Нужно уточнение' : status === 'unsupported' ? 'Не выполнено' : status === 'blocked' ? 'Требуется действие' : status === 'approval_required' ? 'Ожидает подтверждения' : ('delivery_status' in result && result.delivery_status === 'queued') ? 'В очереди' : ({ completed: 'Выполнено', processing: 'Выполняется', received: 'Команда получена', failed: 'Ошибка', cancelled: 'Отменено', rejected: 'Отклонено', history: 'Из истории' }[status] || 'Результат')}
         </span>
         {'credit_charged' in result && result.credit_charged ? <span>Списано {result.charged_credits || 0} кредитов</span> : null}
         {'manual_publication_only' in result && result.manual_publication_only ? <span>Публикация вручную</span> : null}
@@ -1398,3 +1438,4 @@ const OperatorCapabilitiesPanel = ({
     </div>
   );
 };
+
