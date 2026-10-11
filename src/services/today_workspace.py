@@ -1,4 +1,5 @@
 """Adapters for the existing Today builder; no independent home-data endpoint."""
+from services.work_coherence import work_projection
 from datetime import date, datetime, timezone
 from urllib.parse import urlencode
 
@@ -40,7 +41,7 @@ def allowed_priority_flows(cursor, *, scope, is_superadmin=False):
 def work_item(*, entity_type, entity_id, flow, business_id, title, status, url,
               now, updated_at=None, due_at=None, description="", preview=None,
               urgent=False, message_code=None, business_name=None):
-    return {
+    return work_projection({
         "id": f"{entity_type}:{entity_id}", "entity_type": entity_type,
         "entity_id": str(entity_id), "flow": flow, "business_id": business_id, "business_name": business_name,
         "title": title, "description": description, "status": status,
@@ -51,7 +52,7 @@ def work_item(*, entity_type, entity_id, flow, business_id, title, status, url,
         "freshness": {"as_of": _iso(now), "status": "live"},
         "reason_code": status, "message_code": message_code,
         "params": {"status": status},
-    }
+    })
 
 
 def content_work(cursor, scope, now):
@@ -140,14 +141,15 @@ def section_items(items, primary_flow, *, limit=8, now=None):
         due = deadline(item)
         return 0 if human(item) and due and due < observed_at else 1 if human(item) and item.get("status") in failures else 2 if human(item) else 3
 
-    decisions = {"failed","waiting_approval","awaiting_approval","needs_review","replied","negotiating","disputed","overdue","draft_generated","edited","blocked","provider_reconciliation_required","provider_failed","provider_unavailable","approval_invalid"}
+    decisions = {"draft","ready","approved","approved_for_send","failed","waiting_approval","awaiting_approval","needs_review","replied","negotiating","disputed","overdue","draft_generated","edited","blocked","provider_reconciliation_required","provider_failed","provider_unavailable","approval_invalid"}
     completed = {"completed","published","succeeded"}
     sections = {"needs_decision": [], "continue_work": [], "results": []}
     seen = set()
     for item in items:
-        if item["id"] in seen:
+        identity = (item.get("business_id"), item.get("entity_type"), item.get("entity_id") or item["id"])
+        if identity in seen:
             continue
-        seen.add(item["id"])
+        seen.add(identity)
         section = "results" if item.get("status") in completed else "needs_decision" if human(item) else "continue_work"
         sections[section].append(item)
     for name, values in sections.items():

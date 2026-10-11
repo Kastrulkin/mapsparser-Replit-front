@@ -1,3 +1,6 @@
+import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
+import { safeWorkReturn } from '@/lib/workNavigation';
+import { workNavigationCopy } from '@/lib/workNavigation';
 import { Link, Navigate, useLocation, useOutletContext } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -6,7 +9,6 @@ import WhatsAppConnection from '@/components/WhatsAppConnection';
 import { WABACredentials } from '@/components/WABACredentials';
 import { TelegramBotCredentials } from '@/components/TelegramBotCredentials';
 import { TelegramResearchSetup } from '@/components/TelegramResearchSetup';
-import { NetworkManagement } from '@/components/NetworkManagement';
 import { ExternalIntegrations } from '@/components/ExternalIntegrations';
 import FinanceCrmPanel from '@/components/FinanceCrmPanel';
 import { Bot, Settings } from 'lucide-react';
@@ -41,7 +43,7 @@ const LegacySettingsPage = () => {
     currentBusinessId?: string | null;
     currentBusiness?: SettingsBusiness | null;
   }>();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const hasNetwork = Boolean(currentBusiness?.network_id);
   const hasTelegramBot = Boolean(String(currentBusiness?.telegram_bot_token || '').trim());
@@ -133,7 +135,7 @@ const LegacySettingsPage = () => {
               Для публикаций в Telegram заполните bot token и канал/чат для публикаций. После сохранения LocalOS обновит готовность каналов для контент-плана.
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button type="button" size="sm" asChild>
+              <Button variant="product" type="button" size="sm" asChild>
                 <Link to="/dashboard/card?tab=news&mode=plan">Вернуться в контент-план</Link>
               </Button>
               <span className="text-xs font-medium text-sky-800">
@@ -179,7 +181,7 @@ const LegacySettingsPage = () => {
               Для публикаций подключите нужный внешний кабинет. Если вы пришли из контент-плана, LocalOS подсветит первый заблокированный канал: VK, Google Business Profile или Meta. Telegram-бот находится выше в разделе каналов связи; Яндекс/2ГИС остаются контролируемым или ручным размещением, если API недоступен.
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button type="button" size="sm" asChild>
+              <Button variant="product" type="button" size="sm" asChild>
                 <Link to="/dashboard/card?tab=news&mode=plan">Вернуться в контент-план</Link>
               </Button>
               <span className="text-xs font-medium text-sky-800">
@@ -213,24 +215,19 @@ const LegacySettingsPage = () => {
             </div>
           )}
           actions={(
-            <Button type="button" asChild>
+            <Button variant="product" type="button" asChild>
               <Link to="/dashboard/agents">Открыть агентов</Link>
             </Button>
           )}
         />
       </DashboardSection>
 
-      <DashboardSection
-        title="Управление сетью"
-        description="Настройки материнской точки, структуры сети и правил работы между локациями."
-      >
-        <NetworkManagement />
-      </DashboardSection>
+      <Button variant="outline" asChild><Link to="/dashboard/profile">{workNavigationCopy(language).label('profile')}</Link></Button>
     </div>
   );
 };
 
-export const SettingsPage = () => {
+const SettingsContent = () => {
   const location = useLocation();
 
   if (!featureFlags.settingsHubV2) {
@@ -250,4 +247,11 @@ export const SettingsPage = () => {
   }
 
   return <SettingsIntegrationsPage />;
+};
+
+export const SettingsPage = () => {
+ const { language } = useLanguage(); const location = useLocation();
+ const back = safeWorkReturn(new URLSearchParams(location.search).get('return_to')) || location.pathname + location.search;
+ const target = '/dashboard/profile?' + new URLSearchParams({focus:'subscription',return_to:back}) + '#subscription';
+ return <div className="space-y-6"><SettingsContent/><div className="flex flex-wrap gap-3"><Button variant="outline" asChild><Link to="/dashboard/profile">{workNavigationCopy(language).label('profile')}</Link></Button><Button variant="outline" asChild><Link to={target}>{workCoherenceCopy(language).billing}</Link></Button></div></div>;
 };

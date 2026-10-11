@@ -1,28 +1,9 @@
+import type { LeadJourneyKey, LeadJourneyDirection } from "../content/growthDirections";
+export type { LeadJourneyKey, LeadJourneyDirection } from "../content/growthDirections";
+import { leadJourneyDirections } from "../content/growthDirections";
+export { leadJourneyDirections } from "../content/growthDirections";
 import { browserBearerToken } from '@/lib/browserSessionFetch';
-import { newAuth } from '@/lib/auth_new';
-
-export type LeadJourneyKey = 'influencers' | 'partnerships' | 'maps' | 'content' | 'automation' | 'average_ticket';
-
-export type LeadJourneyDirection = {
-  key: LeadJourneyKey;
-  eyebrow: string;
-  title: string;
-  preview: string;
-  detailTitle: string;
-  detail: string;
-  steps: Array<{ title: string; description: string }>;
-  detailSections?: Array<{ title: string; items: string[] }>;
-  continueTitle?: string;
-  continueText?: string;
-  today: { title: string; description: string; cta: string };
-  businessRole: string;
-  localosRole: string;
-  prepareLabel: string;
-  resultTitle: string;
-  resultPreview: string[];
-  lockedResult: string;
-  dashboardRoute: string;
-};
+import { HttpError, newAuth } from '@/lib/auth_new';
 
 export const LEAD_JOURNEY_STORAGE_KEY = 'localos_lead_journey_intent';
 export const LEAD_JOURNEY_TOKEN_STORAGE_KEY = 'localos_lead_journey_token';
@@ -86,7 +67,7 @@ export type JourneyAction = {
 
 const readJson = async (response: Response) => {
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Не удалось продолжить действие');
+  if (!response.ok) throw new HttpError(data.error || 'Не удалось продолжить действие', response.status, 'http_error');
   return data;
 };
 
@@ -177,201 +158,6 @@ export const runJourneyCommand = async ({
   return readJson(response);
 };
 
-export const leadJourneyDirections: LeadJourneyDirection[] = [
-  {
-    key: 'influencers',
-    eyebrow: 'Инфлюенсеры рядом',
-    title: 'Местные авторы рассказывают о вашем бизнесе',
-    preview: 'Подбор местных авторов, условия сотрудничества и статусы публикаций — в одном месте.',
-    detailTitle: 'Продвижение через местных авторов',
-    detail: 'LocalOS подбирает авторов рядом, готовит предложение и собирает договорённости, визиты и публикации в одном месте.',
-    steps: [
-      { title: 'Задаём рамки', description: 'Указываете город, аудиторию, услугу для продвижения и допустимый формат: бартер, оплата или промокод.' },
-      { title: 'Собираем кандидатов', description: 'LocalOS показывает авторов по географии, тематике и открытым данным. Вы видите, почему каждый кандидат попал в список.' },
-      { title: 'Согласовываем предложение', description: 'Вы выбираете автора и проверяете текст, условия визита, дату и то, что нужно показать в публикации.' },
-      { title: 'Фиксируем результат', description: 'После ответа отмечаете договорённость, публикацию или отказ. Следующий шаг зависит от фактического статуса, а не запускается вслепую.' },
-    ],
-    detailSections: [
-      {
-        title: 'Авторы и публикации',
-        items: [
-          'Подбор по городу, тематике и аудитории',
-          'Бартер, оплата или промокод',
-          'Статусы: договорённость, визит, публикация или отказ',
-        ],
-      },
-      {
-        title: 'Всё под вашим контролем',
-        items: [
-          'Вы видите, кто согласился и когда запланирован визит',
-          'Заранее указываете, что показать в видео или посте',
-          'Любое обращение отправляется только после вашего подтверждения',
-        ],
-      },
-    ],
-    continueTitle: 'Начать подбор',
-    continueText: 'Укажите бизнес и город — откроется список местных авторов. Ничего не отправляется без подтверждения.',
-    today: {
-      title: 'Найдите местных авторов',
-      description: 'Укажите город и аудиторию. LocalOS покажет подходящих авторов и доступные форматы сотрудничества.',
-      cta: 'Открыть подбор',
-    },
-    businessRole: 'Вы утверждаете автора, условия, текст обращения и любую внешнюю отправку.',
-    localosRole: 'LocalOS собирает открытые данные, объясняет подбор и хранит ход договорённостей.',
-    prepareLabel: 'Показать персональное превью',
-    resultTitle: 'Что будет в обращении к автору',
-    resultPreview: [
-      'Короткое персональное открытие по публичному материалу автора',
-      'Одна механика на выбор: бартер, фиксированная оплата или промокод',
-      'Один простой вопрос без давления и массовой рассылки',
-    ],
-    lockedResult: 'После регистрации откроются полный текст, источник персонализации и кнопка «Отметить, что написал».',
-    dashboardRoute: '/dashboard/influencers',
-  },
-  {
-    key: 'partnerships',
-    eyebrow: 'Бизнесы рядом',
-    title: 'Найти партнёра с похожей аудиторией',
-    preview: 'Покажем один соседний бизнес и конкретную идею взаимного продвижения.',
-    detailTitle: 'Предложение, полезное обеим сторонам',
-    detail: 'LocalOS сопоставляет аудитории и услуги, объясняет взаимную пользу и готовит безопасный первый тест, который легко обсудить.',
-    steps: [
-      { title: 'Определяем общую аудиторию', description: 'Выбираете услугу и тип соседнего бизнеса, с которым имеет смысл обмениваться рекомендациями.' },
-      { title: 'Сравниваем кандидатов', description: 'LocalOS показывает компании рядом и объясняет, где аудитории и предложения действительно пересекаются.' },
-      { title: 'Выбираем небольшой тест', description: 'Согласовываете одну механику: совместное предложение, взаимную рекомендацию или локальное событие.' },
-      { title: 'Отмечаем ответ', description: 'После ручной отправки фиксируете ответ. Продолжение появляется только по фактическому результату.' },
-    ],
-    businessRole: 'Вы выбираете партнёра, условия теста и подтверждаете обращение.',
-    localosRole: 'LocalOS помогает сравнить кандидатов и собрать предложение без массовой рассылки.',
-    today: {
-      title: 'Найдите партнёров рядом',
-      description: 'Выберите услугу и тип соседнего бизнеса. LocalOS покажет компании с похожей аудиторией.',
-      cta: 'Открыть подбор',
-    },
-    prepareLabel: 'Подготовить предложение партнёру',
-    resultTitle: 'Предложение партнёру подготовлено',
-    resultPreview: [
-      'Почему аудитории двух бизнесов пересекаются',
-      'Конкретный тест: совместное предложение или взаимная рекомендация',
-      'Первое сообщение с одним вопросом и ручным подтверждением отправки',
-    ],
-    lockedResult: 'После регистрации откроются подходящие компании, полный текст и цикл follow-up по фактическому статусу ответа.',
-    dashboardRoute: '/dashboard/promotion/partnerships',
-  },
-  {
-    key: 'maps',
-    eyebrow: 'Карты',
-    title: 'Исправить то, что сейчас мешает выбрать вас',
-    preview: 'Покажем одно приоритетное исправление карточки вместо длинного аудита.',
-    detailTitle: 'Первое исправление с понятным эффектом',
-    detail: 'LocalOS проверяет услуги, категории, фото, публикации и отзывы, а затем ставит изменения в правильной последовательности по существующему плану карт.',
-    steps: [
-      { title: 'Читаем карточку как клиент', description: 'Проверяем категории, услуги, фото, публикации, рейтинг и отзывы в открытой карточке.' },
-      { title: 'Находим главный пробел', description: 'Показываем одно исправление, которое сейчас сильнее остальных мешает выбору бизнеса.' },
-      { title: 'Проверяем изменение', description: 'Вы видите точный текст или действие до применения и решаете, использовать его или нет.' },
-      { title: 'Смотрим результат', description: 'После изменения сравниваем состояние карточки и только затем предлагаем следующий шаг.' },
-    ],
-    businessRole: 'Вы проверяете данные и отдельно подтверждаете каждое изменение.',
-    localosRole: 'LocalOS проводит аудит, расставляет приоритеты и сохраняет историю проверки.',
-    today: {
-      title: 'Проверьте карточку на картах',
-      description: 'Добавьте ссылку на карточку. LocalOS проверит услуги, фото, публикации и отзывы и покажет, что исправить первым.',
-      cta: 'Проверить карточку',
-    },
-    prepareLabel: 'Показать первое исправление',
-    resultTitle: 'Первое исправление определено',
-    resultPreview: [
-      'Что именно изменить в карточке в первую очередь',
-      'Почему этот шаг важнее остальных сейчас',
-      'Когда проверить эффект и какое исправление делать следующим',
-    ],
-    lockedResult: 'После регистрации откроются точный текст изменения, полный план карт и контроль результата по расписанию.',
-    dashboardRoute: '/dashboard/card',
-  },
-  {
-    key: 'content',
-    eyebrow: 'Контент',
-    title: 'Подготовить материал, который напомнит о вашем бизнесе',
-    preview: 'Покажем одну подходящую тему и короткий фрагмент будущего материала.',
-    detailTitle: 'Тема с понятной целью и следующим шагом',
-    detail: 'LocalOS использует услуги, сезон, отзывы и контекст бизнеса, чтобы предложить не абстрактную идею, а материал для конкретной площадки.',
-    steps: [
-      { title: 'Выбираем площадку и задачу', description: 'Определяете, где выйдет материал и что он должен объяснить клиенту.' },
-      { title: 'Собираем факты', description: 'LocalOS использует подтверждённые услуги, цены, сезонность и отзывы бизнеса.' },
-      { title: 'Проверяем черновик', description: 'Вы редактируете текст, факты и призыв к действию до сохранения в план.' },
-      { title: 'Публикуем отдельно', description: 'Сохранение черновика ничего не публикует. Выход материала требует отдельного подтверждения.' },
-    ],
-    businessRole: 'Вы отвечаете за факты, финальную редактуру и решение о публикации.',
-    localosRole: 'LocalOS предлагает тему, собирает черновик и помогает держать календарь.',
-    today: {
-      title: 'Выберите тему первой публикации',
-      description: 'Укажите площадку и задачу публикации. LocalOS предложит тему на основе услуг, сезона и отзывов.',
-      cta: 'Открыть контент',
-    },
-    prepareLabel: 'Подготовить черновик',
-    resultTitle: 'Структура первого материала готова',
-    resultPreview: [
-      'Тема и цель публикации для конкретной аудитории',
-      'Короткий черновик в понятном голосе бизнеса',
-      'Проверка, календарь и отдельное подтверждение публикации',
-    ],
-    lockedResult: 'После регистрации откроются полный черновик, редактирование и сохранение в контент-календарь.',
-    dashboardRoute: '/dashboard/content',
-  },
-  {
-    key: 'average_ticket',
-    eyebrow: 'Средний чек',
-    title: 'Найти первый безопасный сценарий роста чека',
-    preview: 'Покажем, какие услуги можно объединить и где уместно предложить дополнение.',
-    detailTitle: 'Рост среднего чека без давления на клиента',
-    detail: 'LocalOS сопоставляет услуги и цены, предлагает понятный пакет и показывает ожидаемый эффект до применения.',
-    steps: [
-      { title: 'Проверяем услуги и цены', description: 'Используем только подтверждённые данные бизнеса.' },
-      { title: 'Ищем естественное дополнение', description: 'Предлагаем связку, которая решает следующую задачу клиента.' },
-      { title: 'Проверяем предложение', description: 'Вы видите состав, цену и формулировку до запуска.' },
-      { title: 'Считаем результат', description: 'Изменения применяются только после подтверждения и измеряются отдельно.' },
-    ],
-    businessRole: 'Вы подтверждаете услуги, цены и решение использовать предложение.',
-    localosRole: 'LocalOS находит связки и готовит расчёт и формулировку.',
-    today: { title: 'Найдите первый сценарий роста чека', description: 'Проверьте услуги и выберите уместное дополнение.', cta: 'Открыть средний чек' },
-    prepareLabel: 'Показать сценарий роста',
-    resultTitle: 'Первый сценарий роста подготовлен',
-    resultPreview: ['Базовая услуга и подходящее дополнение', 'Прозрачная выгода для клиента', 'Расчёт и ручное подтверждение'],
-    lockedResult: 'Полный расчёт и применение входят в тариф «Управление».',
-    dashboardRoute: '/dashboard/average-ticket',
-  },
-  {
-    key: 'automation',
-    eyebrow: 'ИИ-сотрудники',
-    title: 'Поручить LocalOS повторяющуюся задачу',
-    preview: 'Покажем один безопасный сценарий автоматизации и что останется под вашим подтверждением.',
-    detailTitle: 'Одна регулярная задача под контролем',
-    detail: 'LocalOS помогает выбрать повторяющуюся работу, проверить источники данных и ограничения, а затем запустить ИИ-сотрудника через существующий preflight.',
-    steps: [
-      { title: 'Выбираем одну задачу', description: 'Фиксируете повторяющуюся работу и понятный результат, который должен появляться в кабинете.' },
-      { title: 'Проверяем доступы и ограничения', description: 'LocalOS показывает, какие данные нужны и какие действия нельзя выполнять без человека.' },
-      { title: 'Делаем пробный запуск', description: 'Сначала вы видите результат на примере и проверяете его до регулярной работы.' },
-      { title: 'Следим за статусом', description: 'В кабинете видно, что выполнено, где нужна проверка и почему задача остановилась.' },
-    ],
-    businessRole: 'Вы задаёте правила и подтверждаете публикации, отправки и другие внешние действия.',
-    localosRole: 'LocalOS выполняет согласованную внутреннюю работу и показывает результат и статус.',
-    today: {
-      title: 'Выберите повторяющуюся задачу',
-      description: 'Откройте список ИИ-сотрудников и выберите работу, которую LocalOS будет выполнять регулярно.',
-      cta: 'Открыть ИИ-сотрудников',
-    },
-    prepareLabel: 'Показать сценарий автоматизации',
-    resultTitle: 'Сценарий автоматизации подготовлен',
-    resultPreview: [
-      'Какая повторяющаяся задача будет выполняться',
-      'Какие данные нужны и что проверит LocalOS до запуска',
-      'Какие внешние действия всё равно потребуют ручного подтверждения',
-    ],
-    lockedResult: 'После регистрации откроется настройка ИИ-сотрудника. Проверка плана и запуск доступны после оплаты и отдельного подтверждения.',
-    dashboardRoute: '/dashboard/agents',
-  },
-];
-
 export const isLeadJourneyKey = (value: string | null): value is LeadJourneyKey => (
   value === 'influencers' || value === 'partnerships' || value === 'maps' || value === 'content' || value === 'automation' || value === 'average_ticket'
 );
@@ -379,14 +165,15 @@ export const isLeadJourneyKey = (value: string | null): value is LeadJourneyKey 
 export const leadJourneyKeyForFlow = (flow: string | null | undefined): LeadJourneyKey | null => {
   if (flow === 'influencer') return 'influencers';
   if (flow === 'partnership') return 'partnerships';
-  return isLeadJourneyKey(flow || null) ? flow : null;
+  const candidate = flow || null;
+  return isLeadJourneyKey(candidate) ? candidate : null;
 };
 
 export const journeyActionRoute = (action: JourneyAction) => {
   const screen = action.cta_target?.screen;
   const routes: Record<string, string> = {
     influencers: '/dashboard/influencers',
-    partnerships: '/dashboard/promotion/partnerships',
+    partnerships: '/dashboard/partnerships',
     progress: '/dashboard/card',
     maps: '/dashboard/card',
     content: '/dashboard/content',
@@ -397,7 +184,7 @@ export const journeyActionRoute = (action: JourneyAction) => {
   };
   const base = routes[screen || ''] || '/dashboard/today';
   const separator = base.includes('?') ? '&' : '?';
-  return `${base}${separator}journey_action=${encodeURIComponent(action.id)}`;
+  return `${base}${separator}journey_action=${encodeURIComponent(action.id)}${action.business_id ? '&business_id=' + encodeURIComponent(action.business_id) : ''}`;
 };
 
 const businessIdFromUser = (user: { businesses?: unknown[] } | null | undefined) => {

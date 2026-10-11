@@ -1,3 +1,4 @@
+import { safeWorkReturn } from '@/lib/workNavigation';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -93,7 +94,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   const paymentSource = searchParams.get('source');
   const autoStartCheckout = searchParams.get('autostart') === '1';
   const selectedTierFromUrl = searchParams.get('tier');
-  const checkoutReturnTo = searchParams.get('return_to') || (typeof window !== 'undefined' ? window.sessionStorage.getItem('localos_checkout_return_to') : null);
+  const checkoutReturnTo = safeWorkReturn(searchParams.get('return_to') || (typeof window !== 'undefined' ? window.sessionStorage.getItem('localos_checkout_return_to') : null));
   const autoCheckoutStartedRef = useRef(false);
   const { language, t } = useLanguage();
 

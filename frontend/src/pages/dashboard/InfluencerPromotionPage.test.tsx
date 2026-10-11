@@ -34,11 +34,12 @@ const DashboardContext = () => (
   }} />
 );
 
-const renderPage = () => render(
-  <MemoryRouter initialEntries={['/dashboard/promotion/influencers']}>
+const renderPage = (entry = '/dashboard/promotion/influencers') => render(
+  <MemoryRouter initialEntries={[entry]}>
     <Routes>
       <Route element={<DashboardContext />}>
         <Route path="/dashboard/promotion/influencers" element={<InfluencerPromotionPage />} />
+        <Route path="/dashboard/influencers/operations" element={<InfluencerPromotionPage />} />
       </Route>
     </Routes>
   </MemoryRouter>,
@@ -276,5 +277,20 @@ describe('InfluencerPromotionPage accessibility states', () => {
     expect(screen.getByDisplayValue(/14 дней после согласования/)).toBeInTheDocument();
     expect(screen.getByDisplayValue(/90 дней с указанием автора/)).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Например, 15 000')).toHaveValue('500');
+  });
+
+  it('opens and focuses the exact collaboration from a Today deep link', async () => {
+    vi.mocked(newAuth.makeRequest).mockResolvedValue({
+      overview: { ...emptyOverview.overview, collaborations: [{ id: 'collaboration-42', display_name: 'Автор из ссылки', status: 'replied', campaign_title: 'Осенний запуск' }] },
+    });
+    renderPage('/dashboard/influencers/operations?section=collaborations&collaboration_id=collaboration-42&business_id=business-1');
+    const collaboration = await screen.findByLabelText('Коллаборация: Автор из ссылки');
+    expect(collaboration).toHaveAttribute('id', 'collaboration-collaboration-42');
+    expect(collaboration.className).toContain('ring-2');
+  });
+
+  it('explains when a collaboration deep link is not available in this business', async () => {
+    renderPage('/dashboard/influencers/operations?section=collaborations&collaboration_id=missing&business_id=business-1');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Коллаборация из ссылки недоступна');
   });
 });

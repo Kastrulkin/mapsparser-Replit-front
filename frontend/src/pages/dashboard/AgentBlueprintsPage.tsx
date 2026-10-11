@@ -1,5 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useOutletContext } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { EmployeeChatTest } from './ChatsPage';
+import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useOutletContext } from 'react-router-dom';
 import { Bot, Zap } from 'lucide-react';
 import { newAuth } from '@/lib/auth_new';
 import { api } from '@/services/api';
@@ -88,12 +92,14 @@ const clearAgentRunResume = (businessId: string, expectedRunId = '') => {
 
 export const AgentBlueprintsPage = () => {
   const location = useLocation();
+  const { language } = useLanguage(); const extraCopy = workCoherenceCopy(language);
   const { currentBusinessId, currentBusiness, demoMode } = useOutletContext<DashboardContext>();
   const [blueprints, setBlueprints] = useState<AgentBlueprint[]>([]);
   const [selectedBlueprintId, setSelectedBlueprintId] = useState<string | null>(null);
   const [blueprintDetails, setBlueprintDetails] = useState<AgentBlueprintDetails | null>(null);
   const [agentDetailsById, setAgentDetailsById] = useState<Record<string, AgentBlueprintDetails>>({});
   const [serverTodaySummary, setServerTodaySummary] = useState<AgentServerTodaySummary | null>(null);
+  const linkedRun = useRef({ key: '', blueprintId: '' });
   const [activeRun, setActiveRun] = useState<AgentRun | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -496,7 +502,7 @@ export const AgentBlueprintsPage = () => {
   useEffect(() => {
     if (selectedBlueprint?.id) {
       setBlueprintDetails(null);
-      setActiveRun(null);
+      if (linkedRun.current.blueprintId !== selectedBlueprint?.id) setActiveRun(null);
       void loadBlueprintDetails(selectedBlueprint.id);
     } else {
       setBlueprintDetails(null);
@@ -576,6 +582,35 @@ export const AgentBlueprintsPage = () => {
       cancelled = true;
     };
   }, [agentDetailsById, blueprints, currentBusinessId]);
+
+  const blueprintLinkScope = blueprints.map(item => `${item.id}:${item.business_id}`).join('|');
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const runId = params.get('run_id');
+    const blueprintId = params.get('blueprint_id');
+    const key = `${currentBusinessId}:${runId || blueprintId || ''}`;
+    if (!currentBusinessId || !blueprints.length || linkedRun.current.key === key) return;
+    if (!runId && !blueprintId) return;
+    linkedRun.current.key = key;
+    if (!runId) {
+      const target = blueprints.find(item => item.id === blueprintId && item.business_id === currentBusinessId);
+      if (target) setSelectedBlueprintId(target.id);
+      else setError('Сотрудник из ссылки недоступен в выбранном бизнесе.');
+      return;
+    }
+    let active = true;
+    void api.get(`/agent-runs/${encodeURIComponent(runId)}`).then(response => {
+      if (!active) return;
+      const run = response.data?.run;
+      const target = blueprints.find(item => item.id === run?.blueprint_id && item.business_id === currentBusinessId);
+      if (!target || run?.id !== runId) { setError('Запуск из ссылки недоступен в выбранном бизнесе.'); return; }
+      linkedRun.current.blueprintId = target.id;
+      setSelectedBlueprintId(target.id);
+      setActiveRun(run);
+      setWorkspaceMode('results');
+    }).catch(() => { if (active) { setActiveRun(null); setError('Запуск из ссылки не найден или недоступен.'); } });
+    return () => { active = false; };
+  }, [location.search, currentBusinessId, blueprintLinkScope]);
 
   const loadRun = async (runId: string, options: { openResults?: boolean; showLoading?: boolean } = {}) => {
     const openResults = options.openResults !== false;
@@ -2213,7 +2248,8 @@ export const AgentBlueprintsPage = () => {
     setWorkspaceMode(selectedEmployeeAction.targetMode);
   };
 
-  return (
+  if (new URLSearchParams(location.search).get('test') === 'dialog') return <div className="space-y-4"><Button variant="outline" asChild><Link to="/dashboard/agents">{extraCopy.backEmployees}</Link></Button><EmployeeChatTest /></div>;
+  return (<>
     <AgentBlueprintsView
       scope={{
       location, currentBusinessId, blueprints, selectedBlueprintId, setSelectedBlueprintId, blueprintDetails, agentDetailsById, activeRun, setActiveRun, loading,
@@ -2239,6 +2275,6 @@ export const AgentBlueprintsPage = () => {
       showPostCreateConnectionDetails, todaySummary, employeeListDetailsById, filteredBlueprints, selectedEmployeeAction, selectedResultRun, resultNeedsScenarioRebuild, resultNeedsGoogleSheetsSetup, resultNeedsGoogleAccessReconnect, resultGoogleAccessReconnected,
       openGoogleSheetsSourceSetup, openGoogleAccessReconnect, openSelectedAgentClone, runEmployeePrimaryAction, applyFinanceRequests
       }}
-    />
+    /><details className="mt-6"><summary className="min-h-11 cursor-pointer py-2">{extraCopy.testEmployee}</summary><Button variant="outline" asChild><Link to="/dashboard/agents?test=dialog">{extraCopy.testEmployee}</Link></Button></details></>
   );
 };

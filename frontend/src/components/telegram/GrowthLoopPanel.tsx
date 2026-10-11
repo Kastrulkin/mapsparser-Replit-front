@@ -27,6 +27,7 @@ export type AnalyticsModule = {
   label?: string;
   status?: 'ready' | 'available' | 'locked' | string;
   next_unlock?: string | null;
+  missing_inputs?: string[];
   ready_locations?: number;
   total_locations?: number;
 };
@@ -81,11 +82,37 @@ type GrowthLoopPanelProps = {
 
 const freshnessCopy = (health?: DataHealth | null) => {
   switch (health?.status) {
-    case 'fresh': return { label: 'Данные свежие', detail: 'Аналитика опирается на последние загруженные данные.', tone: 'text-emerald-300' };
-    case 'due': return { label: 'Скоро обновить данные', detail: 'Новая загрузка поможет сохранить актуальную картину.', tone: 'text-amber-300' };
-    case 'stale': return { label: 'Данные устарели', detail: 'Загрузите свежую сводку, чтобы решения не опирались на прошлый период.', tone: 'text-amber-300' };
-    default: return { label: 'Данных пока нет', detail: 'Загрузите первую финансовую сводку, чтобы открыть аналитику.', tone: 'text-zinc-300' };
+    case 'fresh': return { label: 'Данные актуальны', detail: 'Расчёты сделаны по последней загруженной сводке.', tone: 'text-emerald-300' };
+    case 'due': return { label: 'Пора добавить новую неделю', detail: 'Обновите сводку, чтобы видеть текущую картину.', tone: 'text-amber-300' };
+    case 'stale': return { label: 'Нужна свежая сводка', detail: 'Последние данные относятся к прошлому периоду.', tone: 'text-amber-300' };
+    default: return { label: 'Сводок пока нет', detail: 'Добавьте выручку, средний чек и загрузку за неделю.', tone: 'text-zinc-300' };
   }
+};
+
+const historyCopy = (rhythm?: GrowthRhythm | null) => {
+  if (rhythm?.status === 'active') return 'Можно сравнивать недели';
+  if (rhythm?.status === 'forming' || Number(rhythm?.active_weeks || 0) > 0) return 'История собирается';
+  return 'Истории пока нет';
+};
+
+const analyticsCopy = (analytics?: AnalyticsLevel | null, health?: DataHealth | null) => {
+  if (health?.status === 'missing') return { label: 'Сначала добавьте сводку', detail: 'После загрузки появятся выручка, средний чек и первые подсказки.' };
+  if (health?.status === 'stale') return { label: 'Расчёты нужно обновить', detail: 'Добавьте данные за последнюю неделю, чтобы рекомендации были актуальными.' };
+  if (analytics?.level === 'advanced') return { label: 'Доступно сравнение периодов', detail: 'Можно проверить динамику и влияние выполненных действий.' };
+  return { label: 'Основные показатели готовы', detail: 'Можно посмотреть выручку, средний чек и загрузку.' };
+};
+
+const moduleStatusCopy = (module: AnalyticsModule) => {
+  if (module.status === 'ready') return 'Можно смотреть';
+  if (module.status === 'available') return module.total_locations ? `${module.ready_locations || 0} из ${module.total_locations}` : 'Обновите сводку';
+  return 'Не хватает данных';
+};
+
+const moduleDetailCopy = (module: AnalyticsModule) => {
+  if (module.status === 'ready') return null;
+  if (module.status === 'available') return module.total_locations ? 'Расчёт готов не по всем точкам.' : 'Добавьте данные за последнюю неделю.';
+  if (module.missing_inputs?.length) return `Нужно добавить: ${module.missing_inputs.join(', ')}.`;
+  return 'Добавьте данные, чтобы открыть этот расчёт.';
 };
 
 const sourceLabel = (value?: string) => {
@@ -99,10 +126,10 @@ const sourceLabel = (value?: string) => {
 };
 
 const locationStatus = (status?: string) => {
-  if (status === 'stale') return { label: 'Устарели', tone: 'text-amber-300 bg-amber-400/10' };
-  if (status === 'due') return { label: 'Скоро обновить', tone: 'text-amber-200 bg-amber-400/10' };
-  if (status === 'fresh') return { label: 'Свежие', tone: 'text-emerald-300 bg-emerald-400/10' };
-  return { label: 'Нет данных', tone: 'text-zinc-400 bg-white/[0.05]' };
+  if (status === 'stale') return { label: 'Нужно обновить', tone: 'text-amber-300 bg-amber-400/10' };
+  if (status === 'due') return { label: 'Пора обновить', tone: 'text-amber-200 bg-amber-400/10' };
+  if (status === 'fresh') return { label: 'Актуально', tone: 'text-emerald-300 bg-emerald-400/10' };
+  return { label: 'Сводки нет', tone: 'text-zinc-400 bg-white/[0.05]' };
 };
 
 const problemScreen = (problem: ProblemLocation) => {
@@ -131,7 +158,7 @@ export const GrowthLoopPanel = ({ growthLoop, dataHealth, analyticsLevel, rhythm
   if (!analytics && !rhythm && !dataHealth) return null;
   const freshness = freshnessCopy(dataHealth);
   const needsImport = dataHealth?.status === 'missing' || dataHealth?.status === 'stale' || !dataHealth;
-  const unlock = analytics.next_unlock || (needsImport ? 'Загрузите первую финансовую сводку, чтобы открыть аналитику.' : 'Продолжайте регулярно добавлять данные — появятся новые точки роста.');
+  const analyticsText = analyticsCopy(analytics, dataHealth);
   const isNetwork = scopeKind === 'network' || Number(networkSummary?.locations_count || 0) > 1;
   const financeSummary = networkSummary?.finance;
   const problems = problemLocations.slice(0, 5).map((problem) => ({
@@ -142,16 +169,16 @@ export const GrowthLoopPanel = ({ growthLoop, dataHealth, analyticsLevel, rhythm
   return (
     <section className="mt-4 overflow-hidden rounded-[22px] bg-white/[0.035] shadow-[0_0_0_1px_rgba(255,255,255,0.07)]">
       <div className="p-4">
-        <div className="flex items-center gap-2"><DatabaseZap className="h-4 w-4 text-primary" /><h2 className="text-balance text-sm font-semibold">Ритм роста</h2></div>
+        <div className="flex items-center gap-2"><DatabaseZap className="h-4 w-4 text-primary" /><h2 className="text-balance text-sm font-semibold">Данные для решений</h2></div>
         {isNetwork ? <div className="mt-3 rounded-[14px] bg-black/20 p-3">
-          <div className="flex items-center gap-2"><Building2 className="h-4 w-4 text-primary" /><b className="text-xs text-zinc-200">Сводка сети</b><span className="ml-auto text-xs tabular-nums text-zinc-500">{networkSummary?.locations_count || financeSummary?.total || 0} точек</span></div>
+          <div className="flex items-center gap-2"><Building2 className="h-4 w-4 text-primary" /><b className="text-xs text-zinc-200">Данные по точкам</b><span className="ml-auto text-xs tabular-nums text-zinc-500">{networkSummary?.locations_count || financeSummary?.total || 0} точек</span></div>
           <div className="mt-3 grid grid-cols-4 gap-1 text-center">
-            {[[financeSummary?.fresh, 'Свежие'], [financeSummary?.due, 'Скоро'], [financeSummary?.stale, 'Устарели'], [financeSummary?.missing, 'Нет данных']].map(([value, label]) => <div key={label} className="min-w-0"><b className="block tabular-nums text-zinc-200">{value || 0}</b><small className="block truncate text-[9px] text-zinc-600">{label}</small></div>)}
+            {[[financeSummary?.fresh, 'Актуальны'], [financeSummary?.due, 'Пора обновить'], [financeSummary?.stale, 'Просрочены'], [financeSummary?.missing, 'Без сводки']].map(([value, label]) => <div key={label} className="min-w-0"><b className="block tabular-nums text-zinc-200">{value || 0}</b><small className="block truncate text-[9px] text-zinc-600">{label}</small></div>)}
           </div>
         </div> : null}
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div className="min-w-0 rounded-[14px] bg-black/20 p-3">
-            <small className="flex items-center gap-1.5 text-[10px] text-zinc-600"><DatabaseZap className="h-3.5 w-3.5" />Свежесть</small>
+            <small className="flex items-center gap-1.5 text-[10px] text-zinc-600"><DatabaseZap className="h-3.5 w-3.5" />Последнее обновление</small>
             <b className={`mt-2 block text-pretty text-xs ${freshness.tone}`}>{freshness.label}</b>
             <small className="mt-1 block text-pretty text-[10px] leading-4 text-zinc-600">
               {dataHealth?.age_days !== null && dataHealth?.age_days !== undefined ? `${dataHealth.age_days} дн. с обновления` : freshness.detail}
@@ -159,29 +186,29 @@ export const GrowthLoopPanel = ({ growthLoop, dataHealth, analyticsLevel, rhythm
             </small>
           </div>
           <div className="min-w-0 rounded-[14px] bg-black/20 p-3">
-            <small className="flex items-center gap-1.5 text-[10px] text-zinc-600"><CalendarClock className="h-3.5 w-3.5" />Ритм</small>
-            <b className="mt-2 block text-pretty text-xs text-zinc-200">{rhythm?.label || 'Ритм ещё не начат'}</b>
-            <small className="mt-1 block text-pretty text-[10px] leading-4 text-zinc-600">{rhythm?.active_weeks ? `${rhythm.active_weeks} нед. с данными за 8 недель` : 'Регулярные загрузки покажут динамику.'}</small>
+            <small className="flex items-center gap-1.5 text-[10px] text-zinc-600"><CalendarClock className="h-3.5 w-3.5" />За последние 8 недель</small>
+            <b className="mt-2 block text-pretty text-xs text-zinc-200">{historyCopy(rhythm)}</b>
+            <small className="mt-1 block text-pretty text-[10px] leading-4 text-zinc-600">{rhythm?.active_weeks ? `Сводки есть за ${rhythm.active_weeks} из 8 недель` : 'Добавьте первую недельную сводку.'}</small>
           </div>
         </div>
         <div className="mt-3 rounded-[14px] bg-primary/[0.08] p-3">
-          <small className="flex items-center gap-1.5 text-[10px] text-primary"><BarChart3 className="h-3.5 w-3.5" />Аналитика</small>
-          <b className="mt-1 block text-xs text-zinc-200">{analytics?.label || 'Нужны данные'}</b>
-          <p className="mt-1 text-pretty text-[10px] leading-4 text-zinc-500">{unlock}</p>
+          <small className="flex items-center gap-1.5 text-[10px] text-primary"><BarChart3 className="h-3.5 w-3.5" />Что уже можно увидеть</small>
+          <b className="mt-1 block text-xs text-zinc-200">{analyticsText.label}</b>
+          <p className="mt-1 text-pretty text-[10px] leading-4 text-zinc-500">{analyticsText.detail}</p>
         </div>
         {analyticsModules.length ? <div className="mt-3 grid gap-2">
           {analyticsModules.map((module) => <div key={module.key || module.label} className="flex min-h-11 items-center gap-3 rounded-[14px] bg-black/20 px-3 py-2">
-            <span className="min-w-0 flex-1"><b className="block truncate text-[11px] text-zinc-300">{module.label || 'Раздел аналитики'}</b>{module.status !== 'ready' && module.next_unlock ? <small className="mt-0.5 block truncate text-[9px] text-zinc-600">{module.next_unlock}</small> : null}</span>
-            <small className={`shrink-0 rounded-full px-2 py-1 text-[9px] ${module.status === 'ready' ? 'bg-emerald-400/10 text-emerald-300' : module.status === 'available' ? 'bg-amber-400/10 text-amber-200' : 'bg-white/[0.05] text-zinc-500'}`}>{module.status === 'ready' ? 'Готово' : module.status === 'available' ? (module.total_locations ? `${module.ready_locations || 0}/${module.total_locations}` : 'Обновить') : 'Нужны данные'}</small>
+            <span className="min-w-0 flex-1"><b className="block truncate text-[11px] text-zinc-300">{module.label || 'Показатели бизнеса'}</b>{moduleDetailCopy(module) ? <small className="mt-0.5 block truncate text-[9px] text-zinc-600">{moduleDetailCopy(module)}</small> : null}</span>
+            <small className={`shrink-0 rounded-full px-2 py-1 text-[9px] ${module.status === 'ready' ? 'bg-emerald-400/10 text-emerald-300' : module.status === 'available' ? 'bg-amber-400/10 text-amber-200' : 'bg-white/[0.05] text-zinc-500'}`}>{moduleStatusCopy(module)}</small>
           </div>)}
         </div> : null}
         {isNetwork && problems.length ? <div className="mt-4">
-          <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-300" /><b className="text-xs text-zinc-300">Точки, которым нужны данные</b><span className="ml-auto text-[10px] tabular-nums text-zinc-600">до 5</span></div>
+          <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-300" /><b className="text-xs text-zinc-300">Где не хватает данных</b></div>
           <div className="mt-2 divide-y divide-white/[0.055]">
             {problems.map(({ problem, detail }) => {
               const status = locationStatus(problem.data_health_status || detail?.data_health?.status);
               const businessId = problem.target_scope?.id || problem.business_id;
-              const content = <><span className="min-w-0 flex-1"><span className="flex items-center gap-2"><b className="truncate text-xs text-zinc-200">{problem.business_name || detail?.business_name || 'Точка'}</b><small className={`shrink-0 rounded-full px-2 py-1 text-[9px] ${status.tone}`}>{status.label}</small></span><small className="mt-1 block truncate text-[10px] text-zinc-600">{detail?.rhythm?.label || 'Ритм ещё не начат'} · {detail?.analytics_level?.label || 'Нужны данные'}</small>{detail?.analytics_level?.next_unlock ? <small className="mt-1 block text-pretty text-[10px] leading-4 text-zinc-700">{detail.analytics_level.next_unlock}</small> : null}</span>{businessId && onOpenLocation ? <ChevronRight className="h-4 w-4 shrink-0 text-zinc-700" /> : null}</>;
+              const content = <><span className="min-w-0 flex-1"><span className="flex items-center gap-2"><b className="truncate text-xs text-zinc-200">{problem.business_name || detail?.business_name || 'Точка'}</b><small className={`shrink-0 rounded-full px-2 py-1 text-[9px] ${status.tone}`}>{status.label}</small></span><small className="mt-1 block text-pretty text-[10px] leading-4 text-zinc-600">{detail?.data_health?.status === 'missing' ? 'Добавьте первую недельную сводку.' : 'Добавьте данные за последнюю неделю.'}</small></span>{businessId && onOpenLocation ? <ChevronRight className="h-4 w-4 shrink-0 text-zinc-700" /> : null}</>;
               return businessId && onOpenLocation ? <button key={businessId} type="button" onClick={() => onOpenLocation(businessId, problemScreen(problem))} className="flex min-h-14 w-full items-center gap-3 py-3 text-left transition-transform active:scale-[0.96]">{content}</button> : <div key={businessId || problem.business_name} className="flex min-h-14 items-center gap-3 py-3">{content}</div>;
             })}
           </div>

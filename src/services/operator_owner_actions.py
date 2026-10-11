@@ -241,7 +241,7 @@ def apply(cursor,business,user,envelope,action_id,session=None):
     text='Временные часы сохранены только на '+data['date']+'. Постоянный график не изменён.' if data['kind']=='hours' else ('Задача «'+data['title']+'» сохранена' if data['kind']=='task' else 'Напоминание «'+data['title']+'» сохранено')+' на '+data['date']+' '+data['time']+' ('+data['timezone']+').'
     if data['delivery']=='telegram':text+=' Доставка запланирована; сообщение ещё не отправлено.'
     else:text+=' Результат доступен в «Сегодня» и через чтение задач в чате.'
-    return result(text,owner_action_id=identifier,result_ref={'href':'/dashboard/today?business_id='+business,'entity_id':identifier,'label':'Открыть задачи'})
+    return result(text,owner_action_id=identifier,result_ref={'href':'/dashboard/operator?business_id='+business+'&journey_action='+identifier,'entity_id':identifier,'label':'Открыть работу'})
 
 
 def today_items(cursor,scope,user):

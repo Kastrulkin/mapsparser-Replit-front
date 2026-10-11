@@ -1,3 +1,5 @@
+import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
+import { OutreachSandbox } from '@/components/outreach/OutreachSandbox';
 import { OutreachMessageQueue } from '@/components/prospecting/OutreachMessageQueue';
 import { OutreachContinuation } from '@/components/prospecting/OutreachContinuation';
 import { buildCandidateSearchGroups, resolveSearchTask, taskLabel, type SearchTaskGroup } from '@/components/prospecting/partnershipSearchGroups';
@@ -265,7 +267,8 @@ const getLeadPipelineStatus = (lead: Partial<PartnershipLead> | null | undefined
   if (!legacy || legacy === 'imported' || legacy === 'new') return PIPELINE_UNPROCESSED;
   if (legacy === 'deferred') return PIPELINE_POSTPONED;
   if (['rejected', 'shortlist_rejected'].includes(legacy)) return PIPELINE_NOT_RELEVANT;
-  if (['approved_for_send', 'sent', 'delivered'].includes(legacy)) return PIPELINE_CONTACTED;
+  if (legacy === 'approved_for_send') return PIPELINE_IN_PROGRESS;
+  if (['sent', 'delivered'].includes(legacy)) return PIPELINE_CONTACTED;
   if (legacy === 'second_message_sent') return PIPELINE_SECOND_MESSAGE_SENT;
   if (legacy === 'responded') return PIPELINE_REPLIED;
   if (legacy === 'qualified') return PIPELINE_IN_PROGRESS;
@@ -530,8 +533,9 @@ export const PartnershipSearchPage: React.FC = () => {
   const partnershipCopy = getPartnershipWorkspaceCopy(language);
   const [searchParams, setSearchParams] = useSearchParams();
   const showDemoPartner = searchParams.get('demo') === 'romashka';
-  const requestedLeadId = searchParams.get('lead');
+  const requestedLeadId = searchParams.get('lead_id') || searchParams.get('lead');
   const requestedFocus = searchParams.get('focus');
+  const appliedLeadLink = useRef('');
   const requestedSection = searchParams.get('section');
   const requestedSearchTaskId = searchParams.get('search_task_id');
   const [loading, setLoading] = useState(false);
@@ -909,19 +913,21 @@ export const PartnershipSearchPage: React.FC = () => {
   }, [showDemoPartner, currentBusinessId]);
 
   useEffect(() => {
-    if (!requestedLeadId || !items.length) return;
+    const linkKey = `${currentBusinessId}:${requestedLeadId}`;
+    if (!requestedLeadId || !items.length || appliedLeadLink.current === linkKey) return;
     const requestedLead = items.find((item) => item.id === requestedLeadId);
     if (!requestedLead) return;
+    appliedLeadLink.current = linkKey;
     setWorkspaceView('pipeline');
     setLeadBucket('active');
     setLeadView('all');
     setStage('all');
     setQuery(String(requestedLead.name || ''));
-    setSelectedLeadId(null);
+    setSelectedLeadId(requestedLead.id);
     if (requestedFocus === 'match') {
       setMessage(`Открыта подготовка предложения для ${requestedLead.name || 'этой компании'}. Выполните выделенный следующий шаг — результат появится прямо в карточке.`);
     }
-  }, [items, requestedFocus, requestedLeadId]);
+  }, [items, currentBusinessId, requestedFocus, requestedLeadId]);
 
   const loadRalphLoop = async () => {
     if (!currentBusinessId) return;
@@ -2340,7 +2346,8 @@ export const PartnershipSearchPage: React.FC = () => {
     return (
       <div className="space-y-6 pb-24" data-tour-target="partnership-workspace">
 
-        <PartnershipWorkspaceOverview
+        {requestedLeadId && !loading && !items.some(item => item.id === requestedLeadId) && <p role="status" className="rounded-lg border p-4 text-sm text-muted-foreground">{workCoherenceCopy(language).recordUnavailable}</p>}
+      <PartnershipWorkspaceOverview
           workspaceView={workspaceView}
           currentBusinessId={currentBusinessId}
           rawLeadCount={rawLeadCount}
@@ -2365,7 +2372,7 @@ export const PartnershipSearchPage: React.FC = () => {
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{partnershipCopy.demoOfferBody}</p>
           </div>
           {demoRoomSlug ? (
-            <Button asChild className="min-h-10 active:scale-[0.96]">
+            <Button variant="product" asChild className="min-h-10 active:scale-[0.96]">
               <a href={`/room/${demoRoomSlug}`} target="_blank" rel="noreferrer">{partnershipCopy.demoOpenRoom}</a>
             </Button>
           ) : null}
@@ -2449,7 +2456,7 @@ export const PartnershipSearchPage: React.FC = () => {
                 </p>
               </div>
               {demoRoomSlug ? (
-                <Button asChild className="min-h-10 active:scale-[0.96]">
+                <Button variant="product" asChild className="min-h-10 active:scale-[0.96]">
                   <a href={`/room/${demoRoomSlug}`} target="_blank" rel="noreferrer">
                     Открыть цифровую комнату
                   </a>
@@ -2461,6 +2468,7 @@ export const PartnershipSearchPage: React.FC = () => {
           {workspaceView === 'overview' ? (
             <>
             <PartnershipResults scope={controlScope || { kind: 'business', id: currentBusinessId }} openWork={() => setWorkspaceView('pipeline')} />
+            <details className="rounded-xl border p-4"><summary className="min-h-11 cursor-pointer py-2">{workCoherenceCopy(language).testOutreach}</summary><OutreachSandbox businessId={currentBusinessId} /></details>
             <details><summary className="min-h-11 cursor-pointer py-3">Работа с кандидатами и отправками</summary>
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
               <div className="rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
@@ -2546,7 +2554,7 @@ export const PartnershipSearchPage: React.FC = () => {
                     </div>
                   )}
                   <div className="flex flex-wrap gap-2">
-                    <Button size="sm" onClick={() => setWorkspaceView('raw')}>Добавить кандидатов</Button>
+                    <Button variant="product" size="sm" onClick={() => setWorkspaceView('raw')}>Добавить кандидатов</Button>
                     <Button size="sm" variant="outline" onClick={() => setWorkspaceView('pipeline')}>Открыть отбор</Button>
                     <Button size="sm" variant="outline" onClick={() => setWorkspaceView('analytics')}>Посмотреть отчёт</Button>
                   </div>
@@ -2601,7 +2609,7 @@ export const PartnershipSearchPage: React.FC = () => {
             description=""
             badges={[]}
           >
-            {selectedTask && <Button asChild className="mb-3"><Link to={`/dashboard/operator?business_id=${encodeURIComponent(currentBusinessId || '')}&search_task_id=${encodeURIComponent(selectedTask.id)}&command=${encodeURIComponent('Подготовь письма для подходящих или выбранных компаний этого поиска')}`}>Подготовить письма</Link></Button>}
+            {selectedTask && <Button variant="product" asChild className="mb-3"><Link to={`/dashboard/operator?business_id=${encodeURIComponent(currentBusinessId || '')}&search_task_id=${encodeURIComponent(selectedTask.id)}&command=${encodeURIComponent('Подготовь письма для подходящих или выбранных компаний этого поиска')}`}>Подготовить письма</Link></Button>}
             <p className="mb-3 text-sm text-muted-foreground">Выбор для работы не заменяет проверку сведений.</p>
             {visibleRawLeads.length === 0 ? (
               <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-muted-foreground">
@@ -2969,7 +2977,7 @@ export const PartnershipSearchPage: React.FC = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDraftApprovalReview(null)} disabled={loading}>Вернуться к редактированию</Button>
-            <Button onClick={() => void bulkApproveDrafts()} disabled={loading || !draftApprovalReview?.length}>Утвердить для ручной отправки</Button>
+            <Button variant="product" onClick={() => void bulkApproveDrafts()} disabled={loading || !draftApprovalReview?.length}>Утвердить для ручной отправки</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

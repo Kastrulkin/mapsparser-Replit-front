@@ -1,0 +1,66 @@
+{
+  "frontend": {
+    "files": 21,
+    "passed": 216,
+    "failed": 0
+  },
+  "workspace": {
+    "full_previous_passed": 214,
+    "last_focused_files": 4,
+    "last_focused_passed": 82,
+    "typecheck_exit": 0
+  },
+  "server": {
+    "passed": 83,
+    "failed": 1,
+    "baseline_failure": "test_operator_action_confirm_passes_authenticated_tenant_scope",
+    "baseline_reproduced": true
+  },
+  "types": {
+    "baseline_unique_diagnostics": 88,
+    "candidate_unique_diagnostics": 51,
+    "new_diagnostics": []
+  },
+  "build_exit": 0,
+  "product_ui_exit": 0,
+  "product_ui_mocked_cockpit": "not-run-by-guard-port-3000-not-running; separate-browser-pass-on-3109",
+  "dist_integrity_exit": 0,
+  "browser": {
+    "data": "synthetic-local-fixtures",
+    "widths": [
+      390,
+      768,
+      1280
+    ],
+    "measurements": [
+      {
+        "primaryTop": 606,
+        "scrollWidth": 375,
+        "width": 390
+      },
+      {
+        "primaryTop": 590,
+        "scrollWidth": 753,
+        "width": 768
+      },
+      {
+        "primaryTop": 402,
+        "scrollWidth": 1265,
+        "width": 1280
+      }
+    ],
+    "final_pass_errors": 0
+  },
+  "audience_research": {
+    "participants": 0,
+    "target": 5,
+    "success_target": 4,
+    "status": "not-conducted"
+  },
+  "deployment": "not-authorized-for-this-release-not-performed",
+  "packaging": {
+    "release_patch_check": "passed",
+    "workspace_task_patch_check": "passed",
+    "source_manifest_hashes": "matched"
+  }
+}

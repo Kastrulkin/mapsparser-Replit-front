@@ -757,6 +757,7 @@ const DraftGenerationFeedback = ({ ready }: { ready: boolean }) => {
 export function ContentPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const hasLinkedAction = Boolean(new URLSearchParams(location.search).get('journey_action'));
   const { language } = useLanguage();
   const contentCopy = getContentWorkspaceCopy(language);
   const calendarCopy = getContentCalendarCopy(language);
@@ -2190,7 +2191,7 @@ export function ContentPage() {
           <p className="mt-4 max-w-xl text-base leading-7 text-slate-600">
             LocalOS может подготовить месяц публикаций для карт и соцсетей. Вы увидите готовый календарь, а потом быстро проверите важное.
           </p>
-          <Button type="button" onClick={() => setCreateOpen(true)} className="mt-6 rounded-2xl bg-slate-950 px-5 py-6 text-base text-white hover:bg-slate-800">
+          <Button type="button" onClick={() => setCreateOpen(true)} variant={hasLinkedAction ? 'outline' : 'default'} className={cn('mt-6 rounded-2xl px-5 py-6 text-base', !hasLinkedAction && 'bg-slate-950 text-white hover:bg-slate-800')}>
             Создать первый план
           </Button>
         </div>
@@ -3372,13 +3373,13 @@ export function ContentPage() {
           <Button type="button" variant="outline" onClick={() => { void openVoiceSettings(); }} className="min-h-12 rounded-2xl bg-white px-4 active:scale-[0.96] transition-transform">
             <Star className="mr-2 h-4 w-4" />{contentControls.configureContent}
           </Button>
-          <Button type="button" onClick={() => { setCreateStep('setup'); setCreateOpen(true); }} className="min-h-12 rounded-2xl bg-slate-950 px-5 text-white hover:bg-slate-800 active:scale-[0.96] transition-transform">
+          <Button type="button" onClick={() => { setCreateStep('setup'); setCreateOpen(true); }} variant={hasLinkedAction ? 'outline' : 'default'} className={cn('min-h-12 rounded-2xl px-5 active:scale-[0.96] transition-transform', !hasLinkedAction && 'bg-slate-950 text-white hover:bg-slate-800')}>
             <Plus className="mr-2 h-4 w-4" />{contentCopy.createPlan}
           </Button>
         </div>
       </div>
 
-      <div className="inline-flex rounded-2xl bg-slate-100 p-1">
+      <div className="inline-flex max-w-full flex-wrap rounded-2xl bg-slate-100 p-1">
         {[
           ['calendar', contentCopy.calendar, CalendarDays],
           ['media', contentCopy.media, ImageIcon],
@@ -3501,7 +3502,7 @@ export function ContentPage() {
             </div>
 
             <div className="flex flex-col gap-3 rounded-[28px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-              <div className="inline-flex rounded-2xl bg-slate-100 p-1">
+              <div className="inline-flex max-w-full flex-wrap rounded-2xl bg-slate-100 p-1">
                 {[
                   ['month', calendarCopy.month, CalendarDays],
                   ['week', calendarCopy.week, Clock3],

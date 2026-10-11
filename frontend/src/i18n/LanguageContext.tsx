@@ -1,32 +1,23 @@
-import React, { useContext, useEffect, useMemo, useState, ReactNode } from "react";
-import { LanguageContext } from './LanguageContext.logic';
+import React, { ReactNode, useEffect, useMemo, useState } from "react";
+import { LanguageContext, type Language, type Translations } from './LanguageContext.logic';
 
-import { resolveInitialLanguage } from './languagePreference';
-
-type Translations = any;
-
-export type Language = "ru" | "en" | "fr" | "es" | "el" | "de" | "th" | "ar" | "ha" | "tr";
-
-interface LanguageContextType {
-  language: Language;
-  setLanguage: (lang: Language) => void;
-  t: Translations;
-}
+import { resolveInitialLanguage, urlWithLanguage } from './languagePreference';
 
 const isTranslationRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
-const mergeTranslations = (
-  fallback: Record<string, unknown>,
+const mergeTranslations = <Fallback extends Record<string, unknown>>(
+  fallback: Fallback,
   selected: unknown,
-): Record<string, unknown> => {
+): Fallback => {
   const result = { ...fallback };
   if (!isTranslationRecord(selected)) return result;
   Object.entries(selected).forEach(([key, value]) => {
     const fallbackValue = fallback[key];
-    result[key] = isTranslationRecord(fallbackValue) && isTranslationRecord(value)
+    const mergedValue = isTranslationRecord(fallbackValue) && isTranslationRecord(value)
       ? mergeTranslations(fallbackValue, value)
       : value;
+    Object.assign(result, { [key]: mergedValue });
   });
   return result;
 };
@@ -39,7 +30,7 @@ const detectInitialLanguage = (): Language => {
   return resolveInitialLanguage(pathname, search, saved, browserLanguage);
 };
 
-const loadTranslations = async (language: Language): Promise<Translations> => {
+const loadTranslations = async (language: Language): Promise<Record<string, unknown>> => {
   switch (language) {
     case "ru":
       return import("./locales/ru").then((module) => module.ru);
@@ -61,17 +52,9 @@ const loadTranslations = async (language: Language): Promise<Translations> => {
       return import("./locales/ha").then((module) => module.ha);
     case "tr":
       return import("./locales/tr").then((module) => module.tr);
+    case "hy":
+      return import("./locales/hy").then((module) => module.hy);
   }
-};
-
-export const useLanguage = () => {
-  const context = useContext(LanguageContext);
-
-  if (!context) {
-    throw new Error("useLanguage must be used within a LanguageProvider");
-  }
-
-  return context;
 };
 
 interface LanguageProviderProps {
@@ -101,7 +84,7 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
     const applyTranslations = async () => {
       try {
         const loadedTranslations = await loadTranslations(language);
-        const fallbackTranslations = language === 'en' ? loadedTranslations : await loadTranslations('en');
+        const fallbackTranslations = (await import('./locales/en')).en;
 
         if (active) {
           setTranslations(mergeTranslations(fallbackTranslations, loadedTranslations));
@@ -113,7 +96,7 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
           return;
         }
 
-        const fallbackTranslations = await loadTranslations("en");
+        const fallbackTranslations = (await import('./locales/en')).en;
 
         if (active) {
           setTranslations(fallbackTranslations);
@@ -130,6 +113,8 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
   }, [language]);
 
   const setLanguage = (lang: Language) => {
+    const { pathname, search, hash } = window.location;
+    window.history.replaceState(window.history.state, '', urlWithLanguage(pathname, search, hash, lang));
     setLanguageState(lang);
   };
 
@@ -151,3 +136,8 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 };
+
+
+export { useLanguage } from './LanguageContext.logic';
+
+export type { Language } from './LanguageContext.logic';

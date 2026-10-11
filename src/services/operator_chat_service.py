@@ -78,6 +78,10 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
         digest = hashlib.sha256((digest + str(payload["input_context"])).encode()).hexdigest()
     if payload.get("work_entry_id") or payload.get("work_action_id"):
         digest=hashlib.sha256((digest+json.dumps([payload.get("work_entry_id"),payload.get("work_action_id")])).encode()).hexdigest()
+    if payload.get("work_ref"):
+        digest = hashlib.sha256((digest + str(payload["work_ref"])).encode()).hexdigest()
+    if payload.get("journey_action_id"):
+        digest = hashlib.sha256((digest + str(payload["journey_action_id"])).encode()).hexdigest()
     if payload.get("work_change_hash"):
         digest = hashlib.sha256((digest + str(payload["work_change_hash"])).encode()).hexdigest()
     if any(key in payload for key in ('attachment_ids','selected_object','clear_input_context','search_task_id')):

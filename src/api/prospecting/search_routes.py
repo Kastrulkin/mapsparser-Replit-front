@@ -1141,10 +1141,10 @@ def partnership_funnel():
                             WHEN COALESCE(l.pipeline_status, '') <> '' THEN l.pipeline_status
                             WHEN COALESCE(l.partnership_stage, 'imported') = 'deferred' THEN 'postponed'
                             WHEN COALESCE(l.partnership_stage, 'imported') IN ('rejected', 'shortlist_rejected') THEN 'not_relevant'
-                            WHEN COALESCE(l.partnership_stage, 'imported') IN ('approved_for_send', 'sent') THEN 'contacted'
+                            WHEN COALESCE(l.partnership_stage, 'imported') IN ('sent', 'delivered') THEN 'contacted'
                             WHEN COALESCE(l.partnership_stage, 'imported') IN (
                                 'audited', 'matched', 'proposal_draft_ready', 'selected_for_outreach',
-                                'channel_selected', 'proposal_approved', 'queued_for_send'
+                                'channel_selected', 'proposal_approved', 'approved_for_send', 'queued_for_send'
                             ) THEN 'in_progress'
                             ELSE 'unprocessed'
                         END AS normalized_pipeline_status,

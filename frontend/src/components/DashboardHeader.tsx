@@ -1,3 +1,7 @@
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { getDashboardShellCopy } from '@/i18n/dashboardShellCopy';
+import { workNavigationCopy } from '@/lib/workNavigation';
+import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from './ui/button';
@@ -42,6 +46,8 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   currentBusiness,
 }) => {
   const { currency, setCurrency } = useCurrency();
+  const { language } = useLanguage();
+  const shellCopy = getDashboardShellCopy(language);
   const navigate = useNavigate();
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -88,11 +94,11 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 sm:gap-4">
         {/* Left Side: Context Switchers */}
         <div className="flex min-w-0 flex-auto flex-wrap items-center gap-2 sm:gap-3">
-          {isSuperadmin && (
+          {(isSuperadmin || businesses.length > 1) && (
             <div className="flex min-w-0 shrink-0 items-center gap-2 animate-in fade-in slide-in-from-left-4 duration-500">
-              <span className="hidden rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-indigo-700 sm:inline-flex">
+              {isSuperadmin ? <span hidden={!isSuperadmin} className="hidden rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-indigo-700 sm:inline-flex">
                 SuperAdmin
-              </span>
+              </span> : null}
               <BusinessSwitcher
                 businesses={businesses}
                 currentBusinessId={currentBusinessId || undefined}
@@ -102,7 +108,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             </div>
           )}
 
-          {currentBusiness?.network_id && onBusinessChange && (
+          {!isSuperadmin && businesses.length <= 1 && currentBusiness?.network_id && onBusinessChange && (
             <div className="min-w-0 shrink-0" data-tour-target="network-switcher">
               <NetworkLocationsSwitcher
                 currentBusinessId={currentBusinessId || undefined}
@@ -112,7 +118,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           )}
 
           {/* Fallback Title if no switchers active */}
-          {!isSuperadmin && !currentBusiness?.network_id && currentBusiness && (
+          {!isSuperadmin && businesses.length <= 1 && !currentBusiness?.network_id && currentBusiness && (
             <h1 className="hidden text-lg font-semibold text-slate-800 md:block">
               {currentBusiness.name}
             </h1>
@@ -142,7 +148,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
           <div className="hidden sm:block">
             <Select value={currency} onValueChange={(value) => { if (value === 'RUB' || value === 'USD' || value === 'EUR') setCurrency(value); }}>
-              <SelectTrigger className="h-9 w-14 border-0 bg-transparent hover:bg-slate-100/80 focus:ring-0">
+              <SelectTrigger aria-label={shellCopy.currency} className="h-9 w-14 border-0 bg-transparent hover:bg-slate-100/80 focus:ring-0">
                 <span className="text-base font-medium text-slate-700">
                   {currency === 'RUB' ? '₽' : currency === 'USD' ? '$' : '€'}
                 </span>
@@ -159,7 +165,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
           {isAuthenticated && currentUser ? (
             <div className="hidden items-center gap-3 pl-2 sm:flex">
-              <Link to="/dashboard/profile" className="flex items-center gap-2 group">
+              <Link to="/dashboard/profile" aria-label={workNavigationCopy(language).label('profile')} className="flex items-center gap-2 group">
                 <div className="h-9 w-9 rounded-full border border-slate-200 bg-white p-[2px] shadow-sm transition-all group-hover:border-slate-300 group-hover:shadow-md">
                   <div className="flex h-full w-full items-center justify-center rounded-full bg-slate-50">
                     <UserCircle className="h-5 w-5 text-slate-600" />
@@ -173,6 +179,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                 variant="ghost"
                 size="icon"
                 onClick={handleLogout}
+                aria-label={workCoherenceCopy(language).logout}
                 className="text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500"
               >
                 <LogOut className="w-5 h-5" />

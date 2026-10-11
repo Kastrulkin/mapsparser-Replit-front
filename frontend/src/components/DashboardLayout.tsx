@@ -1,47 +1,97 @@
+import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { workNavigationCopy } from '@/lib/workNavigation';
+import { WorkReturnNotice } from '@/components/WorkReturnNotice';
 import { resolveDashboardBusinessScope } from '../lib/dashboardBusinessScope';
-import { Outlet, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { DashboardSidebar } from './DashboardSidebar';
-import { DashboardHeader } from './DashboardHeader';
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { newAuth, type User } from '../lib/auth_new';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import type { BusinessRecord } from '@/types/business';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { HttpError, newAuth, type User } from '../lib/auth_new';
 import { getCapabilityAccessForBusiness, type SubscriptionCapability } from '../lib/subscriptionAccess';
+import { DashboardHeader } from './DashboardHeader';
+import { DashboardSidebar } from './DashboardSidebar';
 import { DemoModeBanner, GuidedTourProvider } from './guided-tour/GuidedTourProvider';
-import { featureFlags } from '../config/featureFlags';
 
-type DashboardBusiness = {
-  id: string;
-  name: string;
-  description?: string;
-  moderation_status?: string;
-  entity_group?: string;
-  is_lead_business?: boolean;
-  subscription_tier?: string | null;
-  subscription_status?: string | null;
-  subscription_ends_at?: string | null;
-  network_id?: string | null;
-  network_name?: string | null;
-  web_tracking_available?: boolean;
-  creator_promotion_available?: boolean;
+type DashboardBusiness = BusinessRecord;
+
+const selectedBusinessStorageKey = (demoMode: boolean) => (
+  demoMode ? 'demo_selectedBusinessId' : 'selectedBusinessId'
+);
+
+const controlScopeStorageKey = (demoMode: boolean) => (
+  demoMode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope'
+);
+
+const clearStoredDashboardScope = (demoMode: boolean) => {
+  window.localStorage.removeItem(selectedBusinessStorageKey(demoMode));
+  window.localStorage.removeItem(controlScopeStorageKey(demoMode));
 };
 
 export type ControlScope = {
-  kind: 'business' | 'network';
+  kind: 'business' | 'network' | 'platform';
   id: string;
   name: string;
 };
 
-const paidDashboardSections: Array<{ path: string; capability: SubscriptionCapability; title: string; hint: string }> = [
-  { path: '/dashboard/card', capability: 'maps', title: 'Работа с картами входит в тариф «Карты»', hint: 'Аудит, услуги, отзывы, фото и новости для карточки открываются на тарифе «Карты».' },
-  { path: '/dashboard/web-analytics', capability: 'web_analytics', title: 'Аналитика сайта входит в тариф «Карты»', hint: 'Установите tracker-скрипт и получите первые события поведения пользователей.' },
-  { path: '/dashboard/finance', capability: 'finance', title: 'Финансы входят в тариф «Управление»', hint: 'Импорт, показатели и рекомендации по выручке доступны на старшем тарифе.' },
-  { path: '/dashboard/average-ticket', capability: 'average_ticket', title: 'Средний чек входит в тариф «Управление»', hint: 'Пакеты услуг и сценарии допродажи доступны на старшем тарифе.' },
-  { path: '/dashboard/ai-chat-promotion', capability: 'ai_visibility', title: 'AI-видимость входит в тариф «Привлечение»', hint: 'Проверки и рекомендации по AI-выдаче входят в контур привлечения.' },
-  { path: '/dashboard/influencers/operations', capability: 'influencers', title: 'Полная работа с инфлюенсерами входит в тариф «Привлечение»', hint: 'Откроются сообщения, каналы, размещения и подтверждённая отправка.' },
-  { path: '/dashboard/operator', capability: 'operator', title: 'Оператор входит в тариф «Управление»', hint: 'Единый рабочий центр задач и запусков доступен на старшем тарифе.' },
-  { path: '/dashboard/telegram-radar', capability: 'telegram_radar', title: 'Telegram-радар входит в тариф «Карты»', hint: 'Сбор отраслевых публикаций доступен вместе с работой над карточкой.' },
-  { path: '/dashboard/agents', capability: 'agents', title: 'ИИ-сотрудники входят в тариф «Управление»', hint: 'Настройка и запуск автоматизаций доступны на старшем тарифе.' },
-  { path: '/dashboard/chats', capability: 'chats', title: 'Рабочие чаты входят в тариф «Управление»', hint: 'Подключение и обработка сообщений доступны на старшем тарифе.' },
+type PaidDashboardSection = { path: string; capability: SubscriptionCapability; title: string; hint: string; previewItems: string[]; nextAction: string };
+
+const paidDashboardSections: PaidDashboardSection[] = [
+  { path: '/dashboard/progress', capability: 'progress', title: 'Прогресс входит в тариф «Карты»', hint: 'Недельные задачи, повторная проверка и сравнение результата открываются на тарифе «Карты».', previewItems: ['Одна приоритетная задача', 'Прогресс недели', 'Сравнение до и после'], nextAction: 'После оплаты вы вернётесь к текущей задаче.' },
+  { path: '/dashboard/card', capability: 'maps', title: 'Работа с картами входит в тариф «Карты»', hint: 'Аудит, услуги, отзывы, фото и новости для карточки открываются на тарифе «Карты».', previewItems: ['Проверка заполненности и свежести карточки', 'Сводка отзывов и услуг', 'План первых улучшений'], nextAction: 'Добавьте ссылку на карты, чтобы после оплаты сразу запустить аудит.' },
+  { path: '/dashboard/web-analytics', capability: 'web_analytics', title: 'Аналитика сайта входит в тариф «Карты»', hint: 'Установите tracker-скрипт и получите первые события поведения пользователей.', previewItems: ['Посещения и источники трафика', 'Звонки, формы и переходы в мессенджеры', 'Статус подключения tracker-скрипта'], nextAction: 'После подключения главным шагом будет установка скрипта на сайт.' },
+  { path: '/dashboard/finance', capability: 'finance', title: 'Финансы входят в тариф «Управление»', hint: 'Импорт, показатели и рекомендации по выручке доступны на старшем тарифе.', previewItems: ['Выручка, расходы и маржа', 'Динамика по периодам', 'Точки, где бизнес теряет деньги'], nextAction: 'После оплаты вы вернётесь сюда и загрузите первые продажи.' },
+  { path: '/dashboard/work-journal', capability: 'operator', title: 'Рабочий журнал', hint: 'Работа команды через Оператора', previewItems: ['Наблюдения', 'Рекомендации', 'Правила владельца'], nextAction: 'Выберите доступный тариф управления.' },
+  { path: '/dashboard/average-ticket', capability: 'average_ticket', title: 'Средний чек входит в тариф «Управление»', hint: 'Пакеты услуг и сценарии допродажи доступны на старшем тарифе.', previewItems: ['Пары основных и дополнительных услуг', 'Пакеты с прозрачной выгодой', 'Метрики роста среднего чека'], nextAction: 'После оплаты LocalOS соберёт первую матрицу из текущих услуг.' },
+  { path: '/dashboard/content', capability: 'social_content', title: 'Контент для соцсетей входит в тариф «Управление»', hint: 'Контент-планы, адаптация под каналы и контролируемое размещение доступны на старшем тарифе. Новости для карточек уже доступны в разделе «Карты».', previewItems: ['Календарь публикаций по каналам', 'Черновики в формате каждой площадки', 'Проверка и ручное подтверждение размещения'], nextAction: 'После оплаты вы вернётесь к контент-плану и выберете первый канал. Новости для карт можно готовить уже сейчас в разделе карточки.' },
+  { path: '/dashboard/ai-chat-promotion', capability: 'ai_visibility', title: 'AI-видимость входит в тариф «Привлечение»', hint: 'Проверки и рекомендации по AI-выдаче входят в контур привлечения.', previewItems: ['Проверка упоминаний бизнеса', 'Недостающие факты для AI-ответов', 'План роста видимости'], nextAction: 'После оплаты вернём вас к первой проверке AI-выдачи.' },
+  { path: '/dashboard/influencers/operations', capability: 'influencers', title: 'Полная работа с инфлюенсерами входит в тариф «Привлечение»', hint: 'Откроются сообщения, каналы, размещения и подтверждённая отправка.', previewItems: ['Подбор локальных авторов', 'Предложение и черновики сообщений', 'Статусы размещений'], nextAction: 'Откройте тариф, чтобы продолжить работу с выбранными авторами.' },
+  { path: '/dashboard/operator', capability: 'operator', title: 'Оператор входит в тариф «Управление»', hint: 'Единый рабочий центр задач и запусков доступен на старшем тарифе.', previewItems: ['Единая очередь задач', 'Черновики с ручным подтверждением', 'Журнал запусков и ошибок'], nextAction: 'После оплаты Оператор покажет первую задачу, которая требует вашего решения.' },
+  { path: '/dashboard/telegram-radar', capability: 'telegram_radar', title: 'Telegram-радар входит в тариф «Карты»', hint: 'Сбор отраслевых публикаций доступен вместе с работой над карточкой.', previewItems: ['Темы, которые обсуждают в вашей отрасли', 'Новые возможности и риски', 'Краткая ежедневная сводка'], nextAction: 'После оплаты сохраним ваши ключевые темы и запустим сбор.' },
+  { path: '/dashboard/agents', capability: 'agents', title: 'ИИ-сотрудники входят в тариф «Управление»', hint: 'Настройка и запуск автоматизаций доступны на старшем тарифе.', previewItems: ['Задачи по расписанию', 'Результаты и статусы', 'Ручные подтверждения важных шагов'], nextAction: 'После оплаты выберите первую повторяющуюся задачу для настройки.' },
+  { path: '/dashboard/chats', capability: 'chats', title: 'Рабочие чаты входят в тариф «Управление»', hint: 'Подключение и обработка сообщений доступны на старшем тарифе.', previewItems: ['Входящие диалоги в одной очереди', 'Черновики ответов', 'Статус канала и ручная отправка'], nextAction: 'После оплаты подключите первый канал и проверьте тестовый диалог.' },
 ];
+
+const LockedSectionPreview = ({ section, currentTierName, paywallHref }: { section: PaidDashboardSection; currentTierName: string; paywallHref: string }) => (
+  <section className="mx-auto max-w-4xl py-4 sm:py-8" aria-labelledby="locked-section-title">
+    <div className="rounded-[28px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.06),0_2px_5px_rgba(15,23,42,0.05),0_18px_48px_rgba(15,23,42,0.08)] sm:p-8">
+      <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+        <span className="rounded-full bg-slate-100 px-3 py-1.5">Сейчас: {currentTierName}</span>
+        <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-800">Откроется после повышения</span>
+      </div>
+      <h1 id="locked-section-title" className="mt-5 max-w-2xl text-balance text-2xl font-bold tracking-[-0.025em] text-slate-950 sm:text-3xl">{section.title}</h1>
+      <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-slate-600 sm:text-base">{section.hint}</p>
+
+      <div className="mt-7 grid gap-3 sm:grid-cols-3" aria-label="Пример результата">
+        {section.previewItems.map((item, index) => (
+          <div key={item} className="rounded-2xl bg-slate-50 p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.05)]">
+            <span className="tabular-nums text-xs font-bold text-slate-400">0{index + 1}</span>
+            <p className="mt-2 text-pretty text-sm font-semibold leading-5 text-slate-800">{item}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="relative mt-4 overflow-hidden rounded-2xl bg-slate-50 p-4" aria-hidden="true">
+        <div className="space-y-3 opacity-45 blur-[3px]">
+          <div className="h-4 w-2/3 rounded-full bg-slate-300" />
+          <div className="h-16 rounded-xl bg-slate-200" />
+          <div className="h-16 rounded-xl bg-slate-200" />
+        </div>
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent to-white/80" />
+      </div>
+
+      <div className="mt-6 rounded-2xl bg-slate-950 p-5 text-white sm:flex sm:items-center sm:justify-between sm:gap-6">
+        <div>
+          <p className="text-sm font-semibold">Следующий шаг</p>
+          <p className="mt-1 max-w-xl text-pretty text-sm leading-6 text-slate-300">{section.nextAction}</p>
+        </div>
+        <a href={paywallHref} className="mt-4 inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-white px-4 text-sm font-bold text-slate-950 transition-[background-color,scale] duration-150 hover:bg-slate-100 active:scale-[0.96] sm:mt-0">
+          Выбрать подходящий тариф
+        </a>
+      </div>
+    </div>
+  </section>
+);
 
 export const DashboardLayout = () => {
   const location = useLocation();
@@ -52,6 +102,7 @@ export const DashboardLayout = () => {
   const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(null);
   const [currentBusiness, setCurrentBusiness] = useState<DashboardBusiness | null>(null);
   const [controlScope, setControlScope] = useState<ControlScope | null>(null);
+  const [membershipReloadError, setMembershipReloadError] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') {
@@ -59,6 +110,7 @@ export const DashboardLayout = () => {
     }
     return window.localStorage.getItem('dashboard_sidebar_collapsed') === 'true';
   });
+  const scopeRevisionRef = useRef(0);
   const isLeadBusiness = useCallback((business: DashboardBusiness) => {
     const moderationStatus = String(business?.moderation_status || '').trim().toLowerCase();
     const entityGroup = String(business?.entity_group || '').trim().toLowerCase();
@@ -108,7 +160,7 @@ export const DashboardLayout = () => {
           }
 
           if (!businessToSelect) {
-            const businessStorageKey = currentUser.demo_mode ? 'demo_selectedBusinessId' : 'selectedBusinessId';
+            const businessStorageKey = selectedBusinessStorageKey(Boolean(currentUser.demo_mode));
             const savedBusinessId = localStorage.getItem(businessStorageKey);
             businessToSelect = savedBusinessId
               ? businessesData.find((business) => business.id === savedBusinessId) || businessesData[0]
@@ -117,12 +169,16 @@ export const DashboardLayout = () => {
 
           setCurrentBusinessId(businessToSelect.id);
           setCurrentBusiness(businessToSelect);
-          const restoredScope = resolveDashboardBusinessScope(businessToSelect);
+          const restoredScope = resolveDashboardBusinessScope(businessToSelect, linkedBusinessId ? (new URLSearchParams(window.location.search).get('scope_type') === 'network' ? 'network' : 'business') : undefined);
           setControlScope(restoredScope);
-          localStorage.setItem(currentUser.demo_mode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope', JSON.stringify(restoredScope));
-          localStorage.setItem(currentUser.demo_mode ? 'demo_selectedBusinessId' : 'selectedBusinessId', businessToSelect.id);
+          localStorage.setItem(controlScopeStorageKey(Boolean(currentUser.demo_mode)), JSON.stringify(restoredScope));
+          localStorage.setItem(selectedBusinessStorageKey(Boolean(currentUser.demo_mode)), businessToSelect.id);
         } else {
           setBusinesses([]);
+          setCurrentBusinessId(null);
+          setCurrentBusiness(null);
+          setControlScope(null);
+          clearStoredDashboardScope(Boolean(currentUser.demo_mode));
         }
       } catch (error) {
         console.error('Ошибка загрузки пользователя:', error);
@@ -146,27 +202,24 @@ export const DashboardLayout = () => {
     window.sessionStorage.setItem('localos_checkout_return_to', `${location.pathname}${location.search}`);
   }, [location.pathname, location.search]);
 
-  const selectBusinessFromMenu = (businessId: string) => {
-    if (businessId === currentBusinessId || !businesses.some(business => business.id === businessId)) return;
-    const params = new URLSearchParams(location.search);
-    params.set('business_id', businessId);
-    params.delete('search_task_id');
-    params.delete('company_filter');
-    navigate({ pathname: location.pathname, search: `?${params.toString()}`, hash: location.hash }, { replace: true });
-    void handleBusinessChange(businessId);
-  };
-
-  const handleBusinessChange = async (businessId: string) => {
+  const handleBusinessChange = useCallback(async (businessId: string, requestedKind?: 'business' | 'network') => {
     const business = businesses.find(b => b.id === businessId);
     if (business) {
+      scopeRevisionRef.current += 1;
       setCurrentBusinessId(businessId);
       setCurrentBusiness(business);
-      const nextScope = resolveDashboardBusinessScope(business);
+      const nextScope = resolveDashboardBusinessScope(business, requestedKind);
       setControlScope(nextScope);
-      localStorage.setItem(user?.demo_mode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope', JSON.stringify(nextScope));
-      localStorage.setItem(user?.demo_mode ? 'demo_selectedBusinessId' : 'selectedBusinessId', businessId);
+      if (!requestedKind) {
+        const params = new URLSearchParams(location.search);
+        for (const key of ['journey_action','work_ref','return_to','item_id','plan_id','lead','lead_id','campaign_id','collaboration_id','creator_id','run_id','draft_id','entry','search_task_id','company_filter']) params.delete(key);
+        params.set('business_id', businessId); params.set('scope_type', nextScope.kind);
+        navigate({pathname: location.pathname, search: '?' + params, hash: ''}, {replace:true});
+      }
+      localStorage.setItem(controlScopeStorageKey(Boolean(user?.demo_mode)), JSON.stringify(nextScope));
+      localStorage.setItem(selectedBusinessStorageKey(Boolean(user?.demo_mode)), businessId);
     }
-  };
+  }, [businesses, user?.demo_mode, location.pathname, location.search, navigate]);
 
   const appliedBusinessLink = useRef('');
   useEffect(() => {
@@ -177,7 +230,7 @@ export const DashboardLayout = () => {
     // Resolve only against the authenticated list, once per link. A later manual
     // business switch is not overwritten by a query parameter left in the URL.
     appliedBusinessLink.current = linkKey;
-    void handleBusinessChange(requestedBusiness);
+    void handleBusinessChange(requestedBusiness, new URLSearchParams(location.search).get('scope_type') === 'network' ? 'network' : 'business');
   }, [location.pathname, location.search, businesses, handleBusinessChange]);
 
   const updateBusiness = (businessId: string, updates: Partial<DashboardBusiness>) => {
@@ -196,29 +249,65 @@ export const DashboardLayout = () => {
   };
 
   const selectControlScope = (nextScope: ControlScope) => {
+    if (nextScope.kind === 'platform' && user?.is_superadmin) {
+      scopeRevisionRef.current += 1;
+      setControlScope(nextScope);
+      localStorage.setItem(controlScopeStorageKey(Boolean(user?.demo_mode)), JSON.stringify(nextScope));
+      return;
+    }
     const target = businesses.find((business) => business.id === nextScope.id);
-    if (target) void handleBusinessChange(target.id);
+    if (target) void handleBusinessChange(target.id, nextScope.kind === 'network' ? 'network' : 'business');
   };
 
   const reloadBusinesses = async () => {
+    scopeRevisionRef.current += 1;
+    const requestScopeRevision = scopeRevisionRef.current;
+    const demoMode = Boolean(user?.demo_mode);
+    setMembershipReloadError(false);
     try {
-      const data = await newAuth.makeRequest('/auth/me') as { businesses?: DashboardBusiness[] };
+      const data: { businesses?: DashboardBusiness[] } = await newAuth.makeRequest('/auth/me');
+      if (scopeRevisionRef.current !== requestScopeRevision) return;
 
       const businessesData = filterOutLeads(data.businesses || []);
       if (Array.isArray(businessesData) && businessesData.length > 0) {
         setBusinesses(businessesData);
-        // Обновляем текущий бизнес, если он был изменен
-        if (currentBusinessId) {
-          const updatedBusiness = businessesData.find((business) => business.id === currentBusinessId);
-          if (updatedBusiness) {
-            setCurrentBusiness(updatedBusiness);
+        const updatedBusiness = businessesData.find((business) => business.id === currentBusinessId);
+        if (updatedBusiness) {
+          setCurrentBusinessId(updatedBusiness.id);
+          setCurrentBusiness(updatedBusiness);
+          if (controlScope?.kind === 'network' && controlScope.id !== updatedBusiness.network_id) {
+            const nextScope: ControlScope = { kind: 'business', id: updatedBusiness.id, name: updatedBusiness.name };
+            setControlScope(nextScope);
+            localStorage.setItem(controlScopeStorageKey(demoMode), JSON.stringify(nextScope));
           }
+        } else {
+          const replacementBusiness = businessesData[0];
+          const nextScope = resolveDashboardBusinessScope(replacementBusiness);
+          setCurrentBusinessId(replacementBusiness.id);
+          setCurrentBusiness(replacementBusiness);
+          setControlScope(nextScope);
+          localStorage.setItem(selectedBusinessStorageKey(demoMode), replacementBusiness.id);
+          localStorage.setItem(controlScopeStorageKey(demoMode), JSON.stringify(nextScope));
         }
       } else {
         setBusinesses([]);
+        setCurrentBusinessId(null);
+        setCurrentBusiness(null);
+        setControlScope(null);
+        clearStoredDashboardScope(demoMode);
       }
     } catch (error) {
+      if (scopeRevisionRef.current !== requestScopeRevision) return;
+      if (error instanceof HttpError && error.status === 403) {
+        setBusinesses([]);
+        setCurrentBusinessId(null);
+        setCurrentBusiness(null);
+        setControlScope(null);
+        clearStoredDashboardScope(demoMode);
+        return;
+      }
       console.error('Ошибка перезагрузки бизнесов:', error);
+      setMembershipReloadError(true);
     }
   };
 
@@ -245,7 +334,7 @@ export const DashboardLayout = () => {
     || location.pathname === '/dashboard/promotion/partnerships'
     || location.pathname === '/dashboard/promotion';
   const sectionAccess = lockedPaidSection ? getCapabilityAccessForBusiness(currentBusiness, lockedPaidSection.capability) : null;
-  const shouldBlurPaidSection = Boolean(lockedPaidSection && !ownsBlockAccess && !user.demo_mode && !user.is_superadmin && !sectionAccess?.allowed);
+  const shouldLockPaidSection = Boolean(lockedPaidSection && !ownsBlockAccess && !user.demo_mode && !user.is_superadmin && !sectionAccess?.allowed);
   const paywallReturnTo = `${location.pathname}${location.search}`;
   const paywallHref = `/dashboard/profile?focus=subscription&tier=${encodeURIComponent(sectionAccess?.requiredTier || 'starter')}&return_to=${encodeURIComponent(paywallReturnTo)}#subscription`;
 
@@ -263,58 +352,52 @@ export const DashboardLayout = () => {
           businesses={businesses}
           currentBusinessId={currentBusinessId}
           currentBusiness={currentBusiness}
-          onBusinessChange={selectBusinessFromMenu}
+          onBusinessChange={handleBusinessChange}
           controlScope={controlScope}
           onControlScopeChange={selectControlScope}
           isSuperadmin={user.is_superadmin}
           user={user}
         />
         {user.demo_mode ? <DemoModeBanner /> : null}
-        <main className="flex-1 p-3 sm:p-4 lg:p-6">
+        <main className="flex-1 p-3 pb-24 sm:p-4 sm:pb-24 md:pb-4 lg:p-6"><WorkReturnNotice />
           <div className="mx-auto w-full max-w-[1600px]">
             <div className="relative min-h-[60vh]">
-              <div className={shouldBlurPaidSection ? (featureFlags.blockAccessV2 ? 'pointer-events-none select-none opacity-55' : 'pointer-events-none select-none blur-sm') : undefined} aria-hidden={shouldBlurPaidSection || undefined}>
-                <Outlet context={{ user, demoMode: Boolean(user.demo_mode), currentBusinessId, currentBusiness, businesses, controlScope, onControlScopeChange: selectControlScope, updateBusiness, reloadBusinesses, setBusinesses, onBusinessChange: handleBusinessChange }} />
-              </div>
-              {shouldBlurPaidSection && lockedPaidSection ? (
-                <div className="absolute inset-0 z-20 flex items-start justify-center rounded-2xl bg-slate-50/55 px-4 py-16 backdrop-blur-[2px]">
-                  <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white/95 p-6 text-center shadow-xl shadow-slate-900/10">
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-lg font-semibold text-white">
-                      ₽
-                    </div>
-                    <h2 className="mt-4 text-xl font-bold text-slate-950">{lockedPaidSection.title}</h2>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{lockedPaidSection.hint}</p>
-                    <p className="mt-3 text-sm leading-6 text-slate-500">
-                      Сейчас можно заполнить профиль, добавить ссылки на компанию и посмотреть кабинет. Платные действия не запускаются автоматически.
-                    </p>
-                    <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
-                      <a
-                        href="/dashboard/profile?onboarding=1"
-                        className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50"
-                      >
-                        Заполнить профиль
-                      </a>
-                      <a
-                        href={paywallHref}
-                        className="inline-flex items-center justify-center rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
-                      >
-                        Выбрать тариф{sectionAccess ? ` «${sectionAccess.requiredTierName}»` : ''}
-                      </a>
-                    </div>
-                  </div>
+              {membershipReloadError ? (
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="status">
+                  <span>Не удалось обновить доступ. Текущий бизнес сохранён — повторите попытку.</span>
+                  <button type="button" onClick={() => void reloadBusinesses()} className="min-h-10 rounded-lg border border-amber-300 bg-white px-3 font-semibold transition-[background-color] hover:bg-amber-100">
+                    Повторить
+                  </button>
                 </div>
               ) : null}
+              {shouldLockPaidSection && lockedPaidSection ? (
+                <LockedSectionPreview
+                  section={lockedPaidSection}
+                  currentTierName={sectionAccess?.tierName || 'Без тарифа'}
+                  paywallHref={paywallHref}
+                />
+              ) : (
+                <Outlet key={`${currentBusinessId || 'none'}:${controlScope?.kind || 'none'}:${controlScope?.id || 'none'}`} context={{ user, demoMode: Boolean(user.demo_mode), currentBusinessId, currentBusiness, businesses, controlScope, onControlScopeChange: selectControlScope, updateBusiness, reloadBusinesses, setBusinesses, onBusinessChange: handleBusinessChange }} />
+              )}
             </div>
           </div>
         </main>
       </div>
       {/* Mobile sidebar overlay */}
+      <MobileWorkNavigation />
+      <div className="fixed bottom-0 right-0 z-40 flex min-h-14 w-16 items-center justify-center pb-[env(safe-area-inset-bottom)] md:hidden">
       <DashboardSidebar
         isMobile={true}
         onClose={() => setSidebarOpen(false)}
         webTrackingAvailable={currentBusiness?.web_tracking_available === true}
       />
       </div>
+      </div>
     </GuidedTourProvider>
   );
+};
+
+const MobileWorkNavigation = () => {
+ const { language } = useLanguage(); const copy = workNavigationCopy(language); const location = useLocation();
+ return <nav aria-label={copy.groups.daily} className="fixed inset-x-0 bottom-0 z-30 flex border-t bg-background pb-[env(safe-area-inset-bottom)] pr-16 md:hidden">{['today','operator','progress'].map(id => { const path = '/dashboard/' + (id === 'progress' ? 'progress' : id); return <Link key={id} to={path} aria-current={location.pathname === path ? 'page' : undefined} className="flex min-h-14 flex-1 items-center justify-center px-2 text-center text-xs font-medium focus-visible:ring-2 focus-visible:ring-ring">{id === 'operator' ? workCoherenceCopy(language).chat : copy.label(id)}</Link>; })}</nav>;
 };

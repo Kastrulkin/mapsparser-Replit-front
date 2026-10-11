@@ -1,13 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useOutletContext } from 'react-router-dom';
-import { newAuth } from '@/lib/auth_new';
-import { useToast } from '@/hooks/use-toast';
+import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MessageSquare, Bot, User as UserIcon, Send, Pause, Play, X, FlaskConical } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { OutreachSandbox } from '@/components/outreach/OutreachSandbox';
+import { useToast } from '@/hooks/use-toast';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { chatDateLocale, getChatsWorkspaceCopy } from '@/i18n/chatsWorkspaceCopy';
+import { newAuth } from '@/lib/auth_new';
+import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
+import { errorMessage } from '@/lib/errorMessage';
+import { Bot, FlaskConical, Pause, Play, Send, User as UserIcon } from 'lucide-react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 
 interface Conversation {
   id: string;
@@ -40,13 +44,21 @@ interface SandboxMessage {
   meta?: {
     runtime?: string;
     state?: string;
-    decisionTrace?: any;
-    toolCalls?: any[];
+    decisionTrace?: unknown;
+    toolCalls?: unknown[];
     bridgeError?: string | null;
   };
 }
 
 export const ChatsPage: React.FC = () => {
+ const { currentBusinessId } = useOutletContext<{ currentBusinessId: string }>();
+ return <ChatsWorkspace key={currentBusinessId} />;
+};
+export const EmployeeChatTest = () => {
+ const { currentBusinessId } = useOutletContext<{ currentBusinessId: string }>();
+ return <ChatsWorkspace key={currentBusinessId} testing />;
+};
+const ChatsWorkspace = ({ testing = false }: { testing?: boolean }) => {
   const { currentBusinessId } = useOutletContext<{ currentBusinessId: string }>();
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
@@ -59,45 +71,33 @@ export const ChatsPage: React.FC = () => {
   const [sandboxMessages, setSandboxMessages] = useState<SandboxMessage[]>([]);
   const [sandboxInput, setSandboxInput] = useState('');
   const [sandboxLoading, setSandboxLoading] = useState(false);
-  const [workspaceMode, setWorkspaceMode] = useState<'dialogs' | 'agent' | 'outreach'>('dialogs');
+  const [workspaceMode, setWorkspaceMode] = useState<'dialogs' | 'agent' | 'outreach'>(testing ? 'agent' : 'dialogs');
+  const selectedScope = useRef({ agent: selectedAgentId, conversation: selectedConversationId });
+  selectedScope.current = { agent: selectedAgentId, conversation: selectedConversationId };
+  const lifetime = useRef({ active: true });
+  const [sourceError, setSourceError] = useState('');
+  useLayoutEffect(() => { const token = { active: true }; lifetime.current = token; return () => { token.active = false; }; }, []);
+  const isSandbox = workspaceMode === 'agent';
   const { toast } = useToast();
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
+  const copy = getChatsWorkspaceCopy(language);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (currentBusinessId) {
-      loadAgents();
-    }
-  }, [currentBusinessId]);
 
-  useEffect(() => {
-    if (selectedAgentId && currentBusinessId) {
-      loadConversations();
-      // Очищаем песочницу при смене агента
-      if (isSandbox) {
-        setSandboxMessages([]);
-      }
-    }
-  }, [selectedAgentId, currentBusinessId]);
 
-  useEffect(() => {
-    // Не загружаем сообщения для песочницы
-    if (selectedConversationId && selectedConversationId !== 'sandbox') {
-      loadMessages();
-      // Автообновление сообщений каждые 3 секунды
-      const interval = setInterval(loadMessages, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [selectedConversationId]);
+
+
+
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const loadAgents = async () => {
+  const loadAgents = useLatestCallback(async () => {
+    const requestScope = lifetime.current;
     try {
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       const response = await fetch(`/api/business/${currentBusinessId}/ai-agents`, {
         headers: {
@@ -106,8 +106,10 @@ export const ChatsPage: React.FC = () => {
         },
       });
 
+      if (!requestScope.active) return;
       if (response.ok) {
         const data = await response.json();
+        if (!requestScope.active) return;
         if (data.success && data.agents) {
           setAgents(data.agents);
           if (data.agents.length > 0 && !selectedAgentId) {
@@ -115,17 +117,27 @@ export const ChatsPage: React.FC = () => {
           }
         }
       }
+      if (!response.ok) { if ([401,403,404].includes(response.status)) { setAgents([]); setConversations([]); setMessages([]); setSelectedAgentId(null); setSelectedConversationId(null); } setSourceError(workCoherenceCopy(language).messagesUnavailable); }
     } catch (error) {
+      if (!requestScope.active) return;
+      setSourceError(workCoherenceCopy(language).messagesUnavailable);
       console.error('Ошибка загрузки агентов:', error);
     } finally {
-      setLoading(false);
+      if (requestScope.active) setLoading(false);
     }
-  };
+  });
 
-  const loadConversations = async () => {
+  useEffect(() => {
+    if (currentBusinessId) {
+      loadAgents();
+    }
+  }, [currentBusinessId, loadAgents]);
+
+  const loadConversations = useLatestCallback(async () => {
+    const requestScope = lifetime.current; const agentId = selectedAgentId;
     try {
       const token = await newAuth.getToken();
-      if (!token || !selectedAgentId) return;
+      if (!browserAuthenticationAvailable(token) || !selectedAgentId) return;
 
       const response = await fetch(
         `/api/business/${currentBusinessId}/conversations?agent_id=${selectedAgentId}`,
@@ -137,21 +149,37 @@ export const ChatsPage: React.FC = () => {
         }
       );
 
+      if (!requestScope.active || selectedScope.current.agent !== agentId) return;
       if (response.ok) {
         const data = await response.json();
+        if (!requestScope.active || selectedScope.current.agent !== agentId) return;
         if (data.success) {
           setConversations(data.conversations || []);
         }
       }
+      if (!response.ok) { if ([401,403,404].includes(response.status)) { setAgents([]); setConversations([]); setMessages([]); setSelectedAgentId(null); setSelectedConversationId(null); } setSourceError(workCoherenceCopy(language).messagesUnavailable); }
     } catch (error) {
+      if (!requestScope.active || selectedScope.current.agent !== agentId) return;
+      setSourceError(workCoherenceCopy(language).messagesUnavailable);
       console.error('Ошибка загрузки чатов:', error);
     }
-  };
+  });
 
-  const loadMessages = async () => {
+  useEffect(() => {
+    if (selectedAgentId && currentBusinessId) {
+      loadConversations();
+      // Очищаем песочницу при смене агента
+      if (isSandbox) {
+        setSandboxMessages([]);
+      }
+    }
+  }, [selectedAgentId, currentBusinessId, loadConversations, isSandbox]);
+
+  const loadMessages = useLatestCallback(async () => {
+    const requestScope = lifetime.current; const conversationId = selectedConversationId;
     try {
       const token = await newAuth.getToken();
-      if (!token || !selectedConversationId) return;
+      if (!browserAuthenticationAvailable(token) || !selectedConversationId) return;
 
       const response = await fetch(
         `/api/conversations/${selectedConversationId}/messages`,
@@ -163,24 +191,40 @@ export const ChatsPage: React.FC = () => {
         }
       );
 
+      if (!requestScope.active || selectedScope.current.conversation !== conversationId) return;
       if (response.ok) {
         const data = await response.json();
+        if (!requestScope.active || selectedScope.current.conversation !== conversationId) return;
         if (data.success) {
           setMessages(data.messages || []);
         }
       }
+      if (!response.ok) { if ([401,403,404].includes(response.status)) { setAgents([]); setConversations([]); setMessages([]); setSelectedAgentId(null); setSelectedConversationId(null); } setSourceError(workCoherenceCopy(language).messagesUnavailable); }
     } catch (error) {
+      if (!requestScope.active || selectedScope.current.conversation !== conversationId) return;
+      setSourceError(workCoherenceCopy(language).messagesUnavailable);
       console.error('Ошибка загрузки сообщений:', error);
     }
-  };
+  });
+
+  useEffect(() => {
+    // Не загружаем сообщения для песочницы
+    if (selectedConversationId && selectedConversationId !== 'sandbox') {
+      loadMessages();
+      // Автообновление сообщений каждые 3 секунды
+      const interval = setInterval(loadMessages, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [loadMessages, selectedConversationId]);
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedConversationId || sending) return;
 
+    const requestScope = lifetime.current;
     try {
       setSending(true);
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       const response = await fetch(
         `/api/conversations/${selectedConversationId}/send-message`,
@@ -197,31 +241,33 @@ export const ChatsPage: React.FC = () => {
         }
       );
 
+      if (!requestScope.active) return;
       if (response.ok) {
         setNewMessage('');
         await loadMessages();
         toast({
-          title: t.success,
+          title: t.common.success,
           description: t.dashboard.chats.messages.sent,
         });
       } else {
         throw new Error('Ошибка отправки сообщения');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      if (!requestScope.active) return;
       toast({
-        title: t.error,
-        description: error.message || t.dashboard.chats.messages.error,
+        title: t.common.error,
+        description: errorMessage(error) || t.dashboard.chats.messages.error,
         variant: 'destructive',
       });
     } finally {
-      setSending(false);
+      if (requestScope.active) setSending(false);
     }
   };
 
   const handleToggleAgent = async (conversationId: string, pause: boolean) => {
     try {
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       const response = await fetch(
         `/api/conversations/${conversationId}/toggle-agent`,
@@ -241,13 +287,13 @@ export const ChatsPage: React.FC = () => {
           await loadMessages();
         }
         toast({
-          title: t.success,
+          title: t.common.success,
           description: pause ? t.dashboard.chats.messages.agentPaused : t.dashboard.chats.messages.agentResumed,
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
-        title: t.error,
+        title: t.common.error,
         description: t.dashboard.chats.messages.statusError,
         variant: 'destructive',
       });
@@ -256,7 +302,6 @@ export const ChatsPage: React.FC = () => {
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
   const selectedAgent = agents.find(a => a.id === selectedAgentId);
-  const isSandbox = workspaceMode === 'agent';
 
   const handleSandboxSend = async () => {
     if (!sandboxInput.trim() || !selectedAgentId || sandboxLoading) return;
@@ -264,7 +309,7 @@ export const ChatsPage: React.FC = () => {
     try {
       setSandboxLoading(true);
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       // Добавляем сообщение пользователя в историю
       const userMessage = { role: 'user' as const, content: sandboxInput };
@@ -319,10 +364,10 @@ export const ChatsPage: React.FC = () => {
         const errorData = await response.json();
         throw new Error(errorData.error || t.dashboard.chats.messages.error);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
-        title: t.error,
-        description: error.message || t.dashboard.chats.messages.error,
+        title: t.common.error,
+        description: errorMessage(error) || t.dashboard.chats.messages.error,
         variant: 'destructive',
       });
       // Удаляем последнее сообщение пользователя при ошибке
@@ -342,48 +387,19 @@ export const ChatsPage: React.FC = () => {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
-      <div className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg border bg-muted/40 p-1" role="tablist" aria-label="Разделы чатов">
-        {[
-          { id: 'dialogs', label: 'Диалоги' },
-          { id: 'agent', label: 'Песочница агента' },
-          { id: 'outreach', label: 'Аутрич-песочница' },
-        ].map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={workspaceMode === item.id}
-            onClick={() => {
-              if (item.id === 'dialogs' || item.id === 'agent' || item.id === 'outreach') {
-                setWorkspaceMode(item.id);
-                if (item.id === 'agent') setSelectedConversationId('sandbox');
-                if (item.id === 'dialogs' && selectedConversationId === 'sandbox') setSelectedConversationId(null);
-              }
-            }}
-            className={`min-h-10 shrink-0 rounded-md px-3 text-sm font-medium transition-[background-color,color,box-shadow,transform] duration-150 ease-out active:scale-[0.96] ${workspaceMode === item.id
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
-      {workspaceMode === 'outreach' ? (
-        <OutreachSandbox businessId={currentBusinessId} />
-      ) : (
+      {sourceError ? <div role="alert"><p className="text-sm text-destructive">{sourceError}</p><Button variant="outline" onClick={() => { setSourceError(''); void loadAgents(); if(selectedAgentId) void loadConversations(); if(selectedConversationId) void loadMessages(); }}>{workCoherenceCopy(language).retry}</Button></div> : null}
+      <h1 className="text-2xl font-semibold">{language === 'ru' ? (testing ? 'Проверить диалог сотрудника' : 'Сообщения клиентов') : (testing ? 'Test employee conversation' : 'Customer messages')}</h1>
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
       {/* Левая панель: Агенты */}
       <div className="w-full shrink-0 bg-white rounded-lg border border-gray-200 p-4 lg:w-64">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">{t.dashboard.chats.agents.title}</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">{copy.agents}</h2>
         <div className="space-y-2">
           {agents.map((agent) => (
             <button
               key={agent.id}
               onClick={() => {
                 setSelectedAgentId(agent.id);
-                setSelectedConversationId(null);
+                setSelectedConversationId(null); setConversations([]); setMessages([]);
               }}
               className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedAgentId === agent.id
                   ? 'bg-blue-50 border-blue-200 text-blue-700'
@@ -393,9 +409,9 @@ export const ChatsPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Bot className="w-4 h-4" />
                 <div className="flex-1">
-                  <div className="font-medium">{agent.name}</div>
+                  <div className="font-medium">{agent.type === 'booking' ? copy.bookingAgent : copy.marketingAgent}</div>
                   <div className="text-xs text-gray-500">
-                    {agent.type === 'marketing' ? t.dashboard.chats.agents.marketing : t.dashboard.chats.agents.booking}
+                    {agent.type === 'marketing' ? copy.marketingAgent : copy.bookingAgent}
                   </div>
                 </div>
               </div>
@@ -408,20 +424,20 @@ export const ChatsPage: React.FC = () => {
       <div className={`w-full shrink-0 bg-white rounded-lg border border-gray-200 flex-col lg:w-80 ${isSandbox ? 'hidden lg:flex' : 'flex'}`}>
         <div className="p-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">
-            {selectedAgent ? `${t.dashboard.chats.list.title}: ${selectedAgent.name}` : t.dashboard.chats.list.title}
+            {selectedAgent ? `${copy.chats}: ${selectedAgent.type === 'booking' ? copy.bookingAgent : copy.marketingAgent}` : copy.chats}
           </h2>
         </div>
         <ScrollArea className="flex-1">
           <div className="p-2">
-            {conversations.length === 0 ? (
+            {conversations.length === 0 ? sourceError ? null : (
               <div className="text-center text-gray-500 py-8">
-                {t.dashboard.chats.list.empty}
+                {copy.noChats}
               </div>
             ) : (
               conversations.map((conv) => (
                 <button
                   key={conv.id}
-                  onClick={() => setSelectedConversationId(conv.id)}
+                  onClick={() => {setSelectedConversationId(conv.id); setMessages([]);}}
                   className={`w-full text-left p-3 rounded-lg border mb-2 transition-colors ${selectedConversationId === conv.id
                       ? 'bg-blue-50 border-blue-200'
                       : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
@@ -433,7 +449,7 @@ export const ChatsPage: React.FC = () => {
                         {conv.client_name || conv.client_phone}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {new Date(conv.last_message_at).toLocaleString('ru-RU')}
+                        {new Date(conv.last_message_at).toLocaleString(chatDateLocale[language])}
                       </div>
                     </div>
                     {conv.is_agent_paused === 1 && (
@@ -454,23 +470,23 @@ export const ChatsPage: React.FC = () => {
             <div className="p-4 border-b border-gray-200 flex items-center gap-2">
               <FlaskConical className="w-5 h-5 text-purple-500" />
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">{t.dashboard.chats.sandbox.title}</h3>
+                <h3 className="text-lg font-semibold text-gray-900">{copy.sandboxTitle}</h3>
                 <div className="text-sm text-gray-500">
-                  {t.dashboard.chats.sandbox.subtitle}: {selectedAgent?.name || t.dashboard.chats.sandbox.noAgent}
+                  {copy.sandboxSubtitle}: {selectedAgent ? (selectedAgent.type === 'booking' ? copy.bookingAgent : copy.marketingAgent) : copy.noAgent}
                 </div>
               </div>
             </div>
 
             <div className="mx-4 mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-              <div className="font-medium">Dry-run режим</div>
-              <div>Из песочницы не выполняется реальная отправка клиентам в Telegram/WhatsApp/Email.</div>
+              <div className="font-medium">{copy.dryRunTitle}</div>
+              <div>{copy.dryRunDescription}</div>
             </div>
 
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-4">
                 {sandboxMessages.length === 0 ? (
                   <div className="text-center text-gray-500 py-8">
-                    {t.dashboard.chats.sandbox.empty}
+                    {copy.sandboxEmpty}
                   </div>
                 ) : (
                   sandboxMessages.map((msg, idx) => (
@@ -492,7 +508,7 @@ export const ChatsPage: React.FC = () => {
                             <Bot className="w-4 h-4" />
                           )}
                           <span className="text-xs font-medium">
-                            {msg.role === 'user' ? t.dashboard.chats.sandbox.user : t.dashboard.chats.sandbox.agent}
+                            {msg.role === 'user' ? copy.user : copy.agent}
                           </span>
                         </div>
                         <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
@@ -523,7 +539,7 @@ export const ChatsPage: React.FC = () => {
                     <div className="bg-gray-100 rounded-lg p-3">
                       <div className="flex items-center gap-2">
                         <Bot className="w-4 h-4" />
-                        <span className="text-xs font-medium">{t.dashboard.chats.sandbox.agentTyping}</span>
+                        <span className="text-xs font-medium">{copy.agentTyping}</span>
                       </div>
                     </div>
                   </div>
@@ -543,10 +559,10 @@ export const ChatsPage: React.FC = () => {
                       handleSandboxSend();
                     }
                   }}
-                  placeholder={t.dashboard.chats.sandbox.placeholder}
+                  placeholder={copy.sandboxPlaceholder}
                   disabled={sandboxLoading || !selectedAgentId}
                 />
-                <Button
+                <Button variant="product"
                   onClick={handleSandboxSend}
                   disabled={sandboxLoading || !sandboxInput.trim() || !selectedAgentId}
                 >
@@ -555,7 +571,7 @@ export const ChatsPage: React.FC = () => {
               </div>
               {!selectedAgentId && (
                 <div className="text-xs text-orange-600 mt-2">
-                  {t.dashboard.chats.sandbox.noAgent}
+                  {copy.noAgent}
                 </div>
               )}
             </div>
@@ -628,7 +644,7 @@ export const ChatsPage: React.FC = () => {
                       </div>
                       <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
                       <div className="text-xs text-gray-500 mt-1">
-                        {new Date(msg.created_at).toLocaleString('ru-RU')}
+                        {new Date(msg.created_at).toLocaleString(chatDateLocale[language])}
                       </div>
                     </div>
                   </div>
@@ -651,7 +667,7 @@ export const ChatsPage: React.FC = () => {
                   placeholder={t.dashboard.chats.input.placeholder}
                   disabled={sending || selectedConversation.is_agent_paused !== 1}
                 />
-                <Button
+                <Button variant="product"
                   onClick={handleSendMessage}
                   disabled={sending || !newMessage.trim() || selectedConversation.is_agent_paused !== 1}
                 >
@@ -667,12 +683,11 @@ export const ChatsPage: React.FC = () => {
           </>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">
-            {selectedAgentId ? t.dashboard.chats.messages.selectChat : t.dashboard.chats.messages.selectAgent}
+            {copy.selectWorkspace}
           </div>
         )}
       </div>
       </div>
-      )}
     </div>
   );
 };

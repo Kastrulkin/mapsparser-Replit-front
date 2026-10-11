@@ -1,3 +1,17 @@
+export class HttpError extends Error {
+  readonly status: number | null;
+  readonly code: string;
+  readonly details: unknown;
+
+  constructor(message: string, status: number | null, code: string = 'http_error', details?: unknown) {
+    super(message);
+    this.name = 'HttpError';
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
+}
+
 export interface User {
   id: string;
   email: string;
@@ -123,23 +137,23 @@ export class NewAuth {
             data = JSON.parse(text);
           } catch (parseError) {
             console.error('Ошибка парсинга JSON:', parseError, 'Ответ:', text);
-            throw Object.assign(new Error(`Ошибка парсинга ответа сервера: ${text.substring(0, 100)}`), { status: response.status });
+            throw new Error(`Ошибка парсинга ответа сервера: ${text.substring(0, 100)}`);
           }
         }
       } else {
         // Если ответ не JSON, читаем как текст
         const text = await response.text();
         console.error('Сервер вернул не-JSON ответ:', text.substring(0, 200));
-        throw Object.assign(new Error(`Сервер вернул неверный формат ответа (${response.status}): ${text.substring(0, 100)}`), { status: response.status });
+        throw new HttpError(`Сервер вернул неверный формат ответа (${response.status}): ${text.substring(0, 100)}`, response.status, 'invalid_response');
       }
 
       if (!response.ok) {
         const backendError = String(data.error || '');
         if (response.status === 401 && backendError.toLowerCase().includes('invalid token')) {
           this.clearActiveToken();
-          throw Object.assign(new Error('Сессия истекла. Войдите снова.'), { status: response.status });
+          throw new HttpError('Сессия истекла. Войдите снова.', 401, 'session_expired');
         }
-        throw Object.assign(new Error(data.message || data.error || `Ошибка запроса (${response.status})`), { status: response.status });
+        throw new HttpError(data.message || data.error || `Ошибка запроса (${response.status})`, response.status, 'request_failed');
       }
 
       return data;

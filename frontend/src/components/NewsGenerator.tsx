@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
@@ -33,6 +33,12 @@ type NewsWorkspaceMode = 'news' | 'plan';
 
 export default function NewsGenerator({ services, businessId, externalPosts, initialWorkspaceMode = 'news' }: { services: ServiceLite[]; businessId?: string; externalPosts?: any[]; initialWorkspaceMode?: NewsWorkspaceMode }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const focusedDraft = new URLSearchParams(location.search).get('draft_id');
+  const savedRequest = useRef(0);
+  const savedActive = useRef(true);
+  useEffect(() => { savedActive.current = true; return () => { savedActive.current = false; savedRequest.current++; }; }, []);
+  const [savedContentState, setSavedContentState] = useState<'loading' | 'loaded' | 'error'>('loading');
   const { user } = useOutletContext<any>();
   const [workspaceMode, setWorkspaceMode] = useState<NewsWorkspaceMode>(initialWorkspaceMode);
   const [useService, setUseService] = useState(false);
@@ -68,6 +74,16 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
     ? newsCopy.planSubtitle
     : t.dashboard.card.newsGenerator.subtitle;
 
+  useEffect(() => {
+    if (!focusedDraft || savedContentState !== 'loaded') return;
+    const index = news.findIndex(item => String(item.id) === focusedDraft);
+    if (index < 0) return;
+    const page = Math.floor((index + (externalPosts?.length || 0)) / itemsPerPage) + 1;
+    if (currentPage !== page) { setCurrentPage(page); return; }
+    const element = document.getElementById('news-draft-' + focusedDraft);
+    element?.focus(); element?.scrollIntoView({ block: 'center' });
+  }, [focusedDraft, savedContentState, news, externalPosts, currentPage]);
+
   const LANGUAGE_OPTIONS = [
     { value: 'ru', label: 'Русский' },
     { value: 'en', label: 'English' },
@@ -81,6 +97,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
   ];
 
   const loadNews = async () => {
+    const request = ++savedRequest.current;
     // Сбрасываем страницу при загрузке новых новостей
     setCurrentPage(1);
     try {
@@ -93,12 +110,15 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
       const res = await fetch(`${window.location.origin}/api/news/list${query}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      if (!savedActive.current || request !== savedRequest.current) return;
+      if ([401, 403, 404].includes(res.status)) { setNews([]); setSavedContentState('error'); return; }
       const data = await res.json();
-      if (data.success) setNews(user?.demo_mode ? getDemoShowcaseData(interfaceLanguage).news : (data.news || []));
-    } catch { }
+      if (!savedActive.current || request !== savedRequest.current) return;
+      if (res.ok && data.success) { setNews(user?.demo_mode ? getDemoShowcaseData(interfaceLanguage).news : (data.news || [])); setSavedContentState('loaded'); } else setSavedContentState('error');
+    } catch { if (savedActive.current && request === savedRequest.current) setSavedContentState('error'); }
   };
 
-  useEffect(() => { loadNews(); }, [interfaceLanguage, user?.demo_mode]);
+  useEffect(() => { loadNews(); }, [businessId, interfaceLanguage, user?.demo_mode]);
   useEffect(() => {
     (async () => {
       try {
@@ -592,7 +612,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
         </div>
 
         <div className="pt-6 border-t border-blue-100 flex justify-end">
-          <Button
+          <Button variant="product"
             onClick={generate}
             disabled={loading}
             className="w-full md:w-auto px-8 py-6 rounded-xl text-lg font-medium shadow-xl shadow-orange-500/20 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white"
@@ -644,6 +664,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
         )}
       </div>
 
+      {focusedDraft && savedContentState !== 'loading' && !news.some(item => String(item.id) === focusedDraft) ? <p role="alert">{interfaceLanguage === 'ru' ? (savedContentState === 'error' ? 'Не удалось загрузить выбранный черновик. Повторите обновление страницы.' : 'Выбранный черновик недоступен в этом бизнесе.') : 'The selected draft is unavailable. Retry loading or check business access.'}</p> : null}
       {/* History & External Posts */}
       <div className="space-y-4">
         <h4 className="text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -710,7 +731,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
                   } else {
                     // Сгенерированные новости
                     return (
-                      <div key={item.id} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group">
+                      <div key={item.id} id={'news-draft-' + item.id} tabIndex={-1} className="focus-visible:ring-2 focus-visible:ring-ring bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group">
                         <div className="flex items-center justify-between mb-3">
                           <span className="px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 text-xs font-bold uppercase tracking-wider border border-purple-100 flex items-center gap-1">
                             <Sparkles className="w-3 h-3" /> {newsCopy.generated}
@@ -830,7 +851,7 @@ function MapsPublicationsWidget({ externalPosts, onOpenContent }: { externalPost
             Здесь остаётся быстрый обзор для Яндекс Карт. План, календарь, соцсети, проверка и размещение управляются в едином центре.
           </p>
         </div>
-        <Button type="button" onClick={onOpenContent} className="rounded-2xl bg-slate-950 px-5 py-6 text-white hover:bg-slate-800">
+        <Button variant="product" type="button" onClick={onOpenContent} className="rounded-2xl bg-slate-950 px-5 py-6 text-white hover:bg-slate-800">
           Все публикации
           <ExternalLink className="ml-2 h-4 w-4" />
         </Button>

@@ -35,7 +35,7 @@ export type TodayOverview = {
 
 
 export const completedStatuses = new Set(['completed', 'published', 'succeeded']);
-const decisionStatuses = new Set(['failed', 'waiting_approval', 'awaiting_approval', 'needs_review', 'replied', 'negotiating', 'disputed', 'overdue', 'draft_generated', 'edited', 'blocked', 'provider_reconciliation_required', 'provider_failed', 'provider_unavailable', 'approval_invalid']);
+const decisionStatuses = new Set(['draft', 'ready', 'approved', 'approved_for_send', 'failed', 'waiting_approval', 'awaiting_approval', 'needs_review', 'replied', 'negotiating', 'disputed', 'overdue', 'draft_generated', 'edited', 'blocked', 'provider_reconciliation_required', 'provider_failed', 'provider_unavailable', 'approval_invalid']);
 const backgroundStatuses = new Set(['pending', 'queued', 'running', 'processing', 'in_progress', 'waiting_provider', 'provider_request_queued', 'provider_executing', 'scheduled', 'waiting']);
 const errors = new Set(['failed', 'blocked', 'disputed', 'provider_reconciliation_required', 'provider_failed', 'provider_unavailable', 'approval_invalid']);
 export const validDate = (value?: string | null) => Boolean(value && Number.isFinite(Date.parse(value)));
@@ -54,17 +54,18 @@ export const orderWork = (items: TodayItem[], primaryFlow: TodayPreference['prim
   return rank(a) - rank(b) || Number(b.urgency === 'urgent') - Number(a.urgency === 'urgent') || Number(b.flow === primaryFlow) - Number(a.flow === primaryFlow) || (validDate(a.due_at) ? Date.parse(a.due_at || '') : Infinity) - (validDate(b.due_at) ? Date.parse(b.due_at || '') : Infinity) || a.id.localeCompare(b.id);
 });
 
+const workIdentity = (item: TodayItem) => JSON.stringify([item.business_id, item.entity_type || item.kind, item.entity_id || item.id]);
 export const workSections = (overview: TodayOverview, observedAt: number) => {
   const sections = overview.work_sections;
   const current = sections
     ? [...(sections.needs_decision || []).map(item => ({ ...item, requires_decision: true })), ...(sections.continue_work || [])]
     : overview.active_work || [];
-  const unique = [...new Map([...current].reverse().map(item => [item.id, { ...item, status: item.work_status || item.status }])).values()].filter(item => !completedStatuses.has(item.status || ''));
+  const unique = [...new Map([...current].reverse().map(item => [workIdentity(item), { ...item, status: item.work_status || item.status }])).values()].filter(item => !completedStatuses.has(item.status || ''));
   const ordered = orderWork(unique, overview.preference?.primary_flow, observedAt);
   const decisions = ordered.filter(needsHuman);
   const continuing = ordered.filter(item => !needsHuman(item));
-  const results = [...new Map((sections?.results || overview.completed_results || []).map(item => [item.id, item])).values()]
-    .filter(item => validDate(item.occurred_at) && !['growth_achievement', 'aggregate', 'summary'].includes(item.kind || '') && Boolean(workRoute(item)) && (completedStatuses.has(item.status || '') || item.kind === 'confirmed_action'))
+  const results = [...new Map((sections?.results || overview.completed_results || []).map(item => [workIdentity(item), item])).values()]
+    .filter(item => validDate(item.occurred_at) && !['growth_achievement', 'aggregate', 'summary', 'work_observation', 'observation'].includes(item.kind || '') && item.entity_type !== 'work_observation' && Boolean(workRoute(item)) && (completedStatuses.has(item.status || '') || item.kind === 'confirmed_action'))
     .sort((a, b) => Date.parse(b.occurred_at || '') - Date.parse(a.occurred_at || ''));
   const actionable = decisions[0] || continuing.find(item => workRoute(item) && !backgroundStatuses.has(item.status || ''));
   return { decisions, continuing, results, primary: actionable };

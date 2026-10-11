@@ -49,9 +49,7 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
   };
   const visibleBusinesses = React.useMemo(
     () => {
-      const clients = businesses.filter((business) => !isLeadBusiness(business));
-      const parents = new Set(clients.filter((business) => business.id === business.network_id).map((business) => business.id));
-      return clients.filter((business) => !business.network_id || business.id === business.network_id || !parents.has(business.network_id));
+      return businesses.filter((business) => !isLeadBusiness(business));
     },
     [businesses]
   );
@@ -62,9 +60,7 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
 
   useEffect(() => {
     if (visibleBusinesses.length > 0) {
-      const selectedLocation = businesses.find((business) => business.id === currentBusinessId);
-      const current = visibleBusinesses.find((business) => business.id === currentBusinessId)
-        || visibleBusinesses.find((business) => business.id === selectedLocation?.network_id);
+      const current = visibleBusinesses.find((business) => business.id === currentBusinessId);
       if (current) {
         setSelectedBusiness(current);
       } else {

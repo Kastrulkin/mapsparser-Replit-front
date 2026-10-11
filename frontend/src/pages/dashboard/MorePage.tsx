@@ -1,61 +1,19 @@
-import { Bot, Building2, Calendar, CreditCard, Handshake, Map, MessageSquare, Radar, Route, Settings, Sparkles, TrendingUp, UsersRound, WalletCards } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
+import { workNavigationCopy } from '@/lib/workNavigation';
+import { featureFlags } from '@/config/featureFlags';
+import { Route, MessageSquare, Radar, BarChart3, ArrowRight } from 'lucide-react';
 
-const sections = [
-  {
-    title: 'Бизнес',
-    items: [
-      { title: 'Профиль компании', description: 'Данные, услуги и точки присутствия.', route: '/dashboard/profile', icon: Building2 },
-      { title: 'Работа с картами', description: 'Карточка компании, отзывы и локальное присутствие.', route: '/dashboard/card', icon: Map },
-      { title: 'Рабочий журнал', description: 'Сообщить наблюдение, разобрать предложения и поручить работу.', route: '/dashboard/work-journal', icon: MessageSquare },
-      { title: 'Финансы', description: 'Выручка, загрузка и средний чек.', route: '/dashboard/finance', icon: CreditCard },
-      { title: 'Средний чек', description: 'Идеи допродаж и пакетных предложений.', route: '/dashboard/average-ticket', icon: WalletCards },
-    ],
-  },
-  {
-    title: 'Работа и контроль',
-    items: [
-      { title: 'Управление через чат', description: 'Напишите, что нужно сделать.', route: '/dashboard/operator', icon: Bot },
-      { title: 'Контент', description: 'Планы, тексты и календарь публикаций.', route: '/dashboard/content', icon: Calendar },
-      { title: 'Агенты', description: 'Регулярная работа и история запусков.', route: '/dashboard/agents', icon: Sparkles },
-      { title: 'Результаты', description: 'История выполненной работы и динамика показателей.', route: '/dashboard/progress', icon: TrendingUp },
-      { title: 'Чаты', description: 'Сообщения и ответы клиентам.', route: '/dashboard/chats', icon: MessageSquare },
-      { title: 'Telegram-радар', description: 'Сигналы рынка и новые возможности.', route: '/dashboard/telegram-radar', icon: Radar },
-      { title: 'Инфлюенсеры', description: 'Подбор местных авторов и контроль размещений.', route: '/dashboard/influencers', icon: UsersRound },
-      { title: 'Партнёрские акции', description: 'Поиск партнёров и подготовка совместных предложений.', route: '/dashboard/partnerships', icon: Handshake },
-      { title: 'Настройки и подключения', description: 'Тариф, интеграции, команда и безопасность.', route: '/dashboard/settings', icon: Settings },
-    ],
-  },
-  {
-    title: 'Обзор возможностей',
-    items: [
-      { title: 'Пути роста', description: 'Посмотреть все направления и выбрать следующий фокус, когда нужен ориентир.', route: '/dashboard/growth-paths', icon: Route },
-    ],
-  },
-];
-
-export const MorePage = () => (
-  <div className="space-y-6 pb-10">
-    <header className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Ещё</p>
-      <h1 className="mt-2 text-balance text-3xl font-semibold tracking-tight text-slate-950">Управление бизнесом и LocalOS</h1>
-      <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-slate-600">Здесь находятся дополнительные инструменты и обзор направлений. Ежедневная работа остаётся в разделах слева и на странице «Сегодня».</p>
-    </header>
-    {sections.map((section) => (
-      <section key={section.title}>
-        <h2 className="mb-3 text-lg font-semibold text-slate-950">{section.title}</h2>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {section.items.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link key={item.route} to={item.route} className="group flex min-h-28 items-start gap-4 rounded-2xl border border-slate-200 bg-white p-4 transition-[border-color,box-shadow,transform] duration-150 hover:border-slate-300 hover:shadow-md active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-700"><Icon className="h-5 w-5" aria-hidden="true" /></span>
-                <span><b className="text-balance text-sm text-slate-950">{item.title}</b><small className="mt-1 block text-pretty text-xs leading-5 text-slate-600">{item.description}</small></span>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
-    ))}
-  </div>
-);
+export const MorePage = () => {
+ const { language } = useLanguage(); const copy = workNavigationCopy(language); const extra = workCoherenceCopy(language);
+ const { currentBusiness } = useOutletContext<{ currentBusiness?: { web_tracking_available?: boolean } | null }>();
+ const items = [
+  { path: '/dashboard/growth-paths', icon: Route, tour: 'nav-growth-paths' },
+  { path: '/dashboard/work-journal', icon: MessageSquare, tour: 'nav-work-journal' },
+  { path: '/dashboard/chats', icon: MessageSquare, tour: 'nav-chats' },
+  { path: '/dashboard/telegram-radar', icon: Radar, tour: 'nav-telegram-radar' },
+  ...(featureFlags.webTracking && currentBusiness?.web_tracking_available ? [{ path: '/dashboard/web-analytics', icon: BarChart3, tour: 'nav-web-analytics' }] : []),
+ ];
+ return <div className="space-y-6 pb-10"><header><h1 className="text-3xl font-semibold">{copy.label('more')}</h1><p className="mt-2 text-sm text-muted-foreground">{extra.moreIntro}</p></header><div className="divide-y rounded-xl border bg-card">{items.map((item, index) => <Link key={item.path} to={item.path} data-tour-target={item.tour} className="flex min-h-16 items-center gap-4 p-4 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><item.icon className="h-5 w-5 shrink-0" aria-hidden="true" /><span className="min-w-0 flex-1 text-sm font-medium">{extra.utilities[index]}</span><ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" /></Link>)}</div></div>;
+};

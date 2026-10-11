@@ -1,51 +1,51 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import {
-  AlertTriangle,
-  ArrowRight,
-  BadgeDollarSign,
-  Bot,
-  CheckCircle2,
-  ChevronDown,
-  Circle,
-  Clock3,
-  FileText,
-  Handshake,
-  MapPinned,
-  RefreshCw,
-  X,
-  type LucideIcon,
+	AlertTriangle,
+	ArrowRight,
+	BadgeDollarSign,
+	Bot,
+	CheckCircle2,
+	ChevronDown,
+	Circle,
+	Clock3,
+	FileText,
+	Handshake,
+	MapPinned,
+	RefreshCw,
+	X,
+	type LucideIcon,
 } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 
 import CardAuditPanel from '@/components/CardAuditPanel';
+import type { ControlScope } from '@/components/DashboardLayout';
 import MapParseTable from '@/components/MapParseTable';
+import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
+import { DataHealthRhythmStrip, type GrowthDataHealth } from '@/components/growth/DataHealthRhythmStrip';
+import { ManagedCardGrowthPanel, type ManagedCardGrowth } from '@/components/growth/ManagedCardGrowthPanel';
+import { managedCardGrowthCopyForLanguage, managedEvidence, managedFactLabel, managedProviderLabel, managedStateLabel } from '@/components/growth/managedCardGrowthCopy';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
-import { DataHealthRhythmStrip, type GrowthDataHealth } from '@/components/growth/DataHealthRhythmStrip';
-import { newAuth } from '@/lib/auth_new';
+import { useLanguage, type Language } from '@/i18n/LanguageContext.logic';
+import { HttpError, newAuth } from '@/lib/auth_new';
 import { trackProductEvent } from '@/lib/productEvents';
 import { cn } from '@/lib/utils';
-import type { ControlScope } from '@/components/DashboardLayout';
-import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
-import type { JourneyAction } from '@/lib/leadJourney';
-import { useLanguage, type Language } from '@/i18n/LanguageContext';
+import { NetworkDashboardPage } from './network/NetworkDashboardPage';
 import {
-  localizedAnalyticsLevel,
-  localizedAnalyticsModule,
-  localizedAnalyticsNext,
-  localizedFocusAction,
-  localizedGrowthArea,
-  localizedGrowthMetric,
-  localizedGrowthMilestone,
-  localizedGrowthStatus,
-  localizedGrowthText,
-  localizedProgressBusinessName,
-  localizedRhythm,
-  progressPageCopyForLanguage,
-  progressRuntimeCopyForLanguage,
-  type ProgressPageCopy,
+	localizedAnalyticsLevel,
+	localizedAnalyticsModule,
+	localizedAnalyticsNext,
+	localizedGrowthArea,
+	localizedGrowthMetric,
+	localizedGrowthMilestone,
+	localizedGrowthStatus,
+	localizedGrowthText,
+	localizedProgressBusinessName,
+	localizedRhythm,
+	progressPageCopyForLanguage,
+	progressRuntimeCopyForLanguage,
+	type ProgressPageCopy,
 } from './progressPageCopy';
 
 type GrowthAreaKey = 'maps' | 'content' | 'partnerships' | 'automation' | 'upsells';
@@ -58,6 +58,13 @@ type GrowthAction = {
   expected_outcome: string;
   cta_label: string;
   cta_url?: string;
+  provider?: string | null;
+  provider_label?: string | null;
+  fact?: string;
+  gate?: number;
+  gate_label?: string;
+  copy_code?: string | null;
+  copy_params?: { goal?: string; benchmark_median?: number };
   screen?: string;
   target_scope?: { kind?: string; id?: string };
   affected_business_ids?: string[];
@@ -99,7 +106,7 @@ type GrowthAchievement = {
   occurred_at: string;
 };
 
-type GrowthOverview = {
+type GrowthOverview = ManagedCardGrowth & {
   summary: {
     completed_milestones: number;
     total_milestones: number;
@@ -168,18 +175,7 @@ const formatDate = (value: string | null | undefined, language: Language) => {
   return new Intl.DateTimeFormat(language, { day: 'numeric', month: 'short', year: 'numeric' }).format(date).replace(/\.$/, '');
 };
 
-const formatMoney = (value: number, language: Language) =>
-  new Intl.NumberFormat(language, { maximumFractionDigits: 0 }).format(value);
-
-const AreaRow = ({
-  area,
-  expanded,
-  onToggle,
-  onOpen,
-  details,
-  language,
-  copy,
-}: {
+const AreaRow = ({ area, expanded, onToggle, onOpen, details, language, copy }: {
   area: GrowthArea;
   expanded: boolean;
   onToggle: () => void;
@@ -190,93 +186,62 @@ const AreaRow = ({
 }) => {
   const Icon = AREA_ICONS[area.key];
   const status = STATUS_COPY[area.status];
-  const progressValue = area.progress.total > 0
-    ? Math.round((area.progress.completed / area.progress.total) * 100)
-    : 0;
-
+  const summary = localizedGrowthText(language, area.summary);
   return (
-    <div className="border-b border-slate-200 last:border-b-0">
-      <button
-        type="button"
-        data-tour-target={`progress-area-${area.key}`}
-        onClick={onToggle}
-        aria-expanded={expanded}
-        className="grid w-full gap-4 px-4 py-5 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-inset md:grid-cols-[minmax(220px,0.9fr)_minmax(260px,1.4fr)_minmax(180px,0.7fr)_44px] md:items-center md:px-6"
-      >
+    <div className="border-b border-border last:border-b-0">
+      <button type="button" id={`progress-area-${area.key}`} data-tour-target={`progress-area-${area.key}`} onClick={onToggle}
+        aria-expanded={expanded} aria-controls={`progress-details-${area.key}`}
+        className="grid min-h-11 w-full grid-cols-[minmax(0,1fr)_auto] gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] lg:items-center md:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
-            <Icon className="h-5 w-5" />
-          </div>
+          <Icon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div className="min-w-0">
-            <div className="font-semibold text-slate-950">{localizedGrowthArea(language, area.key, area.label)}</div>
-            <div className={cn('mt-1 inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold', status.className)}>
+            <div className="font-semibold text-foreground">{localizedGrowthArea(language, area.key, area.label)}</div>
+            <span className={cn('mt-1 inline-flex rounded-full border px-2 py-0.5 text-xs font-medium', status.className)}>
               {localizedGrowthStatus(language, area.status, status.label)}
-            </div>
+            </span>
           </div>
         </div>
-
-        <div className="min-w-0">
-          <div className="text-sm leading-6 text-slate-700">{localizedGrowthText(language, area.summary)}</div>
-          {area.problem ? <div className="mt-1 text-xs leading-5 text-amber-800">{localizedGrowthText(language, area.problem)}</div> : null}
-        </div>
-
-        <div className="min-w-0">
-          <div className="flex items-center justify-between gap-3 text-xs font-medium text-slate-500">
-            <span>{copy.completed}</span>
-            <span className="tabular-nums">{area.progress.completed} {copy.of} {area.progress.total}</span>
-          </div>
-          <Progress value={progressValue} className="mt-2 h-2" />
-        </div>
-
-        <span className="flex h-11 w-11 items-center justify-center justify-self-end rounded-lg text-slate-500">
-          <ChevronDown className={cn('h-5 w-5 transition-transform duration-200', expanded && 'rotate-180')} />
-        </span>
+        <p className="col-span-2 row-start-2 min-w-0 break-words text-sm leading-6 text-muted-foreground lg:col-span-1 lg:col-start-2 lg:row-start-1">
+          {language === 'ru' && area.key === 'automation' ? summary.replace(/^Агентов:/, 'ИИ-сотрудников:') : summary}
+        </p>
+        <ChevronDown className={cn('col-start-2 row-start-1 h-5 w-5 self-center text-muted-foreground transition-transform motion-reduce:transition-none lg:col-start-3', expanded && 'rotate-180')} aria-hidden="true" />
       </button>
-
-      {expanded ? (
-        <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-5 md:px-6">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(260px,0.65fr)]">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{copy.path}</div>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                {area.milestones.map((milestone) => (
-                  <div key={milestone.key} className="flex min-w-0 gap-2 rounded-lg border border-slate-200 bg-white px-3 py-3">
-                    {milestone.status === 'done' ? (
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                    ) : (
-                      <Circle className="mt-0.5 h-4 w-4 shrink-0 text-slate-300" />
-                    )}
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium leading-5 text-slate-800">{localizedGrowthMilestone(language, milestone.key, milestone.label)}</div>
-                      {milestone.status === 'done' && milestone.evidence ? (
-                        <div className="mt-1 text-xs leading-5 text-slate-500">{localizedGrowthText(language, milestone.evidence)}</div>
-                      ) : null}
-                      {milestone.status === 'done' && milestone.achieved_at ? (
-                        <div className="mt-1 text-xs tabular-nums text-slate-400">{formatDate(milestone.achieved_at, language)}</div>
-                      ) : null}
-                    </div>
+      <div id={`progress-details-${area.key}`} hidden={!expanded}>
+        {expanded ? <div className="space-y-5 border-t border-border bg-muted/30 px-4 py-5 md:px-6">
+          {area.milestones.length > 0 ? <div>
+            <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+              <h3 className="font-semibold">{copy.path}</h3>
+              <span className="tabular-nums text-muted-foreground">{area.progress.completed} {copy.of} {area.progress.total} {copy.confirmedSteps}</span>
+            </div>
+            <ul className="mt-3 divide-y divide-border">
+              {area.milestones.map((milestone) => <li key={milestone.key} className="flex min-w-0 gap-3 py-3">
+                {milestone.status === 'done' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" /> : <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap justify-between gap-2 text-sm">
+                    <span>{localizedGrowthMilestone(language, milestone.key, milestone.label)}</span>
+                    <span className="text-muted-foreground">{milestone.status === 'done' ? copy.completed : localizedGrowthStatus(language, 'not_started', 'Не начато')}</span>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="border-l-0 border-slate-200 lg:border-l lg:pl-6">
-              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{copy.nextStepOutcome}</div>
-              <p className="mt-2 text-sm leading-6 text-slate-700">{localizedGrowthText(language, area.expected_outcome)}</p>
-              {area.action.estimated_effect?.amount ? (
-                <div className="mt-2 text-sm font-medium tabular-nums text-emerald-700">
-                  {localizedGrowthText(language, area.action.estimated_effect.label)}: {formatMoney(area.action.estimated_effect.amount, language)} ₽
+                  {milestone.status === 'done' && milestone.evidence ? <p className="mt-1 break-words text-xs text-muted-foreground">{localizedGrowthText(language, milestone.evidence)}</p> : null}
+                  {milestone.status === 'done' && milestone.achieved_at ? <p className="mt-1 text-xs tabular-nums text-muted-foreground">{formatDate(milestone.achieved_at, language)}</p> : null}
                 </div>
-              ) : null}
-              <Button type="button" variant="outline" className="mt-4 w-full sm:w-auto" onClick={() => onOpen(area.action)}>
-                {localizedGrowthText(language, area.action.cta_label)}
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-          {details ? <div className="mt-5 border-t border-slate-200 pt-5">{details}</div> : null}
-        </div>
-      ) : null}
+              </li>)}
+            </ul>
+          </div> : null}
+          {area.metrics.length > 0 ? <dl className="flex flex-wrap gap-x-6 gap-y-3">
+            {area.metrics.map((metric) => <div key={metric.label}>
+              <dt className="text-xs text-muted-foreground">{localizedGrowthMetric(language, metric.label)}</dt>
+              <dd className="mt-1 text-sm font-semibold tabular-nums">{localizedGrowthText(language, String(metric.value))}</dd>
+            </div>)}
+          </dl> : null}
+          {area.problem ? <p className="text-sm leading-6 text-amber-800">{localizedGrowthText(language, area.problem)}</p> : null}
+          {details || <div className="space-y-3">
+            <p className="text-sm leading-6 text-muted-foreground">{localizedGrowthText(language, area.expected_outcome)}</p>
+            {(area.action.cta_url || area.action.screen) && area.status !== 'unavailable' ? <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" onClick={() => onOpen(area.action)}>
+              {localizedGrowthText(language, area.action.cta_label)}<ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+            </Button> : null}
+          </div>}
+        </div> : null}
+      </div>
     </div>
   );
 };
@@ -288,6 +253,7 @@ export const ProgressPage = () => {
   const { language } = useLanguage();
   const copy = progressPageCopyForLanguage(language);
   const runtime = progressRuntimeCopyForLanguage(language);
+  const managedCopy = managedCardGrowthCopyForLanguage(language);
   const [overviewData, setOverviewData] = useState<GrowthOverview | null>(null);
   const [overviewBusinessId, setOverviewBusinessId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -299,14 +265,17 @@ export const ProgressPage = () => {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedAuditBusinessId, setSelectedAuditBusinessId] = useState<string | null>(null);
   const [parseStatus, setParseStatus] = useState<ParseStatus>('idle');
-  const [mapJourneyActions, setMapJourneyActions] = useState<JourneyAction[]>([]);
+  const [networkOpen, setNetworkOpen] = useState(false);
+  const [reportDataOpen, setReportDataOpen] = useState(false);
+  const [stagesOpen, setStagesOpen] = useState(false);
   const parseStatusRef = useRef<ParseStatus>('idle');
   const auditSectionRef = useRef<HTMLElement | null>(null);
   const requestedMapsSection = searchParams.get('section') === 'maps';
   const requestedAudit = requestedMapsSection && searchParams.get('audit') === 'open';
   const scopeId = controlScope?.id || currentBusinessId;
   const scopeKind = controlScope?.kind || 'business';
-  const overview = overviewBusinessId === scopeId ? overviewData : null;
+  const scopeKey = `${scopeKind}:${scopeId || ''}`;
+  const overview = overviewBusinessId === scopeKey ? overviewData : null;
 
   useEffect(() => {
     if (!scopeId) {
@@ -340,10 +309,7 @@ export const ProgressPage = () => {
         scope: data.scope ? { ...data.scope, locations: Array.isArray(data.scope.locations) ? data.scope.locations : [] } : data.scope,
       };
       setOverviewData(normalizedData);
-      setOverviewBusinessId(scopeId);
-      const focusArea = normalizedData.areas.find((area) => (area.action?.cta_url || area.action?.screen) === (normalizedData.focus_action?.cta_url || normalizedData.focus_action?.screen));
-      setExpandedArea((current) => current ?? focusArea?.key ?? normalizedData.areas[0]?.key ?? null);
-
+      setOverviewBusinessId(scopeKey);
       const locations = normalizedData.scope?.locations || [];
       setSelectedAuditBusinessId((current) => {
         if (locations.some((location) => location.id === current)) return current;
@@ -352,6 +318,16 @@ export const ProgressPage = () => {
 
     }).catch((requestError) => {
       if (controller.signal.aborted) return;
+      if (requestError instanceof HttpError && (requestError.status === 401 || requestError.status === 403)) {
+        setOverviewData(null);
+        setOverviewBusinessId(null);
+        setExpandedArea(null);
+        setShowFullAudit(false);
+        setHistoryOpen(false);
+        setNetworkOpen(false);
+        setReportDataOpen(false);
+        setStagesOpen(false);
+      }
       const message = requestError instanceof Error ? requestError.message : copy.loadErrorTitle;
       setError(message);
     }).finally(() => {
@@ -359,16 +335,19 @@ export const ProgressPage = () => {
     });
 
     return () => controller.abort();
-  }, [copy.loadErrorTitle, currentBusinessId, overviewRefreshKey, scopeId, scopeKind]);
+  }, [copy.loadErrorTitle, currentBusinessId, overviewRefreshKey, scopeId, scopeKey, scopeKind]);
 
   useEffect(() => {
     setExpandedArea(requestedMapsSection ? 'maps' : null);
     setShowFullAudit(requestedAudit);
     setHistoryOpen(false);
+    setNetworkOpen(false);
+    setReportDataOpen(false);
+    setStagesOpen(false);
     setSelectedAuditBusinessId(null);
     setParseStatus('idle');
     parseStatusRef.current = 'idle';
-  }, [currentBusinessId, scopeId]);
+  }, [currentBusinessId, requestedAudit, requestedMapsSection, scopeKey]);
 
   useEffect(() => {
     if (requestedMapsSection) setExpandedArea('maps');
@@ -421,12 +400,12 @@ export const ProgressPage = () => {
       controller.abort();
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [currentBusinessId, selectedAuditBusinessId]);
+  }, [currentBusinessId, scopeKey, selectedAuditBusinessId]);
 
   useEffect(() => {
     if (!showFullAudit || !overview) return undefined;
     const frame = window.requestAnimationFrame(() => {
-      auditSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      auditSectionRef.current?.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
       auditSectionRef.current?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
@@ -435,16 +414,6 @@ export const ProgressPage = () => {
   useEffect(() => {
     trackProductEvent({ eventName: 'progress_open', businessId: currentBusinessId });
   }, [currentBusinessId]);
-
-  useEffect(() => {
-    if (!currentBusinessId || !overview) {
-      setMapJourneyActions([]);
-      return;
-    }
-    void newAuth.makeRequest(`/journey-actions?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' })
-      .then((result: { actions?: JourneyAction[] }) => setMapJourneyActions((result.actions || []).filter((action) => action.flow_type === 'maps')))
-      .catch(() => setMapJourneyActions([]));
-  }, [currentBusinessId, overview, overviewRefreshKey]);
 
   const refreshAll = () => {
     setOverviewRefreshKey((value) => value + 1);
@@ -469,35 +438,38 @@ export const ProgressPage = () => {
     setSearchParams(nextParams, { replace: true });
   };
 
-  const overallProgress = useMemo(() => {
-    if (!overview?.summary.total_milestones) return 0;
-    return Math.round((overview.summary.completed_milestones / overview.summary.total_milestones) * 100);
-  }, [overview]);
   const mapsArea = overview?.areas.find((area) => area.key === 'maps') || null;
   const mapAuditMilestone = mapsArea?.milestones.find((milestone) => milestone.key === 'map_audited');
   const networkLocations = overview?.scope?.locations || [];
-  const recentAchievements = Array.isArray(overview?.recent_achievements) ? overview.recent_achievements : [];
+  const recentAchievements = (overview?.recent_achievements || [])
+    .filter((item) => item.occurred_at && !Number.isNaN(Date.parse(item.occurred_at)))
+    .slice().sort((a, b) => Date.parse(b.occurred_at) - Date.parse(a.occurred_at)).slice(0, 8);
   const selectedAuditLocation = networkLocations.find((location) => location.id === selectedAuditBusinessId);
+  const selectedManagedLocation = overview?.card_state?.locations?.find((location) => location.business_id === (selectedAuditBusinessId || currentBusinessId));
+  const hasManagedCardGrowth = Boolean(overview?.card_state);
+  const providers = overview?.card_state?.locations?.flatMap((location) => location.providers) || [];
+  const sourcesBlocked = providers.length > 0 && providers.every((provider) => provider.source_state === 'blocked');
   const currentMission = overview?.focus_action || overview?.growth_loop?.focus || overview?.growth_loop?.current_mission || overview?.growth_loop?.mission || null;
+  const areas: GrowthArea[] = overview?.areas.slice() || [];
+  if (!mapsArea && hasManagedCardGrowth) {
+    areas.unshift({
+      key: 'maps', label: copy.mapsAndReputation,
+      status: overview?.card_state?.status === 'healthy' ? 'healthy' : 'needs_attention',
+      summary: copy.currentAudit, expected_outcome: '',
+      action: currentMission && (currentMission.provider || currentMission.screen === 'cards' || currentMission.screen === 'reviews' || currentMission.cta_url?.startsWith('/dashboard/card'))
+        ? currentMission : { title: '', reason: '', expected_outcome: '', cta_label: '' },
+      progress: { completed: 0, total: 0 }, milestones: [], metrics: [],
+    });
+  }
+  const areaOrder: GrowthAreaKey[] = ['maps', 'content', 'partnerships', 'automation', 'upsells'];
+  areas.sort((a, b) => areaOrder.indexOf(a.key) - areaOrder.indexOf(b.key));
+  const attentionArea = areas.find((area) => area.status === 'needs_attention');
+  const updatedAt = overview?.generated_at && !Number.isNaN(Date.parse(overview.generated_at))
+    ? new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(overview.generated_at)) : '';
   const openProblemLocation = (location: NonNullable<GrowthOverview['problem_locations']>[number]) => {
     onBusinessChange?.(location.business_id);
     onControlScopeChange?.({ kind: 'business', id: location.business_id, name: location.business_name });
     navigate(location.focus_action?.cta_url || screenRoute(location.focus_action?.screen));
-  };
-  const openMission = () => {
-    if (!currentMission) return;
-    trackProductEvent({
-      eventName: 'mission_open',
-      businessId: currentBusinessId,
-      objectType: 'growth_mission',
-      objectId: overview?.growth_loop?.mission_id || currentMission.cta_url || currentMission.screen,
-    });
-    if (currentMission.target_scope?.kind === 'business' && currentMission.target_scope.id) {
-      const targetName = overview.location_breakdown?.find((location) => location.business_id === currentMission.target_scope?.id)?.business_name || runtime.networkLocation;
-      onBusinessChange?.(currentMission.target_scope.id);
-      onControlScopeChange?.({ kind: 'business', id: currentMission.target_scope.id, name: targetName });
-    }
-    navigate(currentMission.cta_url || screenRoute(currentMission.screen));
   };
   const openAreaAction = (action: GrowthAction) => {
     if (action.target_scope?.kind === 'business' && action.target_scope.id) {
@@ -550,7 +522,6 @@ export const ProgressPage = () => {
   return (
     <div className="space-y-6" data-tour-target="progress-overview">
       <DashboardPageHeader
-        eyebrow={copy.eyebrow}
         title={copy.title}
         description={copy.description}
         actions={(
@@ -561,115 +532,58 @@ export const ProgressPage = () => {
         )}
       />
 
-      {mapJourneyActions.length ? <section aria-label="План по картам" className="space-y-3"><div><h2 className="text-balance text-xl font-semibold text-slate-950">На этой неделе</h2><p className="mt-1 text-pretty text-sm text-slate-600">Выполняйте по одному пункту. После последнего LocalOS предложит обновить данные и сравнить результат.</p></div>{mapJourneyActions.map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={refreshAll} />)}</section> : null}
+      {updatedAt ? <p className="text-xs tabular-nums text-muted-foreground">{copy.reportUpdated}: <time dateTime={overview.generated_at}>{updatedAt}</time></p> : null}
 
-      {error ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
-          <span>{copy.staleData}</span>
-          <button type="button" onClick={refreshAll} className="min-h-10 font-semibold underline underline-offset-2">{copy.retry}</button>
-        </div>
-      ) : null}
+      {error ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
+        <span>{copy.staleData}</span>
+        <Button type="button" variant="ghost" onClick={refreshAll}>{copy.retry}</Button>
+      </div> : null}
 
-      <DataHealthRhythmStrip dataHealth={overview.data_health} onImport={() => navigate('/dashboard/finance?tab=import')} compact showImportAction={!currentMission?.cta_url?.includes('/finance')} />
-
-      {(overview.analytics_level?.label || overview.rhythm?.label) ? <div className="flex flex-wrap gap-2 text-sm text-slate-700"><span className="rounded-full bg-slate-100 px-3 py-1.5">{runtime.analytics}: {localizedAnalyticsLevel(language, overview.analytics_level?.level, overview.analytics_level?.label) || runtime.inProgress}</span>{overview.analytics_level?.next_unlock ? <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-900">{runtime.nextLevel}: {localizedAnalyticsNext(language, overview.analytics_level.level, overview.analytics_level.next_unlock)}</span> : null}{overview.rhythm?.label ? <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-900">{runtime.rhythm}: {localizedRhythm(language, overview.rhythm.status, overview.rhythm.label)}</span> : null}</div> : null}
-
-      {overview.analytics_modules?.length ? <div className="flex flex-wrap gap-2">{overview.analytics_modules.map((module) => <span key={module.key || module.label} className={cn('rounded-full px-3 py-1.5 text-sm', module.status === 'ready' ? 'bg-emerald-50 text-emerald-800' : module.status === 'available' ? 'bg-amber-50 text-amber-900' : 'bg-slate-100 text-slate-600')}>{localizedAnalyticsModule(language, module.key, module.label)}: {module.status === 'ready' ? runtime.ready : module.status === 'available' ? runtime.update : runtime.needsData}</span>)}</div> : null}
-
-      {scopeKind === 'network' && overview.network_summary ? (
-        <section className="rounded-2xl bg-slate-50 px-4 py-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
-          <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-700"><span><strong className="tabular-nums text-slate-950">{overview.network_summary.locations_count || 0}</strong> {runtime.networkLocations}</span><span><strong className="tabular-nums text-amber-800">{overview.network_summary.problem_locations_count || 0}</strong> {runtime.attention}</span><span><strong className="tabular-nums text-emerald-700">{overview.network_summary.healthy_locations_count || 0}</strong> {runtime.healthy}</span></div>
-          {overview.problem_locations?.length ? <div className="mt-3 flex flex-wrap gap-2">{overview.problem_locations.slice(0, 6).map((location) => <Button key={location.business_id} type="button" variant="outline" className="min-h-11" onClick={() => openProblemLocation(location)}>{location.business_name}<ArrowRight className="ml-2 h-4 w-4" /></Button>)}</div> : null}
-        </section>
-      ) : null}
-
-      <section className="grid gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.55fr)] lg:p-6">
-        <div data-tour-target="progress-summary">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{copy.confirmedPath}</div>
-          <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-2">
-            <div className="text-3xl font-semibold tabular-nums text-slate-950">
-              {overview.summary.completed_milestones} {copy.of} {overview.summary.total_milestones}
-            </div>
-            <div className="pb-1 text-sm text-slate-600">{copy.confirmedSteps}</div>
-          </div>
-          <Progress value={overallProgress} className="mt-4 h-3" />
-          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
-            <span><strong className="tabular-nums text-slate-950">{overview.summary.completed_last_30_days}</strong> {copy.resultsIn30Days}</span>
-            <span><strong className="tabular-nums text-slate-950">{overview.summary.active_areas}</strong> {copy.activeAreas}</span>
-            {overview.summary.needs_attention > 0 ? (
-              <span className="text-amber-800"><strong className="tabular-nums">{overview.summary.needs_attention}</strong> {copy.needAttention}</span>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="border-t border-slate-200 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0" data-tour-target="progress-focus-action">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{copy.currentPriority}</div>
-          <h2 className="mt-2 text-balance text-xl font-semibold text-slate-950">{localizedFocusAction(language, currentMission?.id, 'title', currentMission?.title) || copy.continueWorking}</h2>
-          <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">{localizedFocusAction(language, currentMission?.id, 'reason', currentMission?.reason)}</p>
-          {currentMission ? (
-            <>
-              <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
-                <strong>{copy.result}:</strong> {localizedFocusAction(language, currentMission.id, 'outcome', currentMission.expected_outcome)}
-              </div>
-              {currentMission.estimated_effect?.amount ? (
-                <div className="mt-2 text-sm font-medium tabular-nums text-emerald-700">
-                  {localizedGrowthText(language, currentMission.estimated_effect.label)}: {formatMoney(currentMission.estimated_effect.amount, language)} ₽
-                </div>
-              ) : null}
-              <Button type="button" className="mt-4 min-h-11 w-full bg-orange-500 text-white transition-transform hover:bg-orange-600 active:scale-[0.96]" onClick={openMission}>
-                {localizedFocusAction(language, currentMission.id, 'cta', currentMission.cta_label)}
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </>
-          ) : null}
-        </div>
+      <section data-tour-target="progress-summary" aria-label={copy.title} className="rounded-xl border border-border bg-card px-4 py-5 md:px-6">
+        <dl className="grid gap-5 sm:grid-cols-3">
+          {[{ value: overview.summary.completed_last_30_days, label: copy.resultsIn30Days },
+            { value: overview.summary.active_areas, label: copy.activeAreas },
+            { value: overview.summary.needs_attention, label: copy.needAttention }].map((item) => <div key={item.label} className="flex items-center justify-between gap-3 sm:block">
+              <dt className="text-sm text-muted-foreground sm:min-h-10">{item.label}</dt>
+              <dd className="text-3xl font-semibold tabular-nums sm:mt-2">{item.value ?? '—'}</dd>
+            </div>)}
+        </dl>
+        <details className="mt-5 border-t border-border pt-3" open={stagesOpen} onToggle={(event) => setStagesOpen(event.currentTarget.open)}>
+          <summary className="min-h-11 cursor-pointer py-3 text-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{copy.confirmedPath}</summary>
+          {stagesOpen ? <div className="pb-2 text-sm">
+            <p><strong className="tabular-nums">{overview.summary.completed_milestones} {copy.of} {overview.summary.total_milestones}</strong> {copy.confirmedSteps}</p>
+            <Progress value={overview.summary.total_milestones > 0 ? 100 * overview.summary.completed_milestones / overview.summary.total_milestones : 0} className="mt-3 h-2" />
+          </div> : null}
+        </details>
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-4 py-4 md:px-6" data-tour-target="progress-areas">
-          <h2 className="text-lg font-semibold text-slate-950">{copy.growthAreas}</h2>
-          <p className="mt-1 text-sm text-slate-600">{copy.growthAreasDescription}</p>
+      {attentionArea ? <div data-tour-target="progress-focus-action" className="flex flex-wrap items-center justify-between gap-3 text-sm" role="status">
+        <span className="flex items-center gap-2 text-amber-800"><AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {localizedGrowthArea(language, attentionArea.key, attentionArea.label)}: {localizedGrowthStatus(language, attentionArea.status, 'Нужно внимание')}
+        </span>
+        <Button type="button" variant="outline" className="min-h-11" onClick={() => { setExpandedArea(attentionArea.key); document.getElementById(`progress-area-${attentionArea.key}`)?.focus(); }}>
+          {copy.inspectArea}<ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+        </Button>
+      </div> : null}
+
+      <section className="overflow-hidden rounded-xl border border-border bg-card" aria-labelledby="progress-areas-title">
+        <div className="border-b border-border px-4 py-4 md:px-6" data-tour-target="progress-areas">
+          <h2 id="progress-areas-title" className="text-lg font-semibold">{copy.growthAreas}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{copy.growthAreasDescription}</p>
         </div>
-        {overview.areas.map((area) => (
-          <AreaRow
-            key={area.key}
-            area={area}
-            expanded={expandedArea === area.key}
-            onToggle={() => setExpandedArea((current) => current === area.key ? null : area.key)}
-            onOpen={openAreaAction}
-            language={language}
-            copy={copy}
-            details={area.key === 'maps' ? (
-              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{copy.currentAudit}</div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {area.metrics.map((metric) => (
-                      <div key={metric.label} className="rounded-lg bg-white px-3 py-2 shadow-sm ring-1 ring-slate-200">
-                        <div className="text-xs text-slate-500">{localizedGrowthMetric(language, metric.label)}</div>
-                        <div className="mt-0.5 font-semibold tabular-nums text-slate-900">{localizedGrowthText(language, String(metric.value))}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-600">
-                    {mapAuditMilestone?.status === 'done'
-                      ? `${copy.auditReady}${mapAuditMilestone.achieved_at ? ` ${copy.auditReadyUpdated} ${formatDate(mapAuditMilestone.achieved_at, language)}` : ''}. ${copy.auditReadySuffix}`
-                      : copy.auditPending}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={openFullAudit}
-                  className="w-full active:scale-[0.96] transition-transform md:w-auto"
-                >
-                  {copy.viewFullAudit}
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
-            ) : undefined}
-          />
-        ))}
+        {areas.length ? areas.map((area) => <AreaRow key={area.key} area={area}
+          expanded={expandedArea === area.key} onToggle={() => setExpandedArea((current) => current === area.key ? null : area.key)}
+          onOpen={openAreaAction} language={language} copy={copy}
+          details={area.key === 'maps' ? <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">{mapAuditMilestone?.status === 'done' ? `${copy.auditReady}${mapAuditMilestone.achieved_at ? ` · ${formatDate(mapAuditMilestone.achieved_at, language)}` : ''}` : copy.auditPending}</p>
+            {sourcesBlocked || area.status === 'unavailable' ? <p className="text-sm text-amber-800">{managedCopy.sourceBlocked}</p> : mapAuditMilestone?.status === 'done' ? (
+              <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" onClick={openFullAudit}>{copy.viewFullAudit}<ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" /></Button>
+            ) : (area.action.cta_url || area.action.screen) ? (
+              <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" onClick={() => openAreaAction(area.action)}>{localizedGrowthText(language, area.action.cta_label)}<ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" /></Button>
+            ) : null}
+            {hasManagedCardGrowth ? <ManagedCardGrowthPanel embedded key={scopeKey} businessId={currentBusinessId} growth={overview} onUpdated={refreshAll} canEditGoal={scopeKind === 'business' && area.status !== 'unavailable'} /> : null}
+          </div> : undefined}
+        />) : <p className="px-4 py-5 text-sm text-muted-foreground md:px-6">{copy.noAreas}</p>}
       </section>
 
       {showFullAudit ? (
@@ -719,6 +633,34 @@ export const ProgressPage = () => {
               <RefreshCw className="h-4 w-4 motion-safe:animate-spin" />
               {parseStatus === 'queued' ? copy.parseQueued : copy.parseProcessing}
             </div>
+          ) : null}
+
+          {selectedManagedLocation?.providers.length ? (
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white" aria-label={managedCopy.auditState}>
+              <div className="border-b border-slate-200 px-5 py-4 md:px-6">
+                <h3 className="font-semibold text-slate-950">{managedCopy.auditState}</h3>
+                <p className="mt-1 text-sm leading-6 text-slate-600">{managedCopy.auditDescription}</p>
+              </div>
+              <div className="divide-y divide-slate-200">
+                {selectedManagedLocation.providers.map((provider) => (
+                  <details key={provider.provider} className="px-5 py-4 md:px-6">
+                    <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+                      <span className="font-semibold text-slate-950">{managedProviderLabel(provider.provider, provider.provider_label)}</span>
+                      <span className="text-xs text-slate-500">{managedCopy.snapshot(formatDate(provider.observed_at, language) || managedCopy.snapshotMissing)}</span>
+                    </summary>
+                    <div className="mt-3 divide-y divide-slate-100 border-y border-slate-100">
+                      {Object.entries(provider.facts).map(([factName, fact]) => (
+                        <div key={factName} className="grid gap-1 py-3 text-sm md:grid-cols-[minmax(140px,0.45fr)_minmax(130px,0.35fr)_minmax(0,1fr)] md:gap-4">
+                          <span className="font-medium text-slate-800">{managedFactLabel(language, factName)}</span>
+                          <span className={fact.state === 'missing' || fact.state === 'blocked' ? 'text-amber-800' : 'text-slate-600'}>{managedStateLabel(language, fact.state)}</span>
+                          <span className="text-slate-500">{managedEvidence(language, fact.evidence_code, fact.evidence) || `${managedCopy.source}: ${fact.source || managedProviderLabel(provider.provider, provider.provider_label)}`}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ))}
+              </div>
+            </section>
           ) : null}
 
           <CardAuditPanel
@@ -781,6 +723,26 @@ export const ProgressPage = () => {
         )}
       </section>
 
+      <details className="rounded-xl border border-border bg-card px-4 md:px-6" open={reportDataOpen} onToggle={(event) => setReportDataOpen(event.currentTarget.open)}>
+        <summary className="min-h-11 cursor-pointer py-4 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{copy.reportData}{' · '}<span className="ml-3 text-sm font-normal text-muted-foreground">{['fresh', 'due', 'ready'].includes(overview.data_health?.status || '') ? runtime.ready : overview.data_health?.status === 'stale' ? runtime.update : overview.data_health?.status === 'missing' ? runtime.needsData : '—'}</span></summary>
+        {reportDataOpen ? <div className="space-y-4 border-t border-border py-4">
+          <DataHealthRhythmStrip dataHealth={overview.data_health} onImport={() => navigate('/dashboard/finance?tab=import')} compact />
+          {(overview.analytics_level?.label || overview.rhythm?.label) ? <p className="text-sm text-muted-foreground">{runtime.analytics}: {localizedAnalyticsLevel(language, overview.analytics_level?.level, overview.analytics_level?.label) || runtime.needsData} · {runtime.rhythm}: {localizedRhythm(language, overview.rhythm?.status, overview.rhythm?.label) || runtime.needsData}</p> : null}
+          {overview.analytics_level?.next_unlock ? <p className="text-sm text-muted-foreground">{localizedAnalyticsNext(language, overview.analytics_level.level, overview.analytics_level.next_unlock)}</p> : null}
+          {overview.analytics_modules?.length ? <ul className="space-y-2 text-sm text-muted-foreground">{overview.analytics_modules.map((module) => <li key={module.key || module.label}>{localizedAnalyticsModule(language, module.key, module.label)}: {module.status === 'ready' ? runtime.ready : module.status === 'available' ? runtime.update : runtime.needsData}</li>)}</ul> : null}
+        </div> : null}
+      </details>
+
+      {scopeKind === 'network' ? <details className="rounded-xl border border-border bg-card px-4 md:px-6" open={networkOpen} onToggle={(event) => setNetworkOpen(event.currentTarget.open)}>
+        <summary className="min-h-11 cursor-pointer py-4 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{copy.networkDetails}</summary>
+        {networkOpen ? <div className="space-y-4 border-t border-border py-4">
+          {overview.network_summary ? <p className="text-sm text-muted-foreground">{overview.network_summary.locations_count} {runtime.networkLocations} · {overview.network_summary.problem_locations_count} {runtime.attention}</p> : null}
+          {overview.problem_locations?.length ? <div className="flex flex-wrap gap-2">{overview.problem_locations.map((location) => <Button key={location.business_id} type="button" variant="outline" className="min-h-11 whitespace-normal text-left" onClick={() => openProblemLocation(location)}>{location.business_name}<ArrowRight className="ml-2 h-4 w-4 shrink-0" aria-hidden="true" /></Button>)}</div> : null}
+          <NetworkDashboardPage embedded businessId={currentBusinessId} />
+        </div> : null}
+      </details> : null}
+
+      <Button type="button" variant="outline" className="min-h-11" onClick={() => navigate('/dashboard/today')}>{copy.today}<ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" /></Button>
     </div>
   );
 };

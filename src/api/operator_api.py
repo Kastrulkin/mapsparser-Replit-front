@@ -226,7 +226,8 @@ def _decorate_mobile_journey_actions(payload: dict, subscription_access: dict) -
         if not isinstance(raw_action, dict):
             continue
         action = dict(raw_action)
-        capability = JOURNEY_FLOW_CAPABILITIES.get(str(action.get("flow_type") or ""), "management")
+        from api.lead_journey_api import FLOW_CAPABILITIES
+        capability = FLOW_CAPABILITIES.get(str(action.get("flow_type") or ""), "management")
         access = capability_access_payload(subscription_access, capability)
         action["access"] = access
         if not access.get("allowed"):
@@ -236,6 +237,8 @@ def _decorate_mobile_journey_actions(payload: dict, subscription_access: dict) -
             safe_commands.append("open_upgrade")
             action["allowed_commands"] = safe_commands
             action["cta_label"] = access.get("cta_label")
+            from services.work_coherence import redact_unavailable_work
+            action = redact_unavailable_work(action)
         decorated.append(action)
     payload["journey_actions"] = decorated
     if decorated and str((payload.get("focus_action") or {}).get("source") or "") == "lead_journey":
@@ -1294,11 +1297,47 @@ def operator_chat():
             input_summary={"message": message[:500]},
             output_summary={"channel": "web"},
         )
+        selected_action = None
+        selected_action_id = str(payload.get("journey_action_id") or "").strip()
+        if selected_action_id:
+            try:
+                uuid.UUID(selected_action_id)
+            except ValueError:
+                return jsonify({"success": False, "error": "invalid_action_id"}), 400
+            from services.lead_journey_service import load_action, JourneyError
+            try:
+                selected_action = load_action(cursor, action_id=selected_action_id, business_id=business_id)
+            except JourneyError as failure:
+                return jsonify({"success": False, "error": str(failure)}), failure.status_code
+            from api.lead_journey_api import FLOW_CAPABILITIES
+            capability = FLOW_CAPABILITIES.get(str(selected_action.get("flow_type") or ""))
+            if capability:
+                selected_access = capability_access_payload(_scope_subscription_access(cursor, business_scope, bool(user_data.get("is_superadmin"))), capability)
+                if not selected_access.get("allowed"):
+                    return jsonify({"success": False, "error": "payment_required", **selected_access}), 402
+            payload = dict(payload)
+            source_payload = selected_action.get("payload_json") or {}
+            if selected_action.get("entity_type") == "work_observation" and source_payload.get("source_entry_id"):
+                from services import work_review
+                if not work_review.can_review(cursor, business_id, user_id):
+                    return jsonify({"success": False, "error": "Нет доступа к разбору журнала"}), 403
+                linked = work_review.links(cursor, business_id, user_id, source_payload["source_entry_id"])
+                if not any(str(item["id"]) == selected_action_id for item in linked):
+                    return jsonify({"success": False, "error": "Нет доступа к связанной задаче"}), 403
+        from services.work_coherence import internal_work_ref, unavailable_work_context
+        work_ref = internal_work_ref(payload.get('work_ref'), business_id)
         from services.operator_chat_service import process_chat
+        def selected_work_router(selected_cursor, **arguments):
+            if selected_action is not None:
+                from services.work_coherence import discuss_existing_work
+                return discuss_existing_work(selected_action, business_id), {}
+            if work_ref and not payload.get('selected_object'):
+                return unavailable_work_context(work_ref), {}
+            return route_operator_message(selected_cursor, **arguments)
         result = process_chat(
             cursor, business_id=business_id, user_id=user_id,
             channel=str(payload.get("channel") or "web"), message=message, payload=payload,
-            router=route_operator_message,
+            router=selected_work_router,
             subscription_access=_scope_subscription_access(cursor, business_scope, bool(user_data.get("is_superadmin"))),
             actor_context={"role": "business_owner" if owner_id == user_id else "business_user", "is_superadmin": bool(user_data.get("is_superadmin")), "permissions": ["business.access"], "session_kind": user_data.get("session_kind", "standard"), "scope_business_id": user_data.get('scope_business_id'), "impersonating": bool(user_data.get("impersonating") or user_data.get("impersonated_by"))},
             refresh_handler=refresh_reviews_from_operator, ai_router_handler=classify_operator_intent_with_ai,

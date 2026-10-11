@@ -1,3 +1,5 @@
+import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
+import { workChatRoute, workNavigationCopy } from '@/lib/workNavigation';
 import { useLatestCallback } from '@/hooks/useLatestCallback';
 import { ArrowRight, ChevronDown, Clock3, RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -284,6 +286,7 @@ export const TodayPage = () => {
           </div>
         </div>
         {route ? <Button type="button" variant="outline" className="min-h-11 max-w-full whitespace-normal text-left" onClick={() => openWork(item)} aria-label={`${itemLabel(item, result)}: ${item.title}`}>{itemLabel(item, result)}<ArrowRight className="ml-2 h-4 w-4 shrink-0" /></Button> : null}
+        {route && item.business_id ? <Button variant="ghost" onClick={() => navigate(workChatRoute(route, item.business_id || '', item.entity_type === 'journey_action' ? item.entity_id : undefined))}>{workNavigationCopy(language).discuss}</Button> : null}
       </div>
       {!route ? <p className="mt-2 text-sm text-muted-foreground">{ui.blockedAction}</p> : null}
       {item.description || item.preview || item.source ? <details className="mt-2 text-sm"><summary className="min-h-10 cursor-pointer py-2 text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">{ui.details}</summary>
@@ -297,7 +300,7 @@ export const TodayPage = () => {
     const remaining = items.filter(item => item.id !== primaryItem?.id);
     const visible = expandedSections.includes(key) ? remaining : remaining.slice(0, 3);
     return <section aria-label={title} className="border-t border-border pt-5"><h2 className="mb-4 text-lg font-semibold text-foreground">{title}</h2>{key === 'decisions' ? <p className="mb-3 text-sm text-muted-foreground">{operationalCopy.decisionDescription}</p> : null}
-      {remaining.length ? <div className="divide-y divide-border">{visible.map(item => row(item, result))}</div> : <p className="text-sm leading-6 text-muted-foreground">{unavailableSources.length ? ui.unavailable : empty}</p>}
+      {remaining.length ? <div className="divide-y divide-border">{visible.map(item => row(item, result))}</div> : <p className="text-sm leading-6 text-muted-foreground">{unavailableSources.length ? ui.unavailable : items.some(item => item.id === primaryItem?.id) ? workCoherenceCopy(language).currentWorkAbove : empty}</p>}
       {remaining.length > 3 ? <Button type="button" variant="ghost" className="mt-3 min-h-11" onClick={() => expand(key)} aria-expanded={expandedSections.includes(key)}>{expandedSections.includes(key) ? ui.details : ui.more} ({remaining.length})</Button> : null}
       {remaining.length ? <p className="mt-3 text-xs text-muted-foreground">{ui.limited}</p> : null}
     </section>;
@@ -355,6 +358,7 @@ export const TodayPage = () => {
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground"><span>{ui[statusKey(primaryItem, observedAt)]}</span>{primaryItem.business_name ? <span>{primaryItem.business_name}</span> : null}{formatDate(language, primaryItem.due_at, primaryItem.timezone || overview?.timezone) ? <span>{ui.due}: {formatDate(language, primaryItem.due_at, primaryItem.timezone || overview?.timezone)}{!validTimezone(primaryItem.timezone || overview?.timezone) ? ` · ${ui.deviceTime}` : ''}</span> : null}</div>
           <p className="mt-3 break-words text-sm leading-6 text-muted-foreground">{todayWorkDescription(language, primaryItem.message_code, localizedGrowthText(language === 'hy' ? 'en' : language, primaryItem.description || primaryItem.stage))}</p>
           {workRoute(primaryItem) ? <Button type="button" variant="product" onClick={() => openWork(primaryItem)} className="mt-4 min-h-11 w-full whitespace-normal sm:w-auto">{itemLabel(primaryItem)}<ArrowRight className="ml-2 h-4 w-4 shrink-0" /></Button> : <><p className="mt-3 text-sm text-muted-foreground">{ui.blockedAction}</p><Button type="button" variant="product" className="mt-4 min-h-11" onClick={() => navigate('/dashboard/operator')}>{ui.openManagement}<ArrowRight className="ml-2 h-4 w-4" /></Button></>}
+          {workRoute(primaryItem) && primaryItem.business_id ? <Button variant="ghost" className="mt-2" onClick={() => navigate(workChatRoute(workRoute(primaryItem) || '', primaryItem.business_id || '', primaryItem.entity_type === 'journey_action' ? primaryItem.entity_id : undefined))}>{workNavigationCopy(language).discuss}</Button> : null}
         </> : <>
           <p className="mt-2 break-words text-sm leading-6 text-muted-foreground">{nextMission?.reason || (unavailableSources.length ? ui.unavailable : ui.emptyDecisions)}</p>
           <Button type="button" variant="product" onClick={() => openMission(nextMission)} className="mt-4 min-h-11 w-full whitespace-normal sm:w-auto">{(nextMission?.cta_url?.startsWith('/dashboard/profile') || nextMission?.screen === 'settings') && journeyAction?.access?.allowed !== false ? ui.setup : nextMission?.cta_label || copy.openProgress}<ArrowRight className="ml-2 h-4 w-4 shrink-0" /></Button>

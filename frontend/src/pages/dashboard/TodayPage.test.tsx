@@ -120,6 +120,8 @@ describe('TodayPage', () => {
     renderPage();
     expect(await screen.findByRole('heading', { name: 'Подтвердите черновик' })).toBeInTheDocument();
     expect(screen.queryByText('Сейчас у LocalOS нет активных задач.')).not.toBeInTheDocument();
+    expect(screen.getByText('Следующий шаг показан выше. Других записей в этом разделе нет.')).toBeInTheDocument();
+    expect(screen.queryByText('В доступных данных нет задач, ожидающих вашего решения.')).not.toBeInTheDocument();
   });
 
   it('shows the static decision heading and instruction in Spanish without rewriting API decision text', async () => {

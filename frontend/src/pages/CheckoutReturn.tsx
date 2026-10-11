@@ -1,3 +1,4 @@
+import { safeWorkReturn } from '@/lib/workNavigation';
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -124,7 +125,7 @@ const CheckoutReturn = () => {
         <div className="mt-8 flex flex-wrap gap-3">
           {checkout?.audit_public_url ? (
             <a href={checkout.audit_public_url} target="_blank" rel="noreferrer">
-              <Button className="bg-slate-900 text-white hover:bg-slate-800">
+              <Button variant="product" className="bg-slate-900 text-white hover:bg-slate-800">
                 Открыть аудит
                 <ExternalLink className="ml-2 h-4 w-4" />
               </Button>
@@ -141,8 +142,8 @@ const CheckoutReturn = () => {
           ) : null}
 
           {checkout?.status === "completed" ? (
-            <Link to={checkout.return_to?.startsWith('/dashboard/') && !checkout.return_to.startsWith('//') ? checkout.return_to : '/login'}>
-              <Button variant="outline">{checkout.return_to ? 'Вернуться к задаче' : 'Войти в LocalOS'}</Button>
+            <Link to={safeWorkReturn(checkout.return_to) || '/login'}>
+              <Button variant="outline">{safeWorkReturn(checkout.return_to) ? 'Вернуться к задаче' : 'Войти в LocalOS'}</Button>
             </Link>
           ) : null}
 

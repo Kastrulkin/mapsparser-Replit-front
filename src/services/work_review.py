@@ -178,6 +178,8 @@ def links(cursor,business,user,entry_id):
     cursor.execute('''SELECT a.* FROM journey_actions a JOIN business_work_links l ON l.action_id=a.id
         WHERE l.business_id=%s AND l.entry_id=%s AND a.business_id=%s ORDER BY a.created_at''',(business,entry_id,business))
     rows=[_row(cursor,row) for row in cursor.fetchall()]
+    from services.work_coherence import linked_draft_route
+    rows = [{**row, 'material_href': linked_draft_route(row, business)} for row in rows]
     return rows if reviewer else [{key:row.get(key) for key in ('id','status','completed_at')} for row in rows]
 
 

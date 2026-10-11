@@ -1,9 +1,10 @@
+import { WorkContextBridge } from '@/components/WorkContextBridge';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { useLocation, useOutletContext, useSearchParams } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { newAuth } from '@/lib/auth_new';
+import { HttpError, newAuth } from '@/lib/auth_new';
 import type { JourneyAction } from '@/lib/leadJourney';
 import { JourneyActionCard } from './JourneyActionCard';
 
@@ -12,6 +13,7 @@ type ActionHandoff = { key: string; action: JourneyAction };
 
 export const JourneyWorkspaceFocus = ({ children }: { children: ReactNode }) => {
   const { currentBusinessId } = useOutletContext<WorkspaceContext>();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const actionId = searchParams.get('journey_action') || '';
   const intentKey = JSON.stringify([currentBusinessId, actionId]);
@@ -40,28 +42,33 @@ export const JourneyWorkspaceFocus = ({ children }: { children: ReactNode }) => 
     <div className="space-y-5">
       {actionId && currentBusinessId ? <JourneyFocusPanel
         key={intentKey}
+        showDiscussion={location.pathname !== '/dashboard/operator'}
         actionId={actionId}
         businessId={currentBusinessId}
         initialAction={handoff?.key === intentKey ? handoff.action : null}
         onContinue={continueWith}
       /> : null}
+      <WorkContextBridge />
       {children}
     </div>
   );
 };
 
 type JourneyFocusPanelProps = {
+  showDiscussion: boolean;
   actionId: string;
   businessId: string;
   initialAction: JourneyAction | null;
   onContinue: (action: JourneyAction) => void;
 };
 
-const JourneyFocusPanel = ({ actionId, businessId, initialAction, onContinue }: JourneyFocusPanelProps) => {
+const JourneyFocusPanel = ({ actionId, businessId, initialAction, onContinue, showDiscussion }: JourneyFocusPanelProps) => {
   const [action, setAction] = useState<JourneyAction | null>(initialAction);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const trackedAction = useRef('');
+  const focusRegion = useRef<HTMLElement | null>(null);
+  useEffect(() => { if (action) focusRegion.current?.focus(); }, [action?.id]);
   const requestScope = useRef({ active: false, generation: 0 });
 
   useLayoutEffect(() => {
@@ -81,7 +88,7 @@ const JourneyFocusPanel = ({ actionId, businessId, initialAction, onContinue }: 
       .then((data) => { if (isCurrent()) setAction(data.action || null); })
       .catch((caught) => {
         if (!isCurrent()) return;
-        if (typeof caught === 'object' && caught !== null && 'status' in caught && (caught.status === 401 || caught.status === 403 || caught.status === 404)) setAction(null);
+        if (caught instanceof HttpError && (caught.status === 401 || caught.status === 403 || caught.status === 404)) setAction(null);
         setError(caught instanceof Error ? caught.message : 'Не удалось открыть выбранное действие');
       })
       .finally(() => { if (isCurrent()) setLoading(false); });
@@ -106,7 +113,7 @@ const JourneyFocusPanel = ({ actionId, businessId, initialAction, onContinue }: 
     <>
       {loading ? <section className="h-36 animate-pulse rounded-[24px] bg-slate-100" aria-label="Загружаем выбранное действие" /> : null}
       {error ? <section className="rounded-[24px] bg-red-50 p-5 shadow-[0_0_0_1px_rgba(185,28,28,0.12)]"><h2 className="text-balance font-semibold text-red-950">Не удалось продолжить персональный сценарий</h2><p className="mt-2 text-pretty text-sm text-red-800">{error}</p><Button type="button" variant="outline" onClick={load} className="mt-4 min-h-11 gap-2 transition-transform active:scale-[0.96]"><RefreshCw className="h-4 w-4" />Повторить</Button></section> : null}
-      {action ? <section aria-label="Выбранное действие"><JourneyActionCard action={action} businessId={businessId} onUpdated={(nextAction?: JourneyAction) => {
+      {action ? <section ref={focusRegion} tabIndex={-1} className="scroll-mt-24 rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring" aria-label="Выбранное действие"><JourneyActionCard showDiscussion={showDiscussion} action={action} businessId={businessId} onUpdated={(nextAction) => {
         const scope = requestScope.current;
         if (!scope.active) return;
         if (!nextAction) {

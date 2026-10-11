@@ -1,3 +1,4 @@
+import { WorkRouteAlias } from '@/components/WorkRouteAlias';
 import { Suspense, lazy, useEffect, useState } from "react";
 import { Toaster } from "./components/ui/toaster";
 import { Toaster as Sonner } from "./components/ui/sonner";
@@ -353,7 +354,7 @@ const AppShell = () => {
             <Route path="profile" element={<ProfilePage />} />
             <Route path="card" element={<JourneyWorkspaceFocus><CardOverviewPage /></JourneyWorkspaceFocus>} />
             <Route path="content" element={<JourneyWorkspaceFocus><ContentPage /></JourneyWorkspaceFocus>} />
-            <Route path="content-plan" element={<Navigate to="/dashboard/content" replace />} />
+            <Route path="content-plan" element={<WorkRouteAlias path="/dashboard/content" />} />
             <Route path="progress" element={<ProgressPage />} />
             <Route path="finance" element={<FinancePage />} />
             <Route path="web-analytics" element={featureFlags.webTracking ? <WebAnalyticsPage /> : <Navigate to="/dashboard/progress" replace />} />
@@ -362,12 +363,12 @@ const AppShell = () => {
             <Route path="ai-chat-promotion" element={<AIChatPromotionPage />} />
             <Route path="settings/*" element={<SettingsPage />} />
             <Route path="partnerships" element={<JourneyWorkspaceFocus><PartnershipSearchPage /></JourneyWorkspaceFocus>} />
-            <Route path="promotion" element={<PromotionHubPage />} />
-            <Route path="promotion/partnerships" element={<JourneyWorkspaceFocus><PartnershipSearchPage /></JourneyWorkspaceFocus>} />
+            <Route path="promotion" element={<WorkRouteAlias path="/dashboard/growth-paths" group="clients" />} />
+            <Route path="promotion/partnerships" element={<WorkRouteAlias path="/dashboard/partnerships" />} />
             <Route path="influencers" element={<JourneyWorkspaceFocus><InfluencersPage /></JourneyWorkspaceFocus>} />
             <Route path="influencers/registry" element={<JourneyWorkspaceFocus><InfluencerRegistryPage /></JourneyWorkspaceFocus>} />
             <Route path="influencers/operations" element={<JourneyWorkspaceFocus><InfluencerPromotionPage /></JourneyWorkspaceFocus>} />
-            <Route path="promotion/influencers" element={<Navigate to="/dashboard/influencers" replace />} />
+            <Route path="promotion/influencers" element={<WorkRouteAlias path="/dashboard/influencers" />} />
             <Route path="growth-paths" element={<GrowthPathsPage />} />
             <Route path="more" element={<MorePage />} />
             <Route path="operator" element={<JourneyWorkspaceFocus><OperatorPage /></JourneyWorkspaceFocus>} />

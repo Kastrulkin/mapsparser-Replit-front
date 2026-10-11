@@ -6,6 +6,8 @@ import { newAuth } from '@/lib/auth_new';
 import { Network, MapPin, User, Building2, Clock, Mail, Phone, Edit2, ShieldCheck, AlertTriangle, CheckCircle2, ArrowRight, FileSearch, Plus, Trash2, Info, ExternalLink } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { cn } from '@/lib/utils';
+import { NetworkManagement } from '@/components/NetworkManagement';
+import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
 import { SubscriptionManagement } from '@/components/SubscriptionManagement';
 import { BusinessMembers } from '@/components/dashboard/BusinessMembers';
 import { BusinessAdditionalSettings } from '@/components/dashboard/BusinessAdditionalSettings';
@@ -1000,7 +1002,7 @@ export const ProfilePage = () => {
             : 'This page stores the business source data used for maps, audits, posts, and SEO.'
         }
         action={(
-          <Button
+          <Button variant="product"
             type="button"
             onClick={primaryProfileAction.onClick}
             disabled={primaryProfileAction.disabled}
@@ -1018,7 +1020,7 @@ export const ProfilePage = () => {
         title={t.dashboard.profile.userProfile}
         description={isRu ? 'Кто управляет аккаунтом и получает рабочие уведомления.' : 'Who manages the account and receives work notifications.'}
         actions={!editMode && currentBusiness && currentBusiness.owner_id === user?.id ? (
-          <Button onClick={() => setEditMode(true)} variant="outline" className="gap-2">
+          <Button  onClick={() => setEditMode(true)} variant="outline" className="gap-2">
             <Edit2 className="w-4 h-4" />
             {t.dashboard.profile.edit}
           </Button>
@@ -1081,8 +1083,8 @@ export const ProfilePage = () => {
         </div>
         {editMode && (
           <div className="mt-8 flex justify-end gap-3 border-t border-slate-100 pt-6">
-            <Button onClick={() => setEditMode(false)} variant="ghost">{t.dashboard.profile.cancel}</Button>
-            <Button onClick={handleUpdateProfile} className="bg-blue-600 hover:bg-blue-700">{t.dashboard.profile.save}</Button>
+            <Button  onClick={() => setEditMode(false)} variant="ghost">{t.dashboard.profile.cancel}</Button>
+            <Button variant="product" onClick={handleUpdateProfile} className="bg-blue-600 hover:bg-blue-700">{t.dashboard.profile.save}</Button>
           </div>
         )}
       </DashboardSection>
@@ -1143,7 +1145,7 @@ export const ProfilePage = () => {
               </Button>
             )}
             {!editClientInfo && (
-              <Button
+              <Button 
                 onClick={() => setEditClientInfo(true)}
                 variant="outline"
                 className="gap-2"
@@ -1447,14 +1449,14 @@ export const ProfilePage = () => {
 
         {editClientInfo && (
           <div className="mt-8 flex justify-end gap-3 border-t border-slate-100 pt-6">
-            <Button
+            <Button 
               onClick={() => setEditClientInfo(false)}
               variant="ghost"
               title={isRu ? 'Отменяет изменения в информации о бизнесе.' : 'Cancels changes in the business information form.'}
             >
               {t.dashboard.profile.cancel}
             </Button>
-            <Button
+            <Button variant="product"
               onClick={handleSaveClientInfo}
               className="bg-blue-600 hover:bg-blue-700"
               title={isRu ? 'Сохраняет данные бизнеса, чтобы их можно было использовать в картах, прогрессе и аудите.' : 'Saves business data so it can be used in maps management, progress, and the audit.'}
@@ -1465,6 +1467,7 @@ export const ProfilePage = () => {
         )}
       </DashboardSection>
 
+<details className="rounded-xl border p-4"><summary className="min-h-11 cursor-pointer py-2 font-medium">{workCoherenceCopy(language).locations}</summary><NetworkManagement key={effectiveBusinessId} /></details>
       <BusinessMembers businessId={effectiveBusinessId} isRu={isRu} />
       <BusinessAdditionalSettings businessId={effectiveBusinessId} isRu={isRu} />
 

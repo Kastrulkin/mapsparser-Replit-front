@@ -1,3 +1,4 @@
+import { canonicalWorkRoute, safeWorkReturn, workNavigationCopy } from '@/lib/workNavigation';
 import { businessResultHref } from '@/components/operator/businessResultHref';
 import { useChatAutoScroll } from '@/components/operator/useChatAutoScroll';
 import { OutreachChatSummary } from '@/components/operator/OutreachChatSummary';
@@ -23,7 +24,7 @@ import {
 	Send,
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useId, useRef, useState } from 'react';
-import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
+import { Link, useOutletContext, useSearchParams, useLocation } from 'react-router-dom';
 
 import { BetaFeedbackBanner } from '@/components/dashboard/BetaFeedbackBanner';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -277,6 +278,10 @@ const mapStoredMessages = (items: Array<{
 }));
 
 export const OperatorPage = () => {
+  const location = useLocation();
+  const workParams = new URLSearchParams(location.search);
+  const workRef = safeWorkReturn(workParams.get('work_ref'));
+  const workActionId = workParams.get('journey_action');
   const { currentBusinessId, currentBusiness } = useOutletContext<DashboardContext>();
   const { language } = useLanguage();
   const copy = operatorPageCopyForLanguage(language);
@@ -322,7 +327,7 @@ export const OperatorPage = () => {
     if (input) { input.style.height = "auto"; input.style.height = `${Math.min(144, input.scrollHeight)}px`; }
   }, [chatMessage]);
   const chatSendInFlightRef = useRef(false);
-  const pendingRequest = useRef({ businessId: "", text: "", groupId: "", id: "" });
+  const pendingRequest = useRef({ businessId: "", text: "", groupId: "", workKey: "", id: "" });
   const [refreshCheckingQueueId, setRefreshCheckingQueueId] = useState<string | null>(null);
   const [bulkGeneratingKey, setBulkGeneratingKey] = useState<string | null>(null);
   const [applyingServiceJobId, setApplyingServiceJobId] = useState<string | null>(null);
@@ -457,7 +462,7 @@ export const OperatorPage = () => {
   const sendOperatorChatMessage = async (overrideText?: string, source?: VoiceSubmission) => {
     const text = (overrideText || chatMessage).trim();
     if (!currentBusinessId || !text || chatSendInFlightRef.current) return;
-    if (pendingRequest.current.businessId !== currentBusinessId || pendingRequest.current.text !== text || pendingRequest.current.groupId !== selectedSearchId) pendingRequest.current = { businessId: currentBusinessId, text, groupId: selectedSearchId, id: crypto.randomUUID() };
+    if (pendingRequest.current.businessId !== currentBusinessId || pendingRequest.current.text !== text || pendingRequest.current.groupId !== selectedSearchId || pendingRequest.current.workKey !== (workActionId || workRef || "")) pendingRequest.current = { businessId: currentBusinessId, text, groupId: selectedSearchId, workKey: workActionId || workRef || "", id: crypto.randomUUID() };
     historyVersion.current++;
     setHistoryLoading(false);
     chatSendInFlightRef.current = true;
@@ -471,6 +476,9 @@ export const OperatorPage = () => {
         business_id: currentBusinessId,
         message: text,
         conversation_id: conversationId,
+        journey_action_id: workActionId || undefined,
+        work_ref: workRef || undefined,
+        selected_object: workRef && new URL(workRef, 'https://localos.pro').searchParams.get('item_id') ? { type: 'content_item', id: new URL(workRef, 'https://localos.pro').searchParams.get('item_id') } : undefined,
         channel: 'web',
         search_task_id: selectedSearchId || null,
         request_id: pendingRequest.current.id,
@@ -490,7 +498,7 @@ export const OperatorPage = () => {
         else if (job.status === 'waiting_for_review') setPendingChatPhase('Нужно ваше подтверждение');
       });
       if(activeBusiness.current!==currentBusinessId)return;
-      pendingRequest.current = { businessId: "", text: "", groupId: "", id: "" };
+      pendingRequest.current = { businessId: "", text: "", groupId: "", workKey: "", id: "" };
       appendPair(text, result);
       if (result.task?.id && (!result.task.business_id || result.task.business_id === currentBusinessId)) {
         setSavedSearchTask({...result.task, business_id: currentBusinessId});
@@ -726,6 +734,7 @@ export const OperatorPage = () => {
 
   return (
     <div ref={workspaceRef} style={{ height: workspaceHeight }} className="flex min-h-0 min-w-0 flex-col gap-2" data-tour-target="operator-overview">
+      {workRef ? <section className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3"><span>{copy.title}</span><Button variant="outline" asChild><Link to={workRef}>{workNavigationCopy(language).open}</Link></Button></section> : null}
       <header className="flex shrink-0 items-center justify-between gap-2">
         <div className="flex items-center gap-2"><h1 className="text-xl font-semibold">{copy.title}</h1><span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">Beta</span></div>
         <div className="flex items-center gap-1">
@@ -881,7 +890,7 @@ export const OperatorPage = () => {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="block shrink-0">
-                    <Button
+                    <Button variant="product"
                       type="button"
                       className="btn-iridescent h-12 w-12 p-0 sm:w-auto sm:px-4"
                       aria-label={copy.send}
@@ -1073,7 +1082,7 @@ const OperatorResultActions = ({
         <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-sky-950">
           <p className="font-medium">Поиск ещё не начался</p>
           <p className="mt-1">Условия и лимиты показаны выше. Подтвердите запуск.</p>
-          <Button type="button" size="sm" className="mt-2" onClick={() => void onSendCommand('Начни поиск по показанным условиям')}>
+          <Button variant="product" type="button" size="sm" className="mt-2" onClick={() => void onSendCommand('Начни поиск по показанным условиям')}>
             Начать поиск
           </Button>
         </div>
@@ -1082,7 +1091,7 @@ const OperatorResultActions = ({
       {textToCopy ? (
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
           <div className="whitespace-pre-wrap text-slate-700">{textToCopy}</div>
-          <Button type="button" size="sm" className="mt-2" onClick={() => void onCopy(`copy-${textToCopy.length}`, textToCopy)}>
+          <Button variant="product" type="button" size="sm" className="mt-2" onClick={() => void onCopy(`copy-${textToCopy.length}`, textToCopy)}>
             <Copy className="mr-2 h-4 w-4" />
             {copiedKey === `copy-${textToCopy.length}` ? 'Скопировано' : 'Скопировать'}
           </Button>
@@ -1186,7 +1195,7 @@ const OperatorResultActions = ({
               <div className="whitespace-pre-wrap text-slate-700">{draft.generated_text}</div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {draft.generated_text ? (
-                  <Button type="button" size="sm" onClick={() => void onCopy(`draft-${draft.id}`, draft.generated_text || '')}>
+                  <Button variant="product" type="button" size="sm" onClick={() => void onCopy(`draft-${draft.id}`, draft.generated_text || '')}>
                     <Copy className="mr-2 h-4 w-4" />
                     {copiedKey === `draft-${draft.id}` ? 'Скопировано' : 'Скопировать'}
                   </Button>
@@ -1218,7 +1227,7 @@ const OperatorResultActions = ({
         ) : null}
         {approval?.action_id && approval.status === 'pending' && !outdatedOutreachApproval ? (
           <>
-            <Button
+            <Button variant="product"
               type="button"
               size="sm"
               onClick={() => void onConfirmOperatorAction(approval.action_id)}
@@ -1240,7 +1249,7 @@ const OperatorResultActions = ({
           </>
         ) : null}
         {isOperatorHelp ? (
-          <Button
+          <Button variant="product"
             type="button"
             size="sm"
             aria-expanded={capabilitiesOpen}
@@ -1256,8 +1265,8 @@ const OperatorResultActions = ({
             />
           </Button>
         ) : hasUsefulResultRef && resultRef?.href ? (
-          <Button type="button" size="sm" asChild>
-            <Link to={businessResultHref(resultRef.href, businessId)} target="_blank" rel="noopener noreferrer">
+          <Button variant="product" type="button" size="sm" asChild>
+            <Link to={canonicalWorkRoute(businessResultHref(resultRef.href, businessId))} >
               {resultRef.label || 'Открыть результат'}
               <ExternalLink className="ml-2 h-3.5 w-3.5" />
             </Link>
@@ -1277,7 +1286,7 @@ const OperatorResultActions = ({
         ) : null}
 
         {hasNewUnansweredReviews ? (
-          <Button
+          <Button variant="product"
             type="button"
             size="sm"
             onClick={() => void onGenerateReplies()}
@@ -1315,7 +1324,7 @@ const OperatorResultActions = ({
         ) : null}
 
         {optimizationJobId ? (
-          <Button
+          <Button variant="product"
             type="button"
             size="sm"
             onClick={() => void onApplyServices(optimizationJobId)}
@@ -1341,7 +1350,7 @@ const OperatorResultActions = ({
 
         {billingUrl ? (
           <Button type="button" size="sm" variant="outline" asChild>
-            <Link to={businessResultHref(billingUrl, businessId)} target="_blank" rel="noopener noreferrer">
+            <Link to={businessResultHref(billingUrl, businessId)} >
               Пополнить счёт
               <ExternalLink className="ml-2 h-3.5 w-3.5" />
             </Link>

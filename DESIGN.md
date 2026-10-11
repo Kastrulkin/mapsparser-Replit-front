@@ -6,6 +6,29 @@ This is the design operating model for LocalOS product UI. It sits above individ
 
 Use it before editing dashboard, cockpit, builder, form, approval, run history, or agent-management screens.
 
+## Today And Direct Work Navigation
+
+`/dashboard` is always Today. Keep stable direct entries for content,
+influencers, partnerships, maps/reviews, average ticket and automation. Growth
+Paths is optional discovery under More; it must not be a required extra click.
+
+Today has one primary next action and three stable sections: needs a decision,
+continue work, completed results. Real deadlines and failed/blocked work outrank
+a personal priority. A priority changes comparable work inside Today, never the
+sidebar order or the destination of an explicit deep link. User/business/network
+scope is part of every state and request; clear private state on a scope change
+or loss of access, retain it with a retry notice for transient failures.
+
+Behavior-based suggestions require an explicit user decision. Offer accept,
+decline, snooze, disable and undo; never infer acceptance from silence or time.
+
+For compiled scripts, show task → rules → example and expected result → preview
+→ approval → run. Editing rules invalidates the candidate's approval; new run
+data does not regenerate the approved program. Technical source and JSON belong
+in the advanced layer. The current internal JSON pilot is not the finished
+nontechnical data-source editor. Draft approval never claims that a message was
+sent; changed text or contact requires a refreshed review.
+
 ## Product Surfaces Before Brand Surfaces
 
 LocalOS has two different surface types:
@@ -14,6 +37,72 @@ LocalOS has two different surface types:
 - `Brand surfaces`: public pages, landing pages, articles, marketing explainers, public audit pages.
 
 Product surfaces must be quiet, direct, and operational. They should prioritize scanning, comparison, and safe action over expressive visuals.
+
+## Canonical Logo
+
+Use the approved LocalOS logo from
+`frontend/src/assets/images/logo.png` on every product and brand surface.
+Do not recreate the mark with a generic icon, emoji, generated symbol, or an
+icon-plus-text wordmark. Size and crop the existing asset for its context, but
+do not redraw or substitute it.
+
+## Canonical Public Background
+
+The homepage and every `/growth` state — direction selection, direction detail,
+personal preview, and result — belong to one public acquisition surface and
+must use the same LocalOS background:
+
+- warm off-white base `#f7f7f5`;
+- a subtle `48px` slate grid;
+- restrained orange and gold radial light near the top;
+- decorative layers must remain non-interactive and hidden from assistive technology.
+
+Reuse `frontend/src/components/PublicBrandBackdrop.tsx`. Do not recreate the
+grid, change its spacing, or introduce a separate grey background for an
+individual `/growth` route. Content cards remain solid enough to preserve text
+contrast over the grid.
+
+## Canonical Button Hierarchy
+
+LocalOS buttons use one shared hierarchy across the product:
+
+- product primary actions use the black `Button` default;
+- public conversion actions use the gold `brand` variant, backed by
+  `btn-iridescent`;
+- secondary actions use `outline`, `secondary`, `ghost`, or a black button on
+  a light brand surface when the composition requires it;
+- flat rust/orange, blue, indigo, or purple must not be introduced as a local
+  primary-button treatment;
+- red is reserved for destructive actions, while green, amber, and blue remain
+  semantic status colors rather than CTA colors;
+- provider colors are allowed only where the provider identity itself matters,
+  such as a Telegram sign-in control;
+- disabled public conversion actions retain the brand gradient and communicate
+  unavailability through opacity and state copy rather than changing hue.
+
+Use `frontend/src/components/ui/button.tsx` instead of restyling primary buttons
+screen by screen. Use `variant="brand"` for public conversion CTA and the default
+variant for the dominant action inside the authenticated product.
+
+## Public Growth Choice
+
+The homepage pain-point section explains why owners use LocalOS. It is not a
+second product taxonomy. The primary homepage CTA leads to one `/growth`
+choice with six directions:
+
+- clients: local creators, nearby businesses, and maps;
+- ongoing work: content, average ticket, and automation.
+
+Keep all six directions available on the first `/growth` screen. Do not label
+this route as three opportunities or reduce the whole product to customer
+acquisition.
+
+## Subscription Preview
+
+- A locked screen starts with one useful, truthful read-only fragment and only then shows a blurred continuation and one upgrade action.
+- Influencer and partner previews contain at most 10 stable public records. Filters must not rotate that sample, and hidden records or contacts must never be sent to the browser.
+- Blur is a conversion affordance, not an authorization boundary. Backend capability checks remain authoritative for every read and mutation.
+- Upgrade copy names the minimum result-oriented tier: `Карты`, `Привлечение`, or `Управление`, and preserves the user's return route.
 
 ## Operating Principles
 
@@ -173,3 +262,37 @@ Use these labels only as secondary navigation inside the employee model:
 - `Настройки`
 
 Advanced/debug surfaces must be gated or visually secondary.
+
+## Coherent Work Across Web And Telegram
+
+The canonical Web/Mini App menu is defined in
+`frontend/src/lib/workNavigation.ts`. Order is fixed: Today and chat; six work
+areas (maps/reviews, content, partnerships, creators, average ticket, AI
+employees); results and finance; business/team, settings/connections, More.
+Mobile quick entries are Today, Chat, Results, Menu. Chat and workspaces are
+peers operating on existing work. A focus preference never changes menu order.
+
+More contains optional Growth Paths, work journal, customer messages, radar and
+feature-gated website analytics. Growth Paths explains the six work areas and
+lets users explicitly choose a focus. It is not a prerequisite for work.
+`/dashboard/promotion` is a compatibility discovery route; its partnership
+subroute redirects to `/dashboard/partnerships`, preserving query and fragment.
+
+Every work summary retains its business, source type/id, source status, deadline
+and evidence link. Approval for sending is not sending; queued work is not
+executing; a draft is not a publication; an observation is not a result. Unknown
+states have a neutral label. Deduplicate by business + source type + source id.
+Do not introduce a parallel task table or infer evidence from cumulative counts.
+
+Deep links select an authorized business before loading records. Network
+summaries retain each location's identity. Explicit links can select the parent
+as one business without turning the selected record into a network result.
+A workspace clears private state on context changes/access loss; temporary
+refresh failures retain that context's data with retry. Chat/workspace navigation
+never creates work, confirms actions or starts execution.
+
+`return_to` accepts only internal allowed LocalOS work routes. Settings and
+checkout expose an explicit return to the originating work. Customer messages
+contain real conversations; employee tests live under AI employees and outreach
+tests under partnerships. Evidence and known limitations belong in the release
+UX audit; human usability research must be recorded separately from test results.

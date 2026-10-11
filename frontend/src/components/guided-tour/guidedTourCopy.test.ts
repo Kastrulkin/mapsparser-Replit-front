@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveInitialLanguage } from '@/i18n/languagePreference';
+import { resolveInitialLanguage, urlWithLanguage } from '@/i18n/languagePreference';
 import { guidedTourCopyForLanguage, supportedGuidedTourLanguages } from './guidedTourCopy';
 import { GUIDED_TOUR_STEP_LAYOUTS, guidedTourStepsForLanguage } from './tourConfig';
 
@@ -10,7 +10,7 @@ describe('guided tour localization', () => {
     const steps = guidedTourStepsForLanguage(language);
 
     expect(steps).toHaveLength(GUIDED_TOUR_STEP_LAYOUTS.length);
-    expect(copy.welcome.capabilities).toHaveLength(7);
+    expect(copy.welcome.capabilities).toHaveLength(6);
     expect(copy.entry.pageTitle.trim()).not.toBe('');
     expect(copy.banner.notice.trim()).not.toBe('');
     expect(steps.every((step) => step.chapterTitle.trim() && step.title.trim() && step.body.trim())).toBe(true);
@@ -27,7 +27,7 @@ describe('guided tour localization', () => {
       title: expect.any(String),
       body: expect.any(String),
     });
-    ['agents-signals', 'agents-today', 'agents-employees', 'agents-control'].forEach((key) => {
+    ['agents-signals', 'agents-today', 'agents-employees', 'agents-control', 'agents-run', 'agents-review', 'agents-history'].forEach((key) => {
       expect(stepEntries.find(([stepKey]) => stepKey === key)?.[1]).toMatchObject({
         title: expect.any(String),
         body: expect.any(String),
@@ -54,18 +54,58 @@ describe('guided tour localization', () => {
     expect(JSON.stringify(copy)).not.toMatch(internalJargon);
   });
 
+  it('uses concrete Russian copy instead of abstract product language', () => {
+    expect(guidedTourCopyForLanguage('ru').banner.createAccount).toBe('Подключить свой бизнес');
+
+    const steps = guidedTourStepsForLanguage('ru');
+    const text = steps.map((step) => `${step.title} ${step.body}`).join(' ');
+    const vaguePhrases = /хранит контекст|ведутся по этапам|картина бизнеса|практический результат|следующий результат|рабочий экран|история сохраняет факты|решение остаётся за вами/i;
+
+    expect(text).not.toMatch(vaguePhrases);
+    expect(steps.find((step) => step.key === 'partnership-candidates')).toMatchObject({
+      title: 'Что уже обсудили с «Ромашкой»',
+      body: 'Здесь видно, что предложили компании, как планировали связаться и что нужно сделать дальше.',
+    });
+  });
+
+  it('gives every Russian content-plan and agent step its own explanation', () => {
+    const steps = guidedTourStepsForLanguage('ru');
+    const keys = [
+      'content-plan-setup', 'content-plan-preview', 'content-plan-save', 'content-plan-review',
+      'agents-signals', 'agents-today', 'agents-employees', 'agents-control', 'agents-run', 'agents-review', 'agents-history',
+    ];
+    const selected = steps.filter((step) => keys.includes(step.key));
+
+    expect(selected).toHaveLength(keys.length);
+    expect(new Set(selected.map((step) => step.title)).size).toBe(keys.length);
+    expect(new Set(selected.map((step) => step.body)).size).toBe(keys.length);
+  });
+
   it('uses the demo link language before saved and browser preferences', () => {
     expect(resolveInitialLanguage('/demo', '?lang=tr', 'ru', 'de-DE')).toBe('tr');
     expect(resolveInitialLanguage('/demo', '?lang=ar', null, 'en-US')).toBe('ar');
+    expect(resolveInitialLanguage('/demo', '?lang=hy', null, 'en-US')).toBe('hy');
   });
 
   it('uses an explicit public-room link language before saved and browser preferences', () => {
     expect(resolveInitialLanguage('/room/room-test-audit-offer-20260629', '?lang=el', 'ru', 'ru-RU')).toBe('el');
+    expect(resolveInitialLanguage('/docs/api', '?lang=hy', 'ru', 'ru-RU')).toBe('hy');
+  });
+
+  it('uses an explicit language link on every page', () => {
+    expect(resolveInitialLanguage('/', '?lang=hy', 'ru', 'ru-RU')).toBe('hy');
+    expect(resolveInitialLanguage('/dashboard/services', '?lang=hy', 'ru', 'ru-RU')).toBe('hy');
+  });
+
+  it('creates a shareable language link without losing other URL state', () => {
+    expect(urlWithLanguage('/about', '?ref=partner&lang=ru', '#pricing', 'hy'))
+      .toBe('/about?ref=partner&lang=hy#pricing');
   });
 
   it('falls back to saved, browser, and English preferences in that order', () => {
     expect(resolveInitialLanguage('/demo', '?lang=unsupported', 'fr', 'de-DE')).toBe('fr');
     expect(resolveInitialLanguage('/demo', '', null, 'th-TH')).toBe('th');
+    expect(resolveInitialLanguage('/demo', '', null, 'hy-AM')).toBe('hy');
     expect(resolveInitialLanguage('/demo', '', null, 'it-IT')).toBe('en');
   });
 });

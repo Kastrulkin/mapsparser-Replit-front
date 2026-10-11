@@ -8,9 +8,8 @@ import services.operator_mobile_today as mobile_today
 def legacy_today_contract(monkeypatch):
     # These tests isolate the existing builder sources; new adapters have real-PG tests.
     monkeypatch.setenv("LOCALOS_TODAY_PERSONALIZATION_ENABLED", "false")
-    import sys
-    from types import SimpleNamespace
-    monkeypatch.setitem(sys.modules, "services.operator_owner_actions", SimpleNamespace(today_items=lambda *args: []))
+    from services import operator_owner_actions
+    monkeypatch.setattr(operator_owner_actions, "today_items", lambda *args: [])
 
 
 def _growth(priority=80):
@@ -348,3 +347,12 @@ def test_business_history_reminder_skips_complete_profile_and_flags_placeholder(
         "Представляет Органику в партнёрском общении.",
         {},
     )
+
+
+def test_locked_mobile_work_withholds_material_content():
+    from api import operator_api
+    from subscription_manager import build_subscription_capabilities
+    access = build_subscription_capabilities(tier='starter', status='active', is_superadmin=False)
+    result = operator_api._decorate_mobile_journey_actions({'journey_actions': [{'id': 'work', 'flow_type': 'influencer', 'title': 'private name', 'payload': {'draft_text': 'private material'}}]}, access)
+    assert result['journey_actions'][0]['payload'] == {}
+    assert 'private material' not in str(result)

@@ -98,8 +98,9 @@ const DRAFT_EXCLUDED_PIPELINE_STATUSES = ['not_relevant', 'disqualified', 'close
 const DRAFT_EXCLUDED_LEAD_STATUSES = ['not_relevant', 'disqualified', 'rejected', 'shortlist_rejected'];
 const DRAFT_EXCLUDED_PARTNERSHIP_STAGES = ['rejected', 'shortlist_rejected'];
 
-const getLeadPipelineStatus = (item: PartnershipDerivedLead) => {
+export const getLeadPipelineStatus = (item: PartnershipDerivedLead) => {
   const explicit = String(item.pipeline_status || '').trim().toLowerCase();
+  if (explicit === 'approved_for_send' || explicit === 'queued_for_send') return 'in_progress';
   if (explicit === 'qualified') return 'in_progress';
   if (explicit === 'disqualified') return 'not_relevant';
   if (explicit === 'deferred') return 'postponed';
@@ -110,7 +111,7 @@ const getLeadPipelineStatus = (item: PartnershipDerivedLead) => {
   const stageValue = String(item.partnership_stage || '').trim().toLowerCase();
   if (stageValue === 'deferred') return 'postponed';
   if (['rejected', 'shortlist_rejected'].includes(stageValue)) return 'not_relevant';
-  if (['approved_for_send', 'sent'].includes(stageValue)) return 'contacted';
+  if (['sent', 'delivered'].includes(stageValue)) return 'contacted';
   if (ACTIVE_PIPELINE_STAGES.includes(stageValue)) return 'in_progress';
   return 'unprocessed';
 };

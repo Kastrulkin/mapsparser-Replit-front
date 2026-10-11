@@ -181,7 +181,7 @@ def partnership_list_leads():
                                 COALESCE(active_ws.status, '') = ''
                                 AND COALESCE(partnership_stage, 'imported') IN (
                                     'audited', 'matched', 'proposal_draft_ready', 'selected_for_outreach',
-                                    'channel_selected', 'proposal_approved', 'queued_for_send'
+                                    'channel_selected', 'proposal_approved', 'approved_for_send', 'queued_for_send'
                                 )
                             )
                         )"""
@@ -198,7 +198,7 @@ def partnership_list_leads():
                     where_sql.append(
                         """(
                             COALESCE(active_ws.status, 'unprocessed') IN ('contacted', 'waiting_reply', 'sent', 'delivered')
-                            OR COALESCE(partnership_stage, 'imported') IN ('approved_for_send', 'sent')
+                            OR COALESCE(partnership_stage, 'imported') IN ('sent', 'delivered')
                         )"""
                     )
                 elif pipeline_status_filter == "replied":
@@ -528,7 +528,7 @@ def partnership_update_lead(lead_id):
                         pipeline_status = PIPELINE_POSTPONED
                     elif stage in {"rejected", "shortlist_rejected"}:
                         pipeline_status = PIPELINE_NOT_RELEVANT
-                    elif stage in {"approved_for_send", "sent"}:
+                    elif stage in {"sent", "delivered"}:
                         pipeline_status = PIPELINE_CONTACTED
                     elif stage not in {"imported"}:
                         pipeline_status = PIPELINE_IN_PROGRESS
@@ -856,7 +856,7 @@ def partnership_bulk_update_leads():
                         pipeline_status = PIPELINE_POSTPONED
                     elif stage in {"rejected", "shortlist_rejected"}:
                         pipeline_status = PIPELINE_NOT_RELEVANT
-                    elif stage in {"approved_for_send", "sent"}:
+                    elif stage in {"sent", "delivered"}:
                         pipeline_status = PIPELINE_CONTACTED
                     elif stage not in {"imported"}:
                         pipeline_status = PIPELINE_IN_PROGRESS
