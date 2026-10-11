@@ -103,7 +103,7 @@ export function ContentHandoffProgram({ blueprintId, details, onRunQueued, onSav
         const response = await api.post(`/agent-blueprints/${selected}/compiled-script/preview`, { version_id: versionId, snapshot_id: snapshot.data.snapshot.id });
         if (target.current !== selected) return;
         setPreview({ ...record(response.data.preview), input: snapshot.data.snapshot.input });
-        setState(response.data.preview?.status === 'passed' ? 'ready_approval' : 'needs_fix');
+        setState(response.data.preview?.status === 'passed' ? (state === 'approved' || state === 'active' ? state : 'ready_approval') : 'needs_fix');
       } else if (operation === 'approve') {
         if (preview.status !== 'passed' || !preview.fixture_digest || !record(preview.delivery_context).digest) {
           throw new Error('Сначала обновите предпросмотр материалов и получателя. Отправки при проверке нет.');
@@ -153,7 +153,7 @@ export function ContentHandoffProgram({ blueprintId, details, onRunQueued, onSav
       <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={exampleAccepted} onChange={(event) => setExampleAccepted(event.target.checked)} />Ожидаемый результат: готовый комплект с фото передаётся; неполный пост и уже переданная версия пропускаются.</label>
       <Button disabled={Boolean(busy) || !exampleAccepted} onClick={() => void perform('compile')}>Создать программу по условиям</Button>
     </>}
-    {(state === 'checking' || state === 'ready_approval') && <Button variant={preview.status === 'passed' ? 'outline' : 'default'} disabled={Boolean(busy)} onClick={() => void perform('preview')}>Проверить на текущем плане без отправки</Button>}
+    {(['checking', 'ready_approval', 'approved', 'active'].includes(state)) && <Button variant={preview.status === 'passed' ? 'outline' : 'default'} disabled={Boolean(busy)} onClick={() => void perform('preview')}>Проверить на текущем плане без отправки</Button>}
     {preview.status === 'passed' && <p role="status" className="text-sm text-slate-600">Проверка программы пройдена. Сейчас готово к передаче: {posts.filter((post: unknown) => record(post).eligible === true).length}. Утверждение программы не утверждает сами посты; пропущенные даты не отправляются задним числом.</p>}
     {posts.map((post: unknown) => { const row = record(post); const recipient = targets.find((value) => { const valueScope = record(value.scope); return valueScope.business_id === row.business_id && valueScope.recipient_user_id === row.recipient_user_id; }); return <div key={String(row.post_id)} className="border-t border-slate-100 pt-3 text-sm"><p>{String(recipient?.address || '')} → {String(recipient?.recipient_name || '')} · {String(row.scheduled_for || '').slice(0, 10)}</p><p className="font-medium">{String(row.platform || '')} · {row.eligible ? 'Готово к передаче' : (blockedLabels[String(row.blocked_reason)] || 'Не готово')}</p><p className="mt-1 whitespace-pre-wrap">{String(row.text || '')}</p>{row.photo_asset_id ? <HandoffPhotoPreview assetId={String(row.photo_asset_id)} /> : <p className="text-slate-500">Фото не выбрано</p>}</div>; })}
     {state === 'ready_approval' && preview.status === 'passed' && <Button disabled={Boolean(busy)} onClick={() => void perform('approve')}>Утвердить программу и условия передачи</Button>}
