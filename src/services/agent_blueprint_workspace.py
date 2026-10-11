@@ -757,6 +757,9 @@ def _render_output(
     feedback_history: List[Dict[str, Any]],
     workspace: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
+    from services.agent_blueprint_draft_builder import requires_native_outreach
+    if requires_native_outreach(_clean_text(setup.get("workflow_description")), category):
+        raise ValueError("Для аутрича нужны согласованные условия поиска и подготовки писем. Этот сценарий сводки не выполняет аутрич; отправка не запускалась.")
     run_parameters = _public_run_parameters(workspace)
     setup = _setup_for_run(setup, run_parameters)
     facts = [item.get("summary") for item in extracted if item.get("summary")]

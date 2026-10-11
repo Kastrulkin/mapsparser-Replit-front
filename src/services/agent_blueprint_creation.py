@@ -213,6 +213,70 @@ def _outreach_draft(description: str, config: dict, conditions: dict) -> dict:
     return draft
 
 
+def _is_content_handoff_request(description: str) -> bool:
+    text = str(description or "").lower()
+    content = any(token in text for token in ("пост", "публикац", "контент"))
+    telegram = any(token in text for token in ("telegram", "телеграм", "бот"))
+    delivery = any(token in text for token in ("отправ", "передав", "присыл", "достав"))
+    return content and telegram and delivery
+
+
+def _content_handoff_draft(description: str, *, business_id: str, recipient_user_id: str, conditions: dict, network_scope: dict | None = None) -> dict:
+    from services.agent_blueprint_draft_builder import _attach_compiled_metadata, _summary
+
+    timezone_name = str((conditions.get("schedule") or {}).get("timezone") or "")
+    schedule_time = str((conditions.get("schedule") or {}).get("time") or "")
+    platforms = ["telegram", "vk", "max"]
+    step = {
+        "key": "send_due_content_to_telegram",
+        "type": "capability",
+        "title": "Передать готовые посты и фото в Telegram",
+        "capability": "content.publish_handoff",
+        "requires_approval": True,
+        "required_approval_type": "content_handoff_activation",
+        "payload": {
+            "business_id": business_id,
+            "recipient_user_id": recipient_user_id,
+            "platforms": platforms,
+            "lead_days": 1,
+            "time": schedule_time,
+            "timezone": timezone_name,
+        },
+    }
+    version = {
+        "goal": description,
+        "execution_mode": "scheduled",
+        "trigger": conditions["trigger"],
+        "schedule": conditions["schedule"],
+        "steps": [step],
+        "inputs_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+        "capability_allowlist": ["content.publish_handoff"],
+        "approval_policy": {
+            "required_for": [],
+            "content_handoff_activation": "one_time_exact_scope_consent",
+        },
+        "limits": {"max_posts_per_run": 100, "publication_status_changes": False},
+        "output_schema": {"type": "object", "properties": {"deliveries": {"type": "array"}}},
+        "required_integration_bindings": [],
+    }
+    draft = build_agent_blueprint_draft(description, "content", use_ai=False)
+    draft["version_payload"] = version
+    draft["summary"] = _summary("content", ["content_plan", "telegram_bot"], [step])
+    draft["summary"].update(
+        approval_boundaries=["exact_recipient_and_channels", "activation_consent"],
+        outputs=["Квитанции доставки отдельно от публикации на площадках"],
+        external_dispatch_performed=False,
+    )
+    if network_scope:
+        step['payload'].pop('recipient_user_id')
+        step['payload'].update(network_scope)
+        from services.compiled_content_handoff import handoff_scope
+        if not handoff_scope({**version, 'steps_json': version['steps'], 'schedule_json': version['schedule']}, business_id):
+            raise ValueError('Проверьте выбранные точки, получателей, планы и условия продолжения')
+    _attach_compiled_metadata(draft["metadata"], version, "compiled_content_handoff_v1", "content_handoff_activation")
+    return draft
+
+
 def _outreach_builder_context(description: str, config: dict, conditions: dict) -> str:
     return description + "\nУсловия поручения: " + json.dumps({
         "источники поиска": config["queries"], "аудитория": config["audience"],
@@ -225,6 +289,29 @@ def _outreach_builder_context(description: str, config: dict, conditions: dict) 
     }, ensure_ascii=False)
 
 
+def _finance_summary_requested(description):
+    import re
+    text=re.sub(r'\bбез\s+(?:включения\s+и\s+)?отправки\b|\bне\s+(?:включай\s+и\s+)?отправ\w*\b','',description,flags=re.I)
+    return bool(re.search(r'сводк|итог|отч[её]т',text,re.I) and re.search(r'выруч|чек|финанс',text,re.I)
+        and not re.search(r'отправ|присыл|телеграм|telegram|email',text,re.I))
+
+
+def _finance_summary_draft(description,conditions):
+    from services.agent_blueprint_draft_builder import _attach_compiled_metadata, _summary
+    draft=build_agent_blueprint_draft(description,'custom',use_ai=False)
+    version={**draft['version_payload'],'goal':description,
+        'execution_mode':conditions['execution_mode'],'trigger':conditions['trigger'],'schedule':conditions['schedule'],
+        'steps':[{'key':'finance_summary','type':'capability','title':'Сводка сохранённых финансов за день',
+                  'capability':'finance.summary.read','payload':{'day':'today'}}],
+        'inputs_schema':{'type':'object','properties':{},'additionalProperties':False},
+        'capability_allowlist':['finance.summary.read'],'required_integration_bindings':[],
+        'approval_policy':{'required_for':[],'external_delivery':'not_supported'},'runtime_config':{}}
+    draft['version_payload']=version
+    draft['summary']=_summary('custom',['localos_finance'],version['steps'])
+    _attach_compiled_metadata(draft['metadata'],version,'compiled_finance_summary_v1','internal_read_only')
+    return draft
+
+
 def preview_creation(cursor: Any, *, business_id: str, user_id: str, actor_context: dict, payload: dict) -> dict:
     actor = dict(actor_context or {})
     if actor.get("session_kind") == "demo" or actor.get("impersonating") or actor.get("impersonated_by"):
@@ -232,11 +319,33 @@ def preview_creation(cursor: Any, *, business_id: str, user_id: str, actor_conte
     allowed, _owner_id = verify_business_write_access(cursor, business_id, {**actor, "user_id": user_id, "is_active": actor.get("is_active", True)})
     if not allowed:
         return {"status": "blocked", "code": "FORBIDDEN", "error": "Недостаточно прав на изменение бизнеса."}
+    description = str(payload.get("description") or "").strip()[:4000]
+    handoff_requested = _is_content_handoff_request(description)
+    finance_summary_requested = _finance_summary_requested(description)
+    conditions_payload = dict(payload)
+    if handoff_requested and not isinstance(payload.get("schedule"), dict):
+        from services.business_input_settings import resolve
+        business_timezone = str(resolve(cursor, business_id).get("timezone") or "")
+        if business_timezone:
+            conditions_payload.update(execution_mode="scheduled", schedule={"time": "10:00", "timezone": business_timezone})
     try:
-        conditions = _conditions(cursor, business_id, payload)
+        conditions = _conditions(cursor, business_id, conditions_payload)
     except (ValueError, TypeError) as exc:
         return {"status": "clarification_required", "code": getattr(exc, "code", "CONDITIONS_INVALID"), "error": str(exc)}
-    description = str(payload.get("description") or "").strip()[:4000]
+    if handoff_requested:
+        from services.business_input_settings import resolve
+        business_timezone = str(resolve(cursor, business_id).get("timezone") or "")
+        if (conditions.get("execution_mode") != "scheduled"
+                or (conditions.get("schedule") or {}).get("time") != "10:00"
+                or (conditions.get("schedule") or {}).get("timezone") != business_timezone):
+            return {"status": "clarification_required", "code": "CONTENT_HANDOFF_SCHEDULE_REQUIRED",
+                    "error": "Для передачи контента нужен ежедневный запуск в 10:00 по часовому поясу точки."}
+        network_scope = payload.get('content_handoff_scope')
+        if network_scope:
+            from services.compiled_content_program import authorize_contract, contract_for
+            candidate = _content_handoff_draft(description, business_id=business_id, recipient_user_id=user_id,
+                conditions=conditions, network_scope=network_scope)['version_payload']
+            authorize_contract(cursor, contract_for(candidate,business_id), user_id)
     clone_metadata = {}
     if payload.get("clone_from_blueprint_id"):
         cursor.execute("SELECT business_id,metadata_json FROM agent_blueprints WHERE id=%s", (str(payload.get("clone_from_blueprint_id")),))
@@ -247,13 +356,22 @@ def preview_creation(cursor: Any, *, business_id: str, user_id: str, actor_conte
         clone_metadata = {key: source_metadata[key] for key in ("agent_sources", "agent_integration_ids", "agent_integration_bindings", "agent_binding_provider_routes", "required_integration_bindings", "agent_setup") if key in source_metadata}
     if len(description) < 8:
         return {"status": "clarification_required", "code": "VALIDATION_ERROR", "error": "Опишите повторяющуюся работу, которую должен выполнять ИИ-сотрудник."}
+    from services.agent_blueprint_draft_builder import requires_native_outreach
+    if not conditions.get("outreach_config") and requires_native_outreach(description, str(payload.get("category") or "")):
+        return {"status": "clarification_required", "code": "OUTREACH_CONDITIONS_REQUIRED",
+                "error": "Для поиска, проверки компаний и подготовки писем нужны согласованные условия аутрича. Обычная сводка бизнеса эту работу не выполняет. Настройте условия в поиске компаний и передайте их в автоматизацию.",
+                "result_ref": {"href": "/dashboard/partnerships?business_id=" + business_id, "label": "Настроить поиск"}}
     inventory = _inventory(cursor, business_id)
     config = conditions.get("outreach_config")
     builder_description = _outreach_builder_context(description, config, conditions) if config else description
     state = build_agent_builder_state([{"role": "user", "content": builder_description}],
         "outreach" if config else str(payload.get("category") or ""), use_ai=False, business_id=business_id,
         user_id=user_id, connected_integrations=inventory,
-        compiled_draft=_outreach_draft(description, config, conditions) if config else None)
+        compiled_draft=(
+            _outreach_draft(description, config, conditions) if config else
+            _content_handoff_draft(description, business_id=business_id, recipient_user_id=user_id, conditions=conditions, network_scope=payload.get('content_handoff_scope')) if handoff_requested else
+            _finance_summary_draft(description,conditions) if finance_summary_requested else None
+        ))
     preview = state.get("preview") if isinstance(state.get("preview"), dict) else {}
     if config:
         preview["manual_control"] = "Условия согласуются до запуска. AI-отправка требует отдельного действующего разрешения на точные правила; повторное подтверждение неизменных правил не требуется."
@@ -279,6 +397,7 @@ def preview_creation(cursor: Any, *, business_id: str, user_id: str, actor_conte
                 "setup_flow": setup_flow, "next_step": "accept_provider_routes"}
     return {"status": "ready", "conditions": conditions, "preview": preview, "feasibility": feasibility, "setup_flow": setup_flow,
             "selected_bindings": selected_bindings, "selected_provider_routes": selected_routes,
+            "content_handoff_requested": handoff_requested,
             "clone_metadata": clone_metadata,
             "planner_context": preview.get("openclaw_planner_context") if isinstance(preview.get("openclaw_planner_context"), dict) else {},
             "planner_loop": preview.get("openclaw_planner_loop") if isinstance(preview.get("openclaw_planner_loop"), dict) else {},
@@ -295,7 +414,7 @@ def prepare_creation(cursor: Any, *, business_id: str, user_id: str, actor_conte
     if paid.get("status") != "ready":
         return {"status": "blocked", "code": "AGENT_CREATION_BILLING_BLOCKED", "error": "Создание сейчас недоступно по кредитам.", "billing": paid}
     allowed_keys = ("name", "description", "category", "execution_mode", "schedule_time", "schedule_timezone",
-                    "schedule", "outreach_config", "selected_connection_bindings", "selected_bindings",
+                    "schedule", "outreach_config", "content_handoff_scope", "selected_connection_bindings", "selected_bindings",
                     "selected_provider_routes", "selected_routes", "accepted_provider_routes", "clone_from_blueprint_id", "use_ai_compiler")
     envelope_payload = {key: payload[key] for key in allowed_keys if key in payload}
     # Pin defaults in the approval so a later business timezone edit cannot
@@ -356,6 +475,9 @@ def create_draft(cursor: Any, *, business_id: str, user_id: str, actor_context: 
     planner_context = checked.get("planner_context") or {}
     conditions = checked.get("conditions") or _conditions(cursor, business_id, payload)
     draft = (_outreach_draft(description, conditions["outreach_config"], conditions) if conditions.get("outreach_config") else
+        _content_handoff_draft(description, business_id=business_id, recipient_user_id=user_id, conditions=conditions)
+        if checked.get("content_handoff_requested") else
+        _finance_summary_draft(description,conditions) if _finance_summary_requested(description) else
         build_agent_blueprint_draft(description, str(payload.get("category") or ""),
             use_ai=bool(payload.get("use_ai_compiler")), business_id=business_id, user_id=user_id,
             planner_context=planner_context))

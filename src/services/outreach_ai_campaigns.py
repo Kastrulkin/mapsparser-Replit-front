@@ -40,6 +40,8 @@ def _binding(cursor, campaign, touches, grant, job_id):
     if not all(config.get(key) == rules[key] for key in ('mode','audience','agency_country','sold_destination','offer','language',
             'target_count','search_budget_cents','max_qualification_calls','max_draft_attempts','max_search_calls')):
         return False
+    if any(config.get(key) != rules.get(key) for key in ('requirements', 'search_geography')):
+        return False
     process = rules['process']
     if process['type'] == 'one_off':
         return process['id'] == str(job_id)

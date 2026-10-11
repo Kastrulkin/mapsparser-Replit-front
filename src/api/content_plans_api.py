@@ -12,6 +12,7 @@ from core.auth_helpers import verify_business_access
 from database_manager import DatabaseManager
 from subscription_manager import get_capability_access
 from services.content_plan_service import (
+    ContentPlanItemConflict,
     create_generated_content_plan,
     create_news_from_plan_item,
     delete_content_plan,
@@ -306,6 +307,8 @@ def content_plan_item_update(item_id: str):
         return jsonify({"success": True, "plan": plan})
     except PermissionError as exc:
         return jsonify({"success": False, "error": str(exc)}), 403
+    except ContentPlanItemConflict as exc:
+        return jsonify({"success": False, "error": str(exc), "code": "content_item_stale"}), 409
     except ValueError as exc:
         return jsonify({"success": False, "error": str(exc)}), 404
     except Exception as exc:

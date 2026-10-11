@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, Response, has_request_context, jsonify, request
 
 from core.auth_helpers import require_auth_from_request, verify_business_access, verify_business_write_access
 from database_manager import DatabaseManager
@@ -87,6 +87,10 @@ AGENT_READ_ONLY_POST_ENDPOINTS = {
 
 
 def _agent_request_requires_write() -> bool:
+    # Internal chat operations have an authenticated actor, not an HTTP
+    # request. Require write access there; never downgrade to read access.
+    if not has_request_context():
+        return True
     return (
         request.method not in {"GET", "HEAD", "OPTIONS"}
         and request.endpoint not in AGENT_READ_ONLY_POST_ENDPOINTS
@@ -2782,6 +2786,7 @@ def _execution_step_title(step: dict) -> str:
         "sheets.append_row_request": "Добавить строку после подтверждения",
         "google_sheets.update_cells": "Изменить ячейки после подтверждения",
         "content_plan.item.create_draft": "Сохранить черновик в контент-план",
+        "content.publish_handoff": "Передать готовые посты и фото в Telegram",
         "reviews.reply.draft": "Подготовить черновик ответа",
         "news.generate": "Подготовить публикацию",
         "services.optimize": "Подготовить рекомендации по услугам",
@@ -3029,7 +3034,7 @@ def _agent_schedule_status(blueprint: dict, version: dict | None = None) -> dict
     }
 
 
-def _remember_active_version(cursor, blueprint: dict, version: dict, user_data: dict, action: str, reason: str = "") -> dict:
+def _remember_active_version(cursor, blueprint: dict, version: dict, user_data: dict, action: str, reason: str = "", external_effect_consent: dict | None = None) -> dict:
     blueprint_id = str(blueprint.get("id") or "")
     # Feedback can already hold the blueprint row lock. Never wait here on a
     # worker holding the opposite (lifecycle fence -> blueprint) lock order.
@@ -3049,12 +3054,16 @@ def _remember_active_version(cursor, blueprint: dict, version: dict, user_data: 
         "created_by_user_id": _user_id(user_data),
         "created_at": _utc_now_text(),
     }
+    if isinstance(external_effect_consent, dict):
+        event["external_effect_consent"] = external_effect_consent
     events = metadata.get("version_events") if isinstance(metadata.get("version_events"), list) else []
     events.append(event)
     metadata["active_version_id"] = event["active_version_id"]
     metadata["active_version_number"] = event["active_version_number"]
     metadata["active_version_updated_at"] = event["created_at"]
     metadata["version_events"] = events[-50:]
+    if isinstance(external_effect_consent, dict):
+        metadata["compiled_content_handoff_consent"] = external_effect_consent
     version_payload = build_version_payload_from_row(version)
     custom_process = version_payload.get("runtime_config") if isinstance(version_payload.get("runtime_config"), dict) else None
     if custom_process is None:
@@ -4828,16 +4837,19 @@ def get_agent_blueprint_version_diff(blueprint_id: str, version_id: str):
 
 @agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/snapshots", methods=["POST"])
 def create_agent_compiled_snapshot(blueprint_id: str):
-    from core.auth_context import AuthContext
-    from services.compiled_input_snapshots import create_snapshot, SnapshotUnavailable, SnapshotQuotaExceeded
-    from services.compiled_pilot_access import compiled_pilot_allowed
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    return compiled_snapshot_for_actor(blueprint_id, user_data, request.get_json(silent=True))
+
+
+def compiled_snapshot_for_actor(blueprint_id: str, user_data: dict, payload):
+    from core.auth_context import AuthContext
+    from services.compiled_input_snapshots import create_snapshot, SnapshotUnavailable, SnapshotQuotaExceeded
+    from services.compiled_pilot_access import compiled_pilot_allowed
     session_error = _require_compiled_standard_session(user_data)
     if session_error:
         return session_error
-    payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return _json_error("Ожидается таблица.", 400, "INVALID_JSON_PAYLOAD")
     db = DatabaseManager()
@@ -4851,9 +4863,17 @@ def create_agent_compiled_snapshot(blueprint_id: str):
             return access_error
         if not compiled_pilot_allowed(blueprint.get("business_id")):
             return _json_error("Проверка таблиц пока недоступна для этого бизнеса.", 403, "COMPILED_PILOT_NOT_ALLOWED")
-        snapshot = create_snapshot(cursor, auth=AuthContext.from_session(user_data),
-            blueprint_id=blueprint_id, business_id=blueprint.get("business_id"),
-            input_payload=payload.get("input"), name=payload.get("name"))
+        if payload.get('source_kind') == 'content_plan':
+            from services.compiled_content_program import create_content_snapshot
+            version = _load_blueprint_version_for_blueprint(cursor, blueprint_id, str(payload.get('version_id') or ''))
+            if not version:
+                return _json_error('Выберите сохранённую программу.', 404, 'VERSION_NOT_FOUND')
+            snapshot = create_content_snapshot(cursor, blueprint=blueprint, version=version, user_id=_user_id(user_data))
+            snapshot = {**snapshot, 'id': snapshot['snapshot_id'], 'hash': snapshot['content_hash']}
+        else:
+            snapshot = create_snapshot(cursor, auth=AuthContext.from_session(user_data),
+                blueprint_id=blueprint_id, business_id=blueprint.get("business_id"),
+                input_payload=payload.get("input"), name=payload.get("name"))
         db.conn.commit()
         return jsonify({"success": True, "snapshot": snapshot}), 201
     except SnapshotQuotaExceeded:
@@ -4874,6 +4894,13 @@ def create_agent_compiled_snapshot(blueprint_id: str):
 
 @agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/compile", methods=["POST"])
 def compile_agent_blueprint_script(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    return compiled_compile_for_actor(blueprint_id, user_data, request.get_json(silent=True))
+
+
+def compiled_compile_for_actor(blueprint_id: str, user_data: dict, payload):
     from services.compiled_generation_admission import (
         input_digest,
         mark_generation_failed,
@@ -4883,26 +4910,24 @@ def compile_agent_blueprint_script(blueprint_id: str):
     from services.compiled_pilot_access import compiled_pilot_allowed
     from services.compiled_table_contract import normalize_table_contract, normalize_table_input, table_manifest
     from services.compiled_script_runtime import execute_pilot
-    user_data, error_response = _require_auth()
-    if error_response:
-        return error_response
     session_error = _require_compiled_standard_session(user_data)
     if session_error:
         return session_error
-    payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
     description = str(payload.get("description") or "").strip()
     if not description or len(description) > 3000:
         return _json_error("Опишите процесс для компиляции.", 400, "COMPILED_DESCRIPTION_REQUIRED")
     table_contract = None
+    content_contract = None
+    content_requested = payload.get('content_handoff') is True
     try:
         if "table_contract" in payload:
             table_contract = normalize_table_contract(payload["table_contract"])
     except ValueError:
         return _json_error("Проверьте колонки и правила таблицы.", 422, "COMPILED_TABLE_CONTRACT_INVALID")
     advanced_enabled = _env_enabled("COMPILED_SCRIPT_ADVANCED_ENABLED") and bool(user_data.get("is_superadmin"))
-    if table_contract is None and not advanced_enabled:
+    if table_contract is None and not content_requested and not advanced_enabled:
         return _json_error("Первый compiled-пилот работает только с правилами проверки таблицы.", 403, "COMPILED_TABLE_CONTRACT_REQUIRED")
     if isinstance(payload.get("source"), str) and not advanced_enabled:
         return _json_error("Исходник программы доступен только техническому оператору в advanced-режиме.", 403, "COMPILED_MANUAL_SOURCE_FORBIDDEN")
@@ -4931,10 +4956,24 @@ def compile_agent_blueprint_script(blueprint_id: str):
             return access_error
         if not compiled_pilot_allowed(blueprint.get("business_id")):
             return _json_error("Проверка таблиц пока недоступна для этого бизнеса.", 403, "COMPILED_PILOT_NOT_ALLOWED")
+        if content_requested:
+            from services.compiled_content_program import contract_for
+            base = _resolve_candidate_version(cursor, blueprint) or {}
+            if payload.get('expected_version_id') and str(base.get('id') or '') != str(payload['expected_version_id']):
+                return _json_error('Условия изменились. Загрузите актуальную версию.', 409, 'COMPILED_CONTENT_VERSION_CHANGED')
+            content_base_id = str(base.get('id') or '')
+            try:
+                content_contract = contract_for(base, str(blueprint.get('business_id') or ''))
+            except ValueError:
+                return _json_error('Сначала сохраните условия передачи постов.', 422, 'COMPILED_CONTENT_SCOPE_REQUIRED')
+            generation_digest = input_digest({'request_digest': generation_digest,
+                'content_contract': content_contract, 'base_version_id': str(base.get('id') or '')})
         runner_digest = str(os.getenv("COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST") or "")
         if not runner_digest.startswith("sha256:"):
             return _json_error("Compiled runner ещё не закреплён образом.", 503, "COMPILED_RUNTIME_NOT_READY")
         user_fixtures = payload.get("fixtures") if isinstance(payload.get("fixtures"), list) else []
+        if content_contract is not None and not user_fixtures:
+            return _json_error('Подтвердите пример ожидаемой передачи.', 422, 'COMPILED_USER_FIXTURE_REQUIRED')
         if any(not isinstance(item, dict) or item.get("source") != "user" or "expected" not in item for item in user_fixtures):
             return _json_error("Добавьте подтверждённые пользователем fixtures с expected.", 400, "COMPILED_USER_FIXTURES_INVALID")
         if table_contract is not None:
@@ -4988,6 +5027,10 @@ def compile_agent_blueprint_script(blueprint_id: str):
             if table_contract is not None:
                 generation_options["table_contract"] = table_contract
                 generation_options["validation_fixtures"] = user_fixtures
+            if content_contract is not None:
+                from services.compiled_content_program import validation_fixtures
+                generation_options['content_contract'] = content_contract
+                generation_options['validation_fixtures'] = [*user_fixtures, *validation_fixtures()]
             candidate = generate_candidate_from_description(description, **generation_options)
             provenance = {"mode": "ai_generation", "description": description, "provider": str(candidate.get("source") or "")}
         raw = candidate.get("candidate") if isinstance(candidate.get("candidate"), dict) else {}
@@ -4995,6 +5038,10 @@ def compile_agent_blueprint_script(blueprint_id: str):
         generated_fixtures = [{**item, "source": "generator"} for item in generated_fixtures if isinstance(item, dict)]
         manifest = raw.get("manifest") if isinstance(raw.get("manifest"), dict) else {}
         manifest = table_manifest(table_contract, runner_digest) if table_contract is not None else {**manifest, "runner_image_digest": runner_digest}
+        if content_contract is not None:
+            from services.compiled_content_program import manifest_for, validation_fixtures
+            manifest = manifest_for(content_contract, runner_digest)
+            generated_fixtures = validation_fixtures()
         if table_contract is not None:
             # Model examples are not independent evidence. The user's examples and
             # platform boundary fixtures are compared against the independent oracle.
@@ -5041,6 +5088,10 @@ def compile_agent_blueprint_script(blueprint_id: str):
             return _json_error("Доступ к пилоту изменился.", 403, "COMPILED_PILOT_NOT_ALLOWED")
         cursor.execute("SELECT id FROM agent_blueprints WHERE id = %s FOR UPDATE", (blueprint_id,))
         base = _resolve_candidate_version(cursor, blueprint) or {}
+        if content_requested and (str(base.get('id') or '') != content_base_id or contract_for(base, str(blueprint.get('business_id') or '')) != content_contract):
+            mark_generation_failed(cursor, generation_request_id, 'COMPILED_CONTENT_VERSION_CHANGED')
+            db.conn.commit()
+            return _json_error('Условия изменились во время создания программы. Проверьте новую версию.', 409, 'COMPILED_CONTENT_VERSION_CHANGED')
         version_payload = build_version_payload_from_row(base)
         version_payload["goal"] = description
         version_payload["compiled_artifact"] = artifact
@@ -5065,17 +5116,20 @@ def compile_agent_blueprint_script(blueprint_id: str):
 
 @agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/preview", methods=["POST"])
 def preview_agent_blueprint_script(blueprint_id: str):
-    from services.compiled_pilot_access import compiled_pilot_allowed
-    from services.compiled_input_snapshots import resolve_snapshot, SnapshotUnavailable
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    return compiled_preview_for_actor(blueprint_id, user_data, request.get_json(silent=True))
+
+
+def compiled_preview_for_actor(blueprint_id: str, user_data: dict, payload):
+    from services.compiled_pilot_access import compiled_pilot_allowed
+    from services.compiled_input_snapshots import resolve_snapshot, SnapshotUnavailable
     session_error = _require_compiled_standard_session(user_data)
     if session_error:
         return session_error
     if str(os.getenv("COMPILED_SCRIPT_PREVIEW_ENABLED", "false")).lower() not in {"1", "true", "yes", "on"}:
         return _json_error("Preview compiled scripts пока выключен.", 404, "COMPILED_PREVIEW_DISABLED")
-    payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
     db = DatabaseManager()
@@ -5092,13 +5146,22 @@ def preview_agent_blueprint_script(blueprint_id: str):
         version = _load_blueprint_version_for_blueprint(cursor, blueprint_id, str(payload.get("version_id") or ""))
         if not version:
             return _json_error("Версия не найдена.", 404, "VERSION_NOT_FOUND")
-        if str(version.get("compiled_state") or "") not in {"checking", "needs_fix", "ready_approval"}:
+        saved_artifact = parse_json_field(version.get("compiled_artifact_json"), {})
+        read_only_preview = (version.get("compiled_state") in {"approved", "active"}
+            and bool((saved_artifact.get('manifest') or {}).get('content_handoff_contract')))
+        if not read_only_preview and str(version.get("compiled_state") or "") not in {"checking", "needs_fix", "ready_approval"}:
             return _json_error("Preview уже подтверждённой версии не меняет evidence.", 409, "COMPILED_PREVIEW_STATE_INVALID")
         artifact = parse_json_field(version.get("compiled_artifact_json"), {})
         validation = validate_compiled_script_artifact(artifact)
         if not validation.get("valid"):
             return jsonify({"success": False, "code": "COMPILED_ARTIFACT_INVALID", "validation": validation}), 422
         preview_input = payload.get("input") if isinstance(payload.get("input"), dict) else {}
+        content_context = None
+        content_contract = (artifact.get('manifest') or {}).get('content_handoff_contract')
+        if content_contract:
+            from services.compiled_content_program import delivery_context, authorize_contract
+            authorize_contract(cursor, content_contract, _user_id(user_data))
+            content_context = delivery_context(cursor, content_contract)
         if payload.get("snapshot_id"):
             try:
                 snapshot = resolve_snapshot(cursor, payload["snapshot_id"], blueprint.get("business_id"), _user_id(user_data), blueprint_id)
@@ -5108,6 +5171,8 @@ def preview_agent_blueprint_script(blueprint_id: str):
         db.conn.rollback()
         try:
             preview_result = preview_compiled_script(artifact, preview_input)
+            if content_context:
+                preview_result['delivery_context'] = content_context
         except CompiledRuntimeUnavailable:
             return _json_error("Защищённый runtime для compiled scripts недоступен.", 503, "COMPILED_RUNTIME_UNAVAILABLE")
         except ValueError:
@@ -5122,6 +5187,13 @@ def preview_agent_blueprint_script(blueprint_id: str):
             return _json_error("Доступ к пилоту изменился.", 403, "COMPILED_PILOT_NOT_ALLOWED")
         cursor.execute("SELECT id FROM agent_blueprint_versions WHERE id = %s AND blueprint_id = %s FOR UPDATE", (str(version.get("id") or ""), blueprint_id))
         current = _load_blueprint_version_for_blueprint(cursor, blueprint_id, str(version.get("id") or ""))
+        if read_only_preview:
+            if not current or current.get('compiled_state') != version.get('compiled_state') or current.get('compiled_artifact_hash') != version.get('compiled_artifact_hash'):
+                return _json_error('Версия изменилась. Откройте её снова.', 409, 'COMPILED_PREVIEW_STATE_INVALID')
+            authorize_contract(cursor, content_contract, _user_id(user_data))
+            db.conn.rollback()
+            return jsonify({'success': preview_result.get('status') == 'passed', 'version_id': version['id'],
+                'preview': preview_result, 'read_only': True}), (200 if preview_result.get('status') == 'passed' else 422)
         if not current or current.get("compiled_state") not in {"checking", "needs_fix", "ready_approval"} or current.get("compiled_artifact_hash") != version.get("compiled_artifact_hash"):
             return _json_error("Версия уже изменилась. Откройте её снова.", 409, "COMPILED_PREVIEW_STATE_INVALID")
         if preview_result.get("status") != "passed":
@@ -5141,14 +5213,67 @@ def preview_agent_blueprint_script(blueprint_id: str):
 
 @agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/approve", methods=["POST"])
 def approve_agent_blueprint_script(blueprint_id: str):
-    from services.compiled_pilot_access import compiled_pilot_allowed
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    return compiled_approve_for_actor(blueprint_id, user_data, request.get_json(silent=True))
+
+
+@agent_blueprints_bp.route('/api/agent-blueprints/<blueprint_id>/content-successors', methods=['GET', 'POST'])
+def content_successors(blueprint_id):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    if request.method == 'POST':
+        return content_successor_approve_for_actor(blueprint_id, user_data, request.get_json(silent=True) or {})
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        blueprint, error_response = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if error_response:
+            return error_response
+        cursor.execute("""SELECT job.result_json,plan.id,plan.title,plan.period_start,plan.period_end,
+            plan.generated_plan_json->'meta'->'handoff_approval' approval
+            FROM operator_async_jobs job JOIN contentplans plan ON plan.id::text=job.result_json->>'plan_id'
+            WHERE job.kind='content_plan_network_renewal' AND job.user_id=%s
+              AND job.payload_json->>'blueprint_id'=%s AND plan.plan_status<>'archived'
+            ORDER BY job.created_at DESC LIMIT 20""", (_user_id(user_data),blueprint_id))
+        return jsonify({'success': True, 'plans': [dict(row) for row in cursor.fetchall()]})
+    except (ValueError, PermissionError) as error:
+        db.conn.rollback()
+        return _json_error(str(error), 409, 'CONTENT_PLAN_REVIEW_BLOCKED')
+    finally:
+        db.close()
+
+
+def content_successor_approve_for_actor(blueprint_id, user_data, payload):
     session_error = _require_compiled_standard_session(user_data)
     if session_error:
         return session_error
-    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or payload.get('approved') is not True:
+        return _json_error('Подтвердите проверку текстов и фото плана.', 400, 'CONTENT_PLAN_REVIEW_REQUIRED')
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        blueprint, error_response = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if error_response:
+            return error_response
+        from services.content_network_renewal import approve_successor
+        result = approve_successor(db.conn, blueprint_id=blueprint_id, plan_id=str(payload.get('plan_id') or ''), user_id=_user_id(user_data))
+        db.conn.commit()
+        return jsonify({'success': True, **result})
+    except (ValueError, PermissionError) as error:
+        db.conn.rollback()
+        return _json_error(str(error), 409, 'CONTENT_PLAN_REVIEW_BLOCKED')
+    finally:
+        db.close()
+
+
+def compiled_approve_for_actor(blueprint_id: str, user_data: dict, payload):
+    from services.compiled_pilot_access import compiled_pilot_allowed
+    session_error = _require_compiled_standard_session(user_data)
+    if session_error:
+        return session_error
     if not isinstance(payload, dict):
         return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
     db = DatabaseManager()
@@ -5178,6 +5303,23 @@ def approve_agent_blueprint_script(blueprint_id: str):
             return _json_error("Подтверждение относится к другой версии скрипта.", 409, "COMPILED_APPROVAL_DIGEST_MISMATCH")
         if str(payload.get("fixture_digest") or "") != str(preview_evidence.get("fixture_digest") or ""):
             return _json_error("Подтверждение относится к другому preview evidence.", 409, "COMPILED_APPROVAL_FIXTURE_DIGEST_MISMATCH")
+        contract = (artifact.get('manifest') or {}).get('content_handoff_contract')
+        if contract:
+            from services.compiled_content_program import contract_for, delivery_context, authorize_contract
+            from services.compiled_content_handoff import scope_digest
+            from services.operator_audio import authorize_actor
+            if contract != contract_for(version, str(blueprint.get('business_id') or '')):
+                return _json_error('Условия передачи изменились.', 409, 'COMPILED_CONTENT_SCOPE_CHANGED')
+            authorize_contract(cursor, contract, _user_id(user_data))
+            context = delivery_context(cursor, contract)
+            if context['digest'] != (preview_evidence.get('delivery_context') or {}).get('digest') or context['digest'] != payload.get('delivery_context_digest'):
+                return _json_error('Получатель или условия изменились. Проверьте предпросмотр снова.', 409, 'COMPILED_CONTENT_BINDING_CHANGED')
+            consent = {'version_id': str(version['id']), 'scope': contract['scope'],
+                'scope_digest': scope_digest(version_id=str(version['id']), scope=contract['scope']),
+                'artifact_hash': validation['artifact_hash'], 'telegram_id': context.get('telegram_id'),
+                'delivery_context_digest': context['digest'], 'approved_by_user_id': _user_id(user_data)}
+            cursor.execute("UPDATE agent_blueprints SET metadata_json=COALESCE(metadata_json,'{}'::jsonb)||jsonb_build_object('compiled_content_handoff_consent',%s::jsonb) WHERE id=%s",
+                (json.dumps(consent, ensure_ascii=False), blueprint_id))
         cursor.execute("""UPDATE agent_blueprint_versions SET compiled_state = 'approved', compiled_approved_at = NOW(), compiled_approved_by_user_id = %s
             WHERE id = %s AND blueprint_id = %s""", (_user_id(user_data), str(version.get("id") or ""), blueprint_id))
         cursor.execute("""UPDATE agent_blueprints SET compiled_approved_version_id = %s, updated_at = NOW()
@@ -5201,10 +5343,13 @@ def run_agent_blueprint_script(blueprint_id: str):
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    return compiled_run_for_actor(blueprint_id, user_data, request.get_json(silent=True))
+
+
+def compiled_run_for_actor(blueprint_id: str, user_data: dict, payload):
     session_error = _require_compiled_standard_session(user_data)
     if session_error:
         return session_error
-    payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
     db = DatabaseManager()
@@ -5321,8 +5466,92 @@ def activate_agent_blueprint_version(blueprint_id: str, version_id: str):
                     "activation_gate": activation_gate,
                 }
             ), 400
+        from services.compiled_content_handoff import handoff_scope, scope_digest
+        handoff_consent = None
+        handoff_scope_value = handoff_scope(version, str(blueprint.get("business_id") or ""))
+        if handoff_scope_value and 'business_ids' in handoff_scope_value:
+            from services.compiled_content_program import contract_for, authorize_contract, delivery_context
+            from services.compiled_content_handoff import has_active_consent
+            from services.business_input_settings import resolve
+            contract = contract_for(version, str(blueprint['business_id']))
+            authorize_contract(cursor, contract, _user_id(user_data))
+            if any(str(resolve(cursor, business).get('timezone') or '') != handoff_scope_value['timezone'] for business in handoff_scope_value['business_ids']):
+                return _json_error('Часовой пояс одной из точек изменился.', 409, 'CONTENT_HANDOFF_TIMEZONE_CHANGED')
+            context = delivery_context(cursor, contract)
+            metadata = parse_json_field(blueprint.get('metadata_json'), {})
+            consent = metadata.get('compiled_content_handoff_consent') or {}
+            if (not has_active_consent(metadata, version_id=version_id, scope=handoff_scope_value)
+                    or consent.get('delivery_context_digest') != context['digest']
+                    or consent.get('artifact_hash') != version.get('compiled_artifact_hash')):
+                return _json_error('Сначала пройдите предпросмотр и утвердите сетевую программу.', 409, 'CONTENT_HANDOFF_CONSENT_REQUIRED')
+            expected_digest = scope_digest(version_id=version_id, scope=handoff_scope_value)
+            if str(payload.get('external_send_consent_digest') or '') != expected_digest:
+                return jsonify({'success': False, 'confirm_required': True, 'code': 'CONTENT_HANDOFF_CONSENT_REQUIRED',
+                    'scope': handoff_scope_value, 'scope_digest': expected_digest,
+                    'confirmation_message': 'Включить передачу готовых материалов всех выбранных точек обоим получателям в 10:00 накануне публикации? Новые планы остаются на вашей проверке. Публикации на площадках не запускаются.'})
+            handoff_consent = consent
+        elif handoff_scope_value:
+            from services.business_input_settings import resolve
+            current_timezone = str(resolve(cursor, handoff_scope_value["business_id"]).get("timezone") or "")
+            if current_timezone != handoff_scope_value["timezone"]:
+                return jsonify({
+                    "success": False,
+                    "code": "CONTENT_HANDOFF_TIMEZONE_CHANGED",
+                    "error": "Часовой пояс точки изменился. Пересоберите сценарий перед включением.",
+                }), 409
+            expected_digest = scope_digest(version_id=version_id, scope=handoff_scope_value)
+            cursor.execute(
+                """SELECT p.telegram_id,u.name,u.is_active FROM telegramcontrolpreferences p
+                   JOIN users u ON u.id=p.user_id WHERE p.user_id=%s LIMIT 1""",
+                (handoff_scope_value["recipient_user_id"],),
+            )
+            recipient_binding = cursor.fetchone() or {}
+            if not recipient_binding.get("is_active") or not str(recipient_binding.get("telegram_id") or "").strip():
+                return jsonify({
+                    "success": False,
+                    "code": "CONTENT_HANDOFF_RECIPIENT_NOT_CONNECTED",
+                    "error": "Для сценария нужен подключённый Telegram-получатель с доступом к этому бизнесу.",
+                }), 409
+            from services.operator_audio import authorize_actor
+            try:
+                authorize_actor(cursor, handoff_scope_value["recipient_user_id"], handoff_scope_value["business_id"], check_subscription=False)
+            except PermissionError:
+                return jsonify({
+                    "success": False,
+                    "code": "CONTENT_HANDOFF_RECIPIENT_ACCESS_REQUIRED",
+                    "error": "У получателя должен быть доступ к бизнесу, для которого настраивается передача.",
+                }), 409
+            # Activation is the one-time approval surface for a scheduled
+            # external send. The approval is cryptographically bound to this
+            # exact immutable version and its recipient/channel/time scope.
+            if str(payload.get("external_send_consent_digest") or "") != expected_digest:
+                return jsonify({
+                    "success": False,
+                    "confirm_required": True,
+                    "code": "CONTENT_HANDOFF_CONSENT_REQUIRED",
+                    "scope": handoff_scope_value,
+                    "scope_digest": expected_digest,
+                    "confirmation_message": (
+                        "Подтвердите включение автоматической передачи только готовых постов "
+                        f"для получателя {recipient_binding.get('name') or 'из подключённого Telegram-аккаунта'}; "
+                        f"каналы: {', '.join(handoff_scope_value['platforms'])}; за {handoff_scope_value['lead_days']} дн. "
+                        f"в {handoff_scope_value['time']} по времени точки. Публикация на площадках не выполняется."
+                    ),
+                })
+            handoff_consent = {
+                "version_id": str(version_id),
+                "scope": handoff_scope_value,
+                "scope_digest": expected_digest,
+                "approved_by_user_id": _user_id(user_data),
+                "approved_at": _utc_now_text(),
+                "telegram_id": str(recipient_binding['telegram_id']),
+                "artifact_hash": str(version.get('compiled_artifact_hash') or ''),
+            }
         active_before = _resolve_active_version(cursor, blueprint)
-        event = _remember_active_version(cursor, blueprint, version, user_data, "activated", str(payload.get("reason") or ""))
+        event = _remember_active_version(
+            cursor, blueprint, version, user_data, "activated", str(payload.get("reason") or ""),
+            external_effect_consent=handoff_consent,
+        )
         db.conn.commit()
         return jsonify(
             {

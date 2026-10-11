@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from services.media_library_scope import PHOTO_LIBRARY_SCOPE_SQL, PHOTO_USAGE_LIBRARY_SCOPE_SQL
+
 import json
 import sys
 import urllib.error
@@ -91,13 +93,15 @@ def _selected_media_assets(cursor: Any, post: dict[str, Any], limit: int = 10) -
         return result[:normalized_limit]
     try:
         cursor.execute(
-            """
+            f"""
             SELECT pa.id, pa.asset_version, pa.content_hash, pa.original_url, pa.storage_key, pa.versions_json, pa.metadata_json,
                    usage.target_platform, usage.created_at
             FROM photo_asset_usage_events usage
             JOIN photo_assets pa
               ON pa.id = usage.photo_asset_id
-             AND pa.business_id = usage.business_id
+             AND pa.business_id IN ({PHOTO_USAGE_LIBRARY_SCOPE_SQL})
+             AND pa.metadata_json->>'publication_candidate' IS DISTINCT FROM 'false'
+             AND pa.category IS DISTINCT FROM 'document'
             WHERE usage.business_id = %s
               AND usage.usage_type = 'publication'
               AND usage.target_id = ANY(%s)
@@ -136,10 +140,12 @@ def _strict_selected_media_assets(cursor: Any, post: dict[str, Any], limit: int 
         raise ValueError("Для публикации выбрано слишком много медиафайлов; выберите не более 10.")
     if inline_ids:
         cursor.execute(
-            """
+            f"""
             SELECT id, asset_version, content_hash, original_url, storage_key, versions_json, metadata_json
             FROM photo_assets
-            WHERE business_id=%s AND id = ANY(%s)
+            WHERE business_id IN ({PHOTO_LIBRARY_SCOPE_SQL}) AND id = ANY(%s)
+              AND metadata_json->>'publication_candidate' IS DISTINCT FROM 'false'
+              AND category IS DISTINCT FROM 'document'
             """,
             (business_id, inline_ids),
         )
@@ -149,14 +155,16 @@ def _strict_selected_media_assets(cursor: Any, post: dict[str, Any], limit: int 
             raise ValueError("Выбранное медиа больше недоступно; выберите файл заново.")
     else:
         cursor.execute(
-        """
+        f"""
         SELECT pa.id, pa.asset_version, pa.content_hash, pa.original_url,
                pa.storage_key, pa.versions_json, pa.metadata_json,
                usage.created_at
         FROM photo_asset_usage_events usage
         JOIN photo_assets pa
           ON pa.id = usage.photo_asset_id
-         AND pa.business_id = usage.business_id
+         AND pa.business_id IN ({PHOTO_USAGE_LIBRARY_SCOPE_SQL})
+         AND pa.metadata_json->>'publication_candidate' IS DISTINCT FROM 'false'
+         AND pa.category IS DISTINCT FROM 'document'
         WHERE usage.business_id = %s
           AND usage.usage_type = 'publication'
           AND usage.target_id = ANY(%s)
@@ -225,10 +233,12 @@ def _approved_media_assets(cursor: Any, post: dict[str, Any], snapshot: dict[str
     if len(asset_ids) != len(approved) or len(set(asset_ids)) != len(asset_ids):
         return None
     cursor.execute(
-        """
+        f"""
         SELECT id, asset_version, content_hash, original_url, storage_key, versions_json
         FROM photo_assets
-        WHERE business_id=%s AND id = ANY(%s)
+        WHERE business_id IN ({PHOTO_LIBRARY_SCOPE_SQL}) AND id = ANY(%s)
+          AND metadata_json->>'publication_candidate' IS DISTINCT FROM 'false'
+          AND category IS DISTINCT FROM 'document'
         """,
         (business_id, asset_ids),
     )

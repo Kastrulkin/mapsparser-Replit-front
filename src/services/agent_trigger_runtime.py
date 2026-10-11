@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict
@@ -385,6 +386,12 @@ def dispatch_due_scheduled_agent_blueprints(
     for blueprint in blueprints:
         if should_stop and should_stop():
             break
+        # Optional release fence: never evaluate, pause or enqueue another
+        # active schedule when enabling a narrowly approved pilot.
+        scheduled_ids = {value.strip() for value in os.getenv('AGENT_SCHEDULE_BLUEPRINT_IDS', '').split(',') if value.strip()}
+        if scheduled_ids and str(blueprint.get('id') or '') not in scheduled_ids:
+            skipped.append({'blueprint_id': str(blueprint.get('id') or ''), 'reason': 'outside_schedule_allowlist'})
+            continue
         checked_blueprints.append(blueprint)
         canary = evaluate_agent_canary_budget(
             cursor,

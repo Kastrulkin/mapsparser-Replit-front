@@ -424,6 +424,8 @@ export type AgentUnifiedBillingLedger = {
 };
 
 export type AgentBlueprintDetails = {
+  compiled_approved_version?: Record<string, unknown> | null;
+  compiled_access?: { preview?: boolean; execute?: boolean };
   blueprint?: AgentBlueprint;
   versions: Array<Record<string, unknown>>;
   runs: AgentRun[];

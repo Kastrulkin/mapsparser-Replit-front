@@ -253,11 +253,13 @@ def create_uploaded_photo_asset(
 
 
 def list_photo_assets(cursor: Any, business_id: str) -> list[dict[str, Any]]:
+    from services.media_library_scope import PHOTO_LIBRARY_SCOPE_SQL, PHOTO_PUBLICATION_SQL
     cursor.execute(
-        """
+        f"""
         SELECT *
         FROM photo_assets
-        WHERE business_id = %s AND metadata_json->>'disk_import_available' IS DISTINCT FROM 'false'
+        WHERE business_id IN ({PHOTO_LIBRARY_SCOPE_SQL}) AND metadata_json->>'disk_import_available' IS DISTINCT FROM 'false'
+          AND {PHOTO_PUBLICATION_SQL}
         ORDER BY quality_score DESC, updated_at DESC
         LIMIT 200
         """,
@@ -471,10 +473,10 @@ def recommend_media_for_post(
         """
         SELECT id, theme, goal, draft_text, content_type
         FROM contentplanitems
-        WHERE id = %s
+        WHERE id = %s AND business_id = %s
         LIMIT 1
         """,
-        (content_plan_item_id,),
+        (content_plan_item_id, business_id),
     )
     item = _row_to_dict(cursor, cursor.fetchone())
     if not item:
@@ -483,10 +485,10 @@ def recommend_media_for_post(
         """
         SELECT platform
         FROM social_posts
-        WHERE content_plan_item_id = %s
+        WHERE content_plan_item_id = %s AND business_id = %s
         ORDER BY platform
         """,
-        (content_plan_item_id,),
+        (content_plan_item_id, business_id),
     )
     platforms = [str((_row_to_dict(cursor, row) or {}).get("platform") or "") for row in (cursor.fetchall() or [])]
     platforms = [platform for platform in platforms if platform]
@@ -549,6 +551,7 @@ def record_photo_usage(
     target_platform: str = "",
     metadata: dict[str, Any] | None = None,
 ) -> None:
+    from services.media_library_scope import PHOTO_LIBRARY_SCOPE_SQL
     cursor.execute(
         """
         INSERT INTO photo_asset_usage_events (
@@ -559,10 +562,10 @@ def record_photo_usage(
         (str(uuid.uuid4()), photo_asset_id, business_id, usage_type, target_id or None, target_platform or None, Json(metadata or {})),
     )
     cursor.execute(
-        """
+        f"""
         UPDATE photo_assets
         SET last_used_at = %s, updated_at = NOW()
-        WHERE id = %s AND business_id = %s
+        WHERE id = %s AND business_id IN ({PHOTO_LIBRARY_SCOPE_SQL})
         """,
         (datetime.now(timezone.utc), photo_asset_id, business_id),
     )

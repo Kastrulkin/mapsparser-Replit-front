@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { ContentHandoffProgram, hasContentHandoff } from '@/components/agents/ContentHandoffProgram';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
@@ -990,6 +991,12 @@ export const AgentBlueprintsView = ({ scope }) => {
                     ) : null}
                   </div>
                 ) : workspaceMode === 'scenario' ? (
+                  hasContentHandoff(blueprintDetails) ? <ContentHandoffProgram
+                    blueprintId={selectedBlueprint.id}
+                    details={blueprintDetails}
+                    onRunQueued={(runId) => { void loadRun(runId); }}
+                    onSaved={() => void loadBlueprintDetails(selectedBlueprint.id)}
+                  /> :
                   <EmployeeAgentScenarioPanel
                     blueprint={selectedBlueprint}
                     details={blueprintDetails}

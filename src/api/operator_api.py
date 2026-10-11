@@ -8,7 +8,8 @@ import json
 import logging
 import re
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import Blueprint, jsonify, request
 
@@ -100,48 +101,9 @@ operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
 logger = logging.getLogger(__name__)
 
 
-MOBILE_NAVIGATION_CAPABILITIES = {
-    "feed": "telegram_radar",
-    "reviews": "maps.reviews",
-    "operator": "operator",
-    "progress": "progress",
-    "cards": "maps",
-    "content": "social_content",
-    "services": "maps.services",
-    "work_journal": "operator",
-    "finance": "finance",
-    "partnerships": "partnerships",
-    "influencers": "influencers",
-    "agents": "agents",
-    "community_sources": "telegram_radar",
-}
-MOBILE_MODULE_CAPABILITIES = {
-    "cards": "maps",
-    "content": "social_content",
-    "services": "maps.services",
-    "finance": "finance",
-    "analytics": "finance",
-    "partnerships": "partnerships",
-    "agents": "agents",
-}
-MOBILE_ACTION_CAPABILITIES = {
-    "cards.": "maps",
-    "content.": "social_content",
-    "finance.": "finance",
-    "partnerships.": "partnerships",
-    "agents.": "agents",
-    "reviews.": "maps.reviews",
-    "services.": "maps.services",
-    "community_sources.": "telegram_radar",
-}
-JOURNEY_FLOW_CAPABILITIES = {
-    "maps": "maps",
-    "content": "social_content",
-    "influencer": "influencers",
-    "partnership": "partnerships",
-    "automation": "automation",
-    "average_ticket": "average_ticket",
-}
+def _content_handoff_status(metadata):
+    from services.content_delivery_status import delivery_status
+    return delivery_status(metadata)
 
 
 def _inline_scope_subscription_access(scope: dict) -> dict | None:
@@ -1338,7 +1300,7 @@ def operator_chat():
             channel=str(payload.get("channel") or "web"), message=message, payload=payload,
             router=route_operator_message,
             subscription_access=_scope_subscription_access(cursor, business_scope, bool(user_data.get("is_superadmin"))),
-            actor_context={"role": "business_owner" if owner_id == user_id else "business_user", "is_superadmin": bool(user_data.get("is_superadmin")), "permissions": ["business.access"], "session_kind": user_data.get("session_kind", "standard"), "impersonating": bool(user_data.get("impersonating") or user_data.get("impersonated_by"))},
+            actor_context={"role": "business_owner" if owner_id == user_id else "business_user", "is_superadmin": bool(user_data.get("is_superadmin")), "permissions": ["business.access"], "session_kind": user_data.get("session_kind", "standard"), "scope_business_id": user_data.get('scope_business_id'), "impersonating": bool(user_data.get("impersonating") or user_data.get("impersonated_by"))},
             refresh_handler=refresh_reviews_from_operator, ai_router_handler=classify_operator_intent_with_ai,
             manual_review_handler=process_operator_chat_message,
         )
@@ -2477,6 +2439,163 @@ def operator_today():
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         payload = build_mobile_today(cursor, scope=scope, user_id=user_id)
         return jsonify({"success": True, **payload})
+    finally:
+        db.close()
+
+
+@operator_bp.route("/content/today", methods=["GET"])
+def operator_content_today():
+    """Read-only publication overview for the selected authorized scope or LocalOS platform."""
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_operator_read_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        if scope.get("kind") == "platform" and not bool(user_data.get("is_superadmin")):
+            return jsonify({"success": False, "error": "Раздел доступен только администратору LocalOS"}), 403
+        platform_scope = scope.get("kind") == "platform"
+        business_ids = [str(value) for value in scope.get("business_ids") or []]
+        from_date_text = str(request.args.get("from_date") or "").strip()
+        to_date_text = str(request.args.get("to_date") or "").strip()
+        try:
+            from_date = date.fromisoformat(from_date_text) if from_date_text else None
+            to_date = date.fromisoformat(to_date_text) if to_date_text else None
+        except ValueError:
+            return jsonify({"success": False, "error": "Дата должна быть в формате YYYY-MM-DD"}), 400
+        if bool(from_date) != bool(to_date):
+            return jsonify({"success": False, "error": "Укажите обе границы периода"}), 400
+        if from_date and to_date and (to_date < from_date or (to_date - from_date).days > 90):
+            return jsonify({"success": False, "error": "Период должен быть от 1 до 91 дня"}), 400
+        cursor.execute(
+            """SELECT b.id, b.name, b.address,
+                      COALESCE(NULLIF(settings.timezone, ''), to_jsonb(b)->>'timezone') AS timezone
+               FROM businesses b
+               LEFT JOIN business_finance_settings settings ON settings.business_id = b.id
+               WHERE b.entity_group = 'client' AND COALESCE(b.is_active, TRUE) = TRUE
+                 AND (%s OR b.id = ANY(%s))
+               ORDER BY b.name""",
+            (platform_scope, business_ids),
+        )
+        businesses = [dict(row) for row in cursor.fetchall() or []]
+        zones: dict[str, tuple[ZoneInfo, str]] = {}
+        warnings: list[str] = []
+        now_utc = datetime.now(timezone.utc)
+        for business in businesses:
+            business_id = str(business.get("id") or "")
+            zone_name = str(business.get("timezone") or "").strip()
+            if not zone_name:
+                zones[business_id] = (ZoneInfo("UTC"), "UTC")
+                warnings.append(f"{business.get('name')}: часовой пояс не задан, даты показаны по UTC.")
+                continue
+            try:
+                zones[business_id] = (ZoneInfo(zone_name), zone_name)
+            except (ZoneInfoNotFoundError, ValueError):
+                zones[business_id] = (ZoneInfo("UTC"), "UTC")
+                warnings.append(f"{business.get('name')}: неизвестный часовой пояс «{zone_name}», даты показаны по UTC.")
+        if not businesses:
+            return jsonify({"success": True, "businesses": [], "warnings": warnings})
+        if from_date and to_date:
+            utc_start = datetime.combine(from_date - timedelta(days=2), datetime.min.time(), tzinfo=timezone.utc)
+            utc_end = datetime.combine(to_date + timedelta(days=3), datetime.min.time(), tzinfo=timezone.utc)
+        else:
+            utc_start, utc_end = now_utc - timedelta(days=1), now_utc + timedelta(days=2)
+        cursor.execute(
+            """SELECT post.id, post.business_id, post.content_plan_item_id, post.platform,
+                      post.status, post.publish_mode, post.scheduled_for,
+                      COALESCE(NULLIF(BTRIM(item.theme), ''), NULLIF(BTRIM(post.platform_text), ''), 'Без темы') AS title,
+                      post.provider_post_url, post.metadata_json
+               FROM social_posts post
+               LEFT JOIN contentplanitems item ON item.id = post.content_plan_item_id
+               WHERE post.business_id = ANY(%s)
+                 AND post.scheduled_for >= %s AND post.scheduled_for < %s
+               ORDER BY post.business_id, post.scheduled_for, post.platform""",
+            ([str(item.get("id")) for item in businesses], utc_start, utc_end),
+        )
+        posts = [dict(row) for row in cursor.fetchall() or []]
+        grouped: dict[str, list[dict]] = {str(item.get("id")): [] for item in businesses}
+        scheduled_item_ids: set[str] = set()
+        for post in posts:
+            business_id = str(post.get("business_id") or "")
+            zone_info = zones.get(business_id)
+            scheduled = post.get("scheduled_for")
+            if not zone_info or not isinstance(scheduled, (datetime, date)):
+                continue
+            if isinstance(scheduled, datetime):
+                scheduled_utc = scheduled.replace(tzinfo=timezone.utc) if scheduled.tzinfo is None else scheduled.astimezone(timezone.utc)
+                local_time = scheduled_utc.astimezone(zone_info[0])
+            else:
+                local_time = datetime.combine(scheduled, datetime.min.time(), tzinfo=zone_info[0])
+            local_today = now_utc.astimezone(zone_info[0]).date()
+            if from_date and to_date:
+                if not (from_date <= local_time.date() <= to_date):
+                    continue
+            elif local_time.date() != local_today:
+                continue
+            metadata = post.get("metadata_json")
+            if isinstance(metadata, str):
+                try:
+                    metadata = json.loads(metadata)
+                except (TypeError, ValueError):
+                    metadata = {}
+            handoff_status = _content_handoff_status(metadata)
+            grouped.setdefault(business_id, []).append({
+                "id": str(post.get("id") or ""), "channel": str(post.get("platform") or ""),
+                "status": str(post.get("status") or "unknown"), "publish_mode": str(post.get("publish_mode") or ""),
+                "scheduled_for": local_time.isoformat(), "title": str(post.get("title") or "Без темы"),
+                "url": str(post.get("provider_post_url") or "") or None,
+                "local_date": local_time.date().isoformat(),
+                "handoff_status": handoff_status,
+            })
+            if post.get("content_plan_item_id"):
+                scheduled_item_ids.add(str(post.get("content_plan_item_id")))
+        cursor.execute(
+            """SELECT item.id, item.business_id, item.status, item.scheduled_for,
+                      COALESCE(NULLIF(BTRIM(item.theme), ''), 'Без темы') AS title
+               FROM contentplanitems item
+               JOIN contentplans plan ON plan.id = item.plan_id
+               WHERE item.business_id = ANY(%s)
+                 AND COALESCE(plan.plan_status, '') <> 'archived'
+                 AND COALESCE(item.status, '') NOT IN ('archived', 'published')
+                 AND item.scheduled_for >= %s AND item.scheduled_for < %s
+               ORDER BY item.business_id, item.scheduled_for""",
+            ([str(item.get("id")) for item in businesses], utc_start, utc_end),
+        )
+        for item in cursor.fetchall() or []:
+            plan_item = dict(item)
+            business_id = str(plan_item.get("business_id") or "")
+            item_id = str(plan_item.get("id") or "")
+            if item_id in scheduled_item_ids or business_id not in zones:
+                continue
+            scheduled = plan_item.get("scheduled_for")
+            if not isinstance(scheduled, (datetime, date)):
+                continue
+            zone = zones[business_id][0]
+            if isinstance(scheduled, datetime):
+                scheduled_utc = scheduled.replace(tzinfo=timezone.utc) if scheduled.tzinfo is None else scheduled.astimezone(timezone.utc)
+                local_time = scheduled_utc.astimezone(zone)
+            else:
+                local_time = datetime.combine(scheduled, datetime.min.time(), tzinfo=zone)
+            local_today = now_utc.astimezone(zone).date()
+            if (from_date and to_date and from_date <= local_time.date() <= to_date) or (
+                not from_date and local_time.date() == local_today
+            ):
+                grouped.setdefault(business_id, []).append({
+                    "id": item_id, "channel": "не подготовлено", "status": str(plan_item.get("status") or "planned"),
+                    "publish_mode": "", "scheduled_for": local_time.isoformat(),
+                    "title": str(plan_item.get("title") or "Без темы"), "url": None,
+                })
+        return jsonify({"success": True, "date": now_utc.date().isoformat(), "businesses": [
+            {"id": str(item.get("id")), "name": str(item.get("name") or "Без названия"),
+             "address": str(item.get("address") or ""),
+             "timezone": zones.get(str(item.get("id")), (ZoneInfo("UTC"), "UTC"))[1],
+             "posts": grouped.get(str(item.get("id")), [])}
+            for item in businesses
+        ], "from_date": from_date.isoformat() if from_date else None,
+            "to_date": to_date.isoformat() if to_date else None, "warnings": warnings})
     finally:
         db.close()
 
@@ -4433,3 +4552,7 @@ register_workday_routes(operator_bp)
 
 from api.operator_input_settings_api import register_input_settings_routes
 register_input_settings_routes(operator_bp)
+from api.business_member_directory_api import register_member_directory_routes
+register_member_directory_routes(operator_bp)
+from api.business_management_api import register_business_management_routes
+register_business_management_routes(operator_bp)

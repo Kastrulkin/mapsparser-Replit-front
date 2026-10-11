@@ -50,6 +50,7 @@ def _number(text):
 
 
 def verify_revenue(message, arguments):
+    message=re.split(r'\bа\s+не\b|\bэто\s+замена\b',message,maxsplit=1,flags=re.I)[0]
     result=dict(arguments)
     if result.get('kind','daily')!='daily' or result.get('mode','set')!='set':
         return result
@@ -81,11 +82,15 @@ def daily_statement(message, previous=None):
     """Parse only explicit local-day totals; ambiguous or detailed sales use the planner."""
     if re.search(r'\?|\b(?:если|допустим|пример)\b|не (?:записывай|сохраняй)|итог месяца|за месяц',message,re.I):
         return None
-    if not re.search(r'\b(?:сегодня|вчера)\b',message,re.I) or not re.search(r'выручк|чек',message,re.I):
+    if re.match(r'\s*(?:покажи|покажите|сколько|прочитай|выведи|какая|какой)\b',message,re.I):
         return None
-    if re.search(r'добавь|ещ[её]|увелич|отмен',message,re.I):
+    explicit_date=re.search(r'\b\d{4}-\d{2}-\d{2}\b',message)
+    if (not explicit_date and not re.search(r'\b(?:сегодня|вчера)\b',message,re.I)) or not re.search(r'выручк|чек',message,re.I):
         return None
-    result={'kind':'daily','date':'yesterday' if re.search(r'\bвчера\b',message,re.I) else 'today','mode':'set'}
+    if re.search(r'\b(?:добавь|ещ[её]|увелич\w*|отмен\w*)\b',message,re.I):
+        return None
+    message=re.split(r'\bа\s+не\b|\bэто\s+замена\b',message,maxsplit=1,flags=re.I)[0]
+    result={'kind':'daily','date':explicit_date.group() if explicit_date else 'yesterday' if re.search(r'\bвчера\b',message,re.I) else 'today','mode':'set'}
     values=dict((previous or {}).get('data') or {})
     for key,pattern in [
         ('checks',r'('+_AMOUNT+r')\s+чек(?:а|ов)?\b(?!\s+с\s+доп)'),

@@ -1093,11 +1093,25 @@ class AgentBlueprintRunner:
                              "summary": "Проверка завершена. Запись в таблицу не выполнялась."}, ensure_ascii=False), step_id),
             )
             return True
+        if canonical_capability == "content.publish_handoff" and (
+            run_input.get("preview_mode") is True or run_input.get("external_side_effects_allowed") is False
+        ):
+            step_id = self._insert_step(run, step, step_index, "completed", {}, {})
+            self.cursor.execute(
+                "UPDATE agent_run_steps SET completed_at=NOW(), output_json=%s::jsonb WHERE id=%s",
+                (json.dumps({"capability": capability, "status": "preview_only", "external_dispatch_performed": False,
+                             "publish_performed": False}, ensure_ascii=False), step_id),
+            )
+            return True
         required_type = str(step.get("required_approval_type") or "").strip()
         # A previous unrelated decision is not approval for this step. Legacy
         # writers must explicitly declare the decision type they depend on.
         approval_verified = bool(required_type) and self._has_required_approval(str(run.get("id")), step)
-        if self._capability_requires_approval(capability, step, payload) and not approval_verified:
+        standing_handoff_consent = (
+            canonical_capability == "content.publish_handoff"
+            and self._has_scheduled_content_handoff_consent(run, version, payload)
+        )
+        if self._capability_requires_approval(capability, step, payload) and not (approval_verified or standing_handoff_consent):
             error_text = f"approval required before capability: {capability}"
             if required_type:
                 error_text = f"approval required before capability: {capability} ({required_type})"
@@ -1155,10 +1169,18 @@ class AgentBlueprintRunner:
             "idempotency_key": f"agent-run:{run.get('id')}:{step.get('key')}",
             "capability": capability,
             "payload": payload,
-            "approval": {"source": "agent_blueprint", "run_id": run.get("id")},
+            "approval": {
+                "source": "agent_blueprint",
+                "run_id": run.get("id"),
+                "content_handoff_consent": standing_handoff_consent,
+            },
             "billing": {"source": "agent_blueprint"},
         }
-        orchestrator_result = self.orchestrator.execute(envelope, user_data, allow_execute_when_approved=approval_verified)
+        orchestrator_result = self.orchestrator.execute(
+            envelope,
+            user_data,
+            allow_execute_when_approved=approval_verified or standing_handoff_consent,
+        )
         if not orchestrator_result.get("success"):
             validation_error = str(orchestrator_result.get("error") or "orchestrator rejected capability")
             runtime_contract = self._production_action_runtime_contract(
@@ -3439,6 +3461,42 @@ class AgentBlueprintRunner:
         effective_payload = payload if isinstance(payload, dict) else step.get("payload")
         risk = evaluate_risk_policy(canonical, effective_payload if isinstance(effective_payload, dict) else {}, {})
         return bool(metadata.get("approval_required") or risk.get("requires_human"))
+
+    def _has_scheduled_content_handoff_consent(
+        self,
+        run: Dict[str, Any],
+        version: Dict[str, Any],
+        payload: Dict[str, Any],
+    ) -> bool:
+        """A one-time activation consent applies only to the pinned scheduled scope."""
+        run_input = self._run_input(run)
+        source_event = run_input.get("source_event") if isinstance(run_input.get("source_event"), dict) else {}
+        if (
+            run_input.get("trigger") not in {"schedule.daily", "schedule.weekly"}
+            or source_event.get("source") != "scheduler"
+            or str(run.get("blueprint_version_id") or version.get("id") or "") != str(version.get("id") or "")
+            or str(version.get("execution_mode") or "") != "scheduled"
+        ):
+            return False
+        from services.compiled_content_handoff import handoff_scope, has_active_consent
+
+        self.cursor.execute("SELECT status, metadata_json FROM agent_blueprints WHERE id=%s LIMIT 1", (run.get("blueprint_id"),))
+        row = self.cursor.fetchone()
+        blueprint = dict(row) if row else {}
+        if blueprint.get("status") != "active":
+            return False
+        metadata = parse_json_field(blueprint.get("metadata_json"), {})
+        scope = handoff_scope(version, str(blueprint.get("business_id") or run.get("business_id") or ""))
+        if not scope or scope != {
+            "business_id": str(payload.get("business_id") or ""),
+            "recipient_user_id": str(payload.get("recipient_user_id") or ""),
+            "platforms": sorted(payload.get("platforms") or []),
+            "lead_days": payload.get("lead_days"),
+            "time": str(payload.get("time") or ""),
+            "timezone": str(payload.get("timezone") or ""),
+        }:
+            return False
+        return has_active_consent(metadata, version_id=str(version.get("id") or ""), scope=scope)
 
     def _build_approval_payload(self, run: Dict[str, Any], step: Dict[str, Any]) -> Dict[str, Any]:
         payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}

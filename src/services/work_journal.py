@@ -11,7 +11,9 @@ from services.operator_conversations import _row
 
 
 def enabled(business_id):
-    return business_id in {v.strip() for v in os.getenv('OPERATOR_WORK_JOURNAL_BUSINESS_IDS','').split(',') if v.strip()}
+    if os.getenv('OPERATOR_BUSINESS_INFORMATION_ENABLED', '').casefold() in {'1','true'}:
+        return True
+    return business_id in {value.strip() for value in os.getenv('OPERATOR_WORK_JOURNAL_BUSINESS_IDS', '').split(',') if value.strip()}
 
 
 def installed(cursor):
@@ -30,19 +32,18 @@ def scope(cursor,business_id,user_id,write=False,owner_only=False):
     owner=actor.get('role')=='business_owner' or bool(actor.get('is_superadmin'))
     role='owner' if owner else 'viewer'
     if not owner:
-        cursor.execute("SELECT role FROM business_members WHERE business_id=%s AND user_id=%s AND status='active'",(business_id,user_id))
-        membership=_row(cursor,cursor.fetchone())
-        if not membership:
-            cursor.execute("""SELECT m.role FROM network_members m JOIN businesses b ON b.network_id=m.network_id
-                WHERE b.id=%s AND m.user_id=%s AND m.status='active'""",(business_id,user_id))
-            membership=_row(cursor,cursor.fetchone())
-        if not membership:raise PermissionError('Доступ сотрудника к бизнесу отозван.')
-        role=membership.get('role') or 'viewer'
+        cursor.execute("""SELECT role FROM business_members WHERE business_id=%s AND user_id=%s AND status='active'
+            UNION ALL SELECT m.role FROM network_members m JOIN businesses b ON b.network_id=m.network_id
+            WHERE b.id=%s AND m.user_id=%s AND m.status='active'""",(business_id,user_id,business_id,user_id))
+        roles={_row(cursor,row).get('role') for row in cursor.fetchall()}
+        if not roles:raise PermissionError('Доступ сотрудника к бизнесу отозван.')
+        role=next((value for value in ('owner','admin','manager','member','master','viewer') if value in roles),'viewer')
     if owner_only and not owner:raise PermissionError('Правила и привязки сотрудников изменяет владелец бизнеса.')
-    if write and role not in {'owner','manager','member'}:raise PermissionError('Нет права вносить рабочие сведения.')
+    from services.business_permissions import roles_allow
+    if write and not roles_allow([role], 'work.facts.write'):raise PermissionError('Нет права вносить рабочие сведения.')
     cursor.execute('SELECT master_id FROM business_master_bindings WHERE business_id=%s AND user_id=%s',(business_id,user_id))
     master_id=_row(cursor,cursor.fetchone()).get('master_id')
-    return {'user_id':user_id,'role':role,'all_visits':role in {'owner','manager'},'master_id':master_id}
+    return {'user_id':user_id,'role':role,'all_visits':role in {'owner','manager','admin'},'master_id':master_id}
 
 
 def local_day(cursor,business_id,value=None):
@@ -191,6 +192,11 @@ def save_note(cursor,business_id,user_id,channel,message_id,request_key,original
             raise ValueError('Вопрос или предположение не сохраняется как произошедшее событие.')
     elif not before:raise ValueError('Укажите запись для отмены.')
     facts=dict(before.get('facts_json') or {})
+    if 'operational' in args:
+        from services.operator_day_facts import validate
+        facts['operational']=validate(cursor,business_id,args['operational'],quote)
+    elif before and quote and quote != facts.get('quote'):
+        facts.pop('operational',None)
     if quote and quote!=facts.get('quote') and before and 'outcome' not in args:
         facts.update(outcome='note',reason=None,addon_service_id=None)
     for key in ('outcome','reason','addon_service_id'):

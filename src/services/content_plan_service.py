@@ -7,13 +7,14 @@ import uuid
 import unicodedata
 from datetime import date, datetime, timedelta
 from typing import Any
+from urllib.parse import urljoin
 
-import requests
 from bs4 import BeautifulSoup
 
 from database_manager import DatabaseManager
+from core import outbound_network
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
-from core.auth_helpers import verify_business_access
+from core.auth_helpers import verify_business_access, verify_business_write_access
 from core.card_audit import build_card_audit_snapshot
 from core.helpers import get_business_owner_id
 from core.industry_patterns import detect_industry_key, format_industry_pattern_prompt
@@ -1360,6 +1361,102 @@ def _select_context_seo_keywords(
     return _filter_foreign_brand_seo_keywords(_merge_seo_keyword_lists(ranked_keywords, custom_keywords, limit=limit), business_name)
 
 
+def _content_plan_user_data(cursor: Any, user_id: str) -> dict[str, Any]:
+    cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
+    return {
+        "user_id": user_id,
+        "is_superadmin": bool(_row_get(cursor.fetchone(), "coalesce", 0, False)),
+    }
+
+
+def _resolve_content_plan_scope(
+    cursor: Any,
+    business_row: dict[str, Any],
+    scope_type: str,
+    scope_target_id: str | None,
+) -> dict[str, Any]:
+    """Resolve one canonical scope from options belonging to the root business."""
+    root_business_id = str(business_row.get("id") or "").strip()
+    normalized_scope = _normalize_scope_type(scope_type)
+    scope_options = _fetch_network_scope_options(cursor, business_row)
+    requested_target_id = str(scope_target_id or "").strip()
+    if normalized_scope == "single_business":
+        return {
+            "scope_type": "single_business",
+            "scope_target_id": root_business_id,
+            "business_ids": [root_business_id] if root_business_id else [],
+            "scope_options": scope_options,
+        }
+
+    selected_scope_option = next(
+        (
+            item
+            for item in scope_options
+            if str(item.get("scope_type") or "") == normalized_scope
+            and str(item.get("scope_target_id") or "") == requested_target_id
+        ),
+        None,
+    )
+    if not requested_target_id:
+        selected_scope_option = next(
+            (
+                item
+                for item in scope_options
+                if str(item.get("scope_type") or "") == normalized_scope
+                and (normalized_scope != "network_location" or bool(item.get("is_current")))
+            ),
+            None,
+        )
+    if not selected_scope_option:
+        raise PermissionError("Недоступный контекст контент-плана")
+
+    target_id = str(selected_scope_option.get("scope_target_id") or "").strip()
+    if normalized_scope == "network_location":
+        business_ids = [target_id] if target_id else []
+    else:
+        business_ids = [
+            str(item.get("scope_target_id") or "").strip()
+            for item in scope_options
+            if str(item.get("scope_type") or "") in {"network_parent", "network_location"}
+            and str(item.get("scope_target_id") or "").strip()
+        ]
+    return {
+        "scope_type": normalized_scope,
+        "scope_target_id": target_id,
+        "business_ids": list(dict.fromkeys(business_ids)),
+        "scope_options": scope_options,
+    }
+
+
+def _authorize_content_plan_scope(
+    cursor: Any,
+    *,
+    user_data: dict[str, Any],
+    business_ids: list[str],
+    require_write: bool,
+) -> None:
+    verifier = verify_business_write_access if require_write else verify_business_access
+    for target_business_id in business_ids:
+        has_access, _owner_id = verifier(cursor, target_business_id, user_data)
+        if not has_access:
+            raise PermissionError("Нет доступа к бизнесу")
+
+
+def _visible_content_plan_scope_options(
+    cursor: Any,
+    *,
+    user_data: dict[str, Any],
+    scope_options: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    visible_options = []
+    for option in scope_options:
+        target_business_id = str(option.get("scope_target_id") or "").strip()
+        has_access, _owner_id = verify_business_access(cursor, target_business_id, user_data)
+        if has_access:
+            visible_options.append(option)
+    return visible_options
+
+
 def load_plan_context_for_business(user_id: str, business_id: str, scope_type: str, scope_target_id: str | None = None) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -1368,45 +1465,36 @@ def load_plan_context_for_business(user_id: str, business_id: str, scope_type: s
         business_row = _fetch_business_row(cursor, business_id)
         if not business_row:
             raise ValueError("Бизнес не найден")
-        owner_id = get_business_owner_id(cursor, business_id)
-        if str(owner_id or "").strip() != str(user_id or "").strip():
-            cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
-            superadmin_row = cursor.fetchone()
-            has_access, _ = verify_business_access(
-                cursor,
-                business_id,
-                {
-                    "user_id": user_id,
-                    "is_superadmin": bool(_row_get(superadmin_row, "coalesce", 0, False)),
-                },
-            )
-            if not has_access:
-                raise PermissionError("Нет доступа к бизнесу")
-
+        user_data = _content_plan_user_data(cursor, user_id)
+        _authorize_content_plan_scope(
+            cursor,
+            user_data=user_data,
+            business_ids=[str(business_row.get("id") or "").strip()],
+            require_write=False,
+        )
+        scope_resolution = _resolve_content_plan_scope(cursor, business_row, scope_type, scope_target_id)
+        _authorize_content_plan_scope(
+            cursor,
+            user_data=user_data,
+            business_ids=scope_resolution["business_ids"],
+            require_write=False,
+        )
         subscription = get_subscription_access(business_id)
         allowed_horizons = get_allowed_content_plan_horizons(business_id)
-        scope_options = _fetch_network_scope_options(cursor, business_row)
-        normalized_scope = _normalize_scope_type(scope_type)
-        target_id = str(scope_target_id or "").strip()
-        if not target_id:
-            current_scope_option = next((item for item in scope_options if item.get("is_current")), None)
-            if current_scope_option:
-                normalized_scope = str(current_scope_option.get("scope_type") or normalized_scope)
-                target_id = str(current_scope_option.get("scope_target_id") or business_id)
-            else:
-                target_id = business_id
+        normalized_scope = str(scope_resolution["scope_type"])
+        target_id = str(scope_resolution["scope_target_id"])
+        scope_options = _visible_content_plan_scope_options(
+            cursor,
+            user_data=user_data,
+            scope_options=scope_resolution["scope_options"],
+        )
         selected_scope_option = next(
-            (
-                item
-                for item in scope_options
-                if str(item.get("scope_type") or "") == normalized_scope
-                and str(item.get("scope_target_id") or "") == target_id
-            ),
+            (item for item in scope_options if str(item.get("scope_target_id") or "") == target_id),
             None,
         )
         scope_business_row = _build_scope_business_context(cursor, business_row, normalized_scope, target_id)
         scope_business_id = str(scope_business_row.get("id") or business_id)
-        context_business_ids = _scope_context_business_ids(cursor, business_row, normalized_scope, target_id)
+        context_business_ids = list(scope_resolution["business_ids"])
         if not context_business_ids:
             context_business_ids = [scope_business_id]
         map_links_count = _fetch_map_link_count_for_businesses(cursor, context_business_ids)
@@ -1771,11 +1859,29 @@ def create_generated_content_plan(
     continuation_message: str | None = None,
     editorial_brief: str | None = None,
     operator_request_id: str | None = None,
+    continuation_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
         ensure_content_plan_tables(cursor)
+        business_row = _fetch_business_row(cursor, business_id)
+        if not business_row:
+            raise ValueError("Бизнес не найден")
+        user_data = _content_plan_user_data(cursor, user_id)
+        _authorize_content_plan_scope(
+            cursor,
+            user_data=user_data,
+            business_ids=[str(business_row.get("id") or "").strip()],
+            require_write=True,
+        )
+        scope_resolution = _resolve_content_plan_scope(cursor, business_row, scope_type, scope_target_id)
+        _authorize_content_plan_scope(
+            cursor,
+            user_data=user_data,
+            business_ids=scope_resolution["business_ids"],
+            require_write=True,
+        )
         allowed_horizons = get_allowed_content_plan_horizons(business_id)
         from services.operator_plan_schedule import extract
         explicit_schedule = extract(editorial_brief) if editorial_brief else None
@@ -1787,7 +1893,12 @@ def create_generated_content_plan(
             normalized_period = min(permitted)
         if normalized_period not in allowed_horizons:
             raise PermissionError("Горизонт планирования недоступен на текущем тарифе")
-        context = load_plan_context_for_business(user_id, business_id, scope_type, scope_target_id)
+        context = load_plan_context_for_business(
+            user_id,
+            business_id,
+            str(scope_resolution["scope_type"]),
+            str(scope_resolution["scope_target_id"]),
+        )
         if not bool(context.get("subscription", {}).get("maps_content_access")):
             raise PermissionError("Новости для карт входят в тариф «Карты»")
         knowledge_metadata: dict[str, Any] = {}
@@ -1809,7 +1920,7 @@ def create_generated_content_plan(
             )
             knowledge_metadata["foundation_type"] = str(raw_knowledge_foundation.get("type") or "market_signal")
         continuation = None
-        if continuation_message or operator_request_id:
+        if continuation_message or operator_request_id or continuation_context:
             cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,0))", ('content-plan:'+business_id,))
         if operator_request_id:
             cursor.execute("""SELECT id FROM contentplans WHERE business_id=%s AND created_by=%s
@@ -1822,6 +1933,12 @@ def create_generated_content_plan(
             continuation = resolve_continuation(cursor, business_id, continuation_message)
             context = {**context, 'excluded_plan_themes': continuation['excluded_themes']}
             content_mix = {**(content_mix or {}), 'channels': continuation['channels']}
+        if continuation_context:
+            from services.content_network_renewal import resolve_successor_context
+            continuation = resolve_successor_context(cursor, business_id, continuation_context)
+            context = {**context, 'excluded_plan_themes': continuation['excluded_themes'],
+                       'source_refresh_snapshot': continuation_context.get('sources') or {}}
+            content_mix = {**(content_mix or {}), 'channels': continuation['channels']}
         skeleton = build_content_plan_skeleton(
             context,
             period_days=normalized_period,
@@ -1829,6 +1946,12 @@ def create_generated_content_plan(
             content_mix=content_mix if isinstance(content_mix, dict) else {},
             period_start=continuation['period_start'] if continuation else None,
         )
+        if continuation_context:
+            dates = continuation['dates']
+            skeleton['items'] = [{'scheduled_for': day} for day in dates]
+            skeleton['period_start'] = continuation['period_start'].isoformat()
+            skeleton['period_end'] = continuation['period_end'].isoformat()
+            skeleton['meta']['items_target'] = len(dates)
         if editorial_brief:
             if explicit_schedule:
                 if explicit_schedule['period_days'] > max(allowed_horizons):
@@ -1855,6 +1978,10 @@ def create_generated_content_plan(
         if continuation:
             skeleton['meta']['previous_plan_id'] = continuation['previous_plan_id']
             skeleton['meta']['excluded_themes_count'] = len(continuation['excluded_themes'])
+        if continuation_context:
+            skeleton['meta']['source_refresh_snapshot'] = continuation_context.get('sources') or {}
+            skeleton['meta']['network_automation_id'] = continuation_context.get('blueprint_id')
+            skeleton['meta']['requires_owner_review'] = True
         raw_channels = content_mix.get("channels") if isinstance(content_mix, dict) else []
         selected_channels = [
             str(channel or "").strip()
@@ -1871,8 +1998,8 @@ def create_generated_content_plan(
             skeleton_meta["knowledge_foundation"] = knowledge_metadata
             skeleton["meta"] = skeleton_meta
         plan_id = str(uuid.uuid4())
-        normalized_scope = _normalize_scope_type(scope_type)
-        target_id = str(scope_target_id or "").strip() or str(context.get("scope", {}).get("scope_target_id") or business_id)
+        normalized_scope = str(scope_resolution["scope_type"])
+        target_id = str(scope_resolution["scope_target_id"])
         root_business = context.get("root_business") if isinstance(context.get("root_business"), dict) else {}
         scope_business = context.get("business") if isinstance(context.get("business"), dict) else {}
         network_location_targets = _network_location_targets_from_context(context)
@@ -2006,7 +2133,7 @@ def get_content_plan(user_id: str, plan_id: str) -> dict[str, Any]:
             """
             SELECT id, business_id, scheduled_for, content_type, theme, goal, source_kind, source_ref,
                    seo_keyword, service_id, transaction_id, seo_views, location_scope, draft_text, status, usernews_id,
-                   metadata_json, created_at, updated_at
+                   metadata_json, created_at, updated_at, updated_at::text AS version
             FROM contentplanitems
             WHERE plan_id = %s
             ORDER BY scheduled_for ASC, created_at ASC
@@ -2047,6 +2174,7 @@ def get_content_plan(user_id: str, plan_id: str) -> dict[str, Any]:
                 "metadata_json": _json_value(_row_get(row, "metadata_json", 16, {}), {}),
                 "created_at": _row_get(row, "created_at", 17),
                 "updated_at": _row_get(row, "updated_at", 18),
+                "version": str(_row_get(row, "version", 19, "") or ""),
             }
             item_payload["metadata_json"] = _annotate_story_facts_requirement(item_payload)
             items.append(item_payload)
@@ -2185,6 +2313,10 @@ def delete_content_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
         db.close()
 
 
+class ContentPlanItemConflict(ValueError):
+    """The item changed after the caller last loaded it."""
+
+
 def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any], *, auth_context=None) -> dict[str, Any]:
     if auth_context is not None and auth_context.user_id != user_id:
         raise PermissionError("Несовпадение пользователя операции")
@@ -2195,6 +2327,7 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
         cursor.execute(
             """
             SELECT i.id, i.plan_id, i.business_id, i.status, i.source_kind, i.content_type, i.theme, i.draft_text,
+                   i.updated_at::text AS version,
                    i.metadata_json, i.location_scope, p.business_id AS root_business_id
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
@@ -2207,9 +2340,13 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
         if not row:
             raise ValueError("Элемент плана не найден")
         data = _row_to_dict(cursor, row)
+        expected_version = str(payload.get("expected_version") or "").strip()
+        current_version = str(data.get("version") or "").strip()
+        if expected_version and expected_version != current_version:
+            raise ContentPlanItemConflict("Пост уже изменился. Обновите план и проверьте актуальную версию перед сохранением.")
         previous_status = str(data.get("status") or "").strip()
         cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
-        has_access, _ = verify_business_access(
+        has_access, _ = verify_business_write_access(
             cursor,
             str(data.get("root_business_id") or data.get("business_id") or ""),
             {
@@ -2681,7 +2818,10 @@ def _normalize_website_url(value: Any) -> str:
     text = str(value or "").strip()
     if not text:
         return ""
-    if text.startswith(("http://", "https://")):
+    if re.match(r"^[^/?#:@]+\.[^/?#:@]+:\d+(?:[/?#]|$)", text):
+        return f"https://{text}"
+    if re.match(r"^[a-z][a-z0-9+.-]*:", text, re.I):
+        # Preserve explicit schemes for the outbound validator to accept or reject.
         return text
     return f"https://{text}"
 
@@ -2695,7 +2835,7 @@ def _clean_site_description_text(value: Any) -> str:
     return text[:500]
 
 
-def _extract_site_description_from_html(html: str) -> str:
+def _extract_site_description_from_html(html: str | bytes) -> str:
     if not html:
         return ""
     try:
@@ -2723,14 +2863,38 @@ def _fetch_site_description(site_url: Any) -> str:
     if not url:
         return ""
     try:
-        response = requests.get(
-            url,
-            headers={"User-Agent": "LocalOSBot/1.0 (+https://localos.pro)"},
-            timeout=5,
-        )
-        if response.status_code >= 400:
-            return ""
-        return _extract_site_description_from_html(response.text or "")
+        visited: set[str] = set()
+        for _ in range(5):
+            if url in visited:
+                return ""
+            visited.add(url)
+            response = outbound_network.public_pinned_get(
+                url,
+                headers={"User-Agent": "LocalOSBot/1.0 (+https://localos.pro)"},
+                timeout=5,
+                max_bytes=1_000_001,
+            )
+            if response.status_code in {301, 302, 303, 307, 308}:
+                location = str(response.headers.get("location") or "").strip()
+                if not location:
+                    return ""
+                url = urljoin(url, location)
+                continue
+            if not 200 <= response.status_code < 300 or len(response.body) > 1_000_000:
+                return ""
+            charset = re.search(
+                r"charset\s*=\s*[\"']?([A-Za-z0-9._-]+)",
+                str(response.headers.get("content-type") or ""),
+                re.I,
+            )
+            html: str | bytes = response.body
+            if charset:
+                try:
+                    html = response.body.decode(charset.group(1), errors="replace")
+                except LookupError:
+                    html = response.body.decode("utf-8", errors="replace")
+            return _extract_site_description_from_html(html)
+        return ""
     except Exception:
         return ""
 
@@ -2810,7 +2974,6 @@ CONTENT_PLAN_LANGUAGE_LABELS = {
     "fr": "French",
     "tr": "Turkish",
     "hy": "Armenian",
-    "kk": "Kazakh",
     "it": "Italian",
     "pt": "Portuguese",
     "zh": "Chinese",
@@ -4407,6 +4570,7 @@ def _load_editorial_pattern_library(
     item: dict[str, Any],
     *,
     limit: int = 5,
+    industry_key: str = '',
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     cursor.execute("SAVEPOINT editorial_patterns_telegram")
@@ -4498,6 +4662,9 @@ def _load_editorial_pattern_library(
                 "source_post_count": post.get("source_post_count"),
             }
         )
+    if industry_key and industry_key != 'local_business':
+        candidates = [candidate for candidate in candidates
+                      if detect_industry_key(service_text=candidate.get('text')) == industry_key]
     return _rank_editorial_pattern_candidates(candidates, item, limit=limit)
 
 
@@ -5182,7 +5349,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
         from services.operator_editorial import editorial_evidence
         content_evidence = editorial_evidence(cursor,str(item.get('business_id') or '')) + content_evidence
         content_brief = _build_content_brief_v1(item, business_facts, content_evidence)
-        editorial_patterns = _load_editorial_pattern_library(cursor, item, limit=5) if generation_v2 else []
+        editorial_patterns = _load_editorial_pattern_library(cursor, item, limit=5, industry_key=industry_key) if generation_v2 else []
         editorial_pattern_context = _format_editorial_pattern_context(editorial_patterns)
         voice_context = load_content_voice_context(
             cursor,

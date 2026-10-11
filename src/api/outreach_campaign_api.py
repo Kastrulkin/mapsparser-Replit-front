@@ -288,12 +288,15 @@ def _campaign_payload(cursor: Any, campaign_id: str) -> dict[str, Any] | None:
     cursor.execute(
         """
         SELECT touch.*,
+               contact.normalized_value AS recipient,
+               sender.sender_identity AS sender_identity,
                sender.status AS sender_status,
                sender.outreach_enabled AS sender_outreach_enabled,
                sender.health_status AS sender_health_status,
                sender.capabilities_json AS sender_capabilities_json,
                permissions.outreach_enabled AS telegram_outreach_enabled
         FROM outreach_campaign_touches touch
+        LEFT JOIN lead_contact_points contact ON contact.id = touch.contact_point_id
         LEFT JOIN outreach_sender_accounts sender ON sender.id = touch.sender_account_id
         LEFT JOIN telegram_account_permissions permissions ON permissions.account_id = sender.external_account_id
         WHERE touch.campaign_id = %s
@@ -452,6 +455,9 @@ def get_outreach_message_queue():
     if requested_workstream_type not in {"", "localos_sales", "client_partnership"}:
         return jsonify({"success": False, "error": "Unsupported workstream_type"}), 400
     requested_business_id = str(request.args.get("business_id") or "").strip() or None
+    requested_campaign_id = str(request.args.get("campaign_id") or "").strip()
+    requested_search_task_id = str(request.args.get("search_task_id") or "").strip()
+    presentation = str(request.args.get("presentation") or "").strip()
     requested_channel = str(request.args.get("channel") or "").strip().lower()
     requested_status = str(request.args.get("status") or "").strip().lower()
     search_query = str(request.args.get("q") or "").strip()
@@ -483,6 +489,19 @@ def get_outreach_message_queue():
         if resolved_business_id:
             where_clauses.append("ranked.client_business_id = %s")
             params.append(resolved_business_id)
+        if requested_search_task_id:
+            if not resolved_business_id:
+                return jsonify({"success": False, "error": "business_required"}), 400
+            from services.partnership_group_view import load_group_scope, GroupNotFound
+            try:
+                group = load_group_scope(cursor, resolved_business_id, requested_search_task_id)
+            except GroupNotFound:
+                return jsonify({"success": False, "error": "search_task_not_found"}), 404
+            where_clauses.append("ranked.lead_id::text = ANY(%s::text[])")
+            params.append(group["lead_ids"])
+        if requested_campaign_id:
+            where_clauses.append("ranked.id::text = %s")
+            params.append(requested_campaign_id)
         if requested_channel:
             where_clauses.append("touch.channel = %s")
             params.append(requested_channel)
@@ -583,6 +602,8 @@ def get_outreach_message_queue():
         summary: dict[str, int] = {"all": 0}
         for item in raw_items:
             item["status"] = _message_queue_status(item)
+            if presentation == "send" and item["status"] == "draft":
+                continue
             summary["all"] += 1
             summary[item["status"]] = summary.get(item["status"], 0) + 1
             if requested_status and item["status"] != requested_status:

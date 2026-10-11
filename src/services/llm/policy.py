@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import json
 from dataclasses import dataclass
 
 from services.llm.contracts import DATA_CLASSES
@@ -80,6 +81,21 @@ def prepare_prompt_for_provider(prompt: str, *, provider: str, data_class: str) 
     for line in redacted.splitlines():
         if FINANCIAL_LINE_PATTERN.search(line) or APPOINTMENT_LINE_PATTERN.search(line):
             removed_line = True
+            # Planner state and tool schemas share a JSON document. Removing
+            # that whole line also removes safe instructions and tool contracts.
+            try:
+                structured = json.loads(line)
+            except (ValueError, TypeError):
+                continue
+            def scrub(value):
+                if isinstance(value, dict):
+                    return {key: "[SENSITIVE_CONTEXT_REDACTED]" if FINANCIAL_LINE_PATTERN.search(key) or APPOINTMENT_LINE_PATTERN.search(key) else scrub(item) for key, item in value.items()}
+                if isinstance(value, list):
+                    return [scrub(item) for item in value]
+                if isinstance(value, str) and (FINANCIAL_LINE_PATTERN.search(value) or APPOINTMENT_LINE_PATTERN.search(value)):
+                    return "[SENSITIVE_CONTEXT_REDACTED]"
+                return value
+            safe_lines.append(json.dumps(scrub(structured), ensure_ascii=False))
             continue
         safe_lines.append(line)
     safe_prompt = "\n".join(safe_lines).strip()

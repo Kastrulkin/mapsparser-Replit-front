@@ -1,9 +1,32 @@
 """Deterministic handling of explicit follow-ups and addressed work notes."""
 import re
+from datetime import datetime, timezone
 from services import operator_editorial, operator_work_journal, work_journal, work_review
 
 
-def remember_selection(cursor, business_id, result):
+def _photo_target(cursor, business_id, history):
+    for entry in reversed(history or []):
+        value = entry.get('result_json') or {}
+        if value.get('selected_item'):
+            return value['selected_item']
+        if entry.get('role') == 'user':
+            match = re.search(r'пост\w*\s+[«"]([^»"]+)[»"]', entry.get('content') or '', re.I)
+            if match:
+                rows = [row for row in operator_editorial._items(cursor, business_id)
+                        if row.get('theme', '').casefold() == match[1].casefold()]
+                if len(rows) == 1:
+                    row = rows[0]
+                    return {'item_id':row['id'], 'plan_id':row['plan_id'], 'version':operator_editorial._version(row)}
+                return None
+    return None
+
+
+def remember_selection(cursor, business_id, result, history=None):
+    if result.get('photos'):
+        selected = _photo_target(cursor, business_id, history)
+        if selected:
+            result['selected_item'] = selected
+        return
     items = result.get('items')
     if result.get('resource') != 'content' or not isinstance(items, list) or len(items) != 1:
         return
@@ -37,6 +60,27 @@ def route(cursor, *, business_id, user_id, channel, message, history, conversati
     from services.operator_core import standardize_operator_result, operator_subscription_block
     from services.operator_tool_billing import run_paid_operator_tool_loop
     command=re.sub(r'^\s*(?:пожалуйста[,\s]*|(?:можешь|можете|можно)\s+(?:пожалуйста[,\s]*)?)','',message,flags=re.I)
+    if photo_read_request(message):
+        blocked = operator_subscription_block(access, 'content.history')
+        if blocked:
+            return blocked, {}
+        result = operator_editorial._read_photo_library(cursor, business_id, user_id, message, max_results=5)
+        remember_selection(cursor, business_id, result,
+                           [*(history or []), {'role': 'user', 'content': message}])
+        return standardize_operator_result(result, 'content.history'), {}
+    photo_result = select_shown_photo(cursor, business_id, user_id, message, history)
+    if photo_result is not None:
+        blocked = operator_subscription_block(access, 'content.item.edit')
+        if blocked:
+            return blocked, {}
+        # The selector resolves context only; the existing editor owns rights,
+        # row locking, version checks and publication-approval invalidation.
+        args = photo_result.pop('_photo_update', None)
+        if args:
+            photo_result = operator_editorial.update_item_fields(cursor, business_id, user_id, args)
+            if photo_result.get('status') == 'completed':
+                photo_result['chat_response'] = 'Сохранил выбранное фото в посте. Публикацию и отправку не запускал.'
+        return standardize_operator_result(photo_result, 'content.item.edit'), {}
     from services import operator_voice_followups
     try:
         corrected=operator_voice_followups.route(cursor,business_id=business_id,user_id=user_id,channel=channel,
@@ -142,3 +186,58 @@ def route(cursor, *, business_id, user_id, channel, message, history, conversati
         cursor,business_id=business_id,user_id=user_id,message=message,conversation_id=conversation_id,
         actor_context=actor,tools=[tool],planner=lambda state: ({'action':'error','message':state['observations'][-1].get('chat_response') or 'Не удалось изменить пост. Он остался прежним.','error_code':'operator_planner_failed'} if state['observations'] else {'action':'tool_call','tool':'content.rewrite_item','arguments':{}}))
     return standardize_operator_result(result,'content.item.edit'), {}
+
+
+def photo_read_request(message):
+    return bool(re.search(r'\b(?:покажи|показать|найди|посмотри|подбери)\b', message, re.I)
+                and re.search(r'фото|изображени|\.(?:jpg|jpeg|png|webp)\b', message, re.I)
+                and not re.search(r'\b(?:замени|прикрепи|поставь|используй|сохрани)\b', message, re.I))
+
+
+def select_shown_photo(cursor, business_id, user_id, message, history):
+    if not re.search(r'пусть\s+будет|выбир\w*|выбрал\w*|выбрала|используй|прикрепи|поставь|замени|добавь', message, re.I):
+        return None
+    if not re.search(r'фото|изображени|\.(?:jpg|jpeg|png|webp)\b', message, re.I):
+        return None
+    if re.search(r'не\s+(?:меняй|заменяй|прикрепляй|сохраняй|используй)\s+(?:(?:это|выбранное|текущее)\s+)?(?:фото|изображени)|пока\s+ничего|\bесли\b|\?', message, re.I):
+        return None
+    gallery = next((entry for entry in reversed(history or []) if (entry.get('result_json') or {}).get('photos')), None)
+    if not gallery:
+        return operator_editorial._result('Сначала покажите варианты фото для нужного поста.', 'clarification_required')
+    photos = gallery['result_json']['photos']
+    named = [photo for photo in photos if photo.get('name') and photo['name'].casefold() in message.casefold()]
+    explicit_filename = re.search(r'\.(?:jpg|jpeg|png|webp)\b', message, re.I)
+    if explicit_filename and not named:
+        # An intervening search must not reinterpret an exact filename as the
+        # same ordinal in a different gallery. Resolve only previously shown assets.
+        for previous in reversed(history or []):
+            previous_photos = (previous.get('result_json') or {}).get('photos') or []
+            matches = [photo for photo in previous_photos if photo.get('name') and photo['name'].casefold() in message.casefold()]
+            if matches:
+                gallery, photos, named = previous, previous_photos, matches
+                break
+    number = re.match(r'\s*(\d+)\s*(?:[.)]|$)', message)
+    chosen = named[0] if len(named) == 1 else (photos[int(number[1])-1] if not named and not explicit_filename and number and 0 < int(number[1]) <= len(photos) else None)
+    if not chosen:
+        return operator_editorial._result('Не удалось определить выбранное фото. Укажите имя файла из последнего списка.', 'clarification_required')
+    if number and named and (int(number[1]) > len(photos) or int(number[1]) < 1 or photos[int(number[1])-1]['asset_id'] != chosen['asset_id']):
+        return operator_editorial._result('Номер и имя файла относятся к разным фото. Укажите только точное имя файла.', 'clarification_required')
+    selected = gallery['result_json'].get('selected_item')
+    if not selected:
+        selected = _photo_target(cursor, business_id, history)
+        if selected:
+            rows = operator_editorial._items(cursor, business_id, selected['plan_id'], item_id=selected['item_id'])
+            try:
+                viewed = datetime.fromisoformat(str(gallery.get('created_at')).replace('Z', '+00:00'))
+                changed = datetime.fromisoformat(str(rows[0]['updated_at']).replace('Z', '+00:00'))
+                if viewed.tzinfo is None:
+                    viewed = viewed.replace(tzinfo=timezone.utc)
+                if changed.tzinfo is None:
+                    changed = changed.replace(tzinfo=timezone.utc)
+                if changed > viewed:
+                    return operator_editorial._result('Пост изменился после показа фото. Покажите его заново перед заменой.', 'blocked')
+            except (ValueError, TypeError, IndexError):
+                selected = None
+    if not selected:
+        return operator_editorial._result('Для какого поста сохранить выбранное фото? Назовите тему и дату.', 'clarification_required')
+    return {'_photo_update':{**selected, 'photo_asset_id':chosen['asset_id']}}

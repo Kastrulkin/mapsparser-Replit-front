@@ -1533,6 +1533,11 @@ class DatabaseManager:
         )
         business_address = "Материнская точка сети"
 
+        cursor.execute("SELECT entity_group FROM networks WHERE id = %s", (network_id,))
+        network_row = cursor.fetchone()
+        network_group = (network_row.get("entity_group") if hasattr(network_row, "keys") else network_row[0]) if network_row else "lead"
+        network_group = str(network_group or "lead").strip().lower()
+
         requested_fields = [
             "id",
             "owner_id",
@@ -1553,7 +1558,7 @@ class DatabaseManager:
             business_address,
             True,
             "ru",
-            "client",
+            network_group,
         ]
 
         fields = []
@@ -1570,7 +1575,7 @@ class DatabaseManager:
             update_fields = []
             update_values = []
             for field_name, field_value in zip(fields, values):
-                if field_name == "id":
+                if field_name in ("id", "entity_group"):
                     continue
                 update_fields.append(f"{field_name} = %s")
                 update_values.append(field_value)

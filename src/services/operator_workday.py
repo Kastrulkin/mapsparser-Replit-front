@@ -10,7 +10,9 @@ from services import work_journal, work_recommendations
 
 
 def enabled(business_id):
-    return business_id in {v.strip() for v in os.getenv('OPERATOR_WORKDAY_BUSINESS_IDS', '').split(',') if v.strip()}
+    if os.getenv('OPERATOR_BUSINESS_INFORMATION_ENABLED', '').casefold() in {'1','true'}:
+        return True
+    return business_id in {value.strip() for value in os.getenv('OPERATOR_WORKDAY_BUSINESS_IDS', '').split(',') if value.strip()}
 
 
 def authorize(cursor, business_id, user_id, owner=False):
@@ -130,11 +132,18 @@ def briefing(cursor, business_id, user_id, args):
     if matrix is None:
         matrix = work_recommendations.matrix(cursor, business_id).get('matrix_json')
     entries = current['entries_json']
+    from services import operator_day_facts
+    day_facts = operator_day_facts.read(cursor,business_id,user_id,day)
+    absent = {row['facts_json']['operational']['master'].casefold() for row in day_facts if row['facts_json']['operational']['kind']=='absence'}
     items = []
     lines = [f'Планёрка на {day}. Записей: {len(entries)}.']
     if not matrix:
         lines.append('Связки допродаж ещё не настроены. Владелец может проверить их в разделе «Средний чек».')
     for entry in entries:
+        if entry.get('master','').casefold() in absent:
+            items.append({**entry,'recommendations':[],'master_unavailable':True})
+            lines.append(f"\n{entry['time']} · {entry['service_name']} · {entry['master']}: мастер отсутствует. Проверьте перенос; ничего не перенесено.")
+            continue
         # Imported master names are not master IDs: never bypass master-specific rules.
         cursor.execute('SELECT id FROM masters WHERE business_id=%s AND name=%s', (business_id, entry['master']))
         matches = [_row(cursor, r) for r in cursor.fetchall()]

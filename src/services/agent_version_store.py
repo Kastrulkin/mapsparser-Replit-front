@@ -70,4 +70,3 @@ def insert_version(cursor, blueprint_id: str, payload: dict, user_data: dict, *,
     )
     cursor.execute("SELECT * FROM agent_blueprint_versions WHERE id = %s", (version_id,))
     return _normalize_json_row(dict(cursor.fetchone()))
-

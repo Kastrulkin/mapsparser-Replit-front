@@ -49,8 +49,14 @@ def resolve_snapshot(cursor, snapshot_id, business_id, user_id, blueprint_id=Non
     value = row["input_json"]
     if isinstance(value, str):
         value = json.loads(value)
-    normalized = normalize_table_input(value)
-    if row["schema_version"] != TABLE_SCHEMA or content_hash(normalized) != row["content_hash"]:
+    from services.compiled_content_program import SCHEMA
+    if row['schema_version'] == SCHEMA and row['source_kind'] == 'content_plan':
+        normalized = value
+    elif row['schema_version'] == TABLE_SCHEMA and row['source_kind'] == 'user_table':
+        normalized = normalize_table_input(value)
+    else:
+        raise SnapshotUnavailable('compiled_snapshot_source_invalid')
+    if row['schema_version'] not in {TABLE_SCHEMA, SCHEMA} or content_hash(normalized) != row["content_hash"]:
         raise SnapshotUnavailable("compiled_snapshot_integrity_failed")
     return {"snapshot_id": str(row["id"]), "content_hash": row["content_hash"], "schema_version": row["schema_version"], "source_kind": row["source_kind"], "input": normalized}
 

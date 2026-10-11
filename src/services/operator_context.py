@@ -1,14 +1,16 @@
 """Request-local planner context. Authorization and execution retain full server data."""
 import re
+from services.llm.policy import EMAIL_PATTERN
 
 DOMAINS = {
     'partnerships': r'аутрич|outreach|партн[её]р|турагент|туроператор|кандидат|\bлид(?:ы|ов|а|ам)?\b|\bписьм|email',
     'content': r'\bпост(?:а|ы|ов|е|у|ом)?\b|контент|публикац|новост',
     'finance': r'выруч|расход|доход|чек|финанс|продаж|возврат',
-    'services': r'услуг|прайс|цен[ауы]',
+    'services': r'услуг|прайс|цен[ауы]|wordstat|вордстат|поисков.{0,15}запрос|seo|сео',
+    'seo': r'wordstat|вордстат|поисков.{0,15}запрос|seo|сео',
     'reviews': r'отзыв|рейтинг',
     'work': r'журнал|жалоб|недоволь|плохо встрет|сотрудник|заметк|предложени|иде[яию]|допродаж|план[её]р|расписани|коллег',
-    'settings': r'город|валют|часов.{0,10}пояс',
+    'settings': r'город|валют|часов.{0,10}пояс|адрес|сайт|профил|пользоват|администратор|мастер|приглас',
 }
 
 
@@ -19,10 +21,9 @@ class PlannerContext:
         self.reverse = {}
 
     def tools(self, tools):
-        if not self.domains:
-            return tools
-        selected = [tool for tool in tools if tool['name'].split('.')[0] in self.domains or tool['name'].startswith(('operator.', 'settings.', 'localos.'))]
-        return selected or tools
+        # Domains help with history, never with authority or availability.
+        # A finance request may create an automation; a review may create a post.
+        return tools
 
     def encode(self, value):
         if isinstance(value, dict):
@@ -34,6 +35,15 @@ class PlannerContext:
                 ref = '@ref' + str(len(self.references) + 1)
                 self.references[ref] = value; self.reverse[value] = ref
             return self.reverse[value]
+        if isinstance(value, str):
+            def contact_reference(match):
+                contact = match.group(0)
+                if contact not in self.reverse:
+                    ref = '@ref' + str(len(self.references) + 1)
+                    self.references[ref] = contact
+                    self.reverse[contact] = ref
+                return self.reverse[contact]
+            return EMAIL_PATTERN.sub(contact_reference, value)
         return value
 
     def decode(self, value):

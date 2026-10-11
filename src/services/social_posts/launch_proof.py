@@ -21,6 +21,7 @@ from services.media_file_storage import load_media_file
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
 from services.content_editorial_quality import review_content_text
 from services.social_posts.platform_variants import platform_variant_base_hash
+from services.social_posts.version_conflicts import SocialPostVersionConflict
 from core.ai_learning import record_ai_learning_event
 
 
@@ -38,6 +39,7 @@ SOCIAL_POST_PLATFORMS = [
 API_PLATFORMS = {"google_business", "telegram", "vk", "instagram", "facebook"}
 BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis", "max"}
 FIRST_API_PROOF_PLATFORMS = ("telegram", "vk")
+
 
 SOCIAL_POST_STATUSES = {
     "draft",
@@ -1046,12 +1048,35 @@ def update_social_post_text(
     post_id: str,
     platform_text: str,
     base_text: str = "",
+    expected_updated_at: str = "",
 ) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
         post = _load_post_for_user(cursor, user_id, post_id)
+        expected_version = str(expected_updated_at or "").strip()
+        if expected_version:
+            current_version = post.get("updated_at")
+            try:
+                expected_timestamp = datetime.fromisoformat(expected_version.replace("Z", "+00:00"))
+                current_timestamp = (
+                    current_version
+                    if isinstance(current_version, datetime)
+                    else datetime.fromisoformat(str(current_version).replace("Z", "+00:00").replace(" ", "T"))
+                )
+            except (TypeError, ValueError):
+                raise SocialPostVersionConflict(
+                    "Не удалось проверить версию публикации. Обновите карточку и повторите правку."
+                ) from None
+            if expected_timestamp.tzinfo is None:
+                expected_timestamp = expected_timestamp.replace(tzinfo=timezone.utc)
+            if current_timestamp.tzinfo is None:
+                current_timestamp = current_timestamp.replace(tzinfo=timezone.utc)
+            if expected_timestamp != current_timestamp:
+                raise SocialPostVersionConflict(
+                    "Публикация изменилась после загрузки. Обновите карточку и повторите правку."
+                )
         current_status = str(post.get("status") or "").strip()
         if current_status in {"queued", "publishing", "published"}:
             raise ValueError("Нельзя менять текст после постановки в расписание или публикации")
@@ -1086,6 +1111,7 @@ def update_social_post_text(
                 last_error = NULL,
                 updated_at = NOW()
             WHERE id = %s
+              AND (CAST(%s AS TIMESTAMPTZ) IS NULL OR updated_at = %s)
             RETURNING *
             """,
             (
@@ -1094,9 +1120,18 @@ def update_social_post_text(
                 next_status,
                 _json_dumps(metadata),
                 post_id,
+                expected_timestamp if expected_version else None,
+                expected_timestamp if expected_version else None,
             ),
         )
-        updated = _serialize_social_post(cursor, cursor.fetchone())
+        updated_row = cursor.fetchone()
+        if not updated_row:
+            if expected_version:
+                raise SocialPostVersionConflict(
+                    "Публикация изменилась во время сохранения. Обновите карточку и повторите правку."
+                )
+            raise ValueError("Не удалось сохранить публикацию")
+        updated = _serialize_social_post(cursor, updated_row)
         db.conn.commit()
         return updated
     except Exception:

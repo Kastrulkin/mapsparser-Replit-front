@@ -60,6 +60,7 @@ def run_paid_operator_tool_loop(
     conversation_history: Any = None,
     actor_context: Any = None,
     pending_approvals: Any = None,
+    input_context: Any = None,
     business_timezone: str | None = "Europe/Moscow",
     planner=None,
 ) -> dict[str, Any]:
@@ -133,6 +134,7 @@ def run_paid_operator_tool_loop(
             conversation_history=conversation_history,
             actor_context=actor_context,
             pending_approvals=pending_approvals,
+            input_context=input_context,
             tools=tools,
             business_timezone=business_timezone,
         )

@@ -1933,6 +1933,14 @@ def partnership_list_drafts():
                     JOIN prospectingleads l ON l.id = d.lead_id
                     WHERE l.business_id = %s
                       AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM outreach_campaign_touches touch
+                          JOIN outreach_campaigns campaign ON campaign.id = touch.campaign_id
+                          WHERE campaign.lead_id = d.lead_id AND touch.channel = d.channel
+                            AND COALESCE(touch.approved_text, touch.generated_text, '') <> ''
+                            AND COALESCE(touch.approved_text, touch.generated_text, '') =
+                                COALESCE(NULLIF(d.approved_text, ''), NULLIF(d.edited_text, ''), d.generated_text, '')
+                      )
             """
             query += ACTIVE_PARTNERSHIP_LEAD_SQL
             params: list[Any] = [business_id]

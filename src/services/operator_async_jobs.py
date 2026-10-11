@@ -12,7 +12,7 @@ JOB_STATUSES = {"queued", "running", "waiting_for_review", "completed", "failed"
 TERMINAL_JOB_STATUSES = {"completed", "failed", "cancelled"}
 RETRYABLE_JOB_KINDS = {
     "audio_transcription", "audio_speech", "voice_receive", "voice_execute",
-    "content_plan_generate", "content_plan_revision",
+    "content_plan_generate", "content_plan_revision", "content_plan_network_renewal",
     "content_draft_generate",
     "finance_document_recognize",
     "finance_crm_sync",
@@ -21,7 +21,7 @@ RETRYABLE_JOB_KINDS = {
 }
 CANCELLABLE_JOB_KINDS = {
     "audio_transcription", "audio_speech", "voice_receive", "voice_execute",
-    "content_plan_generate", "content_plan_revision",
+    "content_plan_generate", "content_plan_revision", "content_plan_network_renewal",
     "content_draft_generate",
     "finance_document_recognize",
     "finance_crm_sync",
@@ -534,6 +534,12 @@ def process_next_operator_async_job(*, background: bool = False, background_only
             from services.yandex_disk import process_job
             result = process_job(claimed)
             status, stage, progress = "completed", "Проверено сохранение фото", 100
+        elif kind == "content_plan_network_renewal":
+            from services.content_network_renewal import process_job
+            result = process_job(claimed)
+            status = 'queued' if result.get('pending_sources') else 'waiting_for_review'
+            stage = 'Ждём обновления источников' if result.get('pending_sources') else 'Следующий план требует проверки владельца'
+            progress = 10 if result.get('pending_sources') else 100
         elif kind == "content_plan_revision":
             from services.operator_plan_revision import process_job
             result = process_job(claimed)
@@ -573,6 +579,8 @@ def process_next_operator_async_job(*, background: bool = False, background_only
                 result=result,
                 lease_token=lease_token,
             )
+            if kind == 'content_plan_network_renewal' and result.get('pending_sources') and updated:
+                finish_db.conn.cursor().execute("UPDATE operator_async_jobs SET next_attempt_at=NOW()+INTERVAL '30 seconds',attempt_count=GREATEST(0,attempt_count-1) WHERE id=%s AND status='queued'", (job_id,))
             finish_db.conn.commit()
         finally:
             finish_db.close()
@@ -610,6 +618,9 @@ def process_next_operator_async_job(*, background: bool = False, background_only
                 fail_db.conn.cursor().execute("UPDATE operator_async_jobs SET status='queued',next_attempt_at=NOW()+INTERVAL '15 seconds',completed_at=NULL WHERE id=%s AND status='failed'",(job_id,))
             elif failed_update and kind == 'voice_execute':
                 fail_db.conn.cursor().execute("UPDATE operator_audio_assets SET metadata_json=metadata_json || %s::jsonb WHERE id=%s",(json.dumps({'operator_payload':{'text':'Не удалось выполнить команду. Откройте диалог для проверки результата.','result':{'status':'failed'}}}),payload['asset_id']))
+            if failed_update and kind == 'content_plan_network_renewal':
+                from services.content_network_renewal import record_failure
+                record_failure(fail_db.conn, claimed, exc)
             if failed_update and kind=="content_plan_revision":
                 from services.operator_plan_revision import record_failure
                 record_failure(fail_db.conn.cursor(),claimed)

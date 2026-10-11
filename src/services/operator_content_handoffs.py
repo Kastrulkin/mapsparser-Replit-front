@@ -49,6 +49,42 @@ def _binding(cursor, business_id, recipient_id=''):
 
 
 def operator_task(cursor, *, business_id, user_id, arguments, actor_context=None):
+    # Chat and menu prepare the same blueprint; do not enable legacy bot
+    # preferences as a substitute for a compiled program.
+    from services.operator_agent_management import configure, prepare_lifecycle
+    operation = str(arguments.get('operation') or 'status')
+    if operation in {'compile', 'preview', 'approve', 'run', 'approve_plan'}:
+        from services.operator_compiled_content import prepare
+        return prepare(cursor, business_id=business_id, user_id=user_id,
+            arguments=arguments, actor_context=actor_context)
+    if operation in {'pause', 'resume'}:
+        return prepare_lifecycle(cursor, business_id=business_id, user_id=user_id,
+            arguments={**arguments, 'operation': operation}, actor_context=actor_context)
+    if operation == 'status':
+        return configure(cursor, business_id=business_id, user_id=user_id,
+            arguments={**arguments, 'operation': 'status' if arguments.get('blueprint_id') else 'list'}, actor_context=actor_context)
+    if operation == 'configure':
+        if arguments.get('content_handoff_scope'):
+            return configure(cursor, business_id=business_id, user_id=user_id, actor_context=actor_context,
+                arguments={**arguments, 'operation': 'create', 'name': 'Передача публикаций сети через бот',
+                    'description': arguments.get('description') or 'Передавать через Telegram-бот готовые посты с фото выбранных точек указанным получателям за день до публикации в 10:00. Продолжение плана — на проверку владельца.',
+                    'selected_provider_routes': {'telegram_delivery': {'provider': 'native_localos'}},
+                    'accepted_provider_routes': True})
+        settings = arguments.get('settings') or {}
+        if settings.get('time', '10:00') != '10:00' or settings.get('lead_days', 1) != 1 or set(settings.get('platforms', ['telegram','vk','max'])) != {'telegram','vk','max'}:
+            return {'status':'clarification_required','chat_response':'Для пилота поддержаны Telegram, VK и MAX, за день до публикации в 10:00. Другие условия не сохранены.'}
+        recipient = str(arguments.get('recipient_user_id') or user_id)
+        if recipient != user_id:
+            return {'status':'clarification_required','chat_response':'Тест выполняется только на вашем подключённом Telegram. Переключение получателя требует отдельной проверки и утверждения.'}
+        return configure(cursor, business_id=business_id, user_id=user_id, actor_context=actor_context,
+            arguments={'operation':'create', 'name':'Передача готовых публикаций через бот',
+                'selected_provider_routes': {'telegram_delivery': {'provider': 'native_localos'}},
+                'accepted_provider_routes': True,
+                'description':'За день до публикации в 10:00 отправлять через подключённого бота готовые версии постов для Telegram, VK и MAX с выбранным фото. Получатель — мой подключённый аккаунт. Регулярный запуск оставить на паузе.'})
+    return {'status':'blocked','blocked_reasons':['unsupported_operation']}
+
+
+def legacy_operator_task(cursor, *, business_id, user_id, arguments, actor_context=None):
     actor=_authorized_actor(cursor,business_id=business_id,user_id=user_id,actor_context=actor_context)
     if not actor:
         return {'status':'blocked','blocked_reasons':['access_denied']}
@@ -98,6 +134,10 @@ def operator_task(cursor, *, business_id, user_id, arguments, actor_context=None
 
 
 def execute(cursor, *, business_id, user_id, envelope, actor_context=None):
+    if envelope.get('compiled_operation'):
+        from services import operator_compiled_content
+        return operator_compiled_content.execute(cursor, business_id=business_id, user_id=user_id,
+            envelope=envelope, actor_context=actor_context)
     actor=_authorized_actor(cursor,business_id=business_id,user_id=user_id,actor_context=actor_context)
     recipient=str(envelope.get('recipient_user_id') or '')
     if not actor or envelope.get('business_id')!=business_id or (not actor.get('is_superadmin') and recipient!=user_id):

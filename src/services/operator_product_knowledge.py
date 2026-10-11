@@ -357,6 +357,8 @@ def classify_product_explanation_intent(message: Any) -> bool:
     normalized = _normalize(message)
     if not normalized or not resolve_product_feature(normalized):
         return False
+    if re.search(r'покажи.{0,80}(?:услуг|отзыв|запрос)|выведи.{0,80}(?:услуг|отзыв|запрос)', normalized):
+        return False
     markers = (
         "что такое",
         "как работает",

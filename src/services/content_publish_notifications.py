@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from services.media_library_scope import PHOTO_USAGE_LIBRARY_SCOPE_SQL
+
 import json
 import hashlib
 from datetime import date, datetime, timedelta, timezone
@@ -76,13 +78,15 @@ def _selected_photo(cursor: Any, post: dict[str, Any]) -> dict[str, Any] | None:
     if not business_id or not target_ids:
         return None
     cursor.execute(
-        """
+        f"""
         SELECT pa.id, pa.original_url, pa.storage_key, pa.versions_json, pa.metadata_json,
                usage.target_platform, usage.created_at
         FROM photo_asset_usage_events usage
         JOIN photo_assets pa
           ON pa.id = usage.photo_asset_id
-         AND pa.business_id = usage.business_id
+         AND pa.business_id IN ({PHOTO_USAGE_LIBRARY_SCOPE_SQL})
+         AND pa.metadata_json->>'publication_candidate' IS DISTINCT FROM 'false'
+         AND pa.category IS DISTINCT FROM 'document'
         WHERE usage.business_id = %s
           AND usage.usage_type = 'publication'
           AND usage.target_id = ANY(%s)
@@ -138,6 +142,39 @@ def _enabled_scopes(cursor: Any) -> list[dict[str, Any]]:
     return scopes
 
 
+def _active_compiled_handoff_scopes(cursor: Any) -> set[tuple[str, str]]:
+    """Prevent the legacy preference scanner from dispatching a compiled-owned scope."""
+    cursor.execute(
+        """SELECT blueprint.business_id::text AS business_id,
+                  step.value->'payload'->>'recipient_user_id' AS recipient_user_id
+           FROM agent_blueprints blueprint
+           JOIN agent_blueprint_versions version
+             ON version.blueprint_id=blueprint.id
+            AND version.id::text=blueprint.metadata_json->>'active_version_id'
+           CROSS JOIN LATERAL jsonb_array_elements(version.steps_json) AS step(value)
+           WHERE blueprint.status='active'
+             AND version.execution_mode='scheduled'
+             AND version.trigger='schedule.daily'
+             AND step.value->>'capability'='content.publish_handoff'
+             AND blueprint.metadata_json->'compiled_content_handoff_consent'->>'version_id'=version.id::text
+             AND blueprint.metadata_json->'compiled_content_handoff_consent'->'scope'->>'business_id'=blueprint.business_id::text
+             AND blueprint.metadata_json->'compiled_content_handoff_consent'->'scope'->>'recipient_user_id'=step.value->'payload'->>'recipient_user_id'"""
+    )
+    scopes = {
+        (str(item.get("business_id") or ""), str(item.get("recipient_user_id") or ""))
+        for item in (_row(cursor, raw) for raw in (cursor.fetchall() or []))
+        if item.get("business_id") and item.get("recipient_user_id")
+    }
+    cursor.execute("""SELECT business.value business_id,recipient.value recipient_user_id
+        FROM agent_blueprints blueprint
+        CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(blueprint.metadata_json->'compiled_content_handoff_consent'->'scope'->'business_ids','[]'::jsonb)) business(value)
+        CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(blueprint.metadata_json->'compiled_content_handoff_consent'->'scope'->'recipient_user_ids','[]'::jsonb)) recipient(value)
+        WHERE blueprint.status='active'
+          AND blueprint.metadata_json->'compiled_content_handoff_consent'->>'version_id'=blueprint.metadata_json->>'active_version_id'""")
+    scopes.update((str(row['business_id']),str(row['recipient_user_id'])) for row in cursor.fetchall())
+    return scopes
+
+
 def _content_publication_lead_days(settings: dict[str, Any]) -> int:
     try:
         value = int(settings.get("content_publications_lead_days") or 0)
@@ -151,12 +188,36 @@ def collect_due_content_publish_handoffs(
     *,
     now: datetime | None = None,
     limit: int = 100,
+    business_id: str | None = None,
+    recipient_user_id: str | None = None,
+    compiled_scope: dict[str, Any] | None = None,
+    include_not_due: bool = False,
 ) -> list[dict[str, Any]]:
     cursor = conn.cursor()
     observed_at = now or datetime.now(timezone.utc)
     result: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
-    for scope in _enabled_scopes(cursor):
+    scopes = [dict(compiled_scope)] if isinstance(compiled_scope, dict) else _enabled_scopes(cursor)
+    compiled_owned_scopes = _active_compiled_handoff_scopes(cursor) if not isinstance(compiled_scope, dict) else set()
+    for scope in scopes:
+        if isinstance(compiled_scope, dict):
+            scope.setdefault("scope_type", "business")
+            scope.setdefault("scope_id", str(scope.get("business_id") or ""))
+            scope.setdefault("lead_days", "1")
+            scope.setdefault("handoff_time", "10:00")
+            scope.setdefault("required_platforms", list(HANDOFF_PLATFORMS))
+            scope.setdefault("business_id", scope.get("scope_id"))
+            if not all(str(scope.get(key) or "").strip() for key in ("business_id", "user_id", "telegram_id")):
+                continue
+        # Compiled LocalOS workflows may request one exact business/recipient
+        # scope. The legacy worker keeps the unfiltered behavior.
+        if business_id and (scope["scope_type"] != "business" or scope["scope_id"] != str(business_id)):
+            continue
+        if recipient_user_id and scope["user_id"] != str(recipient_user_id):
+            continue
+        if (scope["scope_type"] == "business" and
+                (scope["scope_id"], scope["user_id"]) in compiled_owned_scopes):
+            continue
         scope_filter = "sp.business_id = %s" if scope["scope_type"] == "business" else "b.network_id = %s"
         cursor.execute(
             f"""
@@ -167,17 +228,20 @@ def collect_due_content_publish_handoffs(
             LEFT JOIN business_finance_settings settings ON settings.business_id = b.id
             WHERE {scope_filter}
               AND sp.platform = ANY(%s)
-              AND sp.publish_mode = 'manual'
+              AND (%s OR sp.publish_mode = 'manual')
+              AND (%s OR to_jsonb(sp)->>'content_plan_id' = ANY(%s))
               AND sp.status = ANY(%s)
               AND sp.scheduled_for IS NOT NULL
               AND ((sp.scheduled_for >= %s AND sp.scheduled_for < %s)
-                   OR (sp.scheduled_for > %s AND sp.metadata_json->'staff_handoff'->'telegram_deliveries' ? %s))
+                   OR (sp.scheduled_for > %s AND jsonb_exists(sp.metadata_json->'staff_handoff'->'telegram_deliveries', %s)))
             ORDER BY sp.scheduled_for, sp.created_at
             LIMIT %s
             """,
             (
                 scope["scope_id"],
                 list(scope.get("required_platforms") or HANDOFF_PLATFORMS),
+                isinstance(compiled_scope, dict),
+                not bool(scope.get('plan_ids')), scope.get('plan_ids') or [],
                 list(HANDOFF_STATUSES | {"needs_review", "draft"}),
                 observed_at - timedelta(days=1),
                 observed_at + timedelta(days=int(scope.get("lead_days") or 0) + 2),
@@ -194,14 +258,17 @@ def collect_due_content_publish_handoffs(
             deliveries = _json_object(_json_object(metadata.get("staff_handoff")).get("telegram_deliveries"))
             delivery = _json_object(deliveries.get(user_id))
             is_update = bool(delivery.get("sent_at") or delivery.get("is_update"))
-            if not post_id or identity in seen or not handoff_due({**post, **scope, "is_update": is_update}, observed_at) or not handoff_plan_current(cursor, post):
+            due_now = handoff_due({**post, **scope, "is_update": is_update}, observed_at)
+            if not post_id or identity in seen or (not due_now and not include_not_due) or not handoff_plan_current(cursor, post):
                 continue
             seen.add(identity)
             photos = _selected_photos(cursor, post)
-            item = {**post, **scope, "selected_photo": photos[0] if photos else None, "selected_photos": photos}
+            item = {**post, **scope, "compiled_handoff": isinstance(compiled_scope, dict), "selected_photo": photos[0] if photos else None, "selected_photos": photos}
             item["revision"] = handoff_revision(item)
             if post.get("status") not in HANDOFF_STATUSES or not handoff_kit_complete(cursor, item):
                 item["blocked_reason"] = "incomplete"
+            elif not due_now:
+                item['blocked_reason'] = 'not_due'
             delivery = _json_object(deliveries.get(user_id))
             # Legacy receipts are conclusive; never replay them on upgrade.
             if delivery and not delivery.get("revision"):
@@ -318,18 +385,52 @@ def handoff_revision(item: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
-def claim_handoff_part(conn: Any, item: dict[str, Any], part_key: str) -> dict[str, Any]:
+def claim_handoff_part(conn: Any, item: dict[str, Any], part_key: str, *, compiled_scope: dict[str, Any] | None = None) -> dict[str, Any]:
     """Persist intent before sending. Interrupted attempts require reconciliation."""
     from services.operator_audio import authorize_actor
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM social_posts WHERE id=%s FOR UPDATE", (item["id"],))
     current = _row(cursor, cursor.fetchone())
-    if not current or current.get("status") not in HANDOFF_STATUSES or current.get("publish_mode") != "manual" or not handoff_plan_current(cursor, current):
+    if not current or current.get("status") not in HANDOFF_STATUSES or (not isinstance(compiled_scope, dict) and current.get("publish_mode") != "manual") or not handoff_plan_current(cursor, current):
         return {"status": "cancelled"}
-    scopes = _enabled_scopes(cursor)
-    scope = next((scope for scope in scopes if scope["user_id"] == item["user_id"]
-                  and scope["telegram_id"] == item["telegram_id"]
-                  and scope["scope_type"] == item["scope_type"] and scope["scope_id"] == item["scope_id"]), None)
+    if isinstance(compiled_scope, dict):
+        scope = dict(compiled_scope)
+        if scope.get('plan_ids') and str(current.get('content_plan_id')) not in scope['plan_ids']:
+            return {'status': 'paused'}
+        dispatch = scope.get('compiled_dispatch')
+        if isinstance(dispatch, dict):
+            from services.compiled_content_program import dispatch_fence, program_allowed
+            run = {'id': dispatch.get('run_id'), 'blueprint_id': dispatch.get('blueprint_id'),
+                   'blueprint_version_id': dispatch.get('version_id'), 'lease_token': dispatch.get('lease_token')}
+            consent_scope = {'business_id': scope['business_id'], 'recipient_user_id': scope['user_id'],
+                'platforms': sorted(scope['required_platforms']), 'lead_days': int(scope['lead_days']),
+                'time': scope['handoff_time'], 'timezone': scope['timezone']}
+            if scope.get('plan_ids'):
+                consent_scope['plan_ids'] = scope['plan_ids']
+            if (not program_allowed(scope['business_id'], dispatch.get('blueprint_id'))
+                    or not dispatch_fence(cursor, run, dispatch.get('artifact_hash'), consent_scope)):
+                return {'status': 'paused'}
+        cursor.execute(
+            """SELECT p.user_id, p.telegram_id, u.is_active FROM telegramcontrolpreferences p
+               JOIN users u ON u.id=p.user_id WHERE p.user_id=%s LIMIT 1""",
+            (str(scope.get("user_id") or ""),),
+        )
+        recipient = _row(cursor, cursor.fetchone())
+        if (
+            not recipient
+            or not recipient.get("is_active")
+            or str(recipient.get("telegram_id") or "") != str(scope.get("telegram_id") or "")
+            or str(scope.get("business_id") or "") != str(item.get("business_id") or "")
+            or str(scope.get("user_id") or "") != str(item.get("user_id") or "")
+        ):
+            return {"status": "paused"}
+        authorize_actor(cursor, scope["user_id"], scope["business_id"], check_subscription=False)
+        scope.update(scope_type="business", scope_id=scope["business_id"])
+    else:
+        scopes = _enabled_scopes(cursor)
+        scope = next((scope for scope in scopes if scope["user_id"] == item["user_id"]
+                      and scope["telegram_id"] == item["telegram_id"]
+                      and scope["scope_type"] == item["scope_type"] and scope["scope_id"] == item["scope_id"]), None)
     if not scope:
         return {"status": "paused"}
     if current.get("platform") not in (scope.get("required_platforms") or HANDOFF_PLATFORMS):
@@ -342,6 +443,7 @@ def claim_handoff_part(conn: Any, item: dict[str, Any], part_key: str) -> dict[s
     current["lead_days"] = scope["lead_days"]
     current["handoff_time"] = scope["handoff_time"]
     current["required_platforms"] = scope["required_platforms"]
+    current['compiled_handoff'] = isinstance(compiled_scope, dict)
     if not handoff_kit_complete(cursor, current):
         return {"status": "incomplete"}
     current["selected_photos"] = _selected_photos(cursor, current)
@@ -407,7 +509,7 @@ def finish_handoff_part(conn: Any, item: dict[str, Any], part_key: str, result: 
     conn.commit()
 
 
-def deliver_content_publish_handoff(conn: Any, item: dict[str, Any], *, send_photo: Any, send_text: Any, validate_media: Any = None) -> str:
+def deliver_content_publish_handoff(conn: Any, item: dict[str, Any], *, send_photo: Any, send_text: Any, validate_media: Any = None, compiled_scope: dict[str, Any] | None = None) -> str:
     if item.get("blocked_reason"):
         return item["blocked_reason"]
     if not item.get("selected_photo") or not str(item.get("platform_text") or item.get("base_text") or "").strip():
@@ -422,7 +524,11 @@ def deliver_content_publish_handoff(conn: Any, item: dict[str, Any], *, send_pho
         return "incomplete"
     keys = [("photo" if index == 0 else f"photo:{index}") for index in range(len(photos))] + [f"text:{index}" for index in range(len(chunks))]
     for index, key in enumerate(keys):
-        claim = claim_handoff_part(conn, item, key)
+        claim = (
+            claim_handoff_part(conn, item, key, compiled_scope=compiled_scope)
+            if isinstance(compiled_scope, dict)
+            else claim_handoff_part(conn, item, key)
+        )
         if claim["status"] == "sent":
             continue
         if claim["status"] != "claimed":
@@ -438,11 +544,11 @@ def deliver_content_publish_handoff(conn: Any, item: dict[str, Any], *, send_pho
     return "sent"
 
 
-def queue_handoff_alert(conn: Any, *, business_id: str, event_key: str, message: str) -> None:
+def queue_handoff_alert(conn: Any, *, business_id: str, event_key: str, message: str, recipient_user_id: str | None = None) -> None:
     """Use the existing journey action/outbox for one alert per condition."""
     import uuid
     cursor = conn.cursor()
-    cursor.execute("SELECT id, telegram_id FROM users WHERE is_superadmin IS TRUE AND is_active IS TRUE AND NULLIF(BTRIM(telegram_id::text),'') IS NOT NULL")
+    cursor.execute("SELECT id, telegram_id FROM users WHERE is_superadmin IS TRUE AND is_active IS TRUE AND NULLIF(BTRIM(telegram_id::text),'') IS NOT NULL AND (%s IS NULL OR id::text=%s)", (recipient_user_id, recipient_user_id))
     recipients = [_row(cursor, row) for row in cursor.fetchall()]
     for recipient in recipients:
         key = hashlib.sha256(f"content-handoff:{business_id}:{event_key}:{recipient['id']}".encode()).hexdigest()
@@ -553,7 +659,7 @@ def handoff_kit_complete(cursor: Any, post: dict[str, Any], validate_media: Any 
     posts = [_row(cursor, value) for value in cursor.fetchall()]
     ready = set()
     for candidate in posts:
-        if candidate.get('status') in HANDOFF_STATUSES and candidate.get('publish_mode') == 'manual' and str(candidate.get('platform_text') or candidate.get('base_text') or '').strip() and _selected_photos(cursor, candidate):
+        if candidate.get('status') in HANDOFF_STATUSES and (post.get('compiled_handoff') or candidate.get('publish_mode') == 'manual') and str(candidate.get('platform_text') or candidate.get('base_text') or '').strip() and _selected_photos(cursor, candidate):
             photos = _selected_photos(cursor, candidate)
             if not validate_media or all(validate_media(photo) for photo in photos):
                 ready.add(candidate['platform'])

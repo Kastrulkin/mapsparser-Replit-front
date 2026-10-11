@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
+import psycopg2
 from datetime import datetime, timezone
 from typing import Any
 
@@ -351,6 +352,43 @@ def update_content_voice(actor: AuthContext | str, business_id: str, payload: di
 def load_content_voice_context(cursor: Any, *, user_id: str, business_id: str, limit: int = 5) -> dict[str, Any]:
     cursor.execute("SELECT * FROM content_voice_profiles WHERE business_id = %s", (business_id,))
     profile = _row_to_dict(cursor, cursor.fetchone())
+    cursor.execute('SAVEPOINT voice_manual_corrections')
+    try:
+        cursor.execute('''SELECT event.id, item.business_id, event.final_text AS example_text,
+            NULL AS platform, 'manual_correction' AS origin, 'reference' AS quality_status,
+            event.metadata_json, event.created_at
+            FROM ailearningevents event JOIN contentplanitems item
+              ON item.id::text = event.metadata_json->>'item_id'
+            JOIN contentplans plan ON plan.id = item.plan_id
+            WHERE item.business_id=%s AND plan.plan_status <> 'archived'
+              AND event.capability='content_plan.item'
+              AND event.event_type IN ('minor_edit','major_rewrite')
+              AND jsonb_exists(event.metadata_json->'fields', 'draft_text')
+              AND NULLIF(BTRIM(event.final_text),'') IS NOT NULL
+            ORDER BY event.created_at DESC LIMIT %s''', (business_id, min(limit, 3)))
+        corrections = [_serialize_example(cursor, row) for row in cursor.fetchall() or []]
+        cursor.execute('''SELECT item.id,item.business_id,item.draft_text AS example_text,
+            NULL AS platform,'manual_correction' AS origin,'reference' AS quality_status,
+            item.metadata_json,item.updated_at AS created_at
+            FROM contentplanitems item JOIN contentplans plan ON plan.id=item.plan_id
+            WHERE item.business_id=%s AND plan.plan_status <> 'archived'
+              AND item.metadata_json->>'generation_source'='operator_manual_edit'
+              AND item.status='edited' AND NULLIF(BTRIM(item.draft_text),'') IS NOT NULL
+            ORDER BY item.updated_at DESC LIMIT %s''', (business_id, min(limit,3)))
+        corrections = [_serialize_example(cursor, row) for row in cursor.fetchall() or []] + corrections
+        cursor.execute('''SELECT id,business_id,platform_text AS example_text,platform,
+            'manual_correction' AS origin,'reference' AS quality_status,
+            metadata_json,updated_at AS created_at
+            FROM social_posts WHERE business_id=%s
+              AND metadata_json->>'manually_edited'='true'
+              AND NULLIF(BTRIM(platform_text),'') IS NOT NULL
+            ORDER BY updated_at DESC LIMIT %s''', (business_id, min(limit,3)))
+        corrections = [_serialize_example(cursor, row) for row in cursor.fetchall() or []] + corrections
+    except (psycopg2.errors.UndefinedTable, psycopg2.errors.UndefinedColumn):
+        cursor.execute('ROLLBACK TO SAVEPOINT voice_manual_corrections')
+        corrections = []
+    finally:
+        cursor.execute('RELEASE SAVEPOINT voice_manual_corrections')
     cursor.execute(
         """
         SELECT id, business_id, example_text, platform, origin, quality_status, metadata_json, created_at
@@ -362,7 +400,7 @@ def load_content_voice_context(cursor: Any, *, user_id: str, business_id: str, l
         """,
         (user_id, business_id, business_id, max(1, min(limit, 5))),
     )
-    examples = [_serialize_example(cursor, row) for row in cursor.fetchall() or []]
+    examples = corrections + [_serialize_example(cursor, row) for row in cursor.fetchall() or []]
     remaining = max(0, min(limit, 5) - len(examples))
     if remaining:
         cursor.execute(

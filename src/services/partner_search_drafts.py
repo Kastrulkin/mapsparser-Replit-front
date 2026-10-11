@@ -209,6 +209,35 @@ def _draft_id(task_id: str, lead_id: str, revision: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"partner-search-draft:{task_id}:{lead_id}:{revision}"))
 
 
+def project_campaign_draft(cursor: Any, *, task_id: str, campaign_id: str,
+                           business_id: str, user_id: str) -> dict[str, Any]:
+    """Project canonical campaign copy into the existing letters list, never send."""
+    cursor.execute("""SELECT c.id,c.version,c.workstream_id,w.lead_id,
+        t.id AS touch_id,t.generated_text,t.subject,t.quality_gate_json,t.message_brief_json
+        FROM outreach_campaigns c JOIN lead_workstreams w ON w.id=c.workstream_id
+        JOIN outreach_campaign_touches t ON t.campaign_id=c.id AND t.sequence_index=0
+        JOIN operator_async_jobs j ON j.id=%s AND j.business_id=c.business_id
+        WHERE c.id=%s AND c.business_id=%s
+          AND j.result_json->'lead_ids' @> jsonb_build_array(w.lead_id::text)""",
+        (task_id, campaign_id, business_id))
+    row = cursor.fetchone()
+    if not row:
+        raise ValueError("campaign_outside_search_group")
+    draft_id = _draft_id(task_id, str(row["lead_id"]), str(campaign_id))
+    gate = row.get("quality_gate_json") or {}
+    cursor.execute("""INSERT INTO outreachmessagedrafts
+        (id,lead_id,workstream_id,channel,angle_type,tone,status,
+         generated_text,edited_text,learning_note_json,created_by,created_at,updated_at)
+        VALUES (%s,%s,%s,'email','partnership_first_note','professional','generated',
+                %s,%s,%s,%s,NOW(),NOW()) ON CONFLICT (id) DO NOTHING""",
+        (draft_id,row["lead_id"],row["workstream_id"],row["generated_text"],row["generated_text"],
+         Json({"search_task_id":task_id,"campaign_id":campaign_id,
+               "campaign_touch_id":str(row["touch_id"]),"campaign_version":row["version"],
+               "subject":row["subject"],"manual_review_required":not bool(gate.get("passed")),
+               "evidence":row.get("message_brief_json") or {},"external_dispatch_performed":False}),user_id))
+    return {"draft_id":draft_id,"quality_passed":bool(gate.get("passed"))}
+
+
 def process_job(claimed: dict[str, Any]) -> dict[str, Any]:
     from pg_db_utils import get_db_connection
     from services.operator_credit_reservation import reserve_paid_action_credits, finalize_reserved_action_credits

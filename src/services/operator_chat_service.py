@@ -117,7 +117,7 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
     finally:
         current_request_key.reset(request_token)
     from services.operator_followups import remember_selection
-    remember_selection(cursor, business_id, result)
+    remember_selection(cursor, business_id, result, history=list_operator_messages(cursor, conversation_id=conversation_id, business_id=business_id, limit=12))
     result["conversation_id"] = conversation_id
     result['user_message_id'] = user_message_id
     approval = result.get("approval") or {}

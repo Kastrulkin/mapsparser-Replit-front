@@ -5,7 +5,7 @@ import sys
 from flask import Blueprint, Response, jsonify, request
 
 from core.api_errors import internal_error_response
-from core.auth_helpers import require_auth_from_request, verify_business_access
+from core.auth_helpers import require_auth_from_request, verify_business_access, verify_business_write_access
 from database_manager import DatabaseManager
 from services.ai_runtime import (
     VISION_CAPABILITY,
@@ -79,10 +79,11 @@ def _user_id(user_data: dict) -> str:
     return str(user_data.get("user_id") or user_data.get("id") or "").strip()
 
 
-def _require_business(cursor, business_id: str, user_data: dict):
+def _require_business(cursor, business_id: str, user_data: dict, *, require_write: bool = False):
     if not business_id:
         return False, (jsonify({"success": False, "error": "business_id обязателен"}), 400)
-    has_access, _owner_id = verify_business_access(cursor, business_id, user_data)
+    access_check = verify_business_write_access if require_write else verify_business_access
+    has_access, _owner_id = access_check(cursor, business_id, user_data)
     if not has_access:
         return False, (jsonify({"success": False, "error": "Нет доступа к бизнесу"}), 403)
     return True, None
@@ -99,7 +100,7 @@ def _invalidate_social_approvals_for_photo_usage(
     if not business_id or not content_plan_item_id or not photo_asset_id:
         return 0
     platform_clause = "AND platform = %s" if target_platform else ""
-    params = [photo_asset_id, business_id, content_plan_item_id]
+    params = [photo_asset_id, photo_asset_id, business_id, content_plan_item_id]
     if target_platform:
         params.append(target_platform)
     cursor.execute(
@@ -110,6 +111,13 @@ def _invalidate_social_approvals_for_photo_usage(
             approval_id = NULL,
             automation_task_id = NULL,
             last_error = NULL,
+            media_json = (SELECT jsonb_build_array(jsonb_build_object(
+                'id', id, 'photo_asset_id', id,
+                'original_url', '/api/media-intelligence/photos/' || id::text || '/file' || chr(63) || 'variant=original',
+                'storage_path', storage_key,
+                'original_name', metadata_json->'upload'->>'original_name',
+                'mime_type', metadata_json->'upload'->>'mime_type'
+            )) FROM photo_assets WHERE id = %s),
             metadata_json = COALESCE(metadata_json, '{{}}'::jsonb) || jsonb_build_object(
                 'selected_photo_asset_id', %s,
                 'media_selection_changed_at', NOW(),
@@ -123,7 +131,14 @@ def _invalidate_social_approvals_for_photo_usage(
         """,
         tuple(params),
     )
-    return max(int(getattr(cursor, "rowcount", 0) or 0), 0)
+    affected = max(int(getattr(cursor, "rowcount", 0) or 0), 0)
+    # A photo is part of the plan item's editable version, even when a
+    # platform-specific selection was made. Bump it to invalidate stale edits.
+    cursor.execute(
+        "UPDATE contentplanitems SET updated_at = NOW() WHERE id = %s AND business_id = %s",
+        (content_plan_item_id, business_id),
+    )
+    return affected
 
 
 @media_intelligence_bp.route("/settings", methods=["GET"])
@@ -169,7 +184,7 @@ def media_settings_post():
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        ok, error_response = _require_business(cursor, business_id, user_data)
+        ok, error_response = _require_business(cursor, business_id, user_data, require_write=True)
         if not ok:
             return error_response
         setting = set_capability_enabled(
@@ -225,7 +240,7 @@ def media_photos_create():
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        ok, error_response = _require_business(cursor, business_id, user_data)
+        ok, error_response = _require_business(cursor, business_id, user_data, require_write=True)
         if not ok:
             return error_response
         if not is_capability_enabled(cursor, business_id, VISION_CAPABILITY):
@@ -267,7 +282,7 @@ def media_photo_upload():
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        ok, error_response = _require_business(cursor, business_id, user_data)
+        ok, error_response = _require_business(cursor, business_id, user_data, require_write=True)
         if not ok:
             return error_response
         if not is_capability_enabled(cursor, business_id, VISION_CAPABILITY):
@@ -356,7 +371,7 @@ def media_photo_analyze(asset_id: str):
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        ok, error_response = _require_business(cursor, business_id, user_data)
+        ok, error_response = _require_business(cursor, business_id, user_data, require_write=True)
         if not ok:
             return error_response
         business = load_business(cursor, business_id)
@@ -403,7 +418,7 @@ def media_photo_new_version(asset_id: str):
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        ok, error_response = _require_business(cursor, business_id, user_data)
+        ok, error_response = _require_business(cursor, business_id, user_data, require_write=True)
         if not ok:
             return error_response
         photo = create_photo_asset_version(
@@ -437,14 +452,33 @@ def media_photo_usage(asset_id: str):
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        ok, error_response = _require_business(cursor, business_id, user_data)
+        ok, error_response = _require_business(cursor, business_id, user_data, require_write=True)
         if not ok:
             return error_response
-        cursor.execute("SELECT id FROM photo_assets WHERE id=%s AND business_id=%s AND metadata_json->>'disk_import_available' IS DISTINCT FROM 'false'",(asset_id,business_id))
-        if not cursor.fetchone():raise ValueError('Фото недоступно для новых публикаций.')
         usage_type = str(payload.get("usage_type") or "publication")
         target_id = str(payload.get("target_id") or "").strip()
         target_platform = str(payload.get("target_platform") or "").strip()
+        if usage_type == "publication" and target_id:
+            expected_version = str(payload.get("expected_version") or "").strip()
+            if not expected_version:
+                return jsonify({"success": False, "error": "Пост уже мог измениться. Обновите его и выберите фото ещё раз.", "code": "content_item_version_required"}), 428
+            cursor.execute(
+                """SELECT updated_at::text AS version
+                   FROM contentplanitems
+                   WHERE id=%s AND business_id=%s
+                   FOR UPDATE""",
+                (target_id, business_id),
+            )
+            item_row = cursor.fetchone()
+            item = dict(item_row) if item_row and hasattr(item_row, "keys") else {}
+            current_version = str(item.get("version") or "").strip()
+            if not current_version:
+                return jsonify({"success": False, "error": "Пост не найден. Обновите контент-план.", "code": "content_item_not_found"}), 404
+            if current_version != expected_version:
+                return jsonify({"success": False, "error": "Пост изменился после загрузки. Обновите его и проверьте актуальные данные перед выбором фото.", "code": "content_item_stale"}), 409
+        from services.media_library_scope import available_photo
+        if not available_photo(cursor, asset_id, business_id):
+            raise ValueError('Фото недоступно для новых публикаций.')
         record_photo_usage(
             cursor,
             business_id=business_id,
