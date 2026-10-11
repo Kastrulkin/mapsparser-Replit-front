@@ -23,4 +23,10 @@ describe('content handoff entry in existing automation screen', () => {
     expect(screen.getByRole('button', { name: 'Проверить на текущем плане без отправки' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Передать готовые материалы — тест' })).toBeDisabled();
   });
+  it('allows the approved manual test when the backend grants execution, without activating a schedule', () => {
+    render(<ContentHandoffProgram blueprintId="pilot" details={{ versions: [], runs: [], candidate_version: {
+      id: 'v5', compiled_state: 'approved', steps_json: [{ capability: 'content.publish_handoff' }],
+    }, compiled_access: { execute: true } }} onRunQueued={() => undefined} />);
+    expect(screen.getByRole('button', { name: 'Передать готовые материалы — тест' })).toBeEnabled();
+  });
 });
