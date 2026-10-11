@@ -1,0 +1,39 @@
+{
+  "status": "FIX_PROVEN",
+  "code_commit": "1e9d9bf0578c52a780fcf22989712a2256b543d9",
+  "verified_at": "2026-10-11T17:37:33.853826+00:00",
+  "before": {
+    "regression_tests_failed": 4,
+    "failure": "Partnerships keeps rendering without any data or user change"
+  },
+  "after": {
+    "release_tests_passed": 32,
+    "workspace_regression_tests_passed": 4,
+    "release_types_inherited_diagnostics": 51,
+    "release_types_new_diagnostics": 0,
+    "workspace_types_exit": 0,
+    "build_exit": 0,
+    "product_ui_guard_exit": 0,
+    "integrity_exit": 0,
+    "reachable_js": 157
+  },
+  "production": {
+    "asset": "/assets/index-BuAZKeAt.js",
+    "widths": [
+      390,
+      1280
+    ],
+    "transitions": [
+      "partnerships -> influencers",
+      "partnerships -> average-ticket",
+      "partnerships -> agents"
+    ],
+    "mobile_menu_closed": true,
+    "browser_errors": 0,
+    "health": "ok",
+    "backup": "/opt/seo-app/backups/partnership-navigation-20261011",
+    "rollback": "/opt/seo-app/backups/partnership-navigation-20261011/rollback.sh",
+    "data_mutations": false,
+    "public_audit_index_sha256": "0545e2ea9d3a58f65fe507566e0a4e0a322ae1623ba9bd419c37ca7fe0bcde94"
+  }
+}
