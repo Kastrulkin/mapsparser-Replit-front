@@ -83,6 +83,18 @@ def test_schedule_allowlist_does_not_even_evaluate_other_automations(monkeypatch
     assert all(row['reason'] == 'outside_schedule_allowlist' for row in result['skipped'])
 
 
+def test_creation_approval_keeps_network_scope_and_hashes_changes(monkeypatch):
+    from services import agent_blueprint_creation, agent_builder_billing
+    monkeypatch.setattr(agent_blueprint_creation, 'preview_creation', lambda *args, **kwargs: {'status': 'ready'})
+    monkeypatch.setattr(agent_builder_billing, 'build_paid_action_preflight', lambda *args, **kwargs: {'status': 'ready'})
+    payload = {'name': 'Content', 'description': 'Network content', 'content_handoff_scope': {'business_ids': ['a', 'b'], 'recipient_user_ids': ['owner', 'manager']}}
+    first = agent_blueprint_creation.prepare_creation(None, business_id='a', user_id='owner', actor_context={}, payload=payload)['approval']['envelope']
+    assert first['payload']['content_handoff_scope'] == payload['content_handoff_scope']
+    payload['content_handoff_scope'] = {**payload['content_handoff_scope'], 'recipient_user_ids': ['owner']}
+    second = agent_blueprint_creation.prepare_creation(None, business_id='a', user_id='owner', actor_context={}, payload=payload)['approval']['envelope']
+    assert first['idempotency_key'] != second['idempotency_key']
+
+
 @pytest.mark.parametrize('uncertain', [False, True])
 def test_network_dispatch_preserves_success_and_continues_other_recipient(monkeypatch, uncertain):
     from services import compiled_content_program, agent_capability_handlers

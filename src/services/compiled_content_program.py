@@ -133,6 +133,8 @@ def collect_input(conn, contract, now=None, *, blueprint_id=None, version_id=Non
         'eligible': not bool(post.get('blocked_reason')), 'blocked_reason': post.get('blocked_reason') or '',
         'text': str(post.get('platform_text') or post.get('base_text') or ''),
         'platform': post.get('platform'),
+        'business_id': scope['business_id'], 'recipient_user_id': scope['recipient_user_id'],
+        'scheduled_for': post['scheduled_for'].isoformat(),
         'photo_asset_id': str((post.get('selected_photo') or {}).get('id') or '')} for post in due]}
 
 

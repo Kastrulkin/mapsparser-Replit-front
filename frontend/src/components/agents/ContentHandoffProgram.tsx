@@ -40,8 +40,8 @@ export function hasContentHandoff(details: AgentBlueprintDetails | null | undefi
   return Array.isArray(version?.steps_json) && version.steps_json.some((step: unknown) => record(step).capability === 'content.publish_handoff');
 }
 
-export function ContentHandoffProgram({ blueprintId, details, onRunQueued }: {
-  blueprintId: string; details: AgentBlueprintDetails | null; onRunQueued: (id: string) => void;
+export function ContentHandoffProgram({ blueprintId, details, onRunQueued, onSaved }: {
+  blueprintId: string; details: AgentBlueprintDetails | null; onRunQueued: (id: string) => void; onSaved?: () => void;
 }) {
   const saved = details?.candidate_version || details?.compiled_approved_version;
   const [versionId, setVersionId] = useState(String(saved?.id || ''));
@@ -97,6 +97,7 @@ export function ContentHandoffProgram({ blueprintId, details, onRunQueued }: {
         if (target.current !== selected) return;
         setVersionId(String(response.data.candidate_version?.id || '')); setState('checking');
         setArtifactHash(String(response.data.artifact?.artifact_hash || ''));
+        onSaved?.();
       } else if (operation === 'preview') {
         const snapshot = await api.post(`/agent-blueprints/${selected}/compiled-script/snapshots`, { source_kind: 'content_plan', version_id: versionId });
         const response = await api.post(`/agent-blueprints/${selected}/compiled-script/preview`, { version_id: versionId, snapshot_id: snapshot.data.snapshot.id });
@@ -109,7 +110,7 @@ export function ContentHandoffProgram({ blueprintId, details, onRunQueued }: {
         }
         await api.post(`/agent-blueprints/${selected}/compiled-script/approve`, { version_id: versionId, approval_digest: artifactHash, fixture_digest: preview.fixture_digest,
           delivery_context_digest: record(preview.delivery_context).digest });
-        if (target.current === selected) setState('approved');
+        if (target.current === selected) { setState('approved'); onSaved?.(); }
       } else {
         if (!runSnapshot.current) {
           const snapshot = await api.post(`/agent-blueprints/${selected}/compiled-script/snapshots`, { source_kind: 'content_plan', version_id: versionId });
@@ -131,6 +132,8 @@ export function ContentHandoffProgram({ blueprintId, details, onRunQueued }: {
   const context = record(preview.delivery_context);
   const scope = record(context.scope || record(artifact.manifest).content_handoff_contract && record(record(artifact.manifest).content_handoff_contract).scope);
   const posts = Array.isArray(input.posts) ? input.posts : [];
+  const targets = Array.isArray(context.targets) ? context.targets.map(record) : [context];
+  const blockedLabels: Record<string, string> = { incomplete: 'Комплект не утверждён или неполон', not_due: 'Время передачи ещё не наступило', needs_reconciliation: 'Нужна сверка предыдущей отправки' };
   return <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
     <h2 className="text-lg font-semibold">Передача готовых публикаций через бот</h2>
     <p className="text-sm text-slate-600">Сначала проверьте программу и материалы, затем утвердите условия. Передача сотруднику не означает публикацию на площадке.</p>
@@ -151,7 +154,8 @@ export function ContentHandoffProgram({ blueprintId, details, onRunQueued }: {
       <Button disabled={Boolean(busy) || !exampleAccepted} onClick={() => void perform('compile')}>Создать программу по условиям</Button>
     </>}
     {(state === 'checking' || state === 'ready_approval') && <Button variant={preview.status === 'passed' ? 'outline' : 'default'} disabled={Boolean(busy)} onClick={() => void perform('preview')}>Проверить на текущем плане без отправки</Button>}
-    {posts.map((post: unknown) => { const row = record(post); return <div key={String(row.post_id)} className="border-t border-slate-100 pt-3 text-sm"><p className="font-medium">{String(row.platform || '')} · {row.eligible ? 'Готово к передаче' : String(row.blocked_reason || 'Не готово')}</p><p className="mt-1 whitespace-pre-wrap">{String(row.text || '')}</p>{row.photo_asset_id ? <HandoffPhotoPreview assetId={String(row.photo_asset_id)} /> : <p className="text-slate-500">Фото не выбрано</p>}</div>; })}
+    {preview.status === 'passed' && <p role="status" className="text-sm text-slate-600">Проверка программы пройдена. Сейчас готово к передаче: {posts.filter((post: unknown) => record(post).eligible === true).length}. Утверждение программы не утверждает сами посты; пропущенные даты не отправляются задним числом.</p>}
+    {posts.map((post: unknown) => { const row = record(post); const recipient = targets.find((value) => { const valueScope = record(value.scope); return valueScope.business_id === row.business_id && valueScope.recipient_user_id === row.recipient_user_id; }); return <div key={String(row.post_id)} className="border-t border-slate-100 pt-3 text-sm"><p>{String(recipient?.address || '')} → {String(recipient?.recipient_name || '')} · {String(row.scheduled_for || '').slice(0, 10)}</p><p className="font-medium">{String(row.platform || '')} · {row.eligible ? 'Готово к передаче' : (blockedLabels[String(row.blocked_reason)] || 'Не готово')}</p><p className="mt-1 whitespace-pre-wrap">{String(row.text || '')}</p>{row.photo_asset_id ? <HandoffPhotoPreview assetId={String(row.photo_asset_id)} /> : <p className="text-slate-500">Фото не выбрано</p>}</div>; })}
     {state === 'ready_approval' && preview.status === 'passed' && <Button disabled={Boolean(busy)} onClick={() => void perform('approve')}>Утвердить программу и условия передачи</Button>}
     {(state === 'approved' || state === 'active') && <><p className="text-sm text-slate-600">Программа утверждена. Регулярное расписание включается отдельно; сейчас можно выполнить тест на выбранного получателя.</p><Button disabled={Boolean(busy) || details?.compiled_access?.execute !== true} onClick={() => void perform('run')}>Передать готовые материалы — тест</Button></>}
     {successors.map((plan) => <div key={String(plan.id)} className="space-y-2 border-t border-slate-100 pt-3 text-sm">

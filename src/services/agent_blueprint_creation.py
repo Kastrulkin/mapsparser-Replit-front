@@ -384,7 +384,7 @@ def prepare_creation(cursor: Any, *, business_id: str, user_id: str, actor_conte
     if paid.get("status") != "ready":
         return {"status": "blocked", "code": "AGENT_CREATION_BILLING_BLOCKED", "error": "Создание сейчас недоступно по кредитам.", "billing": paid}
     allowed_keys = ("name", "description", "category", "execution_mode", "schedule_time", "schedule_timezone",
-                    "schedule", "outreach_config", "selected_connection_bindings", "selected_bindings",
+                    "schedule", "outreach_config", "content_handoff_scope", "selected_connection_bindings", "selected_bindings",
                     "selected_provider_routes", "selected_routes", "accepted_provider_routes", "clone_from_blueprint_id", "use_ai_compiler")
     envelope_payload = {key: payload[key] for key in allowed_keys if key in payload}
     # Pin defaults in the approval so a later business timezone edit cannot

@@ -16,7 +16,8 @@ def main(package):
     if Path.cwd() != root:
         raise SystemExit('Run from /opt/seo-app')
     index = root / 'frontend/dist/index.html'
-    if 'index-BJLPiouM.js' not in index.read_text():
+    expected_asset = json.loads((package / 'manifest.json').read_text()).get('expected_frontend_asset', 'index-BJLPiouM.js')
+    if expected_asset not in index.read_text():
         raise SystemExit('Frontend baseline changed; re-port before deploying')
     result = subprocess.run(['python3', str(package / 'install.py'), 'install', str(package)], check=True, capture_output=True, text=True)
     backup = Path(json.loads(result.stdout)['backup'])

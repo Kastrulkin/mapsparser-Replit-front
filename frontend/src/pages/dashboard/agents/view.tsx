@@ -574,6 +574,7 @@ export const AgentBlueprintsView = ({ scope }) => {
                     blueprintId={selectedBlueprint.id}
                     details={blueprintDetails}
                     onRunQueued={(runId) => { void loadRun(runId); }}
+                    onSaved={() => void loadBlueprintDetails(selectedBlueprint.id)}
                   /> :
                   <EmployeeAgentScenarioPanel
                     blueprint={selectedBlueprint}

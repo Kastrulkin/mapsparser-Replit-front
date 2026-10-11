@@ -28,11 +28,10 @@ results, shifted final dates, completion deduplication, reviewed successor
 lineage, cached source dates and service changes. Frontend production build
 passed. These tests do not prove production browser or live provider behavior.
 
-## Deployment gate — not activated
+## Initial deployment gate
 
-No production changes, network candidate creation, schedule activation or
-Telegram sends have been performed for this release. In particular, no
-retroactive October 11 delivery is authorized by the regular scenario.
+The initial code commit was not deployed. No retroactive October 11 delivery
+is authorized by the regular scenario.
 
 Before deploying:
 
@@ -70,3 +69,31 @@ file. The dispatcher has a blueprint-ID allowlist applied before evaluating
 any schedule, including canary checks; its empty-value behavior is compatible.
 The two old Riderra schedules are outside this allowlist. The rollout leaves
 dispatch disabled until a reviewed network version is approved and activated.
+
+## Production verification, October 11
+
+The guarded partial rollout completed. Backup:
+`/opt/seo-app/backups/content-network-20261011T111547`. Thirteen backend files
+and the compatible frontend distribution were installed. App, worker and
+operator-worker were restarted; runner, Telegram bot and other services were
+not restarted. HTTP returned 200, the authenticated agents page loaded and the
+smart menu remained present. Config allowlists contain only this blueprint
+and the two specified branches. Schedule dispatch remains disabled.
+
+Paused network candidate v4 was saved using the existing version store with a
+restricted backup of prior pilot records. The real browser compiled candidate
+v5 (`c3bde055-24d7-429d-9f47-9b47a3b3502b`), previewed real photos and four
+branch/recipient contexts, and approved the version-bound program conditions.
+No Telegram request was dispatched. The preview correctly excluded the
+unapproved post variants. Final regression suite: 92 passed (including
+PostgreSQL), no skips. Frontend and Today checks: 33 passed.
+
+**Remaining operational gate:** the current Eng plan ends on October 11 and
+its last packet missed the day-before window. The Dol plan contains future
+posts (next October 14), but its platform variants are still `needs_review`.
+Compiled approval does not approve posts. Do not backdate sends, mark a missed
+last packet delivered, or emit successful plan-completion events without both
+recipients' receipts. A real approved future kit and a decision on the ended
+Eng plan are required before enabling the recurring schedule. The UI safety
+review also blocked proceeding toward activation before that delivery test;
+no indirect activation workaround was used.
