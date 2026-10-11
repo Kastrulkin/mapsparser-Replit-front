@@ -6,6 +6,10 @@ This is the design operating model for LocalOS product UI. It sits above individ
 
 Use it before editing dashboard, cockpit, builder, form, approval, run history, or agent-management screens.
 
+## Automation Display Names
+
+Use «Автоматизация» in navigation and «Автоматизация работы» as the workspace title. The primary setup action is «Настроить задачу». Describe recurring work through concrete actions, such as checking new reviews, preparing news drafts and collecting a summary. Existing `/dashboard/agents` routes, identifiers and internal agent architecture remain compatible. User-facing task naming takes precedence over the employee metaphor below.
+
 ## Today And Direct Work Navigation
 
 `/dashboard` is always Today. Keep stable direct entries for content,

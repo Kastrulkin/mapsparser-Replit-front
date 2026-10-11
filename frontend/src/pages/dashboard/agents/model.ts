@@ -977,7 +977,7 @@ export const buildAgentBusinessStatus = (
     tone: 'ready',
     primaryLabel: 'Проверить',
     lastResult: formatLastRun(blueprint),
-    nextRun: blueprint.active_version_number ? 'по сценарию агента' : 'после проверки',
+    nextRun: blueprint.active_version_number ? 'по сценарию задачи' : 'после проверки',
   };
 };
 
@@ -1003,14 +1003,14 @@ export const buildEmployeeStatus = (
     return {
       label: 'Нужно проверить',
       tone: 'amber',
-      summary: 'Сотрудник не получил данные из источника. Нужно исправить доступ или запустить тест заново.',
+      summary: 'LocalOS не получил данные из источника. Нужно исправить доступ или запустить тест заново.',
     };
   }
   if (workspaceState === 'waiting_for_review') {
     return {
       label: 'Ждёт решения',
       tone: 'amber',
-      summary: 'Сотрудник подготовил результат и остановился, чтобы вы его проверили.',
+      summary: 'LocalOS подготовил результат и ждёт вашей проверки.',
     };
   }
   if (workspaceState === 'error') {
@@ -1032,7 +1032,7 @@ export const buildEmployeeStatus = (
     return {
       label: 'Нужно проверить',
       tone: 'amber',
-      summary: 'Выберите, как должен запускаться агент: один раз, по кнопке или по расписанию.',
+      summary: 'Выберите, как должна запускаться задача: один раз, по кнопке или по расписанию.',
     };
   }
   if (workspaceState === 'completed') {
@@ -1046,7 +1046,7 @@ export const buildEmployeeStatus = (
     return {
       label: 'Черновик',
       tone: 'slate',
-      summary: 'Сотрудник создан, но ещё не включён в работу.',
+      summary: 'Задача создана, но ещё не включена в работу.',
     };
   }
   if (workspaceState === 'ready_for_test' || workspaceState === 'needs_attention') {
@@ -1060,13 +1060,13 @@ export const buildEmployeeStatus = (
     return {
       label: 'Нужно проверить',
       tone: 'amber',
-      summary: 'Сотрудник выполняет тестовую проверку.',
+      summary: 'LocalOS выполняет тестовую проверку.',
     };
   }
   return {
     label: 'Работает',
     tone: 'emerald',
-    summary: 'Сотрудник готов работать по опубликованному сценарию.',
+    summary: 'Задача готова к выполнению по утверждённому сценарию.',
   };
 };
 
@@ -1233,7 +1233,7 @@ export const buildEmployeePrimaryAction = ({
     return {
       kind: 'open_result',
       label: 'Разобрать результат',
-      description: 'Сотрудник остановился до готового результата. Откройте причину и исправьте следующий шаг.',
+      description: 'Задача остановилась до готового результата. Откройте причину и исправьте следующий шаг.',
       targetMode: 'results',
     };
   }
@@ -1315,8 +1315,8 @@ export const buildEmployeePrimaryAction = ({
     }
     return {
       kind: 'enable',
-      label: userMode.mode === 'scheduled' ? 'Включить по расписанию' : 'Включить агента',
-      description: 'Включите сотрудника после успешной проверки результата.',
+      label: userMode.mode === 'scheduled' ? 'Включить по расписанию' : 'Включить задачу',
+      description: 'Включите задачу после успешной проверки результата.',
       targetMode: 'overview',
       versionId: activationVersionId,
     };
@@ -1333,7 +1333,7 @@ export const buildEmployeePrimaryAction = ({
   return {
     kind: 'view_history',
     label: 'Открыть последний результат',
-    description: 'Сотрудник работает. Можно открыть последний сохранённый результат.',
+    description: 'Задача включена. Можно открыть последний сохранённый результат.',
     targetMode: 'results',
   };
 };
@@ -1451,14 +1451,14 @@ export const buildAgentUserMode = (
       mode,
       label: 'По расписанию',
       flow: 'Описание → тест → включение → расписание',
-      description: 'Сотрудник запускается в указанное время. Внешние действия по-прежнему требуют подтверждения.',
+      description: 'Задача запускается в указанное время. Внешние действия по-прежнему требуют подтверждения.',
     };
   }
   return {
     mode: 'manual',
     label: 'Запуск по кнопке',
     flow: 'Описание → тест → включение → запуск',
-    description: 'Сотрудник выполняет задачу только когда вы нажимаете кнопку запуска.',
+    description: 'Задача выполняется только когда вы нажимаете кнопку запуска.',
   };
 };
 
@@ -1489,12 +1489,12 @@ export const buildReasonCard = (
   if (state === 'running_test') {
     return {
       title: 'Что происходит сейчас',
-      description: 'Сотрудник выполняет проверку. Внешние отправки и публикации не выполняются без вашего разрешения.',
+      description: 'LocalOS выполняет проверку. Внешние отправки и публикации не выполняются без вашего разрешения.',
     };
   }
   if (state === 'error') {
     return {
-      title: 'Почему сотрудник остановился',
+      title: 'Почему выполнение остановилось',
       description: 'Последняя проверка не дала готового результата. Посмотрите причину и запустите тест после исправления.',
     };
   }

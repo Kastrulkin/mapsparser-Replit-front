@@ -18,7 +18,7 @@ const context = {
 };
 
 function WorkShell() {
-  return <><nav><Link to="/influencers">Инфлюенсеры</Link><Link to="/average-ticket">Средний чек</Link><Link to="/agents">ИИ-сотрудники</Link></nav><Outlet context={context} /></>;
+  return <><nav><Link to="/influencers">Инфлюенсеры</Link><Link to="/average-ticket">Средний чек</Link><Link to="/agents">Автоматизация</Link></nav><Outlet context={context} /></>;
 }
 
 // A bounded commit budget aborts an update loop instead of hanging the test runner.
@@ -40,7 +40,7 @@ describe('leaving partnerships while data is pending', () => {
     expect(screen.getByRole('heading', { name: 'Партнёрства сети' })).toBeInTheDocument();
     expect(commits()).toBeLessThan(10);
   });
-  it.each([['Инфлюенсеры', 'influencers'], ['Средний чек', 'average-ticket'], ['ИИ-сотрудники', 'agents']])('opens %s without waiting for partnership requests', async (label, path) => {
+  it.each([['Инфлюенсеры', 'influencers'], ['Средний чек', 'average-ticket'], ['Автоматизация', 'agents']])('opens %s without waiting for partnership requests', async (label, path) => {
     mountWorkspace();
     await userEvent.click(screen.getByRole('link', { name: label }));
     expect(screen.getByRole('heading', { name: path })).toBeInTheDocument();

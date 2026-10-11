@@ -435,7 +435,7 @@ export const CreateAgentWizard = ({
             className="min-h-32 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-slate-400"
             value={prompt}
             onChange={(event) => onPromptChange(event.target.value)}
-            placeholder="Опишите, какого агента хотите создать"
+            placeholder="Опишите задачу, которую хотите настроить"
           />
           <div className="flex flex-wrap gap-2">
             {examples.map((example) => (
@@ -560,7 +560,7 @@ export const CreateAgentWizard = ({
         ) : (
           <Button type="button" onClick={onCreate} disabled={actionLoading || !canCreate}>
             {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-            Создать агента
+            Создать задачу
           </Button>
         )}
       </DialogFooter>
@@ -748,7 +748,7 @@ export const DialogAgentBuilder = ({
     addCreateBlocker(`unsupported:${item.capability || item.reason}`, item.reason || 'Нет разрешённого способа подключения.');
   });
   const createDraftLabel = preview?.setup_flow?.post_create_status === 'ready_for_preview'
-    ? 'Создать агента и открыть тест'
+    ? 'Создать задачу и открыть тест'
     : missingConnectionChoices.length
       ? 'Сначала выберите подключение'
       : missingProviderRouteKeys.length
@@ -756,8 +756,8 @@ export const DialogAgentBuilder = ({
         : missingProviderRouteConfirmation
           ? 'Подтвердите способы'
           : preview?.setup_flow?.post_create_status === 'needs_connection' || preview?.setup_flow?.post_create_status === 'needs_connection_choice'
-      ? 'Создать агента и подключить сервисы'
-      : 'Создать агента';
+      ? 'Создать задачу и подключить сервисы'
+      : 'Создать задачу';
   const builderDecision = buildBuilderCreationDecision({
     preview,
     questions,
@@ -818,13 +818,20 @@ export const DialogAgentBuilder = ({
           className="min-h-28 resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm leading-6 outline-none transition focus:border-slate-400"
           value={input}
           onChange={(event) => onInputChange(event.target.value)}
-          placeholder="Например: мне нужен агент, который проверяет договоры, находит риски и готовит краткий отчёт"
+          placeholder="Например: проверяй новые отзывы и готовь черновики ответов для моей проверки"
         />
         <Button type="button" onClick={onStart} disabled={actionLoading || !input.trim()}>
           {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
           {session ? 'Обновить понимание' : 'Начать диалог'}
         </Button>
       </div>
+      {!session ? <div className="flex flex-wrap gap-2" aria-label="Примеры задач">
+        {[
+          { label: 'Проверять новые отзывы', prompt: 'Проверяй новые отзывы выбранного бизнеса и готовь черновики ответов для моей проверки. Ничего не публикуй и не отправляй.' },
+          { label: 'Готовить черновики новостей', prompt: 'Готовь черновики новостей по подтверждённым данным выбранного бизнеса для моей проверки. Не придумывай факты, ничего не публикуй и не отправляй.' },
+          { label: 'Собирать сводку', prompt: 'Собирай краткую внутреннюю сводку по доступным данным выбранного бизнеса: что изменилось и что требует моего решения. Указывай недостающие данные. Ничего не отправляй клиентам.' },
+        ].map(example => <Button key={example.label} type="button" variant="outline" disabled={actionLoading} onClick={() => onInputChange(example.prompt)}>{example.label}</Button>)}
+      </div> : null}
       {actionLoading ? (
         <div role="status" aria-live="polite" className="flex items-center gap-2 rounded-xl bg-sky-50 px-3 py-2 text-sm text-sky-900">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
@@ -835,7 +842,7 @@ export const DialogAgentBuilder = ({
       {session ? (
         <div className="space-y-4">
           <section className="rounded-2xl bg-white p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.10)]">
-            <div className="text-sm font-semibold text-slate-950">Как запускать агента</div>
+            <div className="text-sm font-semibold text-slate-950">Как запускать задачу</div>
             <div className="mt-1 text-xs leading-5 text-slate-500">LocalOS предложил вариант. Подтвердите его или выберите другой.</div>
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
               {agentExecutionModeOptions.map((option) => (
@@ -1090,7 +1097,7 @@ export const DialogAgentBuilder = ({
             </details>
             {estimatedCredits > 0 ? (
               <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900">
-                Создание агента спишет примерно {estimatedCredits} кредита с баланса. Если кредитов не хватит, предложим пополнить счёт.
+                Создание задачи спишет примерно {estimatedCredits} кредита с баланса. Если кредитов не хватит, предложим пополнить счёт.
               </div>
             ) : null}
           </div>

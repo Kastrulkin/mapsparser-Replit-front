@@ -580,10 +580,10 @@ export const AgentBlueprintsView = ({ scope }) => {
       }}>
         <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto rounded-2xl">
           <DialogHeader>
-            <DialogTitle>{cloneFromBlueprintId ? 'Создать копию агента' : 'Создать агента'}</DialogTitle>
+            <DialogTitle>{cloneFromBlueprintId ? 'Создать копию задачи' : pageCopy.create}</DialogTitle>
             <DialogDescription>
               {cloneFromBlueprintId
-                ? 'LocalOS создаст нового агента с теми же источниками и правилами. История запусков, результаты и решения не копируются.'
+                ? 'LocalOS создаст новую задачу с теми же источниками и правилами. История запусков, результаты и решения не копируются.'
                 : 'Опишите задачу обычным языком. LocalOS уточнит недостающие детали и покажет понятную проверку перед созданием.'}
             </DialogDescription>
           </DialogHeader>
@@ -904,7 +904,7 @@ export const AgentBlueprintsView = ({ scope }) => {
 
             <main data-tour-target="agents-control" className="min-w-0 space-y-4">
               {selectedBlueprint && selectedEmployeeAction && !runAnimation ? (
-                <nav className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1" aria-label="Разделы агента">
+                <nav className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1" aria-label="Разделы задачи">
                   {([
                     ['overview', 'Обзор'],
                     ['results', 'История'],

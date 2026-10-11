@@ -52,6 +52,7 @@ describe('DashboardSidebar localization', () => {
     expect(screen.getByRole('link', { name: 'Контент' })).toHaveAttribute('href', '/dashboard/content');
     expect(screen.getByRole('link', { name: 'Результаты' })).toHaveAttribute('href', '/dashboard/progress');
     expect(screen.getByRole('link', { name: 'Инфлюенсеры' })).toHaveAttribute('href', '/dashboard/influencers');
+    expect(screen.getByRole('link', { name: 'Автоматизация' })).toHaveAttribute('href', '/dashboard/agents');
   });
 
   it('keeps direct work areas in the Turkish navigation', async () => {

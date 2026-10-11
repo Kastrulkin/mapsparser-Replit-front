@@ -1,0 +1,25 @@
+{
+  "target_tests": 67,
+  "target_tests_pass": true,
+  "release_type_diagnostics_existing": 51,
+  "release_type_diagnostics_new": 0,
+  "baseline_paused_test_failures": 2,
+  "baseline_paused_failures_reproduced": true,
+  "workspace_tests_passed": 11,
+  "workspace_types_pass": true,
+  "build_pass": true,
+  "product_ui_guard_pass": true,
+  "dist_integrity_pass": true,
+  "production_widths": [
+    390,
+    768,
+    1280
+  ],
+  "production_horizontal_overflow": false,
+  "production_console_errors": 0,
+  "examples_fill_description_only": true,
+  "created_or_started_task": false,
+  "live_js": "/assets/index-DGtzBFv7.js",
+  "backup": "/opt/seo-app/backups/automation-labels-20261011/",
+  "private_screenshots_published": false
+}
