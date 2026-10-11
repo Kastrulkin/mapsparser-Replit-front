@@ -140,5 +140,5 @@ def test_approved_content_preview_never_updates_approval_evidence(monkeypatch):
     with Flask(__name__).app_context():
         response, status = agent_blueprints_api.compiled_preview_for_actor('pilot', {'user_id':'owner'}, {'version_id':'v5'})
     assert status == 200 and response.get_json()['read_only'] is True
-    assert not any('UPDATE' in query for query in sql)
+    assert not any(query.lstrip().startswith(('UPDATE ', 'INSERT ', 'DELETE ')) for query in sql)
     assert version['compiled_state'] == 'approved'
