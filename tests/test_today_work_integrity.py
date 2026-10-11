@@ -41,3 +41,11 @@ def test_approved_content_still_requires_manual_publication():
     sections=section_items([failure,task],'maps',now=NOW)
     assert sections['needs_decision'][0]['entity_id']=='approved'
     assert sections['needs_decision'][0]['status']=='approved'
+
+def test_context_metadata_survives_normalization():
+    source={'id':'owner:o','kind':'owner_action','entity_id':'o','status':'ready','business_id':'point','business_name':'Location','timezone':'Europe/Moscow','due_at':NOW.isoformat()}
+    view=canonical_work_items({'active_work':[source]},NOW)[0]
+    assert view['business_name']=='Location'
+    assert view['timezone']=='Europe/Moscow'
+    assert view['business_id']=='point'
+    assert work_item(entity_type='content_item',entity_id='i',flow='content',business_id='point',business_name='Location',title='Title',status='edited',url='/dashboard/content?item_id=i',now=NOW)['business_name']=='Location'
