@@ -4,6 +4,7 @@ Does not enable dispatch or modify schedules. Keeps old frontend assets for
 open tabs and backs up configuration before adding the scheduler allowlist.
 """
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -16,11 +17,29 @@ def main(package):
     if Path.cwd() != root:
         raise SystemExit('Run from /opt/seo-app')
     index = root / 'frontend/dist/index.html'
-    expected_asset = json.loads((package / 'manifest.json').read_text()).get('expected_frontend_asset', 'index-BJLPiouM.js')
+    manifest = json.loads((package / 'manifest.json').read_text())
+    expected_asset = manifest.get('expected_frontend_asset', 'index-BJLPiouM.js')
     if expected_asset not in index.read_text():
         raise SystemExit('Frontend baseline changed; re-port before deploying')
+    for row in manifest.get('frontend_sources', []):
+        relative = Path(row['path'])
+        if '..' in relative.parts or not relative.is_relative_to('frontend/src'):
+            raise SystemExit('Invalid frontend path')
+        current = root / relative
+        observed = hashlib.sha256(current.read_bytes()).hexdigest() if current.exists() else None
+        if observed != row['before'] or hashlib.sha256((package / relative).read_bytes()).hexdigest() != row['after']:
+            raise SystemExit('Frontend source changed; re-port before deploying')
     result = subprocess.run(['python3', str(package / 'install.py'), 'install', str(package)], check=True, capture_output=True, text=True)
     backup = Path(json.loads(result.stdout)['backup'])
+    for row in manifest.get('frontend_sources', []):
+        relative = Path(row['path'])
+        target = root / relative
+        if target.exists():
+            saved = backup / relative
+            saved.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(target, saved)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(package / relative, target)
     for relative in ['.env', 'docker/compiled-script-runner/compose.fragment.yml', 'frontend/dist/index.html']:
         source = root / relative
         saved = backup / relative
