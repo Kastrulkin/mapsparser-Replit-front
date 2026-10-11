@@ -1,6 +1,6 @@
 {
   "frontend_tests": 128,
-  "backend_tests": 20,
+  "backend_tests": 21,
   "telegram_tests": 4,
   "build": "passed",
   "integrity": "passed",
@@ -9,11 +9,22 @@
   "type_check": "production baseline has 235 diagnostics; release has 217; zero new diagnostics after path and union-order normalization",
   "baseline_commit": "aa0ebe1cf",
   "backup": "/opt/seo-app/backups/today-ui-20261011",
-  "frontend_entry": "/assets/index-Bk3vce3x.js",
+  "frontend_entry": "/assets/index-BJLPiouM.js",
   "backend_allowlist": [
     "services/today_workspace.py",
     "services/operator_mobile_today.py",
     "services/operator_owner_actions.py"
   ],
-  "deployment": "prepared; user authorized"
+  "deployment": "deployed; live HTTP 200 and selected action verified",
+  "network_context": "business names and owner timezone preserved; SQL EXPLAIN verified",
+  "primary_action": "explicit black product Button variant",
+  "push": "pending explicit repository destination approval",
+  "browser_errors": 0,
+  "viewport_checks": [
+    390,
+    768,
+    1280
+  ],
+  "horizontal_overflow": false,
+  "live_backend_sha256": "d505fcff0e665ef9522b2e66bf1f7339184d316f3051fd2da8081c7b50f06973"
 }
