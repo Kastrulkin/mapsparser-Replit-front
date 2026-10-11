@@ -1,10 +1,12 @@
-import { render, screen, within } from '@testing-library/react';
+import { configure, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { newAuth } from '@/lib/auth_new';
 import { LanguageProvider } from '@/i18n/LanguageContext';
 import { ManagedCardGrowthPanel, type ManagedCardGrowth } from './ManagedCardGrowthPanel';
+
+configure({ asyncUtilTimeout: 10_000 });
 
 vi.mock('@/lib/auth_new', () => ({
   newAuth: { makeRequest: vi.fn() },
@@ -49,6 +51,18 @@ describe('ManagedCardGrowthPanel', () => {
     window.localStorage.clear();
     window.localStorage.setItem('language', 'ru');
     vi.mocked(newAuth.makeRequest).mockReset();
+  });
+
+  it('keeps goal changes disabled for a network overview even with one location', async () => {
+    render(<LanguageProvider><ManagedCardGrowthPanel businessId="parent-business" growth={growth} onUpdated={vi.fn()} canEditGoal={false} /></LanguageProvider>);
+    expect(await screen.findByRole('combobox')).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Подтвердить цель' })).not.toBeInTheDocument();
+  });
+
+  it('does not turn missing baseline measurements into zeroes', async () => {
+    render(<LanguageProvider><ManagedCardGrowthPanel businessId="business-1" growth={{ ...growth, baseline: { status: 'observed', providers: { yandex: { views: 0 } } } }} onUpdated={vi.fn()} /></LanguageProvider>);
+    expect((await screen.findAllByText('—')).length).toBe(2);
+    expect(screen.getByText('0')).toBeInTheDocument();
   });
 
   it('distinguishes missing and unknown evidence', async () => {

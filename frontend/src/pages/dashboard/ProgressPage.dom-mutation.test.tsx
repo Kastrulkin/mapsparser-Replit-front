@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { configure, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,6 +6,9 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { LanguageProvider } from '@/i18n/LanguageContext';
 import { newAuth } from '@/lib/auth_new';
 import { ProgressPage } from './ProgressPage';
+
+// Locale modules load asynchronously; allow cold filesystem reads without weakening assertions.
+configure({ asyncUtilTimeout: 10_000 });
 
 vi.mock('@/lib/auth_new', () => ({
   newAuth: {
@@ -111,6 +114,7 @@ describe('Progress page DOM ownership', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Обновить' }));
 
+    fireEvent.click(screen.getByText('Выполненные этапы за всё время'));
     expect(await screen.findByText(/3 из 4/)).toBeInTheDocument();
     expect(screen.queryByText('Что-то пошло не так')).not.toBeInTheDocument();
   });

@@ -48,8 +48,8 @@ test('managed card path is readable in the web progress screen', async ({ page }
   });
 
   await page.goto('/dashboard/progress');
+  await page.getByRole('button', { name: /Карты и отзывы/ }).click();
   await expect(page.getByRole('heading', { name: 'Цель и состояние карточек' })).toBeVisible();
-  await expect(page.getByText('Уточните основную категорию в Яндекс', { exact: true })).toBeVisible();
   await expect(page.getByText('Базовые 28 дней', { exact: true })).toBeVisible();
   await page.getByRole('group').filter({ hasText: 'Яндекс' }).click();
   await expect(page.getByText('Нужно заполнить', { exact: true })).toBeVisible();

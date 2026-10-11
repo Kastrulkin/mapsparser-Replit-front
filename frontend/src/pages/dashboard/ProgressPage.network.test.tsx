@@ -163,6 +163,7 @@ describe('ProgressPage network map', () => {
       </MemoryRouter>,
     );
 
+    fireEvent.click(await screen.findByText('Точки сети'));
     expect(await screen.findByTestId('network-map', {}, { timeout: 10_000 })).toBeInTheDocument();
     expect(await screen.findByText('2 точки на карте')).toBeInTheDocument();
 
@@ -197,7 +198,7 @@ describe('ProgressPage network map', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'Что уже сделано' }, { timeout: 10_000 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Результаты' }, { timeout: 10_000 })).toBeInTheDocument();
     expect(screen.queryByTestId('network-map')).not.toBeInTheDocument();
   });
 

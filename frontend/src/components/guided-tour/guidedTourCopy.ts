@@ -1,3 +1,4 @@
+import { progressResultsCopies } from '@/pages/dashboard/progressResultsCopy';
 import type { Language } from '@/i18n/LanguageContext.logic';
 
 type GuidedTourStepText = {
@@ -616,12 +617,13 @@ const humanTourClarity: Record<Language, Record<string, GuidedTourStepText>> = {
 export const guidedTourCopyForLanguage = (language: Language): GuidedTourCopy => {
   const base = copyByLanguage[language];
   const automation = automationCopy[language];
+  const results = progressResultsCopies[language];
   const contentPlan = base.steps['content-calendar'];
   return {
     ...base,
     welcome: clarityWelcomeCopy[language],
     chapters: { ...base.chapters, automation: automation.chapter, partnership: clarityPartnershipChapter[language] },
-    steps: { ...base.steps, ...menuPurposeCopy[language], 'content-plan-setup': contentPlan, 'content-plan-preview': contentPlan, 'content-plan-save': contentPlan, 'content-plan-review': contentPlan, 'agents-nav': automation.nav, 'agents-signals': automation.signals, 'agents-today': automation.today, 'agents-employees': automation.employees, 'agents-control': automation.control, 'agents-run': automation.run, 'agents-review': automation.review, 'agents-history': automation.history, ...(language === 'ru' ? russianTourClarity : {}), ...humanTourClarity[language] },
+    steps: { ...base.steps, ...menuPurposeCopy[language], 'content-plan-setup': contentPlan, 'content-plan-preview': contentPlan, 'content-plan-save': contentPlan, 'content-plan-review': contentPlan, 'agents-nav': automation.nav, 'agents-signals': automation.signals, 'agents-today': automation.today, 'agents-employees': automation.employees, 'agents-control': automation.control, 'agents-run': automation.run, 'agents-review': automation.review, 'agents-history': automation.history, ...(language === 'ru' ? russianTourClarity : {}), ...humanTourClarity[language], 'progress-nav': { title: results.title, body: results.description }, 'progress-summary': { title: results.resultsIn30Days, body: results.confirmedSteps }, 'progress-focus-action': { title: results.needAttention, body: results.growthAreasDescription }, 'progress-areas': { title: results.growthAreas, body: results.growthAreasDescription }, 'progress-results': { title: results.recentResults, body: results.recentResultsEmpty } },
   };
 };
 

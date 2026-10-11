@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-09",
+  "deployment": "not_deployed",
+  "unit_tests": {
+    "base_suite": {
+      "files": 6,
+      "passed": 80
+    },
+    "updated_results_file": {
+      "passed": 15
+    },
+    "distinct_tests": 82
+  },
+  "typecheck": "passed",
+  "targeted_eslint": "passed",
+  "production_build": "passed",
+  "product_ui_guard": "passed; optional agents browser smoke skipped because port 3000 was not serving",
+  "dist_integrity": "passed",
+  "browser_widths": [
+    390,
+    768,
+    1280
+  ],
+  "browser_data": "isolated control fixtures; actual ProgressPage component; no production writes",
+  "human_usability_test": "not_performed",
+  "build_directory": "/tmp/localos-results-dist"
+}

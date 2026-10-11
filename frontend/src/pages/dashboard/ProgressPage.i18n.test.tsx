@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { configure, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '@/i18n/LanguageContext';
 import { newAuth } from '@/lib/auth_new';
 import { ProgressPage } from './ProgressPage';
+
+// Locale modules load asynchronously; allow cold filesystem reads without weakening assertions.
+configure({ asyncUtilTimeout: 10_000 });
 
 vi.mock('@/lib/auth_new', () => ({
   newAuth: {
@@ -116,7 +119,7 @@ describe('ProgressPage localization', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'İşletme ilerlemesi' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Sonuçlar' })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('Haritalar ve itibar')).toBeInTheDocument());
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
@@ -135,7 +138,7 @@ describe('ProgressPage localization', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'Πρόοδος επιχείρησης' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Αποτελέσματα' })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('Χάρτες και φήμη')).toBeInTheDocument());
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
@@ -246,10 +249,10 @@ describe('ProgressPage localization', () => {
     expect(await screen.findByRole('heading', { name: 'Objetivo y estado de las fichas' })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('region', { name: 'Auditoría completa de la ficha' })).toHaveFocus());
     expect(screen.getByText('Más reservas')).toBeInTheDocument();
-    expect(screen.getByText('Acción principal')).toBeInTheDocument();
+    expect(screen.queryByText('Acción principal')).not.toBeInTheDocument();
     expect(screen.getByText('Рога и копыта')).toBeInTheDocument();
     expect(screen.getAllByText('Яндекс').length).toBeGreaterThan(0);
-    expect(screen.getByText('Completa los contactos en Яндекс')).toBeInTheDocument();
+
     expect(screen.getByText('Aún no hay crecimiento en el primer control; se comprobará el siguiente periodo.')).toBeInTheDocument();
     const managedPanel = screen.getByRole('heading', { name: 'Objetivo y estado de las fichas' }).closest('section');
     if (!managedPanel) throw new Error('Managed card panel was not rendered');
@@ -281,7 +284,7 @@ describe('ProgressPage localization', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText(/Doğrulanmış sonuçlar burada görünecek/)).toBeInTheDocument();
+    expect(await screen.findByText(/Tarihli doğrulanmış aşama yok/)).toBeInTheDocument();
   });
 
   it('shows the data freshness action when the overview reports missing analytics inputs', async () => {
@@ -312,6 +315,7 @@ describe('ProgressPage localization', () => {
       </MemoryRouter>,
     );
 
+    await userEvent.click(await screen.findByText(/^Данные для отчёта/));
     expect(await screen.findByRole('button', { name: 'Загрузить файл из CRM' })).toBeInTheDocument();
     expect(screen.getByText(/Источник: не указан/)).toBeInTheDocument();
   });

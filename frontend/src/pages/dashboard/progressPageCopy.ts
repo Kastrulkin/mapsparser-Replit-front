@@ -1,3 +1,4 @@
+import { progressResultsCopies } from './progressResultsCopy';
 import type { Language } from '@/i18n/LanguageContext.logic';
 
 export type ProgressPageCopy = {
@@ -389,7 +390,7 @@ const dynamicCopy: Record<Language, ProgressDynamicCopy> = {
   tr: { analyticsSetup: 'Veri gerekli', firstFinance: 'Analizleri açmak için ilk finans özetini yükleyin.', rhythmForming: 'Çalışma ritmi oluşuyor', sales: 'Satışlar ve ortalama sepet', services: 'Hizmetler ve ek satışlar', capacity: 'Ekip kapasitesi', trend: 'Eğilimler ve kanıta dayalı öneriler', financeTitle: 'Finansal verileri güncelleyin', financeReason: 'Finansal veriler güncel değil.', financeOutcome: 'LocalOS güncel finansal görünümü ve büyüme fırsatlarını gösterecek.', uploadData: 'Veri yükle' },
 };
 
-export const progressPageCopyForLanguage = (language: Language) => progressCopies[language];
+export const progressPageCopyForLanguage = (language: Language) => ({ ...progressCopies[language], ...progressResultsCopies[language], fallbackDescription: progressResultsCopies[language].description });
 export const progressRuntimeCopyForLanguage = (language: Language) => runtimeCopy[language];
 export const localizedAnalyticsLevel = (language: Language, level: string | undefined, fallback: string | undefined) => level === 'setup' ? dynamicCopy[language].analyticsSetup : localizedGrowthText(language, fallback);
 export const localizedAnalyticsNext = (language: Language, level: string | undefined, fallback: string | undefined) => level === 'setup' ? dynamicCopy[language].firstFinance : localizedGrowthText(language, fallback);
