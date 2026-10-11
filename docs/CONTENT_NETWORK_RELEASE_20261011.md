@@ -85,7 +85,7 @@ restricted backup of prior pilot records. The real browser compiled candidate
 v5 (`c3bde055-24d7-429d-9f47-9b47a3b3502b`), previewed real photos and four
 branch/recipient contexts, and approved the version-bound program conditions.
 No Telegram request was dispatched. The preview correctly excluded the
-unapproved post variants. Final regression suite: 93 passed (including
+unapproved post variants. Final regression suite: 94 passed (including
 PostgreSQL), no skips. Frontend and Today checks: 34 passed.
 
 **Remaining operational gate:** the current Eng plan ends on October 11 and
@@ -98,15 +98,22 @@ Eng plan are required before enabling the recurring schedule. The UI safety
 review also blocked proceeding toward activation before that delivery test;
 no indirect activation workaround was used.
 
-The final frontend asset is `index-BiB20kVl.js` (the current Today stylesheet
+The final frontend asset is `index-CYORdh7k.js` (the current Today stylesheet
 is unchanged). Matching current frontend source files were guarded by their
 preimage hashes and saved on the server, so subsequent builds retain this
 content panel. Approved-program preview is read-only: it rechecks branch rights
 and leaves approved evidence/state unchanged. Its production API was patched
-individually with a preimage check. Final runtime commit: `1117cca07` plus the
+individually with a preimage check. Final runtime commit: `96ac29a15` plus the
 preceding scoped commits on `codex/network-content-release`; push succeeded.
 The final test-only correction distinguishes a row lock (`SELECT FOR UPDATE`)
 from mutations when checking that approval evidence is untouched.
+
+The final browser pass repeated preview on the already approved version and
+passed. Display-only branch/recipient/date labels are returned separately from
+the immutable, schema-validated runner input, so they do not invalidate an
+approved artifact. Real preview photos loaded successfully. The page showed
+all four target contexts and zero eligible kits, with explicit incomplete or
+unapproved reasons. Screenshot: `/private/tmp/localos-network-preview-20261011.jpg`.
 
 An actual dispatcher check in the worker returned zero dispatched jobs and
 both Riderra IDs skipped as `outside_schedule_allowlist`; their active version
