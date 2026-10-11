@@ -1,7 +1,8 @@
-import { Outlet, Navigate, useLocation } from 'react-router-dom';
+import { resolveDashboardBusinessScope } from '../lib/dashboardBusinessScope';
+import { Outlet, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { DashboardSidebar } from './DashboardSidebar';
 import { DashboardHeader } from './DashboardHeader';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { newAuth, type User } from '../lib/auth_new';
 import { getCapabilityAccessForBusiness, type SubscriptionCapability } from '../lib/subscriptionAccess';
 import { DemoModeBanner, GuidedTourProvider } from './guided-tour/GuidedTourProvider';
@@ -44,6 +45,7 @@ const paidDashboardSections: Array<{ path: string; capability: SubscriptionCapab
 
 export const DashboardLayout = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [businesses, setBusinesses] = useState<DashboardBusiness[]>([]);
@@ -95,9 +97,13 @@ export const DashboardLayout = () => {
         if (businessesData.length > 0) {
           setBusinesses(businessesData);
 
-          // Приоритет: бизнес из админской страницы > сохраненный > первый
+          // An authenticated deep link selects its business before child APIs run.
           let businessToSelect;
-          if (adminSelectedBusinessId) {
+          const linkedBusinessId = new URLSearchParams(window.location.search).get('business_id');
+          if (linkedBusinessId) {
+            businessToSelect = businessesData.find((business) => business.id === linkedBusinessId);
+          }
+          if (!businessToSelect && adminSelectedBusinessId) {
             businessToSelect = businessesData.find((business) => business.id === adminSelectedBusinessId);
           }
 
@@ -111,19 +117,9 @@ export const DashboardLayout = () => {
 
           setCurrentBusinessId(businessToSelect.id);
           setCurrentBusiness(businessToSelect);
-          const savedScopeValue = localStorage.getItem(currentUser.demo_mode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope');
-          let restoredScope: ControlScope = { kind: 'business', id: businessToSelect.id, name: businessToSelect.name };
-          if (savedScopeValue) {
-            try {
-              const parsed = JSON.parse(savedScopeValue);
-              if (parsed?.kind === 'network' && parsed?.id && businessToSelect.network_id === parsed.id) {
-                restoredScope = { kind: 'network', id: parsed.id, name: parsed.name || businessToSelect.network_name || 'Сеть' };
-              }
-            } catch {
-              localStorage.removeItem(currentUser.demo_mode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope');
-            }
-          }
+          const restoredScope = resolveDashboardBusinessScope(businessToSelect);
           setControlScope(restoredScope);
+          localStorage.setItem(currentUser.demo_mode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope', JSON.stringify(restoredScope));
           localStorage.setItem(currentUser.demo_mode ? 'demo_selectedBusinessId' : 'selectedBusinessId', businessToSelect.id);
         } else {
           setBusinesses([]);
@@ -150,17 +146,39 @@ export const DashboardLayout = () => {
     window.sessionStorage.setItem('localos_checkout_return_to', `${location.pathname}${location.search}`);
   }, [location.pathname, location.search]);
 
+  const selectBusinessFromMenu = (businessId: string) => {
+    if (businessId === currentBusinessId || !businesses.some(business => business.id === businessId)) return;
+    const params = new URLSearchParams(location.search);
+    params.set('business_id', businessId);
+    params.delete('search_task_id');
+    params.delete('company_filter');
+    navigate({ pathname: location.pathname, search: `?${params.toString()}`, hash: location.hash }, { replace: true });
+    void handleBusinessChange(businessId);
+  };
+
   const handleBusinessChange = async (businessId: string) => {
     const business = businesses.find(b => b.id === businessId);
     if (business) {
       setCurrentBusinessId(businessId);
       setCurrentBusiness(business);
-      const nextScope: ControlScope = { kind: 'business', id: business.id, name: business.name };
+      const nextScope = resolveDashboardBusinessScope(business);
       setControlScope(nextScope);
       localStorage.setItem(user?.demo_mode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope', JSON.stringify(nextScope));
       localStorage.setItem(user?.demo_mode ? 'demo_selectedBusinessId' : 'selectedBusinessId', businessId);
     }
   };
+
+  const appliedBusinessLink = useRef('');
+  useEffect(() => {
+    const requestedBusiness = new URLSearchParams(location.search).get('business_id');
+    const linkKey = `${location.pathname}${location.search}`;
+    if (!requestedBusiness) { appliedBusinessLink.current = ''; return; }
+    if (appliedBusinessLink.current === linkKey || !businesses.some((business) => business.id === requestedBusiness)) return;
+    // Resolve only against the authenticated list, once per link. A later manual
+    // business switch is not overwritten by a query parameter left in the URL.
+    appliedBusinessLink.current = linkKey;
+    void handleBusinessChange(requestedBusiness);
+  }, [location.pathname, location.search, businesses, handleBusinessChange]);
 
   const updateBusiness = (businessId: string, updates: Partial<DashboardBusiness>) => {
     const updatedBusinesses = businesses.map(b =>
@@ -178,8 +196,8 @@ export const DashboardLayout = () => {
   };
 
   const selectControlScope = (nextScope: ControlScope) => {
-    setControlScope(nextScope);
-    localStorage.setItem(user?.demo_mode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope', JSON.stringify(nextScope));
+    const target = businesses.find((business) => business.id === nextScope.id);
+    if (target) void handleBusinessChange(target.id);
   };
 
   const reloadBusinesses = async () => {
@@ -245,7 +263,7 @@ export const DashboardLayout = () => {
           businesses={businesses}
           currentBusinessId={currentBusinessId}
           currentBusiness={currentBusiness}
-          onBusinessChange={handleBusinessChange}
+          onBusinessChange={selectBusinessFromMenu}
           controlScope={controlScope}
           onControlScopeChange={selectControlScope}
           isSuperadmin={user.is_superadmin}

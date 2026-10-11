@@ -1262,6 +1262,8 @@ def build_mobile_today(
         "freshness": summary.get("freshness") or {"status": "live"},
         "data_warnings": summary.get("data_warnings") or [],
     }
+    from services.operator_owner_actions import today_items
+    payload['active_work'].extend(today_items(cursor,scope,user_id))
     from services.today_workspace import attach_today_workspace
     return attach_today_workspace(cursor, scope=scope, user_id=user_id, payload=payload, now=observed_at)
 

@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
+import React, { useContext, useEffect, useMemo, useState, ReactNode } from "react";
+import { LanguageContext } from './LanguageContext.logic';
 
 import { resolveInitialLanguage } from './languagePreference';
 
@@ -11,8 +12,6 @@ interface LanguageContextType {
   setLanguage: (lang: Language) => void;
   t: Translations;
 }
-
-const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 const isTranslationRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);

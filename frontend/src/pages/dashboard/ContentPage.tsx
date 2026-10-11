@@ -15,12 +15,17 @@ import {
   FileText,
   Lightbulb,
   Loader2,
+  MapPinned,
+  MessageCircle,
   MessageCircleQuestion,
+  MessagesSquare,
   Plus,
+  Send,
   Sparkles,
   Star,
   Trash2,
   Upload,
+  Users,
   Wand2,
 } from 'lucide-react';
 
@@ -75,6 +80,8 @@ type PlanItem = {
   goal?: string;
   draft_text?: string;
   status?: string;
+  updated_at?: string;
+  version?: string;
   content_type?: string;
   metadata_json?: {
     generation_source?: string;
@@ -132,6 +139,7 @@ type VoiceProfile = {
 
 type PlanPayload = {
   id: string;
+  plan_status?: string;
   title?: string;
   period_days?: number;
   scope_type?: string;
@@ -152,6 +160,7 @@ type PlanPayload = {
 
 type SocialPost = {
   id: string;
+  updated_at?: string;
   content_plan_item_id?: string;
   platform?: string;
   platform_label?: string;
@@ -184,6 +193,12 @@ type SocialPost = {
     quality_issue_codes?: string[];
     quality_rules_version?: string;
     quality_text_hash?: string;
+    staff_handoff?: {
+      telegram_deliveries?: Record<string, {
+        sent_at?: string;
+        parts?: Record<string, { status?: string }>;
+      }>;
+    };
     platform_rule_readiness?: {
       label?: string;
       message?: string;
@@ -474,6 +489,17 @@ const getPostQualityIssueText = (post: SocialPost) => (
   (post.metadata_json?.quality_issues || []).filter(Boolean).join(' · ')
 );
 
+const getHandoffLabel = (post: SocialPost) => {
+  const deliveries = post.metadata_json?.staff_handoff?.telegram_deliveries;
+  const receipts = Object.values(deliveries || {});
+  const partStates = receipts.flatMap((receipt) => Object.values(receipt.parts || {}).map((part) => String(part.status || '')));
+  if (partStates.some((status) => status === 'attempting' || status === 'uncertain')) return 'Передачу нужно сверить';
+  if (partStates.some((status) => status === 'not_sent')) return 'Ошибка передачи';
+  if (receipts.some((receipt) => Boolean(receipt.sent_at))) return 'Передано сотруднику';
+  if (partStates.some((status) => status === 'sent')) return 'Передачу нужно сверить';
+  return 'Не передавалось';
+};
+
 const getChannelNextAction = (post: SocialPost) => {
   const variantStatus = String(post.metadata_json?.variant_status || '').toLowerCase();
   const variantSource = String(post.metadata_json?.variant_source || '').toLowerCase();
@@ -699,6 +725,16 @@ const platformShortLabel = (post: SocialPost) => {
   return formatPlatformLabel(label);
 };
 
+const CALENDAR_CHANNEL_ICONS = {
+  yandex_maps: { Icon: MapPinned, active: 'text-red-600' },
+  google_business: { Icon: MapPinned, active: 'text-blue-600' },
+  telegram: { Icon: Send, active: 'text-sky-600' },
+  vk: { Icon: Users, active: 'text-blue-700' },
+  max: { Icon: MessageCircle, active: 'text-violet-600' },
+  instagram: { Icon: MessagesSquare, active: 'text-pink-600' },
+  facebook: { Icon: MessagesSquare, active: 'text-blue-700' },
+};
+
 const placementTargetUrl = (post: SocialPost) => String(
   post.metadata_json?.supervised_publish?.target_url
   || post.metadata_json?.manual_publish_handoff?.target_url
@@ -773,6 +809,7 @@ export function ContentPage() {
   const [mediaCoverage, setMediaCoverage] = useState<MediaCoverage | null>(null);
   const [photoAnalysisQuota, setPhotoAnalysisQuota] = useState<PhotoAnalysisQuota | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
+  const [photoPickerOpen, setPhotoPickerOpen] = useState(false);
   const publicationDetailsRef = useRef<HTMLDivElement | null>(null);
   const [mediaUploading, setMediaUploading] = useState(false);
   const [mediaUploadProgress, setMediaUploadProgress] = useState('');
@@ -1262,6 +1299,7 @@ export function ContentPage() {
           business_id: currentBusinessId,
           usage_type: 'publication',
           target_id: selectedItem.id,
+          expected_version: selectedItem.updated_at || '',
           metadata: {
             source: 'content_publication_drawer',
             theme: selectedItem.theme || selectedItem.goal || '',
@@ -1274,8 +1312,12 @@ export function ContentPage() {
           ? `Фото сохранено. Проверьте итоговый вид и подтвердите публикации заново: ${approvalsReset}.`
           : 'Фото сохранено для публикации. Повторный анализ и списание кредитов не нужны.',
       );
+      setPhotoPickerOpen(false);
       await loadMediaRecommendation(selectedItem.id);
-      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      if (currentPlan?.id) {
+        await loadCurrentPlan(currentPlan.id);
+        await loadSocialPosts(currentPlan.id);
+      }
       if (section === 'media') await loadMediaAssets();
     } catch (usageError) {
       setError(usageError instanceof Error ? usageError.message : 'Не удалось сохранить фото для публикации');
@@ -1288,6 +1330,12 @@ export function ContentPage() {
     if (!selectedItem) return;
     const recommendation = mediaRecommendations[selectedItem.id];
     await recordPhotoUsage(String(recommendation?.selected_asset?.id || ''));
+  };
+
+  const openPhotoPicker = async () => {
+    if (!selectedItem) return;
+    setPhotoPickerOpen(true);
+    await loadMediaAssets();
   };
 
   const saveSelectedItem = async () => {
@@ -1482,6 +1530,7 @@ export function ContentPage() {
       const saveResponse = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}`, {
         method: 'PUT',
         body: JSON.stringify({
+          expected_updated_at: selectedItem.updated_at,
           theme: themeEdits[selectedItem.id] ?? selectedItem.theme ?? '',
           scheduled_for: dateEdits[selectedItem.id] ?? selectedItem.scheduled_for ?? '',
           draft_text: draftEdits[selectedItem.id] ?? selectedItem.draft_text ?? '',
@@ -1528,6 +1577,7 @@ export function ContentPage() {
         body: JSON.stringify({
           platform_text: platformTextEdits[post.id] ?? post.platform_text ?? '',
           base_text: post.base_text || draftEdits[selectedItem?.id || ''] || '',
+          expected_updated_at: post.updated_at || '',
         }),
       });
       await loadSocialPosts(currentPlan.id);
@@ -1627,6 +1677,7 @@ export function ContentPage() {
         const saveResponse = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}`, {
           method: 'PUT',
           body: JSON.stringify({
+            expected_updated_at: selectedItem.updated_at,
             theme: currentTheme,
             scheduled_for: currentDate,
             draft_text: currentDraftText,
@@ -2519,6 +2570,68 @@ export function ContentPage() {
     const channelDetailsId = item ? `content-channels-${item.id}` : 'content-channels';
     const mediaRecommendation = item ? mediaRecommendations[item.id] : null;
     const selectedPhoto = mediaRecommendation?.selected_asset || null;
+    const photoPicker = (
+      <Dialog open={photoPickerOpen} onOpenChange={setPhotoPickerOpen}>
+        <DialogContent className="max-h-[88vh] overflow-y-auto rounded-3xl border-slate-200 sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Выбрать фото для публикации</DialogTitle>
+            <DialogDescription>
+              Выберите любое загруженное фото. Анализ не обязателен и кредиты за выбор не списываются.
+            </DialogDescription>
+          </DialogHeader>
+          {mediaError ? (
+            <div role="alert" className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-800">
+              {mediaError}
+            </div>
+          ) : null}
+          {mediaLoading ? (
+            <div className="py-10 text-center text-sm text-slate-500">Загружаем медиатеку…</div>
+          ) : mediaAssets.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {mediaAssets.map((asset) => {
+                const status = String(asset.analysis_status || 'not_analyzed');
+                const isSelected = String(asset.id || '') === String(selectedPhoto?.id || '');
+                return (
+                  <div key={asset.id} className="flex min-w-0 gap-3 rounded-2xl border border-slate-200 p-3">
+                    {photoImageSrc(asset) ? (
+                      <AuthenticatedImage
+                        src={photoImageSrc(asset)}
+                        alt={`Фото из медиатеки: ${formatPhotoCategoryLabel(asset.category)}`}
+                        className="h-24 w-24 shrink-0 rounded-xl object-cover ring-1 ring-black/10"
+                      />
+                    ) : (
+                      <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
+                        <ImageIcon className="h-6 w-6" aria-hidden="true" />
+                      </div>
+                    )}
+                    <div className="flex min-w-0 flex-1 flex-col items-start">
+                      <div className="font-semibold text-slate-900">{formatPhotoCategoryLabel(asset.category)}</div>
+                      <div className="mt-1 text-xs leading-5 text-slate-500">
+                        {status === 'analysis_failed' ? 'Анализ не удался — фото всё равно можно выбрать' : status === 'analyzed' ? 'Проанализировано' : 'Ожидает анализа — фото можно выбрать'}
+                      </div>
+                      <Button
+                        type="button"
+                        variant={isSelected ? 'secondary' : 'outline'}
+                        onClick={() => { void recordPhotoUsage(String(asset.id || '')); }}
+                        disabled={!asset.id || Boolean(busyAction)}
+                        aria-label={`Выбрать фото из медиатеки: ${formatPhotoCategoryLabel(asset.category)}`}
+                        className="mt-auto min-h-10 rounded-xl"
+                      >
+                        {busyAction === 'photo-usage' ? 'Сохраняем…' : isSelected ? 'Выбрано' : 'Выбрать'}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
+              В медиатеке пока нет фото. Сначала загрузите его в разделе «Медиатека», затем вернитесь к этой публикации.
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    );
     return (
       <Sheet open={Boolean(item)} onOpenChange={(open) => { if (!open) setSelectedItemId(''); }}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-4xl">
@@ -2755,6 +2868,15 @@ export function ContentPage() {
                         ))}
                       </div>
                     ) : null}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => { void openPhotoPicker(); }}
+                      disabled={!item || mediaLoading}
+                      className="mt-4 rounded-2xl"
+                    >
+                      Выбрать фото вручную
+                    </Button>
                     <Button
                       type="button"
                       variant="outline"
@@ -3122,6 +3244,7 @@ export function ContentPage() {
               </div>
             </div>
           ) : null}
+          {photoPicker}
         </SheetContent>
       </Sheet>
     );

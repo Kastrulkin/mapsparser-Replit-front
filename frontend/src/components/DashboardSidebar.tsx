@@ -1,42 +1,58 @@
-import { Link, useLocation } from 'react-router-dom';
 import {
-  User,
-  FileText,
-  TrendingUp,
-  DollarSign,
-  BadgeDollarSign,
-  Settings,
-  Calendar,
-  MessageSquare,
-  Menu,
-  X,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Sparkles,
-  Handshake,
-  Bot,
-  Radar,
-  BarChart3,
-  Megaphone,
-  LayoutGrid,
-  CircleEllipsis,
+	BadgeDollarSign,
+	BarChart3,
+	Bot,
+	Calendar,
+	CircleEllipsis,
+	DollarSign,
+	FileText,
+	Handshake,
+	LayoutGrid,
+	Map,
+	Megaphone,
+	Menu,
+	MessageSquare,
+	PanelLeftClose,
+	PanelLeftOpen,
+	Radar,
+	Settings,
+	Sparkles,
+	TrendingUp,
+	User,
+	UsersRound,
+	X,
 } from 'lucide-react';
-import { Button } from './ui/button';
 import { useState } from 'react';
-import { useLanguage } from '../i18n/LanguageContext';
+import { Link, useLocation } from 'react-router-dom';
 import logo from '../assets/images/logo.png';
-import { cn } from '../lib/utils';
-import { DESIGN_TOKENS } from '../lib/design-tokens';
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import { getDemoWorkspaceCopy } from '../i18n/demoWorkspaceCopy';
-import { getDashboardNavigationCopy } from '../i18n/dashboardNavigationCopy';
 import { featureFlags } from '../config/featureFlags';
+import { useLanguage } from '../i18n/LanguageContext.logic';
+import { getDashboardNavigationCopy } from '../i18n/dashboardNavigationCopy';
+import { getDashboardShellCopy } from '../i18n/dashboardShellCopy';
+import { getDemoWorkspaceCopy } from '../i18n/demoWorkspaceCopy';
+import { cn } from '../lib/utils';
+import { Button } from './ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+
+const influencerNavigationCopy = {
+  ru: { label: 'Инфлюенсеры', hint: 'Подберите местных авторов, согласуйте условия и следите за размещениями.' },
+  en: { label: 'Creators', hint: 'Find local creators, agree terms, and track placements.' },
+  fr: { label: 'Créateurs', hint: 'Trouvez des créateurs locaux, convenez des conditions et suivez les placements.' },
+  es: { label: 'Creadores', hint: 'Encuentra creadores locales, acuerda las condiciones y sigue las publicaciones.' },
+  el: { label: 'Δημιουργοί', hint: 'Βρείτε τοπικούς δημιουργούς, συμφωνήστε τους όρους και παρακολουθήστε τις δημοσιεύσεις.' },
+  de: { label: 'Creator', hint: 'Finden Sie lokale Creator, stimmen Sie Bedingungen ab und verfolgen Sie Platzierungen.' },
+  th: { label: 'ครีเอเตอร์', hint: 'ค้นหาครีเอเตอร์ท้องถิ่น ตกลงเงื่อนไข และติดตามการเผยแพร่' },
+  ar: { label: 'صناع المحتوى', hint: 'اعثر على صناع محتوى محليين، اتفق على الشروط وتابع النشر.' },
+  ha: { label: 'Masu ƙirƙira', hint: 'Nemo masu ƙirƙira na yankinku, ku amince da sharudda kuma ku bi wallafe-wallafe.' },
+  tr: { label: 'İçerik üreticileri', hint: 'Yerel içerik üreticilerini bulun, koşulları kararlaştırın ve yayınları takip edin.' },
+};
 
 interface DashboardSidebarProps {
   isMobile?: boolean;
   onClose?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  webTrackingAvailable?: boolean;
 }
 
 export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
@@ -44,157 +60,34 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   onClose,
   collapsed = false,
   onToggleCollapse,
+  webTrackingAvailable = false,
 }) => {
   const location = useLocation();
   const { t, language } = useLanguage();
   const demoCopy = getDemoWorkspaceCopy(language).sidebar;
   const navigationCopy = getDashboardNavigationCopy(language);
+  const shellCopy = getDashboardShellCopy(language);
   const [isOpen, setIsOpen] = useState(false);
 
-  const legacyMenuItems = [
+  const menuItems = [
     {
       id: 'today',
-      label: language === 'ru' ? 'Сегодня' : 'Today',
+      label: shellCopy.today,
       icon: Calendar,
       path: '/dashboard/today',
-      tooltip: language === 'ru'
-        ? 'Подтверждённые изменения, текущая работа LocalOS и один следующий шаг.'
-        : 'Confirmed changes, current LocalOS work, and one next step.',
+      tooltip: shellCopy.todayHint,
     },
-    {
-      id: 'operator',
-      label: navigationCopy.operator,
-      icon: Bot,
-      path: '/dashboard/operator',
-      tooltip: navigationCopy.operatorHint,
-    },
-    {
-      id: 'profile',
-      label: t.dashboard.sidebar.profile,
-      icon: User,
-      path: '/dashboard/profile',
-      tooltip: language === 'ru'
-        ? 'Заполните данные бизнеса, добавьте ссылку на карты и запустите первый аудит.'
-        : 'Fill in business details, add the map link, and start the first audit.',
-    },
-    {
-      id: 'card',
-      label: t.dashboard.sidebar.card,
-      icon: FileText,
-      path: '/dashboard/card',
-      tooltip: language === 'ru'
-        ? 'Управляйте данными карточки на картах, услугами, отзывами и запуском обновления.'
-        : 'Manage listing data, services, reviews, and start data refresh.',
-    },
-    {
-      id: 'content',
-      label: navigationCopy.content,
-      icon: Calendar,
-      path: '/dashboard/content',
-      tooltip: navigationCopy.contentHint,
-    },
-    {
-      id: 'agents',
-      label: navigationCopy.agents,
-      icon: Sparkles,
-      path: '/dashboard/agents',
-      tooltip: navigationCopy.agentsHint,
-    },
-    {
-      id: 'progress',
-      label: t.dashboard.sidebar.progress,
-      icon: TrendingUp,
-      path: '/dashboard/progress',
-      tooltip: language === 'ru'
-        ? 'Показывает, что уже сделано, что требует внимания и какой шаг важнее всего сейчас.'
-        : 'Shows what is done, what needs attention, and the most important next step.',
-    },
-    {
-      id: 'finance',
-      label: t.dashboard.sidebar.finance,
-      icon: DollarSign,
-      path: '/dashboard/finance',
-      tooltip: language === 'ru'
-        ? 'Финансовые показатели бизнеса и рабочая экономика.'
-        : 'Business financial metrics and operating economics.',
-    },
-    {
-      id: 'chats',
-      label: t.dashboard.sidebar.chats,
-      icon: MessageSquare,
-      path: '/dashboard/chats',
-      tooltip: language === 'ru'
-        ? 'Здесь собраны клиентские диалоги и ответы по каналам связи.'
-        : 'This section contains customer conversations and replies across channels.',
-    },
-    {
-      id: 'partnerships',
-      label: navigationCopy.partnerships,
-      icon: Handshake,
-      path: '/dashboard/partnerships',
-      tooltip: navigationCopy.partnershipsHint,
-    },
-    {
-      id: 'telegram-radar',
-      label: demoCopy.telegramRadar,
-      icon: Radar,
-      path: '/dashboard/telegram-radar',
-      tooltip: demoCopy.telegramRadarHint,
-    },
-    {
-      id: 'average-ticket',
-      label: demoCopy.upsells,
-      icon: BadgeDollarSign,
-      path: '/dashboard/average-ticket',
-      tooltip: demoCopy.upsellsHint,
-    },
-    {
-      id: 'ai-chat-promotion',
-      label: t.dashboard.sidebar.aiChatPromotion,
-      icon: Sparkles,
-      path: '/dashboard/ai-chat-promotion',
-      tooltip: demoCopy.geoPromotionHint,
-    },
-    {
-      id: 'settings',
-      label: t.dashboard.sidebar.settings,
-      icon: Settings,
-      path: '/dashboard/settings',
-      tooltip: language === 'ru'
-        ? 'Общие настройки аккаунта, интеграций и рабочих режимов.'
-        : 'General account, integration, and workflow settings.',
-    },
-  ];
-  const menuItems = featureFlags.growthPathsNavigation ? [
-    {
-      id: 'today',
-      label: 'Сегодня',
-      icon: Calendar,
-      path: '/dashboard/today',
-      tooltip: 'Главное действие и короткая очередь на сегодня.',
-    },
-    {
-      id: 'growth-paths',
-      label: 'Пути роста',
-      icon: LayoutGrid,
-      path: '/dashboard/growth-paths',
-      tooltip: 'Карты, контент, инфлюенсеры и партнёрства — с одним следующим шагом.',
-    },
-    {
-      id: 'progress',
-      label: 'Результаты',
-      icon: TrendingUp,
-      path: '/dashboard/progress',
-      tooltip: 'Завершённые действия, изменения и динамика показателей.',
-    },
+    { id: 'operator', label: navigationCopy.operator, icon: Bot, path: '/dashboard/operator', tooltip: navigationCopy.operatorHint },
+    { id: 'growth-paths', label: shellCopy.growthPaths, icon: LayoutGrid, path: '/dashboard/growth-paths', tooltip: shellCopy.growthPathsHint },
+    { id: 'progress', label: shellCopy.results, icon: TrendingUp, path: '/dashboard/progress', tooltip: shellCopy.resultsHint },
     {
       id: 'more',
-      label: 'Ещё',
+      label: shellCopy.more,
       icon: CircleEllipsis,
       path: '/dashboard/more',
-      tooltip: 'Профиль, финансы, агенты, чаты, интеграции и настройки.',
+      tooltip: shellCopy.moreHint,
     },
-  ] : legacyMenuItems;
+  ];
 
   const handleLinkClick = () => {
     if (isMobile && onClose) {
@@ -206,11 +99,14 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
     if (path === '/dashboard/today') {
       return location.pathname === '/dashboard' || location.pathname === path;
     }
+    if (path === '/dashboard/promotion') {
+      return location.pathname === path || location.pathname.startsWith('/dashboard/promotion/');
+    }
     return location.pathname === path;
   };
 
   const sidebarContent = (
-    <div className={cn(
+    <div data-navigation="guided-v1" className={cn(
       "h-full flex flex-col border-r border-slate-200/70 transition-all duration-300",
       "bg-white/86 backdrop-blur-xl supports-[backdrop-filter]:bg-white/78",
       "shadow-[8px_0_32px_-20px_rgba(15,23,42,0.18)]"
@@ -345,6 +241,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
           variant="ghost"
           size="icon"
           className="md:hidden"
+          aria-label={isOpen ? navigationCopy.collapse : navigationCopy.expand}
           onClick={() => setIsOpen(!isOpen)}
         >
           {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}

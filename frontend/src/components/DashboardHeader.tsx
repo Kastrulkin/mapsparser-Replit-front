@@ -40,8 +40,6 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   isSuperadmin = false,
   user: userProp,
   currentBusiness,
-  controlScope,
-  onControlScopeChange,
 }) => {
   const { currency, setCurrency } = useCurrency();
   const navigate = useNavigate();
@@ -87,19 +85,14 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       "sticky top-0 z-30 px-4 py-4 transition-all duration-300 sm:px-6",
       "border-b border-slate-200/70 bg-white/82 backdrop-blur-xl supports-[backdrop-filter]:bg-white/74"
     )}>
-      <div className="flex min-w-0 items-center justify-between gap-2 sm:gap-4">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 sm:gap-4">
         {/* Left Side: Context Switchers */}
-        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+        <div className="flex min-w-0 flex-auto flex-wrap items-center gap-2 sm:gap-3">
           {isSuperadmin && (
-            <div className="flex min-w-0 flex-1 items-center gap-2 animate-in fade-in slide-in-from-left-4 duration-500">
+            <div className="flex min-w-0 shrink-0 items-center gap-2 animate-in fade-in slide-in-from-left-4 duration-500">
               <span className="hidden rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-indigo-700 sm:inline-flex">
                 SuperAdmin
               </span>
-              {currentBusiness?.network_id && (
-                <span className="hidden rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-medium text-slate-500 lg:inline-flex">
-                  NetID: {currentBusiness.network_id.substring(0, 8)}...
-                </span>
-              )}
               <BusinessSwitcher
                 businesses={businesses}
                 currentBusinessId={currentBusinessId || undefined}
@@ -110,29 +103,13 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           )}
 
           {currentBusiness?.network_id && onBusinessChange && (
-            <div data-tour-target="network-switcher">
+            <div className="min-w-0 shrink-0" data-tour-target="network-switcher">
               <NetworkLocationsSwitcher
                 currentBusinessId={currentBusinessId || undefined}
                 onLocationChange={onBusinessChange}
               />
             </div>
           )}
-
-          {currentBusiness?.network_id && onControlScopeChange ? (
-            <Select value={`${controlScope?.kind || 'business'}:${controlScope?.id || currentBusinessId || ''}`} onValueChange={(value) => {
-              if (value === `network:${currentBusiness.network_id}`) {
-                onControlScopeChange({ kind: 'network', id: currentBusiness.network_id, name: currentBusiness.network_name || 'Сеть' });
-                return;
-              }
-              onControlScopeChange({ kind: 'business', id: currentBusinessId || currentBusiness.id, name: currentBusiness.name || 'Бизнес' });
-            }}>
-              <SelectTrigger className="h-11 min-w-[144px] bg-white text-sm"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={`business:${currentBusinessId || currentBusiness.id}`}>Текущая точка</SelectItem>
-                <SelectItem value={`network:${currentBusiness.network_id}`}>{currentBusiness.network_name || 'Вся сеть'}</SelectItem>
-              </SelectContent>
-            </Select>
-          ) : null}
 
           {/* Fallback Title if no switchers active */}
           {!isSuperadmin && !currentBusiness?.network_id && currentBusiness && (
@@ -143,7 +120,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         </div>
 
         {/* Right Side: Actions & Profile */}
-        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
+        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-3">
           {/* Quick Actions for superadmins */}
           {currentUser?.is_superadmin && (
             <Button
@@ -164,7 +141,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           </div>
 
           <div className="hidden sm:block">
-            <Select value={currency} onValueChange={(value) => setCurrency(value as 'RUB' | 'USD' | 'EUR')}>
+            <Select value={currency} onValueChange={(value) => { if (value === 'RUB' || value === 'USD' || value === 'EUR') setCurrency(value); }}>
               <SelectTrigger className="h-9 w-14 border-0 bg-transparent hover:bg-slate-100/80 focus:ring-0">
                 <span className="text-base font-medium text-slate-700">
                   {currency === 'RUB' ? '₽' : currency === 'USD' ? '$' : '€'}

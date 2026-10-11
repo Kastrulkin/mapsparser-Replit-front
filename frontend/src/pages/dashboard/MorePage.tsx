@@ -1,4 +1,4 @@
-import { Bot, Building2, CreditCard, MessageSquare, Radar, Settings, Sparkles, WalletCards } from 'lucide-react';
+import { Bot, Building2, Calendar, CreditCard, Handshake, Map, MessageSquare, Radar, Route, Settings, Sparkles, TrendingUp, UsersRound, WalletCards } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const sections = [
@@ -6,6 +6,8 @@ const sections = [
     title: 'Бизнес',
     items: [
       { title: 'Профиль компании', description: 'Данные, услуги и точки присутствия.', route: '/dashboard/profile', icon: Building2 },
+      { title: 'Работа с картами', description: 'Карточка компании, отзывы и локальное присутствие.', route: '/dashboard/card', icon: Map },
+      { title: 'Рабочий журнал', description: 'Сообщить наблюдение, разобрать предложения и поручить работу.', route: '/dashboard/work-journal', icon: MessageSquare },
       { title: 'Финансы', description: 'Выручка, загрузка и средний чек.', route: '/dashboard/finance', icon: CreditCard },
       { title: 'Средний чек', description: 'Идеи допродаж и пакетных предложений.', route: '/dashboard/average-ticket', icon: WalletCards },
     ],
@@ -13,11 +15,21 @@ const sections = [
   {
     title: 'Работа и контроль',
     items: [
-      { title: 'Оператор', description: 'Задачи, подтверждения и ручные действия.', route: '/dashboard/operator', icon: Bot },
+      { title: 'Управление через чат', description: 'Напишите, что нужно сделать.', route: '/dashboard/operator', icon: Bot },
+      { title: 'Контент', description: 'Планы, тексты и календарь публикаций.', route: '/dashboard/content', icon: Calendar },
       { title: 'Агенты', description: 'Регулярная работа и история запусков.', route: '/dashboard/agents', icon: Sparkles },
+      { title: 'Результаты', description: 'История выполненной работы и динамика показателей.', route: '/dashboard/progress', icon: TrendingUp },
       { title: 'Чаты', description: 'Сообщения и ответы клиентам.', route: '/dashboard/chats', icon: MessageSquare },
       { title: 'Telegram-радар', description: 'Сигналы рынка и новые возможности.', route: '/dashboard/telegram-radar', icon: Radar },
+      { title: 'Инфлюенсеры', description: 'Подбор местных авторов и контроль размещений.', route: '/dashboard/influencers', icon: UsersRound },
+      { title: 'Партнёрские акции', description: 'Поиск партнёров и подготовка совместных предложений.', route: '/dashboard/partnerships', icon: Handshake },
       { title: 'Настройки и подключения', description: 'Тариф, интеграции, команда и безопасность.', route: '/dashboard/settings', icon: Settings },
+    ],
+  },
+  {
+    title: 'Обзор возможностей',
+    items: [
+      { title: 'Пути роста', description: 'Посмотреть все направления и выбрать следующий фокус, когда нужен ориентир.', route: '/dashboard/growth-paths', icon: Route },
     ],
   },
 ];
@@ -27,7 +39,7 @@ export const MorePage = () => (
     <header className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Ещё</p>
       <h1 className="mt-2 text-balance text-3xl font-semibold tracking-tight text-slate-950">Управление бизнесом и LocalOS</h1>
-      <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-slate-600">Здесь находятся инструменты, которые помогают выполнять основную работу, но не конкурируют с текущим путём роста.</p>
+      <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-slate-600">Здесь находятся дополнительные инструменты и обзор направлений. Ежедневная работа остаётся в разделах слева и на странице «Сегодня».</p>
     </header>
     {sections.map((section) => (
       <section key={section.title}>

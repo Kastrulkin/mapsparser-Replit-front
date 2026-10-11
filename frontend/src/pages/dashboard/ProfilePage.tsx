@@ -7,6 +7,8 @@ import { Network, MapPin, User, Building2, Clock, Mail, Phone, Edit2, ShieldChec
 import { useLanguage } from '@/i18n/LanguageContext';
 import { cn } from '@/lib/utils';
 import { SubscriptionManagement } from '@/components/SubscriptionManagement';
+import { BusinessMembers } from '@/components/dashboard/BusinessMembers';
+import { BusinessAdditionalSettings } from '@/components/dashboard/BusinessAdditionalSettings';
 import { UserTokenUsageSummary } from '@/components/UserTokenUsageSummary';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -1462,6 +1464,9 @@ export const ProfilePage = () => {
           </div>
         )}
       </DashboardSection>
+
+      <BusinessMembers businessId={effectiveBusinessId} isRu={isRu} />
+      <BusinessAdditionalSettings businessId={effectiveBusinessId} isRu={isRu} />
 
       {/* Тарифы */}
       <div id="subscription" ref={subscriptionSectionRef} className="scroll-mt-24">

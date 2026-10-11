@@ -1,16 +1,17 @@
-import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { ChevronDown, Building2, Users } from 'lucide-react';
-import { getNetworkRepresentativeIds, pickNetworkRepresentative } from '@/lib/networkRepresentative';
 import { useClickOutside } from '@/hooks/useClickOutside';
+import { Building2, ChevronDown, Users } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 interface Business {
   id: string;
   name: string;
   description?: string;
+  address?: string;
   industry?: string;
   owner_email?: string;
   owner_name?: string;
   network_id?: string;
+  network_name?: string;
   created_at?: string;
   moderation_status?: string;
   entity_group?: string;
@@ -47,70 +48,30 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
     );
   };
   const visibleBusinesses = React.useMemo(
-    () => businesses.filter((business) => !isLeadBusiness(business)),
+    () => {
+      const clients = businesses.filter((business) => !isLeadBusiness(business));
+      const parents = new Set(clients.filter((business) => business.id === business.network_id).map((business) => business.id));
+      return clients.filter((business) => !business.network_id || business.id === business.network_id || !parents.has(business.network_id));
+    },
     [businesses]
   );
 
-  const networkRepresentativeIds = React.useMemo(() => {
-    return getNetworkRepresentativeIds(visibleBusinesses);
-  }, [visibleBusinesses]);
-
   const getBusinessDisplayName = (business: Business) => {
-    const baseName = String(business.name || '').trim() || 'Без названия';
-    if (networkRepresentativeIds[business.id]) {
-      return `👑 ${baseName}`;
-    }
-    return baseName;
+    return String(business.name || '').trim() || 'Без названия';
   };
 
-  // Фильтруем точки сети - показываем только основные аккаунты
-  // Фильтруем точки сети - показываем независимые точки ИЛИ "главную" точку сети (самую старую)
-  const mainBusinesses = React.useMemo(() => {
-    const independent = [];
-    const networks: { [key: string]: Business[] } = {};
-
-    // Группируем
-    for (const b of visibleBusinesses) {
-      if (!b.network_id) {
-        independent.push(b);
-      } else {
-        if (!networks[b.network_id]) {
-          networks[b.network_id] = [];
-        }
-        networks[b.network_id].push(b);
-      }
-    }
-
-    // Выбираем "главные" точки из сетей (сортировка по дате создания, если есть, или просто первый)
-    const networkHeads = Object.entries(networks)
-      .map(([networkId, group]) => pickNetworkRepresentative(group, networkId))
-      .filter(Boolean) as Business[];
-
-    return [...independent, ...networkHeads];
-  }, [visibleBusinesses]);
-
   useEffect(() => {
-    if (mainBusinesses.length > 0) {
-      // 1. Пытаемся найти бизнес в списке отображаемых (для независимых или главных точек)
-      let current = mainBusinesses.find(b => b.id === currentBusinessId);
-
-      // 2. Если не нашли (значит это дочерняя точка), ищем её родителя/главную точку
-      if (!current && currentBusinessId) {
-        const childBusiness = businesses.find(b => b.id === currentBusinessId);
-        if (childBusiness?.network_id) {
-          current = mainBusinesses.find(b => b.network_id === childBusiness.network_id);
-        }
-      }
-
-      // 3. Если всё равно не нашли, не меняем (или ставим первый, но лучше оставить как есть во избежание скачков)
-      // Но если selectedBusiness еще нет, ставим первый
+    if (visibleBusinesses.length > 0) {
+      const selectedLocation = businesses.find((business) => business.id === currentBusinessId);
+      const current = visibleBusinesses.find((business) => business.id === currentBusinessId)
+        || visibleBusinesses.find((business) => business.id === selectedLocation?.network_id);
       if (current) {
         setSelectedBusiness(current);
-      } else if (!selectedBusiness) {
-        setSelectedBusiness(mainBusinesses[0]);
+      } else {
+        setSelectedBusiness((selected) => selected || visibleBusinesses[0]);
       }
     }
-  }, [mainBusinesses, currentBusinessId, businesses]);
+  }, [businesses, visibleBusinesses, currentBusinessId]);
 
   const handleBusinessSelect = (business: Business) => {
     setSelectedBusiness(business);
@@ -118,16 +79,19 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
     setIsOpen(false);
   };
 
-  const hasBusinesses = mainBusinesses.length > 0;
+  const hasBusinesses = visibleBusinesses.length > 0;
 
   return (
-    <div ref={switcherRef} className="relative">
+    <div ref={switcherRef} className="relative min-w-0 shrink-0">
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex min-h-12 max-w-[min(26rem,calc(100vw-2rem))] items-center gap-3 rounded-xl border border-gray-300 bg-white px-3 py-2 transition-colors hover:bg-gray-50"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        className="flex h-12 w-[clamp(11rem,18vw,16rem)] min-w-0 max-w-full items-center gap-3 rounded-xl border border-gray-300 bg-white px-3 py-2 transition-colors hover:bg-gray-50"
       >
         <Building2 className="h-5 w-5 shrink-0 text-gray-600" />
-        <div className="min-w-0 text-left">
+        <div className="min-w-0 flex-1 text-left">
           <div className="truncate text-sm font-medium text-gray-900">
             {selectedBusiness ? getBusinessDisplayName(selectedBusiness) : 'Выберите бизнес'}
           </div>
@@ -141,10 +105,13 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 top-full z-50 mt-2 max-h-[min(70vh,34rem)] w-[min(34rem,calc(100vw-2rem))] overflow-y-auto overflow-x-hidden rounded-2xl border border-gray-200 bg-white shadow-xl ring-1 ring-black/5">
-          {hasBusinesses && mainBusinesses.map((business) => (
+        <div role="listbox" aria-label="Бизнесы" className="absolute left-0 top-full z-50 mt-2 max-h-[min(70vh,34rem)] w-[min(34rem,calc(100vw-2rem))] overflow-y-auto overflow-x-hidden rounded-2xl border border-gray-200 bg-white shadow-xl ring-1 ring-black/5">
+          {hasBusinesses && visibleBusinesses.map((business) => (
             <button
               key={business.id}
+              type="button"
+              role="option"
+              aria-selected={selectedBusiness?.id === business.id}
               onClick={() => handleBusinessSelect(business)}
               className={`w-full px-4 py-3 text-left transition-colors hover:bg-gray-50 ${selectedBusiness?.id === business.id ? 'border-l-4 border-blue-500 bg-blue-50 pl-3' : ''
                 }`}
@@ -155,10 +122,16 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
                   <div className="break-words text-base font-medium leading-6 text-gray-900">
                     {getBusinessDisplayName(business)}
                   </div>
-                  {business.description && (
+                  {business.id === business.network_id && (
+                    <div className="mt-1 text-xs text-gray-500">Сеть · точки выбираются отдельно</div>
+                  )}
+                  {(business.address || business.description) && (
                     <div className="mt-1 line-clamp-2 break-words text-sm leading-5 text-gray-500">
-                      {business.description}
+                      {business.address || business.description}
                     </div>
+                  )}
+                  {business.network_name && (
+                    <div className="mt-1 text-xs text-gray-500">{business.network_name}</div>
                   )}
                   {isSuperadmin && business.owner_name && (
                     <div className="mt-2 flex items-center gap-1">

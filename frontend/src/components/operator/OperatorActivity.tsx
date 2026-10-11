@@ -16,7 +16,8 @@ export function OperatorReply({ text, animate = false }: { text: string; animate
     setVisible(0);
     const started = performance.now();
     let frame = 0;
-    const duration = Math.min(1200, Math.max(240, text.length * 12));
+    // Keep a readable cadence; long replies can always be revealed immediately.
+    const duration = Math.min(15000, Math.max(800, text.length * 30));
     const reveal = (now: number) => {
       if (skipped.current) return;
       const count = Math.min(text.length, Math.ceil((now - started) / duration * text.length));

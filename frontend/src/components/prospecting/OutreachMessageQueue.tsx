@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   CalendarClock,
@@ -48,6 +48,10 @@ export interface OutreachMessageQueueItem {
 }
 
 interface OutreachMessageQueueProps {
+  campaignId?: string | null;
+  searchTaskId?: string | null;
+  onCountChange?: (count: number) => void;
+  presentation?: 'letters' | 'send';
   query: string;
   scope: 'all' | 'localos_sales' | 'client_partnership';
   businessId?: string;
@@ -173,6 +177,10 @@ const StatusIcon = ({ status }: { status: string }) => {
 };
 
 export function OutreachMessageQueue({
+  campaignId,
+  searchTaskId,
+  onCountChange,
+  presentation,
   query,
   scope,
   businessId,
@@ -182,38 +190,50 @@ export function OutreachMessageQueue({
   onStatusChange,
   onOpenLead,
 }: OutreachMessageQueueProps) {
+  const [workspaceChannel, setWorkspaceChannel] = useState('');
+  const [workspaceStatus, setWorkspaceStatus] = useState('');
+  const effectiveChannel = presentation ? workspaceChannel : channel;
+  const effectiveStatus = presentation ? workspaceStatus : status;
   const [items, setItems] = useState<OutreachMessageQueueItem[]>([]);
   const [summary, setSummary] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const requestVersion = useRef(0);
   const loadMessages = useCallback(async () => {
+    const version = ++requestVersion.current;
     setLoading(true);
     setError('');
     try {
       const params = new URLSearchParams({ limit: '500' });
+      if (campaignId) params.set('campaign_id', campaignId);
+      if (searchTaskId) params.set('search_task_id', searchTaskId);
+      if (presentation) params.set('presentation', presentation);
       if (query.trim()) params.set('q', query.trim());
       if (scope !== 'all') params.set('workstream_type', scope);
       if (businessId) params.set('business_id', businessId);
-      if (channel) params.set('channel', channel);
-      if (status) params.set('status', status);
+      if (effectiveChannel) params.set('channel', effectiveChannel);
+      if (effectiveStatus) params.set('status', effectiveStatus);
       const payload: QueuePayload = await newAuth.makeRequest(`/outreach/messages?${params.toString()}`);
+      if (version !== requestVersion.current) return;
       setItems(Array.isArray(payload?.items) ? payload.items : []);
       setSummary(payload?.summary || {});
+      onCountChange?.(payload?.summary?.all || 0);
     } catch (requestError) {
+      if (version !== requestVersion.current) return;
       setItems([]);
       setSummary({});
       setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить сообщения');
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
-  }, [businessId, channel, query, scope, status]);
+  }, [businessId, campaignId, searchTaskId, onCountChange, presentation, effectiveChannel, query, scope, effectiveStatus]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadMessages();
     }, query.trim() ? 250 : 0);
-    return () => window.clearTimeout(timer);
+    return () => { requestVersion.current += 1; window.clearTimeout(timer); };
   }, [loadMessages, query]);
 
   const visibleCount = useMemo(() => items.length, [items]);
@@ -223,16 +243,16 @@ export function OutreachMessageQueue({
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h2 id="outreach-message-queue-title" className="text-wrap-balance text-lg font-semibold text-slate-950">
-            Очередь сообщений
+            {presentation === 'letters' ? 'Письма' : presentation === 'send' ? 'Отправка' : 'Очередь сообщений'}
           </h2>
           <p className="mt-1 max-w-2xl text-wrap-pretty text-sm text-slate-500">
-            Все касания текущих цепочек: что готовится, когда отправится, что уже доставлено и на что ответили.
+            {presentation ? 'Тексты писем, получатели и фактический статус отправки.' : 'Все касания текущих цепочек: что готовится, когда отправится, что уже доставлено и на что ответили.'}
           </p>
         </div>
         <div className="flex min-h-10 items-center gap-2">
           <select
-            value={channel}
-            onChange={(event) => onChannelChange(event.target.value)}
+            value={effectiveChannel}
+            onChange={(event) => presentation ? setWorkspaceChannel(event.target.value) : onChannelChange(event.target.value)}
             className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
             aria-label="Канал сообщения"
           >
@@ -250,12 +270,12 @@ export function OutreachMessageQueue({
         {summaryStatuses.map((item) => {
           const countKey = item.value || 'all';
           const count = Number(summary[countKey] || 0);
-          const selected = status === item.value;
+          const selected = effectiveStatus === item.value;
           return (
             <button
               key={countKey}
               type="button"
-              onClick={() => onStatusChange(item.value)}
+              onClick={() => presentation ? setWorkspaceStatus(item.value) : onStatusChange(item.value)}
               className={`flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors active:scale-[0.96] ${
                 selected
                   ? 'bg-slate-950 text-white shadow-sm'
@@ -311,14 +331,15 @@ export function OutreachMessageQueue({
                       <Badge variant="outline" className="shrink-0 border-slate-200 bg-white text-slate-600">
                         {channelLabels[String(item.channel || '')] || String(item.channel || 'Канал')}
                       </Badge>
-                      <span className="truncate text-xs text-slate-400">
+                      {!presentation && <span className="truncate text-xs text-slate-400">
                         Шаг {Number(item.sequence_index || 0) + 1} · версия {Number(item.campaign_version || 0)}
-                      </span>
+                      </span>}
                     </div>
                     {item.subject ? <p className="mt-2 truncate text-sm font-semibold text-slate-950">{item.subject}</p> : null}
                     <p className="mt-1 line-clamp-2 text-wrap-pretty text-sm leading-5 text-slate-600">
                       {response || item.message_text || 'Текст сообщения пока не подготовлен'}
                     </p>
+                    {presentation && <details className="mt-2 text-sm" open={Boolean(campaignId)}><summary className="min-h-10 cursor-pointer font-medium">Полный текст письма</summary><p className="whitespace-pre-wrap py-2">{item.message_text}</p></details>}
                     {response ? <p className="mt-1 text-xs font-medium text-emerald-700">Ответ получателя</p> : null}
                   </div>
 
