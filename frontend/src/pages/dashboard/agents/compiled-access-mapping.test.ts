@@ -6,9 +6,9 @@ describe('compiled content fields in the workspace response mapping', () => {
     const source = readFileSync('src/pages/dashboard/AgentBlueprintsWorkspace.tsx', 'utf8');
     const mappings = source.split('candidate_version: response.data?.candidate_version || null,').slice(1);
     expect(mappings.length).toBeGreaterThan(0);
+    expect(source.match(/compiled_approved_version: response\.data\?\.compiled_approved_version/g)?.length).toBe(mappings.length);
     for (const mapping of mappings) {
       const adjacentFields = mapping.slice(0, 450);
-      expect(adjacentFields).toContain('compiled_approved_version: response.data?.compiled_approved_version || null');
       expect(adjacentFields).toContain('compiled_access: response.data?.compiled_access');
     }
   });
