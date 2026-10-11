@@ -70,6 +70,19 @@ def test_service_changes_compare_prices_without_updated_at_noise():
     assert not service_changes([{'id':'a','name':'A','updated_at':'new'}], [{'id':'a','name':'A','updated_at':'old'}])['changed']
 
 
+def test_schedule_allowlist_does_not_even_evaluate_other_automations(monkeypatch):
+    from services import agent_trigger_runtime
+    monkeypatch.setenv('AGENT_SCHEDULE_BLUEPRINT_IDS','our-pilot')
+    monkeypatch.setattr(agent_trigger_runtime,'_load_scheduled_blueprints',lambda *args,**kwargs: [{'id':'riderra-1'},{'id':'riderra-2'}])
+    def forbidden(*args,**kwargs):
+        raise AssertionError('Another automation must not be evaluated or changed')
+    monkeypatch.setattr(agent_trigger_runtime,'evaluate_agent_canary_budget',forbidden)
+    result = agent_trigger_runtime.dispatch_due_scheduled_agent_blueprints(object())
+    assert result['dispatched_count'] == 0
+    assert len(result['skipped']) == 2
+    assert all(row['reason'] == 'outside_schedule_allowlist' for row in result['skipped'])
+
+
 @pytest.mark.parametrize('uncertain', [False, True])
 def test_network_dispatch_preserves_success_and_continues_other_recipient(monkeypatch, uncertain):
     from services import compiled_content_program, agent_capability_handlers

@@ -17,6 +17,7 @@ import {
 	DashboardSection,
 } from '@/components/dashboard/DashboardPrimitives';
 import { Button } from '@/components/ui/button';
+import { ContentHandoffProgram, hasContentHandoff } from '@/components/agents/ContentHandoffProgram';
 import {
 	Dialog,
 	DialogContent,
@@ -569,6 +570,11 @@ export const AgentBlueprintsView = ({ scope }) => {
                     ) : null}
                   </div>
                 ) : workspaceMode === 'scenario' ? (
+                  hasContentHandoff(blueprintDetails) ? <ContentHandoffProgram
+                    blueprintId={selectedBlueprint.id}
+                    details={blueprintDetails}
+                    onRunQueued={(runId) => { void loadRun(runId); }}
+                  /> :
                   <EmployeeAgentScenarioPanel
                     blueprint={selectedBlueprint}
                     details={blueprintDetails}

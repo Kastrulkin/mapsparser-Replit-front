@@ -53,3 +53,20 @@ Before deploying:
 
 The release is not considered operational until these deployment and
 end-to-end checks pass.
+
+## Compatibility checks and rollout package
+
+The October 11 frontend is built from the current Today UI source at local
+revision b41611733, not from the older content release. Only the content
+scenario panel and its two type fields are added. The baseline deployed asset
+is index-BJLPiouM.js; the compatible build is index-CPNgTZaj.js, retaining the
+same index-wEAxYSCo.css. Today and content UI checks: 33 passed. Backend checks:
+75 passed, including PostgreSQL integration tests, with no skipped tests.
+
+The backend is ported to current production preimages (13 individual files),
+preserving its finance, partnership and editorial industry-filter changes.
+The installer aborts if any preimage has changed and backs up each replaced
+file. The dispatcher has a blueprint-ID allowlist applied before evaluating
+any schedule, including canary checks; its empty-value behavior is compatible.
+The two old Riderra schedules are outside this allowlist. The rollout leaves
+dispatch disabled until a reviewed network version is approved and activated.
