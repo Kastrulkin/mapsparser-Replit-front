@@ -119,5 +119,12 @@
     "telegram_live_conversation_test": "not-performed",
     "payment_provider_transaction": "not-performed"
   },
-  "push": "auto-review-rejected-awaiting-explicit-repository-and-preserved-baseline-authorization"
+  "push": {
+    "status": "complete",
+    "branch": "codex/work-coherence",
+    "repository": "https://github.com/Kastrulkin/mapsparser-Replit-front",
+    "verified_release_commit": "1ba81788e5e453a4417f1663c6f7f6b5a5e348b6",
+    "verified_at": "2026-10-11T17:22:57.125575+00:00",
+    "authorization": "explicit-user-approval-of-repository-and-92-preserved-production-files"
+  }
 }
