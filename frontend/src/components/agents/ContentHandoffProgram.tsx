@@ -43,13 +43,15 @@ export function hasContentHandoff(details: AgentBlueprintDetails | null | undefi
 export function ContentHandoffProgram({ blueprintId, details, onRunQueued }: {
   blueprintId: string; details: AgentBlueprintDetails | null; onRunQueued: (id: string) => void;
 }) {
-  const saved = details?.compiled_approved_version || details?.candidate_version;
+  const saved = details?.candidate_version || details?.compiled_approved_version;
   const [versionId, setVersionId] = useState(String(saved?.id || ''));
   const [state, setState] = useState(String(saved?.compiled_state || 'legacy'));
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<Record<string, unknown>>({});
   const [exampleAccepted, setExampleAccepted] = useState(false);
+  const [successors, setSuccessors] = useState<Record<string, unknown>[]>([]);
+  const [reviewedPlan, setReviewedPlan] = useState('');
   const inFlight = useRef(false);
   const runKey = useRef('');
   const runSnapshot = useRef('');
@@ -62,6 +64,25 @@ export function ContentHandoffProgram({ blueprintId, details, onRunQueued }: {
     setArtifactHash(String(record(saved?.compiled_artifact_json).artifact_hash || ''));
     setPreview({}); setError(''); setBusy(''); setExampleAccepted(false); runKey.current = ''; runSnapshot.current = '';
   }, [blueprintId, saved?.id]);
+  useEffect(() => {
+    let cancelled = false;
+    setSuccessors([]); setReviewedPlan('');
+    void api.get(`/agent-blueprints/${blueprintId}/content-successors`).then((response) => {
+      if (!cancelled) setSuccessors(Array.isArray(response.data.plans) ? response.data.plans.map(record) : []);
+    }).catch(() => { if (!cancelled) setError('Не удалось проверить продолжение планов. Обновите автоматизацию.'); });
+    return () => { cancelled = true; };
+  }, [blueprintId, state]);
+  const approvePlan = async (planId: string) => {
+    if (inFlight.current || reviewedPlan !== planId) return;
+    inFlight.current = true; setBusy('plan'); setError('');
+    const selected = blueprintId;
+    try {
+      await api.post(`/agent-blueprints/${selected}/content-successors`, { plan_id: planId, approved: true });
+      if (target.current === selected) setSuccessors((plans) => plans.map((plan) => String(plan.id) === planId ? { ...plan, approval: true } : plan));
+    } catch (failure) {
+      if (target.current === selected) setError(failure instanceof Error ? failure.message : 'План не подключён. Проверьте тексты и фото.');
+    } finally { inFlight.current = false; if (target.current === selected) setBusy(''); }
+  };
   const perform = async (operation: string) => {
     if (inFlight.current) return;
     inFlight.current = true; setBusy(operation); setError('');
@@ -114,10 +135,14 @@ export function ContentHandoffProgram({ blueprintId, details, onRunQueued }: {
     <h2 className="text-lg font-semibold">Передача готовых публикаций через бот</h2>
     <p className="text-sm text-slate-600">Сначала проверьте программу и материалы, затем утвердите условия. Передача сотруднику не означает публикацию на площадке.</p>
     {Object.keys(scope).length > 0 && <div className="rounded-xl bg-slate-50 p-3 text-sm space-y-1">
-      <p className="font-medium">{String(context.business_name || 'Выбранная точка')} · {String(context.address || '')}</p>
-      <p>Получатель: {String(context.recipient_name || 'Проверяется при предпросмотре')}{context.telegram_id ? ` · Telegram ID ${String(context.telegram_id)}` : ''}</p>
+      {Array.isArray(context.targets) ? context.targets.map((value: unknown, index: number) => {
+        const targetContext = record(value);
+        return <p key={index}>{String(targetContext.business_name || '')} · {String(targetContext.address || '')} → {String(targetContext.recipient_name || '')}</p>;
+      }) : <><p className="font-medium">{String(context.business_name || 'Выбранная точка')} · {String(context.address || '')}</p>
+      <p>Получатель: {String(context.recipient_name || 'Проверяется при предпросмотре')}{context.telegram_id ? ` · Telegram ID ${String(context.telegram_id)}` : ''}</p></>}
       <p>За {String(scope.lead_days)} дн. до публикации, в {String(scope.time)} · {String(scope.timezone)}</p>
       <p>Каналы: {Array.isArray(scope.platforms) ? scope.platforms.join(', ') : ''}. Только готовые версии с фото.</p>
+      {scope.renewal ? <p>После передачи последнего поста всем получателям — следующий план на 30 дней, только на проверку владельца.</p> : null}
     </div>}
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
     {busy && <p role="status" className="text-sm text-slate-600">{busy === 'compile' ? 'Создаём и сохраняем программу…' : busy === 'preview' ? 'Читаем план и проверяем выбор материалов. Отправки нет…' : busy === 'approve' ? 'Сохраняем ваше подтверждение условий…' : 'Принимаем тестовый запуск. Результат появится в журнале…'}</p>}
@@ -129,5 +154,13 @@ export function ContentHandoffProgram({ blueprintId, details, onRunQueued }: {
     {posts.map((post: unknown) => { const row = record(post); return <div key={String(row.post_id)} className="border-t border-slate-100 pt-3 text-sm"><p className="font-medium">{String(row.platform || '')} · {row.eligible ? 'Готово к передаче' : String(row.blocked_reason || 'Не готово')}</p><p className="mt-1 whitespace-pre-wrap">{String(row.text || '')}</p>{row.photo_asset_id ? <HandoffPhotoPreview assetId={String(row.photo_asset_id)} /> : <p className="text-slate-500">Фото не выбрано</p>}</div>; })}
     {state === 'ready_approval' && preview.status === 'passed' && <Button disabled={Boolean(busy)} onClick={() => void perform('approve')}>Утвердить программу и условия передачи</Button>}
     {(state === 'approved' || state === 'active') && <><p className="text-sm text-slate-600">Программа утверждена. Регулярное расписание включается отдельно; сейчас можно выполнить тест на выбранного получателя.</p><Button disabled={Boolean(busy) || details?.compiled_access?.execute !== true} onClick={() => void perform('run')}>Передать готовые материалы — тест</Button></>}
+    {successors.map((plan) => <div key={String(plan.id)} className="space-y-2 border-t border-slate-100 pt-3 text-sm">
+      <p className="font-medium">{String(plan.title)} · {String(plan.period_start)} — {String(plan.period_end)}</p>
+      <a href={`/dashboard/content?plan_id=${encodeURIComponent(String(plan.id))}`} className="underline">Проверить тексты и фото следующего плана</a>
+      {plan.approval ? <p>План утверждён и подключён к этой автоматизации.</p> : <>
+        <label className="flex items-start gap-2"><input type="checkbox" checked={reviewedPlan === String(plan.id)} onChange={(event) => setReviewedPlan(event.target.checked ? String(plan.id) : '')} />Я проверил тексты, даты и фото. Разрешаю передачу этих материалов по утверждённому расписанию.</label>
+        <Button disabled={Boolean(busy) || reviewedPlan !== String(plan.id)} onClick={() => void approvePlan(String(plan.id))}>Утвердить и подключить продолжение</Button>
+      </>}
+    </div>)}
   </section>;
 }

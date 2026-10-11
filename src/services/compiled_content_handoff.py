@@ -42,6 +42,25 @@ def handoff_scope(version: dict[str, Any], business_id: str) -> dict[str, Any] |
     platforms = payload.get("platforms")
     recipient = str(payload.get("recipient_user_id") or "").strip()
     target_business = str(payload.get("business_id") or "").strip()
+    business_ids = payload.get('business_ids')
+    recipient_ids = payload.get('recipient_user_ids')
+    network = business_ids is not None or recipient_ids is not None
+    if network:
+        if not all(isinstance(values, list) and values and len(values) <= 10
+                   and all(isinstance(value, str) and value.strip() == value and value for value in values)
+                   and len(set(values)) == len(values) for values in (business_ids, recipient_ids)):
+            return None
+        if str(business_id) not in business_ids or len(business_ids) * len(recipient_ids) > 20:
+            return None
+        plans = payload.get('plan_ids')
+        if not isinstance(plans, dict) or set(plans) != set(business_ids):
+            return None
+        if not all(isinstance(values, list) and values and len(values) <= 10
+                   and all(isinstance(value, str) and value for value in values)
+                   and len(set(values)) == len(values) for values in plans.values()):
+            return None
+        recipient = recipient_ids[0]
+        target_business = str(business_id)
     lead_days = payload.get("lead_days")
     local_time = str(payload.get("time") or "")
     timezone_name = str(payload.get("timezone") or "").strip()
@@ -55,6 +74,7 @@ def handoff_scope(version: dict[str, Any], business_id: str) -> dict[str, Any] |
         or not set(platforms).issubset(ALLOWED_PLATFORMS)
         or type(lead_days) is not int
         or not 0 <= lead_days <= 7
+        or (network and lead_days != 1)
         or len(local_time) != 5
         or local_time[2] != ":"
         or not local_time[:2].isdigit()
@@ -66,7 +86,7 @@ def handoff_scope(version: dict[str, Any], business_id: str) -> dict[str, Any] |
         or str(schedule.get("timezone") or "") != timezone_name
     ):
         return None
-    return {
+    scope = {
         "business_id": target_business,
         "recipient_user_id": recipient,
         "platforms": sorted(platforms),
@@ -74,6 +94,28 @@ def handoff_scope(version: dict[str, Any], business_id: str) -> dict[str, Any] |
         "time": local_time,
         "timezone": timezone_name,
     }
+    if network:
+        scope.pop('recipient_user_id')
+        scope.update(business_ids=sorted(business_ids), recipient_user_ids=sorted(recipient_ids),
+                     plan_ids={key: sorted(plans[key]) for key in sorted(plans)})
+        renewal = payload.get('renewal')
+        if renewal is not None:
+            if (not isinstance(renewal, dict) or set(renewal) != {'period_days', 'reviewer_user_id'}
+                    or renewal.get('period_days') != 30
+                    or renewal.get('reviewer_user_id') not in recipient_ids):
+                return None
+            scope['renewal'] = dict(renewal)
+    return scope
+
+
+def handoff_targets(scope):
+    """Static Cartesian scope; each branch/recipient is checked independently."""
+    if 'business_ids' not in scope:
+        return [scope]
+    common = {key: scope[key] for key in ('platforms', 'lead_days', 'time', 'timezone')}
+    return [{**common, 'business_id': business, 'recipient_user_id': recipient,
+             'plan_ids': scope['plan_ids'][business]}
+            for business in scope['business_ids'] for recipient in scope['recipient_user_ids']]
 
 
 def scope_digest(*, version_id: str, scope: dict[str, Any]) -> str:

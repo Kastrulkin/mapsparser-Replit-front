@@ -5208,6 +5208,56 @@ def approve_agent_blueprint_script(blueprint_id: str):
     return compiled_approve_for_actor(blueprint_id, user_data, request.get_json(silent=True))
 
 
+@agent_blueprints_bp.route('/api/agent-blueprints/<blueprint_id>/content-successors', methods=['GET', 'POST'])
+def content_successors(blueprint_id):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    if request.method == 'POST':
+        return content_successor_approve_for_actor(blueprint_id, user_data, request.get_json(silent=True) or {})
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        blueprint, error_response = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if error_response:
+            return error_response
+        cursor.execute("""SELECT job.result_json,plan.id,plan.title,plan.period_start,plan.period_end,
+            plan.generated_plan_json->'meta'->'handoff_approval' approval
+            FROM operator_async_jobs job JOIN contentplans plan ON plan.id::text=job.result_json->>'plan_id'
+            WHERE job.kind='content_plan_network_renewal' AND job.user_id=%s
+              AND job.payload_json->>'blueprint_id'=%s AND plan.plan_status<>'archived'
+            ORDER BY job.created_at DESC LIMIT 20""", (_user_id(user_data),blueprint_id))
+        return jsonify({'success': True, 'plans': [dict(row) for row in cursor.fetchall()]})
+    except (ValueError, PermissionError) as error:
+        db.conn.rollback()
+        return _json_error(str(error), 409, 'CONTENT_PLAN_REVIEW_BLOCKED')
+    finally:
+        db.close()
+
+
+def content_successor_approve_for_actor(blueprint_id, user_data, payload):
+    session_error = _require_compiled_standard_session(user_data)
+    if session_error:
+        return session_error
+    if not isinstance(payload, dict) or payload.get('approved') is not True:
+        return _json_error('Подтвердите проверку текстов и фото плана.', 400, 'CONTENT_PLAN_REVIEW_REQUIRED')
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        blueprint, error_response = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if error_response:
+            return error_response
+        from services.content_network_renewal import approve_successor
+        result = approve_successor(db.conn, blueprint_id=blueprint_id, plan_id=str(payload.get('plan_id') or ''), user_id=_user_id(user_data))
+        db.conn.commit()
+        return jsonify({'success': True, **result})
+    except (ValueError, PermissionError) as error:
+        db.conn.rollback()
+        return _json_error(str(error), 409, 'CONTENT_PLAN_REVIEW_BLOCKED')
+    finally:
+        db.close()
+
+
 def compiled_approve_for_actor(blueprint_id: str, user_data: dict, payload):
     from services.compiled_pilot_access import compiled_pilot_allowed
     session_error = _require_compiled_standard_session(user_data)
@@ -5244,18 +5294,19 @@ def compiled_approve_for_actor(blueprint_id: str, user_data: dict, payload):
             return _json_error("Подтверждение относится к другому preview evidence.", 409, "COMPILED_APPROVAL_FIXTURE_DIGEST_MISMATCH")
         contract = (artifact.get('manifest') or {}).get('content_handoff_contract')
         if contract:
-            from services.compiled_content_program import contract_for, delivery_context
+            from services.compiled_content_program import contract_for, delivery_context, authorize_contract
             from services.compiled_content_handoff import scope_digest
             from services.operator_audio import authorize_actor
             if contract != contract_for(version, str(blueprint.get('business_id') or '')):
                 return _json_error('Условия передачи изменились.', 409, 'COMPILED_CONTENT_SCOPE_CHANGED')
-            authorize_actor(cursor, contract['scope']['recipient_user_id'], contract['scope']['business_id'], check_subscription=False)
+            authorize_contract(cursor, contract, _user_id(user_data))
             context = delivery_context(cursor, contract)
             if context['digest'] != (preview_evidence.get('delivery_context') or {}).get('digest') or context['digest'] != payload.get('delivery_context_digest'):
                 return _json_error('Получатель или условия изменились. Проверьте предпросмотр снова.', 409, 'COMPILED_CONTENT_BINDING_CHANGED')
             consent = {'version_id': str(version['id']), 'scope': contract['scope'],
                 'scope_digest': scope_digest(version_id=str(version['id']), scope=contract['scope']),
-                'artifact_hash': validation['artifact_hash'], 'telegram_id': context['telegram_id'], 'approved_by_user_id': _user_id(user_data)}
+                'artifact_hash': validation['artifact_hash'], 'telegram_id': context.get('telegram_id'),
+                'delivery_context_digest': context['digest'], 'approved_by_user_id': _user_id(user_data)}
             cursor.execute("UPDATE agent_blueprints SET metadata_json=COALESCE(metadata_json,'{}'::jsonb)||jsonb_build_object('compiled_content_handoff_consent',%s::jsonb) WHERE id=%s",
                 (json.dumps(consent, ensure_ascii=False), blueprint_id))
         cursor.execute("""UPDATE agent_blueprint_versions SET compiled_state = 'approved', compiled_approved_at = NOW(), compiled_approved_by_user_id = %s
@@ -5407,7 +5458,28 @@ def activate_agent_blueprint_version(blueprint_id: str, version_id: str):
         from services.compiled_content_handoff import handoff_scope, scope_digest
         handoff_consent = None
         handoff_scope_value = handoff_scope(version, str(blueprint.get("business_id") or ""))
-        if handoff_scope_value:
+        if handoff_scope_value and 'business_ids' in handoff_scope_value:
+            from services.compiled_content_program import contract_for, authorize_contract, delivery_context
+            from services.compiled_content_handoff import has_active_consent
+            from services.business_input_settings import resolve
+            contract = contract_for(version, str(blueprint['business_id']))
+            authorize_contract(cursor, contract, _user_id(user_data))
+            if any(str(resolve(cursor, business).get('timezone') or '') != handoff_scope_value['timezone'] for business in handoff_scope_value['business_ids']):
+                return _json_error('Часовой пояс одной из точек изменился.', 409, 'CONTENT_HANDOFF_TIMEZONE_CHANGED')
+            context = delivery_context(cursor, contract)
+            metadata = parse_json_field(blueprint.get('metadata_json'), {})
+            consent = metadata.get('compiled_content_handoff_consent') or {}
+            if (not has_active_consent(metadata, version_id=version_id, scope=handoff_scope_value)
+                    or consent.get('delivery_context_digest') != context['digest']
+                    or consent.get('artifact_hash') != version.get('compiled_artifact_hash')):
+                return _json_error('Сначала пройдите предпросмотр и утвердите сетевую программу.', 409, 'CONTENT_HANDOFF_CONSENT_REQUIRED')
+            expected_digest = scope_digest(version_id=version_id, scope=handoff_scope_value)
+            if str(payload.get('external_send_consent_digest') or '') != expected_digest:
+                return jsonify({'success': False, 'confirm_required': True, 'code': 'CONTENT_HANDOFF_CONSENT_REQUIRED',
+                    'scope': handoff_scope_value, 'scope_digest': expected_digest,
+                    'confirmation_message': 'Включить передачу готовых материалов всех выбранных точек обоим получателям в 10:00 накануне публикации? Новые планы остаются на вашей проверке. Публикации на площадках не запускаются.'})
+            handoff_consent = consent
+        elif handoff_scope_value:
             from services.business_input_settings import resolve
             current_timezone = str(resolve(cursor, handoff_scope_value["business_id"]).get("timezone") or "")
             if current_timezone != handoff_scope_value["timezone"]:

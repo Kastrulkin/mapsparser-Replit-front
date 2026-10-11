@@ -1372,9 +1372,15 @@ def _operator_tool_catalog(
         },
         {
             "name":"content.handoff", "capability":"content.handoff", "title":"Передача материалов через подключённого бота",
-            "description":"Общая compiled-AI автоматизация контента: configure создаёт черновик; compile предлагает сохранённую программу; preview проверяет текущий план без отправки; approve предлагает утверждение точной версии; run предлагает тестовую передачу после подтверждения. pause/resume управляют тем же расписанием. Укажите blueprint_id и expected_version_id из последнего status. Получатель пилота — текущий пользователь, не Ирина. Старые настройки фоновой передачи не меняются.",
+            "description":"Общая compiled-AI автоматизация контента: configure создаёт черновик; compile предлагает сохранённую программу; preview проверяет текущий план без отправки; approve предлагает утверждение точной версии; run предлагает тестовую передачу после подтверждения. pause/resume управляют тем же расписанием. Для сети передайте content_handoff_scope с явно выбранными business_ids, recipient_user_ids, plan_ids по точкам и renewal (period_days=30,reviewer_user_id). ID берите из доступных данных, не выдумывайте. Все получатели должны иметь доступ к каждой точке. Новые планы остаются на проверку владельца.",
             "input_schema":{"type":"object","additionalProperties":False,"properties":{
-                "operation":{"type":"string","enum":["status","configure","compile","preview","approve","run","pause","resume"]},"recipient_user_id":{"type":"string"},"blueprint_id":{"type":"string"},"expected_version_id":{"type":"string"},
+                "operation":{"type":"string","enum":["status","configure","compile","preview","approve","run","pause","resume","approve_plan"]},"plan_id":{"type":"string"},"recipient_user_id":{"type":"string"},"blueprint_id":{"type":"string"},"expected_version_id":{"type":"string"},
+                "description":{"type":"string"},
+                "content_handoff_scope":{"type":"object","additionalProperties":False,"properties":{
+                    "business_ids":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":10},
+                    "recipient_user_ids":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":10},
+                    "plan_ids":{"type":"object","additionalProperties":{"type":"array","items":{"type":"string"}}},
+                    "renewal":{"type":"object","properties":{"period_days":{"type":"integer","enum":[30]},"reviewer_user_id":{"type":"string"}},"required":["period_days","reviewer_user_id"],"additionalProperties":False}},"required":["business_ids","recipient_user_ids","plan_ids"]},
                 "settings":{"type":"object","additionalProperties":False,"properties":{
                     "lead_days":{"type":"integer","minimum":0,"maximum":7},"time":{"type":"string"},
                     "platforms":{"type":"array","items":{"type":"string","enum":["vk","telegram","max"]},"minItems":1,"maxItems":3},"enabled":{"type":"boolean"}}}},"required":["operation"]},

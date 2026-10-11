@@ -221,7 +221,7 @@ def _is_content_handoff_request(description: str) -> bool:
     return content and telegram and delivery
 
 
-def _content_handoff_draft(description: str, *, business_id: str, recipient_user_id: str, conditions: dict) -> dict:
+def _content_handoff_draft(description: str, *, business_id: str, recipient_user_id: str, conditions: dict, network_scope: dict | None = None) -> dict:
     from services.agent_blueprint_draft_builder import _attach_compiled_metadata, _summary
 
     timezone_name = str((conditions.get("schedule") or {}).get("timezone") or "")
@@ -267,6 +267,12 @@ def _content_handoff_draft(description: str, *, business_id: str, recipient_user
         outputs=["Квитанции доставки отдельно от публикации на площадках"],
         external_dispatch_performed=False,
     )
+    if network_scope:
+        step['payload'].pop('recipient_user_id')
+        step['payload'].update(network_scope)
+        from services.compiled_content_handoff import handoff_scope
+        if not handoff_scope({**version, 'steps_json': version['steps'], 'schedule_json': version['schedule']}, business_id):
+            raise ValueError('Проверьте выбранные точки, получателей, планы и условия продолжения')
     _attach_compiled_metadata(draft["metadata"], version, "compiled_content_handoff_v1", "content_handoff_activation")
     return draft
 
@@ -310,6 +316,12 @@ def preview_creation(cursor: Any, *, business_id: str, user_id: str, actor_conte
                 or (conditions.get("schedule") or {}).get("timezone") != business_timezone):
             return {"status": "clarification_required", "code": "CONTENT_HANDOFF_SCHEDULE_REQUIRED",
                     "error": "Для передачи контента нужен ежедневный запуск в 10:00 по часовому поясу точки."}
+        network_scope = payload.get('content_handoff_scope')
+        if network_scope:
+            from services.compiled_content_program import authorize_contract, contract_for
+            candidate = _content_handoff_draft(description, business_id=business_id, recipient_user_id=user_id,
+                conditions=conditions, network_scope=network_scope)['version_payload']
+            authorize_contract(cursor, contract_for(candidate,business_id), user_id)
     clone_metadata = {}
     if payload.get("clone_from_blueprint_id"):
         cursor.execute("SELECT business_id,metadata_json FROM agent_blueprints WHERE id=%s", (str(payload.get("clone_from_blueprint_id")),))
@@ -328,7 +340,7 @@ def preview_creation(cursor: Any, *, business_id: str, user_id: str, actor_conte
         user_id=user_id, connected_integrations=inventory,
         compiled_draft=(
             _outreach_draft(description, config, conditions) if config else
-            _content_handoff_draft(description, business_id=business_id, recipient_user_id=user_id, conditions=conditions) if handoff_requested else None
+            _content_handoff_draft(description, business_id=business_id, recipient_user_id=user_id, conditions=conditions, network_scope=payload.get('content_handoff_scope')) if handoff_requested else None
         ))
     preview = state.get("preview") if isinstance(state.get("preview"), dict) else {}
     if config:

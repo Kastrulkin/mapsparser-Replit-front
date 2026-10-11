@@ -53,7 +53,7 @@ def operator_task(cursor, *, business_id, user_id, arguments, actor_context=None
     # preferences as a substitute for a compiled program.
     from services.operator_agent_management import configure, prepare_lifecycle
     operation = str(arguments.get('operation') or 'status')
-    if operation in {'compile', 'preview', 'approve', 'run'}:
+    if operation in {'compile', 'preview', 'approve', 'run', 'approve_plan'}:
         from services.operator_compiled_content import prepare
         return prepare(cursor, business_id=business_id, user_id=user_id,
             arguments=arguments, actor_context=actor_context)
@@ -64,6 +64,12 @@ def operator_task(cursor, *, business_id, user_id, arguments, actor_context=None
         return configure(cursor, business_id=business_id, user_id=user_id,
             arguments={**arguments, 'operation': 'status' if arguments.get('blueprint_id') else 'list'}, actor_context=actor_context)
     if operation == 'configure':
+        if arguments.get('content_handoff_scope'):
+            return configure(cursor, business_id=business_id, user_id=user_id, actor_context=actor_context,
+                arguments={**arguments, 'operation': 'create', 'name': 'Передача публикаций сети через бот',
+                    'description': arguments.get('description') or 'Передавать через Telegram-бот готовые посты с фото выбранных точек указанным получателям за день до публикации в 10:00. Продолжение плана — на проверку владельца.',
+                    'selected_provider_routes': {'telegram_delivery': {'provider': 'native_localos'}},
+                    'accepted_provider_routes': True})
         settings = arguments.get('settings') or {}
         if settings.get('time', '10:00') != '10:00' or settings.get('lead_days', 1) != 1 or set(settings.get('platforms', ['telegram','vk','max'])) != {'telegram','vk','max'}:
             return {'status':'clarification_required','chat_response':'Для пилота поддержаны Telegram, VK и MAX, за день до публикации в 10:00. Другие условия не сохранены.'}

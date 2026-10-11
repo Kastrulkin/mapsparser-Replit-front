@@ -21,6 +21,7 @@ def _invoke(operation, blueprint_id, actor, payload):
         'preview': agent_blueprints_api.compiled_preview_for_actor,
         'approve': agent_blueprints_api.compiled_approve_for_actor,
         'run': agent_blueprints_api.compiled_run_for_actor,
+        'approve_plan': agent_blueprints_api.content_successor_approve_for_actor,
     }
     # The common operations serialize their result with Flask.jsonify. A queue
     # worker has no request context; this supplies serialization only, not auth.
@@ -41,7 +42,7 @@ def _load(cursor, business_id, blueprint_id, operation):
     blueprint = cursor.fetchone()
     if not blueprint:
         raise ValueError('agent_not_found')
-    if operation == 'run':
+    if operation in {'run', 'approve_plan'}:
         cursor.execute('SELECT * FROM agent_blueprint_versions WHERE blueprint_id=%s AND id=%s',
             (blueprint_id, blueprint.get('compiled_approved_version_id')))
     else:
@@ -68,6 +69,11 @@ def _summary(snapshot):
         f"Получатель: {context.get('recipient_name') or ''} · Telegram ID {context.get('telegram_id') or ''}",
         f"За {scope.get('lead_days')} день до публикации, {scope.get('time')} · {scope.get('timezone')}",
         'Передача через бот — не публикация на площадках.']
+    if context.get('targets'):
+        lines = [f"{row.get('business_name')} · {row.get('address')} → {row.get('recipient_name')}"
+                 for row in context['targets']]
+        lines.extend([f"За {scope.get('lead_days')} день до публикации, {scope.get('time')} · {scope.get('timezone')}",
+                      'Передача через бот — не публикация. Продолжение плана — только на проверку владельца.'])
     for row in (snapshot.get('input') or {}).get('posts', []):
         lines.extend([f"{row.get('platform')} — {'готово' if row.get('eligible') else row.get('blocked_reason') or 'не готово'}",
             str(row.get('text') or ''), f"Фото: {row.get('photo_asset_id') or 'нет'}"])
@@ -116,6 +122,12 @@ def prepare(cursor, *, business_id, user_id, arguments, actor_context=None):
                     'external_writes_performed': False, 'result_ref': {'href': '/dashboard/agents', 'label': 'Открыть автоматизацию'}}
             payload['idempotency_key'] = f"operator-content-run:{blueprint_id}:{snapshot['id']}"
             summary += '\nПосле подтверждения запустится передача этих материалов. Регулярное расписание не включается.'
+        elif operation == 'approve_plan':
+            plan_id = str(arguments.get('plan_id') or '')
+            from services.content_plan_service import get_content_plan
+            plan = get_content_plan(user_id, plan_id)
+            payload.update(plan_id=plan_id, approved=True)
+            summary = f"Утвердить проверенные тексты и фото плана «{plan['title']}» ({plan['period_start']} — {plan['period_end']}) и подключить его к тому же расписанию передачи. Публикации на площадках не запускаются."
         elif operation == 'approve':
             evidence = version.get('compiled_preview_json') or {}
             if isinstance(evidence, str):
@@ -147,7 +159,7 @@ def execute(cursor, *, business_id, user_id, envelope, actor_context=None):
     if not actor or intent.get('business_id') != business_id or intent.get('user_id') != user_id or digest(intent) != envelope.get('intent_digest'):
         return {'status': 'blocked', 'blocked_reasons': ['compiled_intent_changed']}
     operation = str(intent.get('compiled_operation') or '')
-    if operation not in {'compile', 'approve', 'run'}:
+    if operation not in {'compile', 'approve', 'run', 'approve_plan'}:
         return {'status': 'blocked', 'blocked_reasons': ['unsupported_operation']}
     try:
         blueprint_id = str(intent.get('blueprint_id') or '')
@@ -157,7 +169,8 @@ def execute(cursor, *, business_id, user_id, envelope, actor_context=None):
         result, status = _invoke(operation, blueprint_id, actor, intent['payload'])
         if status >= 400:
             return _error(result)
-        messages = {'compile': 'Программа создана и сохранена. Проверьте её на текущем плане; отправки нет.',
+        messages = {'approve_plan': 'Продолжение утверждено и подключено к тому же расписанию передачи; внешняя публикация не запущена.',
+                    'compile': 'Программа создана и сохранена. Проверьте её на текущем плане; отправки нет.',
             'approve': 'Программа и условия утверждены. Регулярное расписание остаётся выключенным.',
             'run': 'Тестовый запуск принят в очередь. Доставка ещё не подтверждена; результат смотрите в журнале.'}
         return {'status': 'completed', 'blueprint_id': blueprint_id,

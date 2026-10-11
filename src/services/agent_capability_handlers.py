@@ -1095,6 +1095,10 @@ def _handle_content_publish_handoff(envelope: Dict[str, Any], user_data: Dict[st
             "business_timezone": timezone_name,
             "timezone": timezone_name,
         }
+        if payload.get('plan_ids') is not None:
+            if not isinstance(payload['plan_ids'], list) or not payload['plan_ids']:
+                return _result('blocked', reason_code='CONTENT_HANDOFF_PLANS_REQUIRED', external_dispatch_performed=False)
+            scope['plan_ids'] = payload['plan_ids']
         due = collect_due_content_publish_handoffs(
             db.conn,
             business_id=business_id,

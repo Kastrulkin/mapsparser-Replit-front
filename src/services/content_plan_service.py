@@ -1859,6 +1859,7 @@ def create_generated_content_plan(
     continuation_message: str | None = None,
     editorial_brief: str | None = None,
     operator_request_id: str | None = None,
+    continuation_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -1919,7 +1920,7 @@ def create_generated_content_plan(
             )
             knowledge_metadata["foundation_type"] = str(raw_knowledge_foundation.get("type") or "market_signal")
         continuation = None
-        if continuation_message or operator_request_id:
+        if continuation_message or operator_request_id or continuation_context:
             cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,0))", ('content-plan:'+business_id,))
         if operator_request_id:
             cursor.execute("""SELECT id FROM contentplans WHERE business_id=%s AND created_by=%s
@@ -1932,6 +1933,12 @@ def create_generated_content_plan(
             continuation = resolve_continuation(cursor, business_id, continuation_message)
             context = {**context, 'excluded_plan_themes': continuation['excluded_themes']}
             content_mix = {**(content_mix or {}), 'channels': continuation['channels']}
+        if continuation_context:
+            from services.content_network_renewal import resolve_successor_context
+            continuation = resolve_successor_context(cursor, business_id, continuation_context)
+            context = {**context, 'excluded_plan_themes': continuation['excluded_themes'],
+                       'source_refresh_snapshot': continuation_context.get('sources') or {}}
+            content_mix = {**(content_mix or {}), 'channels': continuation['channels']}
         skeleton = build_content_plan_skeleton(
             context,
             period_days=normalized_period,
@@ -1939,6 +1946,12 @@ def create_generated_content_plan(
             content_mix=content_mix if isinstance(content_mix, dict) else {},
             period_start=continuation['period_start'] if continuation else None,
         )
+        if continuation_context:
+            dates = continuation['dates']
+            skeleton['items'] = [{'scheduled_for': day} for day in dates]
+            skeleton['period_start'] = continuation['period_start'].isoformat()
+            skeleton['period_end'] = continuation['period_end'].isoformat()
+            skeleton['meta']['items_target'] = len(dates)
         if editorial_brief:
             if explicit_schedule:
                 if explicit_schedule['period_days'] > max(allowed_horizons):
@@ -1965,6 +1978,10 @@ def create_generated_content_plan(
         if continuation:
             skeleton['meta']['previous_plan_id'] = continuation['previous_plan_id']
             skeleton['meta']['excluded_themes_count'] = len(continuation['excluded_themes'])
+        if continuation_context:
+            skeleton['meta']['source_refresh_snapshot'] = continuation_context.get('sources') or {}
+            skeleton['meta']['network_automation_id'] = continuation_context.get('blueprint_id')
+            skeleton['meta']['requires_owner_review'] = True
         raw_channels = content_mix.get("channels") if isinstance(content_mix, dict) else []
         selected_channels = [
             str(channel or "").strip()
