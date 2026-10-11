@@ -1,0 +1,25 @@
+{
+  "baseline": "working files captured before Today implementation, not git HEAD",
+  "changed": [
+    "frontend/src/pages/dashboard/TodayPage.tsx",
+    "frontend/src/pages/dashboard/TodayPage.test.tsx",
+    "frontend/src/i18n/todayPageCopy.ts",
+    "frontend/src/components/guided-tour/guidedTourCopy.ts",
+    "frontend/src/App.tsx",
+    "src/services/today_workspace.py",
+    "src/services/operator_mobile_today.py",
+    "src/services/operator_owner_actions.py"
+  ],
+  "added": [
+    "frontend/src/pages/dashboard/todayWorkModel.ts",
+    "frontend/src/pages/dashboard/todayWorkModel.test.ts",
+    "frontend/src/pages/dashboard/TodayPage.clarity.test.tsx",
+    "frontend/src/i18n/todayClarityCopy.ts",
+    "frontend/src/i18n/todayClarityCopy.test.ts",
+    "tests/test_today_work_integrity.py",
+    "docs/TODAY_PRODUCT_UI_AUDIT.md"
+  ],
+  "task_patch": "/tmp/localos-today-task.patch",
+  "requires_backend_release": true,
+  "deployed": false
+}

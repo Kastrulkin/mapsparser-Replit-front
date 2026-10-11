@@ -17,7 +17,7 @@ const commandLabel: Record<string, string> = {
 
 const primaryCommand = (action: JourneyAction) => action.allowed_commands.find((item) => item !== 'copy') || action.allowed_commands[0] || '';
 
-export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = false, onUpdated }: { action: JourneyAction; businessId: string; surface?: 'web' | 'telegram_mini_app'; dark?: boolean; onUpdated: () => void }) => {
+export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = false, onUpdated }: { action: JourneyAction; businessId: string; surface?: 'web' | 'telegram_mini_app'; dark?: boolean; onUpdated: (nextAction?: JourneyAction) => void }) => {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [outcome, setOutcome] = useState('interested');
@@ -53,12 +53,12 @@ export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = 
       payload.note = details;
     }
     try {
-      await runJourneyCommand({ action, businessId, command: nextCommand, payload, surface });
+      const result = await runJourneyCommand({ action, businessId, command: nextCommand, payload, surface });
       if (nextCommand === 'open_upgrade') {
         window.location.assign('/dashboard/settings?tab=subscription');
         return;
       }
-      onUpdated();
+      onUpdated(result.next_action || undefined);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Не удалось сохранить действие');
     } finally {

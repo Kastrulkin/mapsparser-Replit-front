@@ -45,7 +45,8 @@ def work_item(*, entity_type, entity_id, flow, business_id, title, status, url,
         "entity_id": str(entity_id), "flow": flow, "business_id": business_id,
         "title": title, "description": description, "status": status,
         "urgency": "urgent" if urgent else "normal", "due_at": _iso(due_at),
-        "preview": preview, "action": {"label": "Открыть", "url": url},
+        "requires_decision": entity_type == "journey_action" or (entity_type == "content_item" and status == "approved"),
+        "preview": preview, "action": {"label": "Открыть", "label_code": "today.open", "url": url},
         "occurred_at": _iso(updated_at),
         "freshness": {"as_of": _iso(now), "status": "live"},
         "reason_code": status, "message_code": message_code,
@@ -117,13 +118,29 @@ def automation_work(cursor, scope, now):
         status = (row.get("provider_state") or row["status"]) if row["status"] == "waiting_provider" else row["status"]
         result.append(work_item(entity_type="agent_run",entity_id=row["id"],flow="automation",business_id=row["business_id"],
             title=row["name"],status=status,description=descriptions.get(status, ""),
+            message_code=f"today.automation.{status}" if status in descriptions else None,
             url="/dashboard/agents?"+urlencode({"blueprint_id":row["blueprint_id"],"run_id":row["id"],"business_id":row["business_id"]}),
             now=now,updated_at=row["updated_at"],urgent=status in attention))
     return result
 
 
-def section_items(items, primary_flow, *, limit=8):
-    decisions = {"failed","waiting_approval","awaiting_approval","needs_review","replied","negotiating","disputed","overdue","draft_generated","edited","blocked"}
+def section_items(items, primary_flow, *, limit=8, now=None):
+    observed_at = now or datetime.now(timezone.utc)
+    def deadline(item):
+        value = item.get("due_at")
+        try:
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed
+        except (ValueError, TypeError):
+            return None
+    failures = {"failed", "blocked", "disputed", "provider_reconciliation_required", "provider_failed", "provider_unavailable", "approval_invalid"}
+    def human(item):
+        return item.get("status") in decisions or item.get("requires_decision") is True or item.get("kind") == "owner_action"
+    def priority(item):
+        due = deadline(item)
+        return 0 if human(item) and due and due < observed_at else 1 if human(item) and item.get("status") in failures else 2 if human(item) else 3
+
+    decisions = {"failed","waiting_approval","awaiting_approval","needs_review","replied","negotiating","disputed","overdue","draft_generated","edited","blocked","provider_reconciliation_required","provider_failed","provider_unavailable","approval_invalid"}
     completed = {"completed","published","succeeded"}
     sections = {"needs_decision": [], "continue_work": [], "results": []}
     seen = set()
@@ -131,16 +148,16 @@ def section_items(items, primary_flow, *, limit=8):
         if item["id"] in seen:
             continue
         seen.add(item["id"])
-        section = "results" if item.get("status") in completed else "needs_decision" if item.get("status") in decisions or item.get("urgency")=="urgent" else "continue_work"
+        section = "results" if item.get("status") in completed else "needs_decision" if human(item) else "continue_work"
         sections[section].append(item)
     for name, values in sections.items():
         # Results are actual recent work, not the lexicographically first IDs.
         if name == "results":
             values.sort(key=lambda item: (item.get("occurred_at") or "", item["id"]), reverse=True)
-            values.sort(key=lambda item: item.get("flow") != primary_flow)
             sections[name] = values[:limit]
             continue
         values.sort(key=lambda item: (
+            priority(item),
             item.get("urgency") != "urgent",
             item.get("flow") != primary_flow,
             item.get("due_at") or "9999",
@@ -159,20 +176,27 @@ def canonical_work_items(payload, now):
     result = []
     for section in ("active_work","completed_results"):
         for original in payload.get(section) or []:
+            # Preserve aggregate/setup facts in the legacy response, not in completed work.
+            if section == "completed_results" and (not original.get("occurred_at") or original.get("kind") in {"growth_achievement", "aggregate", "summary"}):
+                continue
             screen = str(original.get("screen") or "tasks")
             flow = normalize_flow(screen)
             flow = flow if flow in FLOWS else "overview"
             identity = str(original.get("id") or "")
             if not identity:
                 continue
-            entity_type = "agent_run" if identity.startswith("agent:") else "canonical_work"
-            entity_id = identity.split(":",1)[1] if entity_type=="agent_run" else identity
+            entity_type = "journey_action" if original.get("kind") == "owner_action" else "agent_run" if identity.startswith("agent:") else "canonical_work"
+            entity_id = str(original.get("entity_id") or identity.split(":",1)[1]) if entity_type in {"agent_run", "journey_action"} else identity
+            existing_url = (original.get("action") or {}).get("url")
+            url = existing_url if str(existing_url or "").startswith("/dashboard/") else routes.get(screen, "/dashboard/progress")
+            if entity_type == "journey_action":
+                url = "/dashboard/operator?" + urlencode({"business_id": original.get("business_id") or "", "journey_action": entity_id})
             item = work_item(entity_type=entity_type,entity_id=entity_id,flow=flow,
                 business_id=original.get("business_id"),title=original.get("title") or "",
                 description=original.get("description") or original.get("stage") or "",
-                status="completed" if section=="completed_results" else original.get("status") or "in_progress",
-                url=routes.get(screen,"/dashboard/progress"),now=now,updated_at=original.get("occurred_at"))
-            result.append({**original,**item})
+                status=(original.get("status") or "completed") if section=="completed_results" else original.get("work_status") or original.get("status") or "unknown",
+                url=url,now=now,updated_at=original.get("occurred_at"),due_at=original.get("due_at"))
+            result.append({**original, **item, "action": {**(original.get("action") or {}), **item["action"], "label": (original.get("action") or {}).get("label") or item["action"]["label"]}})
     return result
 
 
@@ -231,5 +255,5 @@ def attach_today_workspace(cursor, *, scope, user_id, payload, now):
                 title=focus.get("title") or "Требует внимания",description=focus.get("reason") or "",
                 status="needs_review",url=focus.get("cta_url") if str(focus.get("cta_url") or "").startswith("/dashboard/") else focus_routes[focus_flow],now=now,urgent=True))
     items.extend(item for item in canonical_work_items(payload,now) if item["flow"] in allowed)
-    sections = section_items(items, primary if primary in allowed else "overview")
+    sections = section_items(items, primary if primary in allowed else "overview", now=now)
     return {**payload,**preferences,"work_sections":sections,"work_source_states":source_states,"data_warnings":warnings}

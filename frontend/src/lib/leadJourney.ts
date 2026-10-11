@@ -69,6 +69,18 @@ export type JourneyAction = {
   cta_target?: { screen?: string; action_id?: string };
   payload?: Record<string, unknown>;
   allowed_commands: string[];
+  access?: {
+    allowed: boolean;
+    capability: string;
+    status: 'available' | 'payment_required';
+    code?: string | null;
+    payment_required?: boolean;
+    required_tier?: string;
+    required_tier_name?: string;
+    reason?: string;
+    cta_label?: string;
+    cta_target?: { screen?: string; url?: string };
+  };
   version: number;
 };
 

@@ -1,3 +1,5 @@
+import { todayClarityCopy } from '@/i18n/todayClarityCopy';
+import { getTodayPageCopy } from '@/i18n/todayPageCopy';
 import type { Language } from '@/i18n/LanguageContext';
 
 type GuidedTourStepText = {
@@ -440,11 +442,12 @@ const automationCopy: Record<Language, AutomationTourCopy> = {
 
 export const guidedTourCopyForLanguage = (language: Language): GuidedTourCopy => {
   const base = copyByLanguage[language];
+  const today = todayClarityCopy(language);
   const automation = automationCopy[language];
   return {
     ...base,
     chapters: { ...base.chapters, automation: automation.chapter },
-    steps: { ...base.steps, 'agents-nav': automation.nav, 'agents-signals': automation.signals, 'agents-today': automation.today, 'agents-employees': automation.employees, 'agents-control': automation.control },
+    steps: { ...base.steps, 'agents-nav': automation.nav, 'agents-signals': automation.signals, 'agents-today': automation.today, 'agents-employees': automation.employees, 'agents-control': automation.control, 'today-nav': { title: getTodayPageCopy(language).title, body: today.description }, 'today-overview': { title: today.next, body: `${today.decisions} · ${today.continue} · ${today.completed}` } },
   };
 };
 

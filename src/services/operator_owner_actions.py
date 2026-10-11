@@ -267,7 +267,7 @@ def today_items(cursor,scope,user):
         items.append({'id':'owner-action:'+str(row['id']),'kind':'owner_action','entity_id':str(row['id']),
             'title':row['title'],'description':row['description'],
             'stage':data['date']+' '+time_label+' ('+data['timezone']+')',
-            'status':row['status'],'due_at':row['due_at'].isoformat(),'occurred_at':row['updated_at'].isoformat(),
+            'status':row['status'],'timezone':data.get('timezone'),'due_at':row['due_at'].isoformat(),'occurred_at':row['updated_at'].isoformat(),
             'business_id':row['business_id'],'business_name':row['business_name'],'screen':'operator'})
     return items
 

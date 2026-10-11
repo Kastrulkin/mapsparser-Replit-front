@@ -1,6 +1,16 @@
 from datetime import datetime, timezone
+import pytest
 
 import services.operator_mobile_today as mobile_today
+
+
+@pytest.fixture(autouse=True)
+def legacy_today_contract(monkeypatch):
+    # These tests isolate the existing builder sources; new adapters have real-PG tests.
+    monkeypatch.setenv("LOCALOS_TODAY_PERSONALIZATION_ENABLED", "false")
+    import sys
+    from types import SimpleNamespace
+    monkeypatch.setitem(sys.modules, "services.operator_owner_actions", SimpleNamespace(today_items=lambda *args: []))
 
 
 def _growth(priority=80):
@@ -41,6 +51,7 @@ def test_today_and_progress_use_the_same_focus(monkeypatch):
     monkeypatch.setattr(mobile_today, "_load_changes", lambda *_args: [])
     monkeypatch.setattr(mobile_today, "_load_community_pulse", lambda *_args: [])
     monkeypatch.setattr(mobile_today, "_load_completed_results", lambda *_args: [])
+    monkeypatch.setattr(mobile_today, "_load_story_facts_action", lambda *_args: None)
     scope = {"kind": "business", "id": "business-1", "business_ids": ["business-1"]}
 
     today = mobile_today.build_mobile_today(object(), scope=scope, user_id="user-1", growth_loader=lambda _business_id: _growth())
@@ -68,6 +79,7 @@ def test_network_today_and_progress_expose_same_location_contract(monkeypatch):
     monkeypatch.setattr(mobile_today, "_load_changes", lambda *_args: [])
     monkeypatch.setattr(mobile_today, "_load_community_pulse", lambda *_args: [])
     monkeypatch.setattr(mobile_today, "_load_completed_results", lambda *_args: [])
+    monkeypatch.setattr(mobile_today, "_load_story_facts_action", lambda *_args: None)
     scope = {"kind": "network", "id": "n-1", "business_ids": ["b-1", "b-2"]}
 
     today = mobile_today.build_mobile_today(object(), scope=scope, user_id="u-1", growth_loader=lambda _id: growth)
@@ -86,6 +98,7 @@ def test_today_uses_exact_rolling_24_hour_window(monkeypatch):
     monkeypatch.setattr(mobile_today, "_load_changes", lambda _cursor, _scope, cutoff: observed_cutoffs.append(cutoff) or [])
     monkeypatch.setattr(mobile_today, "_load_community_pulse", lambda *_args: [])
     monkeypatch.setattr(mobile_today, "_load_completed_results", lambda *_args: [])
+    monkeypatch.setattr(mobile_today, "_load_story_facts_action", lambda *_args: None)
     now = datetime(2026, 7, 27, 9, 30, tzinfo=timezone.utc)
 
     payload = mobile_today.build_mobile_today(
@@ -98,6 +111,53 @@ def test_today_uses_exact_rolling_24_hour_window(monkeypatch):
 
     assert observed_cutoffs == [datetime(2026, 7, 26, 9, 30, tzinfo=timezone.utc)]
     assert payload["period"] == {"kind": "rolling_24h", "since": "2026-07-26T09:30:00+00:00"}
+
+
+def test_feed_cursor_round_trip_and_telegram_link_fallback():
+    observed_at = datetime(2026, 8, 26, 8, 30, tzinfo=timezone.utc)
+    encoded = mobile_today._encode_feed_cursor(observed_at, "7b95fa9a-55b4-4f9c-90b4-ef8da8699484")
+
+    assert mobile_today._feed_cursor(encoded) == (observed_at, "7b95fa9a-55b4-4f9c-90b4-ef8da8699484")
+
+
+def test_feed_inbound_items_are_tenant_scoped_and_route_by_workstream():
+    class Cursor:
+        def __init__(self):
+            self.params = []
+
+        def execute(self, _query, params=None):
+            self.params.append(params)
+
+        def fetchone(self):
+            return {"table_name": "outreach_inbound_events"}
+
+        def fetchall(self):
+            return [{
+                "id": "reply-1",
+                "channel": "telegram",
+                "classification": "interested",
+                "raw_payload_json": {"reply": "Да, интересно"},
+                "occurred_at": datetime(2026, 8, 27, 12, 0, tzinfo=timezone.utc),
+                "sender_name": "Анна про Петербург",
+                "workstream_type": "creator_collaboration",
+                "business_id": "business-1",
+            }]
+
+    cursor = Cursor()
+    items = mobile_today._load_feed_inbound_items(cursor, {"kind": "business", "id": "business-1"})
+
+    assert cursor.params[-1][0] == ["business-1"]
+    assert items[0]["text"] == "Да, интересно"
+    assert items[0]["flow_type"] == "influencer"
+    assert items[0]["target"]["screen"] == "influencers"
+    assert mobile_today._telegram_document_link({
+        "source_url": "https://t.me/local_business",
+        "external_id": "42",
+    }) == "https://t.me/local_business/42"
+    assert mobile_today._telegram_document_link({
+        "source_url": "https://example.com/private",
+        "external_id": "42",
+    }) is None
 
 
 def test_pulse_hides_unconfirmed_topic_and_keeps_provenance():
@@ -216,3 +276,75 @@ def test_blocking_operator_focus_wins_over_growth_recommendation():
     assert focus["source"] == "operator"
     assert focus["target_scope"] == {"kind": "business", "id": "b-2"}
     assert focus["affected_business_ids"] == ["b-2"]
+    assert focus["expected_outcome"] == ""
+
+
+def test_story_facts_focus_wins_over_regular_growth_recommendation():
+    content_action = {
+        "id": "content_story_facts:item-1",
+        "title": "Добавьте факты для истории",
+        "priority": 115,
+        "screen": "content",
+        "source": "content",
+    }
+
+    focus = mobile_today.select_daily_focus(
+        {"primary_action": None},
+        _growth(priority=80),
+        {"kind": "business"},
+        content_action,
+    )
+
+    assert focus == content_action
+
+
+def test_critical_operator_focus_stays_above_story_facts():
+    content_action = {
+        "id": "content_story_facts:item-1",
+        "title": "Добавьте факты для истории",
+        "priority": 125,
+        "screen": "content",
+        "source": "content",
+    }
+
+    focus = mobile_today.select_daily_focus(
+        {
+            "primary_action": {
+                "id": "cards_failed",
+                "title": "Восстановить обновление карточки",
+                "severity": "critical",
+                "count": 1,
+            }
+        },
+        _growth(priority=80),
+        {"kind": "business"},
+        content_action,
+    )
+
+    assert focus["source"] == "operator"
+
+
+def test_story_facts_requirement_recognizes_story_plan_items():
+    assert mobile_today._requires_story_facts(
+        {"content_type": "story", "theme": "История ученика"},
+        {},
+    )
+    assert mobile_today._requires_story_facts(
+        {"content_type": "news", "theme": "Как изменилась история клиента"},
+        {},
+    )
+    assert not mobile_today._requires_story_facts(
+        {"content_type": "faq", "theme": "Как подготовиться к занятию"},
+        {},
+    )
+
+
+def test_business_history_reminder_skips_complete_profile_and_flags_placeholder():
+    assert not mobile_today._needs_business_history(
+        "Бренд основала Елена после личного опыта мамы троих детей. Команда помогает детям спокойно привыкнуть к стрижке.",
+        {"profile_completeness": {"ready": True}},
+    )
+    assert mobile_today._needs_business_history(
+        "Представляет Органику в партнёрском общении.",
+        {},
+    )

@@ -1,0 +1,19 @@
+{
+  "frontend_tests": 128,
+  "backend_tests": 20,
+  "telegram_tests": 4,
+  "build": "passed",
+  "integrity": "passed",
+  "product_ui_guard": "passed; mocked cockpit skipped",
+  "outreach_navigation_guard": "passed",
+  "type_check": "production baseline has 235 diagnostics; release has 217; zero new diagnostics after path and union-order normalization",
+  "baseline_commit": "aa0ebe1cf",
+  "backup": "/opt/seo-app/backups/today-ui-20261011",
+  "frontend_entry": "/assets/index-Bk3vce3x.js",
+  "backend_allowlist": [
+    "services/today_workspace.py",
+    "services/operator_mobile_today.py",
+    "services/operator_owner_actions.py"
+  ],
+  "deployment": "prepared; user authorized"
+}

@@ -123,23 +123,23 @@ export class NewAuth {
             data = JSON.parse(text);
           } catch (parseError) {
             console.error('Ошибка парсинга JSON:', parseError, 'Ответ:', text);
-            throw new Error(`Ошибка парсинга ответа сервера: ${text.substring(0, 100)}`);
+            throw Object.assign(new Error(`Ошибка парсинга ответа сервера: ${text.substring(0, 100)}`), { status: response.status });
           }
         }
       } else {
         // Если ответ не JSON, читаем как текст
         const text = await response.text();
         console.error('Сервер вернул не-JSON ответ:', text.substring(0, 200));
-        throw new Error(`Сервер вернул неверный формат ответа (${response.status}): ${text.substring(0, 100)}`);
+        throw Object.assign(new Error(`Сервер вернул неверный формат ответа (${response.status}): ${text.substring(0, 100)}`), { status: response.status });
       }
 
       if (!response.ok) {
         const backendError = String(data.error || '');
         if (response.status === 401 && backendError.toLowerCase().includes('invalid token')) {
           this.clearActiveToken();
-          throw new Error('Сессия истекла. Войдите снова.');
+          throw Object.assign(new Error('Сессия истекла. Войдите снова.'), { status: response.status });
         }
-        throw new Error(data.message || data.error || `Ошибка запроса (${response.status})`);
+        throw Object.assign(new Error(data.message || data.error || `Ошибка запроса (${response.status})`), { status: response.status });
       }
 
       return data;

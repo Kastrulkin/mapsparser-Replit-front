@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-11",
+  "exit_codes": {
+    "tests": 0,
+    "types": 0,
+    "lint": 0,
+    "build": 0,
+    "guard": 0,
+    "integrity": 0,
+    "backend": 0,
+    "preferences": 0
+  },
+  "frontend_tests": 174,
+  "backend_tests": 45,
+  "pure_preference_tests": 4,
+  "viewport_widths": [
+    390,
+    768,
+    1280
+  ],
+  "production_compared": true,
+  "production_deployed": false,
+  "human_usability_study": "not performed",
+  "postgres_integration_tests": "not run",
+  "mocked_agents_cockpit_guard": "skipped; no frontend at port 3000",
+  "build_context": "current working copy; task-only patch stored separately"
+}

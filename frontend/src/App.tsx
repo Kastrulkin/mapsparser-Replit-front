@@ -370,7 +370,7 @@ const AppShell = () => {
             <Route path="promotion/influencers" element={<Navigate to="/dashboard/influencers" replace />} />
             <Route path="growth-paths" element={<GrowthPathsPage />} />
             <Route path="more" element={<MorePage />} />
-            <Route path="operator" element={<OperatorPage />} />
+            <Route path="operator" element={<JourneyWorkspaceFocus><OperatorPage /></JourneyWorkspaceFocus>} />
             <Route path="telegram-radar" element={<TelegramRadarPage />} />
             <Route path="agents" element={<JourneyWorkspaceFocus><AgentBlueprintsPage /></JourneyWorkspaceFocus>} />
             <Route path="bookings" element={<Navigate to="/dashboard/progress" replace />} />
