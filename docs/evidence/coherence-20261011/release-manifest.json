@@ -1,5 +1,5 @@
 {
-  "status": "local-candidate-awaiting-release-approval",
+  "status": "authorized-release-deployed-final-verification",
   "schema_changes": false,
   "production_data_changes": false,
   "files": [
@@ -565,7 +565,7 @@
     },
     {
       "path": "frontend/src/pages/dashboard/ContentPage.tsx",
-      "sha256": "aa2044e0ee3eecd64e044d869c26e2db2e1ecbc6f957886de59cf2d23f886a6e",
+      "sha256": "4378ca8033bd35f57717b7f4f73dda3acb1336c5f2c3f2b15d073838977426b7",
       "baseline_sha256": "c2372ecaedffb8032c45e6acc31e44a551383153e6d3ba68aa32bfa1cde94005",
       "baseline": "production-host-source",
       "runtime": true
@@ -586,7 +586,7 @@
     },
     {
       "path": "frontend/src/pages/dashboard/GrowthPathsPage.scope.test.tsx",
-      "sha256": "845b0417e5505ae5054ed903d6a92d5dba827cebe2c86d08c328cb5bd7cacaf2",
+      "sha256": "447ce7916f42cf150a15390d622690db258fb7f6d7152c1af3c8d07e9081dcfa",
       "baseline_sha256": null,
       "baseline": "production-host-source",
       "runtime": false
@@ -600,7 +600,7 @@
     },
     {
       "path": "frontend/src/pages/dashboard/GrowthPathsPage.tsx",
-      "sha256": "7b0b840246492e250d2ac6da90ce53ba5d2669afaaebe587ab332187e63e0a6b",
+      "sha256": "6e5a8ac9c3fcc7766beaa2d352e9d028b0ce4ff810ffa53ebbedc80de90bcd5a",
       "baseline_sha256": "c7860999714b0b71cf7b95fc9f1b2348e47858ed27827a11b4aef4e9297de600",
       "baseline": "production-host-source",
       "runtime": true
@@ -841,6 +841,13 @@
       "sha256": "b44419700dbb601c446c45abd3beda0f17748891e6b1c168e647546fb367b400",
       "baseline_sha256": "8d9cee046229a14a6e03dd64433086a38a836bbc1b44881f6c7bee48d7ffa267",
       "baseline": "local-start-snapshot",
+      "runtime": false
+    },
+    {
+      "path": "frontend/src/pages/dashboard/ContentPage.work-link.test.tsx",
+      "sha256": "ea87ee0d67131d2f96d964784e237282c0a7cbc487ed287a873a2187a49a22ad",
+      "baseline_sha256": null,
+      "baseline": "production-host-source",
       "runtime": false
     }
   ],

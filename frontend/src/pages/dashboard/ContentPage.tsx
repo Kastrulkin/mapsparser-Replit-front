@@ -41,6 +41,7 @@ import { API_URL } from '@/config/api';
 import { newAuth } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
 import { fillContentCalendarTemplate, getContentCalendarCopy, getDemoContentCalendarThemes, localizeContentCalendarStatus } from '@/i18n/contentCalendarCopy';
 import { getContentWorkspaceControlsCopy, getContentWorkspaceCopy } from '@/i18n/contentWorkspaceCopy';
 import { localizeDemoBusinessName } from './operatorPageCopy';
@@ -75,6 +76,7 @@ type ContentPlanContext = {
 
 type PlanItem = {
   id: string;
+  business_id?: string;
   scheduled_for?: string;
   theme?: string;
   goal?: string;
@@ -139,6 +141,7 @@ type VoiceProfile = {
 
 type PlanPayload = {
   id: string;
+  business_id?: string;
   plan_status?: string;
   title?: string;
   period_days?: number;
@@ -786,6 +789,12 @@ export function ContentPage() {
     return saved === 'media' || saved === 'audience' ? saved : 'calendar';
   });
   const [selectedItemId, setSelectedItemId] = useState('');
+  const contentLoadSequenceRef = useRef(0);
+  const requestedContentTarget = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return { planId: params.get('plan_id') || '', itemId: params.get('item_id') || '' };
+  }, [location.search]);
+  const linkedRecordUnavailable = workCoherenceCopy(language).recordUnavailable;
   const [manualContentConfirmed, setManualContentConfirmed] = useState<Record<string, boolean>>({});
   const [channelDetailsOpen, setChannelDetailsOpen] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
@@ -907,45 +916,82 @@ export function ContentPage() {
     });
   }, [mediaAssets, mediaFilter]);
 
-  const loadSocialPosts = async (planId: string) => {
+  const loadSocialPosts = async (planId: string, loadSequence?: number, itemIds?: Set<string>) => {
     const response = await newAuth.makeRequest(`/content-plans/${encodeURIComponent(planId)}/social-posts`, { method: 'GET' });
-    const posts = Array.isArray(response.posts) ? response.posts : [];
+    const allPosts: SocialPost[] = Array.isArray(response.posts) ? response.posts : [];
+    const posts = itemIds ? allPosts.filter((post) => itemIds.has(String(post.content_plan_item_id || ''))) : allPosts;
+    if (loadSequence !== undefined && loadSequence !== contentLoadSequenceRef.current) return posts;
     setSocialPosts(posts);
-    setSocialSummary(response.summary || null);
+    setSocialSummary(itemIds ? null : response.summary || null);
     return posts;
   };
 
-  const loadCurrentPlan = async (planId: string) => {
+  const loadCurrentPlan = async (planId: string, loadSequence?: number) => {
     const planResponse = await newAuth.makeRequest(`/content-plans/${encodeURIComponent(planId)}`, { method: 'GET' });
-    const plan = planResponse.plan || null;
-    setCurrentPlan(plan);
-    if (plan?.id) {
-      await loadSocialPosts(plan.id);
+    if (loadSequence !== undefined && loadSequence !== contentLoadSequenceRef.current) return null;
+    const rawPlan: PlanPayload | null = planResponse.plan || null;
+    const planBusinessId = rawPlan?.scope_type === 'business'
+      ? rawPlan.scope_target_id || rawPlan.business_id
+      : rawPlan?.business_id;
+    if (!rawPlan || rawPlan.id !== planId || (rawPlan.scope_type !== 'network' && planBusinessId && planBusinessId !== currentBusinessId)) {
+      throw new Error(linkedRecordUnavailable);
     }
+    const rawItems = rawPlan.items || [];
+    const locationItems = rawItems.some((item) => Boolean(item.business_id));
+    const visibleItems = locationItems ? rawItems.filter((item) => item.business_id === currentBusinessId) : rawItems;
+    const requestedItem = requestedContentTarget.itemId
+      ? visibleItems.find((item) => item.id === requestedContentTarget.itemId)
+      : null;
+    if (requestedContentTarget.itemId && !requestedItem) throw new Error(linkedRecordUnavailable);
+    const plan = { ...rawPlan, items: visibleItems };
+    setCurrentPlan(plan);
+    if (requestedItem) {
+      setSection('calendar');
+      setSelectedItemId(requestedItem.id);
+      setDraftEdits((prev) => ({ ...prev, [requestedItem.id]: String(requestedItem.draft_text || '') }));
+      setThemeEdits((prev) => ({ ...prev, [requestedItem.id]: String(requestedItem.theme || requestedItem.goal || '') }));
+      setDateEdits((prev) => ({ ...prev, [requestedItem.id]: getItemDateKey(requestedItem) }));
+    }
+    await loadSocialPosts(plan.id, loadSequence, locationItems ? new Set(visibleItems.map((item) => item.id)) : undefined);
     return plan;
   };
 
   const loadContent = async () => {
+    const loadSequence = ++contentLoadSequenceRef.current;
     if (!currentBusinessId) return;
     setLoading(true);
     setError('');
     try {
       const contextResponse = await newAuth.makeRequest(`/content-plans/context?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
+      if (loadSequence !== contentLoadSequenceRef.current) return;
       setContext(contextResponse.context || null);
       const plansResponse = await newAuth.makeRequest(`/content-plans?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
+      if (loadSequence !== contentLoadSequenceRef.current) return;
       const nextPlans = workingContentPlans(Array.isArray(plansResponse.plans) ? plansResponse.plans : []);
       setPlans(nextPlans);
-      if (nextPlans.length > 0) {
-        await loadCurrentPlan(nextPlans[0].id);
+      // An explicit link keeps its target, including an archived plan outside the working list.
+      const planId = requestedContentTarget.planId || nextPlans[0]?.id;
+      if (planId) {
+        await loadCurrentPlan(planId, loadSequence);
       } else {
         setCurrentPlan(null);
         setSocialPosts([]);
         setSocialSummary(null);
+        if (requestedContentTarget.itemId) setError(linkedRecordUnavailable);
       }
     } catch (loadError) {
+      if (loadSequence !== contentLoadSequenceRef.current) return;
+      if (loadError instanceof Error && 'status' in loadError && [401, 403, 404].includes(Number(loadError.status))) {
+        setContext(null);
+        setPlans([]);
+        setCurrentPlan(null);
+        setSocialPosts([]);
+        setSocialSummary(null);
+        setSelectedItemId('');
+      }
       setError(loadError instanceof Error ? loadError.message : 'Не удалось загрузить контент');
     } finally {
-      setLoading(false);
+      if (loadSequence === contentLoadSequenceRef.current) setLoading(false);
     }
   };
 
@@ -1024,8 +1070,18 @@ export function ContentPage() {
   };
 
   useEffect(() => {
+    setContext(null);
+    setPlans([]);
+    setCurrentPlan(null);
+    setSocialPosts([]);
+    setSocialSummary(null);
+    setSelectedItemId('');
+    setDraftEdits({});
+    setThemeEdits({});
+    setDateEdits({});
     void loadContent();
-  }, [currentBusinessId]);
+    return () => { contentLoadSequenceRef.current += 1; };
+  }, [currentBusinessId, requestedContentTarget.planId, requestedContentTarget.itemId]);
 
   useEffect(() => {
     setChannelDetailsOpen(false);

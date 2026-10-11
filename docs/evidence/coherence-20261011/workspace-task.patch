@@ -2059,6 +2059,29 @@
    const { language } = useLanguage();
    const contentCopy = getContentWorkspaceCopy(language);
    const calendarCopy = getContentCalendarCopy(language);
+@@ -1021,7 +1022,7 @@
+       : rawItems;
+     const plan = rawPlan ? { ...rawPlan, items: visibleItems } : null;
+     setCurrentPlan(plan);
+-    if (requestedContentTarget.focus === 'story_facts' && requestedContentTarget.itemId) {
++    if (requestedContentTarget.itemId) {
+       const requestedItem = visibleItems.find((item) => item.id === requestedContentTarget.itemId);
+       if (requestedItem) {
+         setSelectedItemId(requestedItem.id);
+@@ -1059,11 +1060,11 @@
+       if (loadSequence !== contentLoadSequenceRef.current) return;
+       const nextPlans = workingContentPlans(Array.isArray(plansResponse.plans) ? plansResponse.plans : []);
+       setPlans(nextPlans);
+-      if (nextPlans.length > 0) {
++      if (nextPlans.length > 0 || requestedContentTarget.planId) {
+         const requestedPlan = requestedContentTarget.planId
+           ? nextPlans.find((plan) => plan.id === requestedContentTarget.planId)
+           : null;
+-        await loadCurrentPlan(requestedPlan?.id || nextPlans[0].id, loadSequence);
++        await loadCurrentPlan(requestedContentTarget.planId || requestedPlan?.id || nextPlans[0].id, loadSequence);
+       } else {
+         setCurrentPlan(null);
+         setSocialPosts([]);
 @@ -2491,7 +2492,7 @@
            <p className="mt-4 max-w-xl text-base leading-7 text-slate-600">
              LocalOS может подготовить месяц публикаций для карт и соцсетей. Вы увидите готовый календарь, а потом быстро проверите важное.
@@ -2086,6 +2109,79 @@
                  {[
                    { key: 'month', label: calendarCopy.month, Icon: CalendarDays },
                    { key: 'week', label: calendarCopy.week, Icon: Clock3 },
+--- /dev/null
++++ b/frontend/src/pages/dashboard/ContentPage.work-link.test.tsx
+@@ -0,0 +1,70 @@
++import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
++import { useState } from 'react';
++import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
++import { beforeEach, describe, expect, it, vi } from 'vitest';
++import { LanguageProvider } from '@/i18n/LanguageContext';
++import { newAuth } from '@/lib/auth_new';
++import { ContentPage } from './ContentPage';
++
++vi.mock('@/lib/auth_new', () => ({ newAuth: { getToken: vi.fn(() => ''), makeRequest: vi.fn() } }));
++const targetPlan = { id: 'old-plan', business_id: 'business-1', scope_type: 'business', scope_target_id: 'business-1', plan_status: 'archived', items: [{ id: 'target-item', business_id: 'business-1', theme: 'Выбранный материал', draft_text: 'Подготовленный текст', scheduled_for: '2026-08-10' }] };
++const ContextRoute = () => {
++  const [businessId, setBusinessId] = useState('business-1');
++  return <><button onClick={() => setBusinessId('business-2')}>Сменить бизнес</button><Outlet context={{currentBusinessId:businessId,currentBusiness:{id:businessId,name:'Бизнес'},demoMode:false}}/></>;
++};
++const renderPage = () => render(
++  <MemoryRouter initialEntries={['/dashboard/content?plan_id=old-plan&item_id=target-item']}>
++    <LanguageProvider><Routes><Route element={<ContextRoute/>}>
++      <Route path='/dashboard/content' element={<ContentPage/>}/>
++    </Route></Routes></LanguageProvider>
++  </MemoryRouter>
++);
++const mockPlan = (plan: typeof targetPlan) => vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
++  if (path.startsWith('/content-plans/context')) return {context:{}};
++  if (path.startsWith('/content-plans?')) return {plans:[{id:'latest-plan',items:[]}]};
++  if (path === '/content-plans/old-plan') return {plan};
++  if (path.endsWith('/social-posts')) return {posts:[],summary:{}};
++  return {};
++});
++describe('Content work deep link', () => {
++  beforeEach(() => { window.localStorage.clear();window.localStorage.setItem('language','ru');vi.mocked(newAuth.makeRequest).mockReset(); });
++  it('opens the exact item from a plan outside the working list without issuing a command', async () => {
++    mockPlan(targetPlan);renderPage();
++    expect(await screen.findByDisplayValue('Выбранный материал')).toBeInTheDocument();
++    expect(screen.getByRole('dialog')).toBeInTheDocument();
++    expect(vi.mocked(newAuth.makeRequest).mock.calls.some(([, options]) => options?.method && options.method !== 'GET')).toBe(false);
++    expect(vi.mocked(newAuth.makeRequest).mock.calls.some(([path]) => path === '/content-plans/latest-plan')).toBe(false);
++  });
++  it('explains a missing item instead of choosing a different item', async () => {
++    mockPlan({...targetPlan,items:[{...targetPlan.items[0],id:'other-item',theme:'Другой материал'}]});renderPage();
++    expect(await screen.findByText(/Указанная запись недоступна в текущей выборке/)).toBeInTheDocument();
++    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
++    expect(screen.queryByDisplayValue('Другой материал')).not.toBeInTheDocument();
++  });
++  it('withholds a plan belonging to another business', async () => {
++    mockPlan({...targetPlan,business_id:'business-2',scope_target_id:'business-2'});renderPage();
++    expect(await screen.findByText(/Указанная запись недоступна в текущей выборке/)).toBeInTheDocument();
++    expect(screen.queryByDisplayValue('Выбранный материал')).not.toBeInTheDocument();
++  });
++  it('ignores a previous business response arriving after switching', async () => {
++    let finishOld = (value: {plan: typeof targetPlan}) => { void value; };
++    const oldResponse = new Promise<{plan: typeof targetPlan}>((resolve) => { finishOld = resolve; });
++    let planReads = 0;
++    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
++      if (path.startsWith('/content-plans/context')) return {context:{}};
++      if (path.startsWith('/content-plans?')) return {plans:[]};
++      if (path === '/content-plans/old-plan') {
++        planReads += 1;
++        return planReads === 1 ? oldResponse : {plan:{...targetPlan,items:[]}};
++      }
++      return {};
++    });
++    renderPage();
++    await waitFor(() => expect(planReads).toBe(1));
++    fireEvent.click(screen.getByRole('button',{name:'Сменить бизнес'}));
++    await waitFor(() => expect(planReads).toBe(2));
++    await act(async () => finishOld({plan:targetPlan}));
++    expect(screen.queryByDisplayValue('Выбранный материал')).not.toBeInTheDocument();
++    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
++  });
++});
 --- a/frontend/src/pages/dashboard/GrowthPathsPage.compatibility.test.tsx
 +++ b/frontend/src/pages/dashboard/GrowthPathsPage.compatibility.test.tsx
 @@ -24,7 +24,7 @@
@@ -2109,7 +2205,7 @@
  });
 --- /dev/null
 +++ b/frontend/src/pages/dashboard/GrowthPathsPage.scope.test.tsx
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,59 @@
 +import '@testing-library/jest-dom/vitest';
 +import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 +import { useState } from 'react';
@@ -2161,6 +2257,14 @@
 + await waitFor(()=>expect(newAuth.makeRequest).toHaveBeenCalledWith('/operator/today/preference?scope_type=business&scope_id=a',{method:'POST',body:JSON.stringify({action:'set',expected_revision:7,primary_flow:'content'})}));
 + expect(await screen.findByRole('button',{name:'Выбранный фокус'})).toBeDisabled();
 +});
++
++it('distinguishes same-name network locations by their existing addresses', async () => {
++ vi.mocked(newAuth.makeRequest).mockImplementation(async (url) => url.includes('/today/preference') ? {} : ({paths:[{flow_type:'content',status:'not_started',access:{status:'available'},locations:[{business_id:'one',business_name:'Одинаковое имя',access:{status:'available'}},{business_id:'two',business_name:'Одинаковое имя',access:{status:'available'}}]}]}));
++ render(<MemoryRouter><Routes><Route element={<Outlet context={{currentBusinessId:'network',controlScope:{kind:'network',id:'network'},businesses:[{id:'one',address:'Первый адрес'},{id:'two',address:'Второй адрес'}],onControlScopeChange:vi.fn()}}/>}><Route index element={<GrowthPathsPage/>}/></Route></Routes></MemoryRouter>);
++ expect(await screen.findByText('Первый адрес')).toBeInTheDocument();
++ expect(screen.getByRole('button',{name:'Открыть контент: Одинаковое имя, Первый адрес'})).toBeInTheDocument();
++ expect(screen.getByRole('button',{name:'Открыть контент: Одинаковое имя, Второй адрес'})).toBeInTheDocument();
++});
 --- a/frontend/src/pages/dashboard/GrowthPathsPage.test.tsx
 +++ b/frontend/src/pages/dashboard/GrowthPathsPage.test.tsx
 @@ -33,7 +33,7 @@
@@ -2189,7 +2293,7 @@
  });
 --- a/frontend/src/pages/dashboard/GrowthPathsPage.tsx
 +++ b/frontend/src/pages/dashboard/GrowthPathsPage.tsx
-@@ -1,131 +1,56 @@
+@@ -1,131 +1,61 @@
  import { AccessPreview, type BlockAccess } from '@/components/access/AccessBoundary';
  import { Button } from '@/components/ui/button';
 -import { useLatestCallback } from '@/hooks/useLatestCallback';
@@ -2340,6 +2444,7 @@
 + return <GrowthPathsWorkspace key={scope.kind + ':' + scope.id} scope={scope} selectScope={onControlScopeChange} clientDirections={clientDirections} />;
  };
 +const GrowthPathsWorkspace = ({ scope, selectScope, clientDirections }: { clientDirections?: boolean; scope: { kind: string; id: string }; selectScope?: (scope: Scope) => void }) => {
++ const { businesses = [] } = useOutletContext<{ businesses?: Array<{ id: string; address?: string | null }> }>();
 + const { language } = useLanguage(); const copy = growthPathsCopyFor(language); const navigation = workNavigationCopy(language); const extra = workCoherenceCopy(language); const navigate = useNavigate();
 + const [data, setData] = useState<Data | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
 + const [preference, setPreference] = useState<TodayPreference | null>(null); const [pending, setPending] = useState<Flow | null>(null); const [saving, setSaving] = useState(false);
@@ -2364,7 +2469,11 @@
 + {pending ? <section aria-label={navigation.focus} className="rounded-xl border bg-card p-4"><p>{navigation.focus}: {copy.directions[pending].title}</p><p className="my-2 text-sm text-muted-foreground">{extra.focusHint}</p><Button disabled={saving} onClick={() => void choose()}>{navigation.focus}</Button><Button variant="ghost" disabled={saving} onClick={() => setPending(null)}>{extra.cancel}</Button></section> : null}
 + {loading && !data ? <p role="status">{copy.loading}</p> : paths.length ? <div className="divide-y rounded-xl border bg-card">{paths.map(path => <section key={path.flow_type} className="p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div className="max-w-2xl"><h2 className="text-xl font-semibold">{copy.directions[path.flow_type].title}</h2><p className="mt-1 text-sm text-muted-foreground">{workStatusLabel(path.status, language)}</p><p className="mt-2 text-sm text-muted-foreground">{copy.directions[path.flow_type].description}</p>{path.obstacle && language === 'ru' ? <p className="mt-2 text-sm">{copy.obstacle} {path.obstacle}</p> : null}</div>
 + {preference && preference.available_flows?.includes(preferenceFlow[path.flow_type]) ? <Button variant="outline" disabled={saving || preference.primary_flow === preferenceFlow[path.flow_type]} onClick={() => setPending(path.flow_type)}>{preference.primary_flow === preferenceFlow[path.flow_type] ? extra.currentFocus : navigation.focus}</Button> : null}</div>
-+ {scope.kind === 'network' ? <details className="mt-4"><summary className="min-h-11 cursor-pointer py-2 font-medium">{extra.locations} · {path.locations?.length || 0}</summary><div className="divide-y">{path.locations?.map(location => <div key={location.business_id} className="flex flex-wrap items-center justify-between gap-3 py-3"><span>{location.business_name || location.business_id}</span>{location.access.status === 'available' ? <Button variant="outline" disabled={!selectScope} onClick={() => open(path, location.business_id, location.action)}>{copy.directions[path.flow_type].cta}</Button> : <AccessPreview access={location.access} businessId={location.business_id} />}</div>)}</div></details> : path.access.status === 'available' ? <Button variant="outline" className="mt-4" asChild><Link to={(() => { const target = new URL(path.action ? journeyActionRoute(path.action) : route[path.flow_type], 'https://localos.pro'); target.searchParams.set('business_id', scope.id); return target.pathname + target.search; })()}>{path.action?.cta_label || copy.directions[path.flow_type].cta}</Link></Button> : <AccessPreview access={path.access} className="mt-4" />}</section>)}</div> : !error && !loading ? <section><h2 className="text-xl font-semibold">{copy.emptyTitle}</h2><p className="mt-2 text-sm text-muted-foreground">{copy.emptyDescription}</p></section> : null}
++ {scope.kind === 'network' ? <details className="mt-4"><summary className="min-h-11 cursor-pointer py-2 font-medium">{extra.locations} · {path.locations?.length || 0}</summary><div className="divide-y">{path.locations?.map(location => {
++   const address = businesses.find(business => business.id === location.business_id)?.address;
++   const name = location.business_name || location.business_id;
++   return <div key={location.business_id} className="flex flex-wrap items-center justify-between gap-3 py-3"><span className="min-w-0"><span className="block">{name}</span>{address ? <span className="block break-words text-sm text-muted-foreground">{address}</span> : null}</span>{location.access.status === 'available' ? <Button variant="outline" aria-label={address ? `${copy.directions[path.flow_type].cta}: ${name}, ${address}` : undefined} disabled={!selectScope} onClick={() => open(path, location.business_id, location.action)}>{copy.directions[path.flow_type].cta}</Button> : <AccessPreview access={location.access} businessId={location.business_id} />}</div>;
++  })}</div></details> : path.access.status === 'available' ? <Button variant="outline" className="mt-4" asChild><Link to={(() => { const target = new URL(path.action ? journeyActionRoute(path.action) : route[path.flow_type], 'https://localos.pro'); target.searchParams.set('business_id', scope.id); return target.pathname + target.search; })()}>{path.action?.cta_label || copy.directions[path.flow_type].cta}</Link></Button> : <AccessPreview access={path.access} className="mt-4" />}</section>)}</div> : !error && !loading ? <section><h2 className="text-xl font-semibold">{copy.emptyTitle}</h2><p className="mt-2 text-sm text-muted-foreground">{copy.emptyDescription}</p></section> : null}
 + </div>;
 +};
 --- a/frontend/src/pages/dashboard/MorePage.tsx

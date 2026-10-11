@@ -49,3 +49,11 @@ it('uses the existing preference contract and saves only after explicit confirma
  await waitFor(()=>expect(newAuth.makeRequest).toHaveBeenCalledWith('/operator/today/preference?scope_type=business&scope_id=a',{method:'POST',body:JSON.stringify({action:'set',expected_revision:7,primary_flow:'content'})}));
  expect(await screen.findByRole('button',{name:'Выбранный фокус'})).toBeDisabled();
 });
+
+it('distinguishes same-name network locations by their existing addresses', async () => {
+ vi.mocked(newAuth.makeRequest).mockImplementation(async (url) => url.includes('/today/preference') ? {} : ({paths:[{flow_type:'content',status:'not_started',access:{status:'available'},locations:[{business_id:'one',business_name:'Одинаковое имя',access:{status:'available'}},{business_id:'two',business_name:'Одинаковое имя',access:{status:'available'}}]}]}));
+ render(<MemoryRouter><Routes><Route element={<Outlet context={{currentBusinessId:'network',controlScope:{kind:'network',id:'network'},businesses:[{id:'one',address:'Первый адрес'},{id:'two',address:'Второй адрес'}],onControlScopeChange:vi.fn()}}/>}><Route index element={<GrowthPathsPage/>}/></Route></Routes></MemoryRouter>);
+ expect(await screen.findByText('Первый адрес')).toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Открыть контент: Одинаковое имя, Первый адрес'})).toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Открыть контент: Одинаковое имя, Второй адрес'})).toBeInTheDocument();
+});

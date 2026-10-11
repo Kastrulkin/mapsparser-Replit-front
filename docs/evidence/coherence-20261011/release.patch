@@ -10052,7 +10052,31 @@
  };
 --- a/frontend/src/pages/dashboard/ContentPage.tsx
 +++ b/frontend/src/pages/dashboard/ContentPage.tsx
-@@ -757,6 +757,7 @@
+@@ -41,6 +41,7 @@
+ import { newAuth } from '@/lib/auth_new';
+ import { cn } from '@/lib/utils';
+ import { useLanguage } from '@/i18n/LanguageContext';
++import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
+ import { fillContentCalendarTemplate, getContentCalendarCopy, getDemoContentCalendarThemes, localizeContentCalendarStatus } from '@/i18n/contentCalendarCopy';
+ import { getContentWorkspaceControlsCopy, getContentWorkspaceCopy } from '@/i18n/contentWorkspaceCopy';
+ import { localizeDemoBusinessName } from './operatorPageCopy';
+@@ -75,6 +76,7 @@
+ 
+ type PlanItem = {
+   id: string;
++  business_id?: string;
+   scheduled_for?: string;
+   theme?: string;
+   goal?: string;
+@@ -139,6 +141,7 @@
+ 
+ type PlanPayload = {
+   id: string;
++  business_id?: string;
+   plan_status?: string;
+   title?: string;
+   period_days?: number;
+@@ -757,6 +760,7 @@
  export function ContentPage() {
    const navigate = useNavigate();
    const location = useLocation();
@@ -10060,7 +10084,133 @@
    const { language } = useLanguage();
    const contentCopy = getContentWorkspaceCopy(language);
    const calendarCopy = getContentCalendarCopy(language);
-@@ -2190,7 +2191,7 @@
+@@ -785,6 +789,12 @@
+     return saved === 'media' || saved === 'audience' ? saved : 'calendar';
+   });
+   const [selectedItemId, setSelectedItemId] = useState('');
++  const contentLoadSequenceRef = useRef(0);
++  const requestedContentTarget = useMemo(() => {
++    const params = new URLSearchParams(location.search);
++    return { planId: params.get('plan_id') || '', itemId: params.get('item_id') || '' };
++  }, [location.search]);
++  const linkedRecordUnavailable = workCoherenceCopy(language).recordUnavailable;
+   const [manualContentConfirmed, setManualContentConfirmed] = useState<Record<string, boolean>>({});
+   const [channelDetailsOpen, setChannelDetailsOpen] = useState(false);
+   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
+@@ -906,45 +916,82 @@
+     });
+   }, [mediaAssets, mediaFilter]);
+ 
+-  const loadSocialPosts = async (planId: string) => {
++  const loadSocialPosts = async (planId: string, loadSequence?: number, itemIds?: Set<string>) => {
+     const response = await newAuth.makeRequest(`/content-plans/${encodeURIComponent(planId)}/social-posts`, { method: 'GET' });
+-    const posts = Array.isArray(response.posts) ? response.posts : [];
++    const allPosts: SocialPost[] = Array.isArray(response.posts) ? response.posts : [];
++    const posts = itemIds ? allPosts.filter((post) => itemIds.has(String(post.content_plan_item_id || ''))) : allPosts;
++    if (loadSequence !== undefined && loadSequence !== contentLoadSequenceRef.current) return posts;
+     setSocialPosts(posts);
+-    setSocialSummary(response.summary || null);
++    setSocialSummary(itemIds ? null : response.summary || null);
+     return posts;
+   };
+ 
+-  const loadCurrentPlan = async (planId: string) => {
++  const loadCurrentPlan = async (planId: string, loadSequence?: number) => {
+     const planResponse = await newAuth.makeRequest(`/content-plans/${encodeURIComponent(planId)}`, { method: 'GET' });
+-    const plan = planResponse.plan || null;
++    if (loadSequence !== undefined && loadSequence !== contentLoadSequenceRef.current) return null;
++    const rawPlan: PlanPayload | null = planResponse.plan || null;
++    const planBusinessId = rawPlan?.scope_type === 'business'
++      ? rawPlan.scope_target_id || rawPlan.business_id
++      : rawPlan?.business_id;
++    if (!rawPlan || rawPlan.id !== planId || (rawPlan.scope_type !== 'network' && planBusinessId && planBusinessId !== currentBusinessId)) {
++      throw new Error(linkedRecordUnavailable);
++    }
++    const rawItems = rawPlan.items || [];
++    const locationItems = rawItems.some((item) => Boolean(item.business_id));
++    const visibleItems = locationItems ? rawItems.filter((item) => item.business_id === currentBusinessId) : rawItems;
++    const requestedItem = requestedContentTarget.itemId
++      ? visibleItems.find((item) => item.id === requestedContentTarget.itemId)
++      : null;
++    if (requestedContentTarget.itemId && !requestedItem) throw new Error(linkedRecordUnavailable);
++    const plan = { ...rawPlan, items: visibleItems };
+     setCurrentPlan(plan);
+-    if (plan?.id) {
+-      await loadSocialPosts(plan.id);
++    if (requestedItem) {
++      setSection('calendar');
++      setSelectedItemId(requestedItem.id);
++      setDraftEdits((prev) => ({ ...prev, [requestedItem.id]: String(requestedItem.draft_text || '') }));
++      setThemeEdits((prev) => ({ ...prev, [requestedItem.id]: String(requestedItem.theme || requestedItem.goal || '') }));
++      setDateEdits((prev) => ({ ...prev, [requestedItem.id]: getItemDateKey(requestedItem) }));
+     }
++    await loadSocialPosts(plan.id, loadSequence, locationItems ? new Set(visibleItems.map((item) => item.id)) : undefined);
+     return plan;
+   };
+ 
+   const loadContent = async () => {
++    const loadSequence = ++contentLoadSequenceRef.current;
+     if (!currentBusinessId) return;
+     setLoading(true);
+     setError('');
+     try {
+       const contextResponse = await newAuth.makeRequest(`/content-plans/context?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
++      if (loadSequence !== contentLoadSequenceRef.current) return;
+       setContext(contextResponse.context || null);
+       const plansResponse = await newAuth.makeRequest(`/content-plans?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
++      if (loadSequence !== contentLoadSequenceRef.current) return;
+       const nextPlans = workingContentPlans(Array.isArray(plansResponse.plans) ? plansResponse.plans : []);
+       setPlans(nextPlans);
+-      if (nextPlans.length > 0) {
+-        await loadCurrentPlan(nextPlans[0].id);
++      // An explicit link keeps its target, including an archived plan outside the working list.
++      const planId = requestedContentTarget.planId || nextPlans[0]?.id;
++      if (planId) {
++        await loadCurrentPlan(planId, loadSequence);
+       } else {
+         setCurrentPlan(null);
+         setSocialPosts([]);
+         setSocialSummary(null);
++        if (requestedContentTarget.itemId) setError(linkedRecordUnavailable);
+       }
+     } catch (loadError) {
++      if (loadSequence !== contentLoadSequenceRef.current) return;
++      if (loadError instanceof Error && 'status' in loadError && [401, 403, 404].includes(Number(loadError.status))) {
++        setContext(null);
++        setPlans([]);
++        setCurrentPlan(null);
++        setSocialPosts([]);
++        setSocialSummary(null);
++        setSelectedItemId('');
++      }
+       setError(loadError instanceof Error ? loadError.message : 'Не удалось загрузить контент');
+     } finally {
+-      setLoading(false);
++      if (loadSequence === contentLoadSequenceRef.current) setLoading(false);
+     }
+   };
+ 
+@@ -1023,8 +1070,18 @@
+   };
+ 
+   useEffect(() => {
++    setContext(null);
++    setPlans([]);
++    setCurrentPlan(null);
++    setSocialPosts([]);
++    setSocialSummary(null);
++    setSelectedItemId('');
++    setDraftEdits({});
++    setThemeEdits({});
++    setDateEdits({});
+     void loadContent();
+-  }, [currentBusinessId]);
++    return () => { contentLoadSequenceRef.current += 1; };
++  }, [currentBusinessId, requestedContentTarget.planId, requestedContentTarget.itemId]);
+ 
+   useEffect(() => {
+     setChannelDetailsOpen(false);
+@@ -2190,7 +2247,7 @@
            <p className="mt-4 max-w-xl text-base leading-7 text-slate-600">
              LocalOS может подготовить месяц публикаций для карт и соцсетей. Вы увидите готовый календарь, а потом быстро проверите важное.
            </p>
@@ -10069,7 +10219,7 @@
              Создать первый план
            </Button>
          </div>
-@@ -3372,13 +3373,13 @@
+@@ -3372,13 +3429,13 @@
            <Button type="button" variant="outline" onClick={() => { void openVoiceSettings(); }} className="min-h-12 rounded-2xl bg-white px-4 active:scale-[0.96] transition-transform">
              <Star className="mr-2 h-4 w-4" />{contentControls.configureContent}
            </Button>
@@ -10085,7 +10235,7 @@
          {[
            ['calendar', contentCopy.calendar, CalendarDays],
            ['media', contentCopy.media, ImageIcon],
-@@ -3501,7 +3502,7 @@
+@@ -3501,7 +3558,7 @@
              </div>
  
              <div className="flex flex-col gap-3 rounded-[28px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -10181,7 +10331,7 @@
 +});
 --- /dev/null
 +++ b/frontend/src/pages/dashboard/GrowthPathsPage.scope.test.tsx
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,59 @@
 +import '@testing-library/jest-dom/vitest';
 +import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 +import { useState } from 'react';
@@ -10232,6 +10382,14 @@
 + fireEvent.click(within(screen.getByRole('region',{name:'Выбрать фокус'})).getByRole('button',{name:'Выбрать фокус'}));
 + await waitFor(()=>expect(newAuth.makeRequest).toHaveBeenCalledWith('/operator/today/preference?scope_type=business&scope_id=a',{method:'POST',body:JSON.stringify({action:'set',expected_revision:7,primary_flow:'content'})}));
 + expect(await screen.findByRole('button',{name:'Выбранный фокус'})).toBeDisabled();
++});
++
++it('distinguishes same-name network locations by their existing addresses', async () => {
++ vi.mocked(newAuth.makeRequest).mockImplementation(async (url) => url.includes('/today/preference') ? {} : ({paths:[{flow_type:'content',status:'not_started',access:{status:'available'},locations:[{business_id:'one',business_name:'Одинаковое имя',access:{status:'available'}},{business_id:'two',business_name:'Одинаковое имя',access:{status:'available'}}]}]}));
++ render(<MemoryRouter><Routes><Route element={<Outlet context={{currentBusinessId:'network',controlScope:{kind:'network',id:'network'},businesses:[{id:'one',address:'Первый адрес'},{id:'two',address:'Второй адрес'}],onControlScopeChange:vi.fn()}}/>}><Route index element={<GrowthPathsPage/>}/></Route></Routes></MemoryRouter>);
++ expect(await screen.findByText('Первый адрес')).toBeInTheDocument();
++ expect(screen.getByRole('button',{name:'Открыть контент: Одинаковое имя, Первый адрес'})).toBeInTheDocument();
++ expect(screen.getByRole('button',{name:'Открыть контент: Одинаковое имя, Второй адрес'})).toBeInTheDocument();
 +});
 --- a/frontend/src/pages/dashboard/GrowthPathsPage.test.tsx
 +++ b/frontend/src/pages/dashboard/GrowthPathsPage.test.tsx
@@ -10286,7 +10444,7 @@
  });
 --- a/frontend/src/pages/dashboard/GrowthPathsPage.tsx
 +++ b/frontend/src/pages/dashboard/GrowthPathsPage.tsx
-@@ -1,124 +1,56 @@
+@@ -1,124 +1,61 @@
 -import { useEffect, useMemo, useState } from 'react';
 -import { ArrowRight, BadgeDollarSign, Bot, FileText, MapPinned, RefreshCw, Users, WandSparkles } from 'lucide-react';
 -import { Link, useOutletContext } from 'react-router-dom';
@@ -10432,6 +10590,7 @@
 + return <GrowthPathsWorkspace key={scope.kind + ':' + scope.id} scope={scope} selectScope={onControlScopeChange} clientDirections={clientDirections} />;
  };
 +const GrowthPathsWorkspace = ({ scope, selectScope, clientDirections }: { clientDirections?: boolean; scope: { kind: string; id: string }; selectScope?: (scope: Scope) => void }) => {
++ const { businesses = [] } = useOutletContext<{ businesses?: Array<{ id: string; address?: string | null }> }>();
 + const { language } = useLanguage(); const copy = growthPathsCopyFor(language); const navigation = workNavigationCopy(language); const extra = workCoherenceCopy(language); const navigate = useNavigate();
 + const [data, setData] = useState<Data | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
 + const [preference, setPreference] = useState<TodayPreference | null>(null); const [pending, setPending] = useState<Flow | null>(null); const [saving, setSaving] = useState(false);
@@ -10456,7 +10615,11 @@
 + {pending ? <section aria-label={navigation.focus} className="rounded-xl border bg-card p-4"><p>{navigation.focus}: {copy.directions[pending].title}</p><p className="my-2 text-sm text-muted-foreground">{extra.focusHint}</p><Button variant="product" disabled={saving} onClick={() => void choose()}>{navigation.focus}</Button><Button variant="ghost" disabled={saving} onClick={() => setPending(null)}>{extra.cancel}</Button></section> : null}
 + {loading && !data ? <p role="status">{copy.loading}</p> : paths.length ? <div className="divide-y rounded-xl border bg-card">{paths.map(path => <section key={path.flow_type} className="p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div className="max-w-2xl"><h2 className="text-xl font-semibold">{copy.directions[path.flow_type].title}</h2><p className="mt-1 text-sm text-muted-foreground">{workStatusLabel(path.status, language)}</p><p className="mt-2 text-sm text-muted-foreground">{copy.directions[path.flow_type].description}</p>{path.obstacle && language === 'ru' ? <p className="mt-2 text-sm">{copy.obstacle} {path.obstacle}</p> : null}</div>
 + {preference && preference.available_flows?.includes(preferenceFlow[path.flow_type]) ? <Button variant="outline" disabled={saving || preference.primary_flow === preferenceFlow[path.flow_type]} onClick={() => setPending(path.flow_type)}>{preference.primary_flow === preferenceFlow[path.flow_type] ? extra.currentFocus : navigation.focus}</Button> : null}</div>
-+ {scope.kind === 'network' ? <details className="mt-4"><summary className="min-h-11 cursor-pointer py-2 font-medium">{extra.locations} · {path.locations?.length || 0}</summary><div className="divide-y">{path.locations?.map(location => <div key={location.business_id} className="flex flex-wrap items-center justify-between gap-3 py-3"><span>{location.business_name || location.business_id}</span>{location.access.status === 'available' ? <Button variant="outline" disabled={!selectScope} onClick={() => open(path, location.business_id, location.action)}>{copy.directions[path.flow_type].cta}</Button> : <AccessPreview access={location.access} businessId={location.business_id} />}</div>)}</div></details> : path.access.status === 'available' ? <Button variant="outline" className="mt-4" asChild><Link to={(() => { const target = new URL(path.action ? journeyActionRoute(path.action) : route[path.flow_type], 'https://localos.pro'); target.searchParams.set('business_id', scope.id); return target.pathname + target.search; })()}>{path.action?.cta_label || copy.directions[path.flow_type].cta}</Link></Button> : <AccessPreview access={path.access} className="mt-4" />}</section>)}</div> : !error && !loading ? <section><h2 className="text-xl font-semibold">{copy.emptyTitle}</h2><p className="mt-2 text-sm text-muted-foreground">{copy.emptyDescription}</p></section> : null}
++ {scope.kind === 'network' ? <details className="mt-4"><summary className="min-h-11 cursor-pointer py-2 font-medium">{extra.locations} · {path.locations?.length || 0}</summary><div className="divide-y">{path.locations?.map(location => {
++   const address = businesses.find(business => business.id === location.business_id)?.address;
++   const name = location.business_name || location.business_id;
++   return <div key={location.business_id} className="flex flex-wrap items-center justify-between gap-3 py-3"><span className="min-w-0"><span className="block">{name}</span>{address ? <span className="block break-words text-sm text-muted-foreground">{address}</span> : null}</span>{location.access.status === 'available' ? <Button variant="outline" aria-label={address ? `${copy.directions[path.flow_type].cta}: ${name}, ${address}` : undefined} disabled={!selectScope} onClick={() => open(path, location.business_id, location.action)}>{copy.directions[path.flow_type].cta}</Button> : <AccessPreview access={location.access} businessId={location.business_id} />}</div>;
++  })}</div></details> : path.access.status === 'available' ? <Button variant="outline" className="mt-4" asChild><Link to={(() => { const target = new URL(path.action ? journeyActionRoute(path.action) : route[path.flow_type], 'https://localos.pro'); target.searchParams.set('business_id', scope.id); return target.pathname + target.search; })()}>{path.action?.cta_label || copy.directions[path.flow_type].cta}</Link></Button> : <AccessPreview access={path.access} className="mt-4" />}</section>)}</div> : !error && !loading ? <section><h2 className="text-xl font-semibold">{copy.emptyTitle}</h2><p className="mt-2 text-sm text-muted-foreground">{copy.emptyDescription}</p></section> : null}
 + </div>;
 +};
 --- a/frontend/src/pages/dashboard/InfluencerPromotionPage.test.tsx
@@ -14326,3 +14489,76 @@
 +Free chat remains available. Materials without a resolvable ID show a limitation
 +instead of a generic link pretending to open the material. Internal return_to
 +restores the path after setup/checkout without starting execution.
+--- /dev/null
++++ b/frontend/src/pages/dashboard/ContentPage.work-link.test.tsx
+@@ -0,0 +1,70 @@
++import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
++import { useState } from 'react';
++import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
++import { beforeEach, describe, expect, it, vi } from 'vitest';
++import { LanguageProvider } from '@/i18n/LanguageContext';
++import { newAuth } from '@/lib/auth_new';
++import { ContentPage } from './ContentPage';
++
++vi.mock('@/lib/auth_new', () => ({ newAuth: { getToken: vi.fn(() => ''), makeRequest: vi.fn() } }));
++const targetPlan = { id: 'old-plan', business_id: 'business-1', scope_type: 'business', scope_target_id: 'business-1', plan_status: 'archived', items: [{ id: 'target-item', business_id: 'business-1', theme: 'Выбранный материал', draft_text: 'Подготовленный текст', scheduled_for: '2026-08-10' }] };
++const ContextRoute = () => {
++  const [businessId, setBusinessId] = useState('business-1');
++  return <><button onClick={() => setBusinessId('business-2')}>Сменить бизнес</button><Outlet context={{currentBusinessId:businessId,currentBusiness:{id:businessId,name:'Бизнес'},demoMode:false}}/></>;
++};
++const renderPage = () => render(
++  <MemoryRouter initialEntries={['/dashboard/content?plan_id=old-plan&item_id=target-item']}>
++    <LanguageProvider><Routes><Route element={<ContextRoute/>}>
++      <Route path='/dashboard/content' element={<ContentPage/>}/>
++    </Route></Routes></LanguageProvider>
++  </MemoryRouter>
++);
++const mockPlan = (plan: typeof targetPlan) => vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
++  if (path.startsWith('/content-plans/context')) return {context:{}};
++  if (path.startsWith('/content-plans?')) return {plans:[{id:'latest-plan',items:[]}]};
++  if (path === '/content-plans/old-plan') return {plan};
++  if (path.endsWith('/social-posts')) return {posts:[],summary:{}};
++  return {};
++});
++describe('Content work deep link', () => {
++  beforeEach(() => { window.localStorage.clear();window.localStorage.setItem('language','ru');vi.mocked(newAuth.makeRequest).mockReset(); });
++  it('opens the exact item from a plan outside the working list without issuing a command', async () => {
++    mockPlan(targetPlan);renderPage();
++    expect(await screen.findByDisplayValue('Выбранный материал')).toBeInTheDocument();
++    expect(screen.getByRole('dialog')).toBeInTheDocument();
++    expect(vi.mocked(newAuth.makeRequest).mock.calls.some(([, options]) => options?.method && options.method !== 'GET')).toBe(false);
++    expect(vi.mocked(newAuth.makeRequest).mock.calls.some(([path]) => path === '/content-plans/latest-plan')).toBe(false);
++  });
++  it('explains a missing item instead of choosing a different item', async () => {
++    mockPlan({...targetPlan,items:[{...targetPlan.items[0],id:'other-item',theme:'Другой материал'}]});renderPage();
++    expect(await screen.findByText(/Указанная запись недоступна в текущей выборке/)).toBeInTheDocument();
++    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
++    expect(screen.queryByDisplayValue('Другой материал')).not.toBeInTheDocument();
++  });
++  it('withholds a plan belonging to another business', async () => {
++    mockPlan({...targetPlan,business_id:'business-2',scope_target_id:'business-2'});renderPage();
++    expect(await screen.findByText(/Указанная запись недоступна в текущей выборке/)).toBeInTheDocument();
++    expect(screen.queryByDisplayValue('Выбранный материал')).not.toBeInTheDocument();
++  });
++  it('ignores a previous business response arriving after switching', async () => {
++    let finishOld = (value: {plan: typeof targetPlan}) => { void value; };
++    const oldResponse = new Promise<{plan: typeof targetPlan}>((resolve) => { finishOld = resolve; });
++    let planReads = 0;
++    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
++      if (path.startsWith('/content-plans/context')) return {context:{}};
++      if (path.startsWith('/content-plans?')) return {plans:[]};
++      if (path === '/content-plans/old-plan') {
++        planReads += 1;
++        return planReads === 1 ? oldResponse : {plan:{...targetPlan,items:[]}};
++      }
++      return {};
++    });
++    renderPage();
++    await waitFor(() => expect(planReads).toBe(1));
++    fireEvent.click(screen.getByRole('button',{name:'Сменить бизнес'}));
++    await waitFor(() => expect(planReads).toBe(2));
++    await act(async () => finishOld({plan:targetPlan}));
++    expect(screen.queryByDisplayValue('Выбранный материал')).not.toBeInTheDocument();
++    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
++  });
++});

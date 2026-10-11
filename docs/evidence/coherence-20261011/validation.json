@@ -1,8 +1,15 @@
 {
   "frontend": {
-    "files": 21,
-    "passed": 216,
-    "failed": 0
+    "files": 22,
+    "passed": 220,
+    "failed": 0,
+    "final_focused": {
+      "files": 3,
+      "passed": 10,
+      "failed": 0,
+      "additional_tests": 1
+    },
+    "combined_covered_tests": 221
   },
   "workspace": {
     "full_previous_passed": 214,
@@ -57,10 +64,10 @@
     "success_target": 4,
     "status": "not-conducted"
   },
-  "deployment": "not-authorized-for-this-release-not-performed",
+  "deployment": "authorized-initial-release-complete-final-frontend-fix-pending",
   "packaging": {
-    "release_patch_check": "passed",
-    "workspace_task_patch_check": "passed",
-    "source_manifest_hashes": "matched"
+    "source_manifest_hashes": "matched",
+    "release_patch_check": "pending-refresh",
+    "workspace_task_patch_check": "pending-refresh"
   }
 }
