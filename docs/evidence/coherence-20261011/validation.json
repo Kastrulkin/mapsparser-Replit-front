@@ -15,7 +15,12 @@
     "full_previous_passed": 214,
     "last_focused_files": 4,
     "last_focused_passed": 82,
-    "typecheck_exit": 0
+    "typecheck_exit": 0,
+    "final_followup": {
+      "files": 3,
+      "passed": 9,
+      "typecheck_exit": 0
+    }
   },
   "server": {
     "passed": 83,
@@ -64,10 +69,55 @@
     "success_target": 4,
     "status": "not-conducted"
   },
-  "deployment": "authorized-initial-release-complete-final-frontend-fix-pending",
+  "deployment": "complete",
   "packaging": {
     "source_manifest_hashes": "matched",
-    "release_patch_check": "pending-refresh",
-    "workspace_task_patch_check": "pending-refresh"
-  }
+    "release_patch_check": "passed",
+    "workspace_task_patch_check": "passed"
+  },
+  "production": {
+    "site": "https://localos.pro",
+    "source_commit": "ed78bab13",
+    "backend_source_commit": "ed4c48336",
+    "entry": "/assets/index-D_nMn38y.js",
+    "service_health": "ok",
+    "telegram_container": "healthy-shared-adapter-imported",
+    "unauthenticated_changed_endpoints": [
+      401,
+      401,
+      401
+    ],
+    "runtime_source_hashes": "9 of 9 matched",
+    "browser_errors": 0,
+    "browser_measurements": [
+      {
+        "primaryTop": 534,
+        "scrollWidth": 375,
+        "width": 390
+      },
+      {
+        "primaryTop": 462,
+        "scrollWidth": 753,
+        "width": 768
+      },
+      {
+        "primaryTop": 378,
+        "scrollWidth": 1265,
+        "width": 1280
+      }
+    ],
+    "real_flows": [
+      "network to location",
+      "exact content item from Today",
+      "work to chat to same work without command",
+      "mobile menu and Escape focus return",
+      "settings loaded",
+      "all five result areas visible"
+    ],
+    "backup": "/opt/seo-app/backups/coherence-20261011-ed4c48336",
+    "rollback": "/opt/seo-app/backups/coherence-20261011-ed4c48336/rollback.sh",
+    "telegram_live_conversation_test": "not-performed",
+    "payment_provider_transaction": "not-performed"
+  },
+  "push": "auto-review-rejected-awaiting-explicit-repository-and-preserved-baseline-authorization"
 }

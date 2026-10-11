@@ -2051,7 +2051,23 @@
  };
 --- a/frontend/src/pages/dashboard/ContentPage.tsx
 +++ b/frontend/src/pages/dashboard/ContentPage.tsx
-@@ -832,6 +832,7 @@
+@@ -44,6 +44,7 @@
+ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+ import { API_URL } from '@/config/api';
+ import { useLanguage } from '@/i18n/LanguageContext.logic';
++import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
+ import { fillContentCalendarTemplate, getContentCalendarCopy, getDemoContentCalendarThemes, localizeContentCalendarStatus } from '@/i18n/contentCalendarCopy';
+ import { getContentWorkspaceControlsCopy, getContentWorkspaceCopy } from '@/i18n/contentWorkspaceCopy';
+ import { newAuth } from '@/lib/auth_new';
+@@ -146,6 +147,7 @@
+ 
+ type PlanPayload = {
+   id: string;
++  business_id?: string;
+   title?: string;
+   plan_status?: string;
+   period_days?: number;
+@@ -832,6 +834,7 @@
  function ContentWorkspace() {
    const navigate = useNavigate();
    const location = useLocation();
@@ -2059,16 +2075,30 @@
    const { language } = useLanguage();
    const contentCopy = getContentWorkspaceCopy(language);
    const calendarCopy = getContentCalendarCopy(language);
-@@ -1021,7 +1022,7 @@
+@@ -1014,14 +1017,21 @@
+     const planResponse = await newAuth.makeRequest(`/content-plans/${encodeURIComponent(planId)}`, { method: 'GET' });
+     const rawPlan: PlanPayload | null = planResponse.plan || null;
+     if (loadSequence !== undefined && loadSequence !== contentLoadSequenceRef.current) return null;
++    const planBusinessId = rawPlan?.scope_type === 'business' ? rawPlan.scope_target_id || rawPlan.business_id : rawPlan?.business_id;
++    if (!rawPlan || rawPlan.id !== planId || (rawPlan.scope_type !== 'network' && planBusinessId && planBusinessId !== currentBusinessId)) {
++      throw new Error(workCoherenceCopy(language).recordUnavailable);
++    }
+     const rawItems = Array.isArray(rawPlan?.items) ? rawPlan.items : [];
+     const hasLocationItems = rawItems.some((item) => Boolean(String(item.business_id || '').trim()));
+     const visibleItems = hasLocationItems
+       ? rawItems.filter((item) => String(item.business_id || '').trim() === String(currentBusinessId || '').trim())
        : rawItems;
      const plan = rawPlan ? { ...rawPlan, items: visibleItems } : null;
++    if (requestedContentTarget.itemId && !visibleItems.some((item) => item.id === requestedContentTarget.itemId)) {
++      throw new Error(workCoherenceCopy(language).recordUnavailable);
++    }
      setCurrentPlan(plan);
 -    if (requestedContentTarget.focus === 'story_facts' && requestedContentTarget.itemId) {
 +    if (requestedContentTarget.itemId) {
        const requestedItem = visibleItems.find((item) => item.id === requestedContentTarget.itemId);
        if (requestedItem) {
          setSelectedItemId(requestedItem.id);
-@@ -1059,11 +1060,11 @@
+@@ -1059,11 +1069,11 @@
        if (loadSequence !== contentLoadSequenceRef.current) return;
        const nextPlans = workingContentPlans(Array.isArray(plansResponse.plans) ? plansResponse.plans : []);
        setPlans(nextPlans);
@@ -2082,7 +2112,7 @@
        } else {
          setCurrentPlan(null);
          setSocialPosts([]);
-@@ -2491,7 +2492,7 @@
+@@ -2491,7 +2501,7 @@
            <p className="mt-4 max-w-xl text-base leading-7 text-slate-600">
              LocalOS может подготовить месяц публикаций для карт и соцсетей. Вы увидите готовый календарь, а потом быстро проверите важное.
            </p>
@@ -2091,7 +2121,7 @@
              Создать первый план
            </Button>
          </div>
-@@ -3722,7 +3723,7 @@
+@@ -3722,7 +3732,7 @@
            <Button type="button" variant="outline" onClick={() => { void openVoiceSettings(); }} className="min-h-12 rounded-2xl bg-white px-4 active:scale-[0.96] transition-transform">
              <Star className="mr-2 h-4 w-4" />{contentControls.configureContent}
            </Button>
@@ -2100,7 +2130,7 @@
              <Plus className="mr-2 h-4 w-4" />{contentCopy.createPlan}
            </Button>
          </div>
-@@ -3855,7 +3856,7 @@
+@@ -3855,7 +3865,7 @@
              </div>
  
              <div className="flex flex-col gap-3 rounded-[28px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
