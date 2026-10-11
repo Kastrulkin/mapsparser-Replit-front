@@ -142,6 +142,13 @@ def request_identity(target, post_id):
     return ':'.join((target['business_id'], target['recipient_user_id'], str(post_id)))
 
 
+def execution_input(artifact, display_input):
+    """Keep UI labels outside the immutable program's versioned input schema."""
+    properties = artifact['manifest']['input_schema']['properties']['posts']['items']['properties']
+    return {'posts': [{key: value for key, value in row.items() if key in properties}
+                      for row in display_input['posts']]}
+
+
 def authorize_contract(cursor, contract, user_id):
     from services.operator_audio import authorize_actor
     for target in handoff_targets(contract['scope']):
@@ -171,7 +178,8 @@ def create_content_snapshot(cursor, *, blueprint, version, user_id, now=None):
     if cursor.fetchone()['count'] >= 100:
         raise SnapshotQuotaExceeded('compiled_snapshot_quota_exceeded')
     context = delivery_context(cursor, contract)
-    value = collect_input(cursor.connection, contract, now, blueprint_id=str(blueprint['id']), version_id=str(version['id']))
+    display_input = collect_input(cursor.connection, contract, now, blueprint_id=str(blueprint['id']), version_id=str(version['id']))
+    value = execution_input(artifact, display_input)
     digest = content_hash(value)
     snapshot_id = str(uuid.uuid4())
     cursor.execute('''INSERT INTO compiled_input_snapshots
@@ -180,7 +188,7 @@ def create_content_snapshot(cursor, *, blueprint, version, user_id, now=None):
         (snapshot_id, business_id, user_id, str(blueprint['id']), SCHEMA, digest,
          json.dumps(value, ensure_ascii=False), len(value['posts'])))
     return {'snapshot_id': snapshot_id, 'content_hash': digest, 'schema_version': SCHEMA,
-            'source_kind': 'content_plan', 'input': value, 'delivery_context': context}
+            'source_kind': 'content_plan', 'input': value, 'display_input': display_input, 'delivery_context': context}
 
 
 def dispatch_result(prepared, result):

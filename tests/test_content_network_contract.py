@@ -95,6 +95,18 @@ def test_creation_approval_keeps_network_scope_and_hashes_changes(monkeypatch):
     assert first['idempotency_key'] != second['idempotency_key']
 
 
+def test_display_labels_do_not_break_approved_input_schema():
+    from services.compiled_content_program import execution_input, manifest_for
+    from services.compiled_json_schema import validate_value
+    manifest = manifest_for(contract_for(version(), 'a'), 'sha256:'+'a'*64)
+    display = {'posts': [{'post_id': 'a:owner:post', 'revision': '1', 'eligible': False,
+        'business_id': 'a', 'recipient_user_id': 'owner', 'scheduled_for': '2026-10-14T00:00:00+00:00'}]}
+    value = execution_input({'manifest':manifest}, display)
+    assert validate_value(manifest['input_schema'], value) == []
+    assert value['posts'][0] == {'post_id':'a:owner:post', 'revision':'1', 'eligible':False}
+    assert display['posts'][0]['business_id'] == 'a'
+
+
 @pytest.mark.parametrize('uncertain', [False, True])
 def test_network_dispatch_preserves_success_and_continues_other_recipient(monkeypatch, uncertain):
     from services import compiled_content_program, agent_capability_handlers

@@ -102,7 +102,7 @@ export function ContentHandoffProgram({ blueprintId, details, onRunQueued, onSav
         const snapshot = await api.post(`/agent-blueprints/${selected}/compiled-script/snapshots`, { source_kind: 'content_plan', version_id: versionId });
         const response = await api.post(`/agent-blueprints/${selected}/compiled-script/preview`, { version_id: versionId, snapshot_id: snapshot.data.snapshot.id });
         if (target.current !== selected) return;
-        setPreview({ ...record(response.data.preview), input: snapshot.data.snapshot.input });
+        setPreview({ ...record(response.data.preview), input: snapshot.data.snapshot.display_input || snapshot.data.snapshot.input });
         setState(response.data.preview?.status === 'passed' ? (state === 'approved' || state === 'active' ? state : 'ready_approval') : 'needs_fix');
       } else if (operation === 'approve') {
         if (preview.status !== 'passed' || !preview.fixture_digest || !record(preview.delivery_context).digest) {

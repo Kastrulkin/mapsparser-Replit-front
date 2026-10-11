@@ -14,9 +14,9 @@ relative=Path('frontend/src/components/agents/ContentHandoffProgram.tsx')
 target=root/relative
 expected=next(row['after'] for row in manifest['frontend_sources'] if row['path']==str(relative))
 index=root/'frontend/dist/index.html'
-if hashlib.sha256(target.read_bytes()).hexdigest()!=expected or 'index-z9-gMnJc.js' not in index.read_text():
+if hashlib.sha256(target.read_bytes()).hexdigest()!=expected or manifest.get('expected_frontend_asset','index-z9-gMnJc.js') not in index.read_text():
     raise SystemExit('Frontend changed; no files replaced')
-backup=root/'backups/content-network-frontend-followup'
+backup=root/('backups/content-network-frontend-followup-'+hashlib.sha256((package/'dist/index.html').read_bytes()).hexdigest()[:12])
 backup.mkdir(mode=0o700)
 shutil.copy2(target,backup/'ContentHandoffProgram.tsx')
 shutil.copy2(index,backup/'index.html')
