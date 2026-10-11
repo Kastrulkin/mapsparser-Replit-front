@@ -10,6 +10,12 @@ if Path.cwd() != root:
 package = Path(sys.argv[1])
 expected_hash = sys.argv[2]
 expected_asset = sys.argv[3]
+if len(sys.argv) > 4:
+    for entry in Path(sys.argv[4]).read_text().splitlines():
+        expected, relative = entry.split('  ', 1)
+        current = root / relative
+        if not current.is_file() or hashlib.sha256(current.read_bytes()).hexdigest() != expected:
+            raise SystemExit('Production source changed; nothing replaced: ' + relative)
 target = root / 'frontend/src/pages/dashboard/AgentBlueprintsPage.tsx'
 index = root / 'frontend/dist/index.html'
 source = target.read_text()
