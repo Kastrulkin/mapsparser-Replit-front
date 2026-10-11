@@ -5146,7 +5146,10 @@ def compiled_preview_for_actor(blueprint_id: str, user_data: dict, payload):
         version = _load_blueprint_version_for_blueprint(cursor, blueprint_id, str(payload.get("version_id") or ""))
         if not version:
             return _json_error("Версия не найдена.", 404, "VERSION_NOT_FOUND")
-        if str(version.get("compiled_state") or "") not in {"checking", "needs_fix", "ready_approval"}:
+        saved_artifact = parse_json_field(version.get("compiled_artifact_json"), {})
+        read_only_preview = (version.get("compiled_state") in {"approved", "active"}
+            and bool((saved_artifact.get('manifest') or {}).get('content_handoff_contract')))
+        if not read_only_preview and str(version.get("compiled_state") or "") not in {"checking", "needs_fix", "ready_approval"}:
             return _json_error("Preview уже подтверждённой версии не меняет evidence.", 409, "COMPILED_PREVIEW_STATE_INVALID")
         artifact = parse_json_field(version.get("compiled_artifact_json"), {})
         validation = validate_compiled_script_artifact(artifact)
@@ -5156,7 +5159,8 @@ def compiled_preview_for_actor(blueprint_id: str, user_data: dict, payload):
         content_context = None
         content_contract = (artifact.get('manifest') or {}).get('content_handoff_contract')
         if content_contract:
-            from services.compiled_content_program import delivery_context
+            from services.compiled_content_program import delivery_context, authorize_contract
+            authorize_contract(cursor, content_contract, _user_id(user_data))
             content_context = delivery_context(cursor, content_contract)
         if payload.get("snapshot_id"):
             try:
@@ -5183,6 +5187,13 @@ def compiled_preview_for_actor(blueprint_id: str, user_data: dict, payload):
             return _json_error("Доступ к пилоту изменился.", 403, "COMPILED_PILOT_NOT_ALLOWED")
         cursor.execute("SELECT id FROM agent_blueprint_versions WHERE id = %s AND blueprint_id = %s FOR UPDATE", (str(version.get("id") or ""), blueprint_id))
         current = _load_blueprint_version_for_blueprint(cursor, blueprint_id, str(version.get("id") or ""))
+        if read_only_preview:
+            if not current or current.get('compiled_state') != version.get('compiled_state') or current.get('compiled_artifact_hash') != version.get('compiled_artifact_hash'):
+                return _json_error('Версия изменилась. Откройте её снова.', 409, 'COMPILED_PREVIEW_STATE_INVALID')
+            authorize_contract(cursor, content_contract, _user_id(user_data))
+            db.conn.rollback()
+            return jsonify({'success': preview_result.get('status') == 'passed', 'version_id': version['id'],
+                'preview': preview_result, 'read_only': True}), (200 if preview_result.get('status') == 'passed' else 422)
         if not current or current.get("compiled_state") not in {"checking", "needs_fix", "ready_approval"} or current.get("compiled_artifact_hash") != version.get("compiled_artifact_hash"):
             return _json_error("Версия уже изменилась. Откройте её снова.", 409, "COMPILED_PREVIEW_STATE_INVALID")
         if preview_result.get("status") != "passed":

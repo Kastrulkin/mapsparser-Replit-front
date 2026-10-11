@@ -116,3 +116,29 @@ def test_common_operations_reject_demo_before_database(monkeypatch, operation):
             {'user_id': 'owner', 'session_kind': 'demo'}, {})
     assert status == 403
     assert response.get_json()['code'] == 'COMPILED_SESSION_NOT_ALLOWED'
+
+
+def test_approved_content_preview_never_updates_approval_evidence(monkeypatch):
+    from types import SimpleNamespace
+    from api import agent_blueprints_api
+    from services import compiled_pilot_access, compiled_content_program
+    sql = []
+    cursor = SimpleNamespace(execute=lambda query, *args: sql.append(query))
+    database = SimpleNamespace(conn=SimpleNamespace(cursor=lambda: cursor, rollback=lambda: None), close=lambda: None)
+    monkeypatch.setattr(agent_blueprints_api, 'DatabaseManager', lambda: database)
+    monkeypatch.setattr(agent_blueprints_api, '_require_current_compiled_account', lambda *args: None)
+    monkeypatch.setattr(agent_blueprints_api, '_require_blueprint_access', lambda *args: ({'id':'pilot','business_id':'business'}, None))
+    version = {'id':'v5','compiled_state':'approved','compiled_artifact_hash':'hash',
+        'compiled_artifact_json': {'manifest': {'content_handoff_contract': {'scope': {}}}}}
+    monkeypatch.setattr(agent_blueprints_api, '_load_blueprint_version_for_blueprint', lambda *args: version)
+    monkeypatch.setattr(agent_blueprints_api, 'validate_compiled_script_artifact', lambda *args: {'valid':True})
+    monkeypatch.setattr(agent_blueprints_api, 'preview_compiled_script', lambda *args: {'status':'passed'})
+    monkeypatch.setattr(compiled_content_program, 'authorize_contract', lambda *args: None)
+    monkeypatch.setattr(compiled_content_program, 'delivery_context', lambda *args: {'digest':'context'})
+    monkeypatch.setattr(compiled_pilot_access, 'compiled_pilot_allowed', lambda *args: True)
+    monkeypatch.setenv('COMPILED_SCRIPT_PREVIEW_ENABLED', 'true')
+    with Flask(__name__).app_context():
+        response, status = agent_blueprints_api.compiled_preview_for_actor('pilot', {'user_id':'owner'}, {'version_id':'v5'})
+    assert status == 200 and response.get_json()['read_only'] is True
+    assert not any('UPDATE' in query for query in sql)
+    assert version['compiled_state'] == 'approved'
