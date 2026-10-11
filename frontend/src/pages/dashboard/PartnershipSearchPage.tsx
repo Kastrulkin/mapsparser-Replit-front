@@ -814,7 +814,10 @@ export const PartnershipSearchPage: React.FC = () => {
 
   useEffect(() => {
     const visibleDraftIds = new Set(visibleDrafts.map((draft) => draft.id));
-    setSelectedDraftIds((prev) => prev.filter((id) => visibleDraftIds.has(id)));
+    setSelectedDraftIds((prev) => {
+      const next = prev.filter((id) => visibleDraftIds.has(id));
+      return next.length === prev.length ? prev : next;
+    });
   }, [visibleDrafts]);
 
   useEffect(() => {
