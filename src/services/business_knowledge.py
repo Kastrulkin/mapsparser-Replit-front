@@ -124,7 +124,7 @@ def read(cursor, scope_type, scope_id, user):
                 EXISTS(SELECT 1 FROM business_knowledge_history h WHERE h.after_json->>'scope_id'=j.business_id
                     AND h.after_json #>> '{payload_json,source_entry_id}'=j.id
                     AND h.after_json #>> '{payload_json,source_entry_version}'=j.version::text) applied
-                FROM business_work_journal j WHERE business_id=%s AND NOT is_voided AND facts_json ? 'knowledge_proposal' ORDER BY occurred_at DESC LIMIT 100""",(scope_id,))
+                FROM business_work_journal j WHERE business_id=%s AND NOT is_voided AND jsonb_exists(facts_json,'knowledge_proposal') ORDER BY occurred_at DESC LIMIT 100""",(scope_id,))
             result['proposals']=[row for raw in cursor.fetchall() if (row:=_row(cursor,raw))['facts_json']['knowledge_proposal'].get('record_id') in allowed]
     return result
 

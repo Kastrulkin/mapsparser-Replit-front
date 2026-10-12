@@ -251,7 +251,11 @@ def test_chat_and_telegram_tools_prepare_durable_approval_without_saving(db,monk
     assert len(knowledge.history(db,'business','salon',user(),result['knowledge_change']['record']['id'])['items'])==1
 
 
-def test_staff_proposal_stays_in_journal_with_link_and_is_not_a_fact(db,monkeypatch):
+@pytest.mark.parametrize('runtime_wrapper',[False,True])
+def test_staff_proposal_stays_in_journal_with_link_and_is_not_a_fact(db,monkeypatch,runtime_wrapper):
+    if runtime_wrapper:
+        from database_manager import DBCursorWrapper
+        db=DBCursorWrapper(db)
     from services import operator_audio,work_journal
     db.execute('CREATE TABLE averageticketevents(id TEXT PRIMARY KEY)')
     spec=importlib.util.spec_from_file_location('journal_migration',Path(__file__).parents[1]/'alembic_migrations/versions/20260912_work_journal.py')
