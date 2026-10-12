@@ -137,9 +137,10 @@ def test_agent_compiler_creates_source_destination_blueprint_for_sheets_to_finan
     ]
     assert payload["steps"][3]["capability"] == "finance.transaction.create"
     assert payload["steps"][3]["payload"]["rows_from_step"] == "read_google_sheets"
-    assert payload["steps"][0]["provider"] == "openclaw"
-    assert payload["steps"][0]["provider_action_ref"] == "openclaw.google_sheets.read_rows"
-    assert payload["steps"][0]["provider_policy"] == "localos_envelope"
+    assert "provider" not in payload["steps"][0]
+    # A static description must not bind an unverified external executor.
+    assert "provider_action_ref" not in payload["steps"][0]
+    assert "provider_policy" not in payload["steps"][0]
     assert payload["steps"][3]["payload"]["input_mappings"] == [
         {
             "target": "rows",
@@ -189,9 +190,9 @@ def test_agent_compiler_creates_source_destination_blueprint_for_sheets_to_teleg
     ]
     assert payload["steps"][1]["artifact_type"] == "telegram_post_draft"
     assert payload["steps"][3]["capability"] == "communications.draft"
-    assert payload["steps"][0]["provider_action_ref"] == "openclaw.google_sheets.read_rows"
-    assert payload["steps"][3]["provider_action_ref"] == "openclaw.telegram.create_draft"
-    assert payload["steps"][3]["provider_policy"] == "localos_envelope"
+    assert "provider_action_ref" not in payload["steps"][0]
+    assert "provider_action_ref" not in payload["steps"][3]
+    assert "provider_policy" not in payload["steps"][3]
     assert payload["steps"][3]["payload"]["message_type"] == "telegram_post_draft"
     assert payload["steps"][3]["payload"]["rows_from_step"] == "read_google_sheets"
     assert payload["steps"][3]["payload"]["input_mappings"] == [
@@ -234,7 +235,7 @@ def test_agent_compiler_creates_source_only_blueprint_for_google_sheet_result_ur
     assert "content_plan.item.create_draft" in payload["capability_allowlist"]
     assert payload["approval_policy"]["required_for"] == []
     assert payload["steps"][0]["capability"] == "google_sheets.read_rows"
-    assert payload["steps"][0]["provider_action_ref"] == "openclaw.google_sheets.read_rows"
+    assert "provider_action_ref" not in payload["steps"][0]
     assert payload["steps"][1]["artifact_type"] == "agent_output_draft"
     assert payload["steps"][1]["payload"]["rows_from_step"] == "read_google_sheets"
     assert payload["approval_policy"]["mode"] == "external_actions_only"
@@ -767,6 +768,8 @@ def test_openclaw_capability_catalog_can_use_sandbox_bridge_env(monkeypatch):
     captured = {}
 
     class FakeResponse:
+        status_code = 200
+
         def raise_for_status(self):
             return None
 
@@ -782,7 +785,8 @@ def test_openclaw_capability_catalog_can_use_sandbox_bridge_env(monkeypatch):
                 ]
             }
 
-    def fake_get(url, headers=None, timeout=0):
+    def fake_get(url, headers=None, timeout=0, allow_redirects=True):
+        assert allow_redirects is False
         captured["url"] = url
         captured["headers"] = headers or {}
         captured["timeout"] = timeout

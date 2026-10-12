@@ -26,7 +26,9 @@ blueprints**. Коммуникационный агент, агент напом
 | `Provider` | Физический исполнитель или connector за capability: native LocalOS adapter, Maton.ai, OpenClaw connector, Composio или manual handoff. Provider не является продуктовой логикой агента. | `src/services/agent_provider_registry.py`, `externalbusinessaccounts`, `agent_integrations`, `channel_router`. |
 | `Run` | Конкретное выполнение blueprint version с input, steps, artifacts, approvals, output и stop reason. | `agent_runs`, `agent_run_steps`, `agent_artifacts`, `AgentBlueprintRunner`. |
 | `Approval` | Human gate вне prompt text. Требуется для внешних отправок, публикаций, платежей, destructive changes, массовых изменений и third-party writes. | `agent_approvals`; action-level approvals в `ActionOrchestrator`. |
-| `OpenClaw` / `ActionOrchestrator` | Execution boundary: tenant guard, policy, idempotency, billing, ledger, callbacks, retries, DLQ, audit, support export. | `src/core/action_orchestrator.py`, OpenClaw docs/scripts/UI panel. |
+| `ActionOrchestrator` | Локальная граница исполнения: tenant guard, policy, idempotency, billing, ledger, callbacks, retries и audit. Наличие этого класса не доказывает вызов удалённого OpenClaw. | `src/core/action_orchestrator.py`. |
+| `OpenClaw` | Отдельный сервер внешних инструментов; LocalOS вызывает только проверенное действие внутри собственной policy-рамки. | Реальный HTTP/tool контракт и проверка подключения; статический реестр не является доказательством. |
+| Изолированный compiled-script runtime | Исполняет утверждённый исходник без сети и секретов; внешние заявки выполняет защищённый исполнитель LocalOS. | Контракт compiled scripts от 5 сентября; не путать с legacy DSL. |
 
 ## Product Contract
 
@@ -178,7 +180,8 @@ Capability отвечает на вопрос **что агенту разреш
 провайдера: он запрашивает `communications.send_offer`,
 `sheets.append_row_request`, `google_sheets.read_rows` или
 `finance.transaction.create`, а LocalOS выбирает provider за общей
-OpenClaw/ActionOrchestrator boundary.
+локальной границей ActionOrchestrator. Удалённый OpenClaw — один из исполнителей,
+а не другое имя этого класса.
 
 Текущие provider families:
 
@@ -197,7 +200,7 @@ human description
   -> Agent Compiler
   -> Blueprint capability allowlist
   -> Run step asks for capability
-  -> ActionOrchestrator/OpenClaw policy, approval, billing and audit
+  -> LocalOS ActionOrchestrator policy, approval, billing and audit
   -> Provider Resolver picks native_localos / maton / openclaw / composio / manual
   -> Provider executes or queues a provider request
   -> observation returns to run history, ledger, artifacts and support export
@@ -320,7 +323,7 @@ Legacy aliases (`reviews.reply`, `appointments.create`,
 ### Domain Integrations Behind Capability Map
 
 Capability handlers v1 больше не являются только безопасными заглушками: они
-читают и создают доменные LocalOS records за общей OpenClaw/ActionOrchestrator
+читают и создают доменные LocalOS records за локальной ActionOrchestrator
 границей. При этом они не расширяют автономность:
 
 - `appointments.read` читает реальные `Bookings` с tenant-фильтром и лимитом.
@@ -435,7 +438,7 @@ human description
   -> compiled input_mappings resolve previous step outputs
   -> validation
   -> capability proposal
-  -> ActionOrchestrator/OpenClaw policy check
+  -> LocalOS ActionOrchestrator policy check
   -> execute, deny, retry, or pending_human
   -> structured observation
   -> artifacts + ledger + audit timeline
@@ -532,7 +535,7 @@ third-party systems напрямую.
 - `step_history`: все `agent_run_steps` и агрегаты completed/failed;
 - `artifacts`: все `agent_artifacts`;
 - `approvals`: все `agent_approvals`, включая pending count;
-- `action_ledger`: связанные OpenClaw/ActionOrchestrator actions, billing entries
+- `action_ledger`: локальные actions и подтверждённые вызовы OpenClaw, billing entries
   и timeline;
 - `delivery_status`: queue state, callback attempts, success/failure counts;
 - `cost_tokens`: reserved/settled/released tokens and total cost;

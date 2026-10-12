@@ -3,6 +3,20 @@
 Дата: 11 июня 2026
 Статус: canonical product/runtime direction
 
+Уточнение 12 октября 2026: схема ниже — направление, а не подтверждение
+удалённой интеграции. `ActionOrchestrator` — локальный исполнитель policy;
+OpenClaw — отдельный сервер инструментов. Compiled-script runtime — отдельный
+изолированный исполнитель без сети и секретов; legacy DSL не равен compiled script.
+Штатный OpenClaw `web_fetch` проверен на публичной тестовой странице, но путь
+из меню/Operator к сохранению материала в LocalOS ещё не принят.
+
+Discovery возвращает `empty`, `invalid`, `discovered`, `available` или `fallback`.
+Каждое действие дополнено `described`, `configured`, `verified`, `verified_at`,
+`execution_ready` и `unavailable_reason`. Без явной свежей проверки (24 часа)
+действие не считается готовым; готовность каталога не заменяет tenant-проверку,
+лимиты и утверждение конкретного вызова. Статический fallback — только описание.
+Проверка на сервере OpenClaw не даёт автоматического разрешения всем бизнесам.
+
 ## Цель
 
 LocalOS не должен становиться вторым OpenClaw. LocalOS должен дать пользователям

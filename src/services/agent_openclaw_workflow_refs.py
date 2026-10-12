@@ -43,7 +43,7 @@ def _preferred_openclaw_action(catalog: Dict[str, Any], capability: str) -> Dict
     actions = [
         action
         for action in openclaw_actions_for_capability(catalog, capability)
-        if str(action.get("status") or "available") == "available"
+        if action.get("execution_ready") is True
     ]
     if not actions:
         return {}

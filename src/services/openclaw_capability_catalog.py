@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit
 from typing import Any, Callable, Dict, List
 
 import requests
@@ -94,18 +96,26 @@ def get_openclaw_capability_catalog(fetcher: OpenClawCatalogFetcher | None = Non
                 "schema": "localos_openclaw_capability_catalog_v1",
                 "source": "static_fallback",
                 "status": "fallback",
+                "execution_ready": False,
                 "error": "OpenClaw catalog request failed",
                 "discovery": {
                     "mode": "static_fallback",
                     "provider_paths_preserved": True,
                 },
-                "actions": _normalize_catalog(STATIC_OPENCLAW_CAPABILITY_FALLBACK),
+                "actions": _discovered_actions(STATIC_OPENCLAW_CAPABILITY_FALLBACK, live=False),
             }
-    actions = _normalize_catalog(raw_catalog if raw_catalog is not None else STATIC_OPENCLAW_CAPABILITY_FALLBACK)
+    live = source == "openclaw"
+    actions = _discovered_actions(raw_catalog if live else STATIC_OPENCLAW_CAPABILITY_FALLBACK, live=live)
+    valid = _catalog_shape_supported(raw_catalog) if live else True
+    ready = any(action["execution_ready"] for action in actions)
+    status = "fallback"
+    if live:
+        status = "invalid" if not valid else "empty" if not actions else "available" if ready else "discovered"
     return {
         "schema": "localos_openclaw_capability_catalog_v1",
         "source": source,
-        "status": "available" if source == "openclaw" else "fallback",
+        "status": status,
+        "execution_ready": ready,
         "discovery": {
             "mode": "live_http" if source == "openclaw" else "static_fallback",
             "provider_paths_preserved": True,
@@ -114,12 +124,57 @@ def get_openclaw_capability_catalog(fetcher: OpenClawCatalogFetcher | None = Non
     }
 
 
+def _catalog_shape_supported(payload: Any) -> bool:
+    if isinstance(payload, dict):
+        if payload.get("success") is False or payload.get("ok") is False:
+            return False
+        values = payload.get("actions", payload.get("capabilities"))
+        if isinstance(values, dict):
+            return all(isinstance(item, dict) for item in values.values())
+        if isinstance(values, list):
+            if "actions" in payload:
+                return all(isinstance(item, dict) and _normalize_action(item) for item in values)
+            return all(isinstance(item, str) and item.strip() for item in values)
+        return False
+    return isinstance(payload, list) and all(isinstance(item, dict) and _normalize_action(item) for item in payload)
+
+
+def _discovered_actions(payload: Any, *, live: bool) -> List[Dict[str, Any]]:
+    if not _catalog_shape_supported(payload):
+        return []
+    actions = _normalize_catalog(payload)
+    for action in actions:
+        ready = live and action["configured"] and action["verified"] and _verification_is_fresh(action["verified_at"]) and action["status"] == "available"
+        action["execution_ready"] = ready
+        if not ready:
+            action["status"] = "unverified" if action["status"] == "available" else action["status"]
+        action["unavailable_reason"] = "" if ready else "static_description_only" if not live else "execution_not_verified"
+    return actions
+
+
+def _verification_is_fresh(value: str) -> bool:
+    try:
+        checked = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if checked.tzinfo is None:
+            return False
+        age = datetime.now(timezone.utc) - checked
+        return -timedelta(minutes=1) <= age <= timedelta(hours=24)
+    except (ValueError, TypeError):
+        return False
+
+
 def _normalize_catalog(raw_catalog: Any) -> List[Dict[str, Any]]:
     if isinstance(raw_catalog, dict):
         if isinstance(raw_catalog.get("actions"), list):
             raw_actions = raw_catalog.get("actions") or []
         elif isinstance(raw_catalog.get("capabilities"), dict):
             raw_actions = _actions_from_capabilities(raw_catalog.get("capabilities") or {})
+        elif isinstance(raw_catalog.get("capabilities"), list):
+            raw_actions = [
+                {"openclaw_action_ref": _default_action_ref(name), "localos_capability": name,
+                 "status": "unverified", "risk_class": "unknown", "side_effect": "unknown"}
+                for name in raw_catalog["capabilities"] if isinstance(name, str) and name.strip()
+            ]
         else:
             raw_actions = []
     elif isinstance(raw_catalog, list):
@@ -143,7 +198,11 @@ def _configured_openclaw_catalog_fetcher() -> OpenClawCatalogFetcher | None:
         if base_url:
             url = f"{base_url}/api/openclaw/capabilities/catalog"
     if not url:
-        url = str(os.getenv("OPENCLAW_SANDBOX_BRIDGE_URL") or "").strip()
+        candidate = str(os.getenv("OPENCLAW_SANDBOX_BRIDGE_URL") or "").strip()
+        # The installed outreach bridge exposes names on GET /capabilities.
+        # An execution/sandbox URL is not a capability discovery endpoint.
+        if urlsplit(candidate).path.rstrip("/") == "/capabilities":
+            url = candidate
     token = str(
         os.getenv("OPENCLAW_LOCALOS_TOKEN")
         or os.getenv("OPENCLAW_TOKEN")
@@ -159,8 +218,10 @@ def _configured_openclaw_catalog_fetcher() -> OpenClawCatalogFetcher | None:
             headers["X-OpenClaw-Token"] = token
             headers["X-OpenClaw-Internal-Token"] = token
             headers["Authorization"] = f"Bearer {token}"
-        response = requests.get(url, headers=headers, timeout=5)
+        response = requests.get(url, headers=headers, timeout=5, allow_redirects=False)
         response.raise_for_status()
+        if 300 <= response.status_code < 400:
+            raise RuntimeError("OpenClaw catalog redirects are not allowed")
         payload = response.json()
         if isinstance(payload, dict) and payload.get("success") is False:
             raise RuntimeError(str(payload.get("error") or "OpenClaw catalog request failed"))
@@ -189,6 +250,9 @@ def _actions_from_capabilities(capabilities: Dict[str, Any]) -> List[Dict[str, A
                 "side_effect": _side_effect_from_meta(meta),
                 "status": _status_from_provider_candidates(canonical, meta),
                 "provider_candidates": _provider_candidates_from_meta(canonical, meta),
+                "configured": meta.get("configured") is True,
+                "verified": meta.get("verified") is True,
+                "verified_at": meta.get("verified_at"),
             }
         )
     return actions
@@ -220,6 +284,10 @@ def _normalize_action(item: Dict[str, Any]) -> Dict[str, Any]:
         "provider": "openclaw",
         "provider_candidates": provider_candidates,
         "provider_paths": _provider_paths(provider_candidates),
+        "described": True,
+        "configured": item.get("configured") is True,
+        "verified": item.get("verified") is True,
+        "verified_at": str(item.get("verified_at") or ""),
     }
 
 
