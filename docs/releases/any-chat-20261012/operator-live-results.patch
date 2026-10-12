@@ -1,0 +1,83 @@
+--- frontend/src/pages/dashboard/OperatorPage.tsx
++++ frontend/src/pages/dashboard/OperatorPage.tsx
+@@ -359,6 +359,29 @@
+     void refresh();
+     return () => { live = false; };
+   }, [currentBusinessId]);
++  const resultHistoryInFlight = useRef(false);
++  const refreshOutreachResults = async () => {
++    if (!currentBusinessId || !conversationId || resultHistoryInFlight.current) return;
++    const businessId = currentBusinessId;
++    const version = historyVersion.current;
++    resultHistoryInFlight.current = true;
++    try {
++      const response = await api.get(`/operator/conversations/${encodeURIComponent(conversationId)}/messages`, {
++        params: { business_id: businessId, limit: 100 },
++      });
++      if (activeBusiness.current !== businessId || version !== historyVersion.current) return;
++      const items = (Array.isArray(response.data.messages) ? response.data.messages : [])
++        .filter((item: { result_json?: { outreach_result_event_id?: string } }) => item.result_json?.outreach_result_event_id);
++      setMessages(previous => {
++        const ids = new Set(previous.map(message => message.id));
++        const additions = mapStoredMessages(items).filter(message => !ids.has(message.id));
++        return additions.length ? [...previous, ...additions.map(message => ({ ...message, fresh: true }))] : previous;
++      });
++    } catch {
++      if (activeBusiness.current === businessId && version === historyVersion.current)
++        setHistoryError('Не удалось обновить результаты в чате. Сохранённые сообщения доступны; повторите обновление.');
++    } finally { resultHistoryInFlight.current = false; }
++  };
+   useEffect(() => {
+     if (!currentBusinessId) {
+       setConversationId(null);
+@@ -753,7 +776,7 @@
+       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}><DialogContent onCloseAutoFocus={event => { event.preventDefault(); menuTriggerRef.current?.focus(); }} className="max-h-[90dvh] max-w-3xl overflow-y-auto"><DialogHeader><DialogTitle>История обращений</DialogTitle><DialogDescription>Сохранённые команды, ответы и распознавание голоса.</DialogDescription></DialogHeader>{historyOpen && currentBusinessId && <OperatorRequestHistory key={currentBusinessId} initiallyOpen businessId={currentBusinessId} language={language} />}</DialogContent></Dialog>
+       <Dialog open={helpOpen} onOpenChange={setHelpOpen}><DialogContent onCloseAutoFocus={event => { event.preventDefault(); menuTriggerRef.current?.focus(); }}><DialogHeader><DialogTitle>Как пользоваться</DialogTitle><DialogDescription>Напишите задачу обычным языком или запишите голосом.</DialogDescription></DialogHeader><p className="text-sm">Оператор покажет результат или уточнит недостающее. Для продолжения поиска выберите его в «Задачах». Отправка писем и другие внешние действия требуют подтверждения.</p></DialogContent></Dialog>
+       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-sm">
+-        {currentBusinessId && activeSearchTask?.id && <div className="shrink-0 border-b border-border px-3 py-2"><OutreachTaskStatus key={`${currentBusinessId}:${activeSearchTask.id}`} businessId={currentBusinessId} initialTask={activeSearchTask} onChange={() => setTasksOpen(true)} onContinue={command => {
++        {currentBusinessId && activeSearchTask?.id && <div className="shrink-0 border-b border-border px-3 py-2"><OutreachTaskStatus key={`${currentBusinessId}:${activeSearchTask.id}`} businessId={currentBusinessId} initialTask={activeSearchTask} onRefresh={refreshOutreachResults} onChange={() => setTasksOpen(true)} onContinue={command => {
+           setSelectedSearchId(activeSearchTask.id);
+           setChatMessage(command);
+           chatInputRef.current?.focus();
+@@ -912,11 +935,13 @@
+   return result && 'task' in result ? result.task : undefined;
+ }
+
+-function OutreachTaskStatus({ businessId, initialTask, onContinue, onChange }: { businessId: string; initialTask: OutreachTask; onContinue?: (command: string) => void; onChange?: () => void }) {
++function OutreachTaskStatus({ businessId, initialTask, onContinue, onChange, onRefresh }: { businessId: string; initialTask: OutreachTask; onContinue?: (command: string) => void; onChange?: () => void; onRefresh?: () => Promise<void> }) {
+   const [detailsOpen, setDetailsOpen] = useState(false);
+   const [refreshVersion, setRefreshVersion] = useState(0);
+   const [task, setTask] = useState(initialTask);
+   const [refreshError, setRefreshError] = useState(false);
++  const onRefreshRef = useRef(onRefresh);
++  onRefreshRef.current = onRefresh;
+   const [actionBusy, setActionBusy] = useState(false);
+   const actionInFlight = useRef(false);
+   useEffect(() => {
+@@ -930,7 +955,7 @@
+         const response = await api.get(`/partnership/continuations/${encodeURIComponent(initialTask.id)}`, { params: { business_id: businessId } });
+         if (!active) return;
+         const current: OutreachTask | undefined = response.data;
+-        if (current) { working = !!current.presentation?.active; setTask(current); }
++        if (current) { working = !!current.presentation?.active; setTask(current); await onRefreshRef.current?.(); }
+         setRefreshError(!current);
+       } catch {
+         if (active) setRefreshError(true);
+@@ -1208,7 +1233,7 @@
+       ) : null}
+
+       <div className="flex flex-wrap gap-2">
+-        {approval?.action_id && approval.status === 'pending' && outdatedOutreachApproval ? (
++        {approval?.action_id && approval.status === 'pending' && status === 'approval_required' && outdatedOutreachApproval ? (
+           <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+             Условия этого подтверждения устарели. Стоимость поиска теперь указана в кредитах LocalOS.
+             <Button type="button" size="sm" variant="outline" className="mt-2 block" onClick={() => void onSendCommand('Покажи актуальные условия и стоимость в кредитах для последнего поручения по поиску компаний и подготовь новое подтверждение запуска')}>
+@@ -1216,7 +1241,7 @@
+             </Button>
+           </div>
+         ) : null}
+-        {approval?.action_id && approval.status === 'pending' && !outdatedOutreachApproval ? (
++        {approval?.action_id && approval.status === 'pending' && status === 'approval_required' && !outdatedOutreachApproval ? (
+           <>
+             <Button
+               type="button"

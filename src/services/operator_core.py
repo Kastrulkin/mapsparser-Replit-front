@@ -1394,17 +1394,21 @@ def _operator_tool_catalog(
             "name": "partnerships.continue_outreach",
             "capability": "partnerships.continue_outreach",
             "title": "Продолжающийся поиск партнёров",
-            "description": "Если пользователь сказал только «найди лидов» без конечного этапа, сначала уточни: найти и проверить или также подготовить письма. Явное «только поиск» сохраняй как find_only. Для нового поиска вызови operation=preview: покажи условия и одно подтверждение запуска. До подтверждения задача не создаётся. Чтобы изменить объём, предложение или конечный этап выбранного поиска, используй revise_preview с task_id: одно подтверждение обновит условия и продолжит в той же группе. operation=create оставлен для старых клиентов. Режим find_only не готовит и не отправляет письма. Если указаны страна компаний и продаваемое направление, но нет городов, preview покажет широкий запрос по указанной стране. auto_send требует отдельного outreach.ai_rules.",
+            "description": "Если пользователь сказал только «найди лидов» без конечного этапа, сначала уточни: найти и проверить или также подготовить письма. Явное «только поиск» сохраняй как find_only. Для ссылки на сайт с просьбой найти контакты и подготовить письмо используй этот же инструмент с config.source_urls и operation=preview; уточни предложение, язык и требования до согласования. Ссылки исследуются без дополнительного поиска. Для нового поиска вызови operation=preview: покажи условия и одно подтверждение запуска. До подтверждения задача не создаётся. Чтобы изменить объём, предложение или конечный этап выбранного поиска, используй revise_preview с task_id: одно подтверждение обновит условия и продолжит в той же группе. operation=create оставлен для старых клиентов. Режим find_only не готовит и не отправляет письма. Используй search_geography и requirements для любых клиентов, специалистов, поставщиков или партнёров. По умолчанию search_source=web: поиск в интернете. search_source=maps допускается только при явном запросе пользователя искать на картах; предварительный просмотр обязан показать отдельное предупреждение о дополнительных кредитах. При недоступном веб-поиске не подменяй его Apify или картами. Изменение аудитории, географии или требований через revise_preview предложит новый поиск, сохранив прежнюю группу. Не задавай туристическое направление для нетуристического поиска. auto_send требует отдельного outreach.ai_rules.",
             "input_schema": {
                 "type": "object", "additionalProperties": False,
                 "properties": {
-                    "operation": {"type": "string", "enum": ["preview", "revise_preview", "create", "list", "pause", "stop", "resume", "start", "rename", "retry_failed", "acknowledge_search", "use_shared_balance"]},
+                    "operation": {"type": "string", "enum": ["preview", "revise_preview", "create", "list", "status", "letters", "pause", "stop", "resume", "start", "rename", "retry_failed", "acknowledge_search", "use_shared_balance"]},
                     "task_id": {"type": "string"}, "revision": {"type": "string"},
                     "display_name": {"type": "string", "maxLength": 120},
                     "config": {"type": "object", "properties": {
+                        "search_source": {"type": "string", "enum": ["web", "maps"], "description": "web по умолчанию. maps только по явной просьбе искать на карте и с отдельным согласованием стоимости."},
+                        "source_urls": {"type": "array", "maxItems": 3, "items": {"type": "string", "maxLength": 2000}, "description": "Явно переданные публичные ссылки: исследовать и подготовить черновики без дополнительного поиска и отправки"},
                         "audience": {"type": "string", "maxLength": 500},
                         "target_count": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Цель: новые подходящие компании с подтверждённым каналом, не сырые результаты поиска"},
-                        "agency_country": {"type": "string", "description": "Страна самих компаний"},
+                        "search_geography": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 120}, "description": "Страны, регионы или города поиска"},
+                        "requirements": {"type": "array", "maxItems": 10, "items": {"type": "string", "maxLength": 300}, "description": "Обязательные условия пригодности компаний или специалистов; не выдумывать"},
+                        "agency_country": {"type": "string", "description": "Совместимость со старыми поисками: страна компании"},
                         "sold_destination": {"type": "string", "description": "Продаваемое направление, отдельно от страны поиска"},
                         "mode": {"type": "string", "enum": ["find_only", "prepare_only", "auto_send"]},
                         "max_qualification_calls": {"type": "integer", "minimum": 1, "maximum": 10000},
@@ -1720,9 +1724,27 @@ def _operator_tool_catalog(
     from services import work_journal, operator_work_journal
     if work_journal.enabled(business_id):
         tools.extend(operator_work_journal.tools(cursor,business_id,user_id,channel,message,work_message_id,work_request_key or str(uuid.uuid4()),work_saved if work_saved is not None else [],action_orchestrator))
+    # One service action shared by web/Telegram; send approval stays separate.
+    continuation_tool = next((item for item in tools if item["name"] == "partnerships.continue_outreach"), None)
+    if continuation_tool:
+        link_properties = dict(continuation_tool["input_schema"]["properties"]["config"]["properties"])
+        tools.append({
+            "name": "partnerships.import_url", "capability": "partnerships.continue_outreach",
+            "title": "Исследовать компанию по ссылке и подготовить черновик",
+            "description": "Показывает условия обработки явно переданных ссылок. Уточни предложение и язык, если они неизвестны. Не запускает дополнительный поиск или отправку. После отдельного подтверждения используется существующая фоновая задача.",
+            "input_schema": {"type": "object", "additionalProperties": False,
+                "properties": {"config": {"type": "object", "properties": link_properties,
+                    "required": ["source_urls", "audience", "offer", "language"]}}, "required": ["config"]},
+            "risk_class": "draft_only", "approval_required": False,
+            "execute": lambda arguments: __import__("services.outreach_continuation", fromlist=["operator_task"]).operator_task(
+                cursor, business_id=business_id, user_id=user_id,
+                arguments={"operation": "preview", "config": arguments.get("config")}, actor_context=actor_context),
+        })
     from services.outreach_continuation import continuation_enabled
     if not continuation_enabled(business_id):
-        tools = [tool for tool in tools if tool["name"] != "partnerships.continue_outreach"]
+        tools = [tool for tool in tools if tool["name"] not in {"partnerships.continue_outreach", "partnerships.import_url"}]
+    from services import operator_search_demand
+    tools.extend(operator_search_demand.tools(cursor, business_id, user_id))
     return [_normalize_tool_contract(tool, business_id=business_id) for tool in tools]
 
 
@@ -2139,6 +2161,12 @@ def route_operator_message(
                            'offer': pending['offer'], 'revision': pending['revision'], 'count': pending['count']},
                 actor_context=actor_context)
             return standardize_operator_result(result, 'partnerships.prepare_search_drafts'), {}
+    from services import outreach_web_search
+    if outreach_web_search.readiness_request(clean_message):
+        blocked = operator_subscription_block(subscription_access, 'partnerships.read')
+        if blocked:
+            return blocked, {}
+        return standardize_operator_result(outreach_web_search.readiness(), 'partnerships.read'), {}
     from services.operator_query import read_reviews_request
     if tool_planner is None and re.search(r'отзыв',clean_message,re.I):
         blocked=operator_subscription_block(subscription_access,'reviews.read')

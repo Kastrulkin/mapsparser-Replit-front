@@ -2439,7 +2439,7 @@ def _revalidate_creator_profiles_if_due() -> None:
     _CREATOR_PROFILE_REVALIDATION_THREAD.start()
 
 
-def _process_contact_intelligence_if_due() -> None:
+def _process_contact_intelligence_if_due(*, reviewed_sources_only: bool = False) -> None:
     global _LAST_CONTACT_INTELLIGENCE_AT, _CONTACT_INTELLIGENCE_RECOVERY_DONE
     if not _env_bool("PROSPECTING_CONTACT_INTELLIGENCE_ENABLED", False):
         return
@@ -2473,11 +2473,11 @@ def _process_contact_intelligence_if_due() -> None:
         min(20, int(os.getenv("PROSPECTING_CONTACT_INTELLIGENCE_BATCH_SIZE", "1"))),
     )
     for _index in range(batch_size):
-        if not _process_one_contact_intelligence_job():
+        if not _process_one_contact_intelligence_job(reviewed_sources_only=reviewed_sources_only):
             break
 
 
-def _process_one_contact_intelligence_job() -> bool:
+def _process_one_contact_intelligence_job(*, reviewed_sources_only: bool = False) -> bool:
     """Claim and finish one bounded enrichment job; return False when queue is empty."""
 
     db = None
@@ -2485,7 +2485,7 @@ def _process_one_contact_intelligence_job() -> bool:
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        job = claim_next_enrichment_job(cursor)
+        job = claim_next_enrichment_job(cursor, reviewed_sources_only=reviewed_sources_only)
         db.conn.commit()
         if not job:
             return False
@@ -7851,6 +7851,8 @@ if __name__ == "__main__":
                 _process_agent_run_queue_if_due()
                 _process_sheet_provider_queue_if_due()
             if _worker_role_enabled("operator"):
+                if _env_bool("OPENCLAW_WEBSITE_RESEARCH_ENABLED", False) and not _worker_role_enabled("maintenance"):
+                    _process_contact_intelligence_if_due(reviewed_sources_only=True)
                 _process_operator_async_job_if_due()
         except Exception as e:
             print(f"❌ Критическая ошибка worker loop: {e}", flush=True)

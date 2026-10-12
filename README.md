@@ -775,3 +775,8 @@ proxy: {
 **Решение:**
 1. Проверьте `worker.log`. Если видите `⚠️ Обнаружена captcha!`, откройте ссылку из лога в обычном браузере и пройдите капчу вручную.
 2. Если капчи нет, но ошибка остается — возможно, Яндекс изменил верстку. Обновите селекторы в `src/yandex_maps_scraper.py`. 
+
+
+## Outreach and the existing OpenClaw server
+
+Current verified integration and remaining acceptance: [Outreach from any chat — 12 October 2026](docs/OUTREACH_ANY_CHAT_STATUS_20261012.md). Use the existing OpenClaw website tools; keep companies, qualification, canonical drafts, approvals, sends and billing in LocalOS. Do not claim the full pilot is complete from component availability.

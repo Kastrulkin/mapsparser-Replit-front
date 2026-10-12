@@ -5746,7 +5746,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         operator_payload = await asyncio.to_thread(build_operator_chat_payload, business_ctx, text)
         from services.operator_request_history import mark_delivery
         try:
-            await update.message.reply_text(operator_payload['text'], reply_markup=_build_operator_result_markup(operator_payload['result']))
+            from services.outreach_chat_results import split_telegram_text
+            chunks = split_telegram_text(operator_payload['text'])
+            for index, chunk in enumerate(chunks):
+                await update.message.reply_text(chunk, reply_markup=_build_operator_result_markup(operator_payload['result']) if index == len(chunks)-1 else None)
         except Exception:
             await asyncio.to_thread(mark_delivery, operator_payload['result'].get('request_audit_id'), 'failed')
             raise

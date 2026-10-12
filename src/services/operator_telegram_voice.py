@@ -213,6 +213,8 @@ async def delivery_loop(application, host):
                     WHERE asset.channel='telegram' AND asset.metadata_json->>'delivery'='pending'
                     AND asset.expires_at>NOW() AND job.status IN ('completed','failed','cancelled') ORDER BY asset.created_at, asset.id LIMIT 10""")
                 return [_row(cursor,row) for row in cursor.fetchall()]
+            from services.outreach_chat_results import deliver
+            await deliver(application, host, transaction)
             await deliver_voice_progress(application)
             await deliver_plan_previews(application,host)
             assets=await asyncio.to_thread(transaction,pending)
