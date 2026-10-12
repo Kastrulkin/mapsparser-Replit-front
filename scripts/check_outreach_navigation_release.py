@@ -4,6 +4,41 @@ import re
 import sys
 
 
+def check_operator(dist: Path) -> None:
+    html = (dist / 'index.html').read_text()
+    entry = re.search(r'assets/(index-[^"\s]+\.js)', html)
+    if not entry: raise ValueError('Frontend entry is missing')
+    root = (dist / 'assets' / entry.group(1)).read_text()
+    operators = set(re.findall(r'(OperatorPage-[\w.-]+\.js)', root))
+    if not operators:
+        raise ValueError('Active Operator page is missing')
+    for page in operators:
+        pending = [page]; seen = {entry.group(1)}; copy = ''
+        while pending:
+            name = pending.pop()
+            if name in seen: continue
+            seen.add(name)
+            body = (dist / 'assets' / name).read_text()
+            copy += body
+            pending.extend(re.findall(r'\./([\w.-]+\.js)', body))
+        for marker in ['Меню Оператора', 'Текущая задача:', 'К последним сообщениям', 'outreach_result_event_id']:
+            if marker not in copy:
+                raise ValueError('Outdated Operator: ' + marker)
+
+
+def check_demo(dist: Path) -> None:
+    html = (dist / 'index.html').read_text()
+    entry = re.search(r'assets/(index-[^"\s]+\.js)', html)
+    if not entry:
+        raise ValueError('Frontend entry is missing')
+    root = (dist / 'assets' / entry.group(1)).read_text()
+    # These sample components are eager imports in App, so inspect the active
+    # entry rather than a leftover lazy demo chunk from an earlier release.
+    for marker in ['/demo/room', 'demo-coat-care', 'Подтвердить проверку в демо', 'reviewTexts', 'reviewTitle']:
+        if marker not in root:
+            raise ValueError('Outdated demo: ' + marker)
+
+
 def check(dist: Path) -> None:
     html = (dist / 'index.html').read_text()
     entry = re.search(r'assets/(index-[^"\s]+\.js)', html)
@@ -22,6 +57,8 @@ def check(dist: Path) -> None:
                 raise ValueError('Outdated partnerships page: ' + marker)
         if 'btn-iridescent' not in body and '"brand"' not in body:
             raise ValueError('Missing shared brand treatment in partnerships')
+    check_operator(dist)
+    check_demo(dist)
     layouts = set(re.findall(r'(DashboardLayout-[\w.-]+\.js)', root))
     if not layouts:
         raise ValueError('Active dashboard layout is missing')
