@@ -124,3 +124,22 @@ def test_catalog_credentials_are_not_forwarded_on_redirect(monkeypatch):
     monkeypatch.setattr(openclaw_capability_catalog.requests, "get", get)
     result = get_openclaw_capability_catalog()
     assert result["execution_ready"] is False
+
+
+def test_bridge_catalog_uses_bridge_key_not_gateway_key(monkeypatch):
+    from services import openclaw_capability_catalog
+    monkeypatch.setenv('OPENCLAW_CAPABILITY_CATALOG_URL', 'http://bridge:8091/capabilities/catalog')
+    monkeypatch.setenv('OPENCLAW_SANDBOX_BRIDGE_URL', 'http://bridge:8091/capabilities')
+    monkeypatch.setenv('OPENCLAW_SANDBOX_BRIDGE_TOKEN', 'bridge-test-key')
+    monkeypatch.setenv('OPENCLAW_LOCALOS_TOKEN', 'different-gateway-test-key')
+    def get(url, **kwargs):
+        assert kwargs['headers']['X-OpenClaw-Internal-Token'] == 'bridge-test-key'
+        class Response:
+            status_code = 200
+            def raise_for_status(self):
+                pass
+            def json(self):
+                return {'actions': []}
+        return Response()
+    monkeypatch.setattr(openclaw_capability_catalog.requests, 'get', get)
+    assert get_openclaw_capability_catalog()['status'] == 'empty'

@@ -214,7 +214,14 @@ def _configured_openclaw_catalog_fetcher() -> OpenClawCatalogFetcher | None:
         # An execution/sandbox URL is not a capability discovery endpoint.
         if urlsplit(candidate).path.rstrip("/") == "/capabilities":
             url = candidate
-    token = str(
+    bridge_url = urlsplit(str(os.getenv('OPENCLAW_SANDBOX_BRIDGE_URL') or ''))
+    catalog_url = urlsplit(url)
+    same_bridge = (
+        bool(bridge_url.hostname)
+        and (catalog_url.scheme, catalog_url.netloc) == (bridge_url.scheme, bridge_url.netloc)
+        and catalog_url.path.rstrip('/') in {'/capabilities', '/capabilities/catalog'}
+    )
+    token = str(os.getenv('OPENCLAW_SANDBOX_BRIDGE_TOKEN') or '').strip() if same_bridge else str(
         os.getenv("OPENCLAW_LOCALOS_TOKEN")
         or os.getenv("OPENCLAW_TOKEN")
         or os.getenv("OPENCLAW_SANDBOX_BRIDGE_TOKEN")
