@@ -1,0 +1,23 @@
+{
+  "tests": "passed",
+  "types": "passed",
+  "build": "passed",
+  "guard": "passed",
+  "integrity": "passed",
+  "api": "passed",
+  "frontend_tests": 129,
+  "api_tests": 16,
+  "api_excluded": 1,
+  "active_entry": "index-BIeAQ9i2.js",
+  "tour_version": 7,
+  "progress_save_read": "HTTP 200",
+  "fresh_browser_console_errors": 0,
+  "fresh_browser_console_warnings": 0,
+  "source_commits": [
+    "56965928a",
+    "af57ae46f"
+  ],
+  "backup_sha256": "4520d85d20325f4f25b0624be96320c5530c33f89240e54694edb265bfb1a79a",
+  "business_data_changed": false,
+  "migrations": false
+}
