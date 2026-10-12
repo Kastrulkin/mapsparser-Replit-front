@@ -109,6 +109,8 @@ def test_public_demo_session_uses_isolated_token_and_configured_scope(monkeypatc
 
     assert response.status_code == 200
     assert response.get_json()["token"] == "personal-demo-token"
+    assert response.get_json()["start_path"] == "/dashboard/today"
+    assert response.get_json()["tour_version"] == 7
     assert captured["session_kind"] == "demo"
     assert captured["scope_business_id"] == "demo-business"
     assert captured["expires_days"] == 30
@@ -315,12 +317,12 @@ def test_progress_accepts_guided_tour_version_used_by_current_frontend(monkeypat
     assert connection.committed is True
 
 
-def test_progress_upgrades_previous_frontend_tour_version(monkeypatch):
+def test_progress_preserves_previous_frontend_version_in_its_own_record(monkeypatch):
     monkeypatch.setattr(guided_tour_api, "verify_session", lambda token: demo_session(token))
     row = {
         "id": "progress-id",
         "tour_key": "roga-i-kopyta-v1",
-        "tour_version": 5,
+        "tour_version": 2,
         "status": "active",
         "chapter_key": "network-pulse",
         "step_key": "operator-nav",
@@ -346,17 +348,17 @@ def test_progress_upgrades_previous_frontend_tour_version(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.get_json()["progress"]["tour_version"] == 5
-    assert connection.cursor_value.queries[0][1][4] == 5
+    assert response.get_json()["progress"]["tour_version"] == 2
+    assert connection.cursor_value.queries[0][1][4] == 2
     assert connection.committed is True
 
 
-def test_progress_upgrades_original_frontend_tour_version(monkeypatch):
+def test_progress_preserves_original_frontend_version_in_its_own_record(monkeypatch):
     monkeypatch.setattr(guided_tour_api, "verify_session", lambda token: demo_session(token))
     row = {
         "id": "progress-id",
         "tour_key": "roga-i-kopyta-v1",
-        "tour_version": 5,
+        "tour_version": 1,
         "status": "active",
         "chapter_key": "network-pulse",
         "step_key": "welcome",
@@ -382,8 +384,8 @@ def test_progress_upgrades_original_frontend_tour_version(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.get_json()["progress"]["tour_version"] == 5
-    assert connection.cursor_value.queries[0][1][4] == 5
+    assert response.get_json()["progress"]["tour_version"] == 1
+    assert connection.cursor_value.queries[0][1][4] == 1
     assert connection.committed is True
 
 
@@ -447,3 +449,25 @@ def test_guided_tour_routes_are_registered_in_main_app():
     }
 
     assert expected.issubset(routes)
+
+
+def test_new_version_reads_its_own_progress_and_preserves_legacy_records(monkeypatch):
+    monkeypatch.setattr(guided_tour_api, "verify_session", lambda token: demo_session(token))
+    row = {"tour_version": 7, "status": "paused", "step_key": "influencers-nav", "completed_steps_json": ["welcome"]}
+    connection = FakeConnection(FakeCursor(rows=[row]))
+    monkeypatch.setattr(guided_tour_api, "get_db_connection", lambda: connection)
+    client = build_app().test_client()
+    response = client.get("/api/guided-tours/roga-i-kopyta-v1/progress", headers={"Authorization": "Bearer demo_token"})
+    assert response.get_json()["progress"]["tour_version"] == 7
+    assert connection.cursor_value.queries[0][1][2] == 7
+    for version in (6, 7):
+        connection.cursor_value.rows.append({**row, "tour_version": version})
+        response = client.put("/api/guided-tours/roga-i-kopyta-v1/progress", headers={"Authorization": "Bearer demo_token"}, json={"tour_version": version, "status": "paused", "step_key": "influencers-nav"})
+        assert response.status_code == 200
+        assert connection.cursor_value.queries[-1][1][4] == version
+
+
+def test_public_demo_cannot_read_private_business_knowledge(monkeypatch):
+    monkeypatch.setattr(guided_tour_api, "verify_session", lambda token: demo_session(token))
+    response = build_app().test_client().get("/api/business-knowledge?scope_type=business&scope_id=demo-business", headers={"Authorization": "Bearer demo_token"})
+    assert response.status_code == 403

@@ -18,7 +18,7 @@ from pg_db_utils import get_db_connection
 
 guided_tour_bp = Blueprint("guided_tour_api", __name__)
 
-TOUR_VERSION = 5
+TOUR_VERSION = 7
 SUPPORTED_PROGRESS_TOUR_VERSIONS = set(range(1, TOUR_VERSION + 1))
 TOUR_KEYS = {"roga-i-kopyta-v1"}
 PROGRESS_STATUSES = {"not_started", "active", "paused", "skipped", "completed"}
@@ -279,7 +279,7 @@ def create_public_demo_session():
             "business_id": business_id,
             "tour_key": "roga-i-kopyta-v1",
             "tour_version": TOUR_VERSION,
-            "start_path": "/dashboard/operator",
+            "start_path": "/dashboard/today",
             "expires_at": (datetime.now(timezone.utc) + timedelta(days=ttl_days)).isoformat(),
         }
     )
@@ -380,7 +380,7 @@ def save_guided_tour_progress(tour_key: str):
                 session["session_id"],
                 session["scope_business_id"],
                 normalized_key,
-                TOUR_VERSION,
+                tour_version,
                 status,
                 chapter_key,
                 step_key,

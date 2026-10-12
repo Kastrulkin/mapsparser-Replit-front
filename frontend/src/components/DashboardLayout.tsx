@@ -2,7 +2,7 @@ import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { workNavigationCopy } from '@/lib/workNavigation';
 import { WorkReturnNotice } from '@/components/WorkReturnNotice';
-import { resolveDashboardBusinessScope } from '../lib/dashboardBusinessScope';
+import { demoScopedBusinesses, resolveDashboardBusinessScope } from '../lib/dashboardBusinessScope';
 import { useLatestCallback } from '@/hooks/useLatestCallback';
 import type { BusinessRecord } from '@/types/business';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -144,7 +144,7 @@ export const DashboardLayout = () => {
         }
 
         // Используем данные, полученные из newAuth.getCurrentUser(), вместо повторного запроса
-        const businessesData = filterOutLeads(currentUser.businesses || []);
+        const businessesData = demoScopedBusinesses(filterOutLeads(currentUser.businesses || []), Boolean(currentUser.demo_mode), currentUser.demo_scope_business_id);
 
         if (businessesData.length > 0) {
           setBusinesses(businessesData);
@@ -169,7 +169,7 @@ export const DashboardLayout = () => {
 
           setCurrentBusinessId(businessToSelect.id);
           setCurrentBusiness(businessToSelect);
-          const restoredScope = resolveDashboardBusinessScope(businessToSelect, linkedBusinessId ? (new URLSearchParams(window.location.search).get('scope_type') === 'network' ? 'network' : 'business') : undefined);
+          const restoredScope = resolveDashboardBusinessScope(businessToSelect, linkedBusinessId ? (new URLSearchParams(window.location.search).get('scope_type') === 'network' ? 'network' : 'business') : undefined, Boolean(currentUser.demo_mode));
           setControlScope(restoredScope);
           localStorage.setItem(controlScopeStorageKey(Boolean(currentUser.demo_mode)), JSON.stringify(restoredScope));
           localStorage.setItem(selectedBusinessStorageKey(Boolean(currentUser.demo_mode)), businessToSelect.id);
@@ -208,7 +208,7 @@ export const DashboardLayout = () => {
       scopeRevisionRef.current += 1;
       setCurrentBusinessId(businessId);
       setCurrentBusiness(business);
-      const nextScope = resolveDashboardBusinessScope(business, requestedKind);
+      const nextScope = resolveDashboardBusinessScope(business, requestedKind, Boolean(user?.demo_mode));
       setControlScope(nextScope);
       if (!requestedKind) {
         const params = new URLSearchParams(location.search);
@@ -268,7 +268,7 @@ export const DashboardLayout = () => {
       const data: { businesses?: DashboardBusiness[] } = await newAuth.makeRequest('/auth/me');
       if (scopeRevisionRef.current !== requestScopeRevision) return;
 
-      const businessesData = filterOutLeads(data.businesses || []);
+      const businessesData = demoScopedBusinesses(filterOutLeads(data.businesses || []), demoMode, user?.demo_scope_business_id);
       if (Array.isArray(businessesData) && businessesData.length > 0) {
         setBusinesses(businessesData);
         const updatedBusiness = businessesData.find((business) => business.id === currentBusinessId);
@@ -282,7 +282,7 @@ export const DashboardLayout = () => {
           }
         } else {
           const replacementBusiness = businessesData[0];
-          const nextScope = resolveDashboardBusinessScope(replacementBusiness);
+          const nextScope = resolveDashboardBusinessScope(replacementBusiness, undefined, Boolean(user?.demo_mode));
           setCurrentBusinessId(replacementBusiness.id);
           setCurrentBusiness(replacementBusiness);
           setControlScope(nextScope);

@@ -1,3 +1,4 @@
+import { demoNavigationCopy } from '@/components/guided-tour/demoNavigationCopy';
 import { OperatorRequestHistory } from '@/components/operator/OperatorRequestHistory';
 import { OperatorPhotoGallery, type OperatorPhoto } from '@/components/operator/OperatorPhotoGallery';
 import { OperatorSpeech, OperatorVoiceInput, VoiceSubmission } from '@/components/operator/OperatorVoice';
@@ -33,7 +34,7 @@ import {
 type DashboardContext = {
   currentBusinessId: string | null;
   controlScope?: { kind: 'business' | 'network' | 'platform'; id: string; name?: string } | null;
-  user?: { is_superadmin?: boolean };
+  user?: { is_superadmin?: boolean; demo_mode?: boolean };
   currentBusiness?: {
     id: string;
     name?: string;
@@ -280,6 +281,8 @@ export const OperatorPage = () => {
   const { currentBusinessId, currentBusiness, controlScope, user } = useOutletContext<DashboardContext>();
   const { language } = useLanguage();
   const copy = operatorPageCopyForLanguage(language);
+  const demoMode = Boolean(user?.demo_mode);
+  const demoNotice = demoNavigationCopy(language).chatPreview;
   const businessName = localizeDemoBusinessName(currentBusiness?.name || '', language) || copy.selectedBusiness;
   const activeBusiness = useRef(currentBusinessId);
   activeBusiness.current = currentBusinessId;
@@ -385,6 +388,7 @@ export const OperatorPage = () => {
   };
 
   const sendOperatorChatMessage = async (overrideText?: string, source?: VoiceSubmission) => {
+    if (demoMode) return;
     const text = (overrideText || chatMessage).trim();
     const platformScope = controlScope?.kind === 'platform';
     if ((!currentBusinessId && !platformScope) || !text || chatSendInFlightRef.current) return;
@@ -811,11 +815,14 @@ export const OperatorPage = () => {
         </div>
 
         <div className="border-t border-slate-200 bg-white px-4 py-4">
-          {currentBusinessId && <OperatorVoiceInput key={currentBusinessId} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onSubmit={sendOperatorChatMessage} />}
-          {currentBusinessId && <OperatorWorkdayInput key={`inputs:${currentBusinessId}`} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onConversation={setConversationId} />}
+          {currentBusinessId && <OperatorVoiceInput key={currentBusinessId} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={demoMode || chatLoading || historyLoading} onSubmit={sendOperatorChatMessage} />}
+          {currentBusinessId && <OperatorWorkdayInput key={`inputs:${currentBusinessId}`} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={demoMode || chatLoading || historyLoading} onConversation={setConversationId} />}
 
+          {demoMode ? <p id="operator-demo-readonly" role="note" className="mb-3 text-sm text-muted-foreground">{demoNotice}</p> : null}
           <div className="flex flex-col gap-3 lg:flex-row">
             <textarea
+              disabled={demoMode}
+              aria-describedby={demoMode ? 'operator-demo-readonly' : undefined}
               className="min-h-[96px] flex-1 resize-y rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-950 outline-none ring-sky-200 placeholder:text-slate-400 focus:ring-2"
               value={chatMessage}
               onChange={(event) => setChatMessage(event.target.value)}
@@ -835,7 +842,7 @@ export const OperatorPage = () => {
                       type="button"
                       className="h-12 w-full transition-transform active:scale-[0.96] lg:w-auto"
                       onClick={() => void sendOperatorChatMessage()}
-                      disabled={chatLoading || (!currentBusinessId && controlScope?.kind !== 'platform') || !chatMessage.trim()}
+                      disabled={demoMode || chatLoading || (!currentBusinessId && controlScope?.kind !== 'platform') || !chatMessage.trim()}
                     >
                       {chatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                       {copy.send}

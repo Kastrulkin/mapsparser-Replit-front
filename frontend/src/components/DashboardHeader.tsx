@@ -1,3 +1,5 @@
+import { workNavigationCopy } from '@/lib/workNavigation';
+import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
 import type { User } from '@/lib/auth_new';
 import type { BusinessRecord } from '@/types/business';
 import { LogIn, LogOut, Settings, UserCircle } from 'lucide-react';
@@ -51,6 +53,8 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
+  const demoMode = Boolean(userProp?.demo_mode || currentUser?.demo_mode);
+
   useEffect(() => {
     const checkAuth = async () => {
       if (userProp) {
@@ -92,8 +96,13 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 sm:gap-4">
         {/* Left Side: Context Switchers */}
         <div className="flex min-w-0 flex-auto flex-wrap items-center gap-2 sm:gap-3">
-          {isSuperadmin && (
-            <div className="flex min-w-0 shrink-0 items-center gap-2 animate-in fade-in slide-in-from-left-4 duration-500">
+          {demoMode && currentBusiness && (
+            <div data-tour-target="network-switcher" className="min-w-0 text-sm font-medium text-slate-800">
+              {currentBusiness.name}
+            </div>
+          )}
+          {!demoMode && isSuperadmin && (
+            <div data-tour-target="network-switcher" className="flex min-w-0 shrink-0 items-center gap-2 animate-in fade-in slide-in-from-left-4 duration-500">
               <span className="hidden rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-indigo-700 sm:inline-flex">
                 SuperAdmin
               </span>
@@ -106,7 +115,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             </div>
           )}
 
-          {currentBusiness?.network_id && onBusinessChange && (
+          {!demoMode && currentBusiness?.network_id && onBusinessChange && (
             <div className="min-w-0 shrink-0" data-tour-target="network-switcher">
               <NetworkLocationsSwitcher
                 currentBusinessId={currentBusinessId || undefined}
@@ -116,7 +125,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           )}
 
           {/* Fallback Title if no switchers active */}
-          {!isSuperadmin && !currentBusiness?.network_id && currentBusiness && (
+          {!demoMode && !isSuperadmin && !currentBusiness?.network_id && currentBusiness && (
             <h1 className="hidden text-lg font-semibold text-slate-800 md:block">
               {currentBusiness.name}
             </h1>
@@ -166,7 +175,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
           {isAuthenticated && currentUser ? (
             <div className="hidden items-center gap-3 pl-2 sm:flex">
-              <Link to="/dashboard/profile" className="flex items-center gap-2 group">
+              <Link to="/dashboard/profile" aria-label={workNavigationCopy(language).label('profile')} className="flex items-center gap-2 group">
                 <div className="h-9 w-9 rounded-full border border-slate-200 bg-white p-[2px] shadow-sm transition-all group-hover:border-slate-300 group-hover:shadow-md">
                   <div className="flex h-full w-full items-center justify-center rounded-full bg-slate-50">
                     <UserCircle className="h-5 w-5 text-slate-600" />
@@ -180,7 +189,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                 variant="ghost"
                 size="icon"
                 onClick={handleLogout}
-                aria-label="Выйти"
+                aria-label={workCoherenceCopy(language).logout}
                 className="text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500"
               >
                 <LogOut className="w-5 h-5" />

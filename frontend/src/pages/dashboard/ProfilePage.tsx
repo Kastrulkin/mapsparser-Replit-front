@@ -1,3 +1,4 @@
+import DemoBusinessKnowledge from './demo/DemoBusinessKnowledge';
 import { NetworkManagement } from '@/components/NetworkManagement';
 import { BusinessKnowledge } from '@/components/business-knowledge/BusinessKnowledge';
 import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
@@ -986,7 +987,7 @@ export const ProfilePage = () => {
 
   if (new URLSearchParams(location.search).get('section') === 'knowledge') {
     const knowledgeScope = controlScope?.kind === 'platform' ? null : controlScope?.kind === 'network' ? {type:'network',id:controlScope.id} : currentBusinessId ? {type:'business',id:currentBusinessId} : null;
-    return <div className="space-y-4"><Button variant="ghost" onClick={()=>navigate('/dashboard/profile')}>{isRu?'Бизнес и команда':'Business and team'}</Button><BusinessKnowledge scope={knowledgeScope?.type==='network'?{type:'network',id:knowledgeScope.id}:knowledgeScope?{type:'business',id:knowledgeScope.id}:null} onBusinessChange={onBusinessChange} /></div>;
+    return <div className="space-y-4"><Button variant="ghost" onClick={()=>navigate('/dashboard/profile')}>{isRu?'Бизнес и команда':'Business and team'}</Button>{user?.demo_mode ? <DemoBusinessKnowledge /> : <BusinessKnowledge scope={knowledgeScope?.type==='network'?{type:'network',id:knowledgeScope.id}:knowledgeScope?{type:'business',id:knowledgeScope.id}:null} onBusinessChange={onBusinessChange} />}</div>;
   }
 
   return (

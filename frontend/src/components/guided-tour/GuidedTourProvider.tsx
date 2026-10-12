@@ -1,3 +1,4 @@
+import { normalizeTourProgress, type TourProgress, type TourStatus } from './tourProgress';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Check, ExternalLink, Pause, Play, RotateCcw, Sparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -16,16 +17,6 @@ import {
 	type GuidedTourStep,
 } from './tourConfig';
 
-
-type TourStatus = 'not_started' | 'active' | 'paused' | 'skipped' | 'completed';
-
-type TourProgress = {
-  status: TourStatus;
-  chapter_key?: string | null;
-  step_key?: string | null;
-  completed_steps?: string[];
-  updated_at?: string | null;
-};
 
 type TargetRect = {
   top: number;
@@ -71,6 +62,8 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   const copy = useMemo(() => guidedTourCopyForLanguage(language), [language]);
   const steps = useMemo(() => guidedTourStepsForLanguage(language), [language]);
   const currentStep = steps[currentIndex] || steps[0];
+  const currentStepKey = useRef(currentStep.key);
+  currentStepKey.current = currentStep.key;
   const isDemo = Boolean(user.demo_mode);
   const localProgressKey = `localos:guided-tour:${GUIDED_TOUR_KEY}:v${GUIDED_TOUR_VERSION}:${user.id}`;
   const isWelcome = currentStep.key === 'welcome';
@@ -135,7 +128,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     if (rawLocalProgress) {
       try {
         const parsed = JSON.parse(rawLocalProgress);
-        if (parsed && typeof parsed === 'object') localProgress = parsed;
+        localProgress = normalizeTourProgress(parsed, steps);
       } catch (parseError) {
         console.warn('Invalid local guided tour progress was ignored:', parseError);
       }
@@ -152,12 +145,12 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     newAuth.makeRequest(`/guided-tours/${GUIDED_TOUR_KEY}/progress`, { method: 'GET' })
       .then((response) => {
         if (cancelled) return;
-        const serverProgress: TourProgress = response.progress || {};
+        const serverProgress = normalizeTourProgress(response.progress, steps);
         const localUpdated = Date.parse(localProgress?.updated_at || '');
         const serverUpdated = Date.parse(serverProgress.updated_at || '');
         const selectedProgress = localProgress && (!Number.isFinite(serverUpdated) || localUpdated >= serverUpdated) ? localProgress : serverProgress;
         applyProgress(selectedProgress);
-        if (selectedProgress === localProgress && localProgress?.step_key) {
+        if (selectedProgress === localProgress && localProgress?.step_key && localProgress.status !== 'not_started') {
           const localStep = steps.find((step) => step.key === localProgress?.step_key) || steps[0];
           void persistProgress(localProgress.status, localStep, localProgress.completed_steps || []);
         }
@@ -182,12 +175,16 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   }, [isWelcome, open]);
 
   const locateTarget = useCallback((step: GuidedTourStep, scrollIntoView: boolean) => {
+    if (step.key !== currentStepKey.current) return false;
     if (!step.target) {
       setTargetRect(null);
       setTargetMissing(false);
       return true;
     }
-    const element = document.querySelector<HTMLElement>(`[data-tour-target="${step.target}"]`);
+    let element = document.querySelector<HTMLElement>(`[data-tour-target="${step.target}"]`);
+    if (step.target.startsWith('nav-') && (!element || element.getBoundingClientRect().width <= 0)) {
+      element = document.querySelector<HTMLElement>('[data-tour-target="mobile-menu"]');
+    }
     if (!element) {
       setTargetRect(null);
       setTargetMissing(true);
@@ -248,6 +245,17 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   }, [currentStep, isDemo, loaded, locateTarget, location.pathname, open, showStep]);
 
   useEffect(() => {
+    if (!isDemo || !open || !loaded || location.pathname !== routePathname(currentStep.route)) return;
+    let frame = 0;
+    const observer = new MutationObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => locateTarget(currentStep, false));
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }, [currentStep, isDemo, loaded, locateTarget, location.pathname, location.search, open]);
+
+  useEffect(() => {
     if (!open || !currentStep.target) return;
     const update = () => locateTarget(currentStep, false);
     window.addEventListener('resize', update);
@@ -286,7 +294,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     if (!saved) return;
     setStatus('active');
     setOpen(true);
-    await recordEvent(status === 'paused' ? 'resumed' : 'started', currentStep);
+    void recordEvent(status === 'paused' ? 'resumed' : 'started', currentStep);
     showStep(currentStep);
   };
 
@@ -304,8 +312,8 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     setStatus('active');
     setCurrentIndex(nextIndex);
     setCompletedSteps(nextCompletedSteps);
-    await recordEvent('started', currentStep);
-    await recordEvent('step_viewed', nextStep);
+    void recordEvent('started', currentStep);
+    void recordEvent('step_viewed', nextStep);
     showStep(nextStep);
     window.setTimeout(() => setWelcomeTransitioning(false), prefersReducedMotion ? 0 : 650);
   };
@@ -320,7 +328,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     setCompletedSteps(nextCompletedSteps);
     setStatus(nextStatus);
     if (nextStatus === 'active') {
-      await recordEvent('step_viewed', nextStep);
+      void recordEvent('step_viewed', nextStep);
       showStep(nextStep);
     }
   };
@@ -335,12 +343,12 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
       setCompletedSteps(nextCompleted);
       setStatus('completed');
       setTargetRect(null);
-      await recordEvent('completed', currentStep);
+      void recordEvent('completed', currentStep);
       return;
     }
     const nextStep = steps[currentIndex + 1];
     if (nextStep.chapter !== currentStep.chapter) {
-      await recordEvent('chapter_completed', currentStep);
+      void recordEvent('chapter_completed', currentStep);
     }
     await moveTo(currentIndex + 1, nextCompleted);
   };
@@ -356,7 +364,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     setStatus('paused');
     setOpen(false);
     setTargetRect(null);
-    await recordEvent('paused', currentStep);
+    void recordEvent('paused', currentStep);
   };
 
   const skip = async () => {
@@ -365,7 +373,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     setStatus('skipped');
     setOpen(false);
     setTargetRect(null);
-    await recordEvent('skipped', currentStep);
+    void recordEvent('skipped', currentStep);
   };
 
   const restart = async () => {
@@ -376,19 +384,19 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     setCompletedSteps([]);
     setStatus('active');
     setOpen(true);
-    await recordEvent('restarted', firstStep);
+    void recordEvent('restarted', firstStep);
     showStep(firstStep);
   };
 
   const openRoom = async () => {
-    await recordEvent('room_opened', currentStep);
+    void recordEvent('room_opened', currentStep);
     if (user.demo_room_slug) {
       window.open(`/room/${encodeURIComponent(user.demo_room_slug)}?lang=${encodeURIComponent(language)}`, '_blank', 'noopener,noreferrer');
     }
   };
 
   const register = async () => {
-    await recordEvent('registration_clicked', currentStep);
+    void recordEvent('registration_clicked', currentStep);
     newAuth.deactivateDemoSession(true);
     window.location.assign('/login?tab=register&source=interactive_demo');
   };
@@ -427,7 +435,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
             setOpen(true);
             if (status === 'paused' || status === 'skipped') void start();
           }}
-          className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-[70] flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white shadow-lg transition-[transform,box-shadow] duration-150 hover:scale-105 hover:shadow-xl active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:scale-100"
+          className="fixed bottom-20 mb-[env(safe-area-inset-bottom)] right-4 z-[70] flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white shadow-lg transition-[transform,box-shadow] duration-150 hover:scale-105 hover:shadow-xl active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:scale-100 md:bottom-[max(1rem,env(safe-area-inset-bottom))] md:mb-0"
           aria-label={status === 'completed' ? copy.controls.launcherOpenAgain : copy.controls.launcherContinue}
         >
           <img src={logo} alt="" className="h-24 w-24 -translate-y-1 scale-150 object-cover object-top" aria-hidden="true" />
