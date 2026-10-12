@@ -118,7 +118,7 @@ const localeByLanguage: Record<Language, string> = {
   th: 'th-TH', ar: 'ar-SA', ha: 'ha-NG', tr: 'tr-TR',
 
   hy: 'hy-AM',
-};
+  kk: 'kk-KZ',};
 
 const selectorCopy: Record<Language, { search: string; empty: string; count: string }> = {
   ru: { search: 'Найти город или Europe/Paris', empty: 'Часовой пояс не найден', count: 'часовых поясов' },
@@ -133,7 +133,7 @@ const selectorCopy: Record<Language, { search: string; empty: string; count: str
   tr: { search: 'Şehir veya Europe/Paris ara', empty: 'Saat dilimi bulunamadı', count: 'saat dilimi' },
 
   hy: { search: "Գտեք քաղաք կամ Եվրոպա/Փարիզ", empty: "Ժամային գոտին չի գտնվել", count: "ժամային գոտիներ" },
-};
+  kk: { search: "Қаланы немесе Еуропа/Парижді табыңыз", empty: "Уақыт белдеуі табылмады", count: "уақыт белдеулері" },};
 
 const timezoneOffset = (timezone: string, language: Language) => {
   try {

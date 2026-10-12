@@ -1,4 +1,5 @@
 import { OperatorRequestHistory } from '@/components/operator/OperatorRequestHistory';
+import { OperatorPhotoGallery, type OperatorPhoto } from '@/components/operator/OperatorPhotoGallery';
 import { OperatorSpeech, OperatorVoiceInput, VoiceSubmission } from '@/components/operator/OperatorVoice';
 import { voiceHeaders, waitForOperatorResult } from '@/components/operator/OperatorVoice.logic';
 import { OperatorWorkdayInput } from '@/components/operator/OperatorWorkdayInput';
@@ -40,6 +41,7 @@ type DashboardContext = {
 };
 
 type OperatorChatResult = {
+  photos?: OperatorPhoto[];
   message_id?: string;
   input_type?: string;
   status: 'completed' | 'blocked' | 'unsupported' | string;
@@ -977,6 +979,7 @@ const OperatorResultActions = ({
 
   return (
     <div className="mt-3 space-y-3">
+      {'photos' in result && result.photos && result.photos.length > 0 && <OperatorPhotoGallery photos={result.photos} />}
       <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
         <span
           className={cn(

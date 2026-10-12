@@ -468,7 +468,8 @@ const normalizeIsoDate = (value?: string) => {
   return Number.isNaN(parsed.getTime()) ? '' : toIsoDate(parsed);
 };
 
-const DATE_LOCALES = { ru: 'ru-RU', en: 'en-US', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR', hy: 'hy-AM' };
+const DATE_LOCALES = { ru: 'ru-RU', en: 'en-US', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR', hy: 'hy-AM',
+kk: 'kk-KZ', };
 
 const formatDate = (value: string | undefined, language: keyof typeof DATE_LOCALES = 'ru') => {
   if (!value) return '';
@@ -2460,7 +2461,7 @@ function ContentWorkspace() {
             >
               <div className="min-w-0">
                 <div className="break-words text-sm font-semibold text-slate-950 [overflow-wrap:anywhere]">{item.theme || item.goal || calendarCopy.publication}</div>
-                <div className="mt-1 text-sm text-slate-500">{formatDate(item.scheduled_for, language)} · {(posts.length || getSelectedCount(createDraft.channels))} {calendarCopy.channels}</div>
+                <div className="mt-1 text-sm text-slate-500">{formatDate(item.scheduled_for, language)} · {resolveItemSelectedChannels(item, posts, currentPlan).length} {calendarCopy.channels}</div>
               </div>
               <div className="flex min-w-0 max-w-full flex-wrap gap-2 sm:justify-end">
                 <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-full px-3 py-1 text-center text-xs font-semibold ring-1 [overflow-wrap:anywhere]', getStatusClassName(calendarState.status))}>
@@ -3118,7 +3119,7 @@ function ContentWorkspace() {
                           <div className="font-semibold text-slate-900">Почему подходит</div>
                           <div className="mt-1 leading-6">{selectedPhoto.why || mediaRecommendation?.message || 'Фото подходит по задаче публикации.'}</div>
                           <div className="mt-3 flex flex-wrap gap-2">
-                            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">качество {Math.round(Number(selectedPhoto.quality_score || 0))}%</span>
+                            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">{selectedPhoto.analysis_status && selectedPhoto.analysis_status !== 'analyzed' ? 'Качество ещё не оценено' : `качество ${Math.round(Number(selectedPhoto.quality_score || 0))}%`}</span>
                             {selectedPhoto.category ? <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">{formatPhotoCategoryLabel(selectedPhoto.category)}</span> : null}
                           </div>
                           <Button
@@ -3780,14 +3781,14 @@ function ContentWorkspace() {
                 <div className="max-w-2xl">
                   <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">{calendarCopy.aiResult}</div>
                   <h2 className="mt-3 text-4xl font-semibold tracking-tight">
-                    {filledDays > 0 ? calendarCopy.contentReady : calendarCopy.preparingCalendar}
+                    {filledDays > 0 ? needsReviewCount > 0 ? calendarCopy.needsReview : calendarCopy.contentReady : calendarCopy.preparingCalendar}
                   </h2>
                   <div className="mt-4 max-w-xl text-lg text-slate-300">
                     {fillContentCalendarTemplate(calendarCopy.filledDays, { filled: filledDays, total: totalDays })}
                   </div>
                   <Progress
                     value={Math.min(100, Math.round((filledDays / Math.max(totalDays, 1)) * 100))}
-                    aria-label={filledDays > 0 ? calendarCopy.contentReady : calendarCopy.preparingCalendar}
+                    aria-label={filledDays > 0 ? needsReviewCount > 0 ? calendarCopy.needsReview : calendarCopy.contentReady : calendarCopy.preparingCalendar}
                     className="mt-5 h-3 bg-white/10"
                   />
                 </div>

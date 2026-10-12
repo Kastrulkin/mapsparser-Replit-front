@@ -319,7 +319,7 @@ const ha: ManagedCardGrowthCopy = {
   }, 'Samu sahihin matsayin bayanan kasuwanci kuma zaɓi gyaran farko.', 'Samu sabbin bayanan kasuwanci kuma gano gyaran farko.', 'Ƙimar tsakiya ta shafukan kasuwanci masu kama'),
 };
 
-export const managedCardGrowthCopyAdditional: Record<Exclude<Language, 'ru' | 'en' | 'es' | 'hy'>, ManagedCardGrowthCopy> = {
+export const managedCardGrowthCopyAdditional: Record<Exclude<Language, 'ru' | 'en' | 'es' | 'hy' | 'kk'>, ManagedCardGrowthCopy> = {
   fr: managedCardGrowthCopyEuropean.fr,
   de: managedCardGrowthCopyEuropean.de,
   tr: managedCardGrowthCopyEuropean.tr,

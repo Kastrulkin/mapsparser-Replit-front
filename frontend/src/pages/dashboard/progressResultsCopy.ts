@@ -11,7 +11,29 @@ export type ProgressResultsCopy = Pick<ProgressPageCopy,
   inspectArea: string;
 };
 
-export const progressResultsCopies: Record<Language | 'hy', ProgressResultsCopy> = {
+export const progressResultsCopies: Record<Language, ProgressResultsCopy> = {
+  kk: {
+    title: 'Нәтижелер',
+    description: 'Атқарылған жұмыс және әр бағыттың ағымдағы күйі',
+    resultsIn30Days: '30 күнде расталған кезеңдер',
+    activeAreas: 'Жұмыс жүріп жатқан бағыттар',
+    needAttention: 'Назар аударуды қажет ететін бағыттар',
+    confirmedPath: 'Барлық уақытта аяқталған кезеңдер',
+    confirmedSteps: 'деректермен расталған кезең',
+    growthAreas: 'Бағыттар бойынша нәтижелер',
+    growthAreasDescription: 'Растаулар мен толық мәліметті көру үшін бағытты ашыңыз.',
+    recentResults: 'Соңғы расталған кезеңдер',
+    recentResultsEmpty: 'Күні көрсетілген расталған кезеңдер жоқ. Қолжетімді материалдар мен жұмыс күйі жоғарыда көрсетілген.',
+    auditPending: 'Аудит әлі алынбады',
+    viewFullAudit: 'Аудитті көру',
+    reportData: 'Есеп деректері',
+    reportUpdated: 'Есеп жаңартылды',
+    today: 'Бүгінгі жұмыс жоспары',
+    networkDetails: 'Желі нүктелері',
+    noAreas: 'Есепте бағыттар әзірге жоқ. Жұмысты бастау үшін «Бүгін» бөлімін ашыңыз.',
+    inspectArea: 'Толық мәліметті көру',
+    currentAudit: 'Карта деректері мен өлшемдер',
+  },
   ru: {
     title: "Результаты",
     description: "Выполненная работа и текущее состояние направлений",

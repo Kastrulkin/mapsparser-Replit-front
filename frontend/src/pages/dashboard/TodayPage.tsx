@@ -79,7 +79,8 @@ const analyticsModuleLabels: Record<Language, Record<string, string>> = {
   ha: { sales: 'Tallace-tallace da matsakaicin sayayya', services: 'Ayyuka da ƙarin sayarwa', capacity: 'Yawan aikin ma’aikata' },
   tr: { sales: 'Satışlar ve ortalama sepet', services: 'Hizmetler ve ek satışlar', capacity: 'Ekip kapasitesi' },
 
-  hy: { sales: "Վաճառք և միջին վաճառք", services: "Ծառայություններ և վաճառքներ", capacity: "Թիմային կարողություններ" },};
+  hy: { sales: "Վաճառք և միջին վաճառք", services: "Ծառայություններ և վաճառքներ", capacity: "Թիմային կարողություններ" },
+  kk: { sales: "Сату және орташа есепшот", services: "Қызметтер және жоғары сатылымдар", capacity: "Пәрмен жүктелуде" },};
 
 const analyticsLabel = (language: Language, copy: TodayPageCopy, key?: string, fallback?: string) => {
   if (key === 'trend') return copy.trend;
@@ -93,10 +94,19 @@ const analyticsStatus = (copy: TodayPageCopy, status?: string) => {
   return copy.uploadSummary;
 };
 
-const localeByLanguage: Record<Language, string> = { ru: 'ru-RU', en: 'en-GB', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR' ,
-  hy: 'hy-AM',};
+const resultSourceLabel = (copy: TodayPageCopy, source?: string) => {
+  if (source === 'Прогресс LocalOS') return copy.resultHistory;
+  return source;
+};
 
-const validTimezone = (value?: string) => { if (!value) return false; try { new Intl.DateTimeFormat('en', { timeZone: value }).format(); return true; } catch { return false; } };
+const localeByLanguage: Record<Language, string> = { ru: 'ru-RU', en: 'en-GB', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR' ,
+  hy: 'hy-AM',
+  kk: 'kk-KZ',};
+
+const validTimezone = (value?: string) => {
+  if (!value) return false;
+  try { new Intl.DateTimeFormat('en', { timeZone: value }).format(); return true; } catch { return false; }
+};
 
 const formatDate = (language: Language, value?: string | null, timeZone?: string) => {
   if (!value) return null;
@@ -119,7 +129,8 @@ const flowLabels: Record<Language, Record<TodayPreference['primary_flow'], strin
   ha: { overview: 'Bayani', content: 'Abun ciki', influencers: 'Masu ƙirƙira', partnerships: 'Haɗin gwiwa', maps: 'Taswira', upsells: 'Ƙarin tallace-tallace', automation: 'Aiki ta atomatik' },
   tr: { overview: 'Genel bakış', content: 'İçerik', influencers: 'İçerik üreticileri', partnerships: 'Ortaklıklar', maps: 'Haritalar', upsells: 'Ek satışlar', automation: 'Otomasyon' },
 
-  hy: { overview: "Ընդհանուր ակնարկ", content: "Բովանդակություն", influencers: "Ստեղծողներ", partnerships: "Գործընկերություններ", maps: "Քարտեզներ", upsells: 'Upsells', automation: "Ավտոմատացում" },};
+  hy: { overview: "Ընդհանուր ակնարկ", content: "Բովանդակություն", influencers: "Ստեղծողներ", partnerships: "Գործընկերություններ", maps: "Քարտեզներ", upsells: 'Upsells', automation: "Ավտոմատացում" },
+  kk: { overview: "Қарау", content: "Мазмұны", influencers: "Әсер етушілер", partnerships: "Серіктестік", maps: "Карталар", upsells: "Жоғары сатылымдар", automation: "Автоматтандыру" },};
 
 export const TodayPage = () => {
   const navigate = useNavigate();

@@ -1,6 +1,6 @@
 export const el = {
   // Page title
-  pageTitle: "LocalOS — λιγότερη καθημερινή διαχείριση για την τοπική σας επιχείρηση",
+  pageTitle: "LocalOS.pro - Τοπική προώθηση για τοπική επιχείρηση",
 
   common: {
     success: "Επιτυχία",
@@ -8,50 +8,49 @@ export const el = {
     save: "Αποθήκευση",
     cancel: "Ακύρωση",
     loading: "Φόρτωση...",
-    back: "Πίσω",
-    next: "Επόμενο",
-    select: "Επιλέξτε"
+    back: "Back",
+    next: "Next",
+    select: "Select"
   },
 
   // Header
   header: {
-    whatWeDo: "Πώς λειτουργεί το LocalOS",
-    whoWeAre: "Σχετικά με το LocalOS",
+    whatWeDo: "Τι Κάνουμε?",
+    whoWeAre: "Ποιοί Είμαστε?",
     prices: "Τιμές",
-    login: "Σύνδεση",
-    tryFree: "Δείτε το demo"
+    tryFree: "Δοκιμή Δωρεάν"
   },
 
   // Footer
   footer: {
     title: "Local OS",
-    description: "Το LocalOS αναλαμβάνει επαναλαμβανόμενες εργασίες για την προσέλκυση πελατών, τη φήμη, τις υπηρεσίες και τον έλεγχο της επιχείρησης.",
-    madeWithLovePrefix: "Φτιαγμένο με φροντίδα για ",
+    description: "Ελευθερώνουμε τις τοπικές επιχειρήσεις από τη ρουτίνα",
+    madeWithLovePrefix: "Φτιαγμένο με αγάπη για ",
     madeWithLoveIndustries: ["κομμωτήρια", "τεχνίτες", "εργαστήρια", "καταστήματα", "σχολεία", "συνεργεία αυτοκινήτων", "κλινικές", "καφετέριες", "πρατήρια καυσίμων"],
     company: "Εταιρεία",
-    whoWeAre: "Σχετικά με το LocalOS",
-    contacts: "Επικοινωνία",
-    copyright: "© 2025 LocalOS. Με επιφύλαξη παντός δικαιώματος."
+    whoWeAre: "Ποιοί Είμαστε?",
+    contacts: "Επαφές",
+    copyright: "© 2025 Local. Όλα τα δικαιώματα διατηρούνται."
   },
 
   // Stats
   stats: {
-    title: "Η τακτική δουλειά γίνεται μετρήσιμη",
-    titleHighlight: "και ελέγξιμη.",
-    subtitle: "Το LocalOS λειτουργεί ήδη σε πάνω από 240 σημεία μικρών επιχειρήσεων.",
-    stat1: "Επαγγελματικά προφίλ σε χάρτες",
-    stat2: "Κριτικές και δημοσιεύσεις",
-    stat3: "Υπηρεσίες, αριθμοί και εργασίες"
+    title: "Δεν παρέχουμε απλώς εργαλεία —",
+    titleHighlight: "φέρνουμε επιχειρηματικά αποτελέσματα.",
+    subtitle: "Αυτό έχουν ήδη επιτύχει οι πελάτες μας:",
+    stat1: "2 νέες αιτήσεις κράτησης την ημέρα",
+    stat2: "Νέοι πελάτες σε 2-4 εβδομάδες",
+    stat3: "1700% αύξηση prospects σε στούντιο μασάζ"
   },
 
   // Hero
   hero: {
     newClients: "Νέοι πελάτες χωρίς κόπο",
-    title: "Γιατί ο ανταγωνιστής σας εμφανίζεται ψηλότερα στο Google Maps;",
-    subtitle: "Συμπληρώστε τη φόρμα και θα ελέγξουμε δωρεάν το επαγγελματικό σας προφίλ στους χάρτες.",
+    title: "Γιατί ο ανταγωνιστής σας είναι πάνω από εσάς στο Google Maps?",
+    subtitle: "Συμπληρώστε τη φόρμα και θα αναλύσουμε την κάρτα της εταιρείας σας στους χάρτες δωρεάν!",
     emailPlaceholder: "Το email σας",
     yandexUrlPlaceholder: "Σύνδεσμος προς την επιχείρησή σας στο Google Maps",
-    submitButton: "Δωρεάν έλεγχος",
+    submitButton: "Λήψη δωρεάν",
     submitting: "Αποστολή αιτήματος...",
     privacyText: "Κάνοντας κλικ στο κουμπί, συμφωνείτε με την επεξεργασία προσωπικών δεδομένων",
     successMessage: "Ευχαριστούμε! Λάβαμε το αίτημά σας και θα επικοινωνήσουμε σύντομα.",
@@ -69,7 +68,7 @@ export const el = {
     returningClients: "Οι πελάτες που έρχονται - επιστρέφουν",
     returningClientsDesc: "Το σύστημα υπενθυμίζει στους πελάτες τις επισκέψεις, προσφέρει υπηρεσίες την κατάλληλη στιγμή — επιστρέφουν πιο συχνά.",
     biggerCheck: "Πουλάς περισσότερα ανά επίσκεψη",
-    biggerCheckDesc: "Σχετικές προτάσεις υπηρεσιών μπορούν να αυξήσουν τη μέση αξία συναλλαγής χωρίς πίεση στον πελάτη.",
+    biggerCheckDesc: "Έξυπνες συστάσεις υπηρεσιών αυξάνουν το μέσο τιμολόγιο χωρίς να είναι επιθετικές.",
     transparency: "Βλέπεις από πού έρχονται τα χρήματα και πώς να αναπτυχθείς",
     transparencyDesc: "Πλήρης ανάλυση σε όλα τα κανάλια — ξέρεις τι λειτουργεί και τι όχι.",
     upToDate: "Οι πελάτες σου λαμβάνουν πάντα ενημερωμένες πληροφορίες",
@@ -82,7 +81,7 @@ export const el = {
     subtitle: "Από την απόκτηση πελατών έως τη διατήρηση — πλήρης έλεγχος και πραγματική ανάπτυξη χωρίς την επιπλέον προσπάθειά σου",
     onlineTitle: "Ελκύουμε πελάτες online",
     offlineTitle: "Ελκύουμε πελάτες offline",
-    optimizationTitle: "Βελτιώνουμε τις διαδικασίες και τη μέση αξία συναλλαγής",
+    optimizationTitle: "Βελτιστοποιούμε την επιχείρηση και αυξάνουμε το μέσο τιμολόγιο",
     interactionTitle: "Αλληλεπιδρούμε με πελάτες: από την πρώτη επαφή έως συστάσεις",
     whatYouGet: "ΤΙ ΛΑΜΒΑΝΕΙΣ:",
     howItWorks: "ΠΩΣ ΛΕΙΤΟΥΡΓΕΙ:",
@@ -138,7 +137,7 @@ export const el = {
 
   // CTA
   cta: {
-    title: "Έτοιμοι να κερδίσετε χρόνο;",
+    title: "Έτοιμος να μεγαλώσεις?",
     subtitle: "Ενώσου με περισσότερα από 100 σαλόνια που έχουν ήδη αυξήσει τα έσοδά τους μαζί μας",
     startFree: "Ξεκίνα δωρεάν σήμερα:",
     setupMaps: "Θα ρυθμίσουμε τους χάρτες σου — για να σε βρουν πρώτοι οι νέοι πελάτες",
@@ -167,7 +166,7 @@ export const el = {
 
   // About
   about: {
-    heroTitle: "Ποιοι είμαστε;",
+    heroTitle: "Ποιοί Είμαστε?",
     heroSubtitle: "Κάνουμε την τοπική επιχείρησή σου να μεγαλώσει χωρίς επιπλέον προσπάθεια από εσένα.",
     problemText: "Ας είμαστε ειλικρινείς, οι παραδοσιακές προσεγγίσεις μάρκετινγκ δεν λειτουργούν για μικρές επιχειρήσεις. Σου λένε: \"διαχειρίσου τα κοινωνικά δίκτυα\", \"μάθε SEO\", \"ρύθμισε το προφίλ σου\". Και όλα αυτά ενώ δουλεύεις 60 ώρες την εβδομάδα κάνοντας τη βασική σου δουλειά.",
     problemHighlight: "Οι επιχειρηματίες δεν έχουν χρόνο να προσελκύσουν πελάτες.",
@@ -182,7 +181,7 @@ export const el = {
     resultsTitle: "Αποτελέσματα",
     resultsPercent: "+33%",
     resultsText: "Κατά μέσο όρο, μετά τη βελτιστοποίηση, ο αριθμός πελατών αυξάνεται κατά ένα τρίτο",
-    howTitle: "Πώς λειτουργεί;",
+    howTitle: "Πώς Λειτουργεί?",
     howSubtitle: "Θα ξεκινήσουμε με βελτιστοποίηση Google Maps, θα συνεχίσουμε με πλήρη βελτιστοποίηση",
     option1Title: "Το κάνεις μόνος σου",
     option1Point1: "Χρησιμοποιείς τα εργαλεία μας, αλλά εσύ ενημερώνεις δεδομένα στον πίνακα χαρτών, CRM, δημοσιεύεις νέα",
@@ -196,26 +195,19 @@ export const el = {
     option2Point3: "Ενημερώνουμε περιεχόμενο, απαντάμε σε κριτικές, αναλύουμε τι φέρνει πελάτες",
     option2Point4: "Βλέπεις αποτελέσματα από τον πρώτο μήνα — νέοι πελάτες, αύξηση μέσου τιμολογίου, επαναλαμβανόμενες επισκέψεις",
     option2Button: "Επικοινώνησε με ειδικό",
-    pricingTitle: "Όροι",
-    pricingSubtitle: "Επιλέξτε πόση επαναλαμβανόμενη εργασία θέλετε να αναθέσετε",
-    pricingStarterTitle: "Χάρτες",
-    pricingStarterPrice: "15 $ / μήνα",
+    pricingTitle: "Συνθήκες",
     pricingStarterPoint1: "Συνδεθείτε με το επαγγελματικό δίκτυο Local",
     pricingStarterPoint2: "Ξεκινήστε να χρησιμοποιείτε το ChatGPT για δημιουργία leads",
     pricingStarterPoint3: "Ιδανικό για όσους αναζητούν νέους τρόπους προσέλκυσης πελατών",
     pricingStarterPoint4: "5$ το μήνα",
     pricingStarterButton: "Λάβετε πρόσβαση",
-    pricingOption0Title: "Επαγγελματικό",
-    pricingOption0Price: "55 $ / μήνα",
+    pricingOption0Title: "Πρόσβαση σε εργαλεία $65 το μήνα",
     pricingOption0Point1: "Δουλέψτε στην κάρτα, θα σας καθοδηγήσουμε σε κάθε βήμα",
     pricingOption0Point2: "Βελτιστοποιήστε τη διαδικασία βάσει βέλτιστων πρακτικών",
     pricingOption0Point3: "Δημιουργία ειδήσεων",
     pricingOption0Point4: "Δημιουργία απαντήσεων σε κριτικές",
-    pricingOption0Point5: "Υπενθυμίσεις πελατών",
-    pricingOption0Point6: "Μηνύματα μάρκετινγκ",
     pricingOption0Button: "Λάβετε πρόσβαση",
-    pricingOption1Title: "Concierge",
-    pricingOption1Price: "310 $ / μήνα",
+    pricingOption1Title: "Θα ρυθμίσουμε τη λειτουργία του σαλονιού $310 το μήνα",
     pricingOption1Point1: "Κάρτα εταιρείας στο Google ή τοπικούς χάρτες",
     pricingOption1Point2: "Επικοινωνία με πελάτες",
     pricingOption1Point3: "Επιπλέον πωλήσεις και διασταυρούμενες πωλήσεις",
@@ -230,8 +222,8 @@ export const el = {
     pricingOption2Point4: "Βελτιστοποίηση επιχειρηματικών διαδικασιών",
     pricingOption2Point5: "Αφοσιωμένος διαχειριστής",
     pricingOption2Note: "Διαθέσιμο μετά από 3 μήνες συνδρομής ή με σύσταση",
-    finalTitle: "Κρατήστε τις αποφάσεις που χρειάζονται πραγματικά τον ιδιοκτήτη",
-    finalText: "Αναθέστε την επαναλαμβανόμενη εργασία στο LocalOS. Ξεκινήστε με μία εργασία που δεν θέλετε πια να κρατάτε στο μυαλό σας.",
+    finalTitle: "Δεν βοηθάμε απλά — κάνουμε την επιχείρησή σου να μεγαλώσει",
+    finalText: "Επικοινώνησε μαζί μας — και άσε τους πελάτες να έρχονται μόνοι τους.",
     contactUs: "Επικοινώνησε Μαζί Μας",
     getConsultation: "Λάβε Συμβουλή"
   },
@@ -569,69 +561,69 @@ export const el = {
       }
     },
     profile: {
-      title: "Προφίλ και επιχείρηση",
-      subtitle: "Διαχειριστείτε τα στοιχεία σας και τις πληροφορίες της επιχείρησης",
-      completion: "Συμπλήρωση προφίλ",
-      userProfile: "Προφίλ",
-      owner: "(ιδιοκτήτης επιχείρησης)",
-      edit: "Επεξεργασία",
-      notEditable: "Δεν μπορείτε να επεξεργαστείτε αυτή την επιχείρηση",
+      title: "Profile & Business",
+      subtitle: "Manage personal data and business information",
+      completion: "Profile Completion",
+      userProfile: "Profile",
+      owner: "(business owner)",
+      edit: "Edit",
+      notEditable: "Editing not available (not your business)",
       email: "Email",
-      name: "Όνομα",
-      phone: "Τηλέφωνο",
-      save: "Αποθήκευση",
-      cancel: "Ακύρωση",
-      noBusinessSelected: "Δεν έχει επιλεγεί επιχείρηση",
-      selectBusinessToSave: "Για να αποθηκεύσετε συνδέσμους χαρτών, επιλέξτε πρώτα μια επιχείρηση επάνω δεξιά.",
-      availableBusinesses: "Διαθέσιμες επιχειρήσεις: ",
-      chooseOne: "Επιλέξτε μία για να συνεχίσετε.",
-      businessInfo: "Στοιχεία επιχείρησης",
+      name: "Name",
+      phone: "Phone",
+      save: "Save",
+      cancel: "Cancel",
+      noBusinessSelected: "No business selected",
+      selectBusinessToSave: "To save map links, you must select a business from the dropdown in the top right corner.",
+      availableBusinesses: "Available businesses: ",
+      chooseOne: "Choose one to continue.",
+      businessInfo: "Business Information",
       sendCredentials: "Αποστολή στοιχείων σύνδεσης",
       sending: "Αποστολή...",
-      businessName: "Επωνυμία",
-      businessType: "Κλάδος",
-      selectType: "Επιλέξτε κλάδο",
-      address: "Διεύθυνση",
-      workingHours: "Ωράριο λειτουργίας",
-      workingHoursPlaceholder: "Καθημερινά 09:00–21:00",
-      mapLinks: "Σύνδεσμοι στους χάρτες",
-      addLink: "Προσθήκη συνδέσμου",
-      pasteLink: "Επικολλήστε τον σύνδεσμο",
-      saveSuccess: "Τα στοιχεία αποθηκεύτηκαν",
-      profileUpdated: "Το προφίλ ενημερώθηκε",
-      errorSave: "Δεν ήταν δυνατή η αποθήκευση",
+      businessName: "Business Name",
+      businessType: "Business Type",
+      selectType: "Select type",
+      address: "Address",
+      workingHours: "Working Hours",
+      workingHoursPlaceholder: "daily 9:00-21:00",
+      mapLinks: "Map Links",
+      addLink: "Add Link",
+      pasteLink: "Paste map link",
+      saveSuccess: "Business info saved",
+      profileUpdated: "Profile updated",
+      errorSave: "Error saving information",
       businessTypes: {
-        beauty_salon: "Ινστιτούτο ομορφιάς",
-        barbershop: "Κουρείο",
-        spa: "SPA και ευεξία",
-        nail_studio: "Περιποίηση νυχιών",
-        cosmetology: "Αισθητική",
-        massage: "Μασάζ",
-        brows_lashes: "Φρύδια και βλεφαρίδες",
-        makeup: "Μακιγιάζ",
-        tanning: "Σολάριουμ",
+        beauty_salon: "Beauty Salon",
+        barbershop: "Barbershop",
+        spa: "SPA/Wellness",
+        nail_studio: "Nail Studio",
+        cosmetology: "Cosmetology",
+        massage: "Massage",
+        brows_lashes: "Brows & Lashes",
+        makeup: "Makeup",
+        tanning: "Tanning",
         hotel: "Ξενοδοχείο",
         guest_house: "Ξενώνας",
-        other: "Άλλο"
+        other: "Other"
       },
       workSchedule: {
-        weekdays: "Καθημερινές",
-        daily: "Κάθε μέρα",
-        roundClock: "Όλο το 24ωρο",
-        weekends: "Σαββατοκύριακα",
-        break: "Διάλειμμα"
+        weekdays: "Weekdays",
+        daily: "Daily",
+        roundClock: "24/7",
+        weekends: "Weekends",
+        break: "Break"
       }
     },
     card: {
       title: "Διαχείριση χαρτών",
       subtitle: "Διαχειριστείτε τις υπηρεσίες και βελτιστοποιήστε την καταχώριση της επιχείρησης",
-      optimizationWizard: "Οδηγός βελτιστοποίησης χαρτών",
-      parsingNote: "Συλλέγουμε τα δεδομένα κάθε εβδομάδα, ώστε να παρακολουθούμε την πρόοδο και να προτείνουμε βελτιώσεις. ",
+      optimizationWizard: "Map Optimization Wizard",
+      parsingNote: "We receive data weekly to track progress and provide optimization tips. Map data will be saved here, and statistics on ",
       progressTab: "Πρόοδος",
       rating: "Βαθμολογία",
       reviews: "κριτικές",
       services: "Υπηρεσίες",
-      servicesSubtitle: "Οι υπηρεσίες που εμφανίζονται στους χάρτες. Τα δεδομένα ενημερώνονται αυτόματα όταν είναι συνδεδεμένη η συλλογή δεδομένων.",
+      servicesSubtitle: "Current service breakdown on maps. Data is added automatically if parser is connected.",
       addService: "Προσθήκη υπηρεσίας",
       category: "Κατηγορία",
       serviceName: "Όνομα *",
@@ -640,29 +632,29 @@ export const el = {
       price: "Τιμή",
       add: "Προσθήκη",
       cancel: "Ακύρωση",
-      deleteConfirm: "Θέλετε σίγουρα να διαγράψετε αυτή την υπηρεσία;",
+      deleteConfirm: "Are you sure you want to delete this service?",
       optimizeAll: "Βελτιστοποίηση όλων",
       table: {
-        category: "Κατηγορία",
-        name: "Όνομα",
-        description: "Περιγραφή",
-        price: "Τιμή",
-        actions: "Ενέργειες"
+        category: "Category",
+        name: "Name",
+        description: "Description",
+        price: "Price",
+        actions: "Actions"
       },
       seo: {
-        proposal: "Πρόταση SEO",
-        accept: "Αποδοχή",
-        reject: "Απόρριψη",
-        title: "Περιγραφές υπηρεσιών για το επαγγελματικό σας προφίλ",
-        desc1: "🔎 Οι χάρτες και το τοπικό SEO είναι σημαντικά κανάλια προσέλκυσης πελατών.",
-        desc2: "Σαφείς ονομασίες και περιγραφές βοηθούν τους πελάτες να βρουν το προφίλ και να επιλέξουν υπηρεσία.",
-        desc3: "Ανεβάστε τον τιμοκατάλογο. Η τεχνητή νοημοσύνη θα προτείνει σύντομες και σαφείς διατυπώσεις, με βάση τη ζήτηση, το υφολόγιό σας και την περιοχή.",
-        desc4: "Αντιγράψτε το κείμενο στο επαγγελματικό σας προφίλ στους χάρτες."
+        proposal: "SEO Proposal",
+        accept: "Accept",
+        reject: "Reject",
+        title: "Setup service descriptions for maps business card",
+        desc1: "🔎 Maps and local SEO are one of the most effective sales channels.",
+        desc2: "Correct service names and descriptions improve search visibility, card clicks, and ranking.",
+        desc3: "Upload a price list — AI will return concise SEO formulations in strict format considering query frequency, your wording, and location.",
+        desc4: "Copy the text and add it to your organization card on maps."
       },
       placeholders: {
-        category: "Παράδειγμα: Κουρέματα",
-        name: "Παράδειγμα: Γυναικείο κούρεμα",
-        desc: "Σύντομη περιγραφή της υπηρεσίας",
+        category: "Example: Haircuts",
+        name: "Example: Womens Haircut",
+        desc: "Short service description",
         keywords: "haircut, styling, coloring",
         price: "Example: $30"
       },
@@ -680,13 +672,11 @@ export const el = {
         generate: "Δημιουργία απάντησης",
         generating: "Δημιουργία...",
         proposalLabel: "Πρόταση απάντησης:",
-        manualPublicationHint: "Δημοσιεύστε στους χάρτες χειροκίνητα: αντιγράψτε την απάντηση και επικολλήστε τη στον πίνακα της πλατφόρμας.",
-        copy: "Αντιγραφή",
-        copied: "Αντιγράφηκε",
         edit: "Επεξεργασία",
         save: "Αποθήκευση",
         saving: "Αποθήκευση...",
         cancel: "Ακύρωση",
+        copy: "Αντιγραφή",
         editPlaceholder: "Επεξεργαστείτε την απάντηση...",
         externalTitle: "Κριτικές από τους χάρτες σας",
         loading: "Φόρτωση κριτικών...",
@@ -760,95 +750,95 @@ export const el = {
       }
     },
     bookings: {
-      title: "Κρατήσεις",
-      subtitle: "Διαχειριστείτε τα ραντεβού και τις κρατήσεις πελατών",
-      refresh: "Ανανέωση",
-      list: "Λίστα κρατήσεων",
-      total: "Σύνολο:",
-      empty: "Δεν υπάρχουν κρατήσεις",
+      title: "Bookings",
+      subtitle: "Manage client bookings",
+      refresh: "Refresh",
+      list: "Booking List",
+      total: "Total:",
+      empty: "No bookings",
       table: {
-        client: "Πελάτης",
-        service: "Υπηρεσία",
-        dateTime: "Ημερομηνία και ώρα",
-        source: "Πηγή",
-        status: "Κατάσταση",
-        actions: "Ενέργειες"
+        client: "Client",
+        service: "Service",
+        dateTime: "Date & Time",
+        source: "Source",
+        status: "Status",
+        actions: "Actions"
       },
       status: {
-        all: "Όλες",
-        pending: "Σε αναμονή",
-        confirmed: "Επιβεβαιωμένες",
-        cancelled: "Ακυρωμένες",
-        completed: "Ολοκληρωμένες",
-        pendingFilter: "Αναμένουν επιβεβαίωση"
+        all: "All",
+        pending: "Pending",
+        confirmed: "Confirmed",
+        cancelled: "Cancelled",
+        completed: "Completed",
+        pendingFilter: "Pending Confirmation"
       },
       actions: {
-        confirm: "Επιβεβαίωση",
-        cancel: "Ακύρωση",
-        complete: "Ολοκλήρωση"
+        confirm: "Confirm",
+        cancel: "Cancel",
+        complete: "Complete"
       },
       messages: {
-        error: "Σφάλμα",
-        loadError: "Οι κρατήσεις δεν φορτώθηκαν",
-        updateSuccess: "Η κατάσταση ενημερώθηκε",
-        updateError: "Η κατάσταση δεν ενημερώθηκε"
+        error: "Error",
+        loadError: "Failed to load bookings",
+        updateSuccess: "Booking status updated",
+        updateError: "Failed to update status"
       }
     },
     chats: {
-      title: "Όλες οι συνομιλίες",
-      sandbox: "Δοκιμαστικό περιβάλλον",
-      search: "Αναζήτηση...",
+      title: "All Chats",
+      sandbox: "Sandbox",
+      search: "Search...",
       roles: {
-        agent: "Βοηθός",
-        client: "Πελάτης",
-        operator: "Χειριστής"
+        agent: "Agent",
+        client: "Client",
+        operator: "Operator"
       },
       input: {
-        placeholder: "Γράψτε μήνυμα...",
-        send: "Αποστολή"
+        placeholder: "Type a message...",
+        send: "Send"
       },
       controls: {
-        pause: "Παύση",
-        resume: "Συνέχιση"
+        pause: "Pause",
+        resume: "Resume"
       }
     },
     aiChatPromotion: {
-      title: "Προβολή στις απαντήσεις της τεχνητής νοημοσύνης",
-      subtitle: "Βήμα προς βήμα οδηγός για να εμφανίζεται η επιχείρησή σας στο ChatGPT και σε άλλους βοηθούς τεχνητής νοημοσύνης",
+      title: "AI Chat Promotion",
+      subtitle: "Step-by-step guide to get your business into ChatGPT and other AI assistants",
       whyImportant: {
-        title: "Γιατί έχει σημασία;",
-        description: "Όλο και περισσότεροι χρήστες αναζητούν πληροφορίες μέσω βοηθών τεχνητής νοημοσύνης. Τέσσερα βήματα βοηθούν την επιχείρησή σας να γίνει πιο κατανοητή και εύκολα εντοπίσιμη."
+        title: "Why is this important?",
+        description: "ChatGPT and other AI assistants are becoming the primary way to find information. To get your business in ChatGPT answers, you need to optimize your site correctly. Four key steps will help your business be found through AI chats."
       },
       steps: {
         step1: {
-          title: "Προσθέστε τον ιστότοπο στο Bing Webmaster",
-          description: "Το Bing Webmaster βοηθά τις μηχανές αναζήτησης και τους βοηθούς AI να εντοπίζουν τον ιστότοπό σας"
+          title: "Add site to Bing Webmaster",
+          description: "Bing Webmaster helps ChatGPT find your site on the internet"
         },
         step2: {
-          title: "Προσθέστε σήμανση Schema.org",
-          description: "Τα δομημένα δεδομένα εξηγούν καθαρά το περιεχόμενο του ιστοτόπου"
+          title: "Implement Schema.org markup",
+          description: "Structured data helps ChatGPT better understand your content"
         },
         step3: {
-          title: "Προσθέστε ενότητα συχνών ερωτήσεων",
-          description: "Οι σαφείς απαντήσεις σε συχνές ερωτήσεις κάνουν το περιεχόμενο πιο κατανοητό"
+          title: "Add FAQ section",
+          description: "ChatGPT loves sites with answers to frequently asked questions"
         },
         step4: {
-          title: "Παραπέμψτε σε αξιόπιστες πηγές",
-          description: "Οι πηγές δείχνουν πώς τεκμηριώνονται οι πληροφορίες του ιστοτόπου"
+          title: "Cite studies",
+          description: "ChatGPT prefers sites that look like encyclopedias with sources"
         }
       },
       actions: {
-        copy: "Αντιγραφή",
-        copied: "Αντιγράφηκε",
-        todo: "Τι χρειάζεται:",
-        links: "Χρήσιμοι σύνδεσμοι:",
-        code: "Παράδειγμα κώδικα:"
+        copy: "Copy",
+        copied: "Copied",
+        todo: "What to do:",
+        links: "Useful links:",
+        code: "Code example:"
       },
       progress: {
-        title: "Πρόοδος",
-        completed: "Ολοκληρωμένα βήματα:",
-        from: "από",
-        success: "Ολοκληρώσατε όλα τα βήματα. Ο ιστότοπός σας είναι πλέον καλύτερα προετοιμασμένος για αναζήτηση μέσω βοηθών AI."
+        title: "Progress",
+        completed: "Steps completed:",
+        from: "of",
+        success: "Great! You have completed all steps. Now your site is optimized for AI chat search."
       }
     },
     finance: {
@@ -1014,11 +1004,10 @@ export const el = {
   },
 
   growthStages: {
-    // Οι αναλυτικές οδηγίες του πλάνου ανάπτυξης προβάλλονται προς το παρόν στα ελληνικά με τους παρακάτω σύντομους τίτλους.
     1: {
-      title: "Βασική παρουσία",
-      description: "Συμπλήρωση των επαγγελματικών προφίλ και συλλογή των πρώτων κριτικών",
-      goal: "10 πρώτες κριτικές με βαθμολογία 4,5+ και πλήρες προφίλ",
+      title: "Foundation",
+      description: "Creating basic profiles on geo-services and collecting first reviews for local visibility",
+      goal: "Get first 10 reviews with 4.5+ rating, ensure 100% profile completion",
       expectedResult: "20% increase in views, first 20 clicks from maps per week",
       duration: "1-2 weeks",
       tasks: [
@@ -1030,9 +1019,9 @@ export const el = {
       ]
     },
     2: {
-      title: "Βελτίωση ορατότητας",
-      description: "Βελτίωση καταχωρίσεων, κρατήσεων και διαχείρισης κριτικών",
-      goal: "Εμφάνιση στις 3 πρώτες τοπικές θέσεις και 20+ ενέργειες από τους χάρτες",
+      title: "Visibility Optimization",
+      description: "Optimizing geo-listings, launching booking widgets, managing reviews",
+      goal: "Reach Top-3 local search, get 20+ map clicks",
       expectedResult: "+40% visibility growth, first inquiries via booking widget",
       duration: "1-2 weeks",
       tasks: [
@@ -1042,9 +1031,9 @@ export const el = {
       ]
     },
     3: {
-      title: "Αυτοματισμός διαδικασιών",
-      description: "Ενιαία βάση πελατών, κρατήσεις και βασικές υπενθυμίσεις",
-      goal: "Συγκέντρωση των δεδομένων πελατών και αυτοματισμός κρατήσεων και υπενθυμίσεων",
+      title: "Process Automation",
+      description: "Implementing CRM and basic client communication automation",
+      goal: "Centralize client database, automate booking and reminders",
       expectedResult: "20% reduction in no-shows, improved client database management",
       duration: "2-3 weeks",
       tasks: [
@@ -1053,10 +1042,10 @@ export const el = {
       ]
     },
     4: {
-      title: "Αυτοματισμός επικοινωνίας",
-      description: "Ρύθμιση chatbot, φωνητικών βοηθών και αυτόματων καμπανιών",
-      goal: "Μείωση των απουσιών και της χειροκίνητης επεξεργασίας αιτημάτων",
-      expectedResult: "Λιγότερος χρόνος σε επαναλαμβανόμενη επικοινωνία και πιο συνεπής εξυπηρέτηση",
+      title: "Communication Automation and Bots",
+      description: "Launching chatbots, voice robots, automated campaigns via LocalOS.pro",
+      goal: "Reduce no-shows from 30-40% to 10-15%, automate 60% of incoming requests",
+      expectedResult: "Staff time savings, increased client loyalty",
       duration: "1-2 weeks",
       tasks: [
         "Set up CHATBOTS on Telegram/WhatsApp: auto-responses, booking, service menu",
@@ -1065,10 +1054,10 @@ export const el = {
       ]
     },
     5: {
-      title: "Βελτίωση κερδοφορίας",
-      description: "Ανάλυση υπηρεσιών, τιμών και περιθωρίου κέρδους",
-      goal: "Βελτίωση της μέσης αξίας συναλλαγής και του περιθωρίου στις βασικές υπηρεσίες",
-      expectedResult: "Μεγαλύτερη κερδοφορία ανά υπηρεσία και ανά επίσκεψη",
+      title: "Monetization Optimization",
+      description: "Service analysis, price list revision, identifying margin points",
+      goal: "Increase average check by 15-25%, margin on key services by 10-15%",
+      expectedResult: "Profitability growth, increased average check",
       duration: "2-3 weeks",
       tasks: [
         "Conduct ABC analysis of pricing: top-5 services by revenue, top-5 by margin",
@@ -1079,7 +1068,7 @@ export const el = {
       ]
     },
     6: {
-      title: "Πρόσθετες και συνδυαστικές πωλήσεις",
+      title: "Upsell and Cross-sell Services",
       description: "Creating additional sales matrix for each service, staff training",
       goal: "Raise AVERAGE CHECK by 20-30% through additional services",
       expectedResult: "Every second client takes additional service, 15-20% revenue growth",
@@ -1093,7 +1082,7 @@ export const el = {
       ]
     },
     7: {
-      title: "Τοπικές συνεργασίες",
+      title: "Local Partnerships and Cold Outreach",
       description: "Building mutually beneficial partnership network through cold emails and meetings",
       goal: "Get 3-5 partners with mutual traffic (wedding agencies, photographers, yoga studios, fitness)",
       expectedResult: "10-15 new clients per month through partners, service exchange, co-promotion",
@@ -1107,7 +1096,7 @@ export const el = {
       ]
     },
     8: {
-      title: "Έντυπα και τοπική προώθηση",
+      title: "Creative Flyers and Street Marketing",
       description: "Creating creative flyers with salon story and mass distribution in target locations",
       goal: "Reach 5000-10000 people within 1-3 km radius, attract 20-30 new clients",
       expectedResult: "New clients from nearby residential complexes, brand awareness in area",
@@ -1121,7 +1110,7 @@ export const el = {
       ]
     },
     9: {
-      title: "Πωλήσεις προϊόντων",
+      title: "Product Add-on Sales and FMCG",
       description: "Starting cosmetic product sales, creating additional income",
       goal: "Generate additional 10-20% revenue from main income through products",
       expectedResult: "Additional margin, improved client experience",
@@ -1135,7 +1124,7 @@ export const el = {
       ]
     },
     10: {
-      title: "Κοινωνικά δίκτυα και περιεχόμενο",
+      title: "Social Media and Content Marketing",
       description: "Creating organic traffic and community through regular content",
       goal: "Get 500-1000 followers, regular organic inquiries from Instagram/VK/Telegram",
       expectedResult: "Stable client flow from social media, brand awareness",
@@ -1149,7 +1138,7 @@ export const el = {
       ]
     },
     11: {
-      title: "Φήμη και κριτικές",
+      title: "Reputation and Review Management",
       description: "Automating review collection, reputation management, bot integration",
       goal: "Increase review count by 50-100%, maintain 4.5+ rating",
       expectedResult: "Rating growth, improved map positions, attracting clients through social proof",
@@ -1163,7 +1152,7 @@ export const el = {
       ]
     },
     12: {
-      title: "Πιστότητα και διατήρηση πελατών",
+      title: "Loyalty Program and Retention",
       description: "Creating client retention system, referral discounts, regular client program",
       goal: "60%+ client repeat visit, +40% average lifetime value",
       expectedResult: "Stable income from regular clients, 30% revenue growth",
@@ -1177,7 +1166,7 @@ export const el = {
       ]
     },
     13: {
-      title: "Επικοινωνία μέσω email και SMS",
+      title: "Email and SMS Marketing",
       description: "Launching targeted campaigns, audience segmentation, automated scenarios",
       goal: "25-30% open rate, 5-10% click rate, generate additional income through campaigns",
       expectedResult: "New clients from campaigns, repeat visits, additional services",
@@ -1191,7 +1180,7 @@ export const el = {
       ]
     },
     14: {
-      title: "Εταιρικές και ομαδικές υπηρεσίες",
+      title: "Corporate and Group Services",
       description: "Offering services to companies, organizing corporate events, team building events",
       goal: "Get 2-3 regular corporate clients, guaranteed monthly income",
       expectedResult: "Corporate contracts, group bookings, stable income",
@@ -1205,7 +1194,7 @@ export const el = {
       ]
     },
     15: {
-      title: "SEO και τοπικό περιεχόμενο",
+      title: "SEO and Local Content Blog",
       description: "Creating blog, search engine optimization, local SEO to attract organic traffic",
       goal: "Organic traffic from Google, ranking for key queries, authority",
       expectedResult: "10-20 visits/month from search, traffic growing month over month",
@@ -1219,11 +1208,11 @@ export const el = {
       ]
     },
     16: {
-      title: "Συνεχής βελτίωση και ανάλυση",
+      title: "Continuous Improvement, Analysis and Optimization",
       description: "Regular analysis of all metrics, A/B testing, optimizing weak points",
       goal: "+10-15% monthly revenue growth, continuous process improvement",
       expectedResult: "Stable growth of all metrics, loss minimization, profit maximization",
-      duration: "Συνεχώς",
+      duration: "Ongoing",
       tasks: [
         "Set up WEEKLY REPORTS: traffic, new clients, revenue, no-show, average check, margin, master workload",
         "Conduct MONTHLY meetings with team: what worked? What didn't work? What ideas to test?",

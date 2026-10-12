@@ -13,7 +13,10 @@ const renderAbout = (pricingOnly: boolean) => render(
 );
 
 describe("About pricing heading hierarchy", () => {
-  afterEach(() => window.localStorage.clear());
+  afterEach(() => {
+    window.localStorage.clear();
+    window.history.replaceState({}, '', '/');
+  });
 
   it("keeps the About pricing heading subordinate and gives /pricing its page H1", async () => {
     window.localStorage.setItem("language", "en");
@@ -27,5 +30,43 @@ describe("About pricing heading hierarchy", () => {
     await screen.findByRole("button", { name: "Start" });
     expect(pricing.container.querySelector("#pricing h1")?.textContent).toBe("Тарифы LocalOS");
     expect(pricing.container.querySelector("#pricing h2")).toBeNull();
+  });
+
+  it("shows Armenian pricing copy on a shared /pricing language link", async () => {
+    window.localStorage.setItem("language", "ru");
+    window.history.replaceState({}, '', '/pricing?lang=hy');
+    renderAbout(true);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "LocalOS-ի սակագները" })).toBeInTheDocument();
+    expect(screen.getByText('Ընտրեք, թե որ բիզնես խնդիրներում LocalOS-ը պետք է օգնի ձեզ')).toBeInTheDocument();
+    expect(screen.getByText('$15 /ամիս')).toBeInTheDocument();
+    expect(screen.queryByText('Choose the business tasks you want LocalOS to help with')).toBeNull();
+  });
+
+  it("shows Kazakh pricing copy on a shared /pricing language link", async () => {
+    window.localStorage.setItem("language", "ru");
+    window.history.replaceState({}, '', '/pricing?lang=kk');
+    renderAbout(true);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "LocalOS тарифтері" })).toBeInTheDocument();
+    expect(screen.getByText('LocalOS көмектесетін бизнес міндеттерін таңдаңыз')).toBeInTheDocument();
+    expect(screen.getByText('$15 /ай')).toBeInTheDocument();
+    expect(screen.queryByText('Choose the business tasks you want LocalOS to help with')).toBeNull();
+  });
+
+  it("shows a coherent Turkish pricing page on a shared language link", async () => {
+    window.localStorage.setItem("language", "en");
+    window.history.replaceState({}, '', '/pricing?lang=tr');
+    const pricing = renderAbout(true);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "LocalOS Fiyatları" })).toBeInTheDocument();
+    expect(screen.getByText('LocalOS’un işletmenize hangi konularda yardımcı olacağını seçin')).toBeInTheDocument();
+    expect(screen.getByText('Haritalar')).toBeInTheDocument();
+    expect(screen.getByText('Müşteri Kazanımı')).toBeInTheDocument();
+    expect(screen.getByText('Yönetim')).toBeInTheDocument();
+    expect(screen.getByText(/Sohbet üzerinden yönetim her planda kullanılabilir/)).toBeInTheDocument();
+    expect(pricing.container.querySelector('#pricing')?.textContent).not.toMatch(/[А-Яа-яЁё]/);
+    expect(pricing.container.querySelector('#pricing')?.textContent).not.toContain('Everything in Maps');
+    expect(pricing.container.querySelector('#pricing')?.textContent).not.toContain('Choose the business tasks');
   });
 });

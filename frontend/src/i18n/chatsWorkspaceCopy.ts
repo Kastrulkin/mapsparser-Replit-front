@@ -36,7 +36,7 @@ const copy: Record<Language, ChatsWorkspaceCopy> = {
   ha: { tabsLabel: 'Sassan tattaunawa', dialogs: 'Tattaunawa', agentSandbox: 'Gwada wakili', outreachSandbox: 'Gwada saƙonni', agents: 'Wakilai', marketingAgent: 'Abun ciki da talla', bookingAgent: 'Ajiyar kwastomomi', chats: 'Tattaunawa', noChats: 'Babu tattaunawa mai gudana', selectWorkspace: 'Zaɓi tattaunawa ko yanayin gwaji', sandboxTitle: 'Gwajin wakili', sandboxSubtitle: 'Wakilin da aka zaɓa', noAgent: 'Da farko zaɓi wakili', sandboxEmpty: 'Rubuta saƙo don duba amsar kafin kunnawa.', sandboxPlaceholder: 'Rubuta saƙon kwastoma…', user: 'Kwastoma', agent: 'Wakili', agentTyping: 'Wakili yana shirya amsa…', dryRunTitle: 'Ba za a aika wa kwastoma komai ba', dryRunDescription: 'Duba amsar a nan. LocalOS ba zai aika komai ta Telegram, WhatsApp ko imel ba.' },
 
   hy: { tabsLabel: "Զրույցի բաժիններ", dialogs: "Զրույցներ", agentSandbox: "Փորձարկեք գործակալին", outreachSandbox: "Փորձարկման իրազեկում", agents: "Գործակալներ", marketingAgent: "Բովանդակություն և առաջխաղացում", bookingAgent: "Հաճախորդի ամրագրում", chats: "Զրույցներ", noChats: "Ակտիվ խոսակցություններ չկան", selectWorkspace: "Ընտրեք խոսակցության կամ փորձարկման ռեժիմ", sandboxTitle: "Գործակալի թեստ", sandboxSubtitle: "Ընտրված գործակալ", noAgent: "Նախ ընտրեք գործակալ", sandboxEmpty: "Գրեք հաղորդագրություն՝ գործարկելուց առաջ գործակալի պատասխանը ստուգելու համար:", sandboxPlaceholder: "Մուտքագրեք հաճախորդի հաղորդագրություն…", user: "Հաճախորդ", agent: "Գործակալ", agentTyping: "Գործակալը պատասխան է պատրաստում…", dryRunTitle: "Հաճախորդին ոչինչ չի ուղարկվում", dryRunDescription: "Ստուգեք պատասխանն այստեղ: LocalOS-ը ոչինչ չի ուղարկի Telegram-ին, WhatsApp-ին կամ էլփոստին:" },
-};
+  kk: { tabsLabel: "Чат бөлімдері", dialogs: "Диалогтар", agentSandbox: "Агентті тексеру", outreachSandbox: "Ақпараттық бюллетеньді тексеру", agents: "Агенттер", marketingAgent: "Мазмұн және жылжыту", bookingAgent: "Клиентті тіркеу", chats: "Диалогтар", noChats: "Белсенді диалогтар жоқ", selectWorkspace: "Диалогты немесе сынақ режимін таңдаңыз", sandboxTitle: "Агентті тексеру", sandboxSubtitle: "Таңдалған агент", noAgent: "Алдымен агентті таңдаңыз", sandboxEmpty: "Іске қосу алдында агент жауабын тексеру үшін хабарлама жазыңыз.", sandboxPlaceholder: "Тұтынушы хабарын енгізіңіз...", user: "Клиент", agent: "Агент", agentTyping: "Агент жауап дайындап жатыр...", dryRunTitle: "Клиентке жібермей", dryRunDescription: "Жауапты мына жерден тексеруге болады. LocalOS Telegram, WhatsApp немесе электрондық поштаға ештеңе жібермейді." },};
 
 export const getChatsWorkspaceCopy = (language: Language) => copy[language];
 
@@ -44,4 +44,4 @@ export const chatDateLocale: Record<Language, string> = {
   ru: 'ru-RU', en: 'en-US', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR',
 
   hy: 'hy-AM',
-};
+  kk: 'kk-KZ',};

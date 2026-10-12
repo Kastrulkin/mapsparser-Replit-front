@@ -101,6 +101,8 @@ const copy: Record<Language, JourneyActionCopy> = {
     outcomes: { interested: "Հետաքրքրված է", paid: "Պահանջում է վճարում", barter: "Բաց փոխանակման համար", details: "Մանրամասներ են պետք", refused: "Մերժվել է", other: "Այլ" },
     useCases: { reviews_without_reply: "Հավաքեք ակնարկներ առանց պատասխանների", content_drafts: "Պատրաստեք բովանդակության նախագծեր", map_changes: "Ստուգեք ցանկի փոփոխությունները", weekly_summary: "Պատրաստեք շաբաթական ամփոփագիր" },
   },
-};
+  kk: {
+    now: "Енді не істеу керек", due: "Мерзімі", replyOutcomeLabel: "Жауап нәтижесі", saveError: "Әрекет сақталмады", publicationUrl: "Жарияланымға сілтеме", termsOrComment: "Шарттар немесе түсініктеме", reviewDraft: "Жобаңызды қарап шығыңыз және өңдеңіз", publicationDate: "Жарияланған күні", assignTask: "Не зарядтау керек", expectedResult: "Не болуы керек", defaultExpectedResult: "Тестілеуге материалдар дайындалды", runInstructions: "Төмендегі жұмыс кеңістігінде AI қызметкерін орнатып, іске қосыңыз. Содан кейін осы қадамға оралыңыз және «Аяқталған іске қосуды тексеру» түймесін басыңыз.", confirmedResult: "Іске қосу нәтижесі нені растайды", inquiries: "Апелляциялар", sales: "Сатылымдар", views: "Көрулер", copy: "Көшіру", noReplyFollowup: "Жауап жоқ - бақылау", commands, outcomes, useCases,
+  },};
 
 export const journeyActionCopy = (language: Language): JourneyActionCopy => copy[language];

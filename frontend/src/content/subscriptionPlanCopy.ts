@@ -37,6 +37,117 @@ export const subscriptionPlanCopy = (language: string) => language === 'ru' ? {
     ],
   },
   approval: 'Управление через чат доступно на любом тарифе. Доступ к действиям зависит от подписки. Публикации и отправки — после вашего подтверждения.',
+} : language === 'hy' ? {
+  subtitle: 'Ընտրեք, թե որ բիզնես խնդիրներում LocalOS-ը պետք է օգնի ձեզ',
+  starter: {
+    name: 'Քարտեզներ',
+    lead: 'Օգնեք հաճախորդներին գտնել և ընտրել ձեզ քարտեզներում',
+    features: [
+      'Քարտեզների էջերի աուդիտ և բարելավման ծրագիր',
+      'Ծառայություններ, կարծիքներ, լուսանկարներ և համեմատություն մրցակիցների հետ',
+      'Կարծիքների պատասխանների և քարտեզների համար նորությունների նախագծեր',
+      'Ոլորտի նորություններ Telegram ռադարում',
+      'Կայքի այցելություններ և այցելուների գործողություններ',
+    ],
+  },
+  professional: {
+    name: 'Ձեռքբերում',
+    lead: 'Ներգրավեք հաճախորդների տեղական հեղինակների և գործընկերների միջոցով',
+    features: [
+      '«Քարտեզներ» սակագնի բոլոր հնարավորությունները',
+      'Հեղինակների և գործընկերների կատալոգներ, զտիչներ և կարճ ցուցակներ',
+      'Համագործակցության առաջարկներ և անհատականացված հաղորդագրություններ',
+      'Ուղարկում միացված կապուղիներով՝ ձեր հաստատումից հետո',
+      'Պատասխանների, հրապարակումների և համագործակցության արդյունքների հետևում',
+      'Բիզնեսի տեսանելիության ստուգում AI զրույցներում',
+    ],
+  },
+  concierge: {
+    name: 'Կառավարում',
+    lead: 'Հանձնարարեք կրկնվող առաջադրանքները AI-ին և վերահսկեք արդյունքը',
+    features: [
+      '«Ձեռքբերում» սակագնի բոլոր հնարավորությունները',
+      'Բովանդակության պլաններ, նախագծեր և հրապարակումներ միացված սոցիալական ալիքներում',
+      'Ֆինանսական ցուցանիշներ և միջին գնման արժեքի աճ',
+      'AI աշխատակիցներ՝ կրկնվող բիզնես առաջադրանքների համար',
+      'Աշխատանքային զրույցներ և առաջադրանքների պատմություն',
+    ],
+  },
+  approval: 'Չատի միջոցով կառավարումը հասանելի է բոլոր սակագներով։ Գործողությունները կախված են բաժանորդագրությունից։ Հրապարակումներն ու հաղորդագրություններն ուղարկվում են միայն ձեր հաստատումից հետո։',
+} : language === 'kk' ? {
+  subtitle: 'LocalOS көмектесетін бизнес міндеттерін таңдаңыз',
+  starter: {
+    name: 'Карталар',
+    lead: 'Клиенттерге сізді картадан тауып, таңдауға көмектесіңіз',
+    features: [
+      'Картадағы карточкаларды тексеру және жақсарту жоспары',
+      'Қызметтер, пікірлер, фотосуреттер және бәсекелестермен салыстыру',
+      'Пікірлерге жауаптар мен картаға арналған жаңалықтардың жобалары',
+      'Telegram радарындағы сала жаңалықтары',
+      'Сайтқа кірулер мен келушілер әрекеттері',
+    ],
+  },
+  professional: {
+    name: 'Клиент тарту',
+    lead: 'Жергілікті авторлар мен серіктестер арқылы жаңа клиенттер тартыңыз',
+    features: [
+      '«Карталар» тарифінің барлық мүмкіндіктері',
+      'Авторлар мен серіктестер каталогтары, сүзгілер және қысқа тізімдер',
+      'Ынтымақтастық ұсыныстары мен жеке хабарламалар',
+      'Қосылған арналар арқылы тек сіз растағаннан кейін жіберу',
+      'Жауаптарды, жарияланымдарды және ынтымақтастық нәтижелерін қадағалау',
+      'Бизнесіңіздің AI чаттарындағы көрінуін тексеру',
+    ],
+  },
+  concierge: {
+    name: 'Басқару',
+    lead: 'Қайталанатын жұмысты AI-ға тапсырып, нәтижесін қадағалаңыз',
+    features: [
+      '«Клиент тарту» тарифінің барлық мүмкіндіктері',
+      'Контент жоспарлары, жобалар және қосылған әлеуметтік арналардағы жарияланымдар',
+      'Қаржылық көрсеткіштер және орташа чекпен жұмыс',
+      'Қайталанатын бизнес міндеттеріне арналған AI қызметкерлері',
+      'Жұмыс чаттары және орындалған міндеттер тарихы',
+    ],
+  },
+  approval: 'Чат арқылы басқару барлық тарифте бар. Қолжетімді әрекеттер жазылымға байланысты. Жарияланымдар мен хабарламалар тек сіз растағаннан кейін жіберіледі.',
+} : language === 'tr' ? {
+  subtitle: 'LocalOS’un işletmenize hangi konularda yardımcı olacağını seçin',
+  starter: {
+    name: 'Haritalar',
+    lead: 'Müşterilerin sizi haritalarda bulmasına ve seçmesine yardımcı olun',
+    features: [
+      'İşletme profili denetimi ve iyileştirme planı',
+      'Hizmetler, yorumlar, fotoğraflar ve rakip karşılaştırmaları',
+      'Harita profilleri için yorum yanıtı ve haber taslakları',
+      'Telegram Radar ile sektör haberleri',
+      'Web sitesi ziyaretleri ve ziyaretçi işlemleri',
+    ],
+  },
+  professional: {
+    name: 'Müşteri Kazanımı',
+    lead: 'Yerel içerik üreticileri ve iş ortakları aracılığıyla müşterilere ulaşın',
+    features: [
+      'Haritalar planındaki tüm özellikler',
+      'İçerik üreticisi ve iş ortağı katalogları, filtreler ve kısa listeler',
+      'İş birliği teklifleri ve kişiselleştirilmiş mesajlar',
+      'Onayınızdan sonra bağlı kanallar üzerinden gönderim',
+      'Yanıtları, paylaşımları ve iş birliği sonuçlarını takip etme',
+      'İşletmenizin yapay zekâ sohbetlerindeki görünürlüğünü kontrol etme',
+    ],
+  },
+  concierge: {
+    name: 'Yönetim',
+    lead: 'Tekrarlanan işleri yapay zekâya devredin ve sonuçları gözden geçirin',
+    features: [
+      'Müşteri Kazanımı planındaki tüm özellikler',
+      'Bağlı sosyal kanallar için içerik planları, taslaklar ve paylaşımlar',
+      'Finansal göstergeler ve ortalama sepet tutarı',
+      'Tekrarlanan işletme işleri için yapay zekâ çalışanları',
+      'İş sohbetleri ve görev geçmişi',
+    ],
+  },
+  approval: 'Sohbet üzerinden yönetim her planda kullanılabilir. Yapılabilecek işlemler aboneliğinize bağlıdır. Paylaşımlar ve mesajlar yalnızca onayınızdan sonra gönderilir.',
 } : {
   subtitle: 'Choose the business tasks you want LocalOS to help with',
   starter: {

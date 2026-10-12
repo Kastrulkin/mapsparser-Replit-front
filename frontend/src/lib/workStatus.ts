@@ -12,6 +12,7 @@ export const workStatus = (status?: string | null): WorkStatus => {
 };
 const keys: WorkStatus[] = ['not_started','planned','running','decision','blocked','error','completed','unknown'];
 const labels: Record<Language, string[]> = {
+ kk: ['Басталмаған','Жоспарланған','Орындалуда','Шешім қажет','Бұғатталған','Қате','Аяқталды','Күйі белгісіз'],
  ru: ['Не начато','Запланировано','Выполняется','Нужно решение','Заблокировано','Ошибка','Завершено','Статус не уточнён'],
  en: ['Not started','Planned','Running','Needs a decision','Blocked','Error','Completed','Status not specified'],
  fr: ['Non commencé','Planifié','En cours','Décision requise','Bloqué','Erreur','Terminé','Statut non précisé'],
@@ -27,6 +28,7 @@ const labels: Record<Language, string[]> = {
 export const workStatusLabel = (status: string | undefined | null, language: Language) => labels[language][keys.indexOf(workStatus(status))];
 
 const details: Record<Language, string[]> = {
+ kk: ['Жоба дайындалды','Жіберуге мақұлданды','Кезекте','Жіберу расталды','Жеткізу расталды','Жариялау расталды'],
  ru: ['Черновик подготовлен','Одобрено к отправке','В очереди','Отправка подтверждена','Доставка подтверждена','Публикация подтверждена'],
  en: ['Draft prepared','Approved for sending','Queued','Sending confirmed','Delivery confirmed','Publication confirmed'],
  fr: ['Brouillon préparé','Envoi approuvé','En attente','Envoi confirmé','Livraison confirmée','Publication confirmée'],

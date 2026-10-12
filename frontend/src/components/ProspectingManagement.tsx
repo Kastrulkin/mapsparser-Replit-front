@@ -538,6 +538,8 @@ const AUDIT_LANGUAGE_OPTIONS = [
     { value: 'tr', label: 'Türkçe' },
     { value: 'ar', label: 'العربية' },
     { value: 'ha', label: 'Hausa' },
+    { value: 'hy', label: 'Հայերեն' },
+    { value: 'kk', label: 'Қазақша' },
 ];
 
 const formatLanguageLabel = (language: string) => {
