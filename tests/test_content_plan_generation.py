@@ -608,7 +608,15 @@ def test_content_plan_skeleton_uses_event_center_template_for_katok():
     assert any("афиша" in item["goal"].lower() or "событ" in item["goal"].lower() for item in plan["items"])
 
 
-def test_content_plan_skeleton_uses_future_katok_events_and_skips_past_event_services():
+def test_content_plan_skeleton_uses_future_katok_events_and_skips_past_event_services(monkeypatch):
+    # Event names have no year. Freeze this July fixture instead of letting
+    # the calendar date turn its future events into past events in October.
+    class FixtureDate(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 7, 12)
+
+    monkeypatch.setattr('src.core.content_plan_generator.date', FixtureDate)
     plan = build_content_plan_skeleton(
         {
             "business": {
