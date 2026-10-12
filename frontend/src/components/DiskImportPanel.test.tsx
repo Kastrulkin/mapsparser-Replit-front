@@ -7,6 +7,16 @@ import { ExternalDriveVideos } from './ExternalDriveVideos';
 import { GoogleDriveReaderSettings } from './GoogleDriveReaderSettings';
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const source = { id: 's', provider: 'google', root_name: 'Работы', root_url: 'https://drive.google.com/drive/folders/f', version: 2, state: 'ready', counts: [] };
+it('lets an owner prepare a public Yandex folder without an OAuth connection or a send', async () => {
+  const fetcher = vi.fn((_url: RequestInfo | URL, options?: RequestInit) => Promise.resolve(new Response(JSON.stringify(options?.method === 'POST' ? {} : { enabled: true, can_configure: true, sources: [] }))));
+  vi.stubGlobal('fetch', fetcher);
+  render(<DiskImportPanel businessId="b" />);
+  await userEvent.type(await screen.findByLabelText('Ссылка на папку Яндекс Диска'), 'https://disk.360.yandex.ru/d/example');
+  await userEvent.click(screen.getByRole('button', { name: 'Подготовить папку' }));
+  const call = fetcher.mock.calls.find(candidate => candidate[1]?.method === 'POST');
+  expect(JSON.parse(String(call?.[1]?.body))).toEqual({ business_id: 'b', provider: 'yandex', folder_url: 'https://disk.360.yandex.ru/d/example' });
+  expect(fetcher.mock.calls.every(candidate => !String(candidate[0]).includes('/publish') && !String(candidate[0]).includes('/send'))).toBe(true);
+});
 it('stays hidden when the backend route is not deployed yet', async () => {
   vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify({ error: 'Not Found' }), { status: 404 }))));
   render(<DiskImportPanel businessId="b" />);

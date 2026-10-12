@@ -1,4 +1,5 @@
 import { businessResultHref } from '@/components/operator/businessResultHref';
+import { OperatorPhotoGallery, OperatorPhoto } from '@/components/operator/OperatorPhotoGallery';
 import { OperatorRequestHistory } from '@/components/operator/OperatorRequestHistory';
 import { OperatorSpeech, OperatorVoiceInput, VoiceSubmission } from '@/components/operator/OperatorVoice';
 import { voiceHeaders, waitForOperatorResult } from '@/components/operator/OperatorVoice.logic';
@@ -38,6 +39,7 @@ type DashboardContext = {
 };
 
 type OperatorChatResult = {
+  photos?: OperatorPhoto[];
   message_id?: string;
   input_type?: string;
   status: 'completed' | 'blocked' | 'unsupported' | string;
@@ -689,6 +691,7 @@ export const OperatorPage = () => {
                   {message.role === 'operator' && currentBusinessId && <OperatorSpeech key={`${currentBusinessId}:${message.id}`} businessId={currentBusinessId} messageId={message.result?.message_id || message.id} prepare={message.result?.input_type === 'voice'} />}
                   {message.role === 'operator' && message.result ? (
                     <OperatorResultActions
+                      businessId={currentBusinessId || undefined}
                       result={message.result}
                       copiedKey={copiedKey}
                       loading={{
@@ -762,6 +765,7 @@ export const OperatorPage = () => {
 };
 
 type OperatorResultActionsProps = {
+  businessId?: string;
   result: OperatorChatResult | RefreshResult;
   copiedKey: string | null;
   loading: {
@@ -784,6 +788,7 @@ type OperatorResultActionsProps = {
 };
 
 const OperatorResultActions = ({
+  businessId,
   result,
   copiedKey,
   loading,
@@ -827,6 +832,7 @@ const OperatorResultActions = ({
 
   return (
     <div className="mt-3 space-y-3">
+      {'photos' in result && result.photos && result.photos.length > 0 && <OperatorPhotoGallery photos={result.photos} />}
       <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
         <span
           className={cn(

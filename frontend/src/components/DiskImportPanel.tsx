@@ -56,7 +56,11 @@ export function DiskImportPanel({ businessId, onImported }: { businessId: string
         <p className="text-sm">Откройте доступ «Читатель» к одной папке для адреса ниже. Остальные папки подключать не требуется.</p>
         <Input aria-label="Адрес LocalOS для доступа к папке" readOnly value={data.google?.client_email || 'Служебный аккаунт ещё не настроен администратором LocalOS'} />
         <label className="block">Ссылка на папку Google Диска<Input value={folder} onChange={event => setFolder(event.target.value)} disabled={busy} /></label>
-      </> : <p className="text-sm">Сначала подключите Яндекс Диск в Операторе. Затем создадим отдельную входящую папку этого бизнеса.</p>}
+      </> : <>
+        <p className="text-sm">Укажите ссылку на общедоступную папку с фото этого бизнеса. LocalOS только читает материалы: публикаций и отправок не будет.</p>
+        <label className="block">Ссылка на папку Яндекс Диска<Input value={folder} onChange={event => setFolder(event.target.value)} disabled={busy} placeholder="https://disk.360.yandex.ru/d/…" /></label>
+        <p className="text-sm text-muted-foreground">Если Яндекс Диск уже подключён в Операторе, можно оставить ссылку пустой: создадим отдельную входящую папку бизнеса.</p>
+      </>}
       <Button disabled={busy || (provider === 'google' && (!data.google?.configured || !folder))} onClick={() => void perform('/prepare', { provider, folder_url: folder })}>Подготовить папку</Button>
     </div></details>}
     {sources.map(source => <div key={source.id} className="space-y-2 border-t pt-3">
