@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Button } from './button';
 import { buttonVariants } from './button.logic';
+import css from '@/index.css?raw';
 
 describe('LocalOS button hierarchy', () => {
   it('uses black for the default product action', () => {
@@ -25,5 +26,14 @@ describe('LocalOS button hierarchy', () => {
 
   it('keeps secondary actions neutral', () => {
     expect(buttonVariants({ variant: 'outline' })).not.toMatch(/(?:blue|indigo|violet|purple)-/);
+  });
+
+  it('keeps hover and dark-mode product accents black instead of legacy rust', () => {
+    const accents = [...css.matchAll(/--accent:\s*([^;]+);/g)].map(match => match[1]);
+    const primary = [...css.matchAll(/--primary:\s*([^;]+);/g)].map(match => match[1]);
+    expect(accents).toEqual(['222 47% 6%', '222 47% 6%']);
+    expect(primary).toEqual(['222 47% 6%', '222 47% 6%']);
+    expect(buttonVariants({ variant: 'outline' })).toContain('hover:bg-accent');
+    expect(buttonVariants({ variant: 'ghost' })).toContain('hover:bg-accent');
   });
 });
