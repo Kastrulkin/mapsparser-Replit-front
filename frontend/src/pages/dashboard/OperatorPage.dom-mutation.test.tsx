@@ -42,6 +42,7 @@ const deferredResponse = <T,>() => {
 describe('OperatorPage DOM ownership', () => {
   it('explains read-only demo chat and never submits a new assignment', async () => {
     vi.mocked(api.post).mockClear();
+    window.localStorage.setItem('localos_operator_conversation_demo-business', 'old-private-conversation');
     vi.mocked(api.get).mockResolvedValue({ data: { messages: [], conversation: null } });
     const DemoContext = () => <Outlet context={{currentBusinessId:'demo-business', currentBusiness:{id:'demo-business',name:'Demo'}, user:{demo_mode:true}}} />;
     render(<MemoryRouter initialEntries={['/dashboard/operator']}><LanguageProvider><Routes>
@@ -54,6 +55,9 @@ describe('OperatorPage DOM ownership', () => {
     fireEvent.change(input, {target:{value:'Подготовь новость'}});
     fireEvent.keyDown(input, {key:'Enter'});
     await waitFor(() => expect(api.get).toHaveBeenCalled());
+    expect(api.get).toHaveBeenCalledWith('/operator/conversations/current', expect.objectContaining({ params: expect.objectContaining({business_id: 'demo-business'}) }));
+    expect(vi.mocked(api.get).mock.calls.some(([path]) => path.includes('old-private-conversation'))).toBe(false);
+    expect(window.localStorage.getItem('localos_operator_conversation_demo-business')).toBe('old-private-conversation');
     expect(api.post).not.toHaveBeenCalled();
   });
 

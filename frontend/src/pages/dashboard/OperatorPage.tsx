@@ -313,7 +313,7 @@ export const OperatorPage = () => {
     setMessages([]); setConversationId(null);
     chatSendInFlightRef.current = false; setChatLoading(false); setConfirmingActionId(null); setRejectingActionId(null);
     const storageKey = `localos_operator_conversation_${currentBusinessId}`;
-    const storedConversationId = window.localStorage.getItem(storageKey);
+    const storedConversationId = demoMode ? null : window.localStorage.getItem(storageKey);
     let cancelled = false;
     const version = ++historyVersion.current;
     setHistoryLoading(true);
@@ -331,7 +331,7 @@ export const OperatorPage = () => {
       const loadedConversationId = storedConversationId || response.data.conversation?.id || null;
       setConversationId(loadedConversationId);
       setMessages(mapStoredMessages(storedMessages));
-      if (loadedConversationId) window.localStorage.setItem(storageKey, loadedConversationId);
+      if (loadedConversationId && !demoMode) window.localStorage.setItem(storageKey, loadedConversationId);
     }).catch((error: unknown) => {
       if (cancelled) return;
       const status = (
@@ -364,7 +364,7 @@ export const OperatorPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [currentBusinessId, historyRetry]);
+  }, [currentBusinessId, demoMode, historyRetry]);
 
   const appendPair = (userText: string, result: OperatorChatResult) => {
     const stamp = String(Date.now());
