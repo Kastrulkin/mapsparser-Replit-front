@@ -65,7 +65,7 @@ export function demoWalkthroughCopy(language: Language) {
   assistant: 'LocalOS',
   reviewTitle: ru ? 'Проверка учебных черновиков' : 'Review sample drafts',
   approve: ru ? 'Подтвердить проверку в демо' : 'Confirm review in demo',
-  approveNote: ru ? 'Это учебное решение. Ответы не публикуются.' : 'This is a sample decision. Replies are not published.',
+  approveNote: ru ? 'Это учебное решение. Материалы не публикуются.' : 'This is a sample decision. Materials are not published.',
   reviewed: ru ? 'Проверено владельцем · только в этой вкладке' : 'Reviewed by owner · in this tab only',
   preparedEvent: ru ? 'Подготовлены черновики · подтверждение не получено' : 'Drafts prepared · not approved',
   reviewTexts: ru ? ['Спасибо за отзыв! Рады, что питомцу было комфортно во время груминга.', 'Спасибо за замечание о времени ожидания. Проверим организацию записи.', 'Благодарим за доверие. Перед следующим визитом обсудим особенности ухода.', 'Спасибо за обратную связь. Свяжитесь с салоном, чтобы обсудить ваш вопрос.'] : ['Thank you! We are glad your pet felt comfortable during grooming.', 'Thank you for feedback about waiting. We will review booking.', 'Thank you for your trust. We can discuss care needs before the next visit.', 'Thank you for the feedback. Please contact the salon to discuss your question.'],

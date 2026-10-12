@@ -219,6 +219,10 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   }, [locateTarget, location.pathname, location.search, navigate]);
 
   const emphasizeCurrentTarget = () => {
+    if (`${location.pathname}${location.search}` !== currentStep.route) {
+      showStep(currentStep);
+      return;
+    }
     setTargetEmphasisKey((value) => value + 1);
     const targetLocated = locateTarget(currentStep, true);
     if (!targetLocated) {
