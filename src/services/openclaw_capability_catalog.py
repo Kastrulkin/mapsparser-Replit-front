@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import json
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 from typing import Any, Callable, Dict, List
@@ -193,6 +195,15 @@ def _normalize_catalog(raw_catalog: Any) -> List[Dict[str, Any]]:
 
 def _configured_openclaw_catalog_fetcher() -> OpenClawCatalogFetcher | None:
     url = str(os.getenv("OPENCLAW_CAPABILITY_CATALOG_URL") or "").strip()
+    if not url:
+        config_path = Path(os.getenv('LOCALOS_WEB_READ_CONFIG', '/app/debug_data/openclaw-web-read.json'))
+        if config_path.is_file():
+            try:
+                config = json.loads(config_path.read_text())
+                if config.get('enabled') is True:
+                    url = str(config.get('catalog_url') or '').strip()
+            except (OSError, ValueError, TypeError):
+                pass
     if not url:
         base_url = str(os.getenv("OPENCLAW_BASE_URL") or "").strip().rstrip("/")
         if base_url:
