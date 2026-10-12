@@ -6,6 +6,10 @@ This is the design operating model for LocalOS product UI. It sits above individ
 
 Use it before editing dashboard, cockpit, builder, form, approval, run history, or agent-management screens.
 
+## Automation Display Names
+
+Use «Автоматизация» in navigation and «Автоматизация работы» as the workspace title. The primary setup action is «Настроить задачу». Describe recurring work through concrete actions, such as checking new reviews, preparing news drafts and collecting a summary. Existing `/dashboard/agents` routes, identifiers and internal agent architecture remain compatible. User-facing task naming takes precedence over the employee metaphor below.
+
 ## Today And Direct Work Navigation
 
 `/dashboard` is always Today. Keep stable direct entries for content,
@@ -30,6 +34,35 @@ nontechnical data-source editor. Draft approval never claims that a message was
 sent; changed text or contact requires a refreshed review.
 
 ## Product Surfaces Before Brand Surfaces
+
+### Permanent Business Knowledge
+
+The owner or appointed manager maintains permanent facts at
+`/dashboard/profile?section=knowledge`, inside Business and team. Use three tabs:
+characteristics, rules and features, documents. Start with Add information and
+preview suggested fields before installing them. Custom fields keep stable IDs;
+unknown, zero and not applicable are distinct values.
+
+Business knowledge owns current characteristics, instructions and private
+documents. The Work journal owns observations, temporary restrictions and team
+decisions. Today owns current tasks; Results owns completed work and evidence.
+Updating a reference field never counts as business growth or a completed task.
+Existing profile, service prices, staff and financial resources retain their
+original editing screens. Capacity does not prove availability of a person or
+time and never creates resource records automatically.
+
+Show source, author, freshness and history in a second layer. Only the owner
+changes structure and editor rights; team and management audiences are enforced
+on the server, including assistant context. Documents require text review and
+explicit confirmation before use. Changes from observations or chat reuse the
+existing durable approval with a before/after comparison. Changed reference
+facts require renewed review of linked prepared work; they never replace an
+already approved execution program silently.
+
+Scope is business or network plus ID. Network physical capacity is entered per
+location; sums show coverage and only additive compatible measurements. Clear
+selection on a manual scope change and discard late requests. Transient refresh
+failures retain current facts; loss of access clears private content.
 
 LocalOS has two different surface types:
 
@@ -262,3 +295,37 @@ Use these labels only as secondary navigation inside the employee model:
 - `Настройки`
 
 Advanced/debug surfaces must be gated or visually secondary.
+
+## Coherent Work Across Web And Telegram
+
+The canonical Web/Mini App menu is defined in
+`frontend/src/lib/workNavigation.ts`. Order is fixed: Today and chat; six work
+areas (maps/reviews, content, partnerships, creators, average ticket, AI
+employees); results and finance; business/team, settings/connections, More.
+Mobile quick entries are Today, Chat, Results, Menu. Chat and workspaces are
+peers operating on existing work. A focus preference never changes menu order.
+
+More contains optional Growth Paths, work journal, customer messages, radar and
+feature-gated website analytics. Growth Paths explains the six work areas and
+lets users explicitly choose a focus. It is not a prerequisite for work.
+`/dashboard/promotion` is a compatibility discovery route; its partnership
+subroute redirects to `/dashboard/partnerships`, preserving query and fragment.
+
+Every work summary retains its business, source type/id, source status, deadline
+and evidence link. Approval for sending is not sending; queued work is not
+executing; a draft is not a publication; an observation is not a result. Unknown
+states have a neutral label. Deduplicate by business + source type + source id.
+Do not introduce a parallel task table or infer evidence from cumulative counts.
+
+Deep links select an authorized business before loading records. Network
+summaries retain each location's identity. Explicit links can select the parent
+as one business without turning the selected record into a network result.
+A workspace clears private state on context changes/access loss; temporary
+refresh failures retain that context's data with retry. Chat/workspace navigation
+never creates work, confirms actions or starts execution.
+
+`return_to` accepts only internal allowed LocalOS work routes. Settings and
+checkout expose an explicit return to the originating work. Customer messages
+contain real conversations; employee tests live under AI employees and outreach
+tests under partnerships. Evidence and known limitations belong in the release
+UX audit; human usability research must be recorded separately from test results.

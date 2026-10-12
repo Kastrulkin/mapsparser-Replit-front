@@ -7,8 +7,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from core.action_orchestrator import ActionOrchestrator
 from core.action_policy import evaluate_risk_policy
-from core.capability_names import normalize_capability_name
-from services.agent_capability_handlers import CANONICAL_CAPABILITIES, build_capability_handlers
+from services.agent_capability_handlers import CANONICAL_CAPABILITIES, build_capability_handlers, normalize_capability_name
 from services.agent_run_billing import finalize_agent_run_credits
 from services.agent_domain_request_executors import execute_approved_domain_requests
 from services.agent_blueprint_workspace import (
@@ -26,6 +25,7 @@ from services.compiled_script_runtime import CompiledRuntimeUnavailable, execute
 
 
 RUNNING_STATUSES = {"running", "waiting_approval"}
+DANGEROUS_CAPABILITY_WORDS = ("send", "publish", "payment", "delete", "destructive", "mass")
 SHORTLIST_APPROVED = "shortlist_approved"
 SELECTED_FOR_OUTREACH = "selected_for_outreach"
 CHANNEL_SELECTED = "channel_selected"
@@ -272,6 +272,16 @@ class AgentBlueprintRunner:
             return {"success": False, "error": "approval_not_found"}
         if approval.get("status") != "pending":
             return {"success": False, "error": "approval_already_decided"}
+        from services.business_knowledge import installed,changed_sources
+        if installed(self.cursor):
+            knowledge_run=self._load_run_header(run_id)
+            self.cursor.execute('SELECT payload_json FROM agent_artifacts WHERE run_id=%s',(run_id,))
+            for raw in self.cursor.fetchall():
+                artifact=raw.get('payload_json') if isinstance(raw,dict) else raw[0]
+                artifact=parse_json_field(artifact,{})
+                sources=artifact.get('business_knowledge_sources') or []
+                if sources and changed_sources(self.cursor,str(knowledge_run.get('business_id') or ''),str(user_data.get('user_id') or user_data.get('id') or ''),sources):
+                    return {'success':False,'error':'business_knowledge_changed','message':'Сведения, использованные при подготовке, изменились. Подготовьте результат заново перед подтверждением.'}
         approval_type = str(approval.get("approval_type") or "").strip()
         reviewed_drafts = None
         if approval_type == "drafts":
@@ -3623,6 +3633,15 @@ class AgentBlueprintRunner:
             (SELECTED_FOR_OUTREACH, PIPELINE_IN_PROGRESS, user_id or None, str(run.get("business_id") or ""), lead_ids),
         )
 
+    def _approved_draft_snapshot(self, run: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
+        self.cursor.execute(
+            "SELECT * FROM agent_approvals WHERE run_id = %s AND approval_type = 'drafts' AND status = 'approved' ORDER BY decided_at DESC, id DESC LIMIT 1",
+            (run.get("id"),),
+        )
+        approval = self.cursor.fetchone()
+        return self._validated_draft_snapshot(run, dict(approval)) if approval else None
+
+
     def _validated_draft_snapshot(self, run: Dict[str, Any], approval: Dict[str, Any], *, for_update: bool = False) -> Optional[List[Dict[str, Any]]]:
         payload = parse_json_field(approval.get("payload_json"), {})
         business_id = str(run.get("business_id") or "")
@@ -3652,13 +3671,6 @@ class AgentBlueprintRunner:
                 return None
         return items
 
-    def _approved_draft_snapshot(self, run: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
-        self.cursor.execute(
-            "SELECT * FROM agent_approvals WHERE run_id = %s AND approval_type = 'drafts' AND status = 'approved' ORDER BY decided_at DESC, id DESC LIMIT 1",
-            (run.get("id"),),
-        )
-        approval = self.cursor.fetchone()
-        return self._validated_draft_snapshot(run, dict(approval)) if approval else None
 
     def _apply_drafts_approval(self, run_id: str, user_id: str, reviewed_drafts: List[Dict[str, Any]]) -> None:
         run = self._load_run_header(run_id)

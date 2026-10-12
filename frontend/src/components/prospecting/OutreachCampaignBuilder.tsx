@@ -1,34 +1,37 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-	AlertTriangle,
-	CheckCircle2,
-	Copy,
-	ExternalLink,
-	Pause,
-	Play,
-	RefreshCw,
-	ShieldCheck,
-	Sparkles,
-	XCircle,
+  AlertTriangle,
+  CheckCircle2,
+  Copy,
+  ExternalLink,
+  Pause,
+  Play,
+  RefreshCw,
+  ShieldCheck,
+  Sparkles,
+  XCircle,
 } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { format } from 'date-fns';
 
-import { OutreachDateTimePicker } from '@/components/prospecting/OutreachDateTimePicker';
-import { OutreachScheduleCalendar } from '@/components/prospecting/OutreachScheduleCalendar';
-import { buildProjectedOutreachTouches, defaultOutreachStartValue, outreachStartIso } from '@/components/prospecting/OutreachScheduleCalendar.logic';
-import {
-	OutreachTouchMessageEditor,
-} from '@/components/prospecting/OutreachTouchMessageEditor';
-import {
-	OutreachTouchMessageDraft,
-	outreachTouchMessageDraft,
-	outreachTouchMessageText,
-} from '@/components/prospecting/outreachTouchMessage';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { newAuth } from '@/lib/auth_new';
+import {
+  buildProjectedOutreachTouches,
+  defaultOutreachStartValue,
+  OutreachScheduleCalendar,
+  outreachStartIso,
+} from '@/components/prospecting/OutreachScheduleCalendar';
+import {
+  OutreachTouchMessageEditor,
+} from '@/components/prospecting/OutreachTouchMessageEditor';
+import { OutreachDateTimePicker } from '@/components/prospecting/OutreachDateTimePicker';
+import {
+  OutreachTouchMessageDraft,
+  outreachTouchMessageDraft,
+  outreachTouchMessageText,
+} from '@/components/prospecting/outreachTouchMessage';
 
 type ChannelStatus =
   | 'ready'
@@ -95,20 +98,10 @@ type TouchPreview = {
   language_support?: LanguageSupport;
   pain_support?: LanguageSupport;
   relevance_bridge?: string | null;
-  template_key?: string | null;
-  template_version?: number | null;
-  template_label?: string | null;
-  template_selection?: {
-    status?: string;
-    key?: string | null;
-    version?: number | null;
-    label?: string | null;
-  };
   quality_gate?: QualityGate;
   status?: string;
   generated_text?: string;
   approved_text?: string | null;
-  recipient?: string | null;
   scheduled_at?: string | null;
 };
 
@@ -131,9 +124,6 @@ type CampaignTouch = TouchPreview & {
     language_support?: LanguageSupport;
     pain_support?: LanguageSupport;
     relevance_bridge?: string | null;
-    template_key?: string | null;
-    template_version?: number | null;
-    template_label?: string | null;
   };
 };
 
@@ -301,16 +291,7 @@ const formatDate = (value?: string) => {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString('ru-RU');
 };
 
-export function OutreachCampaignBuilder(props: OutreachCampaignBuilderProps) {
-  const scopeKey = JSON.stringify([
-    props.workstreamId ?? null,
-    props.businessId ?? null,
-    props.leadSegment ?? null,
-  ]);
-  return <ScopedOutreachCampaignBuilder key={scopeKey} {...props} />;
-}
-
-function ScopedOutreachCampaignBuilder({
+export function OutreachCampaignBuilder({
   workstreamId,
   businessId,
   leadSegment,
@@ -335,23 +316,8 @@ function ScopedOutreachCampaignBuilder({
   const [editingTouchIndex, setEditingTouchIndex] = useState<number | null>(null);
   const [touchEditsValidated, setTouchEditsValidated] = useState(false);
   const hasTouchEdits = Object.values(touchEdits).some((draft) => draft.humanEdited);
-  const hasUnsavedReview = Boolean(preview) || scheduleDirty || hasTouchEdits;
-
-  const requestScope = useRef({ active: false });
-  useLayoutEffect(() => {
-    // A distinct lifetime also rejects requests from StrictMode's first setup.
-    const scope = { active: true };
-    requestScope.current = scope;
-    return () => { scope.active = false; };
-  }, []);
-  const captureScope = useCallback(() => {
-    const scope = requestScope.current;
-    return () => scope.active && requestScope.current === scope;
-  }, []);
 
   const loadCampaigns = useCallback(async () => {
-    const isCurrentScope = captureScope();
-    if (!isCurrentScope()) return;
     if (!workstreamId) {
       setCampaigns([]);
       setSelectedCampaignId('');
@@ -359,7 +325,6 @@ function ScopedOutreachCampaignBuilder({
     }
     try {
       const payload = await newAuth.makeRequest(`/outreach/workstreams/${encodeURIComponent(workstreamId)}/campaigns`);
-      if (!isCurrentScope()) return;
       const nextCampaigns: Campaign[] = (Array.isArray(payload?.campaigns) ? payload.campaigns : [])
         .map((campaign: Campaign) => ({
           ...campaign,
@@ -373,9 +338,6 @@ function ScopedOutreachCampaignBuilder({
             observation: touch.observation || touch.message_brief_json?.observation || null,
             problem_hypothesis: touch.problem_hypothesis || touch.message_brief_json?.problem_hypothesis || null,
             relevance_bridge: touch.relevance_bridge || touch.message_brief_json?.relevance_bridge || null,
-            template_key: touch.template_key || touch.message_brief_json?.template_key || null,
-            template_version: touch.template_version || touch.message_brief_json?.template_version || null,
-            template_label: touch.template_selection?.label || touch.message_brief_json?.template_label || null,
           })),
         }));
       setCampaigns(nextCampaigns);
@@ -384,16 +346,12 @@ function ScopedOutreachCampaignBuilder({
           ? current
           : String(nextCampaigns[0]?.id || '')
       ));
-      return nextCampaigns;
     } catch (requestError) {
-      if (!isCurrentScope()) return;
       setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить кампании');
     }
-  }, [captureScope, workstreamId]);
+  }, [workstreamId]);
 
   const loadRecommendations = useCallback(async () => {
-    const isCurrentScope = captureScope();
-    if (!isCurrentScope()) return;
     if (!businessId) {
       setRecommendations([]);
       return;
@@ -404,7 +362,6 @@ function ScopedOutreachCampaignBuilder({
         business_id: businessId,
       });
       const payload = await newAuth.makeRequest(`/outreach/learning/strategy-stats?${query.toString()}`);
-      if (!isCurrentScope()) return;
       const items = Array.isArray(payload?.stats) ? payload.stats : [];
       const currentTokens = new Set((String(leadSegment || '').toLowerCase().match(/[a-zа-яё0-9]+/g) || []).filter((token) => token.length >= 4).map((token) => token.slice(0, 6)));
       setRecommendations(items.filter((item: StrategyRecommendation) => {
@@ -413,10 +370,9 @@ function ScopedOutreachCampaignBuilder({
         return currentTokens.size === 0 || learnedTokens.length === 0 || learnedTokens.some((token) => currentTokens.has(token));
       }));
     } catch {
-      if (!isCurrentScope()) return;
       setRecommendations([]);
     }
-  }, [captureScope, businessId, leadSegment]);
+  }, [businessId, leadSegment]);
 
   useEffect(() => {
     setChannels(DEFAULT_CHANNELS);
@@ -440,44 +396,6 @@ function ScopedOutreachCampaignBuilder({
     () => campaigns.find((item) => item.id === selectedCampaignId) || campaigns[0] || null,
     [campaigns, selectedCampaignId],
   );
-
-  const showSavedCampaign = (campaign: Campaign) => {
-    const touches = campaign.touches || [];
-    setSelectedCampaignId(campaign.id);
-    setPreview(null);
-    setScheduleDirty(false);
-    setTouchEdits({});
-    setEditingTouchIndex(null);
-    setTouchEditsValidated(false);
-    setPilotReadiness(null);
-    setChannels(ANGLES.map((_, index) => touches.find((touch) => touch.sequence_index === index)?.channel || DEFAULT_CHANNELS[index]));
-    setDays(ANGLES.map((_, index) => touches.find((touch) => touch.sequence_index === index)?.day_offset ?? DEFAULT_DAYS[index]));
-    const senders: Record<number, string> = {};
-    for (const touch of touches) {
-      if (touch.sender_account_id) senders[touch.sequence_index] = touch.sender_account_id;
-    }
-    setSenderSelections(senders);
-    const firstScheduledAt = touches.find((touch) => touch.sequence_index === 0)?.scheduled_at;
-    const start = firstScheduledAt ? new Date(firstScheduledAt) : null;
-    setStartAt(start && !Number.isNaN(start.getTime())
-      ? format(start, "yyyy-MM-dd'T'HH:mm")
-      : defaultOutreachStartValue());
-  };
-
-  const loadSavedReview = async (campaignId: string) => {
-    const isCurrentScope = captureScope();
-    if (!isCurrentScope()) return false;
-    setScheduleDirty(true);
-    const nextCampaigns = await loadCampaigns();
-    if (!isCurrentScope()) return false;
-    const savedCampaign = nextCampaigns?.find((campaign) => campaign.id === campaignId);
-    if (!savedCampaign) {
-      setError('Версия сохранена, но не загружена для проверки. Обновите карточку перед утверждением или отправкой.');
-      return false;
-    }
-    showSavedCampaign(savedCampaign);
-    return true;
-  };
 
   const projectedScheduleTouches = useMemo(() => {
     const sourceTouches = preview?.touches || (scheduleDirty ? [] : selectedCampaign?.touches || []);
@@ -536,8 +454,6 @@ function ScopedOutreachCampaignBuilder({
 
   const prepare = async (save: boolean) => {
     if (!workstreamId) return;
-    const isCurrentScope = captureScope();
-    if (!isCurrentScope()) return;
     const scheduleStart = outreachStartIso(startAt);
     if (!scheduleStart) {
       setError('Выберите корректные дату и время первого касания.');
@@ -546,7 +462,6 @@ function ScopedOutreachCampaignBuilder({
     setBusy(save ? 'save' : 'preview');
     setError('');
     setNotice('');
-    setPilotReadiness(null);
     try {
       const payload = await newAuth.makeRequest(`/outreach/workstreams/${encodeURIComponent(workstreamId)}/preview`, {
         method: 'POST',
@@ -557,72 +472,61 @@ function ScopedOutreachCampaignBuilder({
           save,
         }),
       });
-      if (!isCurrentScope()) return;
       setPreview(payload?.preview || null);
       setTouchEditsValidated(hasTouchEdits);
       if (payload?.campaign) {
-        const reviewed = await loadSavedReview(String(payload.campaign.id || ''));
-        if (!isCurrentScope()) return;
-        if (reviewed) setNotice('Тексты, каналы и расписание сохранены. Проверьте сохранённую версию. Ничего не отправлено.');
+        setScheduleDirty(false);
+        setTouchEdits({});
+        setEditingTouchIndex(null);
+        setTouchEditsValidated(false);
+        setNotice('Тексты, каналы и расписание сохранены. Ничего не отправлено.');
+        await loadCampaigns();
+        setSelectedCampaignId(String(payload.campaign.id || ''));
       }
     } catch (requestError) {
-      if (!isCurrentScope()) return;
       setError(requestError instanceof Error ? requestError.message : 'Не удалось подготовить цепочку');
     } finally {
-      if (isCurrentScope()) setBusy('');
+      setBusy('');
     }
   };
 
   const approve = async () => {
-    if (!selectedCampaign?.id || !campaignReadyForApproval || busy) return;
-    const isCurrentScope = captureScope();
-    if (!isCurrentScope()) return;
+    if (!selectedCampaign?.id) return;
     setBusy('approve');
     setError('');
     setNotice('');
     setPilotReadiness(null);
     try {
       await newAuth.makeRequest(`/outreach/campaigns/${encodeURIComponent(selectedCampaign.id)}/approve`, { method: 'POST' });
-      if (!isCurrentScope()) return;
       setNotice('Цепочка подтверждена. Перед каждым касанием LocalOS повторит все safety-проверки.');
       await loadCampaigns();
-      if (!isCurrentScope()) return;
       onChanged?.();
     } catch (requestError) {
-      if (!isCurrentScope()) return;
       setError(requestError instanceof Error ? requestError.message : 'Не удалось подтвердить цепочку');
     } finally {
-      if (isCurrentScope()) setBusy('');
+      setBusy('');
     }
   };
 
   const changeCampaign = async (action: 'pause' | 'resume' | 'cancel') => {
     if (!selectedCampaign?.id) return;
-    if (action === 'resume' && hasUnsavedReview) return;
-    const isCurrentScope = captureScope();
-    if (!isCurrentScope()) return;
     if (action === 'cancel' && !window.confirm('Отменить кампанию? Будущие касания не будут отправлены.')) return;
     setBusy(action);
     setError('');
     try {
       await newAuth.makeRequest(`/outreach/campaigns/${encodeURIComponent(selectedCampaign.id)}/${action}`, { method: 'POST' });
-      if (!isCurrentScope()) return;
       setNotice(action === 'pause' ? 'Кампания на паузе.' : action === 'resume' ? 'Камания возобновлена после повторного preflight.' : 'Камания отменена.');
       await loadCampaigns();
-      if (!isCurrentScope()) return;
       onChanged?.();
     } catch (requestError) {
-      if (!isCurrentScope()) return;
       setError(requestError instanceof Error ? requestError.message : 'Действие не выполнено');
     } finally {
-      if (isCurrentScope()) setBusy('');
+      setBusy('');
     }
   };
 
   const applyRecommendation = async (recommendation: StrategyRecommendation) => {
     if (!workstreamId) return;
-    const isCurrentScope = captureScope();
-    if (!isCurrentScope()) return;
     setBusy('apply-learning');
     setError('');
     setNotice('');
@@ -631,25 +535,20 @@ function ScopedOutreachCampaignBuilder({
         method: 'POST',
         body: JSON.stringify({ strategy_fingerprint: recommendation.strategy_fingerprint }),
       });
-      if (!isCurrentScope()) return;
       setPreview(payload?.preview || null);
-      const reviewed = await loadSavedReview(String(payload?.campaign?.id || ''));
-      if (!isCurrentScope()) return;
-      if (!reviewed) return;
-      setNotice(`Связка применена к фактам этого лида. Проверьте сохранённую версию ${payload?.campaign?.version || ''}; approval не перенесён.`);
+      setNotice(`Связка применена к фактам этого лида. Создана новая draft-версия ${payload?.campaign?.version || ''}; approval не перенесён.`);
+      await loadCampaigns();
+      setSelectedCampaignId(String(payload?.campaign?.id || ''));
       onChanged?.();
     } catch (requestError) {
-      if (!isCurrentScope()) return;
       setError(requestError instanceof Error ? requestError.message : 'Не удалось применить рекомендацию');
     } finally {
-      if (isCurrentScope()) setBusy('');
+      setBusy('');
     }
   };
 
   const manualEvent = async (touch: TouchPreview, eventType: 'sent' | 'skipped' | 'reply') => {
     if (!selectedCampaign?.id || !touch.id) return;
-    const isCurrentScope = captureScope();
-    if (!isCurrentScope()) return;
     const note = String(manualNotes[touch.id] || '').trim();
     if (eventType === 'reply' && !note) {
       setError('Для ответа добавьте его текст: он нужен для остановки и обучения.');
@@ -662,24 +561,19 @@ function ScopedOutreachCampaignBuilder({
         method: 'POST',
         body: JSON.stringify({ event_type: eventType, note }),
       });
-      if (!isCurrentScope()) return;
       setNotice(eventType === 'reply' ? 'Ответ записан. Все будущие каналы остановлены.' : 'Ручное касание обновлено.');
       setManualNotes((current) => ({ ...current, [touch.id]: '' }));
       await loadCampaigns();
-      if (!isCurrentScope()) return;
       onChanged?.();
     } catch (requestError) {
-      if (!isCurrentScope()) return;
       setError(requestError instanceof Error ? requestError.message : 'Не удалось записать ручное действие');
     } finally {
-      if (isCurrentScope()) setBusy('');
+      setBusy('');
     }
   };
 
   const recordBusinessOutcome = async (outcomeType: CampaignBusinessOutcome) => {
     if (!selectedCampaign?.id) return;
-    const isCurrentScope = captureScope();
-    if (!isCurrentScope()) return;
     if (outcomeType !== 'no_reply' && !outcomeNote.trim()) {
       setError('Добавьте короткую заметку: что согласовано или какой результат получен.');
       return;
@@ -692,7 +586,6 @@ function ScopedOutreachCampaignBuilder({
         method: 'POST',
         body: JSON.stringify({ outcome_type: outcomeType, note: outcomeNote.trim() }),
       });
-      if (!isCurrentScope()) return;
       const reused = Boolean(payload?.outcome?.reused);
       const label = outcomeType === 'meeting_booked'
         ? 'Встреча записана в обучающую петлю.'
@@ -702,22 +595,17 @@ function ScopedOutreachCampaignBuilder({
       setNotice(reused ? `Этот результат уже был записан. ${label}` : label);
       setOutcomeNote('');
       await loadCampaigns();
-      if (!isCurrentScope()) return;
       await loadRecommendations();
-      if (!isCurrentScope()) return;
       onChanged?.();
     } catch (requestError) {
-      if (!isCurrentScope()) return;
       setError(requestError instanceof Error ? requestError.message : 'Не удалось записать результат кампании');
     } finally {
-      if (isCurrentScope()) setBusy('');
+      setBusy('');
     }
   };
 
   const dispatchPilotFirstTouch = async () => {
-    if (!selectedCampaign?.id || !canPilotDispatch || busy) return;
-    const isCurrentScope = captureScope();
-    if (!isCurrentScope()) return;
+    if (!selectedCampaign?.id) return;
     const confirmed = window.confirm(
       'Отправить только первое касание этой кампании реальному получателю? LocalOS ещё раз проверит ответы, разрешения, tenant scope, suppression и лимиты. Остальные касания не будут отправлены.',
     );
@@ -731,27 +619,22 @@ function ScopedOutreachCampaignBuilder({
         method: 'POST',
         body: JSON.stringify({ confirm_campaign_id: selectedCampaign.id }),
       });
-      if (!isCurrentScope()) return;
       if (Number(payload?.messages_sent || 0) !== 1) {
         setError('Первое касание не отправлено: safety-preflight остановил операцию. Проверьте журнал кампании.');
       } else {
         setNotice('Первое пилотное касание отправлено. Остальные каналы не запускались; теперь LocalOS ждёт и синхронизирует ответ.');
       }
       await loadCampaigns();
-      if (!isCurrentScope()) return;
       onChanged?.();
     } catch (requestError) {
-      if (!isCurrentScope()) return;
       setError(requestError instanceof Error ? requestError.message : 'Пилотное касание не отправлено');
     } finally {
-      if (isCurrentScope()) setBusy('');
+      setBusy('');
     }
   };
 
   const runPilotPreflight = async () => {
-    if (!selectedCampaign?.id || hasUnsavedReview || busy) return;
-    const isCurrentScope = captureScope();
-    if (!isCurrentScope()) return;
+    if (!selectedCampaign?.id) return;
     setBusy('pilot-preflight');
     setError('');
     setNotice('');
@@ -759,25 +642,21 @@ function ScopedOutreachCampaignBuilder({
       const payload = await newAuth.makeRequest(`/outreach/campaigns/${encodeURIComponent(selectedCampaign.id)}/pilot-preflight`, {
         method: 'POST',
       });
-      if (!isCurrentScope()) return;
       const readiness: PilotReadiness = payload?.pilot_readiness || {};
       setPilotReadiness(readiness);
       if (readiness.can_dispatch_first_touch) {
         setNotice('Проверка пройдена. LocalOS готов отправить только первое касание после вашего отдельного подтверждения.');
       }
     } catch (requestError) {
-      if (!isCurrentScope()) return;
       setPilotReadiness(null);
       setError(requestError instanceof Error ? requestError.message : 'Не удалось проверить готовность к пилоту');
     } finally {
-      if (isCurrentScope()) setBusy('');
+      setBusy('');
     }
   };
 
   const syncPilotReply = async () => {
     if (!selectedCampaign?.id) return;
-    const isCurrentScope = captureScope();
-    if (!isCurrentScope()) return;
     setBusy('pilot-reply-sync');
     setError('');
     setNotice('');
@@ -785,22 +664,18 @@ function ScopedOutreachCampaignBuilder({
       const payload = await newAuth.makeRequest(`/outreach/campaigns/${encodeURIComponent(selectedCampaign.id)}/pilot-reply-sync`, {
         method: 'POST',
       });
-      if (!isCurrentScope()) return;
       if (payload?.reply_received) {
         setNotice(`Ответ получен и классифицирован${payload.classification ? `: ${payload.classification}` : ''}. Все следующие касания остановлены.`);
       } else {
         setNotice('Нового ответа пока нет. Проверка выполнена без отправки сообщений.');
       }
       await loadCampaigns();
-      if (!isCurrentScope()) return;
       await loadRecommendations();
-      if (!isCurrentScope()) return;
       onChanged?.();
     } catch (requestError) {
-      if (!isCurrentScope()) return;
       setError(requestError instanceof Error ? requestError.message : 'Не удалось проверить ответ');
     } finally {
-      if (isCurrentScope()) setBusy('');
+      setBusy('');
     }
   };
 
@@ -840,7 +715,6 @@ function ScopedOutreachCampaignBuilder({
   });
   const campaignReadyForApproval = Boolean(
     selectedCampaign?.status === 'draft'
-    && !hasUnsavedReview
     && selectedCampaign.generation_current
     && !selectedCampaign.requires_regeneration
     && campaignQualityPassed
@@ -861,7 +735,6 @@ function ScopedOutreachCampaignBuilder({
   ));
   const canPilotDispatch = Boolean(
     selectedCampaign?.status === 'approved'
-    && !hasUnsavedReview
     && firstCampaignTouch
     && ['telegram', 'email', 'vk'].includes(firstCampaignTouch.channel)
     && !pilotAlreadySent
@@ -884,7 +757,7 @@ function ScopedOutreachCampaignBuilder({
             Проверьте сигнал, опыт основателя, каналы и всю цепочку. Любой ответ остановит будущие касания.
           </p>
         </div>
-        {selectedCampaign && !hasUnsavedReview ? (
+        {selectedCampaign ? (
           <Badge variant="outline" className={['approved', 'active'].includes(String(selectedCampaign.status || ''))
             ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
             : 'border-slate-200 bg-white text-slate-700'}>
@@ -898,12 +771,9 @@ function ScopedOutreachCampaignBuilder({
           Версия
           <select
             value={selectedCampaign?.id || ''}
-            disabled={Boolean(busy)}
             onChange={(event) => {
-              const campaign = campaigns.find((item) => item.id === event.target.value);
-              if (campaign) showSavedCampaign(campaign);
-              setNotice('Показана сохранённая версия. Несохранённые изменения отменены.');
-              setError('');
+              setSelectedCampaignId(event.target.value);
+              setPilotReadiness(null);
             }}
             className="mt-2 min-h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900"
           >
@@ -1055,9 +925,7 @@ function ScopedOutreachCampaignBuilder({
                   value={senderSelections[touchIndex] || ''}
                   onChange={(event) => {
                     setSenderSelections((current) => ({ ...current, [touchIndex]: event.target.value }));
-                    setScheduleDirty(true);
                     setPreview(null);
-                    setPilotReadiness(null);
                     setNotice('Отправитель выбран. Обновите preview.');
                   }}
                   className="mt-2 min-h-11 w-full rounded-md border border-amber-200 bg-white px-3 text-sm text-slate-900"
@@ -1142,16 +1010,6 @@ function ScopedOutreachCampaignBuilder({
                     {touch.quality_gate?.passed ? 'Факты проверены' : touch.status || 'Нужна проверка'}
                   </span>
                 </div>
-                {touch.template_label || touch.template_selection?.label ? (
-                  <p className="mt-2 text-xs font-medium text-sky-700">
-                    Основа: {touch.template_label || touch.template_selection?.label}
-                  </p>
-                ) : null}
-                <p className="mt-2 break-all text-sm leading-6 text-slate-700">
-                  {touch.recipient
-                    ? `Получатель: ${touch.recipient}`
-                    : 'Получатель не указан для этого касания.'}
-                </p>
                 {touch.observation || touch.pain_hypothesis || touch.problem_hypothesis || touch.solution || touch.relevance_bridge ? (
                   <div className="mt-3 space-y-1 border-l-2 border-sky-200 pl-3 text-sm leading-6 text-slate-700">
                     {touch.observation ? <p><span className="font-semibold text-slate-900">{operatorApprovedIdea ? 'Подтверждённая идея:' : 'Факт:'}</span> {touch.observation}</p> : null}
@@ -1338,29 +1196,8 @@ function ScopedOutreachCampaignBuilder({
         Сохранятся тексты, каналы и расписание. Ничего не будет отправлено.
       </p>
 
-      {hasUnsavedReview ? (
-        <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
-          <p>Есть несохранённые изменения. Сохраните их и проверьте новую версию перед утверждением или отправкой.</p>
-          {selectedCampaign ? (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={Boolean(busy)}
-              className="h-auto min-h-11 whitespace-normal bg-white"
-              onClick={() => {
-                showSavedCampaign(selectedCampaign);
-                setNotice('Показана сохранённая версия. Несохранённые изменения отменены.');
-                setError('');
-              }}
-            >
-              Отменить правки и показать сохранённую версию
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
-
       {selectedCampaign?.status === 'draft' ? (
-        <Button onClick={() => void approve()} disabled={Boolean(busy) || !campaignReadyForApproval} className="min-h-11 w-full">
+        <Button onClick={() => void approve()} disabled={Boolean(busy) || !campaignReadyForApproval} className="min-h-11 w-full bg-orange-500 text-white hover:bg-orange-600">
           {busy === 'approve' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
           {campaignApprovalBlocker}
         </Button>
@@ -1371,7 +1208,7 @@ function ScopedOutreachCampaignBuilder({
         </p>
       ) : null}
 
-      {selectedCampaign?.status === 'approved' && !hasUnsavedReview && !pilotAlreadySent && !pilotReplyReceived ? (
+      {selectedCampaign?.status === 'approved' && !pilotAlreadySent && !pilotReplyReceived ? (
         <section className={pilotReadiness?.can_dispatch_first_touch
           ? 'rounded-2xl bg-emerald-50 p-4 shadow-[0_0_0_1px_rgba(16,185,129,0.22),0_1px_2px_-1px_rgba(15,23,42,0.08)]'
           : 'rounded-2xl bg-slate-50 p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_1px_2px_-1px_rgba(15,23,42,0.06)]'}>
@@ -1421,7 +1258,7 @@ function ScopedOutreachCampaignBuilder({
           <Button
             onClick={() => void dispatchPilotFirstTouch()}
             disabled={Boolean(busy)}
-            className="mt-3 min-h-11 w-full"
+            className="mt-3 min-h-11 w-full bg-orange-500 text-white hover:bg-orange-600"
           >
             {busy === 'pilot-dispatch' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
             Отправить только первое касание
@@ -1458,7 +1295,7 @@ function ScopedOutreachCampaignBuilder({
       {selectedCampaign && ['approved', 'active', 'paused'].includes(String(selectedCampaign.status || '')) ? (
         <div className="flex flex-wrap gap-2 border-t border-slate-200 pt-3">
           {selectedCampaign.status === 'paused' ? (
-            <Button variant="outline" onClick={() => void changeCampaign('resume')} disabled={Boolean(busy) || hasUnsavedReview}><Play className="mr-2 h-4 w-4" />Возобновить</Button>
+            <Button variant="outline" onClick={() => void changeCampaign('resume')} disabled={Boolean(busy)}><Play className="mr-2 h-4 w-4" />Возобновить</Button>
           ) : (
             <Button variant="outline" onClick={() => void changeCampaign('pause')} disabled={Boolean(busy)}><Pause className="mr-2 h-4 w-4" />Пауза</Button>
           )}

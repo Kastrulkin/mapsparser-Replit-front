@@ -48,10 +48,11 @@ import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
 import { newAuth } from '@/lib/auth_new';
+import { DemoAverageTicketPage } from './demo/DemoAverageTicketPage';
 
 type OutletContext = {
   currentBusinessId?: string | null;
-  user?: { demo_mode?: boolean } | null;
+  user?: { id?: string; demo_mode?: boolean } | null;
 };
 
 type ServiceItem = {
@@ -104,6 +105,7 @@ type AverageTicketPackage = {
 };
 
 type AverageTicketMatrix = {
+  business_knowledge_sources?: {id:string;label?:string;source:string;href:string}[];
   upsell_matrix?: AverageTicketRow[];
   cross_sell_pairs?: Array<{
     from_category?: string;
@@ -256,6 +258,17 @@ const emptyLinkDraft: AverageTicketAddon = {
 };
 
 export const AverageTicketPage = () => {
+  const { currentBusinessId, user } = useOutletContext<OutletContext>();
+  const { language } = useLanguage();
+
+  if (user?.demo_mode && currentBusinessId) {
+    return <DemoAverageTicketPage key={JSON.stringify([currentBusinessId, user.id, language])} />;
+  }
+
+  return <BusinessAverageTicketPage key={JSON.stringify([currentBusinessId, user?.id])} />;
+};
+
+const BusinessAverageTicketPage = () => {
   const { currentBusinessId, user } = useOutletContext<OutletContext>();
   const currentScope=useRef(currentBusinessId); currentScope.current=currentBusinessId;
   const isDemoMode = Boolean(user?.demo_mode);
@@ -492,7 +505,7 @@ export const AverageTicketPage = () => {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 pb-10">
-      {policyApproval?.businessId === currentBusinessId && <section className="space-y-3 rounded-xl border bg-card p-4"><p className="whitespace-pre-wrap">{policyApproval.text}</p><Button disabled={saving} onClick={async () => { setSaving(true); try { const result = await newAuth.makeRequest(`/operator/actions/${policyApproval.id}/confirm`, { method: 'POST', body: JSON.stringify({ business_id: currentBusinessId }) }); if (result.status === 'blocked' || result.operator_result?.status === 'blocked') throw new Error(result.chat_response || result.operator_result?.chat_response || 'Подготовьте новое подтверждение.'); setPolicyApproval(null); await loadOverview(); } catch (error) { toast({ title: 'Не удалось подтвердить', description: error instanceof Error ? error.message : 'Повторите запрос.', variant: 'destructive' }); } finally { setSaving(false); } }}>Подтвердить изменение связок</Button><Button variant="outline" disabled={saving} onClick={async () => { setSaving(true); try { await newAuth.makeRequest(`/operator/actions/${policyApproval.id}/reject`, { method: 'POST', body: JSON.stringify({ business_id: currentBusinessId }) }); setPolicyApproval(null); } catch (error) { toast({ title: 'Не удалось отклонить', description: error instanceof Error ? error.message : 'Повторите запрос.', variant: 'destructive' }); } finally { setSaving(false); } }}>Отклонить</Button></section>}
+      {policyApproval && policyApproval.businessId === currentBusinessId && <section className="space-y-3 rounded-xl border bg-card p-4"><p className="whitespace-pre-wrap">{policyApproval.text}</p><Button disabled={saving} onClick={async () => { setSaving(true); try { const result = await newAuth.makeRequest(`/operator/actions/${policyApproval.id}/confirm`, { method: 'POST', body: JSON.stringify({ business_id: currentBusinessId }) }); if (result.status === 'blocked' || result.operator_result?.status === 'blocked') throw new Error(result.chat_response || result.operator_result?.chat_response || 'Подготовьте новое подтверждение.'); setPolicyApproval(null); await loadOverview(); } catch (error) { toast({ title: 'Не удалось подтвердить', description: error instanceof Error ? error.message : 'Повторите запрос.', variant: 'destructive' }); } finally { setSaving(false); } }}>Подтвердить изменение связок</Button><Button variant="outline" disabled={saving} onClick={async () => { setSaving(true); try { await newAuth.makeRequest(`/operator/actions/${policyApproval.id}/reject`, { method: 'POST', body: JSON.stringify({ business_id: currentBusinessId }) }); setPolicyApproval(null); } catch (error) { toast({ title: 'Не удалось отклонить', description: error instanceof Error ? error.message : 'Повторите запрос.', variant: 'destructive' }); } finally { setSaving(false); } }}>Отклонить</Button></section>}
 
       <DashboardPageHeader
         eyebrow="LocalOS"
@@ -552,6 +565,7 @@ export const AverageTicketPage = () => {
             />
           ) : (
             <Tabs defaultValue="daily" className="space-y-6">
+              {!!matrix.business_knowledge_sources?.length && <details className="rounded-xl border p-4 text-sm"><summary className="cursor-pointer focus-visible:ring-2 focus-visible:ring-ring">Сведения о бизнесе при подготовке рекомендаций</summary><ul className="mt-3 grid gap-2">{matrix.business_knowledge_sources.map(source=><li key={source.id}><Link className="underline" to={source.href}>{source.label||source.source}</Link></li>)}</ul><p className="mt-3 text-muted-foreground">Справочные сведения не подтверждают доступность места, мастера и времени и не заменяют финансовые данные.</p></details>}
               <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:grid-cols-4">
                 <TabsTrigger value="daily">План на день</TabsTrigger>
                 <TabsTrigger value="matrix">Матрица</TabsTrigger>

@@ -96,3 +96,12 @@ README ([0-9]).md
 **/* ([0-9]).tsx
 **/* ([0-9]).json
 **/* ([0-9]).md
+
+# Private business documents and task source snapshots
+data/business_knowledge/
+.agent/tasks/business-knowledge-20261012/baseline/
+.agent/tasks/business-knowledge-20261012/production-snapshot/
+
+.agent/tasks/**/production-predeploy/
+.agent/tasks/**/production-currentbase/
+.agent/tasks/**/production-partnership-source/

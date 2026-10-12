@@ -109,7 +109,10 @@ def recommend(cursor,business_id,user_id,args,preview_rules=None):
     configured_matrix=current.get('matrix_json') if current.get('matrix_json') is not None else current_matrix.get('matrix_json')
     if not configured_matrix:
         message+=' Связки услуг для допродаж пока не настроены. Владелец может подготовить и проверить их в разделе «Средний чек». До этого подходящие дополнения не утверждены.'
-    return {'status':'completed','items':items,'policy_version':current['version'],'message':message,'setup_required':not bool(configured_matrix)}
+    from services.business_knowledge import context
+    knowledge=context(cursor,business_id,user_id)
+    return {'status':'completed','items':items,'policy_version':current['version'],'message':message,'setup_required':not bool(configured_matrix),
+            'business_knowledge':knowledge,'knowledge_notice':'Справочные сведения не заменяют подтверждённые связки услуг, доступность мастера и времени.'}
 
 
 def validate_rules(cursor,business_id,rules):
@@ -222,6 +225,8 @@ def apply_policy(cursor,business_id,user_id,envelope,action_id):
     selected_matrix=before.get('matrix_json') if before.get('matrix_json') is not None else matrix(cursor,business_id).get('matrix_json')
     if kind=='rules':rules=validate_rules(cursor,business_id,data['rules'])
     elif kind=='matrix':
+        from services.business_knowledge import require_current_sources
+        require_current_sources(cursor,business_id,user_id,data['matrix_json'].get('business_knowledge_sources') or [])
         selected_matrix=data['matrix_json']
         prepare_policy(cursor,business_id,user_id,{'kind':'matrix',**data})
         before={**before,'matrix_json':matrix(cursor,business_id).get('matrix_json')}

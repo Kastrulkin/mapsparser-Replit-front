@@ -1,0 +1,13 @@
+{
+  "docker-compose.yml": "e563a764966aeef9fefa8f999c0e7c1b2c84de7b0a68c8b2490747e048c49078",
+  "src/main.py": "31b517a1595d6df3a4802234f7c54be11296c76e5d6165d7ea5d73ce3c27b98c",
+  "src/api/operator_api.py": "01b9a7d004c9813cb42f9acf64aa7b019bef6c365ef781ea6e279d0f4aaa2299",
+  "src/api/average_ticket_api.py": "23f61ebaa43e8570eba2917c10b94b842bb6ff8a0067b956eecdaf78d56fab50",
+  "src/services/agent_blueprint_runner.py": "193f7e20ad33f324c56d51539a648bd1185721a75457fd802e671cf736f27a69",
+  "src/services/operator_news_generation.py": "c47aa37f4189098039af7eaffee8ae762bcf0acaff13a147a65217c3209c91e7",
+  "src/services/work_recommendations.py": "58376eb06b512faf238d06d1511b9f4c6b0efc375b246305e004d82112508143",
+  "src/services/work_journal.py": "38c0426d7d8cc2af54d92509e47017601541f5ff91db377e3517b835867cd35b",
+  "src/services/agent_blueprint_workspace.py": "1cbb363f36a9fc48bb1a877e7213df216c691f80a62eda923b961691f85bc4a8",
+  "src/services/operator_core.py": "519679e532c2b9b56657924c9e3b7bfe769fee3a14c570eabffe1e1cb519ad7f",
+  "src/services/content_plan_service.py": "2b1155ff91979f403af04f31386766011e4f13d99fa626251437cc18ff5dbeb7"
+}

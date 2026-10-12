@@ -1,3 +1,4 @@
+import type { LeadWorkstream } from './AdminLeadRegistry.logic';
 import { ContactPresenceBadges, WorkflowActionRow } from '@/components/prospecting/LeadWorkflowBlocks';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,7 @@ type WorkflowBadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive';
 type WorkflowTone = 'default' | 'success' | 'warning' | 'info' | 'danger';
 
 type PipelineLead = {
+  workstreams?: LeadWorkstream[];
   id: string;
   name?: string;
   address?: string;
@@ -472,6 +474,9 @@ const EditableLeadBasics = ({
 type PartnershipLeadCardProps = {
   lead: PipelineLead;
   mode: 'raw' | 'pipeline';
+  compact?: boolean;
+  searchLabel?: string;
+  verification?: { criteria?: { label?: string; status?: string; source_url?: string; quote?: string }[]; country?: { status?: string; source_url?: string; quote?: string }; destination?: { status?: string; source_url?: string; quote?: string }; contactVerified?: boolean };
   dragging: boolean;
   loading: boolean;
   nextStage: string;
@@ -490,6 +495,9 @@ type PartnershipLeadCardProps = {
 export const PartnershipLeadCard = ({
   lead,
   mode,
+  compact = false,
+  searchLabel,
+  verification,
   dragging,
   loading,
   nextStage,
@@ -504,12 +512,17 @@ export const PartnershipLeadCard = ({
   onOpenLead,
   onDeferLead,
 }: PartnershipLeadCardProps) => {
+  const intelligence = lead.workstreams?.find(workstream => workstream.workstream_type === 'client_partnership');
+  const collecting = ['collecting', 'verifying', 'researching', 'drafting'].includes(intelligence?.enrichment_state?.status || '');
+  const recipient = intelligence?.selected_recipient;
   const stageValue = String(lead.partnership_stage || '').toLowerCase();
   const pipelineStatus = String(lead.pipeline_status || '').toLowerCase();
   const isUnprocessed = !pipelineStatus || pipelineStatus === 'unprocessed' || pipelineStatus === 'qualified' || (!stageValue || stageValue === 'imported');
-  const hasContacts = Boolean(lead.phone || lead.email || lead.telegram_url || lead.whatsapp_url || lead.website);
+  const hasContacts = Boolean(lead.phone || lead.email || lead.telegram_url || lead.whatsapp_url);
+  const verifiedForSearch = !verification || (verification.criteria ? verification.criteria.length > 0 && verification.criteria.every(item => ['verified', 'not_required'].includes(item.status || '')) && verification.contactVerified === true : (['verified', 'not_required'].includes(verification.country?.status || '')
+    && ['verified', 'not_required'].includes(verification.destination?.status || '') && verification.contactVerified === true));
   const primaryActionLabel = mode === 'raw'
-    ? (isUnprocessed ? 'В pipeline' : 'Открыть карточку')
+    ? (isUnprocessed ? 'Выбрать для работы' : 'Открыть компанию')
     : nextStage
       ? 'Дальше'
       : 'Открыть карточку';
@@ -522,6 +535,23 @@ export const PartnershipLeadCard = ({
     deferredReason: deferredReasonInput.trim() || lead.deferred_reason || '',
     deferredUntil: deferredUntilInput || String(lead.deferred_until || '').slice(0, 10) || '',
   };
+
+  if (compact && mode === 'raw') return <article className="grid gap-3 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-start" aria-label={lead.name || 'Компания'}>
+    <div className="min-w-0"><h3 className="break-words text-base font-medium text-foreground">{lead.name || 'Без названия'}</h3><p className="text-sm text-muted-foreground">{lead.category || 'Без категории'} · {lead.city || '—'}</p><span className="text-xs text-muted-foreground">{stagePresentation.label}</span></div>
+    <div className="min-w-0 text-sm"><p>{verification ? verifiedForSearch ? 'Соответствие подтверждено' : 'Соответствие не подтверждено' : 'Соответствие не проверено'}</p><p className="break-all text-xs text-muted-foreground">{recipient?.value || lead.email || lead.phone || 'Контакт не найден'} · {verification?.contactVerified ? 'контакт подтверждён' : 'контакт не проверен'}</p>
+      <details className="mt-2"><summary className="min-h-10 cursor-pointer py-2 text-xs text-muted-foreground">Сведения и источники</summary><div className="space-y-2 py-2 text-xs text-muted-foreground">
+        {verification && <>{(verification.criteria ? verification.criteria.map(criterion => ({ label: criterion.label || 'Требование', criterion })) : [{ label: 'Страна', criterion: verification.country }, { label: 'Направление', criterion: verification.destination }]).map(({ label, criterion }) => <p key={label}>{label}: {criterion?.status === 'verified' ? 'подтверждено' : criterion?.status === 'not_required' ? 'не требуется' : 'не проверено'}{criterion?.source_url && /^https?:\/\//i.test(criterion.source_url) && <a href={criterion.source_url} target="_blank" rel="noreferrer" className="ml-2 underline">Источник</a>}</p>)}</>}
+        <p>{collecting ? 'Получаем контакты и сведения…' : intelligence?.research ? 'Сведения собраны' : 'Сведения ещё не собраны'}</p>
+        {recipient?.source_url && /^https?:\/\//i.test(recipient.source_url) && <a href={recipient.source_url} target="_blank" rel="noreferrer" className="block underline">Источник контакта</a>}
+        {lead.source_url && <a href={lead.source_url} target="_blank" rel="noreferrer" className="block underline">Источник компании</a>}
+        <Button size="sm" variant="ghost" onClick={() => onMoveToStage(lead.id, 'not_relevant', { deferredReason: '', deferredUntil: '' })} disabled={loading}>Исключить</Button>
+      </div></details>
+    </div>
+    <div className="flex flex-wrap gap-2 md:justify-end">
+      {isUnprocessed && <Button size="sm" variant="outline" disabled={loading} onClick={() => onMoveToPipeline(lead.id)}>Выбрать для работы</Button>}
+      <Button size="sm" variant="ghost" onClick={() => onOpenLead(lead.id)}>Открыть</Button>
+    </div>
+  </article>;
 
   return (
     <div
@@ -542,12 +572,28 @@ export const PartnershipLeadCard = ({
           {lead.client_business_name ? (
             <Badge variant="outline" className="mt-2 max-w-full truncate">Лид-партнёр · {lead.client_business_name}</Badge>
           ) : null}
+          {searchLabel ? <div className="mt-2 truncate text-xs text-muted-foreground" title={searchLabel}>Поиск: {searchLabel}</div> : null}
         </div>
         <div className="flex max-w-[45%] shrink-0 flex-wrap justify-end gap-1">
           {lead.source_provider ? <Badge variant="outline" className="max-w-full truncate">{sourceProviderLabel(lead.source_provider)}</Badge> : null}
           {lead.rating ? <Badge variant="secondary">★ {lead.rating}{lead.reviews_count ? ` (${lead.reviews_count})` : ''}</Badge> : null}
         </div>
       </div>
+      {intelligence && <details className="mt-3 rounded-md border p-2 text-xs text-muted-foreground">
+        <summary className="cursor-pointer">{collecting ? 'Получаем контакты и сведения…' : intelligence.research ? 'Сведения собраны' : 'Контакты и сведения'} · Контактов: {intelligence.contact_summary?.found ?? 0}</summary>
+        <div className="mt-2 space-y-1"><p>Контакт: {recipient?.value || 'Пока не выбран'}{recipient?.source_url && /^https?:\/\//i.test(recipient.source_url) && <> · <a href={recipient.source_url} target="_blank" rel="noreferrer" className="underline">Источник контакта</a></>}</p><p>Пригодность для поиска подтверждается отдельно.</p>{intelligence.enrichment_state?.error && <p>Получение сведений требует внимания.</p>}</div>
+      </details>}
+      {verification && <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-700">
+        <div className="font-medium">Проверка для этого поиска</div>
+        {(verification.criteria ? verification.criteria.map(criterion => ({ label: criterion.label || 'Требование', criterion })) : [{ label: 'Страна компании', criterion: verification.country }, { label: 'Продаваемое направление', criterion: verification.destination }]).map(({ label, criterion }) => (
+          <div key={label} className="mt-1">
+            {label}: {criterion?.status === 'verified' ? 'подтверждено' : criterion?.status === 'not_required' ? 'не требуется' : 'не проверено'}
+            {criterion?.status === 'verified' && /^https?:\/\//i.test(criterion.source_url || '') ? <a className="ml-1 underline" href={criterion.source_url} target="_blank" rel="noreferrer" title={criterion.quote || label}>Источник</a> : null}
+          </div>
+        ))}
+        <div className="mt-1">Рабочий контакт: {verification.contactVerified ? 'подтверждён' : 'не проверен'}</div>
+        {!verifiedForSearch && <div className="mt-2 text-amber-800">Можно взять в ручной отбор. Это не подтверждает соответствие поиску и не запускает письма.</div>}
+      </div>}
       <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
         <ContactPresenceBadges
           website={lead.website}
@@ -567,9 +613,9 @@ export const PartnershipLeadCard = ({
           <div className="mt-1 line-clamp-2 font-medium text-slate-900">
             {mode === 'raw' ? stagePresentation.helper : (lead.next_best_action?.label || 'Следующий шаг не определён')}
           </div>
-          <div className={compactMetaClass}>
+          {mode !== 'raw' && <div className={compactMetaClass}>
             {shortStatusLabel(lead.pipeline_status || 'unprocessed')} · {shortStatusLabel(lead.partnership_stage || 'imported')}
-          </div>
+          </div>}
         </div>
         {mode === 'pipeline' ? (
         <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
@@ -619,8 +665,7 @@ export const PartnershipLeadCard = ({
       <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
         <span className={mutedPillClass}><span className="truncate">Воронка: {shortStatusLabel(lead.pipeline_status || 'unprocessed')}</span></span>
         {mode === 'pipeline' ? <span className={mutedPillClass}><span className="truncate">Этап: {shortStatusLabel(lead.partnership_stage || 'новый')}</span></span> : null}
-        <span>{parseStatusLabel}</span>
-        <span>{hasContacts ? 'контакты есть' : 'контактов мало'}</span>
+        <details><summary>Технические сведения</summary><span>{parseStatusLabel}. {hasContacts ? 'Указан канал связи' : 'Канал связи не указан'}</span></details>
       </div>
     </div>
   );
@@ -968,7 +1013,7 @@ export const PartnershipPipelineList = ({
           </Select>
           <Button variant="outline" onClick={onApplyBulkUpdate} disabled={loading || selectedLeadIds.length === 0}>Применить к выбранным</Button>
           <Button variant="outline" onClick={onBulkDeferLeads} disabled={loading || selectedLeadIds.length === 0}>Отложить выбранные</Button>
-          <Button variant="outline" onClick={onNormalizeSelectedViaOpenClaw} disabled={loading || selectedLeadIds.length === 0}>Подготовить письма</Button>
+          <Button variant="outline" onClick={onNormalizeSelectedViaOpenClaw} disabled={loading || selectedLeadIds.length === 0}>Обновить список выбранных</Button>
           <Button variant="outline" onClick={onBulkMarkNotRelevant} disabled={loading || selectedLeadIds.length === 0}>Неактуальны</Button>
         </div>
       </div>
@@ -1127,7 +1172,7 @@ export const PartnershipPipelineBulkBar = ({
         <Button size="sm" variant="outline" onClick={onBulkEnrichContacts} disabled={loading}>Обогатить</Button>
         <Button size="sm" variant="outline" onClick={onBulkRunMatch} disabled={loading}>Матчинг</Button>
         <Button size="sm" variant="outline" onClick={onApplyBulkUpdate} disabled={loading || !canApplyStageOrChannel}>Применить этап/канал</Button>
-        <Button size="sm" variant="outline" onClick={onNormalizeSelectedViaOpenClaw} disabled={loading}>Подготовить письма</Button>
+        <Button size="sm" variant="outline" onClick={onNormalizeSelectedViaOpenClaw} disabled={loading}>Обновить список</Button>
         <Button size="sm" variant="outline" onClick={onBulkPrepareCommercialOffers} disabled={loading}>Подготовить КП</Button>
         <Button size="sm" variant="outline" onClick={onBulkDeleteLeads} disabled={loading}>Удалить</Button>
       </div>

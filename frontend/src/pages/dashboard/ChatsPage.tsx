@@ -1,4 +1,4 @@
-import { OutreachSandbox } from '@/components/outreach/OutreachSandbox';
+import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -10,7 +10,7 @@ import { newAuth } from '@/lib/auth_new';
 import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
 import { errorMessage } from '@/lib/errorMessage';
 import { Bot, FlaskConical, Pause, Play, Send, User as UserIcon } from 'lucide-react';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 
 interface Conversation {
@@ -51,6 +51,14 @@ interface SandboxMessage {
 }
 
 export const ChatsPage: React.FC = () => {
+ const { currentBusinessId } = useOutletContext<{ currentBusinessId: string }>();
+ return <ChatsWorkspace key={currentBusinessId} />;
+};
+export const EmployeeChatTest = () => {
+ const { currentBusinessId } = useOutletContext<{ currentBusinessId: string }>();
+ return <ChatsWorkspace key={currentBusinessId} testing />;
+};
+const ChatsWorkspace = ({ testing = false }: { testing?: boolean }) => {
   const { currentBusinessId } = useOutletContext<{ currentBusinessId: string }>();
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
@@ -63,7 +71,12 @@ export const ChatsPage: React.FC = () => {
   const [sandboxMessages, setSandboxMessages] = useState<SandboxMessage[]>([]);
   const [sandboxInput, setSandboxInput] = useState('');
   const [sandboxLoading, setSandboxLoading] = useState(false);
-  const [workspaceMode, setWorkspaceMode] = useState<'dialogs' | 'agent' | 'outreach'>('dialogs');
+  const [workspaceMode, setWorkspaceMode] = useState<'dialogs' | 'agent' | 'outreach'>(testing ? 'agent' : 'dialogs');
+  const selectedScope = useRef({ agent: selectedAgentId, conversation: selectedConversationId });
+  selectedScope.current = { agent: selectedAgentId, conversation: selectedConversationId };
+  const lifetime = useRef({ active: true });
+  const [sourceError, setSourceError] = useState('');
+  useLayoutEffect(() => { const token = { active: true }; lifetime.current = token; return () => { token.active = false; }; }, []);
   const isSandbox = workspaceMode === 'agent';
   const { toast } = useToast();
   const { language, t } = useLanguage();
@@ -81,6 +94,7 @@ export const ChatsPage: React.FC = () => {
   }, [messages]);
 
   const loadAgents = useLatestCallback(async () => {
+    const requestScope = lifetime.current;
     try {
       const token = await newAuth.getToken();
       if (!browserAuthenticationAvailable(token)) return;
@@ -92,8 +106,10 @@ export const ChatsPage: React.FC = () => {
         },
       });
 
+      if (!requestScope.active) return;
       if (response.ok) {
         const data = await response.json();
+        if (!requestScope.active) return;
         if (data.success && data.agents) {
           setAgents(data.agents);
           if (data.agents.length > 0 && !selectedAgentId) {
@@ -101,10 +117,13 @@ export const ChatsPage: React.FC = () => {
           }
         }
       }
+      if (!response.ok) { if ([401,403,404].includes(response.status)) { setAgents([]); setConversations([]); setMessages([]); setSelectedAgentId(null); setSelectedConversationId(null); } setSourceError(workCoherenceCopy(language).messagesUnavailable); }
     } catch (error) {
+      if (!requestScope.active) return;
+      setSourceError(workCoherenceCopy(language).messagesUnavailable);
       console.error('Ошибка загрузки агентов:', error);
     } finally {
-      setLoading(false);
+      if (requestScope.active) setLoading(false);
     }
   });
 
@@ -115,6 +134,7 @@ export const ChatsPage: React.FC = () => {
   }, [currentBusinessId, loadAgents]);
 
   const loadConversations = useLatestCallback(async () => {
+    const requestScope = lifetime.current; const agentId = selectedAgentId;
     try {
       const token = await newAuth.getToken();
       if (!browserAuthenticationAvailable(token) || !selectedAgentId) return;
@@ -129,13 +149,18 @@ export const ChatsPage: React.FC = () => {
         }
       );
 
+      if (!requestScope.active || selectedScope.current.agent !== agentId) return;
       if (response.ok) {
         const data = await response.json();
+        if (!requestScope.active || selectedScope.current.agent !== agentId) return;
         if (data.success) {
           setConversations(data.conversations || []);
         }
       }
+      if (!response.ok) { if ([401,403,404].includes(response.status)) { setAgents([]); setConversations([]); setMessages([]); setSelectedAgentId(null); setSelectedConversationId(null); } setSourceError(workCoherenceCopy(language).messagesUnavailable); }
     } catch (error) {
+      if (!requestScope.active || selectedScope.current.agent !== agentId) return;
+      setSourceError(workCoherenceCopy(language).messagesUnavailable);
       console.error('Ошибка загрузки чатов:', error);
     }
   });
@@ -151,6 +176,7 @@ export const ChatsPage: React.FC = () => {
   }, [selectedAgentId, currentBusinessId, loadConversations, isSandbox]);
 
   const loadMessages = useLatestCallback(async () => {
+    const requestScope = lifetime.current; const conversationId = selectedConversationId;
     try {
       const token = await newAuth.getToken();
       if (!browserAuthenticationAvailable(token) || !selectedConversationId) return;
@@ -165,13 +191,18 @@ export const ChatsPage: React.FC = () => {
         }
       );
 
+      if (!requestScope.active || selectedScope.current.conversation !== conversationId) return;
       if (response.ok) {
         const data = await response.json();
+        if (!requestScope.active || selectedScope.current.conversation !== conversationId) return;
         if (data.success) {
           setMessages(data.messages || []);
         }
       }
+      if (!response.ok) { if ([401,403,404].includes(response.status)) { setAgents([]); setConversations([]); setMessages([]); setSelectedAgentId(null); setSelectedConversationId(null); } setSourceError(workCoherenceCopy(language).messagesUnavailable); }
     } catch (error) {
+      if (!requestScope.active || selectedScope.current.conversation !== conversationId) return;
+      setSourceError(workCoherenceCopy(language).messagesUnavailable);
       console.error('Ошибка загрузки сообщений:', error);
     }
   });
@@ -189,6 +220,7 @@ export const ChatsPage: React.FC = () => {
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedConversationId || sending) return;
 
+    const requestScope = lifetime.current;
     try {
       setSending(true);
       const token = await newAuth.getToken();
@@ -209,6 +241,7 @@ export const ChatsPage: React.FC = () => {
         }
       );
 
+      if (!requestScope.active) return;
       if (response.ok) {
         setNewMessage('');
         await loadMessages();
@@ -220,13 +253,14 @@ export const ChatsPage: React.FC = () => {
         throw new Error('Ошибка отправки сообщения');
       }
     } catch (error: unknown) {
+      if (!requestScope.active) return;
       toast({
         title: t.common.error,
         description: errorMessage(error) || t.dashboard.chats.messages.error,
         variant: 'destructive',
       });
     } finally {
-      setSending(false);
+      if (requestScope.active) setSending(false);
     }
   };
 
@@ -353,37 +387,8 @@ export const ChatsPage: React.FC = () => {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
-      <div className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg border bg-muted/40 p-1" role="tablist" aria-label={copy.tabsLabel}>
-        {[
-          { id: 'dialogs', label: copy.dialogs },
-          { id: 'agent', label: copy.agentSandbox },
-          { id: 'outreach', label: copy.outreachSandbox },
-        ].map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={workspaceMode === item.id}
-            onClick={() => {
-              if (item.id === 'dialogs' || item.id === 'agent' || item.id === 'outreach') {
-                setWorkspaceMode(item.id);
-                if (item.id === 'agent') setSelectedConversationId('sandbox');
-                if (item.id === 'dialogs' && selectedConversationId === 'sandbox') setSelectedConversationId(null);
-              }
-            }}
-            className={`min-h-10 shrink-0 rounded-md px-3 text-sm font-medium transition-[background-color,color,box-shadow,transform] duration-150 ease-out active:scale-[0.96] ${workspaceMode === item.id
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
-      {workspaceMode === 'outreach' ? (
-        <OutreachSandbox businessId={currentBusinessId} />
-      ) : (
+      {sourceError ? <div role="alert"><p className="text-sm text-destructive">{sourceError}</p><Button variant="outline" onClick={() => { setSourceError(''); void loadAgents(); if(selectedAgentId) void loadConversations(); if(selectedConversationId) void loadMessages(); }}>{workCoherenceCopy(language).retry}</Button></div> : null}
+      <h1 className="text-2xl font-semibold">{language === 'ru' ? (testing ? 'Проверить диалог сотрудника' : 'Сообщения клиентов') : (testing ? 'Test employee conversation' : 'Customer messages')}</h1>
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
       {/* Левая панель: Агенты */}
       <div className="w-full shrink-0 bg-white rounded-lg border border-gray-200 p-4 lg:w-64">
@@ -394,7 +399,7 @@ export const ChatsPage: React.FC = () => {
               key={agent.id}
               onClick={() => {
                 setSelectedAgentId(agent.id);
-                setSelectedConversationId(null);
+                setSelectedConversationId(null); setConversations([]); setMessages([]);
               }}
               className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedAgentId === agent.id
                   ? 'bg-blue-50 border-blue-200 text-blue-700'
@@ -424,7 +429,7 @@ export const ChatsPage: React.FC = () => {
         </div>
         <ScrollArea className="flex-1">
           <div className="p-2">
-            {conversations.length === 0 ? (
+            {conversations.length === 0 ? sourceError ? null : (
               <div className="text-center text-gray-500 py-8">
                 {copy.noChats}
               </div>
@@ -432,7 +437,7 @@ export const ChatsPage: React.FC = () => {
               conversations.map((conv) => (
                 <button
                   key={conv.id}
-                  onClick={() => setSelectedConversationId(conv.id)}
+                  onClick={() => {setSelectedConversationId(conv.id); setMessages([]);}}
                   className={`w-full text-left p-3 rounded-lg border mb-2 transition-colors ${selectedConversationId === conv.id
                       ? 'bg-blue-50 border-blue-200'
                       : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
@@ -683,7 +688,6 @@ export const ChatsPage: React.FC = () => {
         )}
       </div>
       </div>
-      )}
     </div>
   );
 };

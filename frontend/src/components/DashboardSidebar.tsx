@@ -22,6 +22,7 @@ import {
 	UsersRound,
 	X,
 } from 'lucide-react';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import logo from '../assets/images/logo.png';
@@ -31,6 +32,7 @@ import { getDashboardNavigationCopy } from '../i18n/dashboardNavigationCopy';
 import { getDashboardShellCopy } from '../i18n/dashboardShellCopy';
 import { getDemoWorkspaceCopy } from '../i18n/demoWorkspaceCopy';
 import { cn } from '../lib/utils';
+import { workDestinations, workNavigationCopy } from '@/lib/workNavigation';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
@@ -66,139 +68,15 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   const { t, language } = useLanguage();
   const demoCopy = getDemoWorkspaceCopy(language).sidebar;
   const navigationCopy = getDashboardNavigationCopy(language);
-  const influencerCopy = influencerNavigationCopy[language];
   const shellCopy = getDashboardShellCopy(language);
   const [isOpen, setIsOpen] = useState(false);
 
-  const legacyMenuItems = [
-    {
-      id: 'today',
-      label: shellCopy.today,
-      icon: Calendar,
-      path: '/dashboard/today',
-      tooltip: shellCopy.todayHint,
-    },
-    {
-      id: 'operator',
-      label: navigationCopy.operator,
-      icon: Bot,
-      path: '/dashboard/operator',
-      tooltip: navigationCopy.operatorHint,
-    },
-    {
-      id: 'profile',
-      label: t.dashboard.sidebar.profile,
-      icon: User,
-      path: '/dashboard/profile',
-      tooltip: shellCopy.profileHint,
-    },
-    {
-      id: 'card',
-      label: t.dashboard.sidebar.card,
-      icon: FileText,
-      path: '/dashboard/card',
-      tooltip: shellCopy.cardHint,
-    },
-    {
-      id: 'content',
-      label: navigationCopy.content,
-      icon: Calendar,
-      path: '/dashboard/content',
-      tooltip: navigationCopy.contentHint,
-    },
-    {
-      id: 'agents',
-      label: navigationCopy.agents,
-      icon: Sparkles,
-      path: '/dashboard/agents',
-      tooltip: navigationCopy.agentsHint,
-    },
-    {
-      id: 'progress',
-      label: t.dashboard.sidebar.progress,
-      icon: TrendingUp,
-      path: '/dashboard/progress',
-      tooltip: shellCopy.progressHint,
-    },
-    {
-      id: 'finance',
-      label: t.dashboard.sidebar.finance,
-      icon: DollarSign,
-      path: '/dashboard/finance',
-      tooltip: shellCopy.financeHint,
-    },
-    ...(featureFlags.webTracking && webTrackingAvailable ? [{
-        id: 'web-analytics',
-        label: navigationCopy.webAnalytics,
-        icon: BarChart3,
-        path: '/dashboard/web-analytics',
-        tooltip: navigationCopy.webAnalyticsHint,
-      }] : []),
-    {
-      id: 'chats',
-      label: t.dashboard.sidebar.chats,
-      icon: MessageSquare,
-      path: '/dashboard/chats',
-      tooltip: shellCopy.chatsHint,
-    },
-    {
-      id: 'promotion',
-      label: navigationCopy.promotion,
-      icon: Megaphone,
-      path: '/dashboard/promotion',
-      tooltip: navigationCopy.promotionHint,
-    },
-    {
-      id: 'telegram-radar',
-      label: demoCopy.telegramRadar,
-      icon: Radar,
-      path: '/dashboard/telegram-radar',
-      tooltip: demoCopy.telegramRadarHint,
-    },
-    { id: 'work-journal', label: 'Рабочий журнал', icon: BadgeDollarSign, path: '/dashboard/work-journal', tooltip: 'Наблюдения, результаты и рекомендации для команды' },
-    {
-      id: 'average-ticket',
-      label: demoCopy.upsells,
-      icon: BadgeDollarSign,
-      path: '/dashboard/average-ticket',
-      tooltip: demoCopy.upsellsHint,
-    },
-    {
-      id: 'ai-chat-promotion',
-      label: t.dashboard.sidebar.aiChatPromotion,
-      icon: Sparkles,
-      path: '/dashboard/ai-chat-promotion',
-      tooltip: demoCopy.geoPromotionHint,
-    },
-    {
-      id: 'settings',
-      label: t.dashboard.sidebar.settings,
-      icon: Settings,
-      path: '/dashboard/settings',
-      tooltip: shellCopy.settingsHint,
-    },
-  ];
-  const menuItems = featureFlags.growthPathsNavigation ? [
-    {
-      id: 'today',
-      label: shellCopy.today,
-      icon: Calendar,
-      path: '/dashboard/today',
-      tooltip: shellCopy.todayHint,
-    },
-    { id: 'operator', label: navigationCopy.operator, icon: Bot, path: '/dashboard/operator', tooltip: navigationCopy.operatorHint },
-    { id: 'growth-paths', label: shellCopy.growthPaths, icon: LayoutGrid, path: '/dashboard/growth-paths', tooltip: shellCopy.growthPathsHint },
-    { id: 'progress', label: shellCopy.results, icon: TrendingUp, path: '/dashboard/progress', tooltip: shellCopy.resultsHint },
-    {
-      id: 'more',
-      label: shellCopy.more,
-      icon: CircleEllipsis,
-      path: '/dashboard/more',
-      tooltip: shellCopy.moreHint,
-    },
-  ] : legacyMenuItems;
+  const workCopy = workNavigationCopy(language);
+  const icons: Record<string, typeof Calendar> = { today: Calendar, operator: Bot, maps: Map, content: FileText, partnerships: Handshake, influencers: UsersRound, upsells: BadgeDollarSign, automation: Sparkles, progress: TrendingUp, finance: DollarSign, profile: User, settings: Settings, more: CircleEllipsis };
+  const menuItems = workDestinations.map(item => ({ ...item, label: workCopy.label(item.id), icon: icons[item.id] || LayoutGrid, tooltip: workCopy.label(item.id) }));
 
   const handleLinkClick = () => {
+    if (isMobile) setIsOpen(false);
     if (isMobile && onClose) {
       onClose();
     }
@@ -211,11 +89,11 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
     if (path === '/dashboard/promotion') {
       return location.pathname === path || location.pathname.startsWith('/dashboard/promotion/');
     }
-    return location.pathname === path;
+    return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
   const sidebarContent = (
-    <div className={cn(
+    <div data-navigation="guided-v1" className={cn(
       "h-full flex flex-col border-r border-slate-200/70 transition-all duration-300",
       "bg-white/86 backdrop-blur-xl supports-[backdrop-filter]:bg-white/78",
       "shadow-[8px_0_32px_-20px_rgba(15,23,42,0.18)]"
@@ -224,7 +102,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       <div className={cn("border-b border-slate-100", collapsed && !isMobile ? "px-3 py-5" : "p-6")}>
         <div className={cn("flex items-center gap-3", collapsed && !isMobile ? "justify-center" : "justify-between")}>
           <Link
-            to="/dashboard/profile"
+            to="/dashboard/today"
             onClick={handleLinkClick}
             className={cn(
               "flex min-w-0 items-center gap-3 rounded-xl outline-none ring-blue-500/30 transition focus-visible:ring-2",
@@ -289,18 +167,22 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1.5 overflow-y-auto p-4 custom-scrollbar">
-        {menuItems.map((item) => {
+        {menuItems.map((item, index) => {
           const Icon = item.icon;
           const active = isActive(item.path);
           return (
-            <Tooltip key={item.id}>
+            <div key={item.id}>
+            {menuItems[index - 1]?.group !== item.group ? <p className={cn("px-3 pb-1 pt-4 text-xs font-medium text-slate-500", collapsed && !isMobile && "sr-only")}>{workCopy.groups[item.group]}</p> : null}
+            <Tooltip>
               <TooltipTrigger asChild>
                 <Link
                   to={item.path}
+                  aria-label={item.label}
+                  aria-current={active ? 'page' : undefined}
                   onClick={handleLinkClick}
                   data-tour-target={`nav-${item.id}`}
                   className={cn(
-                    "group relative flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-300",
+                    "group relative flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     collapsed && !isMobile ? "justify-center px-2 py-3 hover:translate-x-0" : "px-4 py-3",
                     active
                       ? "bg-slate-900 text-white shadow-sm"
@@ -311,7 +193,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
                     "p-2 rounded-lg transition-colors duration-300",
                     active ? "bg-white/14 text-white" : "bg-transparent text-slate-500 group-hover:bg-white group-hover:text-slate-700"
                   )}>
-                    <Icon className="w-5 h-5" />
+                    <Icon className="w-5 h-5" aria-hidden="true" />
                   </div>
                   <span className={cn("tracking-wide", collapsed && !isMobile && "hidden")}>{item.label}</span>
 
@@ -324,6 +206,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
                 {item.tooltip}
               </TooltipContent>
             </Tooltip>
+            </div>
           );
         })}
       </nav>
@@ -344,33 +227,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   );
 
   if (isMobile) {
-    return (
-      <>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="md:hidden"
-          aria-label={isOpen ? navigationCopy.collapse : navigationCopy.expand}
-          onClick={() => setIsOpen(!isOpen)}
-        >
-          {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </Button>
-        {isOpen && (
-          <>
-            <div
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300"
-              onClick={() => {
-                setIsOpen(false);
-                if (onClose) onClose();
-              }}
-            />
-            <div className="fixed left-0 top-0 bottom-0 w-72 z-50 md:hidden animate-in slide-in-from-left duration-300">
-              {sidebarContent}
-            </div>
-          </>
-        )}
-      </>
-    );
+    return <Sheet open={isOpen} onOpenChange={setIsOpen}><SheetTrigger asChild><Button variant="ghost" className="flex min-h-14 w-16 flex-col gap-1 rounded-none p-1 text-xs md:hidden" aria-label={workCopy.menu}><Menu className="h-5 w-5" aria-hidden="true" /><span>{workCopy.menu}</span></Button></SheetTrigger><SheetContent side="left" className="w-72 p-0"><SheetTitle className="sr-only">{workCopy.menu}</SheetTitle>{sidebarContent}</SheetContent></Sheet>;
   }
 
   return (

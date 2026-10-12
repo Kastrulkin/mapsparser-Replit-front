@@ -1,8 +1,12 @@
+import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { workNavigationCopy } from '@/lib/workNavigation';
+import { WorkReturnNotice } from '@/components/WorkReturnNotice';
 import { resolveDashboardBusinessScope } from '../lib/dashboardBusinessScope';
 import { useLatestCallback } from '@/hooks/useLatestCallback';
 import type { BusinessRecord } from '@/types/business';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { HttpError, newAuth, type User } from '../lib/auth_new';
 import { getCapabilityAccessForBusiness, type SubscriptionCapability } from '../lib/subscriptionAccess';
 import { DashboardHeader } from './DashboardHeader';
@@ -44,7 +48,7 @@ const paidDashboardSections: PaidDashboardSection[] = [
   { path: '/dashboard/influencers/operations', capability: 'influencers', title: 'Полная работа с инфлюенсерами входит в тариф «Привлечение»', hint: 'Откроются сообщения, каналы, размещения и подтверждённая отправка.', previewItems: ['Подбор локальных авторов', 'Предложение и черновики сообщений', 'Статусы размещений'], nextAction: 'Откройте тариф, чтобы продолжить работу с выбранными авторами.' },
   { path: '/dashboard/operator', capability: 'operator', title: 'Оператор входит в тариф «Управление»', hint: 'Единый рабочий центр задач и запусков доступен на старшем тарифе.', previewItems: ['Единая очередь задач', 'Черновики с ручным подтверждением', 'Журнал запусков и ошибок'], nextAction: 'После оплаты Оператор покажет первую задачу, которая требует вашего решения.' },
   { path: '/dashboard/telegram-radar', capability: 'telegram_radar', title: 'Telegram-радар входит в тариф «Карты»', hint: 'Сбор отраслевых публикаций доступен вместе с работой над карточкой.', previewItems: ['Темы, которые обсуждают в вашей отрасли', 'Новые возможности и риски', 'Краткая ежедневная сводка'], nextAction: 'После оплаты сохраним ваши ключевые темы и запустим сбор.' },
-  { path: '/dashboard/agents', capability: 'agents', title: 'ИИ-сотрудники входят в тариф «Управление»', hint: 'Настройка и запуск автоматизаций доступны на старшем тарифе.', previewItems: ['Задачи по расписанию', 'Результаты и статусы', 'Ручные подтверждения важных шагов'], nextAction: 'После оплаты выберите первую повторяющуюся задачу для настройки.' },
+  { path: '/dashboard/agents', capability: 'agents', title: 'Автоматизация входит в тариф «Управление»', hint: 'Настройка и запуск автоматизаций доступны на старшем тарифе.', previewItems: ['Задачи по расписанию', 'Результаты и статусы', 'Ручные подтверждения важных шагов'], nextAction: 'После оплаты выберите первую повторяющуюся задачу для настройки.' },
   { path: '/dashboard/chats', capability: 'chats', title: 'Рабочие чаты входят в тариф «Управление»', hint: 'Подключение и обработка сообщений доступны на старшем тарифе.', previewItems: ['Входящие диалоги в одной очереди', 'Черновики ответов', 'Статус канала и ручная отправка'], nextAction: 'После оплаты подключите первый канал и проверьте тестовый диалог.' },
 ];
 
@@ -91,6 +95,7 @@ const LockedSectionPreview = ({ section, currentTierName, paywallHref }: { secti
 
 export const DashboardLayout = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [businesses, setBusinesses] = useState<DashboardBusiness[]>([]);
@@ -144,9 +149,13 @@ export const DashboardLayout = () => {
         if (businessesData.length > 0) {
           setBusinesses(businessesData);
 
-          // Приоритет: бизнес из админской страницы > сохраненный > первый
+          // An authenticated deep link selects its business before child APIs run.
           let businessToSelect;
-          if (adminSelectedBusinessId) {
+          const linkedBusinessId = new URLSearchParams(window.location.search).get('business_id');
+          if (linkedBusinessId) {
+            businessToSelect = businessesData.find((business) => business.id === linkedBusinessId);
+          }
+          if (!businessToSelect && adminSelectedBusinessId) {
             businessToSelect = businessesData.find((business) => business.id === adminSelectedBusinessId);
           }
 
@@ -160,7 +169,7 @@ export const DashboardLayout = () => {
 
           setCurrentBusinessId(businessToSelect.id);
           setCurrentBusiness(businessToSelect);
-          const restoredScope = resolveDashboardBusinessScope(businessToSelect);
+          const restoredScope = resolveDashboardBusinessScope(businessToSelect, linkedBusinessId ? (new URLSearchParams(window.location.search).get('scope_type') === 'network' ? 'network' : 'business') : undefined);
           setControlScope(restoredScope);
           localStorage.setItem(controlScopeStorageKey(Boolean(currentUser.demo_mode)), JSON.stringify(restoredScope));
           localStorage.setItem(selectedBusinessStorageKey(Boolean(currentUser.demo_mode)), businessToSelect.id);
@@ -193,18 +202,24 @@ export const DashboardLayout = () => {
     window.sessionStorage.setItem('localos_checkout_return_to', `${location.pathname}${location.search}`);
   }, [location.pathname, location.search]);
 
-  const handleBusinessChange = useLatestCallback(async (businessId: string) => {
+  const handleBusinessChange = useCallback(async (businessId: string, requestedKind?: 'business' | 'network') => {
     const business = businesses.find(b => b.id === businessId);
     if (business) {
       scopeRevisionRef.current += 1;
       setCurrentBusinessId(businessId);
       setCurrentBusiness(business);
-      const nextScope = resolveDashboardBusinessScope(business);
+      const nextScope = resolveDashboardBusinessScope(business, requestedKind);
       setControlScope(nextScope);
+      if (!requestedKind) {
+        const params = new URLSearchParams(location.search);
+        for (const key of ['journey_action','work_ref','return_to','item_id','plan_id','lead','lead_id','campaign_id','collaboration_id','creator_id','run_id','draft_id','entry','search_task_id','company_filter','field','rule','document','source_entry']) params.delete(key);
+        params.set('business_id', businessId); params.set('scope_type', nextScope.kind);
+        navigate({pathname: location.pathname, search: '?' + params, hash: ''}, {replace:true});
+      }
       localStorage.setItem(controlScopeStorageKey(Boolean(user?.demo_mode)), JSON.stringify(nextScope));
       localStorage.setItem(selectedBusinessStorageKey(Boolean(user?.demo_mode)), businessId);
     }
-  });
+  }, [businesses, user?.demo_mode, location.pathname, location.search, navigate]);
 
   const appliedBusinessLink = useRef('');
   useEffect(() => {
@@ -215,7 +230,7 @@ export const DashboardLayout = () => {
     // Resolve only against the authenticated list, once per link. A later manual
     // business switch is not overwritten by a query parameter left in the URL.
     appliedBusinessLink.current = linkKey;
-    void handleBusinessChange(requestedBusiness);
+    void handleBusinessChange(requestedBusiness, new URLSearchParams(location.search).get('scope_type') === 'network' ? 'network' : 'business');
   }, [location.pathname, location.search, businesses, handleBusinessChange]);
 
   const updateBusiness = (businessId: string, updates: Partial<DashboardBusiness>) => {
@@ -241,7 +256,7 @@ export const DashboardLayout = () => {
       return;
     }
     const target = businesses.find((business) => business.id === nextScope.id);
-    if (target) void handleBusinessChange(target.id);
+    if (target) void handleBusinessChange(target.id, nextScope.kind === 'network' ? 'network' : 'business');
   };
 
   const reloadBusinesses = async () => {
@@ -344,7 +359,7 @@ export const DashboardLayout = () => {
           user={user}
         />
         {user.demo_mode ? <DemoModeBanner /> : null}
-        <main className="flex-1 p-3 sm:p-4 lg:p-6">
+        <main className="flex-1 p-3 pb-24 sm:p-4 sm:pb-24 md:pb-4 lg:p-6"><WorkReturnNotice />
           <div className="mx-auto w-full max-w-[1600px]">
             <div className="relative min-h-[60vh]">
               {membershipReloadError ? (
@@ -369,12 +384,20 @@ export const DashboardLayout = () => {
         </main>
       </div>
       {/* Mobile sidebar overlay */}
+      <MobileWorkNavigation />
+      <div className="fixed bottom-0 right-0 z-40 flex min-h-14 w-16 items-center justify-center pb-[env(safe-area-inset-bottom)] md:hidden">
       <DashboardSidebar
         isMobile={true}
         onClose={() => setSidebarOpen(false)}
         webTrackingAvailable={currentBusiness?.web_tracking_available === true}
       />
       </div>
+      </div>
     </GuidedTourProvider>
   );
+};
+
+const MobileWorkNavigation = () => {
+ const { language } = useLanguage(); const copy = workNavigationCopy(language); const location = useLocation();
+ return <nav aria-label={copy.groups.daily} className="fixed inset-x-0 bottom-0 z-30 flex border-t bg-background pb-[env(safe-area-inset-bottom)] pr-16 md:hidden">{['today','operator','progress'].map(id => { const path = '/dashboard/' + (id === 'progress' ? 'progress' : id); return <Link key={id} to={path} aria-current={location.pathname === path ? 'page' : undefined} className="flex min-h-14 flex-1 items-center justify-center px-2 text-center text-xs font-medium focus-visible:ring-2 focus-visible:ring-ring">{id === 'operator' ? workCoherenceCopy(language).chat : copy.label(id)}</Link>; })}</nav>;
 };

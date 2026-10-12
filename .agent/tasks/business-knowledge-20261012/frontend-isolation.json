@@ -1,0 +1,192 @@
+{
+  "base_commit": "a89fd887ed0ed5c91c14cdcefaf6e2f22dc25b39",
+  "overlays": [
+    "frontend/src/pages/dashboard/ProfilePage.tsx",
+    "frontend/src/components/WorkJournal.tsx",
+    "frontend/src/pages/telegram/TelegramControlWorkspace.tsx",
+    "frontend/src/components/DashboardLayout.tsx",
+    "frontend/src/pages/dashboard/AverageTicketPage.tsx",
+    "frontend/src/components/business-knowledge/"
+  ],
+  "note": "Isolated on pinned Git source; task files, existing direct-navigation and Today/Results fixes are preserved; unrelated dirty files are excluded. Additional i18n-only fragments are listed separately.",
+  "existing_prerequisites": {
+    "frontend/src/lib/workNavigation.ts": "a366be022051e993949d9fb25c73ddfe544ea6b947d6d8773694d4af6da13dc7",
+    "frontend/src/i18n/workCoherenceCopy.ts": "ab6b495d895a5ec33b961bd34219b11ecd7df97aff9f9ce9b0c08c69b367c134",
+    "frontend/src/components/WorkReturnNotice.tsx": "c531824da238f2f1f4162b189763362e2e5557ee60abc588179ea1bf0b23ea38",
+    "frontend/src/lib/workStatus.ts": "07cfad64d1cdb202f8604ed2a878722847191eff4f2b1f16732fa8bf7f6570a0",
+    "frontend/src/lib/dashboardBusinessScope.ts": "12a3e90c633d1b38df9f4248692527a5d7b09109a0d8317ec868f3a0db9b9236",
+    "frontend/src/components/telegram/GrowthNavigation.tsx": "f6ea760a37ce23692297bd7b4ea8fe58cba625e8eb674aa16390db5c4c707f7f",
+    "frontend/src/components/telegram/AgentsMobileModule.tsx": "090d7ec1de4122a6b4da9a74619bc28c5a2f00ba012082dee617a43b531087a7",
+    "frontend/src/features/telegram/types.ts": "ca8551191476aefa3c0d1bc7cc1cedecfd4c7c4db1fae34c18235102944dee5b",
+    "frontend/src/i18n/LanguageContext.logic.ts": "a146d2c66578f00a58d83c77d475c5e5d9f262902bba7669b84f0a65bce5701a",
+    "frontend/src/pages/dashboard/demo/DemoAverageTicketPage.tsx": "80f66d505f873fbcbc2a3ce0df285683c07ae04eb2dc4378dc4afe9013b1d45f",
+    "frontend/src/i18n/demoAverageTicketCopy.ts": "da3acd00f06c4fac6f064770d3ae0ce201de65e4fc346a17884e322d548d8d11",
+    "frontend/src/App.tsx": "3e5866b5266d3711c9316856bbdae4dd99d09cd7debedb3a024a1f16635010ce",
+    "frontend/src/components/WorkRouteAlias.tsx": "f8d4d5b9872ed1b5a86b9f89ba5ae5c9bc6af16b6e9539c157f907481db38345",
+    "frontend/src/pages/dashboard/TodayPage.tsx": "b4c8dc8693f77a7a865554a790d0203aeab7a680074b348b9517bce570d475ce",
+    "frontend/src/pages/dashboard/todayWorkModel.ts": "cb6e67a1791e51f2f1f3997af45f444aff7e8ee790ecb7afcc1f1500430b5b31",
+    "frontend/src/i18n/todayClarityCopy.ts": "3a95d68393d7b5a61cb2a47e87cbe952b99d0b53b8f4a6e65588bbd54dfbf1de",
+    "frontend/src/pages/dashboard/ProgressPage.tsx": "9faf21d01891644c73c30e5090703e6ad2c7a1904e336b6425b92e5dd83e2f9e",
+    "frontend/src/pages/DocsPage.tsx": "1cf78532eb82d524040496a2e0bb703ba3bb2b2694d2312b5cc29033fb8db3a7",
+    "frontend/src/content/docs-hy.json": "b48957c7af7f1792bc12748fa70ab8939d512dafb348b1e96802a93b53b1b1dc",
+    "frontend/src/components/growth/managedCardGrowthCopyAdditional.ts": "2346ab3fdf167f8d42962497d9aa9c42d433f1094069d393c915fe348ab423ae",
+    "frontend/src/pages/dashboard/progressPageCopy.ts": "9f48f87cd76503202e7fcfbe3ef715e30828ac849e5ceee5759f6507ddd39039",
+    "frontend/src/components/growth/ManagedCardGrowthPanel.tsx": "c8ccc62bd4e0ab68b9c97b6a9d20c795f8d7f078d415c671af94949f7c7ffa12",
+    "frontend/src/pages/dashboard/progressResultsCopy.ts": "98e8201d5274cfbb0f059e532b9a6162a40c80b0ce76da43644ecabd99111a8a",
+    "frontend/src/components/DashboardSidebar.tsx": "f4df56bc3b03130df2bc6d581b60362580082130aa8c1019429db41d16cb5083",
+    "frontend/src/pages/dashboard/MorePage.tsx": "e185adb8a37c449d05db43590be07b1ee82ed59b5735225dbc3012be1b7f7f8d",
+    "frontend/src/pages/dashboard/GrowthPathsPage.tsx": "4260365343d681e66686686109f2b7a0ee64be6d3770e863ee401fa3d79b4821",
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx": "e9209185973d5024f87487cc3eecd698e673850684d72b87b33df0885ec619da",
+    "frontend/src/pages/dashboard/ChatsPage.tsx": "ab959d79735fc365b92499a1180753fa845e3534b8f9003e7a6b0c51df2fb929",
+    "frontend/src/pages/dashboard/AgentBlueprintsWorkspace.tsx": "32383876c81dd21b713e9baeccb4998b2197c4287e6b1f78f4dc5d3f6ca7362e",
+    "frontend/src/i18n/agentsWorkspaceCopy.ts": "488b69532a505edfa2777f7db224830f9c99ed3547b431d81771248c95151990",
+    "frontend/src/components/access/AccessBoundary.tsx": "7cbac0f9ee0a1af828cbb963b62d2ac0f5e5f208b0cca68e01a50e8ffd9a1cea",
+    "frontend/src/components/outreach/OutreachSandbox.tsx": "5e9b8f717fc5b141c3c98120e081be245fed80b44db342247ac72b53e511c8ac"
+  },
+  "production_prerequisites": {
+    "frontend/src/components/prospecting/OutreachContinuation.tsx": {
+      "captured_sha256": "95e6423ea8f06cc01756d5a3763d40355911bf346f2d6e6a9e9798bbd7ca52fe",
+      "release_sha256": "95e6423ea8f06cc01756d5a3763d40355911bf346f2d6e6a9e9798bbd7ca52fe"
+    },
+    "frontend/src/components/prospecting/OutreachDetailPanes.tsx": {
+      "captured_sha256": "9db485e6258d5ab902cf39954674f3ae8ce50925c09547ed919ff7968c800388",
+      "release_sha256": "9db485e6258d5ab902cf39954674f3ae8ce50925c09547ed919ff7968c800388"
+    },
+    "frontend/src/components/prospecting/PartnershipWorkspaceOverview.tsx": {
+      "captured_sha256": "614d0507b762319446900a91bc08dac9be6771a9f66dfdb6c87a53fb90dd07c1",
+      "release_sha256": "b5db5e47bf43935c5aaf3f092a1cdd7aa6b7e3f4392ff989e2c997a094f31f4d"
+    },
+    "frontend/src/components/prospecting/outreachTouchMessage.ts": {
+      "captured_sha256": "7644214d718abfbf2d425b013a1263be5a1df100b719ad13a5239efed57fdd61",
+      "release_sha256": "7644214d718abfbf2d425b013a1263be5a1df100b719ad13a5239efed57fdd61"
+    },
+    "frontend/src/components/prospecting/PartnershipPipelineSections.tsx": {
+      "captured_sha256": "360860690c93c2d2a39bde62cd40435b8a902c6c9a9fbd903e2d10282f2281aa",
+      "release_sha256": "360860690c93c2d2a39bde62cd40435b8a902c6c9a9fbd903e2d10282f2281aa"
+    },
+    "frontend/src/components/prospecting/OutreachGroupCard.tsx": {
+      "captured_sha256": "f2e33a956dd8b5283a99ece4a3f8744bf44f8c382eec88c7d3a37e3df92c5443",
+      "release_sha256": "f2e33a956dd8b5283a99ece4a3f8744bf44f8c382eec88c7d3a37e3df92c5443"
+    },
+    "frontend/src/components/prospecting/OutreachLearningInsights.tsx": {
+      "captured_sha256": "ee7ad581753aa55937f2fe1cbb5b0e1bb069a2740278162d6b2a36aaeef3ab5c",
+      "release_sha256": "ee7ad581753aa55937f2fe1cbb5b0e1bb069a2740278162d6b2a36aaeef3ab5c"
+    },
+    "frontend/src/components/prospecting/OutreachDateTimePicker.tsx": {
+      "captured_sha256": "26ec28b08d7eaada49bab734b0ec0e6628b91c94af7eb8cb6efa104b85726c15",
+      "release_sha256": "26ec28b08d7eaada49bab734b0ec0e6628b91c94af7eb8cb6efa104b85726c15"
+    },
+    "frontend/src/components/prospecting/ProspectingAnalyticsBlocks.tsx": {
+      "captured_sha256": "e36a312f2bf8ceb02c8afa947f0e61312131e043573de3cc74b77239a63ca4f2",
+      "release_sha256": "e36a312f2bf8ceb02c8afa947f0e61312131e043573de3cc74b77239a63ca4f2"
+    },
+    "frontend/src/components/prospecting/PartnershipResults.tsx": {
+      "captured_sha256": "e906b422a9acbf6c4ebf8e384ea5a9cfdc8277ae1db9f351545df219a92b6964",
+      "release_sha256": "e906b422a9acbf6c4ebf8e384ea5a9cfdc8277ae1db9f351545df219a92b6964"
+    },
+    "frontend/src/components/prospecting/AdminLeadRegistry.tsx": {
+      "captured_sha256": "1b9f7fded35d67ba48df8c8f61a310fd82147b2c48aa8d63d19627e90542c4bc",
+      "release_sha256": "1b9f7fded35d67ba48df8c8f61a310fd82147b2c48aa8d63d19627e90542c4bc"
+    },
+    "frontend/src/components/prospecting/partnershipSearchGroups.ts": {
+      "captured_sha256": "f9d0bf397e3d8fd97695447e2327ec1ab72b9288b8d82b2e72f6459b2a8cab56",
+      "release_sha256": "f9d0bf397e3d8fd97695447e2327ec1ab72b9288b8d82b2e72f6459b2a8cab56"
+    },
+    "frontend/src/components/prospecting/OutreachSenderProfileSetup.tsx": {
+      "captured_sha256": "238faa19aa37b64294a67e55c47f39e0b74aaafdc3b55249a1b03216dcc0e437",
+      "release_sha256": "238faa19aa37b64294a67e55c47f39e0b74aaafdc3b55249a1b03216dcc0e437"
+    },
+    "frontend/src/components/prospecting/OutreachSuppressionManager.tsx": {
+      "captured_sha256": "72d6405ed1bcde5e370f0466e55405335aefb15447ef77351f4fb0349d1f7ac7",
+      "release_sha256": "72d6405ed1bcde5e370f0466e55405335aefb15447ef77351f4fb0349d1f7ac7"
+    },
+    "frontend/src/components/prospecting/OutreachWorkspaceBlocks.tsx": {
+      "captured_sha256": "e475e35ff7f8e4a259e6935c8b30e7b83800830d54aaa0abf37b7feeaaff3de8",
+      "release_sha256": "e475e35ff7f8e4a259e6935c8b30e7b83800830d54aaa0abf37b7feeaaff3de8"
+    },
+    "frontend/src/components/prospecting/OutreachScheduleCalendar.tsx": {
+      "captured_sha256": "4b641a7be1f2026562ab7df9f607bebe23eb6594a327d403f2c45a9d0c768c5a",
+      "release_sha256": "4b641a7be1f2026562ab7df9f607bebe23eb6594a327d403f2c45a9d0c768c5a"
+    },
+    "frontend/src/components/prospecting/partnershipApi.ts": {
+      "captured_sha256": "6f4515a4e69671118a165ba28579173a79813a3d94660271fe95f13641c7bb21",
+      "release_sha256": "d88b4f49ec9f72872dffcbbeafe11cecdafa49fcbbd57c87168cc53ab8bf745c"
+    },
+    "frontend/src/components/prospecting/partnershipFlowHelpers.ts": {
+      "captured_sha256": "72de8f2e2cee61515046b3a88b44901b114b6cde2bc15dfe3719956aff0109e3",
+      "release_sha256": "72de8f2e2cee61515046b3a88b44901b114b6cde2bc15dfe3719956aff0109e3"
+    },
+    "frontend/src/components/prospecting/LeadDetailSections.tsx": {
+      "captured_sha256": "d3eb6f5cfa418ba6d5f0a179d86c9136cc9080de99dc00a97c8984f770e4f83b",
+      "release_sha256": "d3eb6f5cfa418ba6d5f0a179d86c9136cc9080de99dc00a97c8984f770e4f83b"
+    },
+    "frontend/src/components/prospecting/partnershipTypes.ts": {
+      "captured_sha256": "cac6d88e19c5dfd49547e8c5087eba5807c7c0efd0d87778b4a059dad507d094",
+      "release_sha256": "24b46c34d6c520673ad4889d62ddda765dafc2e9a38d0f34360986f1d7031872"
+    },
+    "frontend/src/components/prospecting/OutreachMessageQueue.tsx": {
+      "captured_sha256": "17103398b807519dfc4d9ac0b91160afe456b4479f55fac0ba3025a80fc811c4",
+      "release_sha256": "17103398b807519dfc4d9ac0b91160afe456b4479f55fac0ba3025a80fc811c4"
+    },
+    "frontend/src/components/prospecting/PartnershipOperationalSections.tsx": {
+      "captured_sha256": "5108612361df4a0082bab90f50dd6fd0f140e36644f557f08c025f77b23072f2",
+      "release_sha256": "5108612361df4a0082bab90f50dd6fd0f140e36644f557f08c025f77b23072f2"
+    },
+    "frontend/src/components/prospecting/ReadyEmailImport.tsx": {
+      "captured_sha256": "5622eb6d53efa43ed65459850e4bd129f3afddbd28170510412dd3a57810a8b2",
+      "release_sha256": "5622eb6d53efa43ed65459850e4bd129f3afddbd28170510412dd3a57810a8b2"
+    },
+    "frontend/src/components/prospecting/ProspectingWorkspaceChrome.tsx": {
+      "captured_sha256": "090766922af21ba22bb3adc4bf5748c8db5254efb551f71ae92bdb5ffdfaa83b",
+      "release_sha256": "090766922af21ba22bb3adc4bf5748c8db5254efb551f71ae92bdb5ffdfaa83b"
+    },
+    "frontend/src/components/prospecting/LeadWorkflowBlocks.tsx": {
+      "captured_sha256": "9b42b57f87cf601956d956aa2c0c85aef6950492eaff6f55a7936f32ae327df1",
+      "release_sha256": "9b42b57f87cf601956d956aa2c0c85aef6950492eaff6f55a7936f32ae327df1"
+    },
+    "frontend/src/components/prospecting/prospectingAsync.ts": {
+      "captured_sha256": "c94ac797859fde88afcbd8042c3f9d01ecdc323fddd9f974aae399be0ca70645",
+      "release_sha256": "c94ac797859fde88afcbd8042c3f9d01ecdc323fddd9f974aae399be0ca70645"
+    },
+    "frontend/src/components/prospecting/PartnershipAnalyticsWorkspace.tsx": {
+      "captured_sha256": "a577d117dba2b7742efc9688a25e21ddfc7cfa0cd5dc54cb37e87d3b3cc4f3bb",
+      "release_sha256": "a577d117dba2b7742efc9688a25e21ddfc7cfa0cd5dc54cb37e87d3b3cc4f3bb"
+    },
+    "frontend/src/components/prospecting/PartnershipAnalyticsPanels.tsx": {
+      "captured_sha256": "00728fc2e30af2c096eca70cdd87037d02aa5da93a2dafb9517597555314e919",
+      "release_sha256": "00728fc2e30af2c096eca70cdd87037d02aa5da93a2dafb9517597555314e919"
+    },
+    "frontend/src/components/prospecting/partnershipExport.ts": {
+      "captured_sha256": "3868e69290a40256292ce32d603c326e92ca5d5d64d13dfbe6827029634b80c5",
+      "release_sha256": "3868e69290a40256292ce32d603c326e92ca5d5d64d13dfbe6827029634b80c5"
+    },
+    "frontend/src/components/prospecting/OutreachCampaignBuilder.tsx": {
+      "captured_sha256": "9c5fade31f25618907fee537a3ef765c86871c22abd0c4bc9f31ccabf11b01ef",
+      "release_sha256": "074068367521e78cc3e6ef7cabf8df4b5f5b5a0af3646446de4d034214db217e"
+    },
+    "frontend/src/components/prospecting/OutreachTouchMessageEditor.tsx": {
+      "captured_sha256": "56856bf8809b0a6c49b4d1ab5ff0fcdffcbc3f1aa2057f5d537ae4cb5eab0b7f",
+      "release_sha256": "56856bf8809b0a6c49b4d1ab5ff0fcdffcbc3f1aa2057f5d537ae4cb5eab0b7f"
+    },
+    "frontend/src/components/prospecting/PartnershipLeadDetailDrawer.tsx": {
+      "captured_sha256": "d60cb724bd9ba5e49cc3949e013a97ead0c5e23f6cf4b624eefa62360f02c2e6",
+      "release_sha256": "440ec49d382da45a3acc06d2f501f81b9b4be029ab1a9870d568e0f92b9842ff"
+    },
+    "frontend/src/components/prospecting/usePartnershipWorkspaceDerivedData.ts": {
+      "captured_sha256": "c56c75d69a49e913ff2351053c838430f490937de35f3c2318aea8252b922ebd",
+      "release_sha256": "c56c75d69a49e913ff2351053c838430f490937de35f3c2318aea8252b922ebd"
+    },
+    "frontend/src/components/prospecting/PartnershipRawIntakeControls.tsx": {
+      "captured_sha256": "45d17e8bdd6fb750413465227d49679448840681ffe3dc4934a7268604f10673",
+      "release_sha256": "45d17e8bdd6fb750413465227d49679448840681ffe3dc4934a7268604f10673"
+    },
+    "frontend/src/i18n/partnershipWorkspaceCopy.ts": {
+      "captured_sha256": "c50e1bb07522d4523cfbfbdb59f1f83c0051dc8ae97dfcf487553ebabdef5163",
+      "release_sha256": "8a7129dfa4bd81fe4009c06d6d4064650f86957bc4eaa732cc9e70a34437047d"
+    },
+    "frontend/src/pages/dashboard/PartnershipSearchPage.tsx": {
+      "captured_sha256": "97e400ea7cc610537e513a604f10cf96510aa85c7f8c4f032bd0aab7cb991047",
+      "release_sha256": "0b74887f39b993beea465cab21461881731534000af4a5c646b769760914852f"
+    }
+  }
+}

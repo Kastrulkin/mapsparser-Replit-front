@@ -1,51 +1,26 @@
-import '@testing-library/jest-dom/vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-
 import GrowthNavigation from './GrowthNavigation';
-
 const navigation = [
-  { key: 'progress', label: 'Прогресс', status: 'available' },
-  { key: 'cards', label: 'Карточки', status: 'available' },
-  { key: 'reviews', label: 'Отзывы', status: 'available' },
-  { key: 'content', label: 'Контент', status: 'available' },
-  { key: 'finance', label: 'Финансы', status: 'available' },
-  { key: 'services', label: 'Услуги', status: 'available' },
-  { key: 'agents', label: 'ИИ-агенты', status: 'available' },
-  { key: 'settings', label: 'Настройки', status: 'read_only', reason: 'Доступны уведомления' },
+ {key:'content',label:'Content',status:'available'},
+ {key:'cards',label:'Cards',status:'available'},
+ {key:'work_journal',label:'Journal',status:'available'},
+ {key:'chats',label:'Chats',status:'available'},
+ {key:'community_sources',label:'Radar',status:'available'},
 ] satisfies Parameters<typeof GrowthNavigation>[0]['navigation'];
-
-describe('GrowthNavigation', () => {
-  it('organizes modules around business outcomes and preserves fast actions', async () => {
-    const user = userEvent.setup();
-    const open = vi.fn();
-    const openProgress = vi.fn();
-    render(<GrowthNavigation navigation={navigation} onOpen={open} onOpenProgress={openProgress} onLocked={vi.fn()} onRestartTour={vi.fn()} />);
-
-    expect(screen.getByText('Привести карточки в порядок')).toBeInTheDocument();
-    expect(screen.getByText('Контент без рутины')).toBeInTheDocument();
-    expect(screen.getByText('Больше выручки')).toBeInTheDocument();
-    expect(screen.getByText('Снять с себя повторяющиеся задачи')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /Ответить на отзывы/ }));
-    expect(open).toHaveBeenCalledWith('reviews');
-    await user.click(screen.getByRole('button', { name: /Открыть план роста/ }));
-    expect(openProgress).toHaveBeenCalledTimes(1);
-  });
-
-  it('routes an unpaid module to the payment gate instead of opening it', async () => {
-    const user = userEvent.setup();
-    const open = vi.fn();
-    const locked = vi.fn();
-    const unpaidNavigation: Parameters<typeof GrowthNavigation>[0]['navigation'] = navigation.map((item) => item.key === 'content'
-      ? { ...item, status: 'read_only', reason: 'Раздел доступен после оплаты тарифа.' }
-      : item);
-
-    render(<GrowthNavigation navigation={unpaidNavigation} onOpen={open} onOpenProgress={vi.fn()} onLocked={locked} onRestartTour={vi.fn()} />);
-
-    await user.click(screen.getByRole('button', { name: /Контент без рутины/ }));
-    expect(open).not.toHaveBeenCalled();
-    expect(locked).toHaveBeenCalledWith(expect.objectContaining({ key: 'content', status: 'read_only' }));
-  });
+describe('Telegram utility menu', () => {
+ it('keeps primary work areas out of More and links discovery with scope', async () => {
+  const open=vi.fn();
+  render(<GrowthNavigation navigation={navigation} onOpen={open} onOpenProgress={vi.fn()} onLocked={vi.fn()} onRestartTour={vi.fn()} scope={{kind:'network',id:'network'}}/>);
+  expect(screen.queryByRole('button',{name:'Content'})).not.toBeInTheDocument();
+  const href=screen.getByRole('link',{name:/Пути роста/}).getAttribute('href') || '';
+  expect(href).toContain('business_id=network'); expect(href).toContain('scope_type=network');
+  await userEvent.click(screen.getByRole('button',{name:'Сообщения клиентов'})); expect(open).toHaveBeenCalledWith('chats');
+ });
+ it('explains a locked utility and calls the existing paywall',async()=>{
+  const locked=vi.fn();const open=vi.fn();
+  render(<GrowthNavigation navigation={[{key:'work_journal',label:'Journal',status:'read_only',reason:'Нужен тариф'}]} onOpen={open} onOpenProgress={vi.fn()} onLocked={locked} onRestartTour={vi.fn()}/>);
+  await userEvent.click(screen.getByRole('button',{name:/Рабочий журнал/})); expect(open).not.toHaveBeenCalled();expect(locked).toHaveBeenCalledWith(expect.objectContaining({key:'work_journal'}));
+ });
 });

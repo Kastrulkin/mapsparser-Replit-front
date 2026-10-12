@@ -11,7 +11,9 @@ from services.operator_conversations import _row
 
 
 def enabled(business_id):
-    return business_id in {v.strip() for v in os.getenv('OPERATOR_WORK_JOURNAL_BUSINESS_IDS','').split(',') if v.strip()}
+    if os.getenv('OPERATOR_BUSINESS_INFORMATION_ENABLED', '').casefold() in {'1','true'}:
+        return True
+    return business_id in {value.strip() for value in os.getenv('OPERATOR_WORK_JOURNAL_BUSINESS_IDS', '').split(',') if value.strip()}
 
 
 def installed(cursor):
@@ -23,10 +25,10 @@ def digest(value):
     return hashlib.sha256(json.dumps(value,sort_keys=True,default=str,ensure_ascii=False).encode()).hexdigest()
 
 
-def scope(cursor,business_id,user_id,write=False,owner_only=False):
+def scope(cursor,business_id,user_id,write=False,owner_only=False,knowledge_proposal=False):
     from services.operator_audio import authorize_actor
-    actor,_=authorize_actor(cursor,user_id,business_id)
-    if write and not enabled(business_id):raise PermissionError('Новый рабочий журнал пока отключён для этого бизнеса.')
+    actor,_=authorize_actor(cursor,user_id,business_id,check_subscription=False) if knowledge_proposal else authorize_actor(cursor,user_id,business_id)
+    if write and not enabled(business_id) and not knowledge_proposal:raise PermissionError('Новый рабочий журнал пока отключён для этого бизнеса.')
     owner=actor.get('role')=='business_owner' or bool(actor.get('is_superadmin'))
     role='owner' if owner else 'viewer'
     if not owner:
@@ -164,17 +166,30 @@ def _audit(cursor,business_id,user_id,channel,kind,target_id,request_key,before,
 
 
 def save_note(cursor,business_id,user_id,channel,message_id,request_key,original,args):
-    actor=scope(cursor,business_id,user_id,True)
+    if not isinstance(args,dict):raise ValueError('Нужны параметры наблюдения.')
+    actor=scope(cursor,business_id,user_id,True,knowledge_proposal=bool(args.get('knowledge_proposal')))
+    knowledge_link=None
+    if args.get('knowledge_proposal'):
+        from services import business_knowledge
+        from services.business_permissions import load_actor
+        proposal=args['knowledge_proposal']
+        if not isinstance(proposal,dict):raise ValueError('Укажите сведения для предложения.')
+        knowledge_actor=business_knowledge.access(cursor,'business',business_id,load_actor(cursor,user_id))
+        targets=business_knowledge._effective(cursor,knowledge_actor,'field')+business_knowledge._effective(cursor,knowledge_actor,'rule')
+        target=next((row for row in targets if row['id']==proposal.get('record_id')),None)
+        if not target:raise PermissionError('Сведения недоступны для предложения.')
+        knowledge_link={'record_id':target['id'],'kind':target['kind'],'version':target['version'],'label':target['payload_json']['label']}
     if not request_key or len(request_key)>250:raise ValueError('Нужен идентификатор записи.')
     if not isinstance(args,dict):raise ValueError('Нужны параметры наблюдения.')
     request_key=user_id+':'+request_key
     request_hash=digest([original,args])
     cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))',('work-journal:'+business_id,))
-    actor=scope(cursor,business_id,user_id,True)
+    actor=scope(cursor,business_id,user_id,True,knowledge_proposal=bool(args.get('knowledge_proposal')))
     cursor.execute('SELECT after_json FROM business_work_history WHERE business_id=%s AND request_key=%s',(business_id,request_key))
     replay=_row(cursor,cursor.fetchone())
     if replay:
         if replay['after_json'].get('request_hash')!=request_hash:raise ValueError('Идентификатор запроса уже использован для другого изменения.')
+        if knowledge_link:return replay['after_json']
         read_entry(cursor,business_id,actor,replay['after_json']['id'])
         logging.getLogger(__name__).info('work_journal_event status=duplicate')
         from services import work_review
@@ -190,6 +205,12 @@ def save_note(cursor,business_id,user_id,channel,message_id,request_key,original
             raise ValueError('Вопрос или предположение не сохраняется как произошедшее событие.')
     elif not before:raise ValueError('Укажите запись для отмены.')
     facts=dict(before.get('facts_json') or {})
+    if knowledge_link:facts['knowledge_proposal']=knowledge_link
+    if 'operational' in args:
+        from services.operator_day_facts import validate
+        facts['operational']=validate(cursor,business_id,args['operational'],quote)
+    elif before and quote and quote != facts.get('quote'):
+        facts.pop('operational',None)
     if quote and quote!=facts.get('quote') and before and 'outcome' not in args:
         facts.update(outcome='note',reason=None,addon_service_id=None)
     for key in ('outcome','reason','addon_service_id'):
@@ -246,6 +267,7 @@ def save_note(cursor,business_id,user_id,channel,message_id,request_key,original
             (str(uuid.uuid4()),business_id,entry_id,booking_id,service_id or visit.get('service_id'),facts.get('addon_service_id'),outcome,event_date,visit.get('master_id'),reason,user_id))
     _audit(cursor,business_id,user_id,channel,'note',entry_id,request_key,before,after)
     logging.getLogger(__name__).info('work_journal_event status=%s channel=%s','cancelled' if after['is_voided'] else 'corrected' if before else 'saved',channel)
+    if knowledge_link:return after
     return work_review.sanitize(after,work_review.can_review(cursor,business_id,user_id)) if work_review.available(cursor) else after
 
 

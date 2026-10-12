@@ -58,6 +58,11 @@ if [[ ! -f "${css_file}" ]]; then
   exit 1
 fi
 
+if grep -qE '@(tailwind|apply)[[:space:]]+' "${css_file}"; then
+  echo "Uncompiled Tailwind directives in CSS: ${css_file}"
+  exit 1
+fi
+
 missing_assets=0
 while IFS= read -r asset_path; do
   [[ -z "${asset_path}" ]] && continue
@@ -134,6 +139,18 @@ if missing:
 print(f\"Reachable dynamic assets checked: {len(visited)} JS files\")
 "
 python3 -c "${dynamic_asset_check}" "${dist_dir}" "${js_file}"
+
+# Public-audit is a separate entry without dashboard navigation. Dashboard
+# releases must contain the canonical menu; a missing build flag cannot silently
+# re-enable the legacy sidebar. Search only reachable chunks, not retained assets.
+if [[ "${index_file}" != */public-audit/* ]]; then
+  navigation_check="${dynamic_asset_check}
+if not any('guided-v1' in path.read_text(encoding='utf-8') for path in visited):
+    print('Missing canonical dashboard navigation: guided-v1', file=sys.stderr)
+    raise SystemExit(1)
+"
+  python3 -c "${navigation_check}" "${dist_dir}" "${js_file}"
+fi
 
 echo "OK: frontend/dist integrity check passed"
 echo "JS: ${js_asset}"

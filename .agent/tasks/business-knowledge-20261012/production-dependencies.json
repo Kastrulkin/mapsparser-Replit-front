@@ -1,0 +1,5 @@
+{
+  "src/services/business_permissions.py": "bf3423c7fbfb3bf92532e37a43fc5b07e151240ae877dabf5671da4269c9f951",
+  "src/services/agent_source_ingestion.py": "99119634dcf1fc0c78b40cfa1069d156c83d7b1f4c6dea1255ee5367eef3e11a",
+  "src/services/operator_conversations.py": "b7d50eb42da0948be7f7dcfc32514fd208890352d8d661a3a420816b168c7d99"
+}

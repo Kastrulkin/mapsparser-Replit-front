@@ -51,6 +51,7 @@ export type PartnershipLead = {
     last_message_excerpt?: string | null;
   };
   updated_at?: string;
+  created_at?: string;
   rating?: number;
   reviews_count?: number;
   parse_task_id?: string;
@@ -77,6 +78,8 @@ export type PartnershipLead = {
 };
 
 export type PartnershipDraft = {
+  canonical_review?: {recipient?: string; sender?: string};
+  learning_note_json?: { campaign_id?: string; search_task_id?: string; manual_review_required?: boolean };
   id: string;
   lead_id: string;
   created_at?: string;

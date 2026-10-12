@@ -47,12 +47,15 @@ export const getStringIds = (value: unknown) => {
 
 const request = (path: string, init?: PartnershipRequestInit) => newAuth.makeRequest(path, init);
 
-export const loadPartnershipLeads = ({ businessId, stage, pilotCohort, query }: PartnershipLeadQuery) => {
+export const loadPartnershipLeads = ({ businessId, stage, pilotCohort, query, searchTaskId, limit, offset }: PartnershipLeadQuery & { searchTaskId?: string; limit?: number; offset?: number; companyFilter?: string }) => {
   const params = new URLSearchParams();
   params.set('business_id', businessId);
   if (stage !== 'all') params.set('pipeline_status', stage);
   if (pilotCohort !== 'all') params.set('pilot_cohort', pilotCohort);
   if (query.trim()) params.set('q', query.trim());
+  if (searchTaskId) params.set('search_task_id', searchTaskId);
+  if (limit) params.set('limit', String(limit));
+  if (offset) params.set('offset', String(offset));
   return request(`/partnership/leads?${params.toString()}`, { method: 'GET' });
 };
 
@@ -64,10 +67,10 @@ export const loadPartnershipRalphLoop = (businessId: string, pilotCohort: string
   return request(`/partnership/ralph-loop-summary?${params.toString()}`, { method: 'GET' });
 };
 
-export const loadPartnershipDrafts = (businessId: string) =>
+export const loadPartnershipDrafts = (businessId: string, _searchTaskId?: string) =>
   request(`/partnership/drafts?business_id=${encodeURIComponent(businessId)}`, { method: 'GET' });
 
-export const loadPartnershipBatches = (businessId: string) =>
+export const loadPartnershipBatches = (businessId: string, _searchTaskId?: string) =>
   request(`/partnership/send-batches?business_id=${encodeURIComponent(businessId)}`, { method: 'GET' });
 
 export const loadPartnershipLearningMetrics = () =>

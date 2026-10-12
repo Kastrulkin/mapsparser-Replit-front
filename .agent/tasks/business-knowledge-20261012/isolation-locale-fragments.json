@@ -1,0 +1,146 @@
+[
+  {
+    "file": "frontend/src/components/Footer.tsx",
+    "translations": 3
+  },
+  {
+    "file": "frontend/src/components/growth/DataHealthRhythmStrip.tsx",
+    "translations": 2
+  },
+  {
+    "file": "frontend/src/components/growth/managedCardGrowthCopy.ts",
+    "translations": 3
+  },
+  {
+    "file": "frontend/src/components/guided-tour/guidedTourCopy.ts",
+    "translations": 6
+  },
+  {
+    "file": "frontend/src/components/Header.tsx",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/content/aboutStoryCopy.ts",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/content/collectionCopy.ts",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/content/contentCopy.ts",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/i18n/agentsWorkspaceCopy.ts",
+    "translations": 5
+  },
+  {
+    "file": "frontend/src/i18n/aiChatPromotionCopy.ts",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/i18n/chatsWorkspaceCopy.ts",
+    "translations": 2
+  },
+  {
+    "file": "frontend/src/i18n/contentCalendarCopy.ts",
+    "translations": 2
+  },
+  {
+    "file": "frontend/src/i18n/contentWorkspaceCopy.ts",
+    "translations": 2
+  },
+  {
+    "file": "frontend/src/i18n/dashboardNavigationCopy.ts",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/i18n/dashboardShellCopy.ts",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/i18n/demoShowcaseData.ts",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/i18n/demoWorkspaceCopy.ts",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/i18n/financePageCopy.ts",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/i18n/financeWorkspaceCopy.ts",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/i18n/journeyActionCopy.ts",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/i18n/newsWorkspaceCopy.ts",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/i18n/partnershipWorkspaceCopy.ts",
+    "translations": 4
+  },
+  {
+    "file": "frontend/src/i18n/publicSalesRoomCopy.ts",
+    "translations": 2
+  },
+  {
+    "file": "frontend/src/i18n/todayPageCopy.ts",
+    "translations": 2
+  },
+  {
+    "file": "frontend/src/i18n/todayWorkCopy.ts",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/i18n/webAnalyticsCopy.ts",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/pages/content/contentSeo.ts",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/pages/dashboard/agents/agent-deep-copy.ts",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/pages/dashboard/agents/template-gallery-copy.ts",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/pages/dashboard/agents/timezone-select.tsx",
+    "translations": 2
+  },
+  {
+    "file": "frontend/src/pages/dashboard/demo/DemoAgentsPage.tsx",
+    "translations": 2
+  },
+  {
+    "file": "frontend/src/pages/dashboard/demo/DemoContentPlanPage.tsx",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/pages/dashboard/progressPageCopy.ts",
+    "translations": 6
+  },
+  {
+    "file": "frontend/src/pages/dashboard/TodayPage.tsx",
+    "translations": 3
+  },
+  {
+    "file": "frontend/src/pages/DocsPage.tsx",
+    "translations": 1
+  },
+  {
+    "file": "frontend/src/pages/Index.tsx",
+    "translations": 3
+  }
+]

@@ -290,6 +290,8 @@ def build_bounded_model_artifact_payload(cursor: Any, run: Dict[str, Any], step:
         max_items=max_items,
         configured_scope=[_clean_text(item) for item in configured_scope if _clean_text(item)],
     )
+    from services.business_knowledge import context
+    knowledge=context(cursor,_clean_text(run.get('business_id')),_clean_text(run.get('created_by_user_id')))
     if safe_preview:
         return {
             **dict(step.get("payload") if isinstance(step.get("payload"), dict) else {}),
@@ -316,6 +318,7 @@ def build_bounded_model_artifact_payload(cursor: Any, run: Dict[str, Any], step:
         "Если данных недостаточно, укажи это в exceptions.\n"
         "Входные данные:\n"
         + json.dumps(source_context, ensure_ascii=False, default=str)[:30000]
+        + '\n\n' + knowledge['text']
     )
     llm_result = run_llm_task(
         LLMTaskRequest(
@@ -338,6 +341,8 @@ def build_bounded_model_artifact_payload(cursor: Any, run: Dict[str, Any], step:
         **dict(step.get("payload") if isinstance(step.get("payload"), dict) else {}),
         "status": "prepared",
         "result": result_payload,
+        "business_knowledge_sources": knowledge['sources'],
+        "business_knowledge_revision": knowledge['revision'],
         "review_required": parsed_result is None,
         "external_dispatch_performed": False,
         "bounded_model": {
@@ -554,12 +559,17 @@ def _load_workspace(cursor: Any, run: Dict[str, Any]) -> Dict[str, Any]:
     if not sources:
         sources = _compiled_internal_sources(cursor, run, metadata)
     internal_sources = _hydrate_internal_sources(cursor, _clean_text(run.get("business_id")), sources)
+    from services.business_knowledge import context
+    knowledge=context(cursor,_clean_text(run.get('business_id')),_clean_text(run.get('created_by_user_id')))
+    if knowledge['text']:
+        internal_sources.append({'source_name':'Знания о бизнесе','summary':knowledge['text'],'raw':{'text':knowledge['text']}})
     return {
         "blueprint": blueprint,
         "metadata": metadata,
         "setup": setup,
         "sources": sources,
         "internal_sources": internal_sources,
+        "business_knowledge_sources": knowledge['sources'],
         "feedback_history": metadata.get("feedback_history") if isinstance(metadata.get("feedback_history"), list) else [],
         "run_input": parse_json_field(run.get("input_json"), {}),
         "run_id": _clean_text(run.get("id")),
@@ -700,6 +710,7 @@ def _build_output_draft_payload(cursor: Any, run: Dict[str, Any], base_payload: 
         "status": "generated",
         "category": category,
         "result": output,
+        "business_knowledge_sources": workspace.get('business_knowledge_sources') or [],
         "items_used": len(extracted),
         "provenance": output.get("provenance") if isinstance(output, dict) else [],
         "analysis_source": output.get("analysis_source") if isinstance(output, dict) else "",
@@ -757,6 +768,9 @@ def _render_output(
     feedback_history: List[Dict[str, Any]],
     workspace: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
+    from services.agent_blueprint_draft_builder import requires_native_outreach
+    if requires_native_outreach(_clean_text(setup.get("workflow_description")), category):
+        raise ValueError("Для аутрича нужны согласованные условия поиска и подготовки писем. Этот сценарий сводки не выполняет аутрич; отправка не запускалась.")
     run_parameters = _public_run_parameters(workspace)
     setup = _setup_for_run(setup, run_parameters)
     facts = [item.get("summary") for item in extracted if item.get("summary")]

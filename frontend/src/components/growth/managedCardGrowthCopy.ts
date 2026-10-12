@@ -376,6 +376,11 @@ const copy: Record<Language, ManagedCardGrowthCopy> = {
   ar: managedCardGrowthCopyAdditional.ar,
   ha: managedCardGrowthCopyAdditional.ha,
   tr: managedCardGrowthCopyAdditional.tr,
+
+  hy: {
+  eyebrow: "Կառավարվող ցուցակագրման աշխատանք", title: "Ցուցակման նպատակը և կարգավիճակը", description: "LocalOS-ը ստուգում է հարթակներն ըստ հերթականության. նախ նշում է մուտքն ու ճշգրտությունը, այնուհետև կոնտակտային ուղին, առաջարկը, վստահությունը, լուսանկարները և ժամանակին գործելու պատճառները:", goal: "Նպատակ", chooseGoal: "Ընտրեք նպատակ", saving: "Պահվում է…", confirmGoal: "Հաստատեք նպատակը", goalConfirmed: "Գոլը հաստատված է. Դրա դեմ ընտրված է հաջորդ քայլը։", networkGoal: "Հաստատեք նպատակը ցանցի յուրաքանչյուր վայրի համար առանձին:", saveError: "Չհաջողվեց փրկել դարպասը", waitingUntil: (date) => `Waiting for data until ${date}`, waitingDescription: "Փոփոխությունն արդեն առկա է։ Անցակետի ամսաթվին LocalOS-ը կհամեմատի ցուցակման գործողությունները 28-օրյա բազային գծի հետ:", baseline: "Ելակետ՝ 28 օր", views: "Դիտումներ", clicks: "Սեղմումներ", actions: "Գործողություններ", baselineDisclaimer: "Դիտումները և սեղմումները հաստատված հաճախորդներ կամ վաճառքներ չեն:", result: "Վերանայման արդյունքը", critical: "Գոյություն ունի կրիտիկական արգելափակող", noCritical: "Ոչ մի կրիտիկական արգելափակող չի գտնվել", needsAttention: "Ուշադրության կարիք ունի", snapshot: (date) => `Snapshot: ${date}`, sourceObserved: "Ստացված տվյալները", sourceBlocked: "Աղբյուրն անհասանելի է", sourceUnknown: "Նոր լուսանկար է անհրաժեշտ", benchmark: (count, days) => `Benchmark: ${count} comparable businesses, data no older than ${days} days.`, smallSample: "Նմուշը նվազագույնը 10 բիզնեսից ցածր է:", median: "միջին", upperQuartile: "վերին քառորդ", benchmarkDisclaimer: "Համեմատությունը հղում է, ոչ թե արդյունքի պատճառի ապացույց։", noProviders: "Դեռ ոչ մի հարթակ չի ավելացվել։ Միացրեք Google-ը, Yandex-ը կամ 2GIS-ը և հավաքեք թարմ նկար:", noCardState: "Ցուցակման կարգավիճակը դեռ չի ստացվել:", nextSteps: "Հաջորդ քայլերը", nextStepsDescription: "Դրանք առաջնային են դառնում միայն ընթացիկ քայլի ավարտից և տվյալների ստուգումից հետո:", policyVersion: "Քաղաքականության տարբերակ", policyUnknown: "չի նշվում", openEvidence: "Բաց աուդիտորական ապացույցներ", dateUnknown: "ամսաթիվը անհասանելի է", actionHeading: "Հիմնական գործողություն", actionDescription: "Նախ ավարտեք այս քայլը: LocalOS-ն այնուհետև կսպասի անցակետի ամսաթվին և կհամեմատի արդյունքը:", expectedOutcome: "Ակնկալվող արդյունք", continue: "Շարունակեք", auditState: "Կարգավիճակը ըստ հարթակի", auditDescription: "Յուրաքանչյուր եզրակացություն կապված է աղբյուրի և լուսանկարի ամսաթվի հետ: Անհայտ տվյալները չեն համարվում որպես բացակայող:", source: "Աղբյուր", snapshotMissing: "չի ստացվել", safeFallback: "Բացեք ցանկը՝ հաջորդ քայլը վերանայելու համար:", goals, gates, facts, states, evidence, decisions, actionMessages: enActions,
+  resultDisclaimer: "Պլատֆորմի գործողությունները հաստատված հաճախորդներ, պատվերներ կամ վաճառքներ չեն:",
+},
 };
 
 const own = (values: Record<string | number, string>, key: string | number | null | undefined) => (
@@ -387,7 +392,9 @@ const localized = (language: Language, value: string | undefined, fallback?: str
 );
 
 export const managedCardGrowthCopyForLanguage = (language: Language) => copy[language];
-export const managedCardDateLocale: Record<Language, string> = { ru: 'ru-RU', en: 'en-GB', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR' };
+export const managedCardDateLocale: Record<Language, string> = { ru: 'ru-RU', en: 'en-GB', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR' ,
+  hy: 'hy-AM',
+};
 
 export const managedGoalLabel = (language: Language, goal?: string | null, fallback?: string) => localized(language, own(copy[language].goals, goal), fallback);
 export const managedGateLabel = (language: Language, gate?: number, fallback?: string) => localized(language, own(copy[language].gates, gate), fallback);
@@ -395,7 +402,9 @@ export const managedFactLabel = (language: Language, fact?: string) => own(copy[
 export const managedStateLabel = (language: Language, state?: string) => own(copy[language].states, state) || copy[language].states.unknown;
 export const managedProviderLabel = (provider?: string | null, label?: string | null) => label || own({ google: 'Google', yandex: 'Яндекс', '2gis': '2ГИС' }, provider) || provider || '';
 export const managedBenchmarkLabel = (language: Language, metric: string) => {
-  const ratings: Record<Language, string> = { ru: 'Рейтинг', en: 'Rating', fr: 'Note', es: 'Valoración', el: 'Βαθμολογία', de: 'Bewertung', th: 'คะแนน', ar: 'التقييم', ha: 'Ƙimar ra’ayi', tr: 'Puan' };
+  const ratings: Record<Language, string> = { ru: 'Рейтинг', en: 'Rating', fr: 'Note', es: 'Valoración', el: 'Βαθμολογία', de: 'Bewertung', th: 'คะแนน', ar: 'التقييم', ha: 'Ƙimar ra’ayi', tr: 'Puan' ,
+  hy: "Վարկանիշ",
+};
   if (metric === 'rating') return ratings[language];
   const fact = own({ reviews_count: 'reviews', photos_count: 'photos', services_count: 'services' }, metric);
   return managedFactLabel(language, fact || metric);

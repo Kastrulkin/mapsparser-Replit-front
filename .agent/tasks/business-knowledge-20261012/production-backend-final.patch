@@ -1,0 +1,334 @@
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -316,6 +316,7 @@
+       - ./src:/app/src:ro
+       - ./debug_data/media_uploads:/app/debug_data/media_uploads
+       - ./data/operator_audio:/app/operator_audio
++      - ./data/business_knowledge:/app/business_knowledge
+       - ./entrypoint.sh:/app/entrypoint.sh:ro
+       - ./alembic_migrations:/app/alembic_migrations:ro
+       - ./frontend/dist:/app/frontend/dist
+@@ -620,6 +621,7 @@
+       - ./src:/app/src:ro
+       - ./debug_data/media_uploads:/app/debug_data/media_uploads
+       - ./data/operator_audio:/app/operator_audio
++      - ./data/business_knowledge:/app/business_knowledge
+       - ./entrypoint.sh:/app/entrypoint.sh:ro
+       - ./alembic_migrations:/app/alembic_migrations:ro
+     extra_hosts:
+@@ -733,6 +735,7 @@
+       - ./src:/app/src:ro
+       - ./debug_data/media_uploads:/app/debug_data/media_uploads
+       - ./data/operator_audio:/app/operator_audio
++      - ./data/business_knowledge:/app/business_knowledge
+       - ./alembic_migrations:/app/alembic_migrations:ro
+     extra_hosts:
+       - "host.docker.internal:host-gateway"
+--- a/src/main.py
++++ b/src/main.py
+@@ -136,6 +136,7 @@
+ from api.agent_blueprints_api import agent_blueprints_bp
+ from api.capabilities_api import capabilities_bp, PHASE1_ACTION_ORCHESTRATOR
+ from api.work_journal_api import work_journal_bp
++from api.business_knowledge_api import business_knowledge_bp
+ from api.average_ticket_api import average_ticket_bp
+ from api.reports_api import reports_bp
+ from api.operator_api import operator_bp
+@@ -339,6 +340,7 @@
+ app.register_blueprint(capabilities_bp)
+ app.register_blueprint(average_ticket_bp)
+ app.register_blueprint(work_journal_bp)
++app.register_blueprint(business_knowledge_bp)
+ app.register_blueprint(reports_bp)
+ app.register_blueprint(operator_bp)
+ app.register_blueprint(auth_user_bp)
+--- a/src/services/operator_core.py
++++ b/src/services/operator_core.py
+@@ -123,6 +123,7 @@
+     OperatorCapability("services.google.add", "Добавление услуги в Google", "approval_required", "external_write", "separate_confirmation", "/dashboard/card?tab=services", ("Обнови новую услугу в Google",)),
+     OperatorCapability("services.price.update", "Изменение цены одной услуги", "available", "write_internal", "explicit_command", "/dashboard/card?tab=services", ("Измени цену услуги Маникюр на 1500",)),
+     OperatorCapability("work.journal", "Рабочий журнал", "available", "internal_observation_write", "none", "/dashboard/work-journal", ("Клиент отказался от ухода, дорого",)),
++    OperatorCapability('business.knowledge', 'Изменение знаний о бизнесе', 'approval_required', 'internal_write', 'separate_confirmation', '/dashboard/profile?section=knowledge', ('Измени количество кресел',)),
+     OperatorCapability("work.schedule", "Планёрка и расписание", "approval_required", "internal_write", "separate_confirmation", "/dashboard/operator", ("Проведи планёрку на сегодня",)),
+     OperatorCapability("work.owner_action", "Задачи, напоминания и временный график", "approval_required", "internal_write", "separate_confirmation", "/dashboard/today", ("Напомни мне завтра", "Создай задачу с дедлайном")),
+     OperatorCapability("work.colleague", "Сообщение по планёрке", "approval_required", "external_send", "separate_confirmation", "/dashboard/operator", ("Подготовь сообщение коллеге",)),
+@@ -1731,6 +1732,8 @@
+             "execute": lambda _arguments: build_operator_help_response(),
+         },
+     ]
++    from services import operator_business_knowledge
++    tools.extend(operator_business_knowledge.tools(cursor,business_id,user_id,channel,actor_context,message))
+     from services import operator_business_management
+     tools.extend(operator_business_management.tools(cursor,business_id,user_id,message,channel,action_orchestrator,actor_context))
+     from services import operator_owner_actions, operator_workday
+@@ -2897,6 +2900,26 @@
+     if expires and expires <= datetime.now(timezone.utc):
+         return {"status": "blocked", "chat_response": "Срок подтверждения истёк. Подготовьте действие заново.", "blocked_reasons": ["approval_expired"]}, False
+     capability = str(action.get("capability") or "")
++    if capability == 'business.knowledge':
++        from services import business_knowledge
++        from services.business_permissions import load_actor
++        envelope=action.get('envelope_json') or {}
++        if isinstance(envelope,str):envelope=json.loads(envelope)
++        user=load_actor(cursor,user_id)
++        user.update({key:actor_context[key] for key in ('session_kind','scope_business_id') if actor_context and key in actor_context})
++        cursor.execute('SAVEPOINT knowledge_confirmation')
++        try:
++            changed=business_knowledge.mutate(cursor,envelope['scope_type'],envelope['scope_id'],user,envelope['change'])
++            result={'status':'completed','chat_response':'Сведения о бизнесе сохранены.','knowledge_change':changed,'external_writes_performed':False}
++            finish_operator_action(cursor,action_id=action_id,result=result)
++            cursor.execute('RELEASE SAVEPOINT knowledge_confirmation')
++            return result,False
++        except (ValueError,PermissionError,LookupError):
++            import sys
++            reason=str(sys.exception())
++            cursor.execute('ROLLBACK TO SAVEPOINT knowledge_confirmation')
++            cursor.execute('RELEASE SAVEPOINT knowledge_confirmation')
++            return {'status':'blocked','chat_response':reason,'external_writes_performed':False},False
+     if (actor_context or {}).get('role') == 'business_user' or ((actor_context or {}).get('user_id') or (actor_context or {}).get('id')):
+         from services.business_permissions import load_actor, require_permission
+         try:
+--- a/src/services/operator_news_generation.py
++++ b/src/services/operator_news_generation.py
+@@ -310,6 +310,9 @@
+     news_prompt = _build_news_prompt(source_text=source_text, business=business)
+     from services.operator_editorial import editorial_prompt
+     news_prompt += '\n\n' + editorial_prompt(cursor,business_id)
++    from services.business_knowledge import context
++    business_knowledge_context = context(cursor,business_id,user_id)
++    news_prompt += '\n\n' + business_knowledge_context['text']
+     if knowledge_context:
+         news_prompt += (
+             "\n\nПодтверждённый контекст LocalOS. Используй только подходящие факты, "
+@@ -398,6 +401,7 @@
+         "status": "completed",
+         "intent": NEWS_GENERATE_ACTION_KEY,
+         "news_draft": news_draft,
++        "business_knowledge_sources": business_knowledge_context['sources'],
+         "news_text": news_text,
+         "preflight": preflight,
+         "reservation_result": reservation,
+--- a/src/services/content_plan_service.py
++++ b/src/services/content_plan_service.py
+@@ -5355,6 +5355,10 @@
+             or _publication_objective_prompt_block(industry_key, item)
+         )
+         knowledge_context, knowledge_metadata = _content_plan_knowledge_context(cursor, item)
++        from services.business_knowledge import context
++        business_knowledge_context = context(cursor,str(item.get('business_id') or ''),user_id)
++        knowledge_context = (knowledge_context or '') + '\n' + business_knowledge_context['text']
++        knowledge_metadata = {**(knowledge_metadata or {}),'business_knowledge_sources':business_knowledge_context['sources'],'business_knowledge_revision':business_knowledge_context['revision']}
+         knowledge_prompt_block = f"{knowledge_context}\n\n" if knowledge_context else ""
+         generation_v2 = _content_generation_v2_enabled()
+         content_evidence = _load_business_content_evidence(cursor, item, limit=6) if generation_v2 else []
+@@ -5471,6 +5475,7 @@
+         )
+         from services.operator_editorial import editorial_prompt
+         prompt += "\n\n" + editorial_prompt(cursor,str(item.get("business_id") or ""))
++        if generation_v2:prompt += "\n\n" + business_knowledge_context["text"]
+         generated_text = ""
+         generation_source = "ai"
+         generation_error_reason = ""
+--- a/src/services/work_recommendations.py
++++ b/src/services/work_recommendations.py
+@@ -109,7 +109,10 @@
+     configured_matrix=current.get('matrix_json') if current.get('matrix_json') is not None else current_matrix.get('matrix_json')
+     if not configured_matrix:
+         message+=' Связки услуг для допродаж пока не настроены. Владелец может подготовить и проверить их в разделе «Средний чек». До этого подходящие дополнения не утверждены.'
+-    return {'status':'completed','items':items,'policy_version':current['version'],'message':message,'setup_required':not bool(configured_matrix)}
++    from services.business_knowledge import context
++    knowledge=context(cursor,business_id,user_id)
++    return {'status':'completed','items':items,'policy_version':current['version'],'message':message,'setup_required':not bool(configured_matrix),
++            'business_knowledge':knowledge,'knowledge_notice':'Справочные сведения не заменяют подтверждённые связки услуг, доступность мастера и времени.'}
+ 
+ 
+ def validate_rules(cursor,business_id,rules):
+@@ -222,6 +225,8 @@
+     selected_matrix=before.get('matrix_json') if before.get('matrix_json') is not None else matrix(cursor,business_id).get('matrix_json')
+     if kind=='rules':rules=validate_rules(cursor,business_id,data['rules'])
+     elif kind=='matrix':
++        from services.business_knowledge import require_current_sources
++        require_current_sources(cursor,business_id,user_id,data['matrix_json'].get('business_knowledge_sources') or [])
+         selected_matrix=data['matrix_json']
+         prepare_policy(cursor,business_id,user_id,{'kind':'matrix',**data})
+         before={**before,'matrix_json':matrix(cursor,business_id).get('matrix_json')}
+--- a/src/api/operator_api.py
++++ b/src/api/operator_api.py
+@@ -286,6 +286,8 @@
+         items.append({"key": "diagnostics", "label": "Диагностика", "group": "more", "status": "available", "reason": "", "available_actions": ["retry_one"], "supported_scopes": ["platform"], "deep_link_targets": ["diagnostic_job", "integration_error"], "version": 2})
+     if kind == 'business':
+         items.append({'key':'work_journal','label':'Рабочий журнал','group':'more','status':'available','supported_scopes':['business'],'available_actions':['open'],'version':1})
++    if kind in {'business','network'}:
++        items.append({'key':'business_knowledge','label':'Знания о бизнесе','group':'more','status':'available','supported_scopes':['business','network'],'available_actions':['open'],'version':1})
+     if enforce_capabilities:
+         for item in items:
+             capability = MOBILE_NAVIGATION_CAPABILITIES.get(str(item.get("key") or ""))
+--- a/src/services/agent_blueprint_runner.py
++++ b/src/services/agent_blueprint_runner.py
+@@ -272,6 +272,16 @@
+             return {"success": False, "error": "approval_not_found"}
+         if approval.get("status") != "pending":
+             return {"success": False, "error": "approval_already_decided"}
++        from services.business_knowledge import installed,changed_sources
++        if installed(self.cursor):
++            knowledge_run=self._load_run_header(run_id)
++            self.cursor.execute('SELECT payload_json FROM agent_artifacts WHERE run_id=%s',(run_id,))
++            for raw in self.cursor.fetchall():
++                artifact=raw.get('payload_json') if isinstance(raw,dict) else raw[0]
++                artifact=parse_json_field(artifact,{})
++                sources=artifact.get('business_knowledge_sources') or []
++                if sources and changed_sources(self.cursor,str(knowledge_run.get('business_id') or ''),str(user_data.get('user_id') or user_data.get('id') or ''),sources):
++                    return {'success':False,'error':'business_knowledge_changed','message':'Сведения, использованные при подготовке, изменились. Подготовьте результат заново перед подтверждением.'}
+         approval_type = str(approval.get("approval_type") or "").strip()
+         reviewed_drafts = None
+         if approval_type == "drafts":
+--- a/src/services/work_journal.py
++++ b/src/services/work_journal.py
+@@ -25,10 +25,10 @@
+     return hashlib.sha256(json.dumps(value,sort_keys=True,default=str,ensure_ascii=False).encode()).hexdigest()
+ 
+ 
+-def scope(cursor,business_id,user_id,write=False,owner_only=False):
++def scope(cursor,business_id,user_id,write=False,owner_only=False,knowledge_proposal=False):
+     from services.operator_audio import authorize_actor
+-    actor,_=authorize_actor(cursor,user_id,business_id)
+-    if write and not enabled(business_id):raise PermissionError('Новый рабочий журнал пока отключён для этого бизнеса.')
++    actor,_=authorize_actor(cursor,user_id,business_id,check_subscription=False) if knowledge_proposal else authorize_actor(cursor,user_id,business_id)
++    if write and not enabled(business_id) and not knowledge_proposal:raise PermissionError('Новый рабочий журнал пока отключён для этого бизнеса.')
+     owner=actor.get('role')=='business_owner' or bool(actor.get('is_superadmin'))
+     role='owner' if owner else 'viewer'
+     if not owner:
+@@ -166,17 +166,30 @@
+ 
+ 
+ def save_note(cursor,business_id,user_id,channel,message_id,request_key,original,args):
+-    actor=scope(cursor,business_id,user_id,True)
++    if not isinstance(args,dict):raise ValueError('Нужны параметры наблюдения.')
++    actor=scope(cursor,business_id,user_id,True,knowledge_proposal=bool(args.get('knowledge_proposal')))
++    knowledge_link=None
++    if args.get('knowledge_proposal'):
++        from services import business_knowledge
++        from services.business_permissions import load_actor
++        proposal=args['knowledge_proposal']
++        if not isinstance(proposal,dict):raise ValueError('Укажите сведения для предложения.')
++        knowledge_actor=business_knowledge.access(cursor,'business',business_id,load_actor(cursor,user_id))
++        targets=business_knowledge._effective(cursor,knowledge_actor,'field')+business_knowledge._effective(cursor,knowledge_actor,'rule')
++        target=next((row for row in targets if row['id']==proposal.get('record_id')),None)
++        if not target:raise PermissionError('Сведения недоступны для предложения.')
++        knowledge_link={'record_id':target['id'],'kind':target['kind'],'version':target['version'],'label':target['payload_json']['label']}
+     if not request_key or len(request_key)>250:raise ValueError('Нужен идентификатор записи.')
+     if not isinstance(args,dict):raise ValueError('Нужны параметры наблюдения.')
+     request_key=user_id+':'+request_key
+     request_hash=digest([original,args])
+     cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))',('work-journal:'+business_id,))
+-    actor=scope(cursor,business_id,user_id,True)
++    actor=scope(cursor,business_id,user_id,True,knowledge_proposal=bool(args.get('knowledge_proposal')))
+     cursor.execute('SELECT after_json FROM business_work_history WHERE business_id=%s AND request_key=%s',(business_id,request_key))
+     replay=_row(cursor,cursor.fetchone())
+     if replay:
+         if replay['after_json'].get('request_hash')!=request_hash:raise ValueError('Идентификатор запроса уже использован для другого изменения.')
++        if knowledge_link:return replay['after_json']
+         read_entry(cursor,business_id,actor,replay['after_json']['id'])
+         logging.getLogger(__name__).info('work_journal_event status=duplicate')
+         from services import work_review
+@@ -192,6 +205,7 @@
+             raise ValueError('Вопрос или предположение не сохраняется как произошедшее событие.')
+     elif not before:raise ValueError('Укажите запись для отмены.')
+     facts=dict(before.get('facts_json') or {})
++    if knowledge_link:facts['knowledge_proposal']=knowledge_link
+     if 'operational' in args:
+         from services.operator_day_facts import validate
+         facts['operational']=validate(cursor,business_id,args['operational'],quote)
+@@ -253,6 +267,7 @@
+             (str(uuid.uuid4()),business_id,entry_id,booking_id,service_id or visit.get('service_id'),facts.get('addon_service_id'),outcome,event_date,visit.get('master_id'),reason,user_id))
+     _audit(cursor,business_id,user_id,channel,'note',entry_id,request_key,before,after)
+     logging.getLogger(__name__).info('work_journal_event status=%s channel=%s','cancelled' if after['is_voided'] else 'corrected' if before else 'saved',channel)
++    if knowledge_link:return after
+     return work_review.sanitize(after,work_review.can_review(cursor,business_id,user_id)) if work_review.available(cursor) else after
+ 
+ 
+--- a/src/services/agent_blueprint_workspace.py
++++ b/src/services/agent_blueprint_workspace.py
+@@ -290,6 +290,8 @@
+         max_items=max_items,
+         configured_scope=[_clean_text(item) for item in configured_scope if _clean_text(item)],
+     )
++    from services.business_knowledge import context
++    knowledge=context(cursor,_clean_text(run.get('business_id')),_clean_text(run.get('created_by_user_id')))
+     if safe_preview:
+         return {
+             **dict(step.get("payload") if isinstance(step.get("payload"), dict) else {}),
+@@ -316,6 +318,7 @@
+         "Если данных недостаточно, укажи это в exceptions.\n"
+         "Входные данные:\n"
+         + json.dumps(source_context, ensure_ascii=False, default=str)[:30000]
++        + '\n\n' + knowledge['text']
+     )
+     llm_result = run_llm_task(
+         LLMTaskRequest(
+@@ -338,6 +341,8 @@
+         **dict(step.get("payload") if isinstance(step.get("payload"), dict) else {}),
+         "status": "prepared",
+         "result": result_payload,
++        "business_knowledge_sources": knowledge['sources'],
++        "business_knowledge_revision": knowledge['revision'],
+         "review_required": parsed_result is None,
+         "external_dispatch_performed": False,
+         "bounded_model": {
+@@ -554,12 +559,17 @@
+     if not sources:
+         sources = _compiled_internal_sources(cursor, run, metadata)
+     internal_sources = _hydrate_internal_sources(cursor, _clean_text(run.get("business_id")), sources)
++    from services.business_knowledge import context
++    knowledge=context(cursor,_clean_text(run.get('business_id')),_clean_text(run.get('created_by_user_id')))
++    if knowledge['text']:
++        internal_sources.append({'source_name':'Знания о бизнесе','summary':knowledge['text'],'raw':{'text':knowledge['text']}})
+     return {
+         "blueprint": blueprint,
+         "metadata": metadata,
+         "setup": setup,
+         "sources": sources,
+         "internal_sources": internal_sources,
++        "business_knowledge_sources": knowledge['sources'],
+         "feedback_history": metadata.get("feedback_history") if isinstance(metadata.get("feedback_history"), list) else [],
+         "run_input": parse_json_field(run.get("input_json"), {}),
+         "run_id": _clean_text(run.get("id")),
+@@ -700,6 +710,7 @@
+         "status": "generated",
+         "category": category,
+         "result": output,
++        "business_knowledge_sources": workspace.get('business_knowledge_sources') or [],
+         "items_used": len(extracted),
+         "provenance": output.get("provenance") if isinstance(output, dict) else [],
+         "analysis_source": output.get("analysis_source") if isinstance(output, dict) else "",
+--- a/src/api/average_ticket_api.py
++++ b/src/api/average_ticket_api.py
+@@ -1028,6 +1028,10 @@
+             prompt_template,
+             build_average_ticket_analysis_payload(kpis, services),
+         )
++        from services.business_knowledge import context
++        business_knowledge_context=context(cursor,business_id,str(user_data.get('user_id') or user_data.get('id') or ''))
++        prompt += '\n\n' + business_knowledge_context['text']
++        fallback_prompt += '\n\n' + business_knowledge_context['text']
+         generation_mode = "gigachat"
+         raw_matrix = None
+         error_note = None
+@@ -1051,6 +1055,7 @@
+             generation_mode = "fallback"
+         matrix = _normalize_matrix(raw_matrix, services)
+         matrix["generation_mode"] = generation_mode
++        matrix["business_knowledge_sources"] = business_knowledge_context["sources"] if generation_mode=="gigachat" else []
+         if error_note:
+             matrix["generation_note"] = error_note
+ 
+@@ -1128,6 +1133,9 @@
+         if not row:
+             return jsonify({"error": "Матрица не найдена"}), 404
+         matrix = _row_value(row, "matrix_json", 0) or {}
++        if updates.get('status')=='active':
++            from services.business_knowledge import require_current_sources
++            require_current_sources(cursor,business_id,str(user_data.get('user_id') or user_data.get('id') or ''),matrix.get('business_knowledge_sources') or [])
+         updated = False
+         for item in matrix.get("upsell_matrix") or []:
+             for addon in item.get("recommended_addons") or []:

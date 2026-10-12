@@ -795,35 +795,33 @@ export const AgentBlueprintsWorkspace = () => {
     const requestedBlueprintId = params.get('blueprint_id') || '';
     const requestedRunId = params.get('run_id') || '';
     const requestedBusinessId = params.get('business_id') || '';
-    const requestKey = `${requestedBlueprintId}:${requestedRunId}:${requestedBusinessId}`;
+    const requestKey = `${currentBusinessId}:${requestedBlueprintId}:${requestedRunId}:${requestedBusinessId}`;
     if (!requestedBlueprintId && !requestedRunId) return;
     if (requestedDeepLinkRef.current === requestKey || !currentBusinessId || !blueprints.length) return;
-    if (requestedBusinessId && requestedBusinessId !== currentBusinessId) {
-      return;
-    }
-    const blueprint = blueprints.find((item) => item.id === requestedBlueprintId);
-    if (!blueprint) {
-      requestedDeepLinkRef.current = requestKey;
-      setError('Агент из ссылки не найден или недоступен в выбранном бизнесе.');
-      return;
-    }
+    if (requestedBusinessId && requestedBusinessId !== currentBusinessId) return;
     requestedDeepLinkRef.current = requestKey;
-    selectBlueprint(blueprint.id);
-    if (!requestedRunId) return;
-    setExplicitRunTarget({ blueprintId: blueprint.id, runId: requestedRunId });
     const requestRevision = ++runRequestRevisionRef.current;
     const requestBusiness = currentBusinessId;
-    void api.get(`/agent-runs/${requestedRunId}`).then(async (response) => {
-      if (requestedDeepLinkRef.current !== requestKey || requestRevision !== runRequestRevisionRef.current || requestBusiness !== runBusinessRef.current) return;
-      const run: AgentRun | null = response.data?.run && typeof response.data.run === 'object' ? response.data.run : null;
-      if (!run || run.blueprint_id !== blueprint.id) {
-        setError('Запуск из ссылки не принадлежит выбранному агенту.');
+    const matches = () => requestedDeepLinkRef.current === requestKey && requestRevision === runRequestRevisionRef.current && requestBusiness === runBusinessRef.current;
+    const open = async () => {
+      const response = requestedRunId ? await api.get(`/agent-runs/${encodeURIComponent(requestedRunId)}`) : null;
+      if (!matches()) return;
+      const run: AgentRun | null = response?.data?.run && typeof response.data.run === 'object' ? response.data.run : null;
+      const blueprintId = requestedBlueprintId || run?.blueprint_id;
+      const blueprint = blueprints.find(item => item.id === blueprintId && item.business_id === requestBusiness);
+      if (!blueprint || requestedRunId && (!run || run.id !== requestedRunId || run.blueprint_id !== blueprint.id)) {
+        setError('Работа из ссылки не найдена или недоступна в выбранном бизнесе.');
         return;
       }
-      setActiveRun(run); setWorkspaceMode('results');
-      await loadBlueprintDetails(blueprint.id);
-    }).catch(() => { if (requestedDeepLinkRef.current === requestKey && requestRevision === runRequestRevisionRef.current && requestBusiness === runBusinessRef.current) setError('Запуск из ссылки не найден или недоступен.'); });
-  }, [blueprints, currentBusinessId, loadBlueprintDetails, location.search, selectBlueprint]);
+      selectBlueprint(blueprint.id);
+      if (run) {
+        setExplicitRunTarget({ blueprintId: blueprint.id, runId: run.id });
+        setActiveRun(run);
+        setWorkspaceMode('results');
+      }
+    };
+    void open().catch(() => { if (matches()) setError('Запуск из ссылки не найден или недоступен.'); });
+  }, [blueprints, currentBusinessId, location.search, selectBlueprint]);
 
   const { waitForAgentRun } = useAgentRunTracking({ currentBusinessId, blueprints, blueprintDetails, selectedBlueprint, runAnimation, compiledRunContext, explicitRunTarget,
   requestedDeepLinkRef, setSelectedBlueprintId: selectBlueprintFromRunTracking, setRunAnimation, setActiveRun, setWorkspaceMode, setError,

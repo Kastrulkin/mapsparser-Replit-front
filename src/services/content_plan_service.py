@@ -1859,6 +1859,7 @@ def create_generated_content_plan(
     continuation_message: str | None = None,
     editorial_brief: str | None = None,
     operator_request_id: str | None = None,
+    continuation_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -1919,7 +1920,7 @@ def create_generated_content_plan(
             )
             knowledge_metadata["foundation_type"] = str(raw_knowledge_foundation.get("type") or "market_signal")
         continuation = None
-        if continuation_message or operator_request_id:
+        if continuation_message or operator_request_id or continuation_context:
             cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,0))", ('content-plan:'+business_id,))
         if operator_request_id:
             cursor.execute("""SELECT id FROM contentplans WHERE business_id=%s AND created_by=%s
@@ -1932,6 +1933,12 @@ def create_generated_content_plan(
             continuation = resolve_continuation(cursor, business_id, continuation_message)
             context = {**context, 'excluded_plan_themes': continuation['excluded_themes']}
             content_mix = {**(content_mix or {}), 'channels': continuation['channels']}
+        if continuation_context:
+            from services.content_network_renewal import resolve_successor_context
+            continuation = resolve_successor_context(cursor, business_id, continuation_context)
+            context = {**context, 'excluded_plan_themes': continuation['excluded_themes'],
+                       'source_refresh_snapshot': continuation_context.get('sources') or {}}
+            content_mix = {**(content_mix or {}), 'channels': continuation['channels']}
         skeleton = build_content_plan_skeleton(
             context,
             period_days=normalized_period,
@@ -1939,6 +1946,12 @@ def create_generated_content_plan(
             content_mix=content_mix if isinstance(content_mix, dict) else {},
             period_start=continuation['period_start'] if continuation else None,
         )
+        if continuation_context:
+            dates = continuation['dates']
+            skeleton['items'] = [{'scheduled_for': day} for day in dates]
+            skeleton['period_start'] = continuation['period_start'].isoformat()
+            skeleton['period_end'] = continuation['period_end'].isoformat()
+            skeleton['meta']['items_target'] = len(dates)
         if editorial_brief:
             if explicit_schedule:
                 if explicit_schedule['period_days'] > max(allowed_horizons):
@@ -1965,6 +1978,10 @@ def create_generated_content_plan(
         if continuation:
             skeleton['meta']['previous_plan_id'] = continuation['previous_plan_id']
             skeleton['meta']['excluded_themes_count'] = len(continuation['excluded_themes'])
+        if continuation_context:
+            skeleton['meta']['source_refresh_snapshot'] = continuation_context.get('sources') or {}
+            skeleton['meta']['network_automation_id'] = continuation_context.get('blueprint_id')
+            skeleton['meta']['requires_owner_review'] = True
         raw_channels = content_mix.get("channels") if isinstance(content_mix, dict) else []
         selected_channels = [
             str(channel or "").strip()
@@ -2116,7 +2133,7 @@ def get_content_plan(user_id: str, plan_id: str) -> dict[str, Any]:
             """
             SELECT id, business_id, scheduled_for, content_type, theme, goal, source_kind, source_ref,
                    seo_keyword, service_id, transaction_id, seo_views, location_scope, draft_text, status, usernews_id,
-                   metadata_json, created_at, updated_at
+                   metadata_json, created_at, updated_at, updated_at::text AS version
             FROM contentplanitems
             WHERE plan_id = %s
             ORDER BY scheduled_for ASC, created_at ASC
@@ -2157,6 +2174,7 @@ def get_content_plan(user_id: str, plan_id: str) -> dict[str, Any]:
                 "metadata_json": _json_value(_row_get(row, "metadata_json", 16, {}), {}),
                 "created_at": _row_get(row, "created_at", 17),
                 "updated_at": _row_get(row, "updated_at", 18),
+                "version": str(_row_get(row, "version", 19, "") or ""),
             }
             item_payload["metadata_json"] = _annotate_story_facts_requirement(item_payload)
             items.append(item_payload)
@@ -2295,6 +2313,10 @@ def delete_content_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
         db.close()
 
 
+class ContentPlanItemConflict(ValueError):
+    """The item changed after the caller last loaded it."""
+
+
 def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any], *, auth_context=None) -> dict[str, Any]:
     if auth_context is not None and auth_context.user_id != user_id:
         raise PermissionError("Несовпадение пользователя операции")
@@ -2305,6 +2327,7 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
         cursor.execute(
             """
             SELECT i.id, i.plan_id, i.business_id, i.status, i.source_kind, i.content_type, i.theme, i.draft_text,
+                   i.updated_at::text AS version,
                    i.metadata_json, i.location_scope, p.business_id AS root_business_id
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
@@ -2317,6 +2340,10 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
         if not row:
             raise ValueError("Элемент плана не найден")
         data = _row_to_dict(cursor, row)
+        expected_version = str(payload.get("expected_version") or "").strip()
+        current_version = str(data.get("version") or "").strip()
+        if expected_version and expected_version != current_version:
+            raise ContentPlanItemConflict("Пост уже изменился. Обновите план и проверьте актуальную версию перед сохранением.")
         previous_status = str(data.get("status") or "").strip()
         cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
         has_access, _ = verify_business_write_access(
@@ -2946,6 +2973,7 @@ CONTENT_PLAN_LANGUAGE_LABELS = {
     "de": "German",
     "fr": "French",
     "tr": "Turkish",
+    "hy": "Armenian",
     "it": "Italian",
     "pt": "Portuguese",
     "zh": "Chinese",
@@ -3966,7 +3994,7 @@ def _normalize_fact_text(value: Any) -> str:
     return text
 
 
-def _content_plan_business_facts(business_row: Any, item: dict[str, Any]) -> dict[str, Any]:
+def _content_plan_business_facts(business_row: Any, item: dict[str, Any], website_source=None) -> dict[str, Any]:
     name = str(_row_get(business_row, "name", 0, "Бизнес") or "Бизнес").strip() or "Бизнес"
     city = str(_row_get(business_row, "city", 1, "") or "").strip()
     business_type = _normalize_fact_text(_row_get(business_row, "business_type", 2, ""))
@@ -3977,7 +4005,11 @@ def _content_plan_business_facts(business_row: Any, item: dict[str, Any]) -> dic
     site = _normalize_fact_text(_row_get(business_row, "site", 7, ""))
     website = _normalize_fact_text(_row_get(business_row, "website", 8, ""))
     website_url = site or website
-    site_description = _fetch_site_description(website_url)
+    if website_source:
+        from services.openclaw_website_reader import website_material
+        site_description = website_material(website_source)
+    else:
+        site_description = _fetch_site_description(website_url)
     theme = str(item.get("theme") or "").strip()
     goal = str(item.get("goal") or "").strip()
     combined = " ".join([name, business_type, industry, categories, description, site_description, theme, goal]).lower()
@@ -4017,6 +4049,7 @@ def _content_plan_business_facts(business_row: Any, item: dict[str, Any]) -> dic
         "description": description,
         "site": website_url,
         "site_description": site_description,
+        "website_source": website_source or {},
         "is_school_space": is_school_space,
         "is_cultural_space": is_cultural_space,
         "ice_markers": ice_markers,
@@ -4542,6 +4575,7 @@ def _load_editorial_pattern_library(
     item: dict[str, Any],
     *,
     limit: int = 5,
+    industry_key: str = '',
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     cursor.execute("SAVEPOINT editorial_patterns_telegram")
@@ -4633,6 +4667,9 @@ def _load_editorial_pattern_library(
                 "source_post_count": post.get("source_post_count"),
             }
         )
+    if industry_key and industry_key != 'local_business':
+        candidates = [candidate for candidate in candidates
+                      if detect_industry_key(service_text=candidate.get('text')) == industry_key]
     return _rank_editorial_pattern_candidates(candidates, item, limit=limit)
 
 
@@ -5283,7 +5320,14 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             (item.get("business_id"),),
         )
         business_row = cursor.fetchone()
-        business_facts = _content_plan_business_facts(business_row, item)
+        from services.openclaw_website_reader import read_business_website
+        website_url = _normalize_website_url(
+            _row_get(business_row, 'site', 7, '') or _row_get(business_row, 'website', 8, '')
+        )
+        website_source = read_business_website(
+            cursor, user_id, str(item.get('business_id') or ''), website_url
+        ) if website_url else None
+        business_facts = _content_plan_business_facts(business_row, item, website_source)
         business_facts["services"] = _load_content_plan_service_facts(
             cursor,
             str(item.get("business_id") or ""),
@@ -5311,13 +5355,17 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             or _publication_objective_prompt_block(industry_key, item)
         )
         knowledge_context, knowledge_metadata = _content_plan_knowledge_context(cursor, item)
+        from services.business_knowledge import context
+        business_knowledge_context = context(cursor,str(item.get('business_id') or ''),user_id)
+        knowledge_context = (knowledge_context or '') + '\n' + business_knowledge_context['text']
+        knowledge_metadata = {**(knowledge_metadata or {}),'business_knowledge_sources':business_knowledge_context['sources'],'business_knowledge_revision':business_knowledge_context['revision']}
         knowledge_prompt_block = f"{knowledge_context}\n\n" if knowledge_context else ""
         generation_v2 = _content_generation_v2_enabled()
         content_evidence = _load_business_content_evidence(cursor, item, limit=6) if generation_v2 else []
         from services.operator_editorial import editorial_evidence
         content_evidence = editorial_evidence(cursor,str(item.get('business_id') or '')) + content_evidence
         content_brief = _build_content_brief_v1(item, business_facts, content_evidence)
-        editorial_patterns = _load_editorial_pattern_library(cursor, item, limit=5) if generation_v2 else []
+        editorial_patterns = _load_editorial_pattern_library(cursor, item, limit=5, industry_key=industry_key) if generation_v2 else []
         editorial_pattern_context = _format_editorial_pattern_context(editorial_patterns)
         voice_context = load_content_voice_context(
             cursor,
@@ -5427,6 +5475,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
         )
         from services.operator_editorial import editorial_prompt
         prompt += "\n\n" + editorial_prompt(cursor,str(item.get("business_id") or ""))
+        if generation_v2:prompt += "\n\n" + business_knowledge_context["text"]
         generated_text = ""
         generation_source = "ai"
         generation_error_reason = ""
@@ -5526,6 +5575,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             location_scope or str(item.get("business_id") or ""),
         )
         generation_metadata = {
+            "website_source": business_facts.get("website_source") or {},
             "generation_source": generation_source,
             "generation_error_reason": generation_error_reason,
             "last_generation_failed_at": datetime.utcnow().isoformat() if generation_source != "ai" else "",
@@ -5650,6 +5700,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
         return {
             "plan": get_content_plan(user_id, str(item.get("plan_id") or "")),
             "generation": {
+                "website_source": business_facts.get("website_source") or {},
                 "success": generation_source == "ai",
                 "status": "generated" if generation_source == "ai" else "failed",
                 "source": generation_source,

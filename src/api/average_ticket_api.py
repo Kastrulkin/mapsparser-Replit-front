@@ -1028,6 +1028,10 @@ def generate_average_ticket_matrix():
             prompt_template,
             build_average_ticket_analysis_payload(kpis, services),
         )
+        from services.business_knowledge import context
+        business_knowledge_context=context(cursor,business_id,str(user_data.get('user_id') or user_data.get('id') or ''))
+        prompt += '\n\n' + business_knowledge_context['text']
+        fallback_prompt += '\n\n' + business_knowledge_context['text']
         generation_mode = "gigachat"
         raw_matrix = None
         error_note = None
@@ -1051,6 +1055,7 @@ def generate_average_ticket_matrix():
             generation_mode = "fallback"
         matrix = _normalize_matrix(raw_matrix, services)
         matrix["generation_mode"] = generation_mode
+        matrix["business_knowledge_sources"] = business_knowledge_context["sources"] if generation_mode=="gigachat" else []
         if error_note:
             matrix["generation_note"] = error_note
 
@@ -1128,6 +1133,9 @@ def update_average_ticket_link(matrix_id):
         if not row:
             return jsonify({"error": "Матрица не найдена"}), 404
         matrix = _row_value(row, "matrix_json", 0) or {}
+        if updates.get('status')=='active':
+            from services.business_knowledge import require_current_sources
+            require_current_sources(cursor,business_id,str(user_data.get('user_id') or user_data.get('id') or ''),matrix.get('business_knowledge_sources') or [])
         updated = False
         for item in matrix.get("upsell_matrix") or []:
             for addon in item.get("recommended_addons") or []:

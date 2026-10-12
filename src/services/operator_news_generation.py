@@ -310,6 +310,9 @@ def generate_news_draft_from_operator(
     news_prompt = _build_news_prompt(source_text=source_text, business=business)
     from services.operator_editorial import editorial_prompt
     news_prompt += '\n\n' + editorial_prompt(cursor,business_id)
+    from services.business_knowledge import context
+    business_knowledge_context = context(cursor,business_id,user_id)
+    news_prompt += '\n\n' + business_knowledge_context['text']
     if knowledge_context:
         news_prompt += (
             "\n\nПодтверждённый контекст LocalOS. Используй только подходящие факты, "
@@ -398,6 +401,7 @@ def generate_news_draft_from_operator(
         "status": "completed",
         "intent": NEWS_GENERATE_ACTION_KEY,
         "news_draft": news_draft,
+        "business_knowledge_sources": business_knowledge_context['sources'],
         "news_text": news_text,
         "preflight": preflight,
         "reservation_result": reservation,

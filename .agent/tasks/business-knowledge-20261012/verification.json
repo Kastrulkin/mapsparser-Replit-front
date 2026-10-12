@@ -1,0 +1,43 @@
+{
+  "status": "local_verified_not_deployed",
+  "date": "2026-10-12",
+  "postgresql_feature_tests": 29,
+  "compatibility_tests": 77,
+  "staged_backend_combined_tests": 106,
+  "isolated_frontend_tests": 19,
+  "isolated_typecheck": "passed",
+  "dashboard_build": "passed",
+  "public_build": "passed",
+  "product_ui_guard": "passed",
+  "dashboard_integrity": "passed",
+  "public_integrity": "passed",
+  "browser": [
+    {
+      "width": 390,
+      "overflow": false,
+      "formOverflow": false,
+      "keyboardTabs": true,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "overflow": false,
+      "formOverflow": false,
+      "keyboardTabs": true,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "overflow": false,
+      "formOverflow": false,
+      "keyboardTabs": true,
+      "errors": []
+    }
+  ],
+  "browser_data": "local mocked API; real component",
+  "production": "read-only source/dependency comparison; no data or schema writes",
+  "user_study": "not_performed",
+  "deployment": "requires separate release approval and backups",
+  "backend_dependency_hashes": "production-dependencies.json",
+  "release_source_allowlist": "release-manifest.json"
+}

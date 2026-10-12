@@ -41,6 +41,17 @@ const footerIndustryFallbacks: Record<Language, string[]> = {
     "okullar ve kurslar",
     "hizmet işletmeleri",
   ],
+
+  hy: [
+    "գեղեցկության արդյունաբերություն",
+    "բժշկական կենտրոններ",
+    "ֆիթնես ստուդիաներ",
+    "սրճարաններ և ռեստորաններ",
+    "ավտո ծառայություններ",
+    "տեղական խանութներ",
+    "դպրոցներ և դասընթացներ",
+    "սպասարկման ձեռնարկություններ",
+  ],
 };
 
 const Footer = () => {
@@ -64,7 +75,9 @@ const Footer = () => {
     ar: "يتولى LocalOS العمل المتكرر في استقطاب العملاء والسمعة والخدمات ومتابعة العمل.",
     ha: "LocalOS yana gudanar da ayyukan da ake maimaitawa na samo kwastomomi, suna, ayyuka da kula da kasuwanci.",
     tr: "LocalOS müşteri kazanımı, itibar, hizmetler ve işletme kontrolündeki tekrarlanan işleri üstlenir.",
-  };
+
+  hy: "LocalOS-ն իրականացնում է հաճախորդի ձեռքբերման, հեղինակության, ծառայությունների և բիզնեսի վերահսկման հետ կապված պարբերական աշխատանքը:",
+};
   const aboutLabels: Record<Language, string> = {
     ru: "О LocalOS",
     en: "About LocalOS",
@@ -76,7 +89,9 @@ const Footer = () => {
     ar: "عن LocalOS",
     ha: "Game da LocalOS",
     tr: "LocalOS hakkında",
-  };
+
+  hy: "LocalOS-ի մասին",
+};
 
   useEffect(() => {
     setIndex(0);
