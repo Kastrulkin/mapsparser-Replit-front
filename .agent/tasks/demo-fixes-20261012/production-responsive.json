@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Партнёрства",
+    "url": "https://localos.pro/dashboard/partnerships",
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "name": "Инфлюенсеры",
+    "url": "https://localos.pro/dashboard/influencers",
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "name": "Средний чек",
+    "url": "https://localos.pro/dashboard/average-ticket",
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "name": "Автоматизация",
+    "url": "https://localos.pro/dashboard/agents",
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "name": "Материал",
+    "url": "https://localos.pro/dashboard/content?item_id=demo-coat-care",
+    "overflow": false,
+    "width": 768
+  }
+]

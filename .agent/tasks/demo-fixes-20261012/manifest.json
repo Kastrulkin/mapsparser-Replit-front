@@ -1,8 +1,8 @@
 {
-  "status": "locally_verified",
+  "status": "deployed_verified",
   "tour_version": 7,
   "steps": 47,
-  "tests": 125,
+  "tests": 132,
   "typecheck": "pass",
   "build": "pass",
   "product_ui_guard": "pass",
@@ -11,10 +11,28 @@
   "regression_after": "pass",
   "frontend_only": true,
   "schema_changes": false,
-  "prior_entry": "/assets/index-BIeAQ9i2.js",
-  "release_entry": "/assets/index-CcOjbF1Q.js",
-  "backup": "/opt/seo-app/data/backups/releases/demo-fixes-20261012/before-release.tar.gz",
-  "backup_sha256": "f0be5a5e206759e5bb4c1110de4741f3f1a27b79db2d4fb30d03527e16be2c01",
+  "prior_entry": "/assets/index-DTkbPRcH.js",
+  "release_entry": "/assets/index-B7004HEv.js",
+  "backup": "/opt/seo-app/data/backups/releases/demo-fixes-combined-20261012/before-release.tar.gz",
+  "backup_sha256": "d18817d24fb07eb30cdcc9117fd248a7c42e454fb18d64bf30f6d93efbc0f21c",
   "browser_console": "clean",
-  "manual_return": "verified"
+  "manual_return": "verified",
+  "implementation_commit": "d9df6c25a353e1fae9e32f71c8be95efa1432a0c",
+  "release_guard_tests": 6,
+  "public_entry": "/public-audit/assets/index-BfhSsM-d.js",
+  "production_steps": 47,
+  "production_route_heading_target_errors": "pass",
+  "production_widths": [
+    390,
+    768,
+    1280
+  ],
+  "production_console": "clean",
+  "backend_source_sha256": "2dbd4e5a24796cb7acc372f3aedb01c94fd2b65464955260e5a854d7fa7259e2",
+  "human_research": "not_completed",
+  "mocked_cockpit": "skipped: preview uses 4173",
+  "verification_notes": [
+    "Automation confirmation verified after pausing the floating tour hint.",
+    "Demo texts added in this release cover Russian and English. Existing localized controls preserved."
+  ]
 }
