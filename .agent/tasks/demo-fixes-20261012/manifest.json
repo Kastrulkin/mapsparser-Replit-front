@@ -1,0 +1,19 @@
+{
+  "status": "locally_verified",
+  "tour_version": 7,
+  "steps": 47,
+  "tests": 124,
+  "typecheck": "pass",
+  "build": "pass",
+  "product_ui_guard": "pass",
+  "integrity": "pass",
+  "regression_before": "failed_as_expected",
+  "regression_after": "pass",
+  "frontend_only": true,
+  "schema_changes": false,
+  "prior_entry": "/assets/index-BIeAQ9i2.js",
+  "release_entry": "/assets/index-DagtrKib.js",
+  "backup": "/opt/seo-app/data/backups/releases/demo-fixes-20261012/before-release.tar.gz",
+  "backup_sha256": "f0be5a5e206759e5bb4c1110de4741f3f1a27b79db2d4fb30d03527e16be2c01",
+  "browser_console": "clean"
+}

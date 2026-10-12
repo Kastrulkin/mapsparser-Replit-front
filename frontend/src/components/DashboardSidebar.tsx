@@ -22,7 +22,7 @@ import {
 	UsersRound,
 	X,
 } from 'lucide-react';
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import logo from '../assets/images/logo.png';
@@ -227,7 +227,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   );
 
   if (isMobile) {
-    return <Sheet open={isOpen} onOpenChange={setIsOpen}><SheetTrigger asChild><Button data-tour-target="mobile-menu" variant="ghost" className="flex min-h-14 w-16 flex-col gap-1 rounded-none p-1 text-xs md:hidden" aria-label={workCopy.menu}><Menu className="h-5 w-5" aria-hidden="true" /><span>{workCopy.menu}</span></Button></SheetTrigger><SheetContent side="left" className="w-72 p-0"><SheetTitle className="sr-only">{workCopy.menu}</SheetTitle>{sidebarContent}</SheetContent></Sheet>;
+    return <Sheet open={isOpen} onOpenChange={setIsOpen}><SheetTrigger asChild><Button data-tour-target="mobile-menu" variant="ghost" className="flex min-h-14 w-16 flex-col gap-1 rounded-none p-1 text-xs md:hidden" aria-label={workCopy.menu}><Menu className="h-5 w-5" aria-hidden="true" /><span>{workCopy.menu}</span></Button></SheetTrigger><SheetContent side="left" className="w-72 p-0" closeLabel={({ru:"Закрыть меню",en:"Close menu",fr:"Fermer le menu",es:"Cerrar menú",el:"Κλείσιμο μενού",de:"Menü schließen",th:"ปิดเมนู",ar:"إغلاق القائمة",ha:"Rufe menu",tr:"Menüyü kapat",hy:"Փակել ընտրացանկը",kk:"Мәзірді жабу"})[language]}><SheetTitle className="sr-only">{workCopy.menu}</SheetTitle><SheetDescription className="sr-only">{Object.values(workCopy.groups).join(" · ")}</SheetDescription>{sidebarContent}</SheetContent></Sheet>;
   }
 
   return (

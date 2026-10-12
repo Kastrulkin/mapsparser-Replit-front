@@ -1,0 +1,17 @@
+[
+  {
+    "step": 16,
+    "key": "content-plan-setup",
+    "route": "/dashboard/content?demo_stage=setup",
+    "target": "content-plan-setup",
+    "url": "http://127.0.0.1:4173/dashboard/content?demo_stage=setup",
+    "headings": [
+      "Контент‑план",
+      "Настройте план",
+      "Выберите цель, срок и каналы"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  }
+]

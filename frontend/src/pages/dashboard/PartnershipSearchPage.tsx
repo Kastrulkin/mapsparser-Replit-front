@@ -810,7 +810,11 @@ export const PartnershipSearchPage: React.FC = () => {
 
   useEffect(() => {
     const visibleDraftIds = new Set(visibleDrafts.map((draft) => draft.id));
-    setSelectedDraftIds((prev) => prev.filter((id) => visibleDraftIds.has(id)));
+    setSelectedDraftIds((prev) => {
+      const next = prev.filter((id) => visibleDraftIds.has(id));
+      // Filtering preserves order. Avoid an update when only array identity changed.
+      return next.length === prev.length ? prev : next;
+    });
   }, [visibleDrafts]);
 
   useEffect(() => {
@@ -2374,7 +2378,7 @@ export const PartnershipSearchPage: React.FC = () => {
           </div>
           {demoRoomSlug ? (
             <Button asChild className="min-h-10 active:scale-[0.96]">
-              <a href={`/room/${demoRoomSlug}`} target="_blank" rel="noreferrer">{partnershipCopy.demoOpenRoom}</a>
+              <Link to="/demo/room">{partnershipCopy.demoOpenRoom}</Link>
             </Button>
           ) : null}
         </section>
@@ -2458,9 +2462,9 @@ export const PartnershipSearchPage: React.FC = () => {
               </div>
               {demoRoomSlug ? (
                 <Button asChild className="min-h-10 active:scale-[0.96]">
-                  <a href={`/room/${demoRoomSlug}`} target="_blank" rel="noreferrer">
+                  <Link to="/demo/room">
                     Открыть цифровую комнату
-                  </a>
+                  </Link>
                 </Button>
               ) : null}
             </section>

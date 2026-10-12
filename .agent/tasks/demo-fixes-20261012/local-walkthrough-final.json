@@ -1,0 +1,775 @@
+[
+  {
+    "step": 1,
+    "key": "welcome",
+    "url": "http://127.0.0.1:4173/dashboard/today",
+    "verified": true
+  },
+  {
+    "step": 2,
+    "key": "today-nav",
+    "route": "/dashboard/today",
+    "target": "nav-today",
+    "url": "http://127.0.0.1:4173/dashboard/today",
+    "headings": [
+      "Сегодня",
+      "Следующий шаг",
+      "Совет по уходу за шерстью после SPA-процедур",
+      "Нужно ваше решение",
+      "Продолжить работу",
+      "Проверить предложение для «Ромашки»",
+      "Завершено",
+      "Посмотрите, как LocalOS помогает привлекать клиентов и экономить время",
+      "Что можно сделать в LocalOS",
+      "Что вы увидите в демо",
+      "Сегодня"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 3,
+    "key": "today-overview",
+    "route": "/dashboard/today",
+    "target": "today-overview",
+    "url": "http://127.0.0.1:4173/dashboard/today",
+    "headings": [
+      "Сегодня",
+      "Следующий шаг",
+      "Совет по уходу за шерстью после SPA-процедур",
+      "Нужно ваше решение",
+      "Продолжить работу",
+      "Проверить предложение для «Ромашки»",
+      "Завершено",
+      "Следующий шаг"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 4,
+    "key": "operator-nav",
+    "route": "/dashboard/operator",
+    "target": "nav-operator",
+    "url": "http://127.0.0.1:4173/dashboard/operator",
+    "headings": [
+      "Управление через чат",
+      "Владелец · учебный пример",
+      "LocalOS",
+      "Управление через чат"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 5,
+    "key": "operator-overview",
+    "route": "/dashboard/operator",
+    "target": "operator-overview",
+    "url": "http://127.0.0.1:4173/dashboard/operator",
+    "headings": [
+      "Управление через чат",
+      "Владелец · учебный пример",
+      "LocalOS",
+      "Управление через чат"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 6,
+    "key": "network-switcher",
+    "route": "/dashboard/operator",
+    "target": "network-switcher",
+    "url": "http://127.0.0.1:4173/dashboard/operator",
+    "headings": [
+      "Управление через чат",
+      "Владелец · учебный пример",
+      "LocalOS",
+      "Выбор бизнеса"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 7,
+    "key": "card-nav",
+    "route": "/dashboard/card",
+    "target": "nav-maps",
+    "url": "http://127.0.0.1:4173/dashboard/card",
+    "headings": [
+      "Управление картами",
+      "Рейтинг",
+      "Услуги",
+      "Карты и отзывы"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 8,
+    "key": "card-overview",
+    "route": "/dashboard/card",
+    "target": "card-overview",
+    "url": "http://127.0.0.1:4173/dashboard/card",
+    "headings": [
+      "Управление картами",
+      "Рейтинг",
+      "Услуги",
+      "Все данные карточки в одном месте"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 9,
+    "key": "card-services",
+    "route": "/dashboard/card?tab=services",
+    "target": "card-tab-services",
+    "url": "http://127.0.0.1:4173/dashboard/card?tab=services",
+    "headings": [
+      "Управление картами",
+      "Рейтинг",
+      "Услуги",
+      "Стрижка собак",
+      "Услуги"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 10,
+    "key": "card-reviews",
+    "route": "/dashboard/card?tab=reviews&review_filter=all",
+    "target": "card-tab-reviews",
+    "url": "http://127.0.0.1:4173/dashboard/card?tab=reviews&review_filter=all",
+    "headings": [
+      "Управление картами",
+      "Ответы на отзывы",
+      "Ответьте на отзывы без ответа"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 11,
+    "key": "card-news",
+    "route": "/dashboard/card?tab=news",
+    "target": "card-tab-news",
+    "url": "http://127.0.0.1:4173/dashboard/card?tab=news",
+    "headings": [
+      "Управление картами",
+      "Генератор новостей",
+      "Подготовьте новость для карт"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 12,
+    "key": "card-seo",
+    "route": "/dashboard/card?tab=keywords",
+    "target": "card-tab-keywords",
+    "url": "http://127.0.0.1:4173/dashboard/card?tab=keywords",
+    "headings": [
+      "Управление картами",
+      "SEO-запросы",
+      "Минус-слова SEO",
+      "Узнайте, как клиенты ищут услуги"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 13,
+    "key": "card-competitors",
+    "route": "/dashboard/card?tab=competitors",
+    "target": "card-tab-competitors",
+    "url": "http://127.0.0.1:4173/dashboard/card?tab=competitors",
+    "headings": [
+      "Управление картами",
+      "Конкуренты",
+      "Добавленные конкуренты",
+      "Сравните ближайших конкурентов"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 14,
+    "key": "content-nav",
+    "route": "/dashboard/content",
+    "target": "nav-content",
+    "url": "http://127.0.0.1:4173/dashboard/content",
+    "headings": [
+      "Контент‑план",
+      "Черновик в демо-календаре",
+      "Проверить перед публикацией",
+      "Совет по уходу за шерстью после SPA-процедур",
+      "Контент"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 15,
+    "key": "content-calendar",
+    "route": "/dashboard/content?section=calendar",
+    "target": "content-calendar",
+    "url": "http://127.0.0.1:4173/dashboard/content?section=calendar",
+    "headings": [
+      "Контент‑план",
+      "Черновик в демо-календаре",
+      "Проверить перед публикацией",
+      "Совет по уходу за шерстью после SPA-процедур",
+      "Создайте контент-план"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 16,
+    "key": "content-plan-setup",
+    "route": "/dashboard/content?demo_stage=setup",
+    "target": "content-plan-setup",
+    "url": "http://127.0.0.1:4173/dashboard/content?demo_stage=setup",
+    "headings": [
+      "Контент‑план",
+      "Настройте план",
+      "Выберите цель, срок и каналы"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 17,
+    "key": "content-plan-preview",
+    "route": "/dashboard/content?demo_stage=preview",
+    "target": "content-plan-preview",
+    "url": "http://127.0.0.1:4173/dashboard/content?demo_stage=preview",
+    "headings": [
+      "Контент‑план",
+      "Темы и черновик",
+      "Проверьте тему и черновик"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 18,
+    "key": "content-plan-save",
+    "route": "/dashboard/content?demo_stage=saved",
+    "target": "content-plan-save",
+    "url": "http://127.0.0.1:4173/dashboard/content?demo_stage=saved",
+    "headings": [
+      "Контент‑план",
+      "Черновик в демо-календаре",
+      "Черновик в демо-календаре"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 19,
+    "key": "content-plan-review",
+    "route": "/dashboard/content?demo_stage=review",
+    "target": "content-plan-review",
+    "url": "http://127.0.0.1:4173/dashboard/content?demo_stage=review",
+    "headings": [
+      "Контент‑план",
+      "Черновик в демо-календаре",
+      "Проверить перед публикацией",
+      "Совет по уходу за шерстью после SPA-процедур",
+      "Проверьте перед публикацией"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 20,
+    "key": "partnership-nav",
+    "route": "/dashboard/partnerships?demo=romashka",
+    "target": "nav-partnerships",
+    "url": "http://127.0.0.1:4173/dashboard/partnerships?demo=romashka",
+    "headings": [
+      "Партнёрства",
+      "Ромашка",
+      "Партнёрства ведутся по этапам",
+      "Партнёрства"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 21,
+    "key": "partnership-workspace",
+    "route": "/dashboard/partnerships?demo=romashka",
+    "target": "partnership-workspace",
+    "url": "http://127.0.0.1:4173/dashboard/partnerships?demo=romashka",
+    "headings": [
+      "Партнёрства",
+      "Ромашка",
+      "Партнёрства ведутся по этапам",
+      "Как договориться о совместной акции"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 22,
+    "key": "partnership-candidates",
+    "route": "/dashboard/partnerships?demo=romashka",
+    "target": "partnership-candidates",
+    "url": "http://127.0.0.1:4173/dashboard/partnerships?demo=romashka",
+    "headings": [
+      "Партнёрства",
+      "Ромашка",
+      "Партнёрства ведутся по этапам",
+      "Что уже обсудили с «Ромашкой»"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 23,
+    "key": "influencers-nav",
+    "route": "/dashboard/influencers",
+    "target": "nav-influencers",
+    "url": "http://127.0.0.1:4173/dashboard/influencers",
+    "headings": [
+      "Инфлюенсеры",
+      "Анна · уход за питомцами",
+      "Инфлюенсеры"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 24,
+    "key": "average-ticket",
+    "route": "/dashboard/average-ticket",
+    "target": "nav-upsells",
+    "url": "http://127.0.0.1:4173/dashboard/average-ticket",
+    "headings": [
+      "Средний чек",
+      "Пример плана",
+      "Средний чек"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 25,
+    "key": "agents-nav",
+    "route": "/dashboard/agents",
+    "target": "nav-automation",
+    "url": "http://127.0.0.1:4173/dashboard/agents",
+    "headings": [
+      "Автоматизация работы",
+      "Автоматизированные задачи",
+      "Проверять новые отзывы",
+      "Подготовленный результат",
+      "Перед публикацией проверьте текст",
+      "История учебных запусков",
+      "Автоматизация"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 26,
+    "key": "agents-signals",
+    "route": "/dashboard/agents",
+    "target": "agents-workspace",
+    "url": "http://127.0.0.1:4173/dashboard/agents",
+    "headings": [
+      "Автоматизация работы",
+      "Автоматизированные задачи",
+      "Проверять новые отзывы",
+      "Подготовленный результат",
+      "Перед публикацией проверьте текст",
+      "История учебных запусков",
+      "Для каждой задачи готовится результат"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 27,
+    "key": "agents-today",
+    "route": "/dashboard/agents",
+    "target": "agents-today",
+    "url": "http://127.0.0.1:4173/dashboard/agents",
+    "headings": [
+      "Автоматизация работы",
+      "Автоматизированные задачи",
+      "Проверять новые отзывы",
+      "Подготовленный результат",
+      "Перед публикацией проверьте текст",
+      "История учебных запусков",
+      "Что уже сделано сегодня"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 28,
+    "key": "agents-employees",
+    "route": "/dashboard/agents",
+    "target": "agents-employees",
+    "url": "http://127.0.0.1:4173/dashboard/agents",
+    "headings": [
+      "Автоматизация работы",
+      "Автоматизированные задачи",
+      "Проверять новые отзывы",
+      "Подготовленный результат",
+      "Перед публикацией проверьте текст",
+      "История учебных запусков",
+      "Выберите автоматизированную задачу"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 29,
+    "key": "agents-control",
+    "route": "/dashboard/agents",
+    "target": "agents-control",
+    "url": "http://127.0.0.1:4173/dashboard/agents",
+    "headings": [
+      "Автоматизация работы",
+      "Автоматизированные задачи",
+      "Проверять новые отзывы",
+      "Подготовленный результат",
+      "Перед публикацией проверьте текст",
+      "История учебных запусков",
+      "Вы сохраняете контроль"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 30,
+    "key": "agents-run",
+    "route": "/dashboard/agents",
+    "target": "agents-run",
+    "url": "http://127.0.0.1:4173/dashboard/agents",
+    "headings": [
+      "Автоматизация работы",
+      "Автоматизированные задачи",
+      "Проверять новые отзывы",
+      "Подготовленный результат",
+      "Перед публикацией проверьте текст",
+      "История учебных запусков",
+      "Запустите проверку на примере"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 31,
+    "key": "agents-review",
+    "route": "/dashboard/agents",
+    "target": "agents-review",
+    "url": "http://127.0.0.1:4173/dashboard/agents",
+    "headings": [
+      "Автоматизация работы",
+      "Автоматизированные задачи",
+      "Проверять новые отзывы",
+      "Подготовленный результат",
+      "Перед публикацией проверьте текст",
+      "История учебных запусков",
+      "Проверьте готовые черновики"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 32,
+    "key": "agents-history",
+    "route": "/dashboard/agents",
+    "target": "agents-history",
+    "url": "http://127.0.0.1:4173/dashboard/agents",
+    "headings": [
+      "Автоматизация работы",
+      "Автоматизированные задачи",
+      "Проверять новые отзывы",
+      "Подготовленный результат",
+      "Перед публикацией проверьте текст",
+      "История учебных запусков",
+      "Посмотрите историю выполненных задач"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 33,
+    "key": "progress-nav",
+    "route": "/dashboard/progress",
+    "target": "nav-progress",
+    "url": "http://127.0.0.1:4173/dashboard/progress",
+    "headings": [
+      "Результаты",
+      "Результаты по направлениям",
+      "Последние подтверждённые этапы",
+      "Результаты"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 34,
+    "key": "progress-overview",
+    "route": "/dashboard/progress",
+    "target": "progress-summary",
+    "url": "http://127.0.0.1:4173/dashboard/progress",
+    "headings": [
+      "Результаты",
+      "Результаты по направлениям",
+      "Последние подтверждённые этапы",
+      "Результаты"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 35,
+    "key": "progress-areas",
+    "route": "/dashboard/progress",
+    "target": "progress-areas",
+    "url": "http://127.0.0.1:4173/dashboard/progress",
+    "headings": [
+      "Результаты",
+      "Результаты по направлениям",
+      "Последние подтверждённые этапы",
+      "Результаты по направлениям"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 36,
+    "key": "progress-maps",
+    "route": "/dashboard/progress",
+    "target": "progress-area-maps",
+    "url": "http://127.0.0.1:4173/dashboard/progress",
+    "headings": [
+      "Результаты",
+      "Результаты по направлениям",
+      "Последние подтверждённые этапы",
+      "Карты: что уже проверено"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 37,
+    "key": "progress-recent-results",
+    "route": "/dashboard/progress",
+    "target": "progress-recent-results",
+    "url": "http://127.0.0.1:4173/dashboard/progress",
+    "headings": [
+      "Результаты",
+      "Результаты по направлениям",
+      "Последние подтверждённые этапы",
+      "Результаты"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 38,
+    "key": "finance-nav",
+    "route": "/dashboard/finance",
+    "target": "nav-finance",
+    "url": "http://127.0.0.1:4173/dashboard/finance",
+    "headings": [
+      "Финансы",
+      "Финансы"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 39,
+    "key": "profile-nav",
+    "route": "/dashboard/profile",
+    "target": "nav-profile",
+    "url": "http://127.0.0.1:4173/dashboard/profile",
+    "headings": [
+      "Бизнес и команда",
+      "Рога и копыта",
+      "Бизнес и команда"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 40,
+    "key": "business-knowledge",
+    "route": "/dashboard/profile?section=knowledge",
+    "target": "business-knowledge",
+    "url": "http://127.0.0.1:4173/dashboard/profile?section=knowledge",
+    "headings": [
+      "Знания о бизнесе",
+      "Знания о бизнесе"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 41,
+    "key": "settings-nav",
+    "route": "/dashboard/settings",
+    "target": "nav-settings",
+    "url": "http://127.0.0.1:4173/dashboard/settings",
+    "headings": [
+      "Подключения",
+      "Связь с владельцем",
+      "Публикации и сообщения",
+      "Данные и CRM",
+      "Настройки и подключения"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 42,
+    "key": "more-nav",
+    "route": "/dashboard/more",
+    "target": "nav-more",
+    "url": "http://127.0.0.1:4173/dashboard/more",
+    "headings": [
+      "Ещё",
+      "Ещё"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 43,
+    "key": "growth-paths",
+    "route": "/dashboard/growth-paths",
+    "target": "growth-paths-overview",
+    "url": "http://127.0.0.1:4173/dashboard/growth-paths",
+    "headings": [
+      "Пути роста",
+      "Карты и отзывы",
+      "Контент",
+      "Партнёрства",
+      "Инфлюенсеры",
+      "Средний чек",
+      "Автоматизация",
+      "Пути роста"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 44,
+    "key": "work-journal",
+    "route": "/dashboard/work-journal",
+    "target": "work-journal-overview",
+    "url": "http://127.0.0.1:4173/dashboard/work-journal",
+    "headings": [
+      "Рабочий журнал",
+      "Один стол для груминга недоступен до пятницы",
+      "Проверять специалиста и время перед записью",
+      "Подготовлен черновик совета по уходу",
+      "Рабочий журнал"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 45,
+    "key": "chats-nav",
+    "route": "/dashboard/chats",
+    "target": "chats-overview",
+    "url": "http://127.0.0.1:4173/dashboard/chats",
+    "headings": [
+      "Сообщения клиентов",
+      "Агенты",
+      "Диалоги: Запись клиентов",
+      "Сообщения клиентов"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 46,
+    "key": "telegram-radar",
+    "route": "/dashboard/telegram-radar",
+    "target": "radar-overview",
+    "url": "http://127.0.0.1:4173/dashboard/telegram-radar",
+    "headings": [
+      "Telegram-радар",
+      "Отвечайте только вручную",
+      "Источники Telegram",
+      "Найденные сообщения",
+      "Радар"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  },
+  {
+    "step": 47,
+    "key": "finish",
+    "route": "/dashboard/partnerships?demo=romashka",
+    "url": "http://127.0.0.1:4173/dashboard/partnerships?demo=romashka",
+    "headings": [
+      "Партнёрства",
+      "Ромашка",
+      "Партнёрства ведутся по этапам",
+      "Демо пройдено"
+    ],
+    "overflow": false,
+    "targetFound": true,
+    "error": false
+  }
+]

@@ -1,3 +1,4 @@
+import { workNavigationCopy } from '@/lib/workNavigation';
 import { RotateCcw, Sparkles } from 'lucide-react';
 import { useId, useState } from 'react';
 
@@ -29,7 +30,7 @@ export function DemoAverageTicketPage() {
     <div className="space-y-5 pb-16" data-tour-target="average-ticket-demo">
       <DashboardPageHeader
         eyebrow={copy.eyebrow}
-        title={workspaceCopy.title}
+        title={workNavigationCopy(language).label('upsells')}
         description={copy.description}
       />
 

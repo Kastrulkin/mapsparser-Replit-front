@@ -245,7 +245,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   }, [currentStep, isDemo, loaded, locateTarget, location.pathname, open, showStep]);
 
   useEffect(() => {
-    if (!isDemo || !open || !loaded || location.pathname !== routePathname(currentStep.route)) return;
+    if (!isDemo || !open || !loaded || `${location.pathname}${location.search}` !== currentStep.route) return;
     let frame = 0;
     const observer = new MutationObserver(() => {
       cancelAnimationFrame(frame);
@@ -353,6 +353,20 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     await moveTo(currentIndex + 1, nextCompleted);
   };
 
+  useEffect(() => {
+    if (!isDemo || !open) return;
+    const advanceContent = (event: Event) => {
+      if (!(event instanceof CustomEvent) || typeof event.detail !== 'string') return;
+      const transitions: Record<string,string> = {setup:'content-plan-setup',preview:'content-plan-preview',saved:'content-plan-save',review:'content-plan-review'};
+      const prerequisites: Record<string,string[]> = {setup:['content-nav','content-calendar'],preview:['content-plan-setup'],saved:['content-plan-preview'],review:['content-plan-save']};
+      if (!prerequisites[event.detail]?.includes(currentStep.key)) return;
+      const index = steps.findIndex(step=>step.key===transitions[event.detail]);
+      if (index>=0) void moveTo(index,[...new Set([...completedSteps,currentStep.key])]);
+    };
+    window.addEventListener('localos:demo-content-stage',advanceContent);
+    return ()=>window.removeEventListener('localos:demo-content-stage',advanceContent);
+  },[isDemo,open,currentStep.key,completedSteps,steps,moveTo]);
+
   const previous = async () => {
     if (currentIndex <= 0) return;
     await moveTo(currentIndex - 1, completedSteps);
@@ -391,7 +405,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   const openRoom = async () => {
     void recordEvent('room_opened', currentStep);
     if (user.demo_room_slug) {
-      window.open(`/room/${encodeURIComponent(user.demo_room_slug)}?lang=${encodeURIComponent(language)}`, '_blank', 'noopener,noreferrer');
+      navigate('/demo/room');
     }
   };
 
@@ -617,9 +631,9 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
 
           <h2 className="mt-4 text-balance text-lg font-semibold text-slate-950">{currentStep.title}</h2>
           <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">{currentStep.body}</p>
-          {targetMissing && currentStep.target ? (
+          {(targetMissing || `${location.pathname}${location.search}` !== currentStep.route) && currentStep.target ? (
             <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-              {copy.controls.targetMissing}
+              {`${location.pathname}${location.search}` !== currentStep.route ? (language === 'ru' ? 'Вы открыли другой раздел. Вернитесь к шагу обучения или продолжите маршрут.' : 'You opened another section. Return to this step or continue the route.') : copy.controls.targetMissing}
             </p>
           ) : null}
           {progressError ? (
@@ -658,7 +672,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
               {currentStep.target ? (
                 <Button type="button" variant="outline" className="mt-4 w-full gap-2" onClick={emphasizeCurrentTarget}>
                   <Sparkles className="h-4 w-4" />
-                  {copy.controls.highlight}
+                  {`${location.pathname}${location.search}` !== currentStep.route ? (language === 'ru' ? 'Вернуться к шагу' : 'Return to this step') : copy.controls.highlight}
                 </Button>
               ) : null}
               <div className="mt-3 flex gap-2">

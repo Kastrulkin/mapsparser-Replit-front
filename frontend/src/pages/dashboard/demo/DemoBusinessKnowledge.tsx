@@ -1,3 +1,4 @@
+import { demoWalkthroughCopy } from './demoWalkthroughCopy';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { demoNavigationCopy } from '@/components/guided-tour/demoNavigationCopy';
@@ -17,7 +18,7 @@ export default function DemoBusinessKnowledge() {
         <TabsTrigger value="documents" className="whitespace-normal">{t.documents}</TabsTrigger>
       </TabsList>
       <TabsContent value="fields" className="rounded-lg border p-4"><dl>
-        <dt className="text-sm text-muted-foreground">{t.chairs}</dt><dd className="mt-1 text-lg font-semibold">6</dd>
+        <dt className="text-sm text-muted-foreground">{demoWalkthroughCopy(language).groomingTables}</dt><dd className="mt-1 text-lg font-semibold">6</dd>
       </dl></TabsContent>
       <TabsContent value="rules" className="rounded-lg border p-4"><h2 className="font-medium">{t.booking}</h2>
         <p className="mt-2 text-sm">{t.bookingRule}</p></TabsContent>

@@ -18,7 +18,7 @@ describe('demo matches the canonical navigation', () => {
     expect(GUIDED_TOUR_STEPS[0].route).toBe('/dashboard/today');
     expect(GUIDED_TOUR_STEPS.find(step => step.key === 'today-overview')?.title).toBe('Следующий шаг');
     expect(GUIDED_TOUR_STEPS.find(step => step.key === 'operator-nav')?.body).toContain('обычными сообщениями');
-    expect(GUIDED_TOUR_STEPS.find(step => step.key === 'operator-overview')?.body).toContain('Новые поручения');
+    expect(GUIDED_TOUR_STEPS.find(step => step.key === 'operator-overview')?.body).toContain('поручение');
   });
   it('uses genuine maps tabs, not a fake AI visibility tab', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/pages/dashboard/CardOverviewPage.tsx'), 'utf8');
@@ -36,11 +36,10 @@ describe('demo matches the canonical navigation', () => {
       '/dashboard/content?demo_stage=saved', '/dashboard/content?demo_stage=review',
     ]);
   });
-  it('explains utilities at their real links inside More', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/pages/dashboard/MorePage.tsx'), 'utf8');
+  it('opens utilities on their working screens', () => {
     const steps = GUIDED_TOUR_STEPS.filter(step => ['growth-paths', 'work-journal', 'chats-nav', 'telegram-radar'].includes(step.key));
     expect(steps).toHaveLength(4);
-    steps.forEach(step => { expect(step.route).toBe('/dashboard/more'); expect(source).toContain(step.target); });
+    expect(steps.map(step=>step.route)).toEqual(['/dashboard/growth-paths','/dashboard/work-journal','/dashboard/chats','/dashboard/telegram-radar']);
   });
   it('opens a public example of business knowledge rather than private records', () => {
     expect(GUIDED_TOUR_STEPS.find(step => step.key === 'business-knowledge')).toMatchObject({

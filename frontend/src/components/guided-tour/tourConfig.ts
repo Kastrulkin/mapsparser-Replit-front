@@ -64,10 +64,10 @@ export const GUIDED_TOUR_STEP_LAYOUTS: GuidedTourStepLayout[] = [
   { key: 'business-knowledge', chapter: 'service', route: '/dashboard/profile?section=knowledge', target: 'business-knowledge' },
   { key: 'settings-nav', chapter: 'service', route: '/dashboard/settings', target: 'nav-settings' },
   { key: 'more-nav', chapter: 'service', route: '/dashboard/more', target: 'nav-more' },
-  { key: 'growth-paths', chapter: 'service', route: '/dashboard/more', target: 'nav-growth-paths' },
-  { key: 'work-journal', chapter: 'service', route: '/dashboard/more', target: 'nav-work-journal' },
-  { key: 'chats-nav', chapter: 'service', route: '/dashboard/more', target: 'nav-chats' },
-  { key: 'telegram-radar', chapter: 'service', route: '/dashboard/more', target: 'nav-telegram-radar' },
+  { key: 'growth-paths', chapter: 'service', route: '/dashboard/growth-paths', target: 'growth-paths-overview' },
+  { key: 'work-journal', chapter: 'service', route: '/dashboard/work-journal', target: 'work-journal-overview' },
+  { key: 'chats-nav', chapter: 'service', route: '/dashboard/chats', target: 'chats-overview' },
+  { key: 'telegram-radar', chapter: 'service', route: '/dashboard/telegram-radar', target: 'radar-overview' },
   { key: 'finish', chapter: 'directions', route: '/dashboard/partnerships?demo=romashka', final: true },
 ];
 

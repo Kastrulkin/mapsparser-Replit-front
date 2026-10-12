@@ -379,14 +379,14 @@ const ChatsWorkspace = ({ testing = false }: { testing?: boolean }) => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div data-tour-target="chats-overview" className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
+    <div data-tour-target="chats-overview" className="flex h-full min-h-0 flex-col gap-4">
       {sourceError ? <div role="alert"><p className="text-sm text-destructive">{sourceError}</p><Button variant="outline" onClick={() => { setSourceError(''); void loadAgents(); if(selectedAgentId) void loadConversations(); if(selectedConversationId) void loadMessages(); }}>{workCoherenceCopy(language).retry}</Button></div> : null}
       <h1 className="text-2xl font-semibold">{language === 'ru' ? (testing ? 'Проверить диалог сотрудника' : 'Сообщения клиентов') : (testing ? 'Test employee conversation' : 'Customer messages')}</h1>
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">

@@ -1,0 +1,26 @@
+[
+  {
+    "heading": "Инфлюенсеры",
+    "overflow": false,
+    "url": "/dashboard/influencers",
+    "width": 390
+  },
+  {
+    "heading": "Средний чек",
+    "overflow": false,
+    "url": "/dashboard/average-ticket",
+    "width": 390
+  },
+  {
+    "heading": "Автоматизация работы",
+    "overflow": false,
+    "url": "/dashboard/agents",
+    "width": 390
+  },
+  {
+    "heading": "Контент‑план",
+    "overflow": false,
+    "url": "/dashboard/content",
+    "width": 768
+  }
+]
