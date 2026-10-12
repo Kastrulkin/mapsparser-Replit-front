@@ -1,0 +1,20 @@
+Reachable dynamic assets checked: 202 JS files
+Reachable dynamic assets checked: 202 JS files
+OK: frontend/dist integrity check passed
+JS: /assets/index-BnDORFMQ.js
+CSS: /assets/index-CztLWvK0.css
+Outreach navigation release check passed
+Reachable dynamic assets checked: 12 JS files
+OK: frontend/dist integrity check passed
+JS: /public-audit/assets/index-DjePIWBH.js
+CSS: /public-audit/assets/index-CztLWvK0.css
+Reachable dynamic assets checked: 202 JS files
+Reachable dynamic assets checked: 202 JS files
+OK: frontend/dist integrity check passed
+JS: /assets/index-BnDORFMQ.js
+CSS: /assets/index-CztLWvK0.css
+Reachable dynamic assets checked: 12 JS files
+OK: frontend/dist integrity check passed
+JS: /public-audit/assets/index-DjePIWBH.js
+CSS: /public-audit/assets/index-CztLWvK0.css
+Frontend dist deployed to /opt/seo-app/frontend/dist and /opt/seo-app/frontend/public-dist

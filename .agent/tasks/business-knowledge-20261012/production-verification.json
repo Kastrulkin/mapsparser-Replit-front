@@ -1,0 +1,37 @@
+{
+  "app": {
+    "state": "running",
+    "private_mount": true,
+    "restart_count": 0
+  },
+  "worker": {
+    "state": "running",
+    "private_mount": true,
+    "restart_count": 0
+  },
+  "operator-worker": {
+    "state": "running",
+    "private_mount": true,
+    "restart_count": 0
+  },
+  "telegram-bot": {
+    "state": "running",
+    "private_mount": true,
+    "restart_count": 0
+  },
+  "live_backend_hashes": "match; one independently deployed content-plan file verified separately",
+  "independent_deployment": {
+    "src/services/content_plan_service.py": {
+      "sha256": "531b15407dcef125dbc6de6ad746386dd5bf38fec509d7c3fe830fad2f8bd256",
+      "business_knowledge_integration": "preserved; permitted context and source metadata remain",
+      "action": "kept live file; did not overwrite"
+    }
+  },
+  "revision": "20261012_business_knowledge",
+  "knowledge_table_permissions": "passed",
+  "backup": {
+    "database.dump": "d87de3f937a28d0df8b4dadcd436c3f7727f5b27afb3bfade359e6a828517cc7",
+    "private-files.tar.gz": "104913dbc2de42505ef637239ff6dd0f2fb21ac029ac86459aa614bb8356fb15",
+    "application-before.tar.gz": "d000107a1f257fd90c109cdb05c3128d040a091f206962b3a3e595c28f5af6cb"
+  }
+}

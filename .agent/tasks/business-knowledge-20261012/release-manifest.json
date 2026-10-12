@@ -40,7 +40,7 @@
     "src/main.py": "985f3699fa88fe32f281a48078343fcaba634d6e06699c90d84635344a73f8ab",
     "src/services/operator_core.py": "f1dfd70754b2bcc2e507cbbb8e2bf40bf9141ea9942d63cd7cdab659901fd4e0",
     "src/services/operator_news_generation.py": "2a4cd4052813e586283d4bddbd74aff009949bee4d31087d5ea2d2c6bb7ff41d",
-    "src/services/content_plan_service.py": "ec79e913a73d3d0c673b2e2f1a2a746591c465f8550d75f1607e3e267e13d2b2",
+    "src/services/content_plan_service.py": "ef0802b57c722f7939b94417645538db14914da15c25ea95ff5b52c6d1b1530e",
     "src/services/work_recommendations.py": "fe6608d89e48e4b345279136481f9ff196e62884aaee5a5976ab5cf0674a4153",
     "frontend/src/pages/dashboard/ProfilePage.tsx": "c380772a78821296db49547034f90675aff618ad483238aa3fb59a0af38c0d4e",
     "frontend/src/components/WorkJournal.tsx": "0b38008b9c4599309256909d036169cb48196467f9d313f7925ab9ac7d658dad",
@@ -54,17 +54,17 @@
     "frontend/src/pages/dashboard/AverageTicketPage.tsx": "19b453bca9480b1af7c63244760aab2af280118880806af2dde617df5970527d",
     ".gitignore": "68b533d9703e47021f169b7a0a4e4b38bba88a9ca3fb77e3fc11793b95b0a30d",
     "src/api/business_knowledge_api.py": "a597671b3403ebc4039b5bc0ff23120c906b61f15b3cdb61fa28f688bd9dfbf9",
-    "src/services/business_knowledge.py": "653d4069fa8b7c1d790b28d917279966eff1beffdcd55f972926dc57fd8db4f4",
+    "src/services/business_knowledge.py": "305b3d3b16298c320af1c58855b1f863edf21e88d905eb132ab3c08cd0444629",
     "src/services/business_knowledge_validation.py": "2a21205580df78829a17112af1be0a380b1b0d849813aff433f2a58d00e2b83b",
     "src/services/business_knowledge_templates.py": "8fd44e0a0b558e6045185c532d65b062db9a57764eddfe939763a15a21af6c64",
     "src/services/operator_business_knowledge.py": "f1cb81bf619dd4be6efb99093df44c2cc7b89a7e7876aefaf21881d0dca3a084",
-    "tests/test_business_knowledge.py": "42fde6a7574fcc8efceb4f5324ca42745e66858bf9e4d0a5c39fefd2b9efd166",
+    "tests/test_business_knowledge.py": "54ba48ed47ac88ee6d23f300347276ea347839c7c7dd7090595cbada81899d47",
     "alembic_migrations/versions/20261012_business_knowledge.py": "b1c33fbc88d370e5ee488662a15da3e8a4830f7451775e53fb3dd6c5368c946a",
     "scripts/prepare_business_knowledge_storage.sh": "b855b72ddb85014767e348d999a5c87bb57a6d1ec03590ea21991ca966fa9dab",
-    "docs/BUSINESS_KNOWLEDGE.md": "cdb55a0d736a10873dfd09a44ce0f81897b6121a644244d8e2a429bae4d6e725",
-    "frontend/src/components/business-knowledge/BusinessKnowledge.tsx": "0d83435a1dcb61e69ac028bd4eef9557a1809b3e65f22d0fc20a779b2f296868",
-    "frontend/src/components/business-knowledge/types.ts": "6dc9a0cf961718c15330b24b84ea22e92f4990872fb577114c279bf8ca5020aa",
-    "frontend/src/components/business-knowledge/BusinessKnowledge.test.tsx": "ad75e108aa3c637c2f77018d7b0061274d8746b0e42d09e250e9db12fac8024c",
+    "docs/BUSINESS_KNOWLEDGE.md": "8a6fbb28c135739b18fc4f13e3ca720b7631e2f52cd635d53238baa03975ebca",
+    "frontend/src/components/business-knowledge/BusinessKnowledge.tsx": "211fa8cfbbd807abb700839c44c968f788eafa108f8e52cc00d38604c90222d4",
+    "frontend/src/components/business-knowledge/types.ts": "dd24542775679a12a106bf8e76556045ce22ce4840f36d9a09418c21947556b2",
+    "frontend/src/components/business-knowledge/BusinessKnowledge.test.tsx": "c69571e87785ae7837aa4fb64d97833b8d0cf92eec020b9b4b8f50b6beeb92bd",
     "frontend/src/components/business-knowledge/KnowledgeForms.tsx": "e471e0ee30558b3188a8b7f19825c000db7a9fcdad2bd92ff9cd3aeb2cbc1a54"
   },
   "release_backend_sha256": {
@@ -83,7 +83,7 @@
     "src/services/agent_blueprint_workspace.py": "d6ef61b312e540c0dd0d07f02a80d707cd439efb159ec2f3c987c09ae226405e",
     "src/services/operator_core.py": "deacf29ef6d39dd953da6c7b1db3059797960343988e7060abcb3005c1be000b",
     "src/services/operator_business_knowledge.py": "f1cb81bf619dd4be6efb99093df44c2cc7b89a7e7876aefaf21881d0dca3a084",
-    "src/services/business_knowledge.py": "653d4069fa8b7c1d790b28d917279966eff1beffdcd55f972926dc57fd8db4f4",
+    "src/services/business_knowledge.py": "305b3d3b16298c320af1c58855b1f863edf21e88d905eb132ab3c08cd0444629",
     "src/services/content_plan_service.py": "b591db1b5d99048afb7bfbefcb193651d0e4edf6b1b12de88581bdab4001c07d",
     "src/services/business_knowledge_templates.py": "8fd44e0a0b558e6045185c532d65b062db9a57764eddfe939763a15a21af6c64"
   },
@@ -181,7 +181,8 @@
     "frontend/src/pages/dashboard/progressPageCopy.ts",
     "frontend/src/pages/dashboard/progressResultsCopy.ts",
     "frontend/src/pages/dashboard/todayWorkModel.ts",
-    "frontend/src/pages/telegram/TelegramControlWorkspace.tsx"
+    "frontend/src/pages/telegram/TelegramControlWorkspace.tsx",
+    "frontend/src/types/business.ts"
   ],
   "frontend_source_sha256": {
     "frontend/vite.public.config.ts": "fd3c8d1f24224343c951195d29a422918228976e684868ab65bd4bdea51f3a43",
@@ -268,7 +269,7 @@
     "frontend/src/vite-env.d.ts": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5",
     "frontend/src/PublicOfferApp.tsx": "195dfa3b8ec92ebb509870701f64a9bba68da11fb6379633adc986678cbfbe07",
     "frontend/src/types/news.ts": "be4e2588dc16abc4b317539009db6c0a5f838db5a535ef46f00f45b9b844e207",
-    "frontend/src/types/business.ts": "91aeddd507926540fdaefacf880a20d30f910041b8f4b784400edf9afe7ac485",
+    "frontend/src/types/business.ts": "115fe8f1488c2ffa6f60f9bb60b1a31f5a9131f4697c64cb04a449860062bfde",
     "frontend/src/contexts/CurrencyContext.logic.ts": "32d962c04c8ac4f2acfe0c9dd5dd5761106ef26e43fff46b2cf5d7e00c758918",
     "frontend/src/contexts/CurrencyContext.tsx": "2b1b17a1c5df76740255cfaf98d3462a66fc1468481889f3098cfe64e48667e0",
     "frontend/src/test/stagingFixtureCommand.test.ts": "87e7da65069c51363c89d63788c29ca772d9309169d9805c873cde4914115f6d",
@@ -603,9 +604,9 @@
     "frontend/src/components/telegram/GrowthNavigation.test.tsx": "65bbb4f89040ef20d8f60dc7bc1df807dc46a252ca5f2dc0d13fc071e25b6f79",
     "frontend/src/components/telegram/FinanceCrmMobilePanel.tsx": "42760388faba8f807f54fb784643af917c2f4d662ef7536412381b0be9ce91d0",
     "frontend/src/components/telegram/ScopeProvider.test.tsx": "cca3f8bd3fb0fbb5c166c44973e257205fb22fe456a0c03918e0a4f864d6db15",
-    "frontend/src/components/business-knowledge/BusinessKnowledge.tsx": "0d83435a1dcb61e69ac028bd4eef9557a1809b3e65f22d0fc20a779b2f296868",
-    "frontend/src/components/business-knowledge/types.ts": "6dc9a0cf961718c15330b24b84ea22e92f4990872fb577114c279bf8ca5020aa",
-    "frontend/src/components/business-knowledge/BusinessKnowledge.test.tsx": "ad75e108aa3c637c2f77018d7b0061274d8746b0e42d09e250e9db12fac8024c",
+    "frontend/src/components/business-knowledge/BusinessKnowledge.tsx": "211fa8cfbbd807abb700839c44c968f788eafa108f8e52cc00d38604c90222d4",
+    "frontend/src/components/business-knowledge/types.ts": "dd24542775679a12a106bf8e76556045ce22ce4840f36d9a09418c21947556b2",
+    "frontend/src/components/business-knowledge/BusinessKnowledge.test.tsx": "c69571e87785ae7837aa4fb64d97833b8d0cf92eec020b9b4b8f50b6beeb92bd",
     "frontend/src/components/business-knowledge/KnowledgeForms.tsx": "e471e0ee30558b3188a8b7f19825c000db7a9fcdad2bd92ff9cd3aeb2cbc1a54",
     "frontend/src/components/content-plan/PublicationReconciliation.test.tsx": "c072fc2393238e9bfdffda45ff770af72fc16352a43da697e24b20296bd58aad",
     "frontend/src/components/content-plan/PlanDownload.tsx": "0faa47f557814d06e739ec2a4786319bc0743d885357da4fe4514776156606dd",
@@ -954,11 +955,21 @@
     "frontend/src/services/api.ts": "674b3c091e3c53c5a6a296290aeb8f285db6268d09d4dbe9d1beb3dc6af28daf"
   },
   "artifacts": {
-    "frontend-isolated.patch": "a29f5af8a6043e46decba134ac888ae8e62ce7435a6ebca4186df5a6ebe6ceb1",
-    "frontend-source.tar.gz": "7792dd4cebeb66be9235a8eb605d3037c9c4fea7d07362621e3e4ff14a8cb2b9",
-    "frontend-build.tar.gz": "fe09e2b2474ca21dce5217fc09b884d0e3dc7a0d310496b2b7d878f8f83c5445",
-    "backend-source.tar.gz": "5d270e0fb873be80ae98829a5f834e56bc037e34e5bd8a61d48d3fae815bb623",
+    "frontend-isolated.patch": "14c782ae6c339bfdd5fcd9c622efc5560161d41c423daf24a75c889071de9ea6",
+    "frontend-source.tar.gz": "c8f18d20479142314af13760f13fc76c9d3b93fdbb6eb04a108cf31f746534cd",
+    "frontend-build.tar.gz": "1114f6e389669dcc517c3b5de355eabdfc9461b5c8bae002a0b8f8237f2a3f30",
+    "backend-source.tar.gz": "f7fb607c9b1cc5a8290ade256c06f4d0dabac224e7241716ee983d9a17236a7e",
     "production-backend-final.patch": "267b1901a4f338560083a75961f26197571533544d69665cf6b51148fd9fa9e3",
-    "task-changes.patch": "bce92b228f081d4edc1ba8ecfa3fc9eacfe7be767078faa9cc898ac5dd80192e"
-  }
+    "task-changes.patch": "d2563bf8463a011148497d2cbbb4c3c134521583f3cbb217159a86f099b752dd"
+  },
+  "release_tool_sha256": {
+    "scripts/deploy_frontend_dist.sh": "7f086fee4bf335b4d4dcfb64248e0b48a1d496d3eb2ec0439a16e16778f667b2"
+  },
+  "postrelease_evidence": [
+    "production-verification.json",
+    "production-postrelease.json",
+    "verification.json",
+    "browser-checks.md",
+    "docs/BUSINESS_KNOWLEDGE_UX_AUDIT_20261012.md"
+  ]
 }

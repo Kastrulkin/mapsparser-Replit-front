@@ -1,0 +1,11 @@
+> vite_react_shadcn_ts@0.0.0 test
+> vitest run src/components/business-knowledge/BusinessKnowledge.test.tsx src/components/DashboardLayout.selection.test.tsx src/components/DashboardLayout.scope.test.tsx src/components/telegram/GrowthNavigation.test.tsx
+
+
+ RUN  v4.1.11 /private/tmp/localos-knowledge-clean/frontend
+
+
+ Test Files  4 passed (4)
+      Tests  20 passed (20)
+   Start at  13:12:15
+   Duration  6.01s (transform 2.40s, setup 2.94s, import 2.71s, tests 3.39s, environment 8.42s)

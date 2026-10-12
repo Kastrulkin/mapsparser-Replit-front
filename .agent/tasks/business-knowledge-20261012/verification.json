@@ -1,10 +1,10 @@
 {
-  "status": "local_verified_not_deployed",
+  "status": "deployed_verified",
   "date": "2026-10-12",
-  "postgresql_feature_tests": 29,
+  "postgresql_feature_tests": 30,
   "compatibility_tests": 77,
-  "staged_backend_combined_tests": 106,
-  "isolated_frontend_tests": 19,
+  "staged_backend_combined_tests": 107,
+  "isolated_frontend_tests": 20,
   "isolated_typecheck": "passed",
   "dashboard_build": "passed",
   "public_build": "passed",
@@ -34,10 +34,25 @@
       "errors": []
     }
   ],
-  "browser_data": "local mocked API; real component",
-  "production": "read-only source/dependency comparison; no data or schema writes",
+  "browser_data": "local fixtures plus authenticated production business/network/point and template previews",
+  "production": "authorized additive migration and code deployment after verified backups; read-only browser checks; no test business records created",
   "user_study": "not_performed",
-  "deployment": "requires separate release approval and backups",
+  "deployment": "completed; /assets/index-BnDORFMQ.js",
   "backend_dependency_hashes": "production-dependencies.json",
-  "release_source_allowlist": "release-manifest.json"
+  "release_source_allowlist": "release-manifest.json",
+  "live_compatibility_tests": {
+    "passed": 116,
+    "skipped": 1,
+    "skip_reason": "OPERATOR_VOICE_TEST_DSN not configured; unrelated content voice PostgreSQL fixture"
+  },
+  "backup_directory": "/opt/seo-app/data/backups/releases/business-knowledge-20261012",
+  "migration": "20261012_business_knowledge",
+  "telegram": "shared service tests passed; running/healthy private mount verified; interactive user scenario not performed",
+  "production_contexts": [
+    "business",
+    "network",
+    "network-to-child",
+    "network-to-parent business scope"
+  ],
+  "independent_deployment": "production-postrelease.json"
 }
