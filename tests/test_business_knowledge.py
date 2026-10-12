@@ -63,7 +63,7 @@ def db(monkeypatch,tmp_path):
     cursor.execute(f'CREATE SCHEMA {schema}');cursor.execute(f'SET search_path TO {schema}')
     cursor.execute('''CREATE TABLE users(id TEXT PRIMARY KEY,name TEXT,email TEXT,is_active BOOLEAN DEFAULT TRUE,is_superadmin BOOLEAN DEFAULT FALSE);
       CREATE TABLE networks(id TEXT PRIMARY KEY,name TEXT,owner_id TEXT);
-      CREATE TABLE businesses(id TEXT PRIMARY KEY,name TEXT,business_type TEXT,network_id TEXT,owner_id TEXT,is_active BOOLEAN DEFAULT TRUE);
+      CREATE TABLE businesses(id TEXT PRIMARY KEY,name TEXT,address TEXT,business_type TEXT,network_id TEXT,owner_id TEXT,is_active BOOLEAN DEFAULT TRUE);
       CREATE TABLE business_members(business_id TEXT,user_id TEXT,role TEXT,status TEXT);
       CREATE TABLE network_members(network_id TEXT,user_id TEXT,role TEXT,status TEXT);
       CREATE TABLE businesstypes(type_key TEXT,label TEXT,is_active BOOLEAN);
@@ -128,6 +128,7 @@ def test_editors_revocation_and_private_context(db):
 
 
 def test_network_rules_local_exception_and_capacity(db):
+    db.execute("UPDATE businesses SET address='Улица, 6' WHERE id='salon'")
     rule=change(db,'rule',{'label':'Приём','text':'Только по записи'},scope_type='network',scope_id='net')['record']
     assert knowledge.read(db,'business','salon',user())['rules'][0]['id']==rule['id']
     change(db,'rule',{'label':'Приём','text':'С 12 часов','origin_id':rule['id']})
@@ -140,6 +141,7 @@ def test_network_rules_local_exception_and_capacity(db):
     assert data['locations']['summaries'][0]['value']==6
     assert data['locations']['summaries'][0]['coverage']==1
     assert data['locations']['total']==2
+    assert next(item for item in data['locations']['items'] if item['id']=='salon')['address']=='Улица, 6'
     assert change(db,'template',{'type_key':'beauty_salon','fields':['hair_chairs']},scope_type='network',scope_id='net')['already_present']==1
     maximum=change(db,'template',{'type_key':'school','fields':['group_max']},scope_type='network',scope_id='net')['records'][0]
     change(db,'value',{'field_id':maximum['id'],'value':15})

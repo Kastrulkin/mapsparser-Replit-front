@@ -14,6 +14,14 @@ const mount=(url='/dashboard/profile?section=knowledge')=>render(<MemoryRouter i
 beforeEach(()=>{fetchMock=vi.fn(()=>json(fixture()));vi.stubGlobal('fetch',fetchMock);vi.stubGlobal('crypto',{randomUUID:()=>Math.random().toString()});Element.prototype.scrollIntoView=vi.fn();});
 
 describe('knowledge meaning and forms',()=>{
+  it('distinguishes same-name locations and selects business scope without a write',async()=>{
+    fetchMock.mockImplementation(()=>json({...fixture(),locations:{total:2,summaries:[],items:[{id:'a',name:'Салон',address:'Улица, 6'},{id:'b',name:'Салон',address:'Улица, 9'}]}}));
+    const openBusiness=vi.fn();
+    render(<MemoryRouter><BusinessKnowledge scope={{type:'network',id:'net'}} onBusinessChange={openBusiness} /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button',{name:'Салон · Улица, 6'}));
+    expect(openBusiness).toHaveBeenCalledWith('a','business');
+    expect(fetchMock.mock.calls.every(args=>!args[1]?.method)).toBe(true);
+  });
   it('distinguishes absent, zero and not applicable',()=>{
     expect(formatKnowledgeValue()).toBe('Не указано');
     expect(formatKnowledgeValue({...field,payload_json:{state:'set',value:0}})).toBe('0');

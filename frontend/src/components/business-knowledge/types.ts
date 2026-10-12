@@ -23,7 +23,7 @@ export type KnowledgeData = {
   inventory?: {available: boolean; complete: boolean; classification_notice?:string; active_resource_count?:number|null; version?: number; message?: string;
     items: {id: string; name: string; type: string}[];
     mismatches?: {field_id: string; label: string; declared: number; listed: number}[]};
-  locations?: {total: number; items: {id: string; name: string}[];
+  locations?: {total: number; items: {id: string; name: string; address?: string | null}[];
     summaries: {label: string; unit: string; value: number; coverage: number}[]};
 };
 export type KnowledgeChange = {

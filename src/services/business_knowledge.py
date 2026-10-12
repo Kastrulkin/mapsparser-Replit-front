@@ -156,7 +156,7 @@ def inventory(cursor,actor,fields):
 
 def network_summary(cursor,actor,user):
     from core.auth_helpers import verify_business_access
-    cursor.execute('SELECT id,name FROM businesses WHERE network_id=%s AND is_active IS DISTINCT FROM FALSE ORDER BY name',(actor['scope_id'],))
+    cursor.execute('SELECT id,name,address FROM businesses WHERE network_id=%s AND is_active IS DISTINCT FROM FALSE ORDER BY name',(actor['scope_id'],))
     locations=[_row(cursor,row) for row in cursor.fetchall()]
     # Only shared template identifiers and same units are comparable; custom names never imply semantics.
     totals={}; visible=[]
@@ -164,7 +164,7 @@ def network_summary(cursor,actor,user):
         if not verify_business_access(cursor,location['id'],user)[0]:continue
         local_actor=access(cursor,'business',location['id'],user)
         definitions=_effective(cursor,local_actor,'field'); values={row['record_key']:row for row in _effective(cursor,local_actor,'value')}
-        visible.append({'id':location['id'],'name':location['name']})
+        visible.append({'id':location['id'],'name':location['name'],'address':location.get('address')})
         counted=set()
         for field in definitions:
             value=values.get(field['id']); payload=field['payload_json']
