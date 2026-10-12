@@ -1,21 +1,21 @@
-import { AlertTriangle, Loader2, MessageSquareWarning } from 'lucide-react';
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { AlertTriangle, Loader2, MessageSquareWarning } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { api } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { operatorPageCopyForLanguage } from '@/pages/dashboard/operatorPageCopy';
-import { api } from '@/services/api';
 
 type BetaFeedbackBannerProps = {
   area: 'agents' | 'operator';
@@ -23,7 +23,10 @@ type BetaFeedbackBannerProps = {
   description: string;
   businessId?: string | null;
   businessName?: string | null;
-  compact?: boolean;
+  dialogOnly?: boolean;
+  onCloseAutoFocus?: (event: Event) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 export const BetaFeedbackBanner = ({
@@ -32,13 +35,18 @@ export const BetaFeedbackBanner = ({
   description,
   businessId,
   businessName,
-  compact = false,
+  dialogOnly = false,
+  onCloseAutoFocus,
+  open: controlledOpen,
+  onOpenChange,
 }: BetaFeedbackBannerProps) => {
   const location = useLocation();
   const { toast } = useToast();
   const { language } = useLanguage();
   const copy = operatorPageCopyForLanguage(language).feedback;
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
+  const setOpen = (value: boolean) => { setLocalOpen(value); onOpenChange?.(value); };
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -81,36 +89,27 @@ export const BetaFeedbackBanner = ({
 
   return (
     <>
-      {compact ? (
-        <div className="flex justify-end">
-          <Button type="button" variant="ghost" className="min-h-9 rounded-xl px-2 text-xs text-slate-500" onClick={() => setOpen(true)}>
-            <MessageSquareWarning className="mr-2 h-4 w-4" />
-            {copy.button}
-          </Button>
-        </div>
-      ) : (
-        <div className="rounded-3xl border border-amber-200/80 bg-amber-50/90 px-5 py-4 shadow-sm">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0 space-y-1.5">
-              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                Beta
-              </div>
-              <div className="text-base font-semibold text-slate-950">{title}</div>
-              <p className="max-w-3xl text-sm leading-6 text-slate-700">{description}</p>
+      {!dialogOnly && <div className="rounded-3xl border border-amber-200/80 bg-amber-50/90 px-5 py-4 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-1.5">
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Beta
             </div>
-            <div className="flex shrink-0 items-center">
-              <Button type="button" variant="outline" className="min-h-10 rounded-xl bg-white/90" onClick={() => setOpen(true)}>
-                <MessageSquareWarning className="mr-2 h-4 w-4" />
-                {copy.button}
-              </Button>
-            </div>
+            <div className="text-base font-semibold text-slate-950">{title}</div>
+            <p className="max-w-3xl text-sm leading-6 text-slate-700">{description}</p>
+          </div>
+          <div className="flex shrink-0 items-center">
+            <Button type="button" variant="outline" className="min-h-10 rounded-xl bg-white/90" onClick={() => setOpen(true)}>
+              <MessageSquareWarning className="mr-2 h-4 w-4" />
+              {copy.button}
+            </Button>
           </div>
         </div>
-      )}
+      </div>}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl rounded-3xl border-slate-200 p-0">
+        <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="max-w-2xl rounded-3xl border-slate-200 p-0">
           <div className="px-6 py-6">
             <DialogHeader>
               <DialogTitle>{copy.title}</DialogTitle>
