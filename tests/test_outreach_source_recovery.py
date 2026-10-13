@@ -165,3 +165,26 @@ def test_fetched_title_is_sourced_without_inventing_missing_itinerary(bridge, mo
     assert title['fact'] == 'Page title: Phuket tour packages from India'
     assert title['source_url'] == 'https://example.org/tour' and title['untrusted']
     assert not any('pickup' in f['fact'] for f in result['facts'])
+
+
+def test_explicit_evidence_retry_preserves_ready_company_and_spent_budget():
+    from services.outreach_continuation import retry_source_evidence
+    ready = {'status': 'qualified'}
+    state = {'qualifications': {'ready': ready, 'missing': {'status': 'needs_evidence'}},
+             'campaign_results': {'ready': {'campaign_id': 'saved'}}, 'llm_calls': 1,
+             'check_credits_charged': 1, 'source_research_jobs_queued': True}
+    assert retry_source_evidence({'source_urls': ['https://example.org/'], 'max_qualification_calls': 4}, state)
+    assert state['qualifications'] == {'ready': ready}
+    assert state['campaign_results']['ready']['campaign_id'] == 'saved'
+    assert state['source_research_workstream_ids'] == ['missing']
+    assert state['llm_calls'] == state['check_credits_charged'] == 1
+    assert not state['source_research_jobs_queued']
+
+
+def test_evidence_retry_cannot_expand_exhausted_or_non_source_search():
+    from services.outreach_continuation import retry_source_evidence
+    state = {'qualifications': {'missing': {'status': 'needs_evidence'}}, 'llm_calls': 4}
+    assert not retry_source_evidence({'max_qualification_calls': 4}, state)
+    with pytest.raises(ValueError, match='qualification_budget_exhausted'):
+        retry_source_evidence({'source_urls': ['https://example.org/'], 'max_qualification_calls': 4}, state)
+    assert state['qualifications']['missing']['status'] == 'needs_evidence'

@@ -473,6 +473,26 @@ def campaign_requires_refresh(cursor, campaign_id, business_id):
         row.get("message_brief_json"), row.get("quality_gate_json"), require_ai=True) for row in rows)
 
 
+def retry_source_evidence(config, state):
+    """Explicit owner retry refreshes only unproven sites within remaining checks."""
+    if not config.get('source_urls'):
+        return False
+    pending = [key for key, value in (state.get('qualifications') or {}).items()
+               if value.get('status') == 'needs_evidence']
+    if not pending:
+        return False
+    if int(state.get('llm_calls') or 0) >= int(config['max_qualification_calls']):
+        raise ValueError('qualification_budget_exhausted')
+    qualifications = dict(state.get('qualifications') or {})
+    for key in pending:
+        state.setdefault('source_retry_history', []).append({
+            'workstream_id': key, 'qualification': qualifications.pop(key),
+            'at': datetime.now(timezone.utc).isoformat()})
+    state.update(qualifications=qualifications, source_research_jobs_queued=False,
+                 source_research_workstream_ids=pending, phase='prepare')
+    return True
+
+
 def control_task(cursor: Any, *, task_id: str, business_id: str, user_id: str,
                  action: str, revision: str, display_name: str = "") -> dict[str, Any]:
     if action not in {"start", "pause", "resume", "stop", "acknowledge_search", "retry_failed", "use_shared_balance", "rename", "resume_letters"}:
@@ -530,7 +550,7 @@ def control_task(cursor: Any, *, task_id: str, business_id: str, user_id: str,
     if action == "retry_failed":
         if row["status"] in {"running", "queued"}:
             raise ValueError("pause_before_retry")
-        changed = False
+        changed = retry_source_evidence(row['payload_json'], state)
         for field, statuses in (("qualifications", {"failed"}), ("campaign_results", {"failed", "needs_sender_setup", "observe", "needs_generation", "needs_revision"})):
             values = dict(state.get(field) or {})
             for key, value in list(values.items()):
@@ -899,7 +919,7 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
         if config.get("source_urls") and not state.get("source_research_jobs_queued"):
             from services.contact_intelligence_service import enqueue_enrichment_job
             state["source_research_job_ids"] = [str(enqueue_enrichment_job(cursor, ws_id, force=True, allow_paid_enrichment=False)["id"])
-                                                for ws_id in state.get("workstream_ids", [])]
+                                                for ws_id in state.pop("source_research_workstream_ids", state.get("workstream_ids", []))]
             state["source_research_jobs_queued"] = True
             _save(cursor, row, state, stage="Исследуем сайты и собираем контакты через OpenClaw", delay=5)
             conn.commit()
