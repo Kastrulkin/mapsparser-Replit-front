@@ -162,7 +162,7 @@ def enrich_group(cursor, task, *, viewer_id=None):
     draft_job = dict(cursor.fetchone() or {})
     cursor.execute("""SELECT COUNT(DISTINCT d.lead_id) AS prepared
         FROM outreachmessagedrafts d JOIN prospectingleads l ON l.id=d.lead_id
-        WHERE l.business_id=%s AND l.id::text=ANY(%s::text[])""", (task["business_id"], ids))
+        WHERE l.business_id=%s AND d.learning_note_json->>'search_task_id'=%s""", (task["business_id"], task["id"]))
     task["report"]["prepared"] = max(task["report"].get("prepared", 0), int((cursor.fetchone() or {}).get("prepared") or 0))
     cursor.execute("""SELECT COUNT(*) AS needs_decision FROM lead_workstreams ws
         WHERE ws.client_business_id=%s AND ws.lead_id::text=ANY(%s::text[])

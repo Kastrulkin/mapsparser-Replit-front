@@ -406,13 +406,22 @@ def _release_draft_hold(cursor, row, result):
                     credits=0, step="draft", key=result["credit_key"])
 
 
+def group_campaign_ids(cursor, task):
+    ids = [str(value['campaign_id']) for value in (task.get('state', {}).get('campaign_results') or {}).values() if value.get('campaign_id')]
+    cursor.execute("""SELECT DISTINCT d.learning_note_json->>'campaign_id' AS campaign_id
+        FROM outreachmessagedrafts d JOIN prospectingleads l ON l.id=d.lead_id
+        WHERE l.business_id=%s AND d.learning_note_json->>'search_task_id'=%s
+          AND NULLIF(d.learning_note_json->>'campaign_id','') IS NOT NULL""", (task['business_id'], task['id']))
+    ids.extend(str(row['campaign_id']) for row in cursor.fetchall())
+    return list(dict.fromkeys(ids))
+
+
 def delivery_report(cursor, task):
     """Read native receipts; queue admission is never reported as a sent email."""
-    ids = [str(value['campaign_id']) for value in (task.get('state', {}).get('campaign_results') or {}).values() if value.get('campaign_id')]
+    ids = group_campaign_ids(cursor, task)
     result = {'queued': 0, 'sending': 0, 'confirmed_sent': 0, 'delivery_uncertain': 0, 'replies': 0, 'interested_replies': [],
               'delivery_evidence': 'native_queue_and_inbound_events'}
-    lead_ids = list(task.get("state", {}).get("lead_ids") or [])
-    if not lead_ids and not ids:
+    if not ids:
         return result
     cursor.execute("""SELECT
         COUNT(*) FILTER (WHERE q.delivery_status IN ('queued','sending','retry','retry_wait')) AS queued,
@@ -420,23 +429,16 @@ def delivery_report(cursor, task):
         COUNT(*) FILTER (WHERE q.delivery_status IN ('sent','delivered') AND NULLIF(q.provider_message_id,'') IS NOT NULL) AS confirmed_sent,
         COUNT(*) FILTER (WHERE q.delivery_status IN ('delivery_unknown','unknown','uncertain') OR lower(COALESCE(q.error_text,'')) LIKE '%%send_uncertain%%'
           OR (q.delivery_status IN ('sent','delivered') AND NULLIF(q.provider_message_id,'') IS NULL)) AS delivery_uncertain
-        FROM outreachsendqueue q JOIN prospectingleads l ON l.id=q.lead_id
-        WHERE l.id::text=ANY(%s::text[]) AND l.business_id=%s""", (lead_ids, task['business_id']))
+        FROM outreachsendqueue q JOIN outreach_campaign_touches touch ON touch.id=q.campaign_touch_id
+        JOIN outreach_campaigns c ON c.id=touch.campaign_id
+        WHERE c.id::text=ANY(%s::text[]) AND c.business_id=%s""", (ids, task['business_id']))
     result.update(dict(cursor.fetchone() or {}))
     cursor.execute("""SELECT i.id,i.campaign_id,i.lead_id,i.classification,i.occurred_at
         FROM outreach_inbound_events i JOIN outreach_campaigns c ON c.id=i.campaign_id
-        WHERE (c.id::text=ANY(%s) OR i.lead_id::text=ANY(%s::text[])) AND c.business_id=%s AND i.is_human=TRUE
+        WHERE c.id::text=ANY(%s::text[]) AND c.business_id=%s AND i.is_human=TRUE
         ORDER BY CASE WHEN i.classification IN ('interested','positive','positive_reply') THEN 0 ELSE 1 END,
-                 i.occurred_at DESC""", (ids, lead_ids, task['business_id']))
+                 i.occurred_at DESC""", (ids, task['business_id']))
     replies = [dict(row) for row in cursor.fetchall()]
-    cursor.execute("""SELECT DISTINCT ON (r.lead_id) r.id, r.lead_id, r.created_at AS occurred_at,
-        COALESCE(r.human_confirmed_outcome,r.classified_outcome) AS classification
-        FROM outreachreactions r JOIN prospectingleads l ON l.id=r.lead_id
-        WHERE l.business_id=%s AND l.id::text=ANY(%s::text[])
-          AND NULLIF(TRIM(COALESCE(r.raw_reply,'')), '') IS NOT NULL
-        ORDER BY r.lead_id, r.created_at DESC""", (task['business_id'], lead_ids))
-    native_leads = {str(row['lead_id']) for row in replies}
-    replies.extend(dict(row) for row in cursor.fetchall() if str(row['lead_id']) not in native_leads)
     replies.sort(key=lambda row: str(row.get('occurred_at') or ''), reverse=True)
     replies.sort(key=lambda row: row.get('classification') not in {'interested','positive','positive_reply'})
     result['replies'] = len(replies)
