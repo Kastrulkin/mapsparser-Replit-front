@@ -1280,8 +1280,8 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                 else:
                     _save(conn.cursor(), row, state, stage="Одна компания требует проверки; продолжается обработка остальных", delay=30)
             else:
-                state["blocker"] = "preparation_step_failed"
-                _save(conn.cursor(), row, state, status="waiting_for_review", stage="Подготовка требует проверки; сохранённый прогресс доступен")
+                state["blocker"] = "ambiguous_existing_company" if isinstance(exc, ValueError) and str(exc) == "ambiguous_existing_company" else "preparation_step_failed"
+                _save(conn.cursor(), row, state, status="waiting_for_review", stage="Выберите карточку компании: найдено несколько записей одного сайта" if state["blocker"] == "ambiguous_existing_company" else "Подготовка требует проверки; сохранённый прогресс доступен")
             conn.commit()
         return {"status": "progress_saved" if current and target else "pending_human", "reason_code": "preparation_step_failed"}
     finally:
@@ -1682,6 +1682,19 @@ def advance_ai_campaign(conn, cursor, row, state, grant):
     return True
 
 
+def select_source_company(existing, url):
+    """Retain historical rows; a domain-only import is not a second company."""
+    from urllib.parse import urlsplit
+    if len(existing) <= 1:
+        return existing[0] if existing else None
+    hostname = str(urlsplit(url).hostname or '').casefold().removeprefix('www.')
+    named = [item for item in existing
+             if str(item.get('name') or '').strip().casefold().removeprefix('www.') != hostname]
+    if len(named) != 1:
+        raise ValueError('ambiguous_existing_company')
+    return named[0]
+
+
 def import_source_urls(cursor, row, config, state):
     from urllib.parse import urlsplit
     from api.prospecting.partner_discovery import _insert_partnership_lead_if_new, _ensure_imported_partnership_workstream
@@ -1689,14 +1702,13 @@ def import_source_urls(cursor, row, config, state):
     lead_ids, workstreams = list(state.get("lead_ids") or []), list(state.get("workstream_ids") or [])
     for url in config["source_urls"]:
         from services.openclaw_website_research import same_website
-        cursor.execute("""SELECT id, website FROM prospectingleads
+        cursor.execute("""SELECT id, name, website FROM prospectingleads
             WHERE business_id=%s AND COALESCE(intent,'client_outreach')='partnership_outreach'
               AND website IS NOT NULL""", (row["business_id"],))
         existing = [dict(item) for item in cursor.fetchall() if same_website(str(item["website"]), url)]
-        if len(existing) > 1:
-            raise ValueError("ambiguous_existing_company")
-        if existing:
-            lead_id, created = str(existing[0]["id"]), False
+        company = select_source_company(existing, url)
+        if company:
+            lead_id, created = str(company["id"]), False
         else:
             lead_id, created = _insert_partnership_lead_if_new(cursor,
             business_id=row["business_id"], created_by=row["user_id"], source_url=url,

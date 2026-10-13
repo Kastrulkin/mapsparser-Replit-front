@@ -124,3 +124,17 @@ def test_existing_map_company_is_reused_by_site(monkeypatch):
     assert not module._insert_partnership_lead_if_new.called
     assert state['lead_ids'] == ['existing-lead'] and state['reused_companies'] == 1
 
+
+
+def test_unique_named_company_wins_over_historical_domain_stub():
+    from services.outreach_continuation import select_source_company
+    company={'id':'canonical','name':'EWS Holidays','website':'https://www.ewsholidays.com/'}
+    stub={'id':'stub','name':'www.ewsholidays.com','website':'https://www.ewsholidays.com/'}
+    assert select_source_company([stub,company],company['website']) is company
+    assert select_source_company([company,stub],company['website']) is company
+
+
+def test_two_named_companies_still_require_owner_decision():
+    from services.outreach_continuation import select_source_company
+    with pytest.raises(ValueError,match='ambiguous_existing_company'):
+        select_source_company([{'id':'one','name':'First agency'}, {'id':'two','name':'Second agency'}], 'https://example.org/')
