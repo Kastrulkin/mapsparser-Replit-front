@@ -141,3 +141,11 @@ def test_recipient_first_person_is_attributed_in_actual_template_rendering():
         'text_template':'Hello {{RECIPIENT}},\n\n{{OBSERVATION}}\n\n{{BRIDGE}}\n\nWould you like details?',
         'evidence_ids':['public-fact']}], record)
     assert 'Your website states: “We arrange holiday tours”.' in output[0]['text']
+
+
+def test_offer_bridge_names_verified_context_without_inventing_need():
+    from services.outreach_personalization_ai import qualified_offer_bridge
+    value = qualified_offer_bridge('Riderra transfers in Phuket', '#### Day 1: Arrival in Phuket')
+    assert 'Day 1: Arrival in Phuket' in value and 'Riderra transfers in Phuket' in value
+    assert '####' not in value
+    assert 'need' not in value and 'нужна' not in value

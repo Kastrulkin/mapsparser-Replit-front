@@ -88,8 +88,15 @@ def qualified_requirement_for_offer(qualification, offer):
         re.findall(r"[^\W_]{4,}", str(value.get("quote") or "").lower()))), default={})
 
 
+def qualified_offer_bridge(offer, observation):
+    """Tie a reviewed proposal to its verified context without asserting client need."""
+    context = re.sub(r"^\s*#{1,6}\s+", "", str(observation or "")).strip()
+    return 'Для опубликованного на вашем сайте предложения «' + context + '» предлагаем обсудить ' + str(offer or '').strip() + '.'
+
+
 def attributed_observation(observation, language="en"):
     """A recipient's first-person source quote must not impersonate the sender."""
+    observation = re.sub(r"^\s*#{1,6}\s+", "", str(observation or "")).strip()
     if str(language).lower().split("-")[0] == "en" and re.search(r"\b(?:we|our|us)\b", str(observation), re.I):
         return 'Your website states: “' + str(observation).strip().rstrip('.') + '”.'
     return observation
