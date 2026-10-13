@@ -111,6 +111,8 @@ def preview(cursor, *, business_id, user_id, task_ids):
     lines = ['Проверьте письма перед отправкой. В очередь попадут только показанные версии.']
     for index, letter in enumerate(review['letters'], 1):
         lines.append(f"Письмо {index}\nКому: {letter['recipient']}\nОт: {letter['sender']}\nТема: {letter['subject']}\n\n{letter['generated_text']}")
+        if letter.get('source_url'):
+            lines.append('Основание персонализации: ' + str(letter['source_url']))
     lines.append('Подтверждение поставит эти письма в штатную очередь. Повторные касания не включены.')
     summary = '\n\n'.join(lines)
     return {'status': 'approval_required', 'chat_response': summary,

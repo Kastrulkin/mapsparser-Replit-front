@@ -47,12 +47,13 @@ def test_native_failure_rolls_back_entire_batch(monkeypatch):
 
 def test_preview_never_approves_or_dispatches(monkeypatch):
     import services.outreach_campaign_service as native
-    r=review();r['letters']=r['letters'][:1];monkeypatch.setattr(service,'load_review',lambda *a,**kw:r)
+    r=review();r['letters']=r['letters'][:1];r['letters'][0]['source_url']='https://public.example.org/tour';monkeypatch.setattr(service,'load_review',lambda *a,**kw:r)
     approve=Mock();monkeypatch.setattr(native,'approve_campaign',approve)
     result=service.preview(Mock(),business_id='b',user_id='u',task_ids=['task'])
     assert result['approval']['capability']=='partnerships.send_review'
     assert result['approval']['envelope']['operation']=='confirm_send'
     assert 'Exact text' in result['chat_response'] and 'one@example.org' in result['chat_response']
+    assert 'https://public.example.org/tour' in result['chat_response']
     assert 'drafts' not in result
     approve.assert_not_called()
 
