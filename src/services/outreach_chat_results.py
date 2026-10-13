@@ -33,13 +33,15 @@ def letters(cursor, task):
     return [dict(row) for row in cursor.fetchall()]
 
 
-def result(cursor, row):
+def result(cursor, row, *, include_letters=True, task=None):
     from services.outreach_continuation import view
-    task = view(row); report = task['report']; drafts = letters(cursor, task)
+    task = task if task is not None else view(row)
+    report = task['report']; drafts = letters(cursor, task) if include_letters else []
     lines = [task['display_name'], task['presentation']['label'],
         f"Найдено: {report['found']}. Подходят: {report['eligible']} / {report.get('target') or 'не задана'}. Писем: {report['prepared']}.",
         f"Списано за выполнение: {report['credits_charged']} кр."]
     if row.get('stage'): lines.append(row['stage'])
+    if task['presentation'].get('reason'): lines.append(task['presentation']['reason'])
     missing = list(dict.fromkeys(criterion.get('label') for qualification in (task['state'].get('qualifications') or {}).values()
         for criterion in (qualification.get('criteria') or {}).values()
         if criterion.get('status') != 'verified' and criterion.get('label')))
@@ -55,11 +57,12 @@ def result(cursor, row):
         brief = draft.get('message_brief_json') or {}
         if brief.get('source_url'): lines.append('Источник персонализации: ' + str(brief['source_url']))
     if drafts: lines.append('Черновики не отправляются без отдельного просмотра и подтверждения отправки.')
-    section = 'drafts' if drafts else 'companies'
+    has_letters = bool(drafts or report.get('prepared'))
+    section = 'drafts' if has_letters else 'companies'
     return {'status': 'clarification_required' if missing and not drafts else 'completed', 'chat_response': '\n\n'.join(lines), 'task': task,
         'search_task_id': task['id'], 'job_id': task['id'], 'drafts': drafts,
         'result_ref': {'href':f"/dashboard/partnerships?business_id={task['business_id']}&search_task_id={task['id']}&section={section}",
-                       'label':'Посмотреть письма' if drafts else 'Посмотреть компании'},
+                       'label':'Посмотреть письма' if has_letters else 'Посмотреть компании'},
         'external_dispatch_performed':False}
 
 

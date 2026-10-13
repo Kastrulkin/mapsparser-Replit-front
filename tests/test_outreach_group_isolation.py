@@ -83,3 +83,18 @@ def test_message_scope_rejects_task_from_other_business():
     with pytest.raises(GroupNotFound):
         message_campaign_scope(cursor, 'other-business', 'task')
     cursor.fetchall.assert_not_called()
+
+
+def test_status_response_contains_real_result_reason_and_exact_group_link(monkeypatch):
+    import services.outreach_chat_results as results
+    monkeypatch.setattr(results, 'letters', lambda *args: (_ for _ in ()).throw(AssertionError('Status must not load all letters')))
+    task = {'id': 'task', 'business_id': 'business', 'display_name': 'India', 'state': {},
+            'report': {'found': 3, 'eligible': 2, 'target': 3, 'prepared': 0, 'credits_charged': 3},
+            'presentation': {'label': 'Требуется действие', 'reason': 'Не удалось создать письма',
+                             'next_action': {'label': 'Посмотреть компании'}}}
+    output = results.result(Mock(), {'stage': 'Проверка завершена'}, include_letters=False, task=task)
+    assert 'Подходят: 2 / 3' in output['chat_response']
+    assert '3 кр.' in output['chat_response']
+    assert 'Не удалось создать письма' in output['chat_response']
+    assert 'search_task_id=task' in output['result_ref']['href']
+    assert output['external_dispatch_performed'] is False

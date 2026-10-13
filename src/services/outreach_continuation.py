@@ -1344,7 +1344,8 @@ def operator_task(cursor: Any, *, business_id: str, user_id: str, arguments: dic
             task = view(dict(row))
             task['report'].update(delivery_report(cursor, task))
             enrich_group(cursor, task, viewer_id=user_id)
-            return {'status': 'completed', 'task': task, 'chat_response': task['presentation']['label'], 'external_dispatch_performed': False}
+            from services.outreach_chat_results import result
+            return result(cursor, dict(row), include_letters=False, task=task)
         if operation in {"pause", "stop", "retry_failed", "acknowledge_search", "use_shared_balance", "rename", "resume_letters"}:
             task = control_task(cursor, task_id=str(arguments.get("task_id") or ""), business_id=business_id,
                 user_id=user_id, action=operation, revision=str(arguments.get("revision") or ""),
