@@ -51,12 +51,54 @@ def _items(cursor, business_id, plan_id=None, lock=False, item_id=None):
 def read_context(cursor, business_id, user_id, arguments):
     authorize_actor(cursor,user_id,business_id)
     rows=_items(cursor,business_id,arguments.get('plan_id'))
+    channel_versions = {}
+    if rows:
+        cursor.execute('''SELECT content_plan_item_id,platform,status FROM social_posts
+            WHERE business_id=%s AND content_plan_item_id=ANY(%s)
+            ORDER BY content_plan_item_id,platform,id''',
+            (business_id, [str(row['id']) for row in rows]))
+        for raw in cursor.fetchall():
+            channel = _row(cursor, raw)
+            channel_versions.setdefault(str(channel['content_plan_item_id']), []).append(
+                {'platform': channel['platform'], 'status': channel['status']})
     cursor.execute('SELECT id,title,period_start,period_end FROM contentplans WHERE business_id=%s ORDER BY created_at DESC LIMIT 10',(business_id,))
     plans=[_row(cursor,row) for row in cursor.fetchall()]
     cursor.execute('SELECT preferences_json FROM content_voice_profiles WHERE business_id=%s',(business_id,))
     profile=_row(cursor,cursor.fetchone())
     notes=(profile.get('preferences_json') or {}).get('editorial_notes') or []
-    return {'status':'completed','items':[{**{key:row.get(key) for key in (('id','plan_id','theme','goal','scheduled_for','status','plan_status') if arguments.get('include_details') else ('id','plan_id','theme','scheduled_for','status','plan_status'))},'version':_version(row)} for row in rows], 'plans':plans,
+    selected_photos = {}
+    if arguments.get('include_details') and rows:
+        # The menu's manual selection is recorded in this same usage journal.
+        # Read it for older records too, without rewriting plans on a read.
+        from services.media_library_scope import PHOTO_LIBRARY_SCOPE_SQL, PHOTO_PUBLICATION_SQL
+        publication_filter = PHOTO_PUBLICATION_SQL.replace('metadata_json', 'photo_assets.metadata_json').replace('category', 'photo_assets.category')
+        cursor.execute(f'''SELECT DISTINCT ON (usage.target_id)
+            usage.target_id, usage.photo_asset_id
+            FROM photo_asset_usage_events usage
+            JOIN photo_assets ON photo_assets.id = usage.photo_asset_id
+            WHERE usage.business_id = %s AND usage.usage_type = 'publication'
+              AND usage.target_id = ANY(%s)
+              AND (usage.target_platform IS NULL OR usage.target_platform = '')
+              AND photo_assets.business_id IN ({PHOTO_LIBRARY_SCOPE_SQL})
+              AND photo_assets.metadata_json->>'disk_import_available' IS DISTINCT FROM 'false'
+              AND {publication_filter}
+            ORDER BY usage.target_id, usage.created_at DESC, usage.id DESC''',
+            (business_id, [str(row['id']) for row in rows], business_id))
+        selected_photos = {str(value['target_id']): str(value['photo_asset_id'])
+                           for value in (_row(cursor, raw) for raw in cursor.fetchall())}
+    items=[]
+    for row in rows:
+        item={key:row.get(key) for key in (('id','plan_id','theme','goal','scheduled_for','status','draft_text','plan_status') if arguments.get('include_details') else ('id','plan_id','theme','scheduled_for','status','plan_status'))}
+        if arguments.get('include_details'):
+            metadata=row.get('metadata_json') if isinstance(row.get('metadata_json'),dict) else {}
+            item['selected_channels']=metadata.get('selected_channels') or []
+            item['selected_photo_asset_id']=selected_photos.get(str(row['id'])) or metadata.get('selected_photo_asset_id') or ''
+        item['version']=_version(row)
+        item['channel_versions']=channel_versions.get(str(row['id']), [])
+        items.append(item)
+    return {'status':'completed','items':items, 'plans':plans,
+            'search_scope': 'selected_plan' if arguments.get('plan_id') else 'all_nonarchived_plans',
+            'result_is_partial': len(rows) >= 200,
             'saved_notes':notes[-5:], 'external_writes_performed':False}
 
 

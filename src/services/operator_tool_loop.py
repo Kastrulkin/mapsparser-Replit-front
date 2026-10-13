@@ -76,6 +76,7 @@ def _planner_prompt(state: dict[str, Any]) -> str:
             "Ты управляющий Оператор LocalOS. Выбирай только инструменты из переданного каталога.",
             "Не придумывай данные и не утверждай, что действие выполнено, пока нет observation.",
             "Вызывай по одному инструменту за шаг. Для ответа используй только факты из контекста и observations.",
+            "Поиск постов по умолчанию охватывает ВСЕ неархивные планы бизнеса. История выбранного плана не ограничивает новый поиск. Свежий content.editorial_context — исходный список, включая записи без версий каналов. Сужай по plan_id только по явному указанию пользователя на конкретный план; отсутствие версии проверяй по channel_versions каждой записи, а не по отсутствию строки в social_posts.",
             "Если инструмента нет, честно объясни ограничение. Не запрашивай и не раскрывай секреты.",
             "Ссылки @refN — точные серверные ссылки. Передавай их без изменений в параметры инструментов.",
             "Верни только JSON одного из видов:",
@@ -271,6 +272,29 @@ def run_operator_tool_loop(
     last_outcome: dict[str, Any] = {}
     plan = planner or plan_operator_step
     safe_max_steps = max(1, min(int(max_steps or MAX_OPERATOR_TOOL_STEPS), 8))
+
+    # Resolve the read scope before the model can inherit a plan from history.
+    # Reuse the authorised read tool; no new executor or content copies.
+    content_search = bool(re.search(r'пост|контент|публикаци|новост|\bposts?\b', message, re.I)) and bool(
+        re.search(r'найди|найти|покажи|проверь|поиск|какие|когда|\bfind\b|\bshow\b', message, re.I))
+    content_edit = bool(re.match(r'\s*(?:измени|перепиши|замени|сохрани|создай|добавь|перенеси|исправь|подготовь|опубликуй|отправь)\b', message, re.I))
+    context_tool = tool_map.get('content.editorial_context')
+    if content_search and not content_edit and context_tool and context_tool.get('risk_class') == 'read_only':
+        try:
+            outcome = context_tool['execute']({})
+        except Exception:
+            outcome = {'status': 'error', 'error_code': 'content_search_context_failed',
+                       'chat_response': 'Не удалось прочитать все контент-планы. Полнота поиска не подтверждена.'}
+        observations.append({'tool': 'content.editorial_context', **outcome})
+        trace.append({'step': 0, 'tool': 'content.editorial_context',
+                      'status': outcome.get('status', 'error'), 'risk_class': 'read_only'})
+        if outcome.get('status') != 'completed':
+            return {**outcome, 'status': 'error', 'intent': 'operator_tool_loop',
+                    'tool_trace': trace, 'tool_calls': 1, 'planner_steps': 0,
+                    'external_writes_performed': False}
+        if outcome.get('status') == 'completed':
+            seen_calls.add(_tool_signature('content.editorial_context', {}))
+        last_outcome = outcome
 
     for step_index in range(safe_max_steps):
         state = {
