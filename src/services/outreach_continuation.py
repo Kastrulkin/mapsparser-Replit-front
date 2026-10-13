@@ -1349,7 +1349,12 @@ def operator_task(cursor: Any, *, business_id: str, user_id: str, arguments: dic
             task = control_task(cursor, task_id=str(arguments.get("task_id") or ""), business_id=business_id,
                 user_id=user_id, action=operation, revision=str(arguments.get("revision") or ""),
                 display_name=str(arguments.get("display_name") or ""))
-            return {"status": "completed", "task": task, "external_dispatch_performed": False}
+            labels = {"pause": "Подготовка приостановлена. Результаты сохранены.",
+                      "stop": "Подготовка остановлена. Результаты сохранены.",
+                      "retry_failed": "Неудачные шаги отмечены для повтора. Подтвердите продолжение по сохранённым условиям."}
+            return {"status": "completed", "task": task,
+                    "chat_response": labels.get(operation, task.get("presentation", {}).get("label") or "Условия сохранены."),
+                    "external_dispatch_performed": False}
         if operation in {"start", "resume"}:
             return prepare_task_start(cursor, business_id=business_id, user_id=user_id,
                                       task_id=str(arguments.get("task_id") or ""), operation=operation)

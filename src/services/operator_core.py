@@ -1429,7 +1429,7 @@ def _operator_tool_catalog(
                     }, "required": ["audience"]}
                 }, "required": ["operation"]
             },
-            "risk_class": "draft_only", "approval_required": False,
+            "risk_class": "draft_only", "approval_required": False, "deterministic_response": True,
             "execute": lambda arguments: __import__("services.outreach_continuation", fromlist=["operator_task"]).operator_task(
                 cursor, business_id=business_id, user_id=user_id, arguments=group_arguments(arguments), actor_context=actor_context),
         },
@@ -2132,10 +2132,10 @@ def route_operator_message(
         if pending.get('task_id') and str(pending['task_id']) != selected_id:
             pending = {}
         command = clean_message.strip().rstrip('.!').casefold()
-        operation = {'покажи этот поиск': 'status', 'покажи поиск': 'status', 'пауза': 'pause', 'приостанови': 'pause', 'останови': 'stop', 'останови поиск': 'stop', 'продолжи': 'resume', 'продолжи поиск': 'resume'}.get(command)
+        operation = {'покажи этот поиск': 'status', 'покажи поиск': 'status', 'пауза': 'pause', 'приостанови': 'pause', 'останови': 'stop', 'останови поиск': 'stop', 'продолжи': 'resume', 'продолжи поиск': 'resume', 'повтори подготовку писем': 'retry_failed'}.get(command)
         if operation:
             from services.outreach_continuation import operator_task
-            if operation == 'resume' and selected_search_task.get('presentation', {}).get('phase') == 'letters':
+            if operation == 'resume' and selected_search_task.get('draft_job') and selected_search_task.get('presentation', {}).get('phase') == 'letters':
                 operation = 'resume_letters'
             result = operator_task(cursor, business_id=business_id, user_id=user_id,
                 arguments={'operation': operation, 'task_id': selected_id, 'revision': selected_search_task['revision']}, actor_context=actor_context)
