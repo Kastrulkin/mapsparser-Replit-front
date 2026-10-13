@@ -359,6 +359,19 @@ export const OperatorPage = () => {
     void refresh();
     return () => { live = false; };
   }, [currentBusinessId]);
+  // Reopening Tasks must include work created since the page was loaded.
+  useEffect(() => {
+    if (!tasksOpen || !currentBusinessId) return;
+    let live = true;
+    const refresh = async () => {
+      try {
+        const response = await api.get('/partnership/continuations', { params: { business_id: currentBusinessId } });
+        if (live) setSearchTasks(response.data?.items || []);
+      } catch { /* Keep the last available task list on a temporary error. */ }
+    };
+    void refresh();
+    return () => { live = false; };
+  }, [currentBusinessId, tasksOpen]);
   const resultHistoryInFlight = useRef(false);
   const refreshOutreachResults = async () => {
     if (!currentBusinessId || !conversationId || resultHistoryInFlight.current) return;
@@ -456,7 +469,9 @@ export const OperatorPage = () => {
 
   const appendOperatorResult = (result: OperatorChatResult | RefreshResult, suffix: string) => {
     if ('task' in result && result.task?.id && (!result.task.business_id || result.task.business_id === currentBusinessId)) {
-      setSavedSearchTask({ ...result.task, business_id: currentBusinessId });
+      const task = { ...result.task, business_id: currentBusinessId };
+      setSavedSearchTask(task);
+      setSearchTasks(current => [task, ...current.filter(item => item.id !== task.id)]);
       setSelectedSearchId(result.task.id);
       setSearchParams(current => {
         const next = new URLSearchParams(current);
@@ -516,7 +531,9 @@ export const OperatorPage = () => {
       pendingRequest.current = { businessId: "", text: "", groupId: "", id: "" };
       appendPair(text, result);
       if (result.task?.id && (!result.task.business_id || result.task.business_id === currentBusinessId)) {
-        setSavedSearchTask({...result.task, business_id: currentBusinessId});
+        const task = { ...result.task, business_id: currentBusinessId };
+        setSavedSearchTask(task);
+        setSearchTasks(current => [task, ...current.filter(item => item.id !== task.id)]);
         setSelectedSearchId(result.task.id);
         setSearchParams(current => { const next = new URLSearchParams(current); next.set('search_task_id', result.task.id); next.set('business_id', currentBusinessId); return next; }, { replace: true });
       }
