@@ -40,3 +40,16 @@ def test_campaign_contract_is_bound_to_current_task_not_first_historical_import(
     assert contract['qualification']['status']=='qualified'
     assert contract['task_id']=='current-task'
     assert cursor.execute.call_args.args[1]==('ws',continuation.KIND,'current-task','current-task')
+
+
+def test_preview_accepts_task_binding_before_any_generation(monkeypatch):
+    import services.outreach_campaign_service as campaigns
+    import services.outreach_continuation as continuation
+    monkeypatch.setattr(campaigns,'_load_context',lambda *args:{'continuation_managed':True})
+    monkeypatch.setattr(campaigns,'_apply_sender_mode',lambda context,mode:context)
+    contract=Mock(return_value={'enabled':False})
+    monkeypatch.setattr(continuation,'load_workstream_contract',contract)
+    result=campaigns.build_preview(Mock(),'ws',continuation_task_id='reviewed-task',generate_ai=True)
+    assert result['reason_code']=='continuation_audience_review_required'
+    contract.assert_called_once()
+    assert contract.call_args.kwargs['task_id']=='reviewed-task'
