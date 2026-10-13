@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+import re
 
 from services.operator_map_refresh import enqueue_paid_operator_map_refresh
 from services.operator_manual_review import _build_ui_action
@@ -65,6 +66,10 @@ def _has_any_marker(text: str, markers: tuple[str, ...]) -> bool:
 def classify_fresh_reviews_intent(message: Any) -> bool:
     text = _clean_text(message).lower()
     if not text:
+        return False
+    # This direct route runs before the tool-loop read-only guard. It must not
+    # reinterpret checking saved content as a paid external refresh.
+    if re.search(r'только\s+чтени[ея]|read[\s-]+only|ничего\s+не\s+(?:меня|измен)|никаких\s+изменений', text):
         return False
     has_card_scope = _has_any_marker(text, CARD_SCOPE_MARKERS)
     has_refresh = _has_any_marker(text, REFRESH_ACTION_MARKERS)
