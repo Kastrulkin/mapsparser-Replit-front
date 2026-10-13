@@ -62,13 +62,13 @@ def test_readiness_is_renewed_only_after_real_success(bridge, monkeypatch, tmp_p
     config = {'enabled': True, 'business_ids': ['b'], 'verified_at': '2026-01-01T00:00:00Z'}
     path.write_text(json.dumps(config))
     monkeypatch.setattr(bridge, 'CONFIG_PATH', path)
-    probe = Mock(return_value={'ok': True, 'result': {'details': {'status': 200, 'finalUrl': 'https://example.com/', 'text': 'Example Domain'}}})
+    probe = Mock(return_value={'ok': True, 'result': {'details': {'status': 200, 'finalUrl': 'https://localos.pro/robots.txt', 'text': 'User-agent: Googlebot'}}})
     monkeypatch.setattr(bridge, 'invoke_fetch', probe)
     assert bridge.reverify_fetch(config)
     saved = json.loads(path.read_text())
     assert saved['business_ids'] == ['b'] and saved['enabled'] is True
     assert saved['verified_at'] != '2026-01-01T00:00:00Z'
-    assert probe.call_args.args == ('https://example.com/',)
+    assert probe.call_args.args == ('https://localos.pro/robots.txt',)
     assert not bridge.reverify_fetch(config)
     assert probe.call_count == 1
 

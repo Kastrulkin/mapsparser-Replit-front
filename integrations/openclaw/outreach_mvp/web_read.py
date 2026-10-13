@@ -48,11 +48,11 @@ def reverify_fetch(config):
         if _last_verification_attempt and now - _last_verification_attempt < 600:
             return False
         _last_verification_attempt = now
-        result = invoke_fetch('https://example.com/', max_chars=1000)
+        result = invoke_fetch('https://localos.pro/robots.txt', max_chars=1500)
         details = result.get('result', {}).get('details', {})
         if result.get('ok') is not True or details.get('status') != 200:
             return False
-        if urlsplit(str(details.get('finalUrl', ''))).hostname != 'example.com' or 'Example Domain' not in str(details.get('text', '')):
+        if urlsplit(str(details.get('finalUrl', ''))).hostname != 'localos.pro' or 'User-agent:' not in str(details.get('text', '')):
             return False
         config['verified_at'] = datetime.now(timezone.utc).isoformat()
         temporary = CONFIG_PATH.with_suffix('.verified.tmp')
