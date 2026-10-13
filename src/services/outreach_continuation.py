@@ -1192,7 +1192,10 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                     EXISTS (SELECT 1 FROM outreach_campaign_touches t WHERE t.campaign_id=c.id)
                     AND NOT EXISTS (SELECT 1 FROM outreach_campaign_touches t WHERE t.campaign_id=c.id
                         AND COALESCE((t.quality_gate_json->>'passed')::boolean,FALSE)=FALSE) AS quality_passed
-                    FROM outreach_campaigns c WHERE c.workstream_id=%s ORDER BY c.created_at DESC LIMIT 1""", (target,))
+                    FROM outreach_campaigns c WHERE c.workstream_id=%s
+                      AND c.business_id=%s AND c.policy_json->>'outreach_task_id'=%s
+                      AND c.status='draft'
+                    ORDER BY c.created_at DESC LIMIT 1""", (target, row["business_id"], str(row["id"])))
                 campaign = cursor.fetchone()
                 preview_created = False
                 if campaign and (campaign.get("quality_passed") or campaign.get("status") != "draft"):
@@ -1214,6 +1217,9 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                     _require_current_actor(cursor, row)
                     if preview.get("status") in {"ready", "needs_channel_setup", "needs_revision"}:
                         campaign = persist_preview(cursor, preview, user_id=row["user_id"])
+                        cursor.execute("""UPDATE outreach_campaigns SET policy_json=policy_json || %s::jsonb
+                            WHERE id=%s AND business_id=%s""",
+                            (Json({"outreach_task_id": str(row["id"])}), campaign["id"], row["business_id"]))
                         preview_created = True
                         result["campaign_id"] = str(campaign["id"])
                 result["lead_id"] = str(next(entry["lead_id"] for entry in entries if str(entry["id"]) == target))
