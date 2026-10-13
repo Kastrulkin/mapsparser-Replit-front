@@ -176,9 +176,14 @@ def test_chat_language_labels_share_the_same_review_version(label):
     assert config_hash(normalize_config(source_config(language=label))) == config_hash(normalize_config(source_config(language='en')))
 
 
-def test_invalid_language_explains_error_and_does_not_claim_success():
-    from services.outreach_continuation import operator_task
-    result = operator_task(Mock(), business_id='b', user_id='u', actor_context={},
+def test_invalid_language_explains_error_and_does_not_claim_success(monkeypatch):
+    import services.outreach_continuation as continuation
+    import services.partnership_leads_service as partnerships
+    monkeypatch.setattr(continuation, 'continuation_enabled', lambda business: True)
+    monkeypatch.setattr(continuation, 'actor_can_write', lambda *args: True)
+    monkeypatch.setattr(partnerships, 'get_capability_access', lambda *args: {'allowed':True})
+    cursor=Mock(); cursor.fetchone.return_value={'id':'u'}
+    result = continuation.operator_task(cursor, business_id='b', user_id='u', actor_context={},
         arguments={'operation':'preview', 'config':source_config(language='???')})
     assert result['status'] == 'clarification_required'
     assert result['reason_code'] == 'invalid_language'
