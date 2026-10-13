@@ -2070,6 +2070,10 @@ def _build_ask_localos_menu() -> InlineKeyboardMarkup:
 
 def _build_operator_result_markup(result: dict[str, Any]) -> InlineKeyboardMarkup:
     rows = []
+    task = result.get('task') if isinstance(result.get('task'), dict) else {}
+    task_id = str(task.get('id') or '')
+    if (task.get('report') or {}).get('prepared') and re.fullmatch(r'[0-9a-fA-F-]{36}', task_id):
+        rows.append([InlineKeyboardButton('Показать письма', callback_data='outreach_letters:' + task_id)])
     result_ref = result.get("result_ref") if isinstance(result.get("result_ref"), dict) else {}
     href = str(result_ref.get("href") or "").strip()
     if href:
@@ -4253,6 +4257,21 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    if data.startswith('outreach_letters:'):
+        business_ctx = _control_scope_business_context(user_id, control_scope)
+        task_id = data.split(':', 1)[1]
+        if not business_ctx or not re.fullmatch(r'[0-9a-fA-F-]{36}', task_id):
+            await query.answer('Выберите бизнес и откройте актуальную задачу.', show_alert=True)
+            return
+        business_ctx = {**business_ctx, 'operator_payload': {'request_id': 'tg:letters:' + str(query.id)}}
+        payload = await asyncio.to_thread(build_operator_chat_payload, business_ctx, 'Покажи письма задачи ' + task_id)
+        from services.outreach_chat_results import split_telegram_text
+        cards = [chunk for message in payload.get('messages') or [payload['text']]
+                 for chunk in split_telegram_text(message)]
+        for index, card in enumerate(cards):
+            await query.message.reply_text(card, reply_markup=_build_operator_result_markup(payload['result']) if index == len(cards)-1 else None)
+        return
+
     if data.startswith("operator_confirm:"):
         business_ctx = _control_scope_business_context(user_id, control_scope)
         if not business_ctx or not business_ctx.get("business_id"):
@@ -5747,7 +5766,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from services.operator_request_history import mark_delivery
         try:
             from services.outreach_chat_results import split_telegram_text
-            chunks = split_telegram_text(operator_payload['text'])
+            chunks = [chunk for message in operator_payload.get('messages') or [operator_payload['text']]
+                      for chunk in split_telegram_text(message)]
             for index, chunk in enumerate(chunks):
                 await update.message.reply_text(chunk, reply_markup=_build_operator_result_markup(operator_payload['result']) if index == len(chunks)-1 else None)
         except Exception:

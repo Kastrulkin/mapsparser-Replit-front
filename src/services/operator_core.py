@@ -2118,6 +2118,14 @@ def route_operator_message(
         return setup
     selected_search_task = None
     selected_id = str((action_payload or {}).get('search_task_id') or '').strip()
+    from services.operator_outreach_read_request import letter_request
+    requested_letters = letter_request(clean_message)
+    if requested_letters:
+        if requested_letters.get('ambiguous'):
+            return standardize_operator_result({'status': 'clarification_required', 'chat_response': 'Укажите одну задачу для просмотра писем.'}, 'partnerships.continue_outreach'), {}
+        selected_id = requested_letters.get('task_id') or selected_id
+        if not selected_id:
+            return standardize_operator_result({'status': 'clarification_required', 'chat_response': 'Выберите задачу или укажите её ID, чтобы показать текущие письма.'}, 'partnerships.continue_outreach'), {}
     if selected_id:
         from services.outreach_continuation import KIND, view
         cursor.execute("SELECT * FROM operator_async_jobs WHERE id::text=%s AND business_id=%s AND kind=%s", (selected_id, business_id, KIND))
@@ -2133,6 +2141,8 @@ def route_operator_message(
             pending = {}
         command = clean_message.strip().rstrip('.!').casefold()
         operation = {'покажи этот поиск': 'status', 'покажи поиск': 'status', 'пауза': 'pause', 'приостанови': 'pause', 'останови': 'stop', 'останови поиск': 'stop', 'продолжи': 'resume', 'продолжи поиск': 'resume', 'повтори подготовку писем': 'retry_failed'}.get(command)
+        if requested_letters:
+            operation = 'letters'
         if operation:
             from services.outreach_continuation import operator_task
             if operation == 'resume' and selected_search_task.get('draft_job') and selected_search_task.get('presentation', {}).get('phase') == 'letters':

@@ -501,6 +501,10 @@ def route_operator_chat_for_telegram(
 
 
 def _format_operator_chat_result_for_telegram(result: dict[str, Any]) -> str:
+    from services.telegram_outreach_presentation import is_outreach_result, summary
+    if is_outreach_result(result):
+        return summary(result)
+
     if result.get("intent") == "bulk_review_replies_generate" or result.get("drafts"):
         return format_bulk_review_reply_result_for_telegram(result)
 
@@ -663,7 +667,9 @@ def build_operator_chat_text(business_ctx: dict[str, Any], message_text: Any) ->
 
 def build_operator_chat_payload(business_ctx: dict[str, Any], message_text: Any) -> dict[str, Any]:
     result = build_operator_chat_result(business_ctx, message_text)
-    return {"text": _format_operator_chat_result_for_telegram(result), "result": result}
+    from services.telegram_outreach_presentation import is_outreach_result, messages
+    text = _format_operator_chat_result_for_telegram(result)
+    return {"text": text, "result": result, "messages": messages(result) if is_outreach_result(result) else [text]}
 
 
 def format_operator_chat_result_for_telegram(result: dict[str, Any]) -> str:

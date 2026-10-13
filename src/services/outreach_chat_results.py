@@ -136,7 +136,8 @@ async def deliver_item(application, host, transaction, item):
             return
     meta=await asyncio.to_thread(transaction,save_message)
     if origin['channel']=='telegram':
-        chunks=split_telegram_text(response['chat_response'])
+        from services.telegram_outreach_presentation import summary
+        chunks=split_telegram_text(summary(response))
         for index in range(int(meta.get('next_chunk',0)),len(chunks)):
             await application.bot.send_message(chat_id=item['telegram_id'],text=chunks[index],
                 reply_markup=host._build_operator_result_markup(response) if index==len(chunks)-1 else None)
