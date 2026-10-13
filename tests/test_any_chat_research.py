@@ -189,3 +189,18 @@ def test_invalid_language_explains_error_and_does_not_claim_success(monkeypatch)
     assert result['reason_code'] == 'invalid_language'
     assert 'язык' in result['chat_response']
     assert 'Данные получены' not in result['chat_response']
+
+
+def test_bridge_prioritizes_required_service_over_unrelated_first_link(bridge, monkeypatch):
+    monkeypatch.setattr(bridge, 'public_url', lambda value: value)
+    calls = []
+    def read(method, path, headers, payload):
+        calls.append(payload['url'])
+        text = ('[Paris tours](/paris-tours)\n[Organic supplies](/organic)\n'
+                '[Contact](/contact)\n[About](/about)')
+        return 200, {'source': {'text': text, 'final_url': payload['url']}}
+    monkeypatch.setattr(bridge, 'handle_web_read', read)
+    bridge.research_website({'url': 'https://example.org/', 'business_id': 'b',
+        'job_id': 'j', 'requirements': ['Organic supplies']}, {})
+    assert calls.index('https://example.org/organic') < calls.index('https://example.org/paris-tours')
+    assert len(calls) <= 5

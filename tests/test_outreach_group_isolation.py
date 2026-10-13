@@ -119,3 +119,25 @@ def test_old_native_draft_is_not_reused_after_generation_contract_fix():
         'quality_gate_json': {'passed':True,'semantic_review':{'passed':True}}}]
     assert campaign_requires_refresh(cursor, 'campaign', 'business')
     assert cursor.execute.call_args.args[1] == ('campaign','business')
+
+
+def test_offer_evidence_selection_is_not_specific_to_tourism():
+    from services.outreach_personalization_ai import qualified_requirement_for_offer
+    criteria = {'requirement_0': {'status':'verified','quote':'Licensed supplier in Kazan','evidence':{'source_url':'https://supplier.example/about'}},
+                'requirement_1': {'status':'verified','quote':'Wholesale organic cosmetics','evidence':{'source_url':'https://supplier.example/catalog'}},
+                'requirement_2': {'status':'not_verified','quote':'Organic cosmetics certification','evidence':{'source_url':'https://supplier.example'}}}
+    chosen=qualified_requirement_for_offer({'criteria':criteria},'Organic cosmetics partnership')
+    assert chosen['quote']=='Wholesale organic cosmetics'
+
+
+def test_recipient_first_person_is_attributed_in_actual_template_rendering():
+    from services.outreach_personalization_ai import _normalize_touches, _request_record
+    record=_request_record(motion='client_partnership',identity={'company_name':'Example agency'},
+        candidate={'observed_fact':'We arrange holiday tours','source_url':'https://example.org','evidence_id':'public-fact','relevance_to_offer':'Riderra transfers'},
+        founder_story={'story':'Alex from Riderra','offer':'Riderra transfers'},
+        sequence=[{'sequence_index':0,'channel':'email','angle':'business_reputation','day_offset':0}],voice_examples=[])
+    record['copy_language']='en'
+    output=_normalize_touches([{'sequence_index':0,'channel':'email','angle':'business_reputation',
+        'text_template':'Hello {{RECIPIENT}},\n\n{{OBSERVATION}}\n\n{{BRIDGE}}\n\nWould you like details?',
+        'evidence_ids':['public-fact']}], record)
+    assert 'Your website states: “We arrange holiday tours”.' in output[0]['text']

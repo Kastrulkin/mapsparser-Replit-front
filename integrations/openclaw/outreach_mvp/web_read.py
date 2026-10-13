@@ -160,6 +160,8 @@ def research_website(payload, headers):
     requirements = payload.get('requirements', [])
     if not isinstance(requirements, list) or len(requirements) > 10:
         raise ValueError('invalid_requirements')
+    terms = set(re.findall(r'\w{3,}', ' '.join(map(str, requirements)).casefold()))
+    link_labels = {}
     known_sources = payload.get('known_source_urls', [])
     if not isinstance(known_sources, list) or len(known_sources) > 4:
         raise ValueError('invalid_known_sources')
@@ -188,14 +190,16 @@ def research_website(payload, headers):
         pages.append(page)
         # Only links actually present on a fetched page; do not guess paths.
         discovered = []
-        for raw in re.findall(r'\[[^]\n]*\]\(([^)\s]+)\)', page['text']):
+        for label, raw in re.findall(r'\[([^]\n]*)\]\(([^)\s]+)\)', page['text']):
             candidate = urljoin(page['final_url'], raw).split('#', 1)[0]
             parsed = urlsplit(candidate)
             if not same_website(parsed, origin):
                 continue
             if parsed.scheme not in ('https', 'http') or candidate in visited or candidate in pending:
                 continue
-            if any(hint in parsed.path.lower() for hint in ('contact', 'about', 'service', 'контакт', 'услуг', 'tour')):
+            link_text = (label + ' ' + parsed.path).casefold()
+            link_labels[candidate] = link_text
+            if any(term in link_text for term in terms) or any(hint in parsed.path.lower() for hint in ('contact', 'about', 'service', 'контакт', 'услуг', 'tour')):
                 if candidate not in discovered:
                     discovered.append(candidate)
         # Contact and company pages must fit within the same five-page budget.
@@ -203,13 +207,13 @@ def research_website(payload, headers):
         def priority(candidate):
             path = urlsplit(candidate).path.lower()
             if any(word in path for word in ('contact', 'контакт')):
-                return 0
+                return (0, 0)
             if 'about' in path:
-                return 1
-            return 2
+                return (1, 0)
+            matches = sum(term in link_labels.get(candidate, path) for term in terms)
+            return (2, -matches)
         pending = sorted(dict.fromkeys([*pending, *discovered]), key=priority)[:4]
     contacts, facts, seen, candidate_facts = [], [], set(), []
-    terms = set(re.findall(r'\w{3,}', ' '.join(map(str, requirements)).casefold()))
     for page in pages:
         text, source = page['content_text'], page['final_url']
         for email in re.findall(r'(?<![\w.+-])([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})(?![\w.-])', text, re.I):
