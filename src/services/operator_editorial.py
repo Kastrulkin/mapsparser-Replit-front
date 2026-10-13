@@ -53,21 +53,23 @@ def read_context(cursor, business_id, user_id, arguments):
     rows=_items(cursor,business_id,arguments.get('plan_id'))
     channel_versions = {}
     if rows:
-        cursor.execute('''SELECT content_plan_item_id,platform,status FROM social_posts
+        cursor.execute('''SELECT content_plan_item_id,platform,status,platform_text,base_text,media_json FROM social_posts
             WHERE business_id=%s AND content_plan_item_id=ANY(%s)
             ORDER BY content_plan_item_id,platform,id''',
             (business_id, [str(row['id']) for row in rows]))
         for raw in cursor.fetchall():
             channel = _row(cursor, raw)
             channel_versions.setdefault(str(channel['content_plan_item_id']), []).append(
-                {'platform': channel['platform'], 'status': channel['status']})
+                {'platform': channel['platform'], 'status': channel['status'],
+                 'has_text': bool(str(channel.get('platform_text') or channel.get('base_text') or '').strip()),
+                 'has_media': bool(channel.get('media_json'))})
     cursor.execute('SELECT id,title,period_start,period_end FROM contentplans WHERE business_id=%s ORDER BY created_at DESC LIMIT 10',(business_id,))
     plans=[_row(cursor,row) for row in cursor.fetchall()]
     cursor.execute('SELECT preferences_json FROM content_voice_profiles WHERE business_id=%s',(business_id,))
     profile=_row(cursor,cursor.fetchone())
     notes=(profile.get('preferences_json') or {}).get('editorial_notes') or []
     selected_photos = {}
-    if arguments.get('include_details') and rows:
+    if rows:
         # The menu's manual selection is recorded in this same usage journal.
         # Read it for older records too, without rewriting plans on a read.
         from services.media_library_scope import PHOTO_LIBRARY_SCOPE_SQL, PHOTO_PUBLICATION_SQL
@@ -89,10 +91,10 @@ def read_context(cursor, business_id, user_id, arguments):
     items=[]
     for row in rows:
         item={key:row.get(key) for key in (('id','plan_id','theme','goal','scheduled_for','status','draft_text','plan_status') if arguments.get('include_details') else ('id','plan_id','theme','scheduled_for','status','plan_status'))}
-        if arguments.get('include_details'):
-            metadata=row.get('metadata_json') if isinstance(row.get('metadata_json'),dict) else {}
-            item['selected_channels']=metadata.get('selected_channels') or []
-            item['selected_photo_asset_id']=selected_photos.get(str(row['id'])) or metadata.get('selected_photo_asset_id') or ''
+        metadata=row.get('metadata_json') if isinstance(row.get('metadata_json'),dict) else {}
+        item['selected_channels']=metadata.get('selected_channels') or []
+        item['selected_photo_asset_id']=selected_photos.get(str(row['id'])) or metadata.get('selected_photo_asset_id') or ''
+        item['has_text']=bool(str(row.get('draft_text') or '').strip())
         item['version']=_version(row)
         item['channel_versions']=channel_versions.get(str(row['id']), [])
         items.append(item)
