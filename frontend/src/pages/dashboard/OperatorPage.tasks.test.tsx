@@ -27,10 +27,10 @@ it('refreshes new tasks when opened and retains the last list if refresh fails',
     <Route path="/" element={<OperatorPage/>}/>
   </Route></Routes></LanguageProvider></MemoryRouter>);
   await waitFor(()=>expect(reads).toBe(1));
-  fireEvent.click(screen.getByRole('button',{name:'Задачи',exact:true}));
+  fireEvent.click(screen.getByRole('button',{name:'Задачи'}));
   expect(await screen.findByRole('button',{name:/Новый поиск/})).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{name:'Close',exact:true}));
-  fireEvent.click(screen.getByRole('button',{name:'Задачи',exact:true}));
+  fireEvent.click(screen.getByRole('button',{name:'Close'}));
+  fireEvent.click(screen.getByRole('button',{name:'Задачи'}));
   await waitFor(()=>expect(reads).toBe(3));
   expect(screen.getByRole('button',{name:/Новый поиск/})).toBeInTheDocument();
 });
