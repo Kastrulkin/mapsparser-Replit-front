@@ -144,6 +144,7 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("partnerships.search", "Поиск партнёров в LocalOS", "available", "read_only", "none", "/dashboard/partnerships", ("Найди партнёров в нашем списке",)),
     OperatorCapability("partnerships.prepare_message", "Черновик партнёрского сообщения", "draft_only", "draft", "none", "/dashboard/partnerships", ("Подготовь сообщение партнёру",), "partnership.draft_offer"),
     OperatorCapability("partnerships.prepare_search_drafts", "Черновики по группе поиска", "draft_only", "paid_compute", "credit_policy", "/dashboard/partnerships", ("Подготовь письма по отобранным компаниям поиска",)),
+    OperatorCapability("partnerships.send_review", "Отправка проверенных писем", "approval_required", "external_send", "separate_confirmation", "/dashboard/partnerships", ("Подготовь просмотр отправки",)),
     OperatorCapability("partnerships.continue_outreach", "Поиск партнёров", "approval_required", "paid_external", "separate_confirmation", "/dashboard/partnerships", ("Найди и проверь новых партнёров",)),
     OperatorCapability("network.manage", "Сеть и локации", "manual", "write_internal", "manual_handoff", "/dashboard/network", ("Покажи проблемные локации",)),
     OperatorCapability("network.read", "Состояние сети и локаций", "available", "read_only", "none", "/dashboard/network", ("Покажи проблемные локации",)),
@@ -273,6 +274,8 @@ def _action(action: str, label: str, *, href: str = "", payload: dict[str, Any] 
 
 
 def standardize_operator_result(result: dict[str, Any], capability: str) -> dict[str, Any]:
+    if capability == 'partnerships.continue_outreach' and (result.get('approval') or {}).get('capability') == 'partnerships.send_review':
+        capability = 'partnerships.send_review'
     if capability=='services.create' and result.get('status')=='approval_required' and (result.get('approval') or {}).get('envelope',{}).get('distribution_id'):
         capability='services.google.add'
     value = dict(result)
@@ -1398,7 +1401,8 @@ def _operator_tool_catalog(
             "input_schema": {
                 "type": "object", "additionalProperties": False,
                 "properties": {
-                    "operation": {"type": "string", "enum": ["preview", "revise_preview", "create", "list", "status", "letters", "pause", "stop", "resume", "start", "rename", "retry_failed", "acknowledge_search", "use_shared_balance"]},
+                    "operation": {"type": "string", "enum": ["preview", "revise_preview", "create", "list", "status", "letters", "review_send", "pause", "stop", "resume", "start", "rename", "retry_failed", "acknowledge_search", "use_shared_balance"]},
+                    "task_ids": {"type": "array", "maxItems": 10, "items": {"type": "string"}, "description": "Для review_send: выбранные группы одного бизнеса. Просмотр первых писем для отдельного согласования."},
                     "task_id": {"type": "string"}, "revision": {"type": "string"},
                     "display_name": {"type": "string", "maxLength": 120},
                     "config": {"type": "object", "properties": {
@@ -2118,7 +2122,16 @@ def route_operator_message(
         return setup
     selected_search_task = None
     selected_id = str((action_payload or {}).get('search_task_id') or '').strip()
-    from services.operator_outreach_read_request import letter_request
+    from services.operator_outreach_read_request import letter_request, send_review_request
+    requested_send = send_review_request(clean_message)
+    if requested_send:
+        task_ids = requested_send['task_ids'] or ([selected_id] if selected_id else [])
+        if not task_ids:
+            return standardize_operator_result({'status': 'clarification_required', 'chat_response': 'Выберите задачу или укажите группу для просмотра отправки.'}, 'partnerships.send_review'), {}
+        from services.outreach_continuation import operator_task
+        result = operator_task(cursor, business_id=business_id, user_id=user_id,
+            arguments={'operation': 'review_send', 'task_ids': task_ids}, actor_context=actor_context)
+        return standardize_operator_result(result, 'partnerships.send_review'), {}
     requested_letters = letter_request(clean_message)
     if requested_letters:
         if requested_letters.get('ambiguous'):
@@ -2140,7 +2153,7 @@ def route_operator_message(
         if pending.get('task_id') and str(pending['task_id']) != selected_id:
             pending = {}
         command = clean_message.strip().rstrip('.!').casefold()
-        operation = {'покажи этот поиск': 'status', 'покажи поиск': 'status', 'пауза': 'pause', 'приостанови': 'pause', 'останови': 'stop', 'останови поиск': 'stop', 'продолжи': 'resume', 'продолжи поиск': 'resume', 'повтори подготовку писем': 'retry_failed'}.get(command)
+        operation = {'покажи этот поиск': 'status', 'покажи поиск': 'status', 'покажи отправку': 'review_send', 'подготовь просмотр отправки': 'review_send', 'пауза': 'pause', 'приостанови': 'pause', 'останови': 'stop', 'останови поиск': 'stop', 'продолжи': 'resume', 'продолжи поиск': 'resume', 'повтори проверку сайтов': 'retry_failed', 'повтори исследование': 'retry_failed', 'повтори подготовку писем': 'retry_failed'}.get(command)
         if requested_letters:
             operation = 'letters'
         if operation:
@@ -2690,7 +2703,7 @@ def confirm_pending_operator_action(
         if result.get('status') == 'completed':
             finish_operator_action(cursor, action_id=action_id, result=result)
         return result, False
-    if capability == 'partnerships.continue_outreach':
+    if capability in {'partnerships.continue_outreach', 'partnerships.send_review'}:
         from services.outreach_continuation import confirm_task_start
         result = standardize_operator_result(confirm_task_start(cursor, business_id=business_id, user_id=user_id, envelope=envelope, actor_context=actor_context), capability)
         if result.get('status') == 'completed':

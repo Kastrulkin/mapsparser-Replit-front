@@ -1364,6 +1364,10 @@ def operator_task(cursor: Any, *, business_id: str, user_id: str, arguments: dic
     if not get_capability_access(business_id, "partnerships", bool(actor.get("is_superadmin"))).get("allowed"):
         return {"status": "denied", "reason_code": "payment_required"}
     try:
+        if arguments.get('operation') == 'review_send':
+            from services.outreach_send_review import preview
+            return preview(cursor, business_id=business_id, user_id=user_id,
+                           task_ids=arguments.get('task_ids') or [arguments.get('task_id')])
         if arguments.get("operation") == "revise_preview":
             return prepare_revision_approval(cursor, business_id=business_id,
                 task_id=str(arguments.get("task_id") or ""), raw=arguments.get("config"))
@@ -1419,6 +1423,15 @@ def operator_task(cursor: Any, *, business_id: str, user_id: str, arguments: dic
         return {**preview, "task": task}
     except ValueError as exc:
         questions = {
+            "first_contact_exists": "Первое письмо этой компании уже отправлено или находится в очереди. Повторные касания в этих условиях не разрешены; откройте существующую отправку.",
+            "reply_or_refusal_received": "Компания уже ответила или отказалась. Новое первое письмо не отправляется; продолжите существующий диалог.",
+            "no_send_ready_letters": "Готовых к отправке писем нет. Сначала подготовьте и проверьте тексты.",
+            "letters_need_review": "Не все письма и обязательные требования проверены. Сначала откройте результаты компании и письма.",
+            "pause_before_send_review": "Сначала приостановите текущую подготовку, затем покажите просмотр отправки.",
+            "letter_not_send_ready": "Письму не хватает проверенного текста, получателя или отправителя. Отправка не запускалась.",
+            "first_email_only_required": "Этот просмотр поддерживает только одно первое email каждой компании. Повторные касания требуют отдельных условий.",
+            "duplicate_first_contact": "В выбранных группах повторяется компания или адрес. Выберите один первый контакт.",
+            "send_review_stale": "Письмо уже изменилось или отправка согласована. Обновите результат; повторно отправлять не нужно.",
             "letter_language_required": "На каком языке подготовить письмо?",
             "invalid_language": "Укажите язык письма: например, английский (en) или русский (ru).",
             "audience_and_offer_required": "Кого ищем и какое предложение нужно включить в письмо?",
@@ -1596,6 +1609,14 @@ def confirm_task_start(cursor: Any, *, business_id: str, user_id: str, envelope:
             or not actor_can_write(cursor, business_id, actor)
             or not get_capability_access(business_id, "partnerships", bool(actor.get("is_superadmin"))).get("allowed")):
         return {"status": "blocked", "blocked_reasons": ["access_revoked"]}
+    if envelope.get('operation') == 'confirm_send':
+        from services.outreach_send_review import confirm
+        try:
+            return confirm(cursor, business_id=business_id, user_id=user_id, envelope=envelope)
+        except (ValueError, LookupError) as error:
+            return {'status': 'blocked', 'blocked_reasons': [str(error)],
+                    'chat_response': 'Отправка не запущена. Письма или условия изменились либо не готовы. Покажите просмотр отправки заново.',
+                    'external_dispatch_performed': False}
     if envelope.get("operation") not in {"start", "resume", "create_and_start", "revise_and_start"}:
         return {"status": "blocked", "blocked_reasons": ["invalid_operation"]}
     if envelope.get("search_policy_version") != 1:
