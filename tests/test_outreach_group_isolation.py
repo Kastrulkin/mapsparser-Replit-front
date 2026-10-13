@@ -98,3 +98,24 @@ def test_status_response_contains_real_result_reason_and_exact_group_link(monkey
     assert 'Не удалось создать письма' in output['chat_response']
     assert 'search_task_id=task' in output['result_ref']['href']
     assert output['external_dispatch_performed'] is False
+
+
+def test_personalization_prefers_offer_fact_over_generic_company_description():
+    from services.outreach_personalization_ai import qualified_requirement_for_offer, attributed_observation
+    def criterion(quote, source_type='official_website'):
+        return {'status': 'verified', 'quote': quote, 'evidence': {'fact': quote, 'source_url': 'https://example.org', 'source_type': source_type}}
+    qualification = {'criteria': {'requirement_0': criterion('We are a luxury travel company in India'),
+        'requirement_1': criterion('2 nights in Krabi and 2 nights in Phuket'),
+        'requirement_2': criterion('Email Phuket@example.org', 'public_contact_source')}}
+    assert qualified_requirement_for_offer(qualification, 'Riderra transfers in Phuket')['quote'] == '2 nights in Krabi and 2 nights in Phuket'
+    assert attributed_observation('We create luxury holidays').startswith('Your website states: “We')
+    assert attributed_observation('Two nights in Phuket') == 'Two nights in Phuket'
+
+
+def test_old_native_draft_is_not_reused_after_generation_contract_fix():
+    from services.outreach_continuation import campaign_requires_refresh
+    cursor=Mock(); cursor.fetchall.return_value=[{'message_brief_json': {'generation_source':'deepseek',
+        'generation_prompt_version':'outreach_personalization_v15','semantic_review_prompt_version':'outreach_semantic_review_v6'},
+        'quality_gate_json': {'passed':True,'semantic_review':{'passed':True}}}]
+    assert campaign_requires_refresh(cursor, 'campaign', 'business')
+    assert cursor.execute.call_args.args[1] == ('campaign','business')

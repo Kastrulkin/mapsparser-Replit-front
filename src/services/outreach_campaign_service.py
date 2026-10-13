@@ -4135,7 +4135,10 @@ def build_preview(
     ledger = build_evidence_ledger(context)
     if continuation and (continuation.get("qualification") or {}).get("status") == "qualified":
         qualification = continuation["qualification"]
-        evidence = qualification.get("evidence") or {}
+        from services.outreach_personalization_ai import qualified_requirement_for_offer
+        criterion = qualified_requirement_for_offer(qualification, (preparation or {}).get("offer") or continuation["config"].get("offer"))
+        evidence = criterion.get("evidence") or qualification.get("evidence") or {}
+        evidence = {**evidence, "fact": criterion.get("quote") or evidence.get("fact")}
         if not evidence.get("fact") or not evidence.get("source_url"):
             return {"workstream_id": workstream_id, "status": "needs_evidence", "touches": [], "reason_code": "continuation_evidence_missing"}
         # Use the actual qualified public fact, not an unrelated map-rating opener.

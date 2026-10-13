@@ -449,6 +449,16 @@ def delivery_report(cursor, task):
     return result
 
 
+def campaign_requires_refresh(cursor, campaign_id, business_id):
+    from services.outreach_personalization_ai import generation_contract_current
+    cursor.execute("""SELECT t.message_brief_json,t.quality_gate_json
+        FROM outreach_campaign_touches t JOIN outreach_campaigns c ON c.id=t.campaign_id
+        WHERE c.id::text=%s AND c.business_id=%s""", (str(campaign_id), business_id))
+    rows = cursor.fetchall()
+    return not rows or not all(generation_contract_current(
+        row.get("message_brief_json"), row.get("quality_gate_json"), require_ai=True) for row in rows)
+
+
 def control_task(cursor: Any, *, task_id: str, business_id: str, user_id: str,
                  action: str, revision: str, display_name: str = "") -> dict[str, Any]:
     if action not in {"start", "pause", "resume", "stop", "acknowledge_search", "retry_failed", "use_shared_balance", "rename", "resume_letters"}:
@@ -514,7 +524,10 @@ def control_task(cursor: Any, *, task_id: str, business_id: str, user_id: str,
                     and value.get("reason_code") == "continuation_audience_review_required"
                     and (state.get("qualifications", {}).get(key) or {}).get("status") == "qualified"
                     and not value.get("campaign_id") and not value.get("generation_error"))
-                if value.get("status") in statuses or contract_gate:
+                stale_draft = (field == "campaign_results" and value.get("campaign_id")
+                    and value.get("status") in {"ready", "draft", "needs_revision"}
+                    and campaign_requires_refresh(cursor, value["campaign_id"], business_id))
+                if value.get("status") in statuses or contract_gate or stale_draft:
                     if contract_gate:
                         # This gate exits before text generation; its released hold is not a draft attempt.
                         state["draft_attempts"] = max(0, int(state.get("draft_attempts") or 0) - 1)
@@ -1204,6 +1217,8 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                       AND c.status='draft'
                     ORDER BY c.created_at DESC LIMIT 1""", (target, row["business_id"], str(row["id"])))
                 campaign = cursor.fetchone()
+                if campaign and campaign_requires_refresh(cursor, campaign["id"], row["business_id"]):
+                    campaign = None
                 preview_created = False
                 if campaign and (campaign.get("quality_passed") or campaign.get("status") != "draft"):
                     result = {"campaign_id": str(campaign["id"]), "status": str(campaign["status"]) if campaign.get("quality_passed") else "needs_revision"}

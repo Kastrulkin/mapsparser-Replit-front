@@ -17,12 +17,13 @@ from services.outreach_playbook import beauty_outreach_guidance
 
 
 SCHEMA_VERSION = "1.0"
-PROMPT_VERSION = "outreach_personalization_v15"
+PROMPT_VERSION = "outreach_personalization_v16"
 REVIEW_PROMPT_VERSION = "outreach_semantic_review_v6"
 MANUAL_COMPATIBLE_PROMPT_VERSIONS = {
     "outreach_personalization_v11",
     "outreach_personalization_v12",
     "outreach_personalization_v13",
+    "outreach_personalization_v15",
     PROMPT_VERSION,
 }
 QUALITY_CRITERIA = (
@@ -74,6 +75,24 @@ ALLOWED_TEMPLATE_FIELDS = {
     "FOUNDER_PROOF",
     "OFFER",
 }
+
+
+def qualified_requirement_for_offer(qualification, offer):
+    """Choose sourced mandatory evidence relevant to the reviewed offer."""
+    criteria = [value for key, value in (qualification.get("criteria") or {}).items()
+                if key.startswith("requirement_") and value.get("status") == "verified"
+                and value.get("quote") and (value.get("evidence") or {}).get("source_url")
+                and (value.get("evidence") or {}).get("source_type") != "public_contact_source"]
+    terms = set(re.findall(r"[^\W_]{4,}", str(offer).lower()))
+    return max(criteria, key=lambda value: len(terms.intersection(
+        re.findall(r"[^\W_]{4,}", str(value.get("quote") or "").lower()))), default={})
+
+
+def attributed_observation(observation, language="en"):
+    """A recipient's first-person source quote must not impersonate the sender."""
+    if str(language).lower().split("-")[0] == "en" and re.search(r"\b(?:we|our|us)\b", str(observation), re.I):
+        return 'Your website states: “' + str(observation).strip().rstrip('.') + '”.'
+    return observation
 
 
 def ai_personalization_enabled() -> bool:
@@ -515,7 +534,7 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
         "SENDER_NAME": request_record["sender"]["name"],
         "SENDER_ROLE": request_record["sender"]["role"],
         "SENDER_BUSINESS": request_record["sender"]["business"],
-        "OBSERVATION": observation,
+        "OBSERVATION": attributed_observation(observation, request_record.get("copy_language") or "ru"),
         "BRIDGE": relevance_bridge,
         "FOUNDER_STORY": request_record["sender"]["founder_story"],
         "FOUNDER_PROOF": request_record["sender"]["proof"],
