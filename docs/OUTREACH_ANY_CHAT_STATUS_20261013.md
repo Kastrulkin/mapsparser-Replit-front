@@ -33,13 +33,13 @@ LocalOS backups for this run: `/opt/seo-app/.release/outreach-acceptance-2026101
 
 ## Verification and remaining work
 
-57 focused backend tests pass; changed backend files compile. Task-picker regression passes; three frontend release-guard tests pass. Application type check (`tsc --noEmit -p tsconfig.app.json`) passed with exit 0. Earlier clean root-config checks were not application type checks.
+61 focused backend tests pass; changed backend files compile. Task-picker regression passes; three frontend release-guard tests pass. Application type check (`tsc --noEmit -p tsconfig.app.json`) passed with exit 0. Earlier clean root-config checks were not application type checks.
 
 The server UI build initially failed because an already declared/locked `@xyflow/react` dependency was not installed. Dependencies are being restored from the existing lockfile; the previous served bundle remains in place until build and release checks pass.
 
 Remaining acceptance:
 
-1. Confirm the pending version and obtain fresh canonical drafts without manual result editing; find a third actually suitable candidate rather than weakening evidence for EWS.
+1. Start the owner-approved version once connectivity is restored and obtain fresh canonical drafts without manual result editing; find a third actually suitable candidate rather than weakening evidence for EWS.
 2. Complete a positive Telegram review → complete draft-text delivery. Desktop user interactions interrupted the attempted follow-up test; coordinate a short uninterrupted window.
 3. Review exact new recipients/text/version and obtain separate human send approval before native queue/send tests. Historical receipts and the prior control reply do not establish acceptance for these new letters.
 4. Perform two real native scheduled draft-only runs, 15 minutes apart, then pause and reconcile duplicates/expenses. Existing chat schedule accepts daily/weekly schedules; no interval-schedule implementation or substitute Codex automation is claimed.
