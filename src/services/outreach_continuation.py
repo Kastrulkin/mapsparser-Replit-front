@@ -1113,7 +1113,8 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                     import logging
                     logging.getLogger(__name__).warning("Public evidence unavailable for task %s: %s", row["id"], type(exc).__name__)
                     public_evidence = []
-                qualification = qualify_audience(config, [*(research.get("evidence_json") or []), *public_evidence], business_id=row["business_id"], user_id=row["user_id"])
+                contact_evidence = verified_contact_evidence(cursor, target, row["business_id"])
+                qualification = qualify_audience(config, [*(research.get("evidence_json") or []), *public_evidence, *contact_evidence], business_id=row["business_id"], user_id=row["user_id"])
                 qualification["public_evidence"] = public_evidence
                 if not _lock_current(cursor, row):
                     conn.rollback()
@@ -1371,6 +1372,30 @@ def load_workstream_contract(cursor: Any, workstream_id: str) -> dict[str, Any] 
     return {"task_id": row["id"], "status": row["status"], "config": row["payload_json"],
             "qualification": (state.get("qualifications") or {}).get(str(workstream_id)),
             "blocker": state.get("blocker"), "enabled": continuation_enabled(str(row["business_id"]))}
+
+
+def verified_contact_evidence(cursor, workstream_id, business_id):
+    """A source-confirmed address is not proof of mailbox delivery."""
+    from urllib.parse import urlsplit
+    cursor.execute("""SELECT cp.id, cp.value, cp.source_url, cp.verification_status, cp.observed_at
+        FROM lead_contact_points cp JOIN lead_workstreams ws ON ws.lead_id=cp.lead_id
+        WHERE ws.id=%s AND ws.client_business_id=%s AND cp.contact_type='email'
+          AND cp.verification_status IN ('verified','confirmed_source')
+          AND (cp.stale_after IS NULL OR cp.stale_after>NOW())
+          AND cp.source_url IS NOT NULL ORDER BY cp.observed_at DESC LIMIT 5""", (workstream_id, business_id))
+    facts = []
+    for contact in cursor.fetchall():
+        source = str(contact.get('source_url') or '')
+        parsed_source = urlsplit(source)
+        if contact.get('verification_status') not in {'verified', 'confirmed_source'} or not contact.get('value') or parsed_source.scheme not in {'https', 'http'} or not parsed_source.hostname or parsed_source.username or parsed_source.password:
+            continue
+        observed = contact.get('observed_at')
+        facts.append({'id': 'contact:' + str(contact['id']),
+            'fact': 'Public email contact: ' + str(contact['value']) + '. Source confirmed; mailbox delivery has not been verified.',
+            'source_url': source, 'source_type': 'public_contact_source',
+            'observed_at': observed.isoformat() if hasattr(observed, 'isoformat') else observed,
+            'freshness': 'current_contact_record'})
+    return facts
 
 
 def qualify_audience(config: dict[str, Any], evidence: list[dict[str, Any]], *, business_id: str, user_id: str, runner=None) -> dict[str, Any]:
@@ -1652,7 +1677,17 @@ def import_source_urls(cursor, row, config, state):
     cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("outreach-import:" + row["business_id"],))
     lead_ids, workstreams = list(state.get("lead_ids") or []), list(state.get("workstream_ids") or [])
     for url in config["source_urls"]:
-        lead_id, created = _insert_partnership_lead_if_new(cursor,
+        from services.openclaw_website_research import same_website
+        cursor.execute("""SELECT id, website FROM prospectingleads
+            WHERE business_id=%s AND COALESCE(intent,'client_outreach')='partnership_outreach'
+              AND website IS NOT NULL""", (row["business_id"],))
+        existing = [dict(item) for item in cursor.fetchall() if same_website(str(item["website"]), url)]
+        if len(existing) > 1:
+            raise ValueError("ambiguous_existing_company")
+        if existing:
+            lead_id, created = str(existing[0]["id"]), False
+        else:
+            lead_id, created = _insert_partnership_lead_if_new(cursor,
             business_id=row["business_id"], created_by=row["user_id"], source_url=url,
             name=urlsplit(url).hostname, address=None, city=None, category=None, website=url, source="user_link", source_kind="manual",
             source_provider="user_link", search_payload={"continuation_id": row["id"],

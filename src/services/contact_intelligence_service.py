@@ -2959,13 +2959,32 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
         task_row = cursor.fetchone()
         config = (dict(task_row).get("payload_json") or {}) if task_row else {}
         # Reusing a company must retain the exact reviewed starting page.
-        from urllib.parse import urlsplit
         reviewed_urls = [url for url in config.get("source_urls", [])
-                         if urlsplit(url).hostname == urlsplit(str(eligible_website)).hostname]
+                         if openclaw_website_research.same_website(url, str(eligible_website))]
         research_url = reviewed_urls[0] if reviewed_urls else str(eligible_website)
+        # Re-read known public sources within the same five-page allowance.
+        # Reading-mode extraction can omit navigation, not the stored source URLs.
+        known_sources = []
+        cursor.execute("""SELECT source_url FROM lead_contact_points WHERE lead_id=%s
+            AND verification_status IN ('verified','confirmed_source')
+            AND (stale_after IS NULL OR stale_after>NOW()) AND source_url IS NOT NULL""", (lead["id"],))
+        for contact_source in cursor.fetchall():
+            source = str(contact_source.get("source_url") or "").split('#', 1)[0]
+            if source and source != research_url and openclaw_website_research.same_website(source, research_url) and source not in known_sources:
+                known_sources.append(source)
+        cursor.execute("""SELECT signals_json, evidence_json FROM lead_workstream_research
+            WHERE workstream_id=%s ORDER BY researched_at DESC LIMIT 5""", (workstream["id"],))
+        for prior_research in cursor.fetchall():
+            for field in ("signals_json", "evidence_json"):
+                for evidence in prior_research.get(field) or []:
+                    if not isinstance(evidence, dict):
+                        continue
+                    source = str(evidence.get("source_url") or "").split('#', 1)[0]
+                    if source and source != research_url and openclaw_website_research.same_website(source, research_url) and source not in known_sources:
+                        known_sources.append(source)
         website_research = openclaw_website_research.research_website(
             business_id=str(workstream["client_business_id"]), job_id=str(job["id"]),
-            url=research_url, requirements=config.get("requirements") or [])
+            url=research_url, requirements=config.get("requirements") or [], known_source_urls=known_sources[:4])
         website_contacts = []
         for page in website_research["pages"]:
             # Readable text is escaped before reuse of the existing contact parser.

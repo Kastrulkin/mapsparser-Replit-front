@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 from core import outbound_network
+from services.openclaw_website_research import same_website
 
 
 def collect_candidate_evidence(website: str, terms: list[str], *, requirements: list[str] | None = None) -> list[dict]:
@@ -31,7 +32,7 @@ def collect_candidate_evidence(website: str, terms: list[str], *, requirements: 
             continue
         if 300 <= response.status_code < 400:
             target = urljoin(url, str(response.headers.get("location") or ""))
-            if urlparse(target).hostname == parsed.hostname:
+            if same_website(target, website):
                 queue.insert(0, target)
             continue
         if response.status_code != 200 or "text/html" not in str(response.headers.get("content-type") or "").lower() or len(response.body) > 1_000_000:
@@ -43,7 +44,7 @@ def collect_candidate_evidence(website: str, terms: list[str], *, requirements: 
             candidates = []
             for link in soup.find_all("a", href=True):
                 target = urljoin(url, str(link["href"]))
-                if urlparse(target).scheme not in {"http", "https"} or urlparse(target).hostname != parsed.hostname:
+                if urlparse(target).scheme not in {"http", "https"} or not same_website(target, website):
                     continue
                 label = (link.get_text(" ", strip=True) + " " + target).casefold()
                 score = sum(term.casefold() in label for term in terms if term.strip()) * 10

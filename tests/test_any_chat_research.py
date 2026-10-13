@@ -97,7 +97,7 @@ def test_import_links_reuses_business_dedup_and_does_not_search(monkeypatch):
     monkeypatch.setitem(sys.modules,'api.prospecting.partner_discovery',module)
     import services.contact_intelligence_service as intelligence
     monkeypatch.setattr(intelligence,'enqueue_enrichment_job',lambda *a,**k:{'id':'job'})
-    state={}; cursor=Mock()
+    state={}; cursor=Mock(); cursor.fetchall.return_value=[]
     import_source_urls(cursor,{'business_id':'b','user_id':'u','id':'task'},normalize_config(source_config()),state)
     assert observations[0]['business_id']=='b'
     assert state['lead_ids']==['existing-lead'] and state['workstream_ids']==['existing-ws']
