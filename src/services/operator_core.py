@@ -2111,6 +2111,17 @@ def route_operator_message(
     subscription_access: dict | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     clean_message = str(message or "").strip()
+    # Explicit task reviews replace unfinished clarifications; permissions remain in operator_task.
+    from services.operator_outreach_read_request import send_review_request
+    requested_send = send_review_request(clean_message)
+    if requested_send:
+        task_ids = requested_send['task_ids'] or ([str((action_payload or {}).get('search_task_id'))] if (action_payload or {}).get('search_task_id') else [])
+        if not task_ids:
+            return standardize_operator_result({'status': 'clarification_required', 'chat_response': 'Выберите задачу или укажите группу для просмотра отправки.'}, 'partnerships.send_review'), {}
+        from services.outreach_continuation import operator_task
+        result = operator_task(cursor, business_id=business_id, user_id=user_id,
+            arguments={'operation': 'review_send', 'task_ids': task_ids}, actor_context=actor_context)
+        return standardize_operator_result(result, 'partnerships.send_review'), {}
     tool_loop_active = _operator_tool_loop_enabled() or tool_planner is not None
     run_refresh = refresh_handler or refresh_reviews_from_operator
     run_ai_router = ai_router_handler or classify_operator_intent_with_ai
@@ -2122,16 +2133,7 @@ def route_operator_message(
         return setup
     selected_search_task = None
     selected_id = str((action_payload or {}).get('search_task_id') or '').strip()
-    from services.operator_outreach_read_request import letter_request, send_review_request
-    requested_send = send_review_request(clean_message)
-    if requested_send:
-        task_ids = requested_send['task_ids'] or ([selected_id] if selected_id else [])
-        if not task_ids:
-            return standardize_operator_result({'status': 'clarification_required', 'chat_response': 'Выберите задачу или укажите группу для просмотра отправки.'}, 'partnerships.send_review'), {}
-        from services.outreach_continuation import operator_task
-        result = operator_task(cursor, business_id=business_id, user_id=user_id,
-            arguments={'operation': 'review_send', 'task_ids': task_ids}, actor_context=actor_context)
-        return standardize_operator_result(result, 'partnerships.send_review'), {}
+    from services.operator_outreach_read_request import letter_request
     requested_letters = letter_request(clean_message)
     if requested_letters:
         if requested_letters.get('ambiguous'):

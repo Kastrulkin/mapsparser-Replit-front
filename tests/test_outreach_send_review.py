@@ -98,3 +98,21 @@ def test_first_contact_uses_same_business_native_queue_evidence(contacted):
     assert cursor.execute.call_args.args[1]==('business','lead')
     sql=cursor.execute.call_args.args[0]
     assert 'provider_message_id' in sql and 'delivery_unknown' in sql
+
+
+def test_explicit_review_replaces_unfinished_other_task_before_any_ai_router(monkeypatch):
+    import services.outreach_continuation as continuation
+    action=Mock(return_value={'status':'blocked','blocked_reasons':['search_task_not_found']})
+    monkeypatch.setattr(continuation,'operator_task',action)
+    path=Path(__file__).resolve().parents[1]/'src/services/operator_core.py'
+    function=next(n for n in ast.parse(path.read_text()).body if isinstance(n,ast.FunctionDef) and n.name=='route_operator_message')
+    # Postponed annotations let this test execute the real dispatch without importing unrelated app services.
+    module=ast.Module(body=[ast.ImportFrom(module='__future__',names=[ast.alias(name='annotations')],level=0),function],type_ignores=[])
+    ns={'standardize_operator_result':lambda result,cap:dict(result,capability=cap)}
+    exec(compile(ast.fix_missing_locations(module),str(path),'exec'),ns)
+    result,pending=ns['route_operator_message'](Mock(),business_id='other-business',user_id='u',
+        message='Для Riderra подготовь просмотр отправки задачи d4b43860-d176-41f9-8085-462f962f39f3.',channel='telegram',
+        pending_context={'capability':'settings.profile.clarification'},actor_context={'user_id':'u'})
+    assert result['blocked_reasons']==['search_task_not_found'] and pending=={}
+    assert action.call_args.kwargs['business_id']=='other-business'
+    assert action.call_args.kwargs['arguments']['task_ids']==['d4b43860-d176-41f9-8085-462f962f39f3']
