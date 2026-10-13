@@ -1,4 +1,14 @@
 from unittest.mock import Mock
+
+
+def test_two_reviewed_pages_are_one_found_company():
+    from services.outreach_continuation import preparation_report
+    report = preparation_report({'source_urls': ['https://example.org/tour', 'https://example.org/terms'],
+                                 'target_count': 1},
+                                {'lead_ids': ['one-company'], 'search_results_total': 2, 'duplicates': 1})
+    assert report['found'] == 1
+    assert report['source_urls_count'] == 2
+    assert report['eligible'] == 0
 from services.outreach_continuation import delivery_report, group_campaign_ids
 from services.partnership_group_view import presentation
 

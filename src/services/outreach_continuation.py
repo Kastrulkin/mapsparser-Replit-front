@@ -305,7 +305,8 @@ def preparation_report(config: dict[str, Any], state: dict[str, Any]) -> dict[st
     checking = sum(value.get("status") == "checking" for value in qualifications.values())
     checked = sum(value.get("status") != "checking" for value in qualifications.values())
     verification_failed = sum(value.get("status") == "failed" for value in qualifications.values())
-    return {"found": state.get("search_results_total", imported),
+    return {"found": imported if config.get("source_urls") else state.get("search_results_total", imported),
+            "source_urls_count": len(config.get("source_urls") or []),
             "awaiting_check": max(0, imported - checked - checking), "checking": checking,
             "checked": checked,
             "verification_failed": verification_failed,
@@ -347,7 +348,7 @@ def view(row: dict[str, Any]) -> dict[str, Any]:
         country = str(config.get("agency_country") or "").strip()
         destination = str(config.get("sold_destination") or "").strip()
         geography, _ = search_conditions(config)
-        display_name = f"{country} → {destination}" if country and destination else " · ".join([str(config.get("audience") or "Поиск компаний"), ", ".join(geography)])
+        display_name = f"{country} → {destination}" if country and destination else " · ".join(filter(None, [str(config.get("audience") or "Поиск компаний"), ", ".join(geography)]))
         created = row.get("created_at")
         if hasattr(created, "strftime"):
             display_name = f"{display_name} · {created.strftime('%d.%m')}"
