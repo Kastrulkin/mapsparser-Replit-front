@@ -49,7 +49,8 @@ class PlannerContext:
     def decode(self, value):
         if isinstance(value, dict): return {key: self.decode(item) for key, item in value.items()}
         if isinstance(value, list): return [self.decode(item) for item in value]
-        if isinstance(value, str): return self.references.get(value, value)
+        if isinstance(value, str):
+            return re.sub(r'@ref\d+\b', lambda match: self.references.get(match.group(0), match.group(0)), value)
         return value
 
     def history(self, history):

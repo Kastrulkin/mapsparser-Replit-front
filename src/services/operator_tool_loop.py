@@ -252,10 +252,15 @@ def run_operator_tool_loop(
     max_steps: int = MAX_OPERATOR_TOOL_STEPS,
     business_timezone: str | None = "Europe/Moscow",
 ) -> dict[str, Any]:
+    read_only_request = bool(re.search(
+        r"только\s+чтени[ея]|read[\s-]+only|ничего\s+не\s+(?:меня|измен|сохраня|созда)",
+        str(message or ""), re.I,
+    ))
     tool_map = {
         str(tool.get("name") or ""): tool
         for tool in tools
         if isinstance(tool, dict) and str(tool.get("name") or "")
+        and (not read_only_request or tool.get("risk_class") in {"read_only", "privileged_read", "support_read", "financial_read"})
     }
     from services.operator_context import PlannerContext
     context_builder = PlannerContext(message)
@@ -312,6 +317,8 @@ def run_operator_tool_loop(
             if not message_text:
                 message_text = "Готово."
             last_tool_name = str(trace[-1].get("tool") or "") if trace else ""
+            if read_only_request and re.match(r"\s*(?:я\s+)?(?:сохранил|изменил|создал|переписал|отправил|опубликовал)", message_text, re.I):
+                message_text = _fallback_read_response(last_tool_name, last_outcome, message) + "\nИзменения не выполнялись."
             if (
                 last_tool_name == "content.list_items"
                 and isinstance(last_outcome.get("items"), list)

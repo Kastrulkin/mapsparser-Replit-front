@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-13",
+  "content_surface": "LocalOS browser UI only; no direct content database writes",
+  "completed_posts": [
+    {"business": "MELIORA", "plan_id": "af0ec274-d296-578a-86f1-023f2c83ed7a", "item_id": "47a806b7-8cb5-5e8a-a7bf-702a70a21ac2", "date": "2026-10-15", "title": "Один тираж — разные получатели", "photo": "branded backpack", "platform": "Google Business"},
+    {"business": "MELIORA", "plan_id": "af0ec274-d296-578a-86f1-023f2c83ed7a", "item_id": "cb0bb667-a421-53e9-a5dc-0efb8ff77cd2", "date": "2026-10-19", "title": "Что проверить перед запуском мерча в производство", "photo": "printed merchandise shirt", "platform": "Google Business"},
+    {"business": "EREVANTRANSFER", "plan_id": "699a202a-3fcd-58e2-9964-8f773534e72a", "item_id": "74ab84df-9f3f-541f-9162-d1c1705b763f", "date": "2026-10-15", "title": "Book both parts of a return journey clearly", "photo": "white passenger minivan", "platform": "Google Business"},
+    {"business": "EREVANTRANSFER", "plan_id": "699a202a-3fcd-58e2-9964-8f773534e72a", "item_id": "23770673-2755-52ed-a9dc-7553bf04e30a", "date": "2026-10-19", "title": "Final transfer check before departure", "photo": "vehicle passenger interior", "platform": "Google Business"}
+  ],
+  "verification": "All four cards reopened: main text and Google text match reviewed versions, selected image loaded. Dates preserved. No publications, external sends, approvals or schedule activation.",
+  "paid_photo_analysis_calls": 0,
+  "text_preparation": "One platform preparation per post, four calls total; final texts reviewed and saved manually without regeneration.",
+  "chat": "Read-only requests tested in real UI; embedded @refN identifiers were broken, reproduced by two failing tests, fixed in PlannerContext.decode and verified in live replies. Read-only execution guard retained.",
+  "business_selection": "Both clients retained across unscoped content-to-chat navigation and reload. Scoped Git patch records deep-link priority; persistence and inaccessible-business regression tests included. No frontend dist replacement in this follow-up.",
+  "checks": {"working_tree_backend": "35 passed", "working_tree_frontend": "3 passed", "isolated_commit_backend": "9 passed", "isolated_commit_frontend": "2 passed", "isolated_frontend_build": "passed"},
+  "production": {"context_sha256": "a29b43b07b085a93722e005419a5f992c66fdea24b0c6e1fe58239f1762db5c9", "backup": "/opt/seo-app/backups/content-references-20261013/operator_context.py", "restarted": ["app", "operator-worker"], "http": 200, "shared_worker_restarted": false},
+  "residual": "Generic channel-post search initially considered only the latest plan; explicit all-nonarchived-plan request returned the older future items. Broad default cross-plan discovery is not certified by this follow-up. Past-dated items in older plans were not changed."
+}
