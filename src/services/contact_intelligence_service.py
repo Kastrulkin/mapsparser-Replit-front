@@ -2967,7 +2967,7 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
         research_url = reviewed_urls[0] if reviewed_urls else str(eligible_website)
         # Re-read known public sources within the same five-page allowance.
         # Reading-mode extraction can omit navigation, not the stored source URLs.
-        known_sources = []
+        known_sources = list(dict.fromkeys(reviewed_urls[1:]))
         cursor.execute("""SELECT source_url FROM lead_contact_points WHERE lead_id=%s
             AND verification_status IN ('verified','confirmed_source')
             AND (stale_after IS NULL OR stale_after>NOW()) AND source_url IS NOT NULL""", (lead["id"],))

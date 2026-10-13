@@ -141,6 +141,7 @@ def handle_web_read(method, path, headers, payload):
             'provider': 'openclaw.web_fetch', 'url': url, 'final_url': final_url,
             'fetched_at': details.get('fetchedAt'), 'untrusted': True,
             'text': str(details.get('text', ''))[:16000],
+            'title': source_text(str(details.get('title') or ''))[:700],
             'truncated': bool(details.get('truncated')), 'cached': bool(details.get('cached')),
         }}
     except ValueError as error:
@@ -208,14 +209,21 @@ def research_website(payload, headers):
             path = urlsplit(candidate).path.lower()
             if any(word in path for word in ('contact', 'контакт')):
                 return (0, 0)
+            if candidate in known_sources:
+                return (1, known_sources.index(candidate))
             if 'about' in path:
-                return (1, 0)
+                return (2, 0)
             matches = sum(term in link_labels.get(candidate, path) for term in terms)
-            return (2, -matches)
+            return (3, -matches)
         pending = sorted(dict.fromkeys([*pending, *discovered]), key=priority)[:4]
     contacts, facts, seen, candidate_facts = [], [], set(), []
     for page in pages:
         text, source = page['content_text'], page['final_url']
+        title = str(page.get('title') or '').strip()
+        if title:
+            candidate_facts.append({'fact': 'Page title: ' + title[:700],
+                'source_url': source, 'observed_at': page.get('fetched_at'),
+                'untrusted': True, 'evidence_type': 'page_title'})
         for email in re.findall(r'(?<![\w.+-])([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})(?![\w.-])', text, re.I):
             if email.lower() not in seen:
                 seen.add(email.lower())

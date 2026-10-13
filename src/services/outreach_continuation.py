@@ -85,7 +85,8 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("source_import_is_draft_only")
         if raw.get("mode") != "find_only" and not raw.get("language"):
             raise ValueError("letter_language_required")
-        raw = {**raw, "target_count": len(normalized_urls), "max_candidates": len(normalized_urls),
+        source_goal = raw.get("target_count", len({(urlsplit(url).hostname.lower().removeprefix('www.'), urlsplit(url).port) for url in normalized_urls}))
+        raw = {**raw, "target_count": source_goal, "max_candidates": raw.get("max_candidates", source_goal),
                "queries": [{"query": "Указанные пользователем сайты", "city": "По ссылкам"}],
                "max_search_calls": 1, "requirements": raw.get("requirements", [])}
     audience = str(raw.get("audience") or "").strip()
@@ -408,13 +409,25 @@ def _release_draft_hold(cursor, row, result):
                     credits=0, step="draft", key=result["credit_key"])
 
 
-def group_campaign_ids(cursor, task):
-    ids = [str(value['campaign_id']) for value in (task.get('state', {}).get('campaign_results') or {}).values() if value.get('campaign_id')]
-    cursor.execute("""SELECT DISTINCT d.learning_note_json->>'campaign_id' AS campaign_id
-        FROM outreachmessagedrafts d JOIN prospectingleads l ON l.id=d.lead_id
-        WHERE l.business_id=%s AND d.learning_note_json->>'search_task_id'=%s
-          AND NULLIF(d.learning_note_json->>'campaign_id','') IS NOT NULL""", (task['business_id'], task['id']))
-    ids.extend(str(row['campaign_id']) for row in cursor.fetchall())
+def group_campaign_ids(cursor, task, *, current_only=False):
+    results = list((task.get('state', {}).get('campaign_results') or {}).values())
+    ids = [str(value['campaign_id']) for value in results if value.get('campaign_id')]
+    if current_only:
+        cursor.execute("""SELECT DISTINCT ON (d.lead_id) d.lead_id::text AS lead_id,
+            d.learning_note_json->>'campaign_id' AS campaign_id
+            FROM outreachmessagedrafts d JOIN prospectingleads l ON l.id=d.lead_id
+            WHERE l.business_id=%s AND d.learning_note_json->>'search_task_id'=%s
+              AND NULLIF(d.learning_note_json->>'campaign_id','') IS NOT NULL
+            ORDER BY d.lead_id,COALESCE(d.updated_at,d.created_at) DESC,d.created_at DESC,d.id DESC""", (task['business_id'], task['id']))
+        current_leads = {str(value['lead_id']) for value in results if value.get('lead_id')}
+        ids.extend(str(row['campaign_id']) for row in cursor.fetchall()
+                   if str(row.get('lead_id') or '') not in current_leads)
+    else:
+        cursor.execute("""SELECT DISTINCT d.learning_note_json->>'campaign_id' AS campaign_id
+            FROM outreachmessagedrafts d JOIN prospectingleads l ON l.id=d.lead_id
+            WHERE l.business_id=%s AND d.learning_note_json->>'search_task_id'=%s
+              AND NULLIF(d.learning_note_json->>'campaign_id','') IS NOT NULL""", (task['business_id'], task['id']))
+        ids.extend(str(row['campaign_id']) for row in cursor.fetchall())
     return list(dict.fromkeys(ids))
 
 

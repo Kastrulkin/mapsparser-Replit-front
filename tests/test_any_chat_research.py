@@ -204,3 +204,9 @@ def test_bridge_prioritizes_required_service_over_unrelated_first_link(bridge, m
         'job_id': 'j', 'requirements': ['Organic supplies']}, {})
     assert calls.index('https://example.org/organic') < calls.index('https://example.org/paris-tours')
     assert len(calls) <= 5
+
+
+def test_two_reviewed_pages_of_one_company_keep_one_letter_goal():
+    config = normalize_config(source_config(source_urls=['https://example.org/tour', 'https://example.org/terms'], target_count=1))
+    assert config['target_count'] == 1 and config['max_draft_attempts'] == 1
+    assert normalize_config(config) == config

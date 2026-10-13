@@ -138,3 +138,30 @@ def test_two_named_companies_still_require_owner_decision():
     from services.outreach_continuation import select_source_company
     with pytest.raises(ValueError,match='ambiguous_existing_company'):
         select_source_company([{'id':'one','name':'First agency'}, {'id':'two','name':'Second agency'}], 'https://example.org/')
+
+
+def test_reviewed_source_is_not_crowded_out_by_discovered_about_pages(bridge, monkeypatch):
+    monkeypatch.setattr(bridge, 'public_url', lambda url: url)
+    calls = []
+    def read(method, path, headers, payload):
+        calls.append(payload['url'])
+        return 200, {'source': {'final_url': payload['url'],
+            'text': '\n'.join(f'[About {i}](https://example.org/about/{i})' for i in range(8))}}
+    monkeypatch.setattr(bridge, 'handle_web_read', read)
+    bridge.research_website({'url': 'https://example.org/tour', 'business_id': 'b', 'job_id': 'j',
+                            'known_source_urls': ['https://example.org/terms']}, {})
+    assert 'https://example.org/terms' in calls
+    assert len(calls) <= 5
+
+
+def test_fetched_title_is_sourced_without_inventing_missing_itinerary(bridge, monkeypatch):
+    monkeypatch.setattr(bridge, 'public_url', lambda url: url)
+    monkeypatch.setattr(bridge, 'handle_web_read', lambda *args: (200, {'source': {
+        'final_url': 'https://example.org/tour', 'title': 'Phuket tour packages from India',
+        'text': 'General company information and public contacts.'}}))
+    result = bridge.research_website({'url': 'https://example.org/tour', 'business_id': 'b',
+        'job_id': 'j', 'requirements': ['sells Phuket tours']}, {})
+    title = next(f for f in result['facts'] if f.get('evidence_type') == 'page_title')
+    assert title['fact'] == 'Page title: Phuket tour packages from India'
+    assert title['source_url'] == 'https://example.org/tour' and title['untrusted']
+    assert not any('pickup' in f['fact'] for f in result['facts'])

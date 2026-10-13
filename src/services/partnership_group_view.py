@@ -27,7 +27,7 @@ def message_campaign_scope(cursor, business_id: str, task_id: str) -> list[str]:
     return group_campaign_ids(cursor, {
         "id": str(group["id"]), "business_id": business_id,
         "state": group.get("result_json") or {},
-    })
+    }, current_only=True)
 
 
 def group_url(task, section="companies"):

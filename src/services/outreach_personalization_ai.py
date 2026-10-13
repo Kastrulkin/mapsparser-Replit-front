@@ -444,6 +444,9 @@ def _generation_prompt(record: dict[str, Any]) -> str:
             "These fields are filled by the server from sourced facts: never translate or alter them. "
             "Use optional {{OFFER}}, {{SENDER_NAME}}, {{SENDER_BUSINESS}}, {{FOUNDER_STORY}}, {{FOUNDER_PROOF}} "
             "only when corresponding input values exist. Never invent facts, contacts, prices, discounts or promises. "
+            "After the sourced observation, explain one concrete practical role of the reviewed offer in that activity, "
+            "as a proposed use, not a claim about the recipient existing suppliers or needs. "
+            "Do not merely repeat the itinerary title in the CTA. Never add services outside the approved offer. "
             "Respect the sender representation, channel word limit and one CTA. Do not claim approval or sending. "
             "INPUT_JSON:\n" + json.dumps(record, ensure_ascii=False, default=str)
         )

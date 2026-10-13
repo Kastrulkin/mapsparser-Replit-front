@@ -149,3 +149,11 @@ def test_offer_bridge_names_verified_context_without_inventing_need():
     assert 'Day 1: Arrival in Phuket' in value and 'Riderra transfers in Phuket' in value
     assert '####' not in value
     assert 'need' not in value and 'нужна' not in value
+
+
+def test_current_message_scope_excludes_superseded_projection_for_same_company():
+    from services.partnership_group_view import message_campaign_scope
+    cursor = Mock(); cursor.fetchone.return_value = {'id': 'task', 'payload_json': {},
+        'result_json': {'campaign_results': {'ws': {'campaign_id': 'current', 'lead_id': 'lead'}}}}
+    cursor.fetchall.return_value = [{'campaign_id': 'old', 'lead_id': 'lead'}]
+    assert message_campaign_scope(cursor, 'b', 'task') == ['current']
