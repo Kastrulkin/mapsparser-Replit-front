@@ -258,10 +258,12 @@ def _load_partnership_send_snapshot(*, business_id: str, search_task_id: str = "
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        group_ids = None
+        group_task_ids = None
+        campaign_ids = None
         if search_task_id:
-            from services.partnership_group_view import load_group_scope
-            group_ids = load_group_scope(cur, business_id, search_task_id)['lead_ids']
+            from services.partnership_group_view import load_group_scope, message_campaign_scope
+            group_task_ids = [str(load_group_scope(cur, business_id, search_task_id)['id'])]
+            campaign_ids = message_campaign_scope(cur, business_id, search_task_id)
         cur.execute(
             """
             WITH draft_scope AS (
@@ -279,7 +281,7 @@ def _load_partnership_send_snapshot(*, business_id: str, search_task_id: str = "
                 WHERE d.status = %s
                   AND ws.client_business_id = %s
                   AND ws.workstream_type = 'client_partnership'
-                  AND (%s::text[] IS NULL OR l.id::text=ANY(%s::text[]))
+                  AND (%s::text[] IS NULL OR d.learning_note_json->>'search_task_id'=ANY(%s::text[]))
                   AND COALESCE(ws.status, '') NOT IN ('not_relevant', 'disqualified', 'closed_lost')
                   AND COALESCE(l.status, '') NOT IN ('not_relevant', 'disqualified', 'rejected', 'shortlist_rejected')
                   AND COALESCE(l.partnership_stage, '') NOT IN ('rejected', 'shortlist_rejected')
@@ -308,7 +310,7 @@ def _load_partnership_send_snapshot(*, business_id: str, search_task_id: str = "
             WHERE draft_rank = 1
             ORDER BY updated_at DESC, created_at DESC
             """,
-            (DRAFT_APPROVED, business_id, group_ids, group_ids),
+            (DRAFT_APPROVED, business_id, group_task_ids, group_task_ids),
         )
         ready_drafts = [_serialize_draft(dict(row)) for row in cur.fetchall()]
 
@@ -317,14 +319,15 @@ def _load_partnership_send_snapshot(*, business_id: str, search_task_id: str = "
             SELECT DISTINCT b.id, b.batch_date, b.daily_limit, b.status, b.created_by, b.approved_by, b.created_at, b.updated_at
             FROM outreachsendbatches b
             JOIN outreachsendqueue q ON q.batch_id = b.id
+            JOIN outreachmessagedrafts d ON d.id = q.draft_id
             JOIN prospectingleads l ON l.id = q.lead_id
             WHERE l.business_id = %s
-              AND (%s::text[] IS NULL OR l.id::text=ANY(%s::text[]))
+              AND (%s::text[] IS NULL OR d.learning_note_json->>'search_task_id'=ANY(%s::text[]))
               AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
             ORDER BY b.batch_date DESC, b.created_at DESC
             LIMIT 20
             """,
-            (business_id, group_ids, group_ids),
+            (business_id, group_task_ids, group_task_ids),
         )
         batch_rows = [_serialize_batch_row(dict(row)) for row in cur.fetchall()]
         batches_by_id = {row["id"]: row for row in batch_rows}
@@ -355,10 +358,10 @@ def _load_partnership_send_snapshot(*, business_id: str, search_task_id: str = "
                     LIMIT 1
                 ) r ON TRUE
                 WHERE q.batch_id = ANY(%s) AND l.business_id=%s
-                  AND (%s::text[] IS NULL OR l.id::text=ANY(%s::text[]))
+                  AND (%s::text[] IS NULL OR d.learning_note_json->>'search_task_id'=ANY(%s::text[]))
                 ORDER BY q.created_at ASC
                 """,
-                (list(batches_by_id.keys()), business_id, group_ids, group_ids),
+                (list(batches_by_id.keys()), business_id, group_task_ids, group_task_ids),
             )
             for row in cur.fetchall():
                 payload = dict(row)
@@ -374,14 +377,15 @@ def _load_partnership_send_snapshot(*, business_id: str, search_task_id: str = "
                 q.batch_id, q.channel, q.delivery_status
             FROM outreachreactions r
             JOIN outreachsendqueue q ON q.id = r.queue_id
+            JOIN outreachmessagedrafts d ON d.id = q.draft_id
             JOIN prospectingleads l ON l.id = r.lead_id
             WHERE l.business_id = %s
-              AND (%s::text[] IS NULL OR l.id::text=ANY(%s::text[]))
+              AND (%s::text[] IS NULL OR d.learning_note_json->>'search_task_id'=ANY(%s::text[]))
               AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
             ORDER BY r.created_at DESC
             LIMIT 50
             """,
-            (business_id, group_ids, group_ids),
+            (business_id, group_task_ids, group_task_ids),
         )
         reactions = [_serialize_timestamp_fields(dict(row)) for row in cur.fetchall()]
         cur.execute("""SELECT i.id, l.id AS lead_id, l.name AS lead_name, i.channel,
@@ -393,9 +397,9 @@ def _load_partnership_send_snapshot(*, business_id: str, search_task_id: str = "
             FROM outreach_inbound_events i JOIN prospectingleads l ON l.id=i.lead_id
             JOIN outreach_campaigns c ON c.id=i.campaign_id
             WHERE c.business_id=%s AND i.is_human=TRUE
-              AND (%s::text[] IS NULL OR l.id::text=ANY(%s::text[]))
+              AND (%s::text[] IS NULL OR c.id::text=ANY(%s::text[]))
               AND COALESCE(l.intent,'client_outreach')='partnership_outreach'
-            ORDER BY i.occurred_at DESC LIMIT 50""", (business_id, group_ids, group_ids))
+            ORDER BY i.occurred_at DESC LIMIT 50""", (business_id, campaign_ids, campaign_ids))
         legacy_leads = {str(row['lead_id']) for row in reactions}
         reactions.extend(_serialize_timestamp_fields(dict(row)) for row in cur.fetchall() if str(row['lead_id']) not in legacy_leads)
         reactions.sort(key=lambda row: str(row.get('created_at') or ''), reverse=True)

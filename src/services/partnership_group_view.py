@@ -19,6 +19,17 @@ def load_group_scope(cursor, business_id: str, task_id: str) -> dict[str, Any]:
     return row
 
 
+def message_campaign_scope(cursor, business_id: str, task_id: str) -> list[str]:
+    """Resolve reviewed task campaigns; an empty result must remain empty."""
+    from services.outreach_continuation import group_campaign_ids
+
+    group = load_group_scope(cursor, business_id, task_id)
+    return group_campaign_ids(cursor, {
+        "id": str(group["id"]), "business_id": business_id,
+        "state": group.get("result_json") or {},
+    })
+
+
 def group_url(task, section="companies"):
     return f"/dashboard/partnerships?business_id={task['business_id']}&search_task_id={task['id']}&section={section}"
 

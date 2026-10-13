@@ -28,12 +28,12 @@ LocalOS backups for this run: `/opt/seo-app/.release/outreach-acceptance-2026101
 - Web task `a8549889-9e13-4bea-9af0-023496f3a5bc` qualified Holiday Advisor, but reused an old sent campaign. That result is explicitly **not** counted as a fresh draft. The reuse defect was subsequently fixed.
 - Current three-company web task `e361ce95-586a-441f-a167-455805fdb5ed` retained its ID through a native reviewed resume. It reused the original EWS Holidays, Holiday Advisor and Kingdom of Holidays records. OpenClaw source jobs completed; Holiday Advisor and Kingdom of Holidays passed the requirements. EWS lacks sourced evidence of Phuket sales. Three qualification credits were charged; zero search calls occurred.
 - Initial drafting failed because it selected the oldest historical contract. The exact-task fix then exposed a production-only extra function parameter; the merged signature was corrected and verified through the actual container import. No new letter was sent or manually repaired.
-- The next reviewed version permits up to five draft attempts. It remains pending: automatic approval review rejected the attempted start because the preview request said not to start yet. Explicit owner confirmation is requested. Do not start indirectly or claim this pending run passed.
+- The next reviewed version permits up to five draft attempts. The owner explicitly approved this exact draft-only version after the initial approval rejection. The start has not yet been verified: LocalOS HTTPS and server SSH currently time out. Do not claim the approved run passed.
 - Mobile 390 px and desktop 1366 px: input remained visible and no horizontal overflow was observed. Task picker stale-list defect was reproduced; its regression now passes, including a refresh failure.
 
 ## Verification and remaining work
 
-54 focused backend tests pass; changed backend files compile. Task-picker regression passes; three frontend release-guard tests pass. Full application type check is being rerun after correcting the new test's unsupported matcher option. Earlier clean root-config checks were not application type checks.
+57 focused backend tests pass; changed backend files compile. Task-picker regression passes; three frontend release-guard tests pass. Application type check (`tsc --noEmit -p tsconfig.app.json`) passed with exit 0. Earlier clean root-config checks were not application type checks.
 
 The server UI build initially failed because an already declared/locked `@xyflow/react` dependency was not installed. Dependencies are being restored from the existing lockfile; the previous served bundle remains in place until build and release checks pass.
 
@@ -44,3 +44,7 @@ Remaining acceptance:
 3. Review exact new recipients/text/version and obtain separate human send approval before native queue/send tests. Historical receipts and the prior control reply do not establish acceptance for these new letters.
 4. Perform two real native scheduled draft-only runs, 15 minutes apart, then pause and reconcile duplicates/expenses. Existing chat schedule accepts daily/weekly schedules; no interval-schedule implementation or substitute Codex automation is claimed.
 5. Finish served UI/task-picker/browser checks and business-switch recovery. Do not claim full outreach complete while any of the above remain unresolved.
+
+## Additional scoped fix pending deployment
+
+The live Partnerships draft list showed historical sent letters for the same leads while the new task correctly reported zero new letters. List and send snapshot filters now use exact task/campaign ownership instead of shared lead membership. Empty campaign scope remains empty; business/task access is validated first. Regression tests cover exact campaign ownership, empty groups and another business. This patch has not been deployed or browser-verified because HTTPS/SSH connectivity is unavailable. Merge its hunks with live files, preserving production additions, before release.

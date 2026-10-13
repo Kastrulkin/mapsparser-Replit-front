@@ -53,3 +53,33 @@ def test_preview_accepts_task_binding_before_any_generation(monkeypatch):
     assert result['reason_code']=='continuation_audience_review_required'
     contract.assert_called_once()
     assert contract.call_args.kwargs['task_id']=='reviewed-task'
+
+
+def test_group_message_scope_uses_exact_task_campaigns_not_shared_leads():
+    from services.partnership_group_view import message_campaign_scope
+    cursor = Mock()
+    cursor.fetchone.return_value = {'id': 'current-task', 'result_json': {
+        'lead_ids': ['shared-company'], 'campaign_results': {
+            'ws': {'campaign_id': 'current-campaign'}}}, 'payload_json': {}}
+    cursor.fetchall.return_value = [{'campaign_id': 'projected-campaign'}]
+    assert message_campaign_scope(cursor, 'business', 'current-task') == [
+        'current-campaign', 'projected-campaign']
+    assert cursor.execute.call_args_list[0].args[1] == ('current-task', 'business')
+
+
+def test_empty_group_message_scope_does_not_fall_back_to_all_campaigns():
+    from services.partnership_group_view import message_campaign_scope
+    cursor = Mock()
+    cursor.fetchone.return_value = {'id': 'task', 'result_json': {
+        'lead_ids': ['historical-company']}, 'payload_json': {}}
+    cursor.fetchall.return_value = []
+    assert message_campaign_scope(cursor, 'business', 'task') == []
+
+
+def test_message_scope_rejects_task_from_other_business():
+    import pytest
+    from services.partnership_group_view import message_campaign_scope, GroupNotFound
+    cursor = Mock(); cursor.fetchone.return_value = None
+    with pytest.raises(GroupNotFound):
+        message_campaign_scope(cursor, 'other-business', 'task')
+    cursor.fetchall.assert_not_called()

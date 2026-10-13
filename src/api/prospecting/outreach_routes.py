@@ -1943,8 +1943,8 @@ def partnership_list_drafts():
                     group = load_group_scope(cur, business_id, task_id)
                 except GroupNotFound:
                     return jsonify({"error": "search_task_not_found"}), 404
-                query += " AND l.id::text=ANY(%s::text[])"
-                params.append(group['lead_ids'])
+                query += " AND d.learning_note_json->>'search_task_id'=%s"
+                params.append(str(group['id']))
             limit = max(1, min(int(request.args.get('limit') or 200), 500))
             offset = max(0, int(request.args.get('offset') or 0))
             if status_filter:

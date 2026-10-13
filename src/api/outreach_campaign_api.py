@@ -455,6 +455,7 @@ def get_outreach_message_queue():
     requested_channel = str(request.args.get("channel") or "").strip().lower()
     requested_status = str(request.args.get("status") or "").strip().lower()
     search_query = str(request.args.get("q") or "").strip()
+    search_task_id = str(request.args.get("search_task_id") or "").strip()
     try:
         limit = max(1, min(int(request.args.get("limit") or 100), 500))
         offset = max(0, int(request.args.get("offset") or 0))
@@ -466,7 +467,7 @@ def get_outreach_message_queue():
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         is_superadmin = bool(user_data.get("is_superadmin"))
         resolved_business_id = None
-        if requested_business_id or not is_superadmin:
+        if requested_business_id or search_task_id or not is_superadmin:
             resolved_business_id = _resolve_business_for_user(cursor, user_data, requested_business_id)
             if not resolved_business_id:
                 return jsonify({"success": False, "error": "Business access denied"}), 403
@@ -475,6 +476,16 @@ def get_outreach_message_queue():
 
         where_clauses = ["ranked.campaign_rank = 1"]
         params: list[Any] = []
+        if search_task_id:
+            from services.partnership_group_view import GroupNotFound, message_campaign_scope
+            try:
+                campaign_ids = message_campaign_scope(cursor, resolved_business_id, search_task_id)
+            except GroupNotFound:
+                return jsonify({"success": False, "error": "search_task_not_found"}), 404
+            # A selected task owns its campaign versions, including older versions
+            # than another task for the same company. Never fall back to lead IDs.
+            where_clauses = ["ranked.id::text = ANY(%s::text[])"]
+            params.append(campaign_ids)
         if requested_workstream_type:
             where_clauses.append("ranked.workstream_type = %s")
             params.append(requested_workstream_type)
