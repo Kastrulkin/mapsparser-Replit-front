@@ -4088,6 +4088,7 @@ def build_preview(
     manual_reviewer_role: str | None = None,
     manual_review_context: str | None = None,
     preparation_job_id: str | None = None,
+    continuation_task_id: str | None = None,
 ) -> dict[str, Any]:
     context = _apply_sender_mode(_load_context(cursor, workstream_id), sender_mode)
     continuation = None
@@ -4100,7 +4101,7 @@ def build_preview(
                     "reason_code": "draft_preparation_not_authorized"}
     if context.get("continuation_managed") or (context.get("search_payload_json") or {}).get("continuation_id"):
         from services.outreach_continuation import load_workstream_contract
-        continuation = load_workstream_contract(cursor, workstream_id)
+        continuation = load_workstream_contract(cursor, workstream_id, task_id=continuation_task_id)
         if not preparation and (not continuation or not continuation.get("enabled")
                 or continuation.get("status") not in {"running", "queued"}
                 or continuation.get("blocker")

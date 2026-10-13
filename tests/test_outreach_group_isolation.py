@@ -29,3 +29,14 @@ def test_receipts_require_group_campaign_and_business():
 def test_native_draft_batch_campaigns_remain_part_of_group():
     cursor=Mock(); cursor.fetchall.return_value=[{'campaign_id': 'batch-campaign'}]
     assert group_campaign_ids(cursor, {'id':'task','business_id':'b','state':{}})==['batch-campaign']
+
+
+def test_campaign_contract_is_bound_to_current_task_not_first_historical_import(monkeypatch):
+    import services.outreach_continuation as continuation
+    monkeypatch.setattr(continuation, 'continuation_enabled', lambda business: True)
+    cursor=Mock(); cursor.fetchone.return_value={'id':'current-task','status':'running','business_id':'b',
+        'payload_json':{},'result_json':{'qualifications':{'ws':{'status':'qualified'}}}}
+    contract=continuation.load_workstream_contract(cursor,'ws',task_id='current-task')
+    assert contract['qualification']['status']=='qualified'
+    assert contract['task_id']=='current-task'
+    assert cursor.execute.call_args.args[1]==('ws',continuation.KIND,'current-task','current-task')

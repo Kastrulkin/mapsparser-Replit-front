@@ -510,7 +510,14 @@ def control_task(cursor: Any, *, task_id: str, business_id: str, user_id: str,
         for field, statuses in (("qualifications", {"failed"}), ("campaign_results", {"failed", "needs_sender_setup", "observe", "needs_generation", "needs_revision"})):
             values = dict(state.get(field) or {})
             for key, value in list(values.items()):
-                if value.get("status") in statuses:
+                contract_gate = (field == "campaign_results" and value.get("status") == "needs_evidence"
+                    and value.get("reason_code") == "continuation_audience_review_required"
+                    and (state.get("qualifications", {}).get(key) or {}).get("status") == "qualified"
+                    and not value.get("campaign_id") and not value.get("generation_error"))
+                if value.get("status") in statuses or contract_gate:
+                    if contract_gate:
+                        # This gate exits before text generation; its released hold is not a draft attempt.
+                        state["draft_attempts"] = max(0, int(state.get("draft_attempts") or 0) - 1)
                     if field == "campaign_results":
                         state.setdefault("draft_retry_history", []).append({"workstream_id": key, "result": value, "at": datetime.now(timezone.utc).isoformat()})
                     del values[key]
@@ -1202,7 +1209,7 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                     result = {"campaign_id": str(campaign["id"]), "status": str(campaign["status"]) if campaign.get("quality_passed") else "needs_revision"}
                 else:
                     preview = build_preview(cursor, target, sender_mode="partner_business", generate_ai=True,
-                        sequence=[{"sequence_index": 0, "day_offset": 0, "channel": "email", "angle": "business_reputation"}])
+                        continuation_task_id=str(row["id"]), sequence=[{"sequence_index": 0, "day_offset": 0, "channel": "email", "angle": "business_reputation"}])
                     result = {"status": preview.get("status"), "reason_code": preview.get("reason_code"),
                               "reason_codes": (preview.get("decision") or {}).get("reason_codes") or [],
                               "missing": preview.get("missing") or [],
@@ -1367,7 +1374,7 @@ def operator_task(cursor: Any, *, business_id: str, user_id: str, arguments: dic
                 "reason_code": str(exc), "chat_response": question or "Не удалось подготовить условия. Проверьте параметры команды; задача не запущена."}
 
 
-def load_workstream_contract(cursor: Any, workstream_id: str) -> dict[str, Any] | None:
+def load_workstream_contract(cursor: Any, workstream_id: str, *, task_id: str | None = None) -> dict[str, Any] | None:
     """Resolve only the server-created link; browser/model metadata cannot grant it."""
     cursor.execute("""SELECT job.id, job.status, job.business_id, job.payload_json, job.result_json
         FROM lead_workstreams ws JOIN prospectingleads lead ON lead.id=ws.lead_id
@@ -1375,7 +1382,8 @@ def load_workstream_contract(cursor: Any, workstream_id: str) -> dict[str, Any] 
           AND job.result_json->'lead_ids' @> jsonb_build_array(lead.id)
           AND job.result_json->'workstream_ids' @> jsonb_build_array(ws.id)
         WHERE ws.id=%s AND job.kind=%s AND job.business_id=lead.business_id
-        ORDER BY job.created_at LIMIT 1""", (workstream_id, KIND))
+          AND (%s::text IS NULL OR job.id::text=%s)
+        ORDER BY job.created_at DESC LIMIT 1""", (workstream_id, KIND, task_id, task_id))
     row = cursor.fetchone()
     if not row:
         return None
