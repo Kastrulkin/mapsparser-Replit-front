@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import uuid
+from services.outreach_daily_limits import CHANNEL_DAILY_LIMITS, LIMITS_VERSION, sender_daily_limit, author_limits_match
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlparse
@@ -4895,7 +4896,9 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
     campaign_id = str(uuid.uuid4())
     policy = {
         "stop_on_reply": True,
-        "daily_limit": 10,
+        "daily_limit": CHANNEL_DAILY_LIMITS["email"],
+        "channel_daily_limits": dict(CHANNEL_DAILY_LIMITS),
+        "daily_limits_version": LIMITS_VERSION,
         "minimum_cadence_hours": 24,
         "manual_timeout_hours": 48,
         "manual_timeout_action": "needs_attention",
@@ -5336,19 +5339,7 @@ def approve_campaign(
             raise ValueError("riderra_template_authorization_changed")
     if is_localos_author_lane(campaign):
         policy = campaign.get("policy_json") if isinstance(campaign.get("policy_json"), dict) else {}
-        channel_limits = policy.get("channel_daily_limits") if isinstance(policy.get("channel_daily_limits"), dict) else {}
-        try:
-            policy_current = (
-                policy.get("author_policy_version") == AUTHOR_POLICY_VERSION
-                and int(policy.get("daily_limit") or 0) == AUTHOR_DAILY_LIMIT
-                and set(channel_limits) == set(AUTHOR_CHANNEL_DAILY_LIMITS)
-                and all(
-                    int(channel_limits.get(channel) or 0) == limit
-                    for channel, limit in AUTHOR_CHANNEL_DAILY_LIMITS.items()
-                )
-            )
-        except (TypeError, ValueError):
-            policy_current = False
+        policy_current = author_limits_match(policy)
         if not policy_current:
             raise ValueError("Author campaign daily policy is not current")
     if (
@@ -5493,7 +5484,7 @@ def approve_campaign(
             """INSERT INTO outreachsendbatches (
                 id, batch_date, daily_limit, status, created_by, approved_by, created_at, updated_at
             ) VALUES (%s, (NOW() AT TIME ZONE 'Europe/Moscow')::date, %s, 'approved', %s, %s, NOW(), NOW())""",
-            (batch_id, int((campaign.get("policy_json") or {}).get("daily_limit") or 10), user_id, user_id))
+            (batch_id, sender_daily_limit("email", campaign.get("policy_json")), user_id, user_id))
     cursor.execute(
         """
         SELECT t.*, c.lead_id, c.workstream_id, c.sender_profile_id

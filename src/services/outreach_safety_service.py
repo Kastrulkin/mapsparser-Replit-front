@@ -34,13 +34,12 @@ TECHNICAL_CLASSIFICATIONS = {
 SUPPRESSION_CLASSIFICATIONS = {"not_interested", "unsubscribe", "complaint"}
 SENDER_BLOCKING_HEALTH = {"paused", "blocked"}
 
-AUTHOR_DAILY_LIMIT = 200
-AUTHOR_CHANNEL_DAILY_LIMITS = {
-    "email": 150,
-    "telegram": 25,
-    "vk": 25,
-}
-AUTHOR_POLICY_VERSION = "localos-author-daily-v2"
+from services.outreach_daily_limits import (
+    AUTHOR_TOTAL_LIMIT as AUTHOR_DAILY_LIMIT,
+    AUTHOR_CHANNEL_LIMITS as AUTHOR_CHANNEL_DAILY_LIMITS,
+    AUTHOR_LIMITS_VERSION as AUTHOR_POLICY_VERSION,
+    author_limits_match,
+)
 
 PARTNERSHIP_ACTIVE_LIFECYCLES = {"converted"}
 PARTNERSHIP_REPLY_LIFECYCLES = {"replied", "responded"}
@@ -223,28 +222,7 @@ def is_localos_author_lane(item: dict[str, Any]) -> bool:
 
 def _author_policy_reason(item: dict[str, Any]) -> str | None:
     policy = item.get("policy_json") if isinstance(item.get("policy_json"), dict) else {}
-    channel_limits = (
-        policy.get("channel_daily_limits")
-        if isinstance(policy.get("channel_daily_limits"), dict)
-        else {}
-    )
-    try:
-        policy_limit = int(policy.get("daily_limit") or 0)
-        channel_policy_matches = (
-            set(channel_limits) == set(AUTHOR_CHANNEL_DAILY_LIMITS)
-            and all(
-                int(channel_limits.get(channel) or 0) == limit
-                for channel, limit in AUTHOR_CHANNEL_DAILY_LIMITS.items()
-            )
-        )
-    except (TypeError, ValueError):
-        policy_limit = 0
-        channel_policy_matches = False
-    if (
-        str(policy.get("author_policy_version") or "") != AUTHOR_POLICY_VERSION
-        or policy_limit != AUTHOR_DAILY_LIMIT
-        or not channel_policy_matches
-    ):
+    if not author_limits_match(policy):
         return "author_daily_policy_not_approved"
     if not item.get("creator_profile_id"):
         return "author_canonical_profile_missing"
@@ -1365,16 +1343,18 @@ def run_dispatch_preflight(
             return riderra_admission
 
     policy = item.get("policy_json") if isinstance(item.get("policy_json"), dict) else {}
-    daily_limit = max(1, int(policy.get("daily_limit") or 10))
+    from services.outreach_daily_limits import sender_daily_limit
+    daily_limit = sender_daily_limit(item.get("channel"), policy)
     cursor.execute(
         """
         SELECT COUNT(*) AS sent_count
         FROM outreachsendqueue
         WHERE sender_account_id = %s
+          AND channel = %s
           AND sent_at >= CURRENT_DATE
           AND delivery_status IN ('sent', 'delivered')
         """,
-        (item.get("sender_account_id"),),
+        (item.get("sender_account_id"), item.get("channel")),
     )
     sent_today_row = _dict(cursor.fetchone())
     if int(sent_today_row.get("sent_count") or 0) >= daily_limit:
