@@ -141,6 +141,8 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(shortage_only, bool):
         raise ValueError("invalid_start_condition")
     language = str(raw.get("language") or "en").lower().strip()
+    language = {"english": "en", "английский": "en", "английском": "en",
+                "russian": "ru", "русский": "ru", "русском": "ru"}.get(language, language)
     if not re.fullmatch(r"[a-z]{2,3}(?:-[a-z]{4})?", language):
         raise ValueError("invalid_language")
     result: dict[str, Any] = {"riderra_shortage_only": shortage_only, "evidence_terms": [term.strip() for term in terms], "language": language, "version": CONFIG_VERSION, "audience": audience,
@@ -1350,12 +1352,13 @@ def operator_task(cursor: Any, *, business_id: str, user_id: str, arguments: dic
     except ValueError as exc:
         questions = {
             "letter_language_required": "На каком языке подготовить письмо?",
+            "invalid_language": "Укажите язык письма: например, английский (en) или русский (ru).",
             "audience_and_offer_required": "Кого ищем и какое предложение нужно включить в письмо?",
             "public_source_url_required": "Пришлите публичную ссылку на сайт компании без логина и пароля.",
         }
         question = questions.get(str(exc))
         return {"status": "clarification_required" if question else "validation_error",
-                "reason_code": str(exc), **({"chat_response": question} if question else {})}
+                "reason_code": str(exc), "chat_response": question or "Не удалось подготовить условия. Проверьте параметры команды; задача не запущена."}
 
 
 def load_workstream_contract(cursor: Any, workstream_id: str) -> dict[str, Any] | None:

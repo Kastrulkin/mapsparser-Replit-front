@@ -169,3 +169,18 @@ def test_tavily_null_limit_requires_explicit_paygo_attestation(monkeypatch):
     account['paygo_limit']=10
     with pytest.raises(RuntimeError,match='free_plan_unverified'):search._tavily('test',3)
     assert post.call_count==1
+
+
+@pytest.mark.parametrize('label', ['English', 'английском', 'английский', 'en'])
+def test_chat_language_labels_share_the_same_review_version(label):
+    assert config_hash(normalize_config(source_config(language=label))) == config_hash(normalize_config(source_config(language='en')))
+
+
+def test_invalid_language_explains_error_and_does_not_claim_success():
+    from services.outreach_continuation import operator_task
+    result = operator_task(Mock(), business_id='b', user_id='u', actor_context={},
+        arguments={'operation':'preview', 'config':source_config(language='???')})
+    assert result['status'] == 'clarification_required'
+    assert result['reason_code'] == 'invalid_language'
+    assert 'язык' in result['chat_response']
+    assert 'Данные получены' not in result['chat_response']
