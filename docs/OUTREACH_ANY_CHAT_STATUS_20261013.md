@@ -126,3 +126,9 @@ After the dispatch fix the native Telegram request reached `partnerships.send_re
 ### Real Telegram send preview, 19:40 Moscow
 
 Owner selected Riderra using the native business switcher. The real Telegram command `Покажи просмотр отправки задачи d4b43860-d176-41f9-8085-462f962f39f3` returned the canonical Dook recipient, sender, subject, full text, source, and separate approval notice. Screenshot saved at `/private/tmp/localos-dook-send-review.png` during acceptance. No message generation, provider call, or queue approval was performed by this check. Owner approval of this exact first email is pending. Native button clicking/scrolling still returns `noWindowsAvailable`; text-entry accessibility and screenshot observation work.
+
+### Owner-confirmed Dook queue and dispatch failure
+
+Owner separately approved the exact 19:40 Dook text to sales@dooktravels.com from riderracs@gmail.com, then pressed native Telegram confirmation. Telegram returned `В очереди: 1`; native queue ID `6ca4718e-5131-4c3f-85e3-798671d61b46` exists once for campaign `2dc6bd08-5df1-4f8c-838c-01cd6f772aea`. No provider receipt was present at the first check.
+
+The enabled existing dispatcher repeatedly failed with `DBCursorWrapper object does not support the context manager protocol`: current worker uses a cursor scope while the wrapper did not implement special context methods. Two minimal regression tests reproduced the same TypeError. Added cursor context delegation preserving wrapped rows, driver cursor closure and unsuppressed exceptions; does not commit or roll back the connection. Targeted suite: 127 passed. Applied only those methods onto the fresh production file after a guarded backup, preserving unrelated current changes, and restarted the existing worker. Waiting for the same queue record to progress; no new queue or forced provider call.

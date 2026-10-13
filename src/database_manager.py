@@ -42,6 +42,13 @@ class DBCursorWrapper:
     def __init__(self, cursor):
         self.cursor = cursor
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        # Preserve the driver's close/exception semantics, never commit here.
+        return self.cursor.__exit__(exc_type, exc_value, traceback)
+
     def execute(self, query, params=None):
         normalized_params = params
         if isinstance(params, list):
