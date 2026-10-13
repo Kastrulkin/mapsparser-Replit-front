@@ -2712,7 +2712,10 @@ def claim_next_enrichment_job(cursor, *, reviewed_sources_only: bool = False) ->
           AND (NOT %s OR EXISTS (
               SELECT 1 FROM operator_async_jobs parent
               WHERE parent.kind='outreach_continue' AND parent.status IN ('queued','running')
-                AND parent.result_json->'source_research_job_ids' @> jsonb_build_array(job.id::text)))
+                AND (parent.result_json->'source_research_job_ids' @> jsonb_build_array(job.id::text)
+                     OR (parent.payload_json->'source_urls' IS NULL
+                         AND parent.result_json->'workstream_ids' @> jsonb_build_array(job.workstream_id::text)
+                         AND job.created_at>=parent.created_at))))
           AND NOT EXISTS (
               SELECT 1 FROM operator_async_jobs parent
               WHERE parent.kind='outreach_continue'
