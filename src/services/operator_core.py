@@ -2121,6 +2121,12 @@ def route_operator_message(
         from services.outreach_continuation import operator_task
         result = operator_task(cursor, business_id=business_id, user_id=user_id,
             arguments={'operation': 'review_send', 'task_ids': task_ids}, actor_context=actor_context)
+        if not result.get('chat_response') and result.get('status') in {'blocked', 'denied'}:
+            reasons = set(result.get('blocked_reasons') or []) | {result.get('reason_code')}
+            explanation = ('Для просмотра отправки нужен доступ к партнёрствам выбранного бизнеса.' if 'payment_required' in reasons else
+                'Нет прав на согласование писем этого бизнеса.' if 'access_denied' in reasons or 'direct_session_required' in reasons else
+                'Просмотр отправки недоступен в выбранном бизнесе. Откройте «Сменить бизнес», выберите бизнес этой задачи и повторите просмотр.')
+            result = {**result, 'chat_response': explanation + ' Ничего не отправлено.'}
         return standardize_operator_result(result, 'partnerships.send_review'), {}
     tool_loop_active = _operator_tool_loop_enabled() or tool_planner is not None
     run_refresh = refresh_handler or refresh_reviews_from_operator

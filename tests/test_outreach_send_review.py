@@ -114,5 +114,6 @@ def test_explicit_review_replaces_unfinished_other_task_before_any_ai_router(mon
         message='Для Riderra подготовь просмотр отправки задачи d4b43860-d176-41f9-8085-462f962f39f3.',channel='telegram',
         pending_context={'capability':'settings.profile.clarification'},actor_context={'user_id':'u'})
     assert result['blocked_reasons']==['search_task_not_found'] and pending=={}
+    assert 'Сменить бизнес' in result['chat_response'] and 'Ничего не отправлено' in result['chat_response']
     assert action.call_args.kwargs['business_id']=='other-business'
     assert action.call_args.kwargs['arguments']['task_ids']==['d4b43860-d176-41f9-8085-462f962f39f3']
