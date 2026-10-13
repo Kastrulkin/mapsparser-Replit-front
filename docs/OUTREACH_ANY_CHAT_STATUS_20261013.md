@@ -33,7 +33,7 @@ LocalOS backups for this run: `/opt/seo-app/.release/outreach-acceptance-2026101
 
 ## Verification and remaining work
 
-61 focused backend tests pass; changed backend files compile. Task-picker regression passes; three frontend release-guard tests pass. Application type check (`tsc --noEmit -p tsconfig.app.json`) passed with exit 0. Earlier clean root-config checks were not application type checks.
+62 focused backend tests pass; changed backend files compile. Task-picker regression passes; three frontend release-guard tests pass. Application type check (`tsc --noEmit -p tsconfig.app.json`) passed with exit 0. Earlier clean root-config checks were not application type checks.
 
 The server UI build initially failed because an already declared/locked `@xyflow/react` dependency was not installed. Dependencies are being restored from the existing lockfile; the previous served bundle remains in place until build and release checks pass.
 
@@ -48,3 +48,11 @@ Remaining acceptance:
 ## Additional scoped fix pending deployment
 
 The live Partnerships draft list showed historical sent letters for the same leads while the new task correctly reported zero new letters. List and send snapshot filters now use exact task/campaign ownership instead of shared lead membership. Empty campaign scope remains empty; business/task access is validated first. Regression tests cover exact campaign ownership, empty groups and another business. This patch has not been deployed or browser-verified because HTTPS/SSH connectivity is unavailable. Merge its hunks with live files, preserving production additions, before release.
+
+## After owner reboot, 13 October 2026
+
+Direct SSH restored and application, both workers, Telegram, PostgreSQL and Redis were running. Group-list fix merged with live additions and installed with backup `group-list-before.tgz`. Chat status now returns real counts, expenses, reason and task-specific link; regression passes and patch is installed with `chat-status-before.tgz`.
+
+The staged UI assets had already been written before the interrupted compression report. Active navigation and JS/CSS dependency checks passed; assets were copied first, index atomically last, older chunks retained. `/dashboard/operator` actually returns `index-Deg9xrk_.js`, verified within the actual app container. Public `/` has its separate bundle and must not be used as proof of the dashboard revision. Browser pass remains pending: HTTPS from the workstation times out although server-side HTTPS and direct SSH work.
+
+Telegram status request reached the existing e361 task and reproduced a label-only response; fixed subsequently. Further Telegram interaction stopped when the owner switched to another chat. No fresh draft run or external email was started. Approval for the same reviewed draft-only version remains valid. Prior kernel journal contains memory-pressure messages; this is evidence of resource pressure, not proof that this UI build caused the outage. Do not repeat a heavy server build during live task execution.
