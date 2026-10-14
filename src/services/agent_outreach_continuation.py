@@ -72,6 +72,28 @@ def parent_current(cursor,row):
     return parent_state(cursor,row)=='active'
 
 
+def resume_completed_preparation(cursor, *, row, user_id):
+    """Owner-confirmed recovery of a completed draft stage, never a new run."""
+    state = row.get('result_json') or {}
+    if row.get('user_id') != user_id or row.get('payload_json', {}).get('mode') != 'prepare_only':
+        raise ValueError('draft_recovery_owner_required')
+    cursor.execute('''SELECT r.id,r.blueprint_id FROM agent_runs r
+        JOIN agent_run_steps s ON s.run_id=r.id
+        JOIN agent_blueprints b ON b.id=r.blueprint_id
+        WHERE r.id=%s AND r.business_id=%s AND r.created_by_user_id=%s
+          AND r.status='completed' AND s.id=%s AND s.status='completed'
+          AND s.output_json->>'job_id'=%s AND b.status='active'
+          AND b.metadata_json->>'active_version_id'=r.blueprint_version_id::text
+        FOR UPDATE OF r,s,b''',
+        (state.get('agent_run_id'),row['business_id'],user_id,state.get('agent_step_id'),str(row['id'])))
+    if not cursor.fetchone():
+        raise ValueError('draft_recovery_parent_changed_or_paused')
+    cursor.execute("UPDATE agent_run_steps SET status='waiting_provider',completed_at=NULL WHERE id=%s AND run_id=%s",
+                   (state['agent_step_id'],state['agent_run_id']))
+    cursor.execute("UPDATE agent_runs SET status='waiting_provider',completed_at=NULL,lease_token=NULL,updated_at=NOW() WHERE id=%s",
+                   (state['agent_run_id'],))
+
+
 def terminate(cursor, row, *, reason, superseded=False):
     state=row.get('result_json') or {}
     if not state.get('agent_run_id'):return

@@ -52,3 +52,17 @@ The bounded schedule projection no longer invents tomorrow's run after today's l
 Telegram parity remains unverified in this session; a request to open the LocalOS chat is pending. Full outreach acceptance is still open.
 
 Final targeted suite: **58 passed**. After reload, automation UI correctly says “Автоматические запуски приостановлены”, but its prominent badge still says “Работает” despite persisted `paused`. This residual frontend status-priority defect is not claimed fixed; avoid replacing the current neighbour-owned UI bundle from an older checkout.
+
+## Corrected-query acceptance run (v3, 14 October)
+
+Owner approved one run, execution cap 10 credits; total execution cap 17 including the two earlier scheduled runs. Version `552e2e4a-9553-46f9-ade5-3f8916de7a43`, parent run `9d93733e-1a4b-41cf-b355-89c38d2f3f83`, continuation `49fd9bf6-84e6-48dc-bb8a-7f4ce314b309`.
+
+- English Delhi/Mumbai queries returned six new candidates. Execution charged six credits (one search, four checks, one saved draft); combined execution thirteen credits. Operator command/planning charges are separate and must not be presented as included in execution costs.
+- A completed preparation stopped at the qualification budget before drafting an already qualified company. Fixed the branch and added tightly scoped recovery of the same completed preparation parent/step, within its original limits, owner, business and active version. No new run/search, budget reset or external send. Native chat retry and confirmation resumed that same task.
+- The generated NETTOURS draft failed quality checks (`WEAK_OFFER_BRIDGE`, `MULTIPLE_CTA`). It is not a ready letter.
+- More seriously, the model incorrectly accepted “Outbound Tours from India” / South East Asia as proof of the mandatory Phuket condition. The cited fact contains no Phuket. Added a necessary source guard for explicit capitalized names inside mandatory requirements, including transliteration normalization, to reject this case. Applied it both to new qualifications and read-time eligibility/letter contracts/send review of stored qualifications; original model audit records are preserved.
+- This guard is conservative and is not complete semantic entailment or entity resolution. It does not prove suitability merely because a name appears; unrecognized translations/inflections may remain unverified. Lowercase names, implicit requirements and negative/contradictory evidence still require broader qualification validation. Do not describe this as a universal solved qualification system.
+- Paused test automation through the web chat after the run. No send was performed. No additional paid search/check/generation was started after detecting unsupported evidence.
+- Free previews of paused automations now remain claimable by the native queue; paid runs of paused or archived automations remain blocked. Regression tests cover the actual claim predicate.
+
+Acceptance remains open: corrected prospecting must produce genuinely evidenced companies and quality drafts, Telegram parity must be verified on the actual current result, and same-group incoming replies remain unproven. Two autonomous scheduled executions and deduplication passed earlier; that does not establish prospecting success.

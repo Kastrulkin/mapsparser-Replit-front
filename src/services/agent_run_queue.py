@@ -358,7 +358,9 @@ def claim_next_agent_run(cursor: Any) -> dict[str, Any] | None:
                OR (status = 'retry_wait' AND COALESCE(next_attempt_at, NOW()) <= NOW()))
               AND EXISTS (SELECT 1 FROM agent_blueprints blueprint
                           WHERE blueprint.id = agent_runs.blueprint_id
-                            AND blueprint.status IN ('active','draft'))
+                            AND (blueprint.status IN ('active','draft')
+                                 OR (blueprint.status = 'paused'
+                                     AND agent_runs.input_json->>'preview_mode' = 'true')))
             ORDER BY COALESCE(next_attempt_at, queued_at, updated_at) ASC
             FOR UPDATE SKIP LOCKED
             LIMIT 1

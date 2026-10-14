@@ -30,7 +30,7 @@ def load_review(cursor, *, business_id, user_id, task_ids, lock=False):
     from services.operator_audio import authorize_actor
     from services.outreach_safety_service import approval_snapshot_hash
     actor, _ = authorize_actor(cursor, user_id, business_id)
-    from services.outreach_continuation import actor_can_write
+    from services.outreach_continuation import actor_can_write, qualified_contact_ids
     if not actor_can_write(cursor, business_id, {**actor, 'user_id': user_id}):
         raise PermissionError('send_review_access_denied')
     ids = sorted(set(str(value) for value in task_ids))
@@ -53,7 +53,7 @@ def load_review(cursor, *, business_id, user_id, task_ids, lock=False):
             if not value.get('campaign_id'):
                 continue
             if (value.get('status') != 'ready' or ws_id not in contacts or
-                    (state.get('qualifications', {}).get(ws_id) or {}).get('status') != 'qualified'):
+                    ws_id not in qualified_contact_ids(state)):
                 raise ValueError('letters_need_review')
             campaigns.append(str(value['campaign_id']))
     campaigns = sorted(set(campaigns))

@@ -286,10 +286,46 @@ def prepare_revision_approval(cursor, *, business_id, task_id, raw, request_id="
     return preview
 
 
+def named_requirement_supported(label: str, evidence: dict[str, Any]) -> bool:
+    """A necessary source check, never sufficient proof of suitability.
+
+    Explicit names inside a mandatory condition must occur in the cited fact.
+    Keep missing/translated names unverified rather than infer a specific product
+    or place from a broader category. This does not perform entity resolution.
+    """
+    words = list(re.finditer(r"[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_-]*", label))
+    names = [m.group() for index, m in enumerate(words)
+             if index > 0 and m.group()[0].isupper() and len(m.group()) >= 3]
+    if not names:
+        return True
+    text = str((evidence or {}).get('fact') or (evidence or {}).get('observation') or '')
+    from services.prospecting_service import ProspectingService
+    def normalize(value):
+        # Common transliteration variants, applied symmetrically; no place list.
+        return ProspectingService._transliterate_ru_to_latin(value).replace('kh', 'h')
+    tokens = set(normalize(text).split())
+    return all(normalize(name) in tokens for name in names)
+
+
+def effective_qualification(value: dict[str, Any]) -> dict[str, Any]:
+    """Recheck stored proofs without rewriting the original model audit record."""
+    criteria = value.get('criteria') or {}
+    invalid = [key for key, item in criteria.items()
+               if key.startswith('requirement_') and item.get('status') == 'verified'
+               and not named_requirement_supported(str(item.get('label') or ''), item.get('evidence') or {})]
+    if not invalid:
+        return value
+    updated = dict(criteria)
+    for key in invalid:
+        updated[key] = {**criteria[key], 'status': 'not_verified', 'reason': 'named_requirement_missing_from_source'}
+    return {**value, 'criteria': updated, 'status': 'needs_evidence',
+            'reason': 'named_requirement_missing_from_source'}
+
+
 def qualified_contact_ids(state: dict[str, Any]) -> list[str]:
     contacts = set(state.get("verified_contact_workstream_ids") or [])
     return [key for key, value in (state.get("qualifications") or {}).items()
-            if value.get("status") == "qualified" and key in contacts]
+            if effective_qualification(value).get("status") == "qualified" and key in contacts]
 
 
 def preparation_report(config: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
@@ -493,6 +529,13 @@ def retry_source_evidence(config, state):
     return True
 
 
+def remaining_qualified_drafts(config, state):
+    if config.get('mode') != 'prepare_only' or int(state.get('draft_attempts', 0)) >= config['max_draft_attempts']:
+        return []
+    return [value for value in qualified_contact_ids(state)[:config.get('target_count')]
+            if value not in (state.get('campaign_results') or {})]
+
+
 def control_task(cursor: Any, *, task_id: str, business_id: str, user_id: str,
                  action: str, revision: str, display_name: str = "") -> dict[str, Any]:
     if action not in {"start", "pause", "resume", "stop", "acknowledge_search", "retry_failed", "use_shared_balance", "rename", "resume_letters"}:
@@ -551,6 +594,13 @@ def control_task(cursor: Any, *, task_id: str, business_id: str, user_id: str,
         if row["status"] in {"running", "queued"}:
             raise ValueError("pause_before_retry")
         changed = retry_source_evidence(row['payload_json'], state)
+        if (row['status'] == 'completed' and state.get('phase') == 'prepare'
+                and state.get('blocker') in {'model_budget_exhausted', 'sources_or_budget_exhausted'}
+                and remaining_qualified_drafts(row['payload_json'], state)):
+            # Recover only the already reviewed draft stage. Checks, search
+            # calls, evidence and all consumed budgets remain unchanged.
+            changed = True
+            state['draft_recovery_pending'] = True
         for field, statuses in (("qualifications", {"failed"}), ("campaign_results", {"failed", "needs_sender_setup", "observe", "needs_generation", "needs_revision"})):
             values = dict(state.get(field) or {})
             for key, value in list(values.items()):
@@ -599,6 +649,13 @@ def control_task(cursor: Any, *, task_id: str, business_id: str, user_id: str,
             raise ValueError("search_result_uncertain_review_required")
         if state.get("search_calls", 0) >= row["payload_json"]["max_search_calls"] and state.get("phase") == "search":
             raise ValueError("search_budget_exhausted")
+        if state.get('draft_recovery_pending'):
+            if not remaining_qualified_drafts(row['payload_json'], state):
+                raise ValueError('no_remaining_qualified_drafts')
+            if state.get('agent_run_id'):
+                from services.agent_outreach_continuation import resume_completed_preparation
+                resume_completed_preparation(cursor, row=row, user_id=user_id)
+            state.pop('draft_recovery_pending', None)
         if row['payload_json'].get('mode') == 'auto_send':
             from services.outreach_ai_authorization import for_job
             grant = for_job(cursor,row,require_running=False)
@@ -1131,7 +1188,7 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
             pending = [entry for entry in entries if str(entry["id"]) not in (state.get("qualifications") or {})
                        and entry.get("enrichment_status") not in {"queued", "collecting", "verifying", "researching", "drafting", "retry_wait", "running"}]
             goal_reached = config.get("target_count") is not None and len(qualified_contact_ids(state)) >= config["target_count"]
-            if pending and not goal_reached:
+            if pending and not goal_reached and int(state.get("llm_calls", 0)) < config["max_qualification_calls"]:
                 target = str(pending[0]["id"])
                 cursor.execute("SELECT evidence_json FROM lead_workstream_research WHERE workstream_id=%s ORDER BY researched_at DESC LIMIT 1", (target,))
                 research = cursor.fetchone() or {}
@@ -1457,7 +1514,7 @@ def load_workstream_contract(cursor: Any, workstream_id: str, *, task_id: str | 
         return None
     state = row["result_json"] or {}
     return {"task_id": row["id"], "status": row["status"], "config": row["payload_json"],
-            "qualification": (state.get("qualifications") or {}).get(str(workstream_id)),
+            "qualification": effective_qualification((state.get("qualifications") or {}).get(str(workstream_id)) or {}),
             "blocker": state.get("blocker"), "enabled": continuation_enabled(str(row["business_id"]))}
 
 
@@ -1507,6 +1564,7 @@ def qualify_audience(config: dict[str, Any], evidence: list[dict[str, Any]], *, 
         'Evaluate the audience using all supplied facts together. Do not require one sentence to repeat the entire audience label. '
         'If audience wording repeats geography or product requirements, evaluate those in their separate criteria; the audience criterion identifies the kind of prospect. '
         'Geography matches when evidence locates the company in at least one of the specified places. '
+        'A broad region or generic outbound service does not prove a named destination or product. If the named condition is absent from the cited fact, return matches false. '
         'For generic_conditions return criteria keyed by condition id, each with matches, evidence_id and exact quote. '
         'Return JSON only: {"criteria":{},"matches":boolean,"country":{"matches":boolean,"evidence_id":string,"quote":string},'
         '"destination":{"matches":boolean,"evidence_id":string,"quote":string},"reason":string}. '
@@ -1529,6 +1587,9 @@ def qualify_audience(config: dict[str, Any], evidence: list[dict[str, Any]], *, 
         quote = safe.restore(str(answer.get("quote") or ""))
         if not selected or len(quote) < 12 or quote not in selected["fact"]:
             return {"status": "not_verified"}
+        condition = next((item["text"] for item in generic_conditions if item["id"] == name), "")
+        if name.startswith("requirement_") and not named_requirement_supported(condition, selected):
+            return {"status": "not_verified", "reason": "named_requirement_missing_from_source"}
         return {"status": "verified", "evidence_id": selected["id"], "quote": quote,
                 "source_url": selected["source_url"], "evidence": selected}
     criteria = {
