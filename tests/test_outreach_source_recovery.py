@@ -188,3 +188,15 @@ def test_evidence_retry_cannot_expand_exhausted_or_non_source_search():
     with pytest.raises(ValueError, match='qualification_budget_exhausted'):
         retry_source_evidence({'source_urls': ['https://example.org/'], 'max_qualification_calls': 4}, state)
     assert state['qualifications']['missing']['status'] == 'needs_evidence'
+
+
+def test_exact_reviewed_source_disambiguates_historical_same_domain_rows():
+    from services.outreach_continuation import select_source_company
+    old={'id':'old','name':'Agency','website':'https://agency.example/', 'source_url':'https://agency.example/about'}
+    reviewed={'id':'reviewed','name':'Agency service page','website':'https://agency.example/',
+              'source_url':'https://agency.example/phuket/'}
+    assert select_source_company([old,reviewed],'https://www.agency.example/phuket') is reviewed
+    with pytest.raises(ValueError,match='ambiguous_existing_company'):
+        select_source_company([reviewed,{**reviewed,'id':'duplicate'}],'https://agency.example/phuket')
+    with pytest.raises(ValueError,match='ambiguous_existing_company'):
+        select_source_company([old,reviewed],'https://agency.example/unreviewed')

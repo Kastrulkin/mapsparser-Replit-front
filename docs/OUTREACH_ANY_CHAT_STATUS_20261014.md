@@ -85,3 +85,11 @@ Reproduced and fixed:
 - Same-site page selection could choose About in place of Contact. Contact links now take priority; About remains fallback. Three-page bound and public-address restrictions preserved; fixture confirms sourced email retrieval.
 
 A separate read-only HTML diagnostic (no API/model/CRM writes or LocalOS charges) found contactus@dpauls.com on the reviewed DPauls page and Care@easemytrip.com on the reviewed EaseMyTrip page after the contact-page fix. Thomas Cook contact page exposed Forex/franchise/complaints mailboxes; these are not accepted as relevant partner contacts. These diagnostics have not been promoted into qualified CRM records or drafts. Requalification and native generation require explicit approval because the six-check run allowance is exhausted.
+
+## Approved remaining five credits: two saved sources
+
+Owner explicitly approved a separate DPauls/EaseMyTrip source-only preparation within the remaining five credits (two checks, two possible drafts, one command; combined cap fifteen). Web chat created task `9064a05d-4762-4410-aefb-99a408440a65`; both source URLs, requirements, language en, max_qualification_calls=2 and max_draft_attempts=2 were verified in the actual server approval envelope. Initial import stopped with `ambiguous_existing_company` before any execution charge because historical root and specific-page records shared a domain.
+
+Fixed `select_source_company` to prefer a single exact reviewed source/website page (same host, exact path/query, trailing slash normalized), while preserving the unique named-company fallback for historical domain stubs. Multiple named exact records still fail closed. The import query now loads source_url. Regression tests cover exact-page reuse, unresolved ambiguity, and existing stub compatibility. Deployed with fresh-file comparison and backup. Read-only live probe resolves the two exact existing IDs; no company row was merged or deleted.
+
+Resumed the same task via native web-chat confirmation with unchanged limits. The resume command was uncharged; no new search or second task was created. Final outcome still requires verification.

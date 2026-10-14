@@ -1842,6 +1842,18 @@ def select_source_company(existing, url):
     from urllib.parse import urlsplit
     if len(existing) <= 1:
         return existing[0] if existing else None
+    requested = urlsplit(url)
+    def exact_page(value):
+        from services.openclaw_website_research import same_website
+        if not value or not same_website(str(value), url):
+            return False
+        candidate = urlsplit(str(value))
+        return (candidate.path.rstrip('/'), candidate.query) == (requested.path.rstrip('/'), requested.query)
+    exact = [item for item in existing if any(exact_page(item.get(key)) for key in ('source_url', 'website'))]
+    if len(exact) == 1:
+        return exact[0]
+    if exact:
+        existing = exact
     hostname = str(urlsplit(url).hostname or '').casefold().removeprefix('www.')
     named = [item for item in existing
              if str(item.get('name') or '').strip().casefold().removeprefix('www.') != hostname]
@@ -1857,7 +1869,7 @@ def import_source_urls(cursor, row, config, state):
     lead_ids, workstreams = list(state.get("lead_ids") or []), list(state.get("workstream_ids") or [])
     for url in config["source_urls"]:
         from services.openclaw_website_research import same_website
-        cursor.execute("""SELECT id, name, website FROM prospectingleads
+        cursor.execute("""SELECT id, name, website, source_url FROM prospectingleads
             WHERE business_id=%s AND COALESCE(intent,'client_outreach')='partnership_outreach'
               AND website IS NOT NULL""", (row["business_id"],))
         existing = [dict(item) for item in cursor.fetchall() if same_website(str(item["website"]), url)]
