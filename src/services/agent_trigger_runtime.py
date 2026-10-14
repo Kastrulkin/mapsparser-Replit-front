@@ -514,6 +514,17 @@ def _schedule_context(
         local_now = now.astimezone(ZoneInfo(timezone_name))
     except (ValueError, ZoneInfoNotFoundError):
         return {"ready": False, "reason": "schedule_timezone_invalid"}
+    if schedule.get('times') is not None:
+        from services.agent_schedule_contract import apply_schedule, ScheduleError
+        try:
+            bounded = apply_schedule({'trigger': version.get('trigger') or 'schedule.daily', 'schedule': schedule}, {})['schedule']
+        except ScheduleError:
+            return {'ready': False, 'reason': 'schedule_times_invalid'}
+        if local_now.date().isoformat() != bounded['date']:
+            return {'ready': True, 'due': False, 'reason': 'schedule_date_not_due'}
+        current_time = local_now.strftime('%H:%M')
+        due_times = [value for value in bounded['times'] if value <= current_time]
+        schedule_time = due_times[-1] if due_times else bounded['times'][0]
     parsed_time = _parse_schedule_time(schedule_time)
     if not parsed_time:
         return {"ready": False, "reason": "schedule_time_invalid"}

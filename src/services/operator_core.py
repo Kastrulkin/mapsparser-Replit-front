@@ -1524,7 +1524,7 @@ def _operator_tool_catalog(
                 "schedule": {"type": "object", "properties": {
                     "time": {"type": "string"}, "timezone": {"type": "string"},
                     "trigger": {"type": "string", "enum": ["schedule.daily", "schedule.weekly"]},
-                    "weekday": {"type": "integer", "minimum": 0, "maximum": 6}}}
+                    "weekday": {"type": "integer", "minimum": 0, "maximum": 6}, "times": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 2}, "date": {"type": "string", "description": "Дата ограниченных запусков ГГГГ-ММ-ДД; times — один или два момента в этот день"}}}
             }, "required": ["operation"]},
             "risk_class": "write_internal", "approval_required": False, "required_permission": "business.write",
             "deterministic_response": True,
@@ -1538,7 +1538,7 @@ def _operator_tool_catalog(
                 "name": {"type": "string", "maxLength": 160}, "description": {"type": "string", "minLength": 8, "maxLength": 4000},
                 "category": {"type": "string", "maxLength": 80}, "execution_mode": {"type": "string", "enum": ["one_off", "manual", "scheduled"]},
                 "schedule_time": {"type": "string"}, "schedule_timezone": {"type": "string"},
-                "schedule": {"type": "object", "properties": {"trigger": {"type": "string", "enum": ["schedule.daily", "schedule.weekly"]}, "time": {"type": "string"}, "timezone": {"type": "string"}, "weekday": {"type": "integer", "minimum": 0, "maximum": 6}}},
+                "schedule": {"type": "object", "properties": {"trigger": {"type": "string", "enum": ["schedule.daily", "schedule.weekly"]}, "time": {"type": "string"}, "timezone": {"type": "string"}, "weekday": {"type": "integer", "minimum": 0, "maximum": 6}, "times": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 2}, "date": {"type": "string", "description": "Дата ограниченных запусков ГГГГ-ММ-ДД; times — один или два момента в этот день"}}},
                 "outreach_config": {"type": "object", "description": "Для повторяющегося аутрича: audience, queries [{query,city}], target_count, agency_country, sold_destination, offer, language, mode find_only/prepare_only/auto_send, search_budget_cents, max_search_calls, max_candidates, max_qualification_calls, max_draft_attempts. Условия будут показаны до согласования. auto_send требует отдельного разрешения outreach.ai_rules на активную версию."},
                 "selected_connection_bindings": {"type": "object"}, "selected_provider_routes": {"type": "object"},
                 "accepted_provider_routes": {"type": "boolean"}, "clone_from_blueprint_id": {"type": "string"}},

@@ -269,12 +269,27 @@ def _load_non_author_queue_candidates(
         conn.close()
 
 
+def partition_reply_scopes(primary_addresses, ordinary_candidates):
+    ordinary_addresses = normalize_recipient_scope([
+        str(item.get("recipient_value") or "") for item in ordinary_candidates]) if ordinary_candidates else []
+    overlap = set(primary_addresses).intersection(ordinary_addresses)
+    return ([address for address in ordinary_addresses if address not in overlap],
+            [item for item in ordinary_candidates if normalize_email(item.get("recipient_value")) in overlap])
+
+
 def _match_queue_item(reply: dict[str, Any], candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
+    direct = str(reply.get("in_reply_to") or "").strip().lower()
+    direct_matches = [item for item in candidates if direct and
+        str(item.get("provider_message_id") or "").strip().lower() == direct]
+    if len(direct_matches) == 1:
+        return direct_matches[0]
     references = _reference_tokens(reply)
-    for candidate in candidates:
-        message_id = str(candidate.get("provider_message_id") or "").strip().lower()
-        if message_id and message_id in references:
-            return candidate
+    referenced = [item for item in candidates if item.get("provider_message_id") and
+        str(item["provider_message_id"]).strip().lower() in references]
+    if len(referenced) == 1:
+        return referenced[0]
+    if direct_matches or referenced:
+        return None
     from_email = normalize_email(reply.get("from_email"))
     dsn_recipients = {
         normalize_email(value)
@@ -283,6 +298,7 @@ def _match_queue_item(reply: dict[str, Any], candidates: list[dict[str, Any]]) -
     }
     occurred_at = reply.get("occurred_at")
     body_lower = str(reply.get("body") or "").lower()
+    matched = []
     for candidate in candidates:
         recipient = normalize_email(candidate.get("recipient_value"))
         sent_at = candidate.get("sent_at")
@@ -293,8 +309,8 @@ def _match_queue_item(reply: dict[str, Any], candidates: list[dict[str, Any]]) -
             or recipient in dsn_recipients
             or recipient in body_lower
         ):
-            return candidate
-    return None
+            matched.append(candidate)
+    return matched[0] if len(matched) == 1 else None
 
 
 def _sync_known_email_threads(
@@ -817,19 +833,10 @@ def sync_email_replies(
                 str(candidate.get("recipient_value") or "")
                 for candidate in scope_candidates
             ])
-            non_author_recipient_emails = (
-                normalize_recipient_scope([
-                    str(candidate.get("recipient_value") or "")
-                    for candidate in non_author_candidates
-                ])
-                if non_author_candidates
-                else []
-            )
-            if set(recipient_emails).intersection(non_author_recipient_emails):
-                raise EmailAdapterError(
-                    "email_reply_sync_recipient_scope_overlap",
-                    "One recipient belongs to both author and non-author reply scopes",
-                )
+            # Shared addresses are fetched once and resolved across both native
+            # lanes by message references; an overlap alone is not an outage.
+            non_author_recipient_emails, overlap_candidates = partition_reply_scopes(
+                recipient_emails, non_author_candidates)
             remaining_message_limit = configured_complete_limit
             scoped_messages: list[dict[str, Any]] = []
             for mailbox_role in COMPLETE_REPLY_MAILBOX_ROLES:
@@ -861,6 +868,8 @@ def sync_email_replies(
                 "processed_event_ids": set(),
             }
             candidates = _load_queue_candidates(sender_id, campaign_id=campaign_id)
+            known_ids = {str(item.get("id")) for item in candidates}
+            candidates.extend(item for item in overlap_candidates if str(item.get("id")) not in known_ids)
             sender_imported = 0
             sender_unmatched = 0
             sender_processing_failures = 0

@@ -1756,7 +1756,7 @@ def _prepare_riderra_systematic_outreach_if_due() -> None:
                 pass
 
 
-def _dispatch_outreach_queue_if_due() -> None:
+def _dispatch_outreach_queue_cycle() -> None:
     global _LAST_OUTREACH_DISPATCH_AT
     reply_sync_ready = _sync_outreach_replies_if_due()
     if not _env_bool("OUTREACH_DISPATCH_ENABLED", False):
@@ -1823,6 +1823,14 @@ def _dispatch_outreach_queue_if_due() -> None:
             )
     except Exception as e:
         print(f"[OUTREACH_DISPATCH] error: {e}", flush=True)
+
+
+from services.outreach_dispatch_loop import SerializedDispatchLoop
+_OUTREACH_SEND_LOOP = SerializedDispatchLoop(_dispatch_outreach_queue_cycle)
+
+
+def _dispatch_outreach_queue_if_due():
+    return _OUTREACH_SEND_LOOP.tick()
 
 
 def _dispatch_creator_notifications_if_due() -> None:
@@ -7806,7 +7814,20 @@ def _process_sync_2gis_task(queue_dict):
         _handle_worker_error(queue_dict["id"], str(e))
 
 
+def _agent_work_cycle():
+    _dispatch_agent_schedules_if_due()
+    _process_agent_run_queue_if_due()
+    _process_sheet_provider_queue_if_due()
+
+
+_AGENT_WORK_LOOP = SerializedDispatchLoop(_agent_work_cycle, interval=2)
+
+
 if __name__ == "__main__":
+    if _worker_role_enabled("dispatcher"):
+        _OUTREACH_SEND_LOOP.start()
+    if _worker_role_enabled("agent"):
+        _AGENT_WORK_LOOP.start()
     if _worker_role_enabled("operator"):
         from services.disk_import_worker import start
         start()
@@ -7847,9 +7868,7 @@ if __name__ == "__main__":
                 # workloads move into the five explicit roles above.
                 pass
             if _worker_role_enabled("agent"):
-                _dispatch_agent_schedules_if_due()
-                _process_agent_run_queue_if_due()
-                _process_sheet_provider_queue_if_due()
+                _AGENT_WORK_LOOP.tick()
             if _worker_role_enabled("operator"):
                 if _env_bool("OPENCLAW_WEBSITE_RESEARCH_ENABLED", False) and not _worker_role_enabled("maintenance"):
                     _process_contact_intelligence_if_due(reviewed_sources_only=True)
