@@ -987,6 +987,10 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
             conn.commit()
             return {"status": "completed"}
         phase = state.get("phase", "search")
+        if phase == "search" and int(state.get("llm_calls", 0)) >= config["max_qualification_calls"]:
+            # Old queued tasks can already be waiting for another search. Finish
+            # existing preparation instead; never buy candidates we cannot check.
+            state["phase"] = phase = "prepare"
         if phase in {"search", "search_poll"}:
             if state.get("inflight_search"):
                 _save(cursor, row, {**state, "blocker": "search_result_uncertain"}, status="waiting_for_review", stage="Поиск прерван: проверьте расход перед повтором")
@@ -1264,7 +1268,7 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                         _release_draft_hold(cursor, row, value)
                         value.update(status="failed", reason="campaign_result_uncertain")
                 _save(cursor, row, state, stage="Прерванная подготовка отмечена; продолжается обработка остальных", delay=5)
-            elif active and not goal_reached:
+            elif active and not goal_reached and int(state.get("llm_calls", 0)) < config["max_qualification_calls"]:
                 state["enrichment_waits"] = int(state.get("enrichment_waits", 0)) + 1
                 if state["enrichment_waits"] > 24:
                     _save(cursor, row, {**state, "blocker": "enrichment_timeout"}, status="waiting_for_review", stage="Проверка контактов затянулась; проверьте задания компаний")
@@ -1363,7 +1367,8 @@ def process_job(row: dict[str, Any]) -> dict[str, Any]:
                 _save(cursor, row, state, status="waiting_for_review", stage="Подготовка писем ожидает настройки отправителя")
             elif config.get("target_count") is not None and len(qualified_contact_ids(state)) >= config["target_count"]:
                 _save(cursor, row, state, status="completed", stage="Цель поиска достигнута; результаты подготовки доступны")
-            elif len(ids) < config["max_candidates"] and state.get("search_calls", 0) < search_call_limit(config):
+            elif (len(ids) < config["max_candidates"] and state.get("search_calls", 0) < search_call_limit(config)
+                  and int(state.get("llm_calls", 0)) < config["max_qualification_calls"]):
                 state["phase"] = "search"
                 _save(cursor, row, state, stage="Поиск следующей группы компаний", delay=config["interval_minutes"] * 60)
             elif any((value or {}).get("status") == "failed" for value in (state.get("qualifications") or {}).values()):
@@ -1553,6 +1558,10 @@ def qualify_audience(config: dict[str, Any], evidence: list[dict[str, Any]], *, 
              and (item.get("fact") or item.get("observation"))]
     if not facts:
         return {"status": "needs_evidence", "reason": "no_public_audience_evidence"}
+    from services.llm.policy import EMAIL_PATTERN
+    for fact in facts:
+        # Preserve identifier type after privacy masking, never disclose the value.
+        fact["public_contact_types"] = ["email"] if EMAIL_PATTERN.search(fact["fact"]) else []
     safe = public_context({"evidence": facts, "audience": config["audience"], "requirements": search_conditions(config)[1], "search_geography": search_conditions(config)[0], "agency_country": config.get("agency_country", ""), "sold_destination": config.get("sold_destination", "")})
     geography, requirements = search_conditions(config)
     generic_conditions = [{"id": "audience", "text": config["audience"]}, {"id": "geography", "text": "; ".join(geography)}, *[{"id": f"requirement_{index}", "text": text} for index, text in enumerate(requirements)]]
@@ -1565,6 +1574,7 @@ def qualify_audience(config: dict[str, Any], evidence: list[dict[str, Any]], *, 
         'If audience wording repeats geography or product requirements, evaluate those in their separate criteria; the audience criterion identifies the kind of prospect. '
         'Geography matches when evidence locates the company in at least one of the specified places. '
         'A broad region or generic outbound service does not prove a named destination or product. If the named condition is absent from the cited fact, return matches false. '
+        'Contact values and URLs are replaced with opaque privacy tokens. public_contact_types lists the identifier types actually found in each fact; an email token remains evidence of a public email, not a missing address. Quote the supplied token exactly. '
         'For generic_conditions return criteria keyed by condition id, each with matches, evidence_id and exact quote. '
         'Return JSON only: {"criteria":{},"matches":boolean,"country":{"matches":boolean,"evidence_id":string,"quote":string},'
         '"destination":{"matches":boolean,"evidence_id":string,"quote":string},"reason":string}. '

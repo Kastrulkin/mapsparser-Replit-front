@@ -145,3 +145,21 @@ def test_riderra_pool_gate_requires_recent_shortage():
         assert not outreach_continuation.riderra_pool_allows_search(Cursor(status),riderra_template_authorization_service.BUSINESS_ID)
     assert outreach_continuation.riderra_pool_allows_search(Cursor('shortage'),riderra_template_authorization_service.BUSINESS_ID)
     assert not outreach_continuation.riderra_pool_allows_search(Cursor('shortage'),'different-business')
+
+
+def test_contact_page_is_not_displaced_by_about_page(monkeypatch):
+    from services import outreach_public_evidence
+    from core.outbound_network import OutboundHttpFetchResponse
+    calls=[]
+    def fetch(url,**kwargs):
+        calls.append(url)
+        body=(b'<p>Our Phuket packages from India.</p><nav><a href="/about">About</a>'
+              b'<a href="/contact">Contact</a><a href="/phuket">Phuket</a></nav>')
+        if url.endswith('/contact'):
+            body=b'<p>Public business email: sales@example.org</p>'
+        return OutboundHttpFetchResponse(200,{'content-type':'text/html'},body)
+    monkeypatch.setattr(outreach_public_evidence.outbound_network,'public_pinned_get',fetch)
+    facts=outreach_public_evidence.collect_candidate_evidence('https://example.org',['Phuket'])
+    assert 'https://example.org/contact' in calls
+    assert any('sales@example.org' in fact['fact'] for fact in facts)
+    assert len(calls)<=3

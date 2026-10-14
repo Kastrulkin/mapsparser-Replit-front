@@ -50,3 +50,17 @@ def test_model_true_with_exact_but_irrelevant_quote_is_not_qualification():
                               business_id='b',user_id='u',runner=model)
     assert result['status'] == 'needs_evidence'
     assert result['criteria']['requirement_0']['reason'] == 'named_requirement_missing_from_source'
+
+
+def test_public_email_type_survives_privacy_mask_without_address_disclosure():
+    from services.outreach_continuation import qualify_audience
+    from services.llm.contracts import LLMTaskResult
+    def model(request):
+        assert 'Care@example.com' not in request.prompt
+        assert '"public_contact_types": ["email"]' in request.prompt
+        assert '__LOCALOS_PRIVATE_' in request.prompt
+        return LLMTaskResult(status='completed',provider='deepseek',parsed_data={'matches':False,'criteria':{}})
+    qualify_audience({'audience':'travel agencies','search_geography':['India'],
+                      'requirements':['public email on official website']},
+                     [{'id':'e','fact':'Mail support Care@example.com','source_url':'https://example.com/contact'}],
+                     business_id='b',user_id='u',runner=model)

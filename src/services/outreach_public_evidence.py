@@ -54,7 +54,9 @@ def collect_candidate_evidence(website: str, terms: list[str], *, requirements: 
                 if score and target not in seen:
                     candidates.append((score, target))
             ranked = sorted(candidates, key=lambda item: -item[0])
-            contact = next((target for _, target in ranked if any(word in target.casefold() for word in ('contact', 'about', 'контакт'))), None)
+            contact = next((target for _, target in ranked if any(word in target.casefold() for word in ('contact', 'контакт'))), None)
+            if contact is None:
+                contact = next((target for _, target in ranked if 'about' in target.casefold()), None)
             selected = [target for _, target in ranked]
             if contact and selected and contact != selected[0]:
                 selected = [selected[0], contact]

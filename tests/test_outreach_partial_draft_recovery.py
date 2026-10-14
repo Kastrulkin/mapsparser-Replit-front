@@ -64,3 +64,17 @@ def test_changed_or_paused_parent_cannot_reopen():
     cursor=Cursor({'id':'run'})
     with pytest.raises(ValueError,match='owner_required'):resume_completed_preparation(cursor,row=row(),user_id='other')
     assert cursor.statements==[]
+
+
+def test_exhausted_checks_do_not_wait_for_more_enrichment_or_search_again():
+    tree=ast.parse(Path('src/services/outreach_continuation.py').read_text())
+    conditions=[n.test for n in ast.walk(tree) if isinstance(n,ast.If)]
+    wait=next(n for n in conditions if ast.unparse(n).startswith('active and ') and 'goal_reached' in ast.unparse(n))
+    search=next(n for n in conditions if ast.unparse(n).startswith('len(ids) <') and 'search_call_limit' in ast.unparse(n))
+    env={'active':True,'goal_reached':False,'ids':['one'],'state':{'llm_calls':6,'search_calls':1},
+         'config':{'max_candidates':10,'max_qualification_calls':6},'search_call_limit':lambda c:2}
+    for condition in (wait,search):
+        assert not eval(compile(ast.Expression(condition),'<production-condition>','eval'),env)
+    env['state']['llm_calls']=5
+    for condition in (wait,search):
+        assert eval(compile(ast.Expression(condition),'<production-condition>','eval'),env)
