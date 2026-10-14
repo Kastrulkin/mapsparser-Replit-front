@@ -118,7 +118,7 @@ def configure(cursor, *, business_id, user_id, arguments, actor_context=None):
     blueprint_id = str(blueprint.get("id") or "")
     latest, active = _versions(cursor, blueprint)
     if operation == "status":
-        cursor.execute("SELECT id,status,created_at,completed_at,error_text FROM agent_runs WHERE blueprint_id=%s ORDER BY created_at DESC LIMIT 5", (blueprint_id,))
+        cursor.execute("SELECT id,status,queued_at AS created_at,completed_at,error_text FROM agent_runs WHERE blueprint_id=%s ORDER BY queued_at DESC LIMIT 5", (blueprint_id,))
         runs = [_row(cursor, item) for item in (cursor.fetchall() or [])]
         return {"status": "completed", "blueprint_id": blueprint_id, "name": blueprint.get("name"), "state": blueprint.get("status"),
                 "candidate": _version_summary(latest), "active_version": _version_summary(active), "runs": runs,

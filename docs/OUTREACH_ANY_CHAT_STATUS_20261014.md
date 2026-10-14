@@ -25,3 +25,11 @@ Production files were freshly compared and merged with neighbouring work. Backup
 55 focused tests pass for reply scope, dispatch serialization, bounded schedules, email adapter behavior, exact send review and channel limits. A prior broader run has fixture failures around advisory-lock handling; it is not reported as a clean complete suite.
 
 Still required: approve the concrete native automation and its execution costs, complete two autonomous runs 15 minutes apart, reconcile unique companies/drafts/charges, pause it afterward, verify Telegram and business-switch recovery, and verify an actual reply association and stop behavior. Do not count a healthy mailbox poll or unit-test reply fixture as a new real incoming reply.
+
+## Approved schedule activation
+
+Owner approved two real draft-only runs within **20 additional credits total**. Since 10:35 had already passed when approval arrived, both slots were moved to **11:00 and 11:15 Moscow**, preserving the 15-minute interval and all other limits. The change was made through web chat, creating version `f25005a4-8338-42b9-9f3b-663459483a92`; its free preview completed at 10:50. Native UI activation shows “Работает” and next run 11:00. The worker's existing schedule flag is enabled and its existing cohort includes this blueprint plus the previous draft-only entry, which remains inactive. No schedule event has yet been counted as a completed prospecting run.
+
+Chat initially failed during this change because automation status queried nonexistent `agent_runs.created_at`. It now reads `queued_at AS created_at`, preserving the response field. A focused status regression passes and a real chat retry read history successfully. Live files were compared before installing; backup is `management-before.py` in the same release directory.
+
+Existing real Riderra inbound event `4493f180-a03c-435f-bb17-6896df540400` is linked to campaign `5f74ec40-25c2-4a0f-9668-250458e04cd9`, touch `960af7f4-524a-4ade-86c4-fb341bd094cb`, lead and workstream. It is human/question, `stops_campaign=true`, campaign stopped with `recipient_replied`. This establishes stored real reply/stop linkage for that campaign, not a reply to Dook or today's scheduled groups.
