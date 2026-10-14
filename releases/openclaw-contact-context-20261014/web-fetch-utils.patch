@@ -1,0 +1,52 @@
+--- web-fetch-utils.js
++++ web-fetch-utils.js
+@@ -67,6 +67,36 @@
+     }
+     return { text: value.slice(0, maxChars), truncated: true };
+ }
++// LocalOS research compatibility: retain public contact/navigation context from
++// the SAME fetched HTML. No new fetch, browser, paid fallback or SSRF change.
++export function retainPublicContactContext(mainText, html) {
++    const full = htmlToMarkdown(html).text;
++    const retained = [];
++    const seen = new Set();
++    const add = (value) => {
++        const clean = normalizeWhitespace(value);
++        if (clean && !seen.has(clean) && retained.length < 20) {
++            seen.add(clean);
++            retained.push(clean);
++        }
++    };
++    for (const match of full.matchAll(/(?<![\w.+-])([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})(?![\w.-])/gi)) {
++        const start = Math.max(0, match.index - 120);
++        const end = Math.min(full.length, match.index + match[0].length + 120);
++        add(full.slice(start, end));
++    }
++    for (const match of full.matchAll(/\[([^\]\n]*)\]\(([^)\s]+)\)/g)) {
++        if (/(?:contact|about|company|контакт|о компании)/i.test(match[1] + " " + match[2])) {
++            add(match[0]);
++        }
++    }
++    if (!retained.length) return mainText;
++    // Put bounded contact facts before long article text so maxChars cannot
++    // silently discard the only address or contact-page link.
++    return "Public contact/company context from source HTML:\n" + retained.join("\n").slice(0, 6000)
++        + "\n\nMain page content:\n" + mainText;
++}
++
+ export async function extractReadableContent(params) {
+     const fallback = () => {
+         const rendered = htmlToMarkdown(params.html);
+@@ -96,10 +126,10 @@
+         const title = parsed.title || undefined;
+         if (params.extractMode === "text") {
+             const text = normalizeWhitespace(parsed.textContent ?? "");
+-            return text ? { text, title } : fallback();
++            return text ? { text: retainPublicContactContext(text, params.html), title } : fallback();
+         }
+         const rendered = htmlToMarkdown(parsed.content);
+-        return { text: rendered.text, title: title ?? rendered.title };
++        return { text: retainPublicContactContext(rendered.text, params.html), title: title ?? rendered.title };
+     }
+     catch {
+         return fallback();

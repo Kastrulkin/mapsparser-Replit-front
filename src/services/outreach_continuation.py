@@ -286,7 +286,7 @@ def prepare_revision_approval(cursor, *, business_id, task_id, raw, request_id="
     return preview
 
 
-def named_requirement_supported(label: str, evidence: dict[str, Any]) -> bool:
+def named_requirement_supported(label: str, evidence: dict[str, Any], *, geography: list[str] | None = None) -> bool:
     """A necessary source check, never sufficient proof of suitability.
 
     Explicit names inside a mandatory condition must occur in the cited fact.
@@ -304,15 +304,20 @@ def named_requirement_supported(label: str, evidence: dict[str, Any]) -> bool:
         # Common transliteration variants, applied symmetrically; no place list.
         return ProspectingService._transliterate_ru_to_latin(value).replace('kh', 'h')
     tokens = set(normalize(text).split())
-    return all(normalize(name) in tokens for name in names)
+    geographic_names = set(normalize(" ".join(geography or [])).split())
+    # Geography has its own sourced criterion (a city address may establish
+    # its containing country). Keep the explicit-name guard for other names.
+    return all(normalize(name) in tokens or normalize(name) in geographic_names for name in names)
 
 
 def effective_qualification(value: dict[str, Any]) -> dict[str, Any]:
     """Recheck stored proofs without rewriting the original model audit record."""
     criteria = value.get('criteria') or {}
+    geo = criteria.get('geography') or {}
+    reviewed_geography = [str(geo.get('label') or '')] if geo.get('status') == 'verified' else []
     invalid = [key for key, item in criteria.items()
                if key.startswith('requirement_') and item.get('status') == 'verified'
-               and not named_requirement_supported(str(item.get('label') or ''), item.get('evidence') or {})]
+               and not named_requirement_supported(str(item.get('label') or ''), item.get('evidence') or {}, geography=reviewed_geography)]
     if not invalid:
         return value
     updated = dict(criteria)
@@ -1572,7 +1577,7 @@ def qualify_audience(config: dict[str, Any], evidence: list[dict[str, Any]], *, 
         'Industry synonyms and evidence of equivalent business activities can support the audience; literal category wording is not required. '
         'Evaluate the audience using all supplied facts together. Do not require one sentence to repeat the entire audience label. '
         'If audience wording repeats geography or product requirements, evaluate those in their separate criteria; the audience criterion identifies the kind of prospect. '
-        'Geography matches when evidence locates the company in at least one of the specified places. '
+        'Geography matches when an explicit company address or registered location lies in at least one specified place. A city can establish its containing country, but customer departure cities, tour destinations, or generic words like northern part of the country cannot prove where the company is based. '
         'A broad region or generic outbound service does not prove a named destination or product. If the named condition is absent from the cited fact, return matches false. '
         'Contact values and URLs are replaced with opaque privacy tokens. public_contact_types lists the identifier types actually found in each fact; an email token remains evidence of a public email, not a missing address. Quote the supplied token exactly. '
         'For generic_conditions return criteria keyed by condition id, each with matches, evidence_id and exact quote. '
@@ -1598,7 +1603,7 @@ def qualify_audience(config: dict[str, Any], evidence: list[dict[str, Any]], *, 
         if not selected or len(quote) < 12 or quote not in selected["fact"]:
             return {"status": "not_verified"}
         condition = next((item["text"] for item in generic_conditions if item["id"] == name), "")
-        if name.startswith("requirement_") and not named_requirement_supported(condition, selected):
+        if name.startswith("requirement_") and not named_requirement_supported(condition, selected, geography=geography):
             return {"status": "not_verified", "reason": "named_requirement_missing_from_source"}
         return {"status": "verified", "evidence_id": selected["id"], "quote": quote,
                 "source_url": selected["source_url"], "evidence": selected}

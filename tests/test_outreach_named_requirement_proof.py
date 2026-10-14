@@ -64,3 +64,17 @@ def test_public_email_type_survives_privacy_mask_without_address_disclosure():
                       'requirements':['public email on official website']},
                      [{'id':'e','fact':'Mail support Care@example.com','source_url':'https://example.com/contact'}],
                      business_id='b',user_id='u',runner=model)
+
+
+def test_verified_geographic_criterion_can_cover_city_country_containment_only():
+    value={'status':'qualified','criteria':{
+        'geography':{'status':'verified','label':'India','quote':'Office: New Delhi'},
+        'requirement_0':{'status':'verified','label':'company based in India',
+            'evidence':{'fact':'Office: New Delhi'}},
+        'requirement_1':{'status':'verified','label':'sells Phuket tour packages',
+            'evidence':{'fact':'Phuket tour packages'}}}}
+    assert effective_qualification(value)['status']=='qualified'
+    value['criteria']['requirement_1']['evidence']['fact']='South East Asia tours'
+    assert effective_qualification(value)['status']=='needs_evidence'
+    value['criteria']['geography']['status']='not_verified'
+    assert effective_qualification(value)['status']=='needs_evidence'

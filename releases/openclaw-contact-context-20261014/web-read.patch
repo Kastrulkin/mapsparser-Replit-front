@@ -1,0 +1,13 @@
+--- web_read.py
++++ web_read.py
+@@ -187,6 +187,10 @@
+         if not same_website(final, origin):
+             gaps.append({'url': current, 'reason': 'redirect_outside_site'})
+             continue
++        # A reviewed URL can redirect to the same canonical page as another
++        # source. Do not spend a second read slot on its slash/www alias.
++        visited.add(page['final_url'])
++        pending = [candidate for candidate in pending if candidate not in visited]
+         page['content_text'] = source_text(page['text'])
+         pages.append(page)
+         # Only links actually present on a fetched page; do not guess paths.
