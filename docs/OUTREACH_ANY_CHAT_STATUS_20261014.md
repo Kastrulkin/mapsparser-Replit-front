@@ -66,3 +66,9 @@ Owner approved one run, execution cap 10 credits; total execution cap 17 includi
 - Free previews of paused automations now remain claimable by the native queue; paid runs of paused or archived automations remain blocked. Regression tests cover the actual claim predicate.
 
 Acceptance remains open: corrected prospecting must produce genuinely evidenced companies and quality drafts, Telegram parity must be verified on the actual current result, and same-group incoming replies remain unproven. Two autonomous scheduled executions and deduplication passed earlier; that does not establish prospecting success.
+
+## Follow-up without new provider spending
+
+Preserve exact discovery result URLs as research starting pages instead of reducing every service page to the website root. Domain deduplication remains unchanged. Personalization v17 ranks sourced requirement labels as well as quotes after transliteration, so a Russian reviewed offer can select the relevant English service fact instead of the first generic country description. The forced bridge no longer labels arbitrary company descriptions as a published offer or adds a second request to discuss. Existing production localization/restoration changes were preserved when merging this file; no frontend rebuild or search activation.
+
+The current six candidates contain a forum, directories and a Thailand-based agency, with no additional saved Phuket evidence. Historical Concept Holidayz/Khanna/K1 records were inspected before proposing new spending: existing campaigns are terminal, Concept is stopped, and K1's email is invalid. These are not three new eligible first contacts and must not be recycled to satisfy acceptance. The next bounded real run requires fresh owner cost approval. No new provider search/check/text generation was executed during this follow-up.

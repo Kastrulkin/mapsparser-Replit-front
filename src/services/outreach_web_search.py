@@ -180,7 +180,7 @@ def _normalize(items: list[dict], provider: str, limit: int) -> list[dict]:
             continue
         seen.add(host)
         results.append({'name': title[:300], 'source_url': url, 'url': url,
-            'website': f'{parsed.scheme}://{parsed.netloc}/',
+            'website': url,
             'search_snippet': str(item.get('content') or item.get('text') or '')[:1500],
             'source_provider': f'{provider}_web', 'qualification_required': True})
     return results[:limit]
