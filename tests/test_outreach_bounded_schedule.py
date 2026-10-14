@@ -28,3 +28,11 @@ def test_regular_daily_edit_does_not_keep_old_hidden_two_slots():
     updated=apply_schedule(bounded(),{'time':'13:00'})
     assert updated['schedule']['time']=='13:00'
     assert 'times' not in updated['schedule'] and 'date' not in updated['schedule']
+
+
+def test_next_slot_display_uses_second_time_and_never_invents_tomorrow():
+    from services.agent_schedule_contract import next_bounded_run
+    schedule=bounded()['schedule']
+    assert next_bounded_run(schedule,datetime(2026,10,14,8,1,tzinfo=timezone.utc)).strftime('%H:%M')=='11:15'
+    assert next_bounded_run(schedule,datetime(2026,10,14,8,16,tzinfo=timezone.utc)) is None
+    assert next_bounded_run(schedule,datetime(2026,10,15,8,0,tzinfo=timezone.utc)) is None

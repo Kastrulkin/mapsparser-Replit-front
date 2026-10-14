@@ -3009,6 +3009,15 @@ def _agent_schedule_status(blueprint: dict, version: dict | None = None) -> dict
     except ValueError:
         return {"ready": False, "required": True, "reason": "schedule_time_invalid"}
     local_now = datetime.now(timezone.utc).astimezone(schedule_timezone)
+    if schedule.get('times') is not None:
+        from services.agent_schedule_contract import next_bounded_run, ScheduleError
+        try:
+            next_slot = next_bounded_run(schedule, local_now)
+        except ScheduleError:
+            return {'ready': False, 'required': True, 'reason': 'schedule_times_invalid'}
+        return {'ready': True, 'required': True, 'time': schedule_time, 'timezone': timezone_name,
+                'next_run_at': next_slot.astimezone(timezone.utc).isoformat() if next_slot else None,
+                'bounded_complete': next_slot is None}
     next_local = local_now.replace(hour=parsed_time.hour, minute=parsed_time.minute, second=0, microsecond=0)
     trigger = _agent_version_trigger(blueprint, version)
     if trigger == "schedule.weekly":

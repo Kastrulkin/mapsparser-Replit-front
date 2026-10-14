@@ -70,3 +70,11 @@ def describe_schedule(trigger, schedule):
     else:
         frequency = 'ежедневно'
     return f"{frequency}, {schedule.get('time', 'время не указано')} ({schedule.get('timezone', 'пояс не указан')})"
+
+
+def next_bounded_run(schedule, now):
+    validated = apply_schedule({'trigger': 'schedule.daily', 'schedule': schedule}, {})['schedule']
+    zone = ZoneInfo(validated['timezone'])
+    candidates = [datetime.fromisoformat(validated['date'] + 'T' + value).replace(tzinfo=zone)
+                  for value in validated['times']]
+    return next((candidate for candidate in candidates if candidate > now), None)

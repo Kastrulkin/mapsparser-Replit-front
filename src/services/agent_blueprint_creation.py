@@ -285,6 +285,18 @@ def preview_creation(cursor: Any, *, business_id: str, user_id: str, actor_conte
             "connection_inventory": inventory}
 
 
+def outreach_creation_summary(config: dict) -> str:
+    from services.outreach_continuation import search_conditions
+    geography, requirements = search_conditions(config)
+    mode = {"find_only": "поиск и проверка", "prepare_only": "подготовка писем", "auto_send": "подготовка и разрешённая отправка"}.get(config['mode'], config['mode'])
+    queries = '; '.join(item['query'] + (f" · {item['city']}" if item.get('city') else '') for item in config['queries'])
+    return (f"\nКого: {config['audience']}. Где: {', '.join(geography) or 'не указано'}."
+            f"\nТребования: {'; '.join(requirements) or 'не указаны'}."
+            f"\nПоисковые запросы: {queries}"
+            f"\nРезультат: до {config['target_count']} новых подходящих компаний; {mode}."
+            f" До {config['max_search_calls']} запросов и {config['max_qualification_calls']} проверок.")
+
+
 def prepare_creation(cursor: Any, *, business_id: str, user_id: str, actor_context: dict, payload: dict) -> dict:
     preview = preview_creation(cursor, business_id=business_id, user_id=user_id, actor_context=actor_context, payload=payload)
     if preview.get("status") != "ready":
@@ -314,8 +326,7 @@ def prepare_creation(cursor: Any, *, business_id: str, user_id: str, actor_conte
         summary += "; " + describe_schedule(conditions["trigger"], conditions["schedule"])
     if conditions.get("outreach_config"):
         cfg = conditions["outreach_config"]
-        mode_label = {"find_only": "поиск и проверка", "prepare_only": "подготовка писем", "auto_send": "подготовка и разрешённая отправка"}.get(cfg["mode"], cfg["mode"])
-        summary += f"; {cfg['target_count']} новых подходящих компаний; страна: {cfg['agency_country']}; направление: {cfg['sold_destination']}; режим: {mode_label}; лимит поиска: {cfg['search_budget_cents']} центов, {cfg['max_search_calls']} запросов"
+        summary += outreach_creation_summary(cfg)
     envelope = {"business_id": business_id, "idempotency_key": request_key, "payload": envelope_payload}
     return {"status": "approval_required", "chat_response": f"{summary}. Оценка — около 3 кредитов за создание; черновик не будет запущен.",
             "approval": {"status": "pending", "capability": "agents.create", "summary": summary,
