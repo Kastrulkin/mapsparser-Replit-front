@@ -50,3 +50,5 @@ Web chat saved candidate version **3**, `552e2e4a-9553-46f9-ade5-3f8916de7a43`, 
 The bounded schedule projection no longer invents tomorrow's run after today's last slot; it returns no next run. Tests cover selecting the second slot and expiry. Earlier UI showed tomorrow despite correctly bounded worker execution; this was a presentation defect, not an actual third scheduled event.
 
 Telegram parity remains unverified in this session; a request to open the LocalOS chat is pending. Full outreach acceptance is still open.
+
+Final targeted suite: **58 passed**. After reload, automation UI correctly says “Автоматические запуски приостановлены”, but its prominent badge still says “Работает” despite persisted `paused`. This residual frontend status-priority defect is not claimed fixed; avoid replacing the current neighbour-owned UI bundle from an older checkout.
