@@ -1,3 +1,4 @@
+import { rememberMaxConnection, consumeMaxConnection } from "@/lib/maxAuthContinuation";
 import { featureFlags } from '@/config/featureFlags';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { countryOptionsFor, loginCopyFor } from '@/i18n/loginCopy';
@@ -62,6 +63,7 @@ const Login = () => {
       setTab('register');
     }
 
+    if (searchParams.get('return_to') === '/dashboard/max') rememberMaxConnection();
     if (isLeadJourneyKey(journeyParam)) {
       saveLeadJourneyIntent(journeyParam);
     }
@@ -113,7 +115,9 @@ const Login = () => {
         const tierFromUrl = searchParams.get('tier');
         const source = searchParams.get('source');
 
-        if (readLeadJourneyToken() && featureFlags.journeyPostAuthRedirect) {
+        if (consumeMaxConnection() || searchParams.get("return_to") === "/dashboard/max") {
+          navigate('/dashboard/max');
+        } else if (readLeadJourneyToken() && featureFlags.journeyPostAuthRedirect) {
           try {
             const resolved = await resolveStoredLeadJourney();
             navigate(resolved?.route || '/dashboard/today');

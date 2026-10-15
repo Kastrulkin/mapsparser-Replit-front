@@ -1,4 +1,5 @@
 import type { Language } from '@/i18n/LanguageContext.logic';
+import { progressResultsCopies } from './progressResultsCopy';
 
 export type ProgressPageCopy = {
   eyebrow: string;
@@ -407,7 +408,7 @@ const dynamicCopy: Record<Language, ProgressDynamicCopy> = {
   hy: { analyticsSetup: "Անհրաժեշտ տվյալներ", firstFinance: "Վերբեռնեք առաջին ֆինանսական ամփոփագիրը՝ վերլուծությունները բացելու համար:", rhythmForming: "Ռիթմը ձևավորվում է", sales: "Վաճառք և միջին տոմս", services: "Ծառայություններ և վաճառքներ", capacity: "Թիմային կարողություններ", trend: "Միտումներ և ապացույցների վրա հիմնված առաջարկություններ", financeTitle: "Թարմացրեք ֆինանսական տվյալները", financeReason: "Ֆինանսական տվյալները հնացած են։", financeOutcome: "LocalOS-ը ցույց կտա ընթացիկ ֆինանսական պատկերը և աճի հնարավորությունները:", uploadData: "Վերբեռնեք տվյալները" },
   kk: { analyticsSetup: "Деректер керек", firstFinance: "Аналитиканы ашу үшін бірінші қаржылық қорытындыңызды жүктеп алыңыз.", rhythmForming: "Ритм қалыптасады", sales: "Сату және орташа есепшот", services: "Қызметтер және жоғары сатылымдар", capacity: "Пәрмен жүктелуде", trend: "Динамика және дәлелді ұсыныстар", financeTitle: "Қаржылық деректеріңізді жаңартыңыз", financeReason: "Қаржылық деректер ұзақ уақыт бойы жаңартылмады.", financeOutcome: "LocalOS ағымдағы қаржылық сурет пен өсу нүктелерін көрсете алады.", uploadData: "Деректерді жүктеп алу" },};
 
-export const progressPageCopyForLanguage = (language: Language) => progressCopies[language];
+export const progressPageCopyForLanguage = (language: Language) => ({ ...progressCopies[language], ...progressResultsCopies[language], fallbackDescription: progressResultsCopies[language].description });
 export const progressRuntimeCopyForLanguage = (language: Language) => runtimeCopy[language];
 export const localizedAnalyticsLevel = (language: Language, level: string | undefined, fallback: string | undefined) => level === 'setup' ? dynamicCopy[language].analyticsSetup : localizedGrowthText(language, fallback);
 export const localizedAnalyticsNext = (language: Language, level: string | undefined, fallback: string | undefined) => level === 'setup' ? dynamicCopy[language].firstFinance : localizedGrowthText(language, fallback);

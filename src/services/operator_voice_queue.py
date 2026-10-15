@@ -11,6 +11,9 @@ from core.telegram_network import build_requests_proxy_kwargs
 
 def enqueue_execution(cursor, asset):
     metadata = asset.get('metadata_json') or {}
+    if asset['channel'] == 'max_bot':
+        from services.max_inputs import enqueue_voice_result
+        return enqueue_voice_result(cursor, asset)
     if asset['channel'] != 'telegram' or not metadata.get('durable_execution'):
         return
     return create_operator_async_job(cursor, user_id=asset['user_id'], business_id=asset['business_id'],

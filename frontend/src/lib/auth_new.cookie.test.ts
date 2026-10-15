@@ -52,6 +52,19 @@ describe('browser cookie authentication', () => {
     );
   });
 
+  it('shows the credential error from a failed login instead of an expired-session message', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ error: 'invalid_credentials', message: 'Неверный email или пароль' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } },
+    )));
+    const auth = new NewAuth();
+
+    await expect(auth.signIn('invalid@example.com', 'wrong-password')).resolves.toEqual({
+      user: null,
+      error: 'Неверный email или пароль',
+    });
+  });
+
   it('clears both legacy standard browser token keys in cookie mode', () => {
     window.localStorage.setItem('auth_token', 'legacy-token');
     window.localStorage.setItem('token', 'legacy-alias');

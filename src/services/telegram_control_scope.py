@@ -335,11 +335,20 @@ def list_control_scopes(
     }
 
 
-def _load_preference(cursor: Any, user_id: str) -> dict[str, Any]:
-    cursor.execute("SELECT to_regclass('public.telegramcontrolpreferences') AS table_ref")
+def _preference_storage(platform: str) -> tuple[str, str]:
+    if platform == "telegram":
+        return "telegramcontrolpreferences", "telegram_id"
+    if platform == "max":
+        return "maxcontrolpreferences", "max_id"
+    raise ValueError("unsupported_messenger_platform")
+
+
+def _load_preference(cursor: Any, user_id: str, platform: str = "telegram") -> dict[str, Any]:
+    table, identity_column = _preference_storage(platform)
+    cursor.execute("SELECT to_regclass(%s) AS table_ref", (table,))
     if not _row_to_dict(cursor, cursor.fetchone()).get("table_ref"):
         return {}
-    cursor.execute("SELECT * FROM telegramcontrolpreferences WHERE user_id = %s LIMIT 1", (user_id,))
+    cursor.execute(f"SELECT * FROM {table} WHERE user_id = %s LIMIT 1", (user_id,))
     row = _row_to_dict(cursor, cursor.fetchone())
     if not row:
         return {}
@@ -438,7 +447,9 @@ def resolve_control_scope(
     requested_id: str | None = None,
     persist: bool = False,
     telegram_id: str = "",
+    platform: str = "telegram",
 ) -> dict[str, Any] | None:
+    table, identity_column = _preference_storage(platform)
     catalog = list_control_scopes(cursor, user_id=user_id, business_limit=200)
     kind = str(requested_kind or "").strip().lower()
     if kind in SCOPE_TYPES:
@@ -446,10 +457,10 @@ def resolve_control_scope(
         if not selected:
             return None
         if persist and telegram_id:
-            save_control_scope(cursor, user_id=user_id, telegram_id=telegram_id, scope=selected)
+            save_control_scope(cursor, user_id=user_id, telegram_id=telegram_id, scope=selected, platform=platform)
         return selected
 
-    preference = _load_preference(cursor, user_id)
+    preference = _load_preference(cursor, user_id, platform)
     preferred_kind = str(preference.get("scope_type") or "").strip().lower()
     preferred_id = str(preference.get("scope_id") or "").strip() or None
     if preferred_kind in SCOPE_TYPES:
@@ -479,12 +490,14 @@ def save_control_scope(
     user_id: str,
     telegram_id: str,
     scope: dict[str, Any],
+    platform: str = "telegram",
 ) -> dict[str, Any]:
+    table, identity_column = _preference_storage(platform)
     kind = str(scope.get("kind") or "").strip().lower()
     scope_id = str(scope.get("id") or "").strip() or None
     if kind not in SCOPE_TYPES:
         raise ValueError("unsupported_control_scope")
-    current = _load_preference(cursor, user_id)
+    current = _load_preference(cursor, user_id, platform)
     recent = list(current.get("recent_scopes_json") or [])
     item = {"kind": kind, "id": scope_id, "name": str(scope.get("name") or "")}
     recent = [value for value in recent if not (value.get("kind") == kind and value.get("id") == scope_id)]
@@ -495,14 +508,14 @@ def save_control_scope(
     if kind == "business" and parent.get("id"):
         last_by_network[str(parent["id"])] = scope_id
     cursor.execute(
-        """
-        INSERT INTO telegramcontrolpreferences (
-            user_id, telegram_id, scope_type, scope_id,
+        f"""
+        INSERT INTO {table} (
+            user_id, {identity_column}, scope_type, scope_id,
             recent_scopes_json, last_business_by_network_json, updated_at
         )
         VALUES (%s, %s, %s, %s, %s, %s, NOW())
         ON CONFLICT (user_id) DO UPDATE SET
-            telegram_id = COALESCE(NULLIF(EXCLUDED.telegram_id, ''), telegramcontrolpreferences.telegram_id),
+            {identity_column} = COALESCE(NULLIF(EXCLUDED.{identity_column}, ''), {table}.{identity_column}),
             scope_type = EXCLUDED.scope_type,
             scope_id = EXCLUDED.scope_id,
             recent_scopes_json = EXCLUDED.recent_scopes_json,
@@ -514,8 +527,9 @@ def save_control_scope(
     return scope
 
 
-def load_control_preferences(cursor: Any, user_id: str) -> dict[str, Any]:
-    return _load_preference(cursor, user_id)
+def load_control_preferences(cursor: Any, user_id: str, platform: str = "telegram") -> dict[str, Any]:
+    table, identity_column = _preference_storage(platform)
+    return _load_preference(cursor, user_id, platform)
 
 
 def save_scope_notification_preferences(
@@ -524,24 +538,43 @@ def save_scope_notification_preferences(
     user_id: str,
     telegram_id: str,
     scope: dict[str, Any],
-    notifications: dict[str, bool],
-) -> dict[str, bool]:
+    notifications: dict[str, Any],
+    platform: str = "telegram",
+) -> dict[str, Any]:
+    table, identity_column = _preference_storage(platform)
     kind = str(scope.get("kind") or "").strip().lower()
     scope_id = str(scope.get("id") or "").strip() or None
     if kind not in SCOPE_TYPES:
         raise ValueError("unsupported_control_scope")
     allowed_keys = {"daily_digest", "reviews", "tasks", "errors", "agent_results", "finance_rhythm", "content_publications"}
     clean = {key: bool(value) for key, value in notifications.items() if key in allowed_keys}
-    current = _load_preference(cursor, user_id)
+    if "content_publications_lead_days" in notifications:
+        try:
+            lead_days = int(notifications.get("content_publications_lead_days") or 0)
+        except (TypeError, ValueError):
+            lead_days = 0
+        clean["content_publications_lead_days"] = max(0, min(lead_days, 7))
+    if "content_publications_time" in notifications:
+        from datetime import datetime
+        value = str(notifications["content_publications_time"] or "").strip()
+        clean["content_publications_time"] = datetime.strptime(value, "%H:%M").strftime("%H:%M") if value else ""
+    if "content_publications_platforms" in notifications:
+        platforms = notifications["content_publications_platforms"]
+        if not isinstance(platforms, list) or any(value not in {"vk", "telegram", "max"} for value in platforms):
+            raise ValueError("invalid_content_publications_platforms")
+        clean["content_publications_platforms"] = sorted(set(platforms))
+    cursor.execute(f"SELECT user_id FROM {table} WHERE user_id=%s FOR UPDATE", (user_id,))
+    current = _load_preference(cursor, user_id, platform)
     all_preferences = dict(current.get("notification_preferences_json") or {})
     preference_key = f"{kind}:{scope_id or 'all'}"
+    clean = {**(all_preferences.get(preference_key) or {}), **clean}
     all_preferences[preference_key] = clean
     cursor.execute(
-        """
-        INSERT INTO telegramcontrolpreferences (user_id, telegram_id, notification_preferences_json, updated_at)
+        f"""
+        INSERT INTO {table} (user_id, {identity_column}, notification_preferences_json, updated_at)
         VALUES (%s, %s, %s, NOW())
         ON CONFLICT (user_id) DO UPDATE SET
-            telegram_id = COALESCE(NULLIF(EXCLUDED.telegram_id, ''), telegramcontrolpreferences.telegram_id),
+            {identity_column} = COALESCE(NULLIF(EXCLUDED.{identity_column}, ''), {table}.{identity_column}),
             notification_preferences_json = EXCLUDED.notification_preferences_json,
             updated_at = NOW()
         """,
@@ -556,14 +589,17 @@ def toggle_favorite_control_scope(
     user_id: str,
     telegram_id: str,
     scope: dict[str, Any],
+    platform: str = "telegram",
 ) -> bool:
+    table, identity_column = _preference_storage(platform)
     save_control_scope(
         cursor,
         user_id=user_id,
         telegram_id=telegram_id,
         scope=scope,
+        platform=platform,
     )
-    current = _load_preference(cursor, user_id)
+    current = _load_preference(cursor, user_id, platform)
     favorites = [item for item in (current.get("favorite_scopes_json") or []) if isinstance(item, dict)]
     kind = str(scope.get("kind") or "")
     scope_id = str(scope.get("id") or "").strip() or None
@@ -572,7 +608,7 @@ def toggle_favorite_control_scope(
     if not exists:
         favorites.insert(0, {"kind": kind, "id": scope_id, "name": str(scope.get("name") or "")})
     cursor.execute(
-        "UPDATE telegramcontrolpreferences SET favorite_scopes_json = %s, updated_at = NOW() WHERE user_id = %s",
+        f"UPDATE {table} SET favorite_scopes_json = %s, updated_at = NOW() WHERE user_id = %s",
         (Json(favorites[:20]), user_id),
     )
     return not exists

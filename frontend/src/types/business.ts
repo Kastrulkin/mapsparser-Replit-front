@@ -62,7 +62,7 @@ export type DashboardOutletContext = {
   businesses: BusinessRecord[];
   controlScope: ControlScope | null;
   onControlScopeChange: (scope: ControlScope) => void;
-  onBusinessChange: (businessId: string) => void;
+  onBusinessChange: (businessId: string, requestedKind?: 'business' | 'network') => void;
   updateBusiness: (businessId: string, updates: Partial<BusinessRecord>) => void;
   reloadBusinesses: () => Promise<void>;
   setBusinesses: Dispatch<SetStateAction<BusinessRecord[]>>;

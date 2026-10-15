@@ -54,6 +54,7 @@ export type NetworkLocationsResult = {
 };
 
 export type Bootstrap = {
+  max_enabled?: boolean;
   success?: boolean;
   error?: string;
   user?: { id?: string; name?: string; is_superadmin?: boolean };
@@ -132,7 +133,7 @@ export type OperatorActionDecision = 'confirm' | 'reject';
 
 export type ModuleItem = { id?: string; business_id?: string; kind?: string; title?: string; subtitle?: string; business_name?: string; status?: string; rating?: number; reviews_count?: number; seo_score?: number; price?: string; category?: string; source?: string; updated_at?: string; amount?: string | number; previous_amount?: string | number; unit?: string; metric_key?: string; period_label?: string; day?: string; orders_count?: number; transaction_type?: string; selected_channel?: string; run_id?: string; run_status?: string; error_text?: string; provider_sources?: string[]; parse_status?: string; parse_source?: string; parse_updated_at?: string; refresh_cost_credits?: number; scheduled_refresh_cost_credits?: number; review_sync_enabled?: boolean; review_sync_interval_hours?: number; review_sync_schedule_mode?: string; review_sync_schedule_days?: number[]; review_sync_schedule_time?: string; review_sync_next_run_at?: string; review_sync_last_run_at?: string; review_sync_last_status?: string; plan_id?: string; plan_title?: string; plan_period_days?: number; scheduled_for?: string; content_type?: string; draft_text?: string };
 
-export type NotificationPreferences = { daily_digest?: boolean; reviews?: boolean; tasks?: boolean; errors?: boolean; agent_results?: boolean; finance_rhythm?: boolean; content_publications?: boolean };
+export type NotificationPreferences = { daily_digest?: boolean; reviews?: boolean; tasks?: boolean; errors?: boolean; agent_results?: boolean; finance_rhythm?: boolean; content_publications?: boolean; content_publications_lead_days?: number; content_publications_time?: string; content_publications_platforms?: string[] };
 
 export type FinanceValue = string | number | boolean | null | undefined;
 

@@ -1,3 +1,5 @@
+import { DemoRoute, DemoRoomPage } from './pages/dashboard/demo/DemoWorkspaces';
+import { WorkRouteAlias } from '@/components/WorkRouteAlias';
 import SolutionPage from "./pages/content/SolutionPage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Suspense, lazy, useEffect, useState } from "react";
@@ -233,6 +235,7 @@ const VeselayaRascheskaOfferPage = lazy(() => import("./pages/VeselayaRascheskaO
 const CheckoutReturn = lazy(() => import("./pages/CheckoutReturn"));
 const TelegramControlPage = lazy(() => import("./pages/TelegramControlPage"));
 const LeadJourneyPage = lazy(() => import("./pages/LeadJourneyPage"));
+const MaxConnectionPage = lazy(() => import("./pages/dashboard/MaxConnectionPage"));
 const IndustryPatternsE2EPage = import.meta.env.DEV
   ? lazy(() => import("./pages/dev/IndustryPatternsE2EPage"))
   : null;
@@ -301,7 +304,7 @@ const shouldRenderHeader = (pathname: string) => {
     return false;
   }
 
-  if (pathname === "/telegram/control") {
+  if (pathname === "/telegram/control" || pathname === "/max/control") {
     return false;
   }
 
@@ -341,11 +344,13 @@ const AppShell = () => {
           <Route path="/docs" element={<DocsPage />} />
           <Route path="/docs/:section" element={<DocsPage />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/demo" element={<DemoEntryPage />} />
+          <Route path="/demo/room" element={<DemoRoomPage />} />
+            <Route path="/demo" element={<DemoEntryPage />} />
           <Route path="/telegram/control" element={<TelegramControlPage />} />
           <Route path="/solutions/:slug" element={<SolutionPage />} />
           <Route path="/articles" element={<ArticlesPage />} />
           <Route path="/articles/:slug" element={<ArticleDetailPage />} />
+          <Route path="/max/control" element={<TelegramControlPage />} />
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/documents/:slug" element={<DocumentDetailPage />} />
           <Route path="/cases" element={<CasesPage />} />
@@ -353,29 +358,30 @@ const AppShell = () => {
 
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<Navigate to="/dashboard/today" replace />} />
-            <Route path="today" element={<TodayPage />} />
+            <Route path="today" element={<DemoRoute area="today"><TodayPage /></DemoRoute>} />
             <Route path="feed" element={<CommunityFeedPage />} />
-            <Route path="profile" element={<ProfilePage />} />
+            <Route path="max" element={<MaxConnectionPage />} />
+            <Route path="profile" element={<DemoRoute area="profile"><ProfilePage /></DemoRoute>} />
             <Route path="card" element={<JourneyWorkspaceFocus><CardOverviewPage /></JourneyWorkspaceFocus>} />
             <Route path="content" element={<JourneyWorkspaceFocus><ContentPage /></JourneyWorkspaceFocus>} />
-            <Route path="content-plan" element={<Navigate to="/dashboard/content" replace />} />
-            <Route path="progress" element={<ProgressPage />} />
-            <Route path="finance" element={<FinancePage />} />
+            <Route path="content-plan" element={<WorkRouteAlias path="/dashboard/content" />} />
+            <Route path="progress" element={<DemoRoute area="progress"><ProgressPage /></DemoRoute>} />
+            <Route path="finance" element={<DemoRoute area="finance"><FinancePage /></DemoRoute>} />
             <Route path="web-analytics" element={featureFlags.webTracking ? <WebAnalyticsPage /> : <Navigate to="/dashboard/progress" replace />} />
             <Route path="average-ticket" element={<AverageTicketPage />} />
-            <Route path="work-journal" element={<WorkJournalPage />} />
+            <Route path="work-journal" element={<DemoRoute area="journal"><WorkJournalPage /></DemoRoute>} />
             <Route path="ai-chat-promotion" element={<AIChatPromotionPage />} />
             <Route path="settings/*" element={<SettingsPage />} />
             <Route path="partnerships" element={<JourneyWorkspaceFocus><PartnershipSearchPage /></JourneyWorkspaceFocus>} />
-            <Route path="promotion" element={<PromotionHubPage />} />
-            <Route path="promotion/partnerships" element={<JourneyWorkspaceFocus><PartnershipSearchPage /></JourneyWorkspaceFocus>} />
-            <Route path="influencers" element={<JourneyWorkspaceFocus><InfluencersPage /></JourneyWorkspaceFocus>} />
+            <Route path="promotion" element={<WorkRouteAlias path="/dashboard/growth-paths" group="clients" />} />
+            <Route path="promotion/partnerships" element={<WorkRouteAlias path="/dashboard/partnerships" />} />
+            <Route path="influencers" element={<DemoRoute area="influencers"><JourneyWorkspaceFocus><InfluencersPage /></JourneyWorkspaceFocus></DemoRoute>} />
             <Route path="influencers/registry" element={<JourneyWorkspaceFocus><InfluencerRegistryPage /></JourneyWorkspaceFocus>} />
             <Route path="influencers/operations" element={<JourneyWorkspaceFocus><InfluencerPromotionPage /></JourneyWorkspaceFocus>} />
-            <Route path="promotion/influencers" element={<Navigate to="/dashboard/influencers" replace />} />
-            <Route path="growth-paths" element={<GrowthPathsPage />} />
+            <Route path="promotion/influencers" element={<WorkRouteAlias path="/dashboard/influencers" />} />
+            <Route path="growth-paths" element={<DemoRoute area="growth"><GrowthPathsPage /></DemoRoute>} />
             <Route path="more" element={<MorePage />} />
-            <Route path="operator" element={<OperatorPage />} />
+            <Route path="operator" element={<DemoRoute area="operator"><JourneyWorkspaceFocus><OperatorPage /></JourneyWorkspaceFocus></DemoRoute>} />
             <Route path="telegram-radar" element={<TelegramRadarPage />} />
             <Route path="agents" element={<JourneyWorkspaceFocus><AgentBlueprintsPage /></JourneyWorkspaceFocus>} />
             <Route path="bookings" element={<Navigate to="/dashboard/progress" replace />} />

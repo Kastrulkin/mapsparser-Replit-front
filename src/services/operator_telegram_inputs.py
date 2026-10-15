@@ -1,3 +1,4 @@
+from services.owner_bot_context import owner_bot_channel
 """Telegram attachments enter the same conversation as voice and text."""
 import asyncio
 import json
@@ -21,9 +22,9 @@ async def receive(update,context,host):
         file=await context.bot.get_file(media.file_id)
         content=bytes(await file.download_as_bytearray())
         def save(c):
-            item=operator_attachments.receive(c,business_id=business['business_id'],user_id=business['user_id'],channel='telegram',
+            item=operator_attachments.receive(c,business_id=business['business_id'],user_id=business['user_id'],channel=owner_bot_channel(),
                 content=content,name=getattr(media,'file_name',None) or 'photo.jpg',mime_type=getattr(media,'mime_type',None) or 'image/jpeg',
-                request_key=f'tg:{update.effective_chat.id}:{update.message.message_id}')
+                request_key=f'{owner_bot_channel()}:{update.effective_chat.id}:{update.message.message_id}')
             c.execute('SELECT input_context_json FROM operatorconversations WHERE id=%s FOR UPDATE',(item['conversation_id'],))
             selected=_row(c,c.fetchone()).get('input_context_json') or {}
             ids=list(dict.fromkeys((selected.get('attachment_ids') or [])+[item['id']]))

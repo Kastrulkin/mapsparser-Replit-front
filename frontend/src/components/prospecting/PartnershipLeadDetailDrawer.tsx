@@ -1,18 +1,18 @@
-import { OutreachEmailSetup } from '@/components/OutreachEmailSetup';
-import { LeadDetailChipList, LeadDetailMetaList, LeadDetailSection } from '@/components/prospecting/LeadDetailSections';
-import { ContactPresenceBadges, StatusSummaryCard } from '@/components/prospecting/LeadWorkflowBlocks';
-import { OutreachCampaignBuilder } from '@/components/prospecting/OutreachCampaignBuilder';
-import { OutreachSenderProfileSetup } from '@/components/prospecting/OutreachSenderProfileSetup';
-import { OutreachSuppressionManager } from '@/components/prospecting/OutreachSuppressionManager';
-import {
-	addPartnershipLeadContact,
-	getPartnershipContactIntelligence,
-} from '@/components/prospecting/partnershipApi';
+import { ReactNode, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ReactNode, useEffect, useState } from 'react';
+import { ContactPresenceBadges, StatusSummaryCard } from '@/components/prospecting/LeadWorkflowBlocks';
+import { LeadDetailChipList, LeadDetailMetaList, LeadDetailSection } from '@/components/prospecting/LeadDetailSections';
+import { OutreachEmailSetup } from '@/components/OutreachEmailSetup';
+import { OutreachCampaignBuilder } from '@/components/prospecting/OutreachCampaignBuilder';
+import { OutreachSenderProfileSetup } from '@/components/prospecting/OutreachSenderProfileSetup';
+import { OutreachSuppressionManager } from '@/components/prospecting/OutreachSuppressionManager';
+import {
+  addPartnershipLeadContact,
+  getPartnershipContactIntelligence,
+} from '@/components/prospecting/partnershipApi';
 
 type PartnershipLead = {
   id: string;
@@ -112,7 +112,6 @@ export type MatchData = {
 };
 
 export type AuditData = {
-  preview_meta?: { logo_url?: string; photo_urls?: string[] };
   services_preview?: unknown[];
 };
 
@@ -421,7 +420,7 @@ export default function PartnershipLeadDetailDrawer({
                       {missingProfileItems.slice(0, 5).map((item) => <li key={item}>{item}</li>)}
                     </ul>
                   ) : null}
-                  <Button asChild size="sm" className="mt-3">
+                  <Button asChild size="sm" className="mt-3 bg-orange-500 text-white hover:bg-orange-600">
                     <a href="#sender-profile-settings">Заполнить профиль отправителя</a>
                   </Button>
                 </div>

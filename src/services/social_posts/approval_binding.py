@@ -131,6 +131,7 @@ def _external_binding(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
     platform = str(post.get("platform") or "").strip()
     sources = {
         "vk": ("vk", "vk_group", "vk_business"),
+        "max": ("max_bot",),
         "google_business": ("google_business",),
         "facebook": ("meta", "facebook", "instagram"),
         "instagram": ("meta", "facebook", "instagram"),
@@ -145,6 +146,8 @@ def _external_binding(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
     if platform == "vk":
         group_id = str(auth_data.get("group_id") or auth_data.get("community_id") or external_id).strip()
         recipient = str(auth_data.get("owner_id") or (f"-{group_id.lstrip('-')}" if group_id else "")).strip()
+    elif platform == "max":
+        recipient = external_id
     elif platform == "google_business":
         recipient = external_id
     elif platform == "facebook":
@@ -157,6 +160,7 @@ def _external_binding(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
         "provider": platform,
         "account": {"id": account_id, "source": str(account.get("source") or "").strip(), "external_id": external_id},
         "recipient": {"id": recipient},
+        **({"sender": {"bot_id": str(auth_data.get("bot_id") or "")}} if platform == "max" else {}),
     }
 
 

@@ -1,3 +1,4 @@
+import { safeCheckoutReturn } from "@/lib/miniAppPlatform";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { subscriptionPlanCopy } from '@/content/subscriptionPlanCopy';
@@ -86,7 +87,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   const paymentSource = searchParams.get('source');
   const autoStartCheckout = searchParams.get('autostart') === '1';
   const selectedTierFromUrl = searchParams.get('tier');
-  const checkoutReturnTo = searchParams.get('return_to') || (typeof window !== 'undefined' ? window.sessionStorage.getItem('localos_checkout_return_to') : null);
+  const checkoutReturnTo = safeCheckoutReturn(searchParams.get('return_to') || (typeof window !== 'undefined' ? window.sessionStorage.getItem('localos_checkout_return_to') : null));
   const autoCheckoutStartedRef = useRef(false);
   const { language, t } = useLanguage();
 
@@ -250,7 +251,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
             title: language === 'ru' ? 'Оплата успешна!' : 'Payment successful!',
             description: language === 'ru' ? 'Подписка активирована. Карта сохранена для ежемесячного продления, если вы не отвяжете её в кабинете.' : 'Subscription activated. The card is saved for monthly renewal until you unlink it in your account.',
           });
-          if (checkoutReturnTo?.startsWith('/dashboard/') && !checkoutReturnTo.startsWith('//')) {
+          if (checkoutReturnTo) {
             completedReturnTo = checkoutReturnTo;
           }
         } else if (status === 'blocked') {

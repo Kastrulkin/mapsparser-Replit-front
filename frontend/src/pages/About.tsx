@@ -22,6 +22,8 @@ const About = ({ pricingOnly = false }: AboutProps) => {
   const isRu = language === "ru";
   const planCopy = subscriptionPlanCopy(language);
   const story = aboutStoryCopy[language];
+  const pricingHeading = language === 'hy' ? 'LocalOS-ի սակագները' : language === 'kk' ? 'LocalOS тарифтері' : language === 'tr' ? 'LocalOS Fiyatları' : 'Тарифы LocalOS';
+  const pricingMetaTitle = language === 'tr' ? 'LocalOS Fiyatları — Yerel işletmeler için planlar' : language === 'hy' ? pricingHeading : language === 'kk' ? pricingHeading : 'Тарифы LocalOS для локального бизнеса';
 
   const handleSubscribeLanding = async (tierId: "starter" | "professional" | "concierge") => {
     const token = newAuth.getToken();
@@ -98,9 +100,11 @@ const About = ({ pricingOnly = false }: AboutProps) => {
           ? 'LocalOS-ի սակագներ՝ Քարտեզներ, Ձեռքբերում և Կառավարում։ Հրապարակումներն ու հաղորդագրություններն ուղարկվում են միայն ձեր հաստատումից հետո։'
           : language === 'kk'
             ? 'LocalOS тарифтері: Карталар, Клиент тарту және Басқару. Жарияланымдар мен хабарламалар тек сіз растағаннан кейін жіберіледі.'
+            : language === 'tr'
+              ? 'LocalOS fiyatları: Haritalar, Müşteri Kazanımı ve Yönetim planları. Paylaşımlar ve mesajlar yalnızca onayınızdan sonra gönderilir.'
             : "Тарифы LocalOS: Карты — 1 200 ₽, Привлечение — 5 000 ₽, Управление — 25 000 ₽ в месяц. Публикации и отправки выполняются после подтверждения.") : story.metaDescription}
         path={pricingOnly ? "/pricing" : "/about"}
-        title={pricingOnly ? (language === 'hy' ? 'LocalOS-ի սակագները' : language === 'kk' ? 'LocalOS тарифтері' : "Тарифы LocalOS для локального бизнеса") : story.metaTitle}
+        title={pricingOnly ? pricingMetaTitle : story.metaTitle}
       />
 
       {!pricingOnly ? <section className="relative overflow-hidden border-b border-white/10 bg-slate-950 px-4 py-20 text-white sm:px-6 sm:py-24 lg:px-8 lg:py-32">
@@ -205,7 +209,7 @@ const About = ({ pricingOnly = false }: AboutProps) => {
       <section id="pricing" className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-orange-50/30">
         <div className="max-w-7xl mx-auto text-center">
           {pricingOnly ? (
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">{language === 'hy' ? 'LocalOS-ի սակագները' : language === 'kk' ? 'LocalOS тарифтері' : 'Тарифы LocalOS'}</h1>
+            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">{pricingHeading}</h1>
           ) : (
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">{t.about.pricingTitle}</h2>
           )}

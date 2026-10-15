@@ -1,19 +1,24 @@
+import { miniAppChannel } from "@/lib/miniAppPlatform";
+import { workStatusLabel, workStatusDetail } from '@/lib/workStatus';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { OperatorVoiceInput } from '@/components/operator/OperatorVoice';
 import { voiceHeaders, waitForOperatorResult } from '@/components/operator/OperatorVoice.logic';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 const defaultHeaders = voiceHeaders;
-type Entry = { author_name?: string; group_count?: number; review_status?: string; category?: string; decision?: string; assigned_to?: string; urgent?: boolean; id: string; version: number; user_id: string; can_edit?: boolean; channel: string; occurred_at: string; original_text: string; is_voided: boolean; booking_id?: string; facts_json: { event_time_known?: boolean; quote?: string; outcome?: string; reason?: string } };
-type LinkedAction = { payload_json?: { draft_id?: string; draft_href?: string }; id: string; version: number; title?: string; description?: string; status: string };
+type Entry = { author_name?: string; group_count?: number; review_status?: string; category?: string; decision?: string; assigned_to?: string; urgent?: boolean; id: string; version: number; user_id: string; can_edit?: boolean; channel: string; occurred_at: string; original_text: string; is_voided: boolean; booking_id?: string; facts_json: { knowledge_proposal?: {record_id:string;kind:string}; event_time_known?: boolean; quote?: string; outcome?: string; reason?: string } };
+type LinkedAction = { material_href?: string | null; payload_json?: { draft_id?: string; draft_href?: string }; id: string; version: number; title?: string; description?: string; status: string };
 type Rule = { id: string; instruction: string; permanent?: boolean; starts_at?: string; ends_at?: string };
 type PolicyHistory = { id: string; kind: string; created_at: string };
 type Data = { review_enabled?: boolean; can_review?: boolean; members?: { user_id: string; name: string }[]; enabled: boolean; role?: string; items: Entry[]; policy?: { version: number; rules_json: Rule[] }; policy_history?: PolicyHistory[] };
 type Answer = { async_job_id?: string; chat_response?: string; conversation_id?: string; status?: string; approval?: { action_id?: string; status?: string }; operator_result?: Answer };
 
 export function WorkJournal({ businessId, headers = defaultHeaders, embedded = false }: { embedded?: boolean; businessId?: string | null; headers?: () => Record<string, string> }) {
+  const { language } = useLanguage();
   const [data, setData] = useState<Data | null>(null); const [text, setText] = useState('');
   const [query, setQuery] = useState(''); const [day, setDay] = useState('');
   const [answer, setAnswer] = useState<Answer | null>(null); const [conversation, setConversation] = useState<string>();
@@ -72,7 +77,7 @@ export function WorkJournal({ businessId, headers = defaultHeaders, embedded = f
   };
   const submit = async (message: string, source?: { transcription_id: string; conversation_id: string; request_id: string }) => {
     const business = businessId;
-    const raw: Answer = await request('/operator/chat', { method: 'POST', body: JSON.stringify({ business_id: business, input_context: 'work_journal', work_entry_id:selectedObservation?.id, work_action_id:selectedTask?.id, channel: headers === defaultHeaders ? 'web' : 'telegram_mini_app', conversation_id: conversation, message, request_id: crypto.randomUUID(), ...source }) });
+    const raw: Answer = await request('/operator/chat', { method: 'POST', body: JSON.stringify({ business_id: business, input_context: 'work_journal', work_entry_id:selectedObservation?.id, work_action_id:selectedTask?.id, channel: headers === defaultHeaders ? 'web' : miniAppChannel(), conversation_id: conversation, message, request_id: crypto.randomUUID(), ...source }) });
     if (scope.current !== business) return;
     const final=await waitForOperatorResult(raw.operator_result || raw,business || '',headers,()=>scope.current===business);
     if(scope.current!==business)return;
@@ -107,7 +112,7 @@ export function WorkJournal({ businessId, headers = defaultHeaders, embedded = f
       {selectedObservation && <p className="text-sm">По записи: {selectedObservation.facts_json.quote}<Button variant="ghost" onClick={()=>{setSelectedObservation(null);setSelectedTask(null);}}>Убрать привязку</Button></p>}
       <label className="block">Сообщение Оператору<Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Клиент отказался от ухода: дорого. Или: что предложить клиентам сегодня?" /></label>
       <Button disabled={busy || !text.trim()} onClick={() => void run(() => submit(text))}>Отправить</Button>
-      <OperatorVoiceInput directSubmit disabled={busy} businessId={businessId} conversationId={conversation} channel={headers === defaultHeaders ? 'web' : 'telegram_mini_app'} headers={headers} onSubmit={submit} />
+      <OperatorVoiceInput directSubmit disabled={busy} businessId={businessId} conversationId={conversation} channel={headers === defaultHeaders ? 'web' : miniAppChannel()} headers={headers} onSubmit={submit} />
       {answer?.chat_response && <p className="whitespace-pre-wrap" role="status">{answer.chat_response}</p>}
       {answer?.approval?.action_id && answer.approval.status === 'pending' && <div className="flex gap-2"><Button disabled={busy} onClick={() => void run(() => decision(true))}>Подтвердить изменение</Button><Button variant="outline" disabled={busy} onClick={() => void run(() => decision(false))}>Отклонить</Button></div>}
     </section>}
@@ -120,13 +125,14 @@ export function WorkJournal({ businessId, headers = defaultHeaders, embedded = f
         <Button disabled={busy} onClick={()=>{setReviewing(entry);setReason('');setAssignee(entry.assigned_to || '');setResolution('in_progress');}}>Разобрать</Button>
         {entry.review_status==='in_progress' && <Button variant="outline" onClick={()=>{setSelectedObservation(entry);setSelectedTask(null);setText('По выбранному наблюдению создай задачу: ');document.querySelector<HTMLTextAreaElement>('textarea')?.focus();}}>Подготовить действие</Button>}
         <Button variant="ghost" disabled={busy} onClick={()=>void run(async()=>{const business=businessId;const value=await request(`/work-journal/${entry.id}/actions?business_id=${business}`);if(scope.current===business)setLinked(previous=>({...previous,[entry.id]:value.items}));})}>Задачи и результаты</Button>
-        {linked[entry.id]?.map(action=><div key={action.id} className="rounded-md border p-3"><p>{action.title} · {action.status==='completed'?'Выполнено':'В работе'}</p><p className="whitespace-pre-wrap">{action.description}</p>{action.payload_json?.draft_id && <a className="underline" href="/dashboard/content-plan">Открыть сохранённый черновик</a>}{action.status!=='completed' && <Button variant="outline" onClick={()=>{setSelectedObservation(entry);setSelectedTask(action);setText('Выбранная задача выполнена. Результат: ');document.querySelector<HTMLTextAreaElement>('textarea')?.focus();}}>Сообщить результат</Button>}</div>)}
+        {linked[entry.id]?.map(action=><div key={action.id} className="rounded-md border p-3"><p>{action.title} · {workStatusLabel(action.status, language)}</p><p className="whitespace-pre-wrap">{action.description}</p>{action.material_href ? <a className="underline" href={action.material_href}>Открыть сохранённый черновик</a> : action.payload_json?.draft_id ? <p className="text-sm">Ссылка на материал недоступна. Откройте связанную задачу для проверки.</p> : null}{action.status!=='completed' && <Button variant="outline" onClick={()=>{setSelectedObservation(entry);setSelectedTask(action);setText('Выбранная задача выполнена. Результат: ');document.querySelector<HTMLTextAreaElement>('textarea')?.focus();}}>Сообщить результат</Button>}</div>)}
       </article>)}
       {reviewing && <section className="space-y-3 rounded-xl border bg-card p-4" aria-label="Решение по наблюдению"><p>{reviewing.facts_json.quote}</p><label className="block">Решение<select autoFocus className="block rounded-md border bg-background p-2" value={resolution} onChange={e=>setResolution(e.target.value)}><option value="in_progress">Принять в работу</option><option value="clarification">Уточнить</option><option value="observing">Наблюдать</option><option value="rejected">Отклонить</option><option value="completed">Закрыть с результатом</option></select></label><label className="block">Ответственный<select className="block rounded-md border bg-background p-2" value={assignee} onChange={e=>setAssignee(e.target.value)}><option value="">Не назначен</option>{data.members?.map(member=><option key={member.user_id} value={member.user_id}>{member.name}</option>)}</select></label><label className="block">Комментарий руководства<Textarea value={reason} onChange={e=>setReason(e.target.value)} placeholder="Причина решения или подтверждённый результат" /></label><Button disabled={busy || (['rejected','completed'].includes(resolution) && !reason.trim())} onClick={()=>void run(saveReview)}>Сохранить решение</Button><Button variant="ghost" onClick={()=>setReviewing(null)}>Отмена</Button></section>}
     </section>}
     {tab==='journal' && <><div className="flex flex-wrap gap-3"><label>Поиск<Input value={query} onChange={(e) => setQuery(e.target.value)} /></label><label>Местная дата<Input type="date" value={day} onChange={(e) => setDay(e.target.value)} /></label><Button variant="outline" disabled={busy} onClick={() => void run(() => load())}>Обновить</Button></div>
     {data?.items.length === 0 && <p>Записей пока нет. Например: «Запомни: сегодня клиенты спрашивали про новую услугу».</p>}
     {data?.items.map((entry) => <article id={`journal-${entry.id}`} key={entry.id} className="space-y-2 rounded-xl border bg-card p-4 text-card-foreground">
+      {!entry.is_voided&&<Link className="inline-block text-sm underline" to={embedded?`/telegram/control?screen=business_knowledge&tab=more&module=business_knowledge&scope_type=business&scope_id=${encodeURIComponent(businessId||'')}&source_entry=${encodeURIComponent(entry.id)}${entry.facts_json.knowledge_proposal?`&${entry.facts_json.knowledge_proposal.kind==='field'?'field':'rule'}=${encodeURIComponent(entry.facts_json.knowledge_proposal.record_id)}`:''}`:`/dashboard/profile?section=knowledge&business_id=${encodeURIComponent(businessId||'')}&scope_type=business&source_entry=${encodeURIComponent(entry.id)}${entry.facts_json.knowledge_proposal?`&${entry.facts_json.knowledge_proposal.kind==='field'?'field':'rule'}=${encodeURIComponent(entry.facts_json.knowledge_proposal.record_id)}`:''}`}>Предложить изменение сведений</Link>}
       <p>{entry.facts_json.quote || entry.original_text}</p><p className="text-sm text-muted-foreground">{new Date(entry.occurred_at).toLocaleString()} · {entry.channel} · {entry.is_voided ? 'Отменено' : entry.booking_id ? 'Связано с визитом' : 'Без привязки к визиту'} · версия {entry.version}</p>
       <details><summary>Исходное сообщение</summary><p>{entry.original_text}</p></details>
       {editing?.id === entry.id ? <div className="space-y-2"><label>Исправленный текст<Textarea autoFocus value={correction} onChange={(e) => setCorrection(e.target.value)} /></label><Button disabled={busy || !correction.trim()} onClick={() => void run(() => change(entry, false))}>Сохранить исправление</Button><Button variant="ghost" onClick={() => setEditing(null)}>Закрыть</Button></div> : data.enabled && entry.can_edit && !entry.is_voided && <div className="flex gap-2"><Button variant="outline" disabled={busy} onClick={() => { setEditing(entry); setCorrection(entry.facts_json.quote || entry.original_text); }}>Исправить</Button><Button variant="outline" disabled={busy} onClick={() => void run(() => change(entry, true))}>Отменить запись</Button></div>}

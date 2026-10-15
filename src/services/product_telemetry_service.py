@@ -26,7 +26,7 @@ ALLOWED_PRODUCT_EVENTS = frozenset({
     "today_priority_set", "today_priority_accepted", "today_priority_declined",
     "today_priority_snoozed", "today_priority_disabled", "today_priority_enabled", "today_priority_undone",
 })
-ALLOWED_SURFACES = frozenset({"web", "telegram_mini_app"})
+ALLOWED_SURFACES = frozenset({"web", "telegram_mini_app", "max_mini_app", "max_bot"})
 PUBLIC_EVENT_PROPERTY_KEYS = frozenset({"cta_variant"})
 
 

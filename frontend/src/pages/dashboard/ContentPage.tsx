@@ -279,6 +279,7 @@ type MediaRecommendation = {
   title?: string;
   message?: string;
   selected_asset?: PhotoAsset | null;
+  selected_assets?: PhotoAsset[];
   alternatives?: PhotoAsset[];
   coverage?: {
     coverage_percent?: number;
@@ -640,7 +641,15 @@ const isQueuedOrHandledStatus = (status?: string) => {
   return normalized === 'queued' || normalized === 'needs_supervised_publish' || normalized === 'published';
 };
 
-const getItemStatusLabel = (item: PlanItem, posts: SocialPost[]) => {
+const hasApprovedSelectedChannels = (item: PlanItem, posts: SocialPost[], plan: PlanPayload | null) => {
+  const itemChannels = selectedChannelsFromItem(item);
+  const planChannels = selectedChannelsFromPlan(plan);
+  const selected = itemChannels.length > 0 ? itemChannels : planChannels.length > 0 ? planChannels : posts.map((post) => post.platform);
+  return selected.length > 0 && selected.every((platform) => posts.some((post) => post.platform === platform
+    && ['approved', 'published'].includes(String(post.status || '').toLowerCase())));
+};
+
+const getItemStatusLabel = (item: PlanItem, posts: SocialPost[], plan: PlanPayload | null) => {
   if (posts.some((post) => String(post.status || '').toLowerCase() === 'publishing')) return 'Проверить результат отправки';
   if (posts.some((post) => String(post.status || '') === 'failed')) return 'Не удалось';
   if (posts.some((post) => String(post.status || '') === 'needs_supervised_publish' || String(post.status || '') === 'needs_manual_publish')) {
@@ -649,11 +658,12 @@ const getItemStatusLabel = (item: PlanItem, posts: SocialPost[]) => {
   if (posts.some((post) => String(post.status || '') === 'needs_review')) return 'Нужно проверить';
   if (posts.some((post) => String(post.status || '') === 'queued')) return 'Запланировано';
   if (posts.length > 0 && posts.every((post) => String(post.status || '') === 'published')) return 'Опубликовано';
+  if (hasApprovedSelectedChannels(item, posts, plan)) return 'Утверждено';
   if (itemHasUsableText(item)) return 'Нужно проверить';
   return 'Черновик';
 };
 
-const getCalendarItemState = (item: PlanItem, posts: SocialPost[]) => {
+const getCalendarItemState = (item: PlanItem, posts: SocialPost[], plan: PlanPayload | null) => {
   const statuses = posts.map((post) => String(post.status || '').toLowerCase());
   if (statuses.includes('publishing')) {
     return { status: 'Проверить результат отправки', action: 'Проверить площадку' };
@@ -670,11 +680,11 @@ const getCalendarItemState = (item: PlanItem, posts: SocialPost[]) => {
   if (posts.length > 0 && statuses.every((status) => status === 'published')) {
     return { status: 'Опубликовано', action: 'Готово' };
   }
-  if (statuses.includes('approved')) {
-    return { status: 'Текст утверждён', action: 'Выберите каналы' };
-  }
   if (statuses.includes('needs_review')) {
     return { status: 'Текст готов', action: 'Утвердить текст' };
+  }
+  if (hasApprovedSelectedChannels(item, posts, plan)) {
+    return { status: 'Текст утверждён', action: 'Готово' };
   }
   if (itemHasUsableText(item)) {
     return { status: 'Текст готов', action: 'Подготовить каналы' };
@@ -868,6 +878,7 @@ function ContentWorkspace() {
   const [channelDetailsOpen, setChannelDetailsOpen] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
   const [themeEdits, setThemeEdits] = useState<Record<string, string>>({});
+  const [contentTypeEdits, setContentTypeEdits] = useState<Record<string, string>>({});
   const [dateEdits, setDateEdits] = useState<Record<string, string>>({});
   const [generationDetails, setGenerationDetails] = useState<Record<string, GenerationDetails>>({});
   const [briefAnswers, setBriefAnswers] = useState<Record<string, Record<string, string>>>({});
@@ -948,7 +959,7 @@ function ContentWorkspace() {
     return filled.size;
   }, [items]);
   const totalDays = Number(currentPlan?.period_days || 30);
-  const needsReviewCount = Number(socialSummary?.needs_review || 0) || items.filter((item) => itemHasUsableText(item) && getItemStatusLabel(item, postsByItem[item.id] || []) === 'Нужно проверить').length;
+  const needsReviewCount = Number(socialSummary?.needs_review || 0) || items.filter((item) => itemHasUsableText(item) && getItemStatusLabel(item, postsByItem[item.id] || [], currentPlan) === 'Нужно проверить').length;
   const nextItem = useMemo(() => {
     const today = toIsoDate(new Date());
     return [...items]
@@ -959,7 +970,7 @@ function ContentWorkspace() {
     const today = toIsoDate(new Date());
     return [...items]
       .filter((item) => {
-        const status = getItemStatusLabel(item, postsByItem[item.id] || []);
+        const status = getItemStatusLabel(item, postsByItem[item.id] || [], currentPlan);
         return status === 'Нужно проверить' || status === 'Черновик' || getItemDateKey(item) >= today;
       })
       .sort((left, right) => getItemDateKey(left).localeCompare(getItemDateKey(right)))[0] || null;
@@ -1558,6 +1569,8 @@ function ContentWorkspace() {
       if (currentTheme !== String(selectedItem.theme ?? selectedItem.goal ?? '')) payload.theme = currentTheme;
       if (normalizeIsoDate(currentDate) !== normalizeIsoDate(selectedItem.scheduled_for)) payload.scheduled_for = currentDate;
       if (currentDraft !== String(selectedItem.draft_text ?? '')) payload.draft_text = currentDraft;
+      const contentType = contentTypeEdits[selectedItem.id] ?? selectedItem.content_type ?? '';
+      if (contentType !== String(selectedItem.content_type ?? '')) payload.content_type = contentType;
       if (channelsChanged) payload.selected_channels = selectedPlatforms;
       const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}`, {
         method: 'PUT',
@@ -1565,6 +1578,13 @@ function ContentWorkspace() {
       });
       const plan = response.plan || null;
       setCurrentPlan(plan);
+      if ('content_type' in payload) {
+        setGenerationDetails((previous) => {
+          const next = { ...previous };
+          delete next[selectedItem.id];
+          return next;
+        });
+      }
       if (plan?.items) {
         const savedItem = plan.items.find((entry: PlanItem) => entry.id === selectedItem.id);
         if (savedItem) setDateEdits((previous) => ({ ...previous, [selectedItem.id]: getItemDateKey(savedItem) }));
@@ -2328,7 +2348,7 @@ function ContentWorkspace() {
 
   const renderCalendarCard = (item: PlanItem) => {
     const posts = postsByItem[item.id] || [];
-    const calendarState = getCalendarItemState(item, posts);
+    const calendarState = getCalendarItemState(item, posts, currentPlan);
     const channels = resolveItemSelectedChannels(item, posts, currentPlan);
     const canDrag = !posts.some((post) => ['publishing', 'published'].includes(String(post.status || '').toLowerCase()));
     return (
@@ -2451,7 +2471,7 @@ function ContentWorkspace() {
       <div className="divide-y divide-slate-100">
         {items.map((item) => {
           const posts = postsByItem[item.id] || [];
-          const calendarState = getCalendarItemState(item, posts);
+          const calendarState = getCalendarItemState(item, posts, currentPlan);
           return (
             <button
               key={item.id}
@@ -2461,7 +2481,7 @@ function ContentWorkspace() {
             >
               <div className="min-w-0">
                 <div className="break-words text-sm font-semibold text-slate-950 [overflow-wrap:anywhere]">{item.theme || item.goal || calendarCopy.publication}</div>
-                <div className="mt-1 text-sm text-slate-500">{formatDate(item.scheduled_for, language)} · {(posts.length || getSelectedCount(createDraft.channels))} {calendarCopy.channels}</div>
+                <div className="mt-1 text-sm text-slate-500">{formatDate(item.scheduled_for, language)} · {resolveItemSelectedChannels(item, posts, currentPlan).length} {calendarCopy.channels}</div>
               </div>
               <div className="flex min-w-0 max-w-full flex-wrap gap-2 sm:justify-end">
                 <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-full px-3 py-1 text-center text-xs font-semibold ring-1 [overflow-wrap:anywhere]', getStatusClassName(calendarState.status))}>
@@ -2804,6 +2824,7 @@ function ContentWorkspace() {
     const hasUnsavedItemChanges = Boolean(item) && (
       hasUnsavedDraftChanges
       || String(themeEdits[item.id] ?? item.theme ?? '') !== String(item.theme ?? '')
+      || String(contentTypeEdits[item.id] ?? item.content_type ?? '') !== String(item.content_type ?? '')
       || normalizeIsoDate(dateEdits[item.id] ?? item.scheduled_for) !== normalizeIsoDate(item.scheduled_for)
       || publicationChannelsTouched && !sameSelectedChannels(currentItemChannels, storedItemChannels)
     );
@@ -3112,6 +3133,16 @@ function ContentWorkspace() {
                       </Button>
                     </div>
                     {currentBusinessId && <ExternalDriveVideos key={`${currentBusinessId}-${item.id}`} businessId={currentBusinessId} itemId={item.id} onChanged={() => { void loadContent(); }} />}
+                    {(mediaRecommendation?.selected_assets?.length || 0) > 1 ? (
+                      <div className="mt-4">
+                        <div className="text-sm font-semibold">Фото в комплекте: {mediaRecommendation?.selected_assets?.length}</div>
+                        <div className="mt-2 grid grid-cols-2 gap-3">
+                          {mediaRecommendation?.selected_assets?.map((asset, index) => (
+                            <AuthenticatedImage key={asset.id} src={photoImageSrc(asset)} alt={`Выбранное фото ${index + 1}`} className="h-40 w-full rounded-2xl object-contain ring-1 ring-black/10" />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                     {selectedPhoto?.original_url ? (
                       <div className="mt-4 grid gap-4 sm:grid-cols-[140px_1fr]">
                         <AuthenticatedImage src={photoImageSrc(selectedPhoto)} alt="Подобранное фото" className="h-32 w-full rounded-2xl object-cover shadow-sm ring-1 ring-black/10" />
@@ -3119,7 +3150,7 @@ function ContentWorkspace() {
                           <div className="font-semibold text-slate-900">Почему подходит</div>
                           <div className="mt-1 leading-6">{selectedPhoto.why || mediaRecommendation?.message || 'Фото подходит по задаче публикации.'}</div>
                           <div className="mt-3 flex flex-wrap gap-2">
-                            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">качество {Math.round(Number(selectedPhoto.quality_score || 0))}%</span>
+                            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">{selectedPhoto.analysis_status && selectedPhoto.analysis_status !== 'analyzed' ? 'Качество ещё не оценено' : `качество ${Math.round(Number(selectedPhoto.quality_score || 0))}%`}</span>
                             {selectedPhoto.category ? <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">{formatPhotoCategoryLabel(selectedPhoto.category)}</span> : null}
                           </div>
                           <Button
@@ -3232,6 +3263,23 @@ function ContentWorkspace() {
               <div className="space-y-4">
                 <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="text-sm font-semibold text-slate-950">Детали</div>
+                  <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    Тип публикации
+                    <select
+                      value={contentTypeEdits[item.id] ?? item.content_type ?? ''}
+                      onChange={(event) => setContentTypeEdits((previous) => ({ ...previous, [item.id]: event.target.value }))}
+                      className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm normal-case tracking-normal text-slate-950"
+                    >
+                      {!['news', 'service', 'faq', 'story', 'case'].includes(item.content_type || '') && (
+                        <option value={item.content_type || ''}>Текущий тип</option>
+                      )}
+                      <option value="news">Обычная новость</option>
+                      <option value="service">Об услуге</option>
+                      <option value="faq">Вопрос и ответ</option>
+                      <option value="story">Реальная история</option>
+                      <option value="case">Реальный кейс</option>
+                    </select>
+                  </label>
                   <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                     Дата
                     <Input
@@ -3781,14 +3829,14 @@ function ContentWorkspace() {
                 <div className="max-w-2xl">
                   <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">{calendarCopy.aiResult}</div>
                   <h2 className="mt-3 text-4xl font-semibold tracking-tight">
-                    {filledDays > 0 ? calendarCopy.contentReady : calendarCopy.preparingCalendar}
+                    {filledDays > 0 ? needsReviewCount > 0 ? calendarCopy.needsReview : calendarCopy.contentReady : calendarCopy.preparingCalendar}
                   </h2>
                   <div className="mt-4 max-w-xl text-lg text-slate-300">
                     {fillContentCalendarTemplate(calendarCopy.filledDays, { filled: filledDays, total: totalDays })}
                   </div>
                   <Progress
                     value={Math.min(100, Math.round((filledDays / Math.max(totalDays, 1)) * 100))}
-                    aria-label={filledDays > 0 ? calendarCopy.contentReady : calendarCopy.preparingCalendar}
+                    aria-label={filledDays > 0 ? needsReviewCount > 0 ? calendarCopy.needsReview : calendarCopy.contentReady : calendarCopy.preparingCalendar}
                     className="mt-5 h-3 bg-white/10"
                   />
                 </div>

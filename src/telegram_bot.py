@@ -20,11 +20,22 @@ import time
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, MenuButtonWebApp, WebAppInfo
-from telegram.error import BadRequest
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
-from telegram.request import HTTPXRequest
-from core.telegram_polling import PollingRequest
+from services.owner_bot_ui import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+try:
+    from telegram import Update, BotCommand, MenuButtonWebApp
+    from telegram.error import BadRequest
+    from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+    from telegram.request import HTTPXRequest
+    from core.telegram_polling import PollingRequest
+except ModuleNotFoundError:
+    from types import SimpleNamespace
+    Update = type(None)
+    BadRequest = ValueError
+    ContextTypes = SimpleNamespace(DEFAULT_TYPE=object)
+    class Application:
+        @classmethod
+        def builder(cls):
+            raise RuntimeError('Telegram runtime requires python-telegram-bot; MAX uses the common dialogue presentation')
 from database_manager import get_db_connection
 from core.db_helpers import assert_schema_columns
 from core.action_orchestrator import ActionOrchestrator
@@ -61,6 +72,7 @@ from crypto_pay_client import (
     create_crypto_invoice_for_checkout_session,
 )
 from services.bot_feature_requests import save_bot_feature_request
+from services.owner_bot_context import current_owner_bot, owner_bot_platform, owner_bot_channel, owner_bot_user, OwnerBotStates, owner_bot_operation_key, owner_bot_request_payload
 from services.telegram_dashboard import (
     build_automation_text,
     build_card_text,
@@ -141,7 +153,7 @@ TELEGRAM_MINI_APP_URL = os.getenv('TELEGRAM_MINI_APP_URL', 'https://localos.pro/
 logger = logging.getLogger(__name__)
 
 # Словарь для хранения состояния пользователей (telegram_id -> state)
-user_states = {}
+user_states = OwnerBotStates()
 OPENCLAW_ORCHESTRATOR = ActionOrchestrator({})
 REVIEW_REPLY_TONES = [
     ("friendly", "Дружелюбный"),
@@ -681,7 +693,9 @@ async def _telegram_error_handler(update: object, context: ContextTypes.DEFAULT_
         logger.exception("Failed to send fallback error message")
 
 def get_user_id_from_telegram(telegram_id: str):
-    """Получить user_id из telegram_id"""
+    """Resolve a verified messenger identity without cross-platform ID lookup."""
+    if owner_bot_platform() == 'max':
+        return owner_bot_user(telegram_id).get('id')
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM Users WHERE telegram_id = %s", (telegram_id,))
@@ -691,6 +705,8 @@ def get_user_id_from_telegram(telegram_id: str):
 
 
 def _is_superadmin_telegram_user(telegram_id: str) -> bool:
+    if owner_bot_platform() == 'max':
+        return bool(owner_bot_user(telegram_id).get('is_superadmin'))
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE telegram_id = %s", (telegram_id,))
@@ -1498,6 +1514,11 @@ def list_user_businesses(telegram_id: str) -> list[dict]:
 
 def resolve_business_context(telegram_id: str, preferred: str = ""):
     """Определить бизнес пользователя для команд OpenClaw."""
+    if owner_bot_platform() == 'max':
+        scope = _resolve_telegram_control_scope(telegram_id)
+        if preferred and (not scope or str(scope.get('id')) != preferred):
+            scope = _resolve_telegram_control_scope(telegram_id, requested_kind='business', requested_id=preferred)
+        return _control_scope_business_context(telegram_id, scope)
     db_user_id = get_user_id_from_telegram(telegram_id)
     if not db_user_id:
         return None
@@ -1715,6 +1736,7 @@ def _resolve_telegram_control_scope(
             requested_id=requested_id,
             persist=persist,
             telegram_id=str(telegram_id),
+            platform=owner_bot_platform(),
         )
         if persist:
             conn.commit()
@@ -1840,7 +1862,7 @@ def _control_scope_catalog(telegram_id: str, search_query: str = "") -> tuple[di
             search_query=search_query,
             business_limit=12 if search_query else 8,
         )
-        preferences = load_control_preferences(cursor, str(db_user_id))
+        preferences = load_control_preferences(cursor, str(db_user_id), platform=owner_bot_platform())
         return catalog, preferences
     finally:
         conn.close()
@@ -1859,6 +1881,7 @@ def _toggle_current_control_favorite(telegram_id: str) -> bool | None:
             user_id=str(db_user_id),
             telegram_id=str(telegram_id),
             scope=scope,
+            platform=owner_bot_platform(),
         )
         conn.commit()
         return favorite
@@ -2124,10 +2147,12 @@ def _save_feature_request_from_telegram(
     try:
         return save_bot_feature_request(
             conn,
-            telegram_id=telegram_id,
+            telegram_id=telegram_id if owner_bot_platform() == 'telegram' else '',
+            max_id=telegram_id if owner_bot_platform() == 'max' else None,
+            request_key=('max:' + current_owner_bot.get().event_key) if current_owner_bot.get() is not None else None,
             user_id=str(db_user_id or ""),
             business_id=str((business_ctx or {}).get("business_id") or ""),
-            source="telegram_bot",
+            source="max_bot" if owner_bot_platform() == "max" else "telegram_bot",
             category=category,
             request_text=request_text,
             metadata={
@@ -2141,6 +2166,12 @@ def _save_feature_request_from_telegram(
 
 
 def _start_public_report_request(telegram_id: str, normalized_url: str, source_name: str = "") -> tuple[bool, dict[str, str]]:
+    runtime = current_owner_bot.get()
+    if runtime is not None:
+        from services.max_guest_audits import start_guest_audit
+        import hashlib
+        return start_guest_audit(runtime.cursor, max_id=runtime.external_id, normalized_url=normalized_url,
+            event_key=runtime.event_key + ':' + hashlib.sha256(normalized_url.encode()).hexdigest(), source_name=source_name)
     if not normalized_url:
         return False, {"error": "Не удалось распознать ссылку на карточку."}
     pseudo_email = f"telegram-{str(telegram_id or '').strip()}@localos.bot"
@@ -2490,7 +2521,7 @@ def get_openclaw_runtime():
 async def _require_bound_business(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = str(update.effective_user.id)
     if not _is_bound_user(telegram_id):
-        await update.message.reply_text("❌ Аккаунт не привязан. Используйте /start <код_привязки>.")
+        await update.message.reply_text(("❌ Аккаунт не привязан. Используйте /link КОД из кабинета LocalOS." if owner_bot_platform() == "max" else "❌ Аккаунт не привязан. Используйте /start <код_привязки>."))
         return None
     scope = _resolve_telegram_control_scope(telegram_id)
     ctx = _control_scope_business_context(telegram_id, scope)
@@ -2753,12 +2784,12 @@ def _perform_reviews_reply(business_ctx: dict, review_text: str, tone: str = "pr
     envelope = {
         "tenant_id": str(business_ctx["business_id"]),
         "trace_id": str(uuid.uuid4()),
-        "idempotency_key": str(uuid.uuid4()),
+        "idempotency_key": owner_bot_operation_key(),
         "actor": {
             "id": str(business_ctx["user_id"]),
             "type": "user",
             "role": "owner",
-            "channel": "telegram",
+            "channel": owner_bot_channel(),
             "telegram_id": str(business_ctx.get("telegram_id") or ""),
         },
         "capability": "reviews.reply",
@@ -2824,12 +2855,12 @@ def _perform_service_optimize(business_ctx: dict, service_text: str) -> tuple[bo
     envelope = {
         "tenant_id": str(business_ctx["business_id"]),
         "trace_id": str(uuid.uuid4()),
-        "idempotency_key": str(uuid.uuid4()),
+        "idempotency_key": owner_bot_operation_key(),
         "actor": {
             "id": str(business_ctx["user_id"]),
             "type": "user",
             "role": "owner",
-            "channel": "telegram",
+            "channel": owner_bot_channel(),
             "telegram_id": str(business_ctx.get("telegram_id") or ""),
         },
         "capability": "services.optimize",
@@ -2849,7 +2880,7 @@ def _perform_service_optimize(business_ctx: dict, service_text: str) -> tuple[bo
             "industry": business_meta.get("industry") or "",
             "business_type": business_meta.get("business_type") or "",
             "bulk": False,
-            "source": "telegram",
+            "source": owner_bot_channel(),
         },
     }
     result = OPENCLAW_ORCHESTRATOR.execute(
@@ -3030,12 +3061,12 @@ def _perform_news_generate(business_ctx: dict, raw_info: str) -> tuple[bool, str
     envelope = {
         "tenant_id": str(business_ctx["business_id"]),
         "trace_id": str(uuid.uuid4()),
-        "idempotency_key": str(uuid.uuid4()),
+        "idempotency_key": owner_bot_operation_key(),
         "actor": {
             "id": str(business_ctx["user_id"]),
             "type": "user",
             "role": "owner",
-            "channel": "telegram",
+            "channel": owner_bot_channel(),
             "telegram_id": str(business_ctx.get("telegram_id") or ""),
         },
         "capability": "news.generate",
@@ -3687,7 +3718,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
     user_id = str(update.effective_user.id)
     args = context.args
-    logger.info("Received /start from telegram_id=%s args=%s", user_id, args)
+    logger.info("Received /start via %s", owner_bot_platform())
     try:
         if args and len(args) > 0:
             bind_token = args[0]
@@ -3701,7 +3732,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         db_user_id = get_user_id_from_telegram(user_id)
-        creator_link = _creator_portal_link(user_id)
+        creator_link = _creator_portal_link(user_id) if owner_bot_platform() == 'telegram' else None
         if creator_link and db_user_id:
             await _reply_effective_message(
                 update,
@@ -4171,6 +4202,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     import sys
     if await callback(update, context, sys.modules[__name__]):
         return
+    if data.startswith(('finance_apply:', 'finance_cancel:')):
+        from services.owner_finance_input import finance_callback
+        await finance_callback(update, context, sys.modules[__name__])
+        return
     db_user_id = get_user_id_from_telegram(user_id)
     
     if not db_user_id:
@@ -4370,7 +4405,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_id=str(business_ctx.get("user_id") or ""),
                 business_id=str(business_ctx.get("business_id") or ""),
                 tariff_id=tier_key,
-                source="telegram_bot",
+                source="max_bot" if owner_bot_platform() == "max" else "telegram_bot",
             )
             invoice_url = str(
                 invoice.get("bot_invoice_url")
@@ -5376,133 +5411,10 @@ async def handle_transaction_photo(update: Update, context: ContextTypes.DEFAULT
             await update.message.reply_text("❌ Не удалось распознать транзакции на фото")
             return
         
-        # Сохраняем транзакции
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Проверяем наличие полей (PG: information_schema)
-        try:
-            cursor.execute("""
-                SELECT column_name FROM information_schema.columns
-                WHERE table_schema = 'public' AND table_name = 'financialtransactions'
-            """)
-            columns = [str(_row_get(row, 'column_name', 0) or '') for row in cursor.fetchall()]
-        except Exception:
-            cursor.execute("PRAGMA table_info(FinancialTransactions)")
-            columns = [str(_row_get(row, '', 1) or '') for row in cursor.fetchall()]
-        has_master_id = 'master_id' in columns
-        has_business_id = 'business_id' in columns
-        
-        saved_count = 0
-        for trans in transactions:
-            transaction_id = str(uuid.uuid4())
-            
-            master_id = None
-            if trans.get('master_name') and has_master_id:
-                cursor.execute("SELECT id FROM Masters WHERE name = %s AND business_id = %s LIMIT 1", 
-                             (trans['master_name'], business_id))
-                master_row = cursor.fetchone()
-                if master_row:
-                    master_id = _row_get(master_row, 'id', 0)
-            
-            if has_master_id and has_business_id:
-                cursor.execute("""
-                    INSERT INTO FinancialTransactions 
-                    (id, user_id, business_id, transaction_date, amount, client_type, services, notes, master_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    transaction_id, db_user_id, business_id,
-                    trans.get('transaction_date', datetime.now().strftime('%Y-%m-%d')),
-                    trans.get('amount', 0), trans.get('client_type', 'new'),
-                    json.dumps(trans.get('services', [])), trans.get('notes', ''),
-                    master_id
-                ))
-            elif has_master_id:
-                cursor.execute("""
-                    INSERT INTO FinancialTransactions 
-                    (id, user_id, transaction_date, amount, client_type, services, notes, master_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    transaction_id, db_user_id,
-                    trans.get('transaction_date', datetime.now().strftime('%Y-%m-%d')),
-                    trans.get('amount', 0), trans.get('client_type', 'new'),
-                    json.dumps(trans.get('services', [])), trans.get('notes', ''),
-                    master_id
-                ))
-            else:
-                cursor.execute("""
-                    INSERT INTO FinancialTransactions 
-                    (id, user_id, transaction_date, amount, client_type, services, notes)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    transaction_id, db_user_id,
-                    trans.get('transaction_date', datetime.now().strftime('%Y-%m-%d')),
-                    trans.get('amount', 0), trans.get('client_type', 'new'),
-                    json.dumps(trans.get('services', [])), trans.get('notes', '')
-                ))
-            saved_count += 1
-            
-            # Добавляем услуги из транзакции в UserServices, если их там еще нет
-            services_list = trans.get('services', [])
-            if services_list and business_id:
-                # Проверяем наличие поля business_id в UserServices (PG: information_schema)
-                try:
-                    cursor.execute("""
-                        SELECT column_name FROM information_schema.columns
-                        WHERE table_schema = 'public' AND table_name = 'userservices'
-                    """)
-                    service_columns = [str(_row_get(row, 'column_name', 0) or '') for row in cursor.fetchall()]
-                except Exception:
-                    cursor.execute("PRAGMA table_info(UserServices)")
-                    service_columns = [str(_row_get(row, '', 1) or '') for row in cursor.fetchall()]
-                has_business_id_in_services = 'business_id' in service_columns
-                
-                for service_name in services_list:
-                    if not service_name or not isinstance(service_name, str):
-                        continue
-                    
-                    # Проверяем, есть ли уже такая услуга для этого бизнеса
-                    if has_business_id_in_services:
-                        cursor.execute("""
-                            SELECT id FROM UserServices 
-                            WHERE business_id = %s AND name = %s AND user_id = %s
-                            LIMIT 1
-                        """, (business_id, service_name.strip(), db_user_id))
-                    else:
-                        cursor.execute("""
-                            SELECT id FROM UserServices 
-                            WHERE name = %s AND user_id = %s
-                            LIMIT 1
-                        """, (service_name.strip(), db_user_id))
-                    
-                    existing_service = cursor.fetchone()
-                    
-                    if not existing_service:
-                        # Добавляем новую услугу
-                        service_id = str(uuid.uuid4())
-                        if has_business_id_in_services:
-                            cursor.execute("""
-                                INSERT INTO UserServices 
-                                (id, user_id, business_id, category, name, description, keywords, price, created_at)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                            """, (service_id, db_user_id, business_id, 'Общие услуги', service_name.strip(), '', '[]', ''))
-                        else:
-                            cursor.execute("""
-                                INSERT INTO UserServices 
-                                (id, user_id, category, name, description, keywords, price, created_at)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                            """, (service_id, db_user_id, 'Общие услуги', service_name.strip(), '', '[]', ''))
-        
-        conn.commit()
-        conn.close()
-        
-        await update.message.reply_text(
-            f"✅ Успешно добавлено {saved_count} транзакций!\n\n"
-            f"Используйте /start для возврата в меню"
-        )
-        
-        user_states[user_id] = {'state': 'idle'}
-        
+        from services.owner_finance_input import preview_sales
+        await preview_sales(update, sys.modules[__name__], user_id, business_id, transactions)
+        return
+
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка обработки фото: {str(e)}")
 
@@ -5570,6 +5482,8 @@ async def handle_optimize_photo(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 def _telegram_agent_message_decision(update: Update) -> dict[str, Any]:
+    if owner_bot_platform() == 'max':
+        return {'allow_normal_routing': not update.effective_user.is_bot}
     user = update.effective_user
     message = update.message
     if not bool(getattr(user, "is_bot", False)):
@@ -5614,7 +5528,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     reply_to_message = getattr(update.message, "reply_to_message", None)
     reply_to_message_id = int(getattr(reply_to_message, "message_id", 0) or 0)
-    if reply_to_message_id:
+    if reply_to_message_id and owner_bot_platform() == 'telegram':
         try:
             editorial_result = capture_founder_content_correction_from_telegram(
                 telegram_id=user_id,
@@ -5741,10 +5655,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         business_ctx = {**business_ctx, "telegram_name": update.effective_user.full_name}
-        business_ctx["operator_payload"] = {"request_id": f"tg:{update.effective_chat.id}:{update.message.message_id}"}
+        business_ctx["operator_payload"] = owner_bot_request_payload({"request_id": f"{owner_bot_channel()}:{update.effective_chat.id}:{update.message.message_id}"})
         import asyncio
         operator_payload = await asyncio.to_thread(build_operator_chat_payload, business_ctx, text)
         from services.operator_request_history import mark_delivery
+        if current_owner_bot.get() is not None:
+            current_owner_bot.get().request_audit_ids.append(operator_payload['result'].get('request_audit_id'))
+            await update.message.reply_text(operator_payload['text'], reply_markup=_build_operator_result_markup(operator_payload['result']))
+            return
         try:
             await update.message.reply_text(operator_payload['text'], reply_markup=_build_operator_result_markup(operator_payload['result']))
         except Exception:
@@ -5985,182 +5903,9 @@ async def handle_transaction_text(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text("❌ Пожалуйста, укажите сумму транзакции")
         return
     
-    # Логирование для отладки
-    print(f"[DEBUG] handle_transaction_text: business_id={business_id}, services={transaction_data['services']}, amount={transaction_data['amount']}")
-    
-    # Сохраняем транзакцию
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Проверяем наличие полей (PG: information_schema)
-    try:
-        cursor.execute("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'financialtransactions'
-        """)
-        columns = [str(_row_get(row, 'column_name', 0) or '') for row in cursor.fetchall()]
-    except Exception:
-        cursor.execute("PRAGMA table_info(FinancialTransactions)")
-        columns = [str(_row_get(row, '', 1) or '') for row in cursor.fetchall()]
-    columns_set = set(columns)
-    has_master_id = 'master_id' in columns_set
-    has_business_id = 'business_id' in columns_set
-    has_user_id = 'user_id' in columns_set
-    has_services_col = 'services' in columns_set
-    has_notes_col = 'notes' in columns_set
-    has_transaction_date_col = 'transaction_date' in columns_set
-    has_date_col = 'date' in columns_set
-    has_description_col = 'description' in columns_set
-    has_transaction_type_col = 'transaction_type' in columns_set
-    
-    transaction_id = str(uuid.uuid4())
-    
-    master_id = None
-    if transaction_data.get('master_name') and has_master_id:
-        cursor.execute("SELECT id FROM Masters WHERE name = %s AND business_id = %s LIMIT 1", 
-                     (transaction_data['master_name'], business_id))
-        master_row = cursor.fetchone()
-        if master_row:
-            master_id = _row_get(master_row, 'id', 0)
-    
-    # Формируем описание, если нет колонок services/notes
-    description_parts = []
-    if transaction_data.get('services'):
-        description_parts.append("Услуги: " + ", ".join(transaction_data['services']))
-    if transaction_data.get('master_name'):
-        description_parts.append(f"Мастер: {transaction_data['master_name']}")
-    if transaction_data.get('notes'):
-        description_parts.append(f"Заметки: {transaction_data['notes'].strip()}")
-    description_text = "; ".join(description_parts) if description_parts else ""
-    
-    # Значения по умолчанию
-    transaction_type_value = 'income' if has_transaction_type_col else None
-    date_value = transaction_data['transaction_date'] if has_date_col else None
-    
-    # Формируем динамический INSERT под доступные колонки
-    insert_columns = ['id']
-    insert_values = [transaction_id]
-    
-    if has_user_id:
-        insert_columns.append('user_id')
-        insert_values.append(db_user_id)
-    if has_business_id:
-        insert_columns.append('business_id')
-        insert_values.append(business_id)
-    if has_transaction_date_col:
-        insert_columns.append('transaction_date')
-        insert_values.append(transaction_data['transaction_date'])
-    elif has_date_col and date_value:
-        insert_columns.append('date')
-        insert_values.append(date_value)
-    
-    insert_columns.append('amount')
-    insert_values.append(transaction_data['amount'])
-    
-    insert_columns.append('client_type')
-    insert_values.append(transaction_data['client_type'])
-    
-    if has_services_col:
-        insert_columns.append('services')
-        insert_values.append(json.dumps(transaction_data['services']))
-    if has_notes_col:
-        insert_columns.append('notes')
-        insert_values.append(transaction_data['notes'])
-    if has_description_col:
-        insert_columns.append('description')
-        insert_values.append(description_text)
-    if has_transaction_type_col and transaction_type_value:
-        insert_columns.append('transaction_type')
-        insert_values.append(transaction_type_value)
-    if has_master_id:
-        insert_columns.append('master_id')
-        insert_values.append(master_id)
-    
-    placeholders = ",".join(["%s"] * len(insert_columns))
-    sql = f"INSERT INTO FinancialTransactions ({', '.join(insert_columns)}) VALUES ({placeholders})"
-    cursor.execute(sql, insert_values)
-    
-    # Добавляем услуги из транзакции в UserServices, если их там еще нет
-    services_list = transaction_data.get('services', [])
-    added_services_count = 0
-    
-    if services_list and business_id:
-        # Проверяем наличие поля business_id в UserServices (PG: information_schema)
-        try:
-            cursor.execute("""
-                SELECT column_name FROM information_schema.columns
-                WHERE table_schema = 'public' AND table_name = 'userservices'
-            """)
-            service_columns = [str(_row_get(row, 'column_name', 0) or '') for row in cursor.fetchall()]
-        except Exception:
-            cursor.execute("PRAGMA table_info(UserServices)")
-            service_columns = [str(_row_get(row, '', 1) or '') for row in cursor.fetchall()]
-        has_business_id_in_services = 'business_id' in service_columns
-        
-        print(f"[DEBUG] Adding services: {services_list}, business_id={business_id}, has_business_id_in_services={has_business_id_in_services}")
-        
-        for service_name in services_list:
-            if not service_name or not isinstance(service_name, str):
-                continue
-            
-            service_name_clean = service_name.strip()
-            if not service_name_clean:
-                continue
-            
-            # Проверяем, есть ли уже такая услуга для этого бизнеса
-            if has_business_id_in_services:
-                cursor.execute("""
-                    SELECT id FROM UserServices 
-                    WHERE business_id = %s AND name = %s AND user_id = %s
-                    LIMIT 1
-                """, (business_id, service_name_clean, db_user_id))
-            else:
-                cursor.execute("""
-                    SELECT id FROM UserServices 
-                    WHERE name = %s AND user_id = %s
-                    LIMIT 1
-                """, (service_name_clean, db_user_id))
-            
-            existing_service = cursor.fetchone()
-            
-            if not existing_service:
-                # Добавляем новую услугу
-                service_id = str(uuid.uuid4())
-                if has_business_id_in_services:
-                    cursor.execute("""
-                        INSERT INTO UserServices 
-                        (id, user_id, business_id, category, name, description, keywords, price, created_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                    """, (service_id, db_user_id, business_id, 'Общие услуги', service_name_clean, '', '[]', ''))
-                    print(f"[DEBUG] Added service: {service_name_clean} for business_id={business_id}")
-                else:
-                    cursor.execute("""
-                        INSERT INTO UserServices 
-                        (id, user_id, category, name, description, keywords, price, created_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                    """, (service_id, db_user_id, 'Общие услуги', service_name_clean, '', '[]', ''))
-                    print(f"[DEBUG] Added service: {service_name_clean} (no business_id)")
-                added_services_count += 1
-            else:
-                print(f"[DEBUG] Service already exists: {service_name_clean}")
-    else:
-        print(f"[DEBUG] No services to add: services_list={services_list}, business_id={business_id}")
-    
-    conn.commit()
-    conn.close()
-    
-    services_msg = ""
-    if added_services_count > 0:
-        services_msg = f"\n\n➕ Добавлено новых услуг: {added_services_count}"
-    
-    await update.message.reply_text(
-        f"✅ Транзакция добавлена!{services_msg}\n\n"
-        f"💰 Сумма: {transaction_data['amount']} ₽\n"
-        f"📅 Дата: {transaction_data['transaction_date']}\n\n"
-        f"Используйте /start для возврата в меню"
-    )
-    
-    user_states[user_id] = {'state': 'idle'}
+    from services.owner_finance_input import preview_sales
+    await preview_sales(update, sys.modules[__name__], user_id, business_id, [transaction_data])
+    return
 
 async def handle_optimize_text(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, text: str):
     """Обработка текста для оптимизации"""
@@ -6229,37 +5974,15 @@ async def handle_setting_text(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     try:
-        # Обновляем через API
-        update_data = {}
-        if setting_type == 'name':
-            update_data['businessName'] = text
-        elif setting_type == 'address':
-            update_data['address'] = text
-        elif setting_type == 'maps':
-            update_data['yandexUrl'] = text
-        elif setting_type == 'phone':
-            update_data['phone'] = text
-        elif setting_type == 'hours':
-            update_data['workingHours'] = text
-        
-        # Получаем токен сессии для API (упрощенная версия - напрямую в БД)
+        from services.owner_bot_context import update_business_setting
         conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        if setting_type in ['name', 'address', 'hours']:
-            field_map = {
-                'name': 'name',
-                'address': 'address',
-                'hours': 'working_hours'
-            }
-            field = field_map.get(setting_type)
-            if field:
-                cursor.execute(f"UPDATE Businesses SET {field} = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", 
-                             (text, business_id))
-                conn.commit()
-        
-        conn.close()
-        
+        try:
+            update_business_setting(conn.cursor(), user_id=db_user_id, business_id=business_id, setting=setting_type, text=text)
+            conn.commit()
+        finally:
+            conn.rollback()
+            conn.close()
+
         setting_names = {
             'name': 'название',
             'address': 'адрес',
@@ -6280,7 +6003,7 @@ async def handle_setting_text(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /help"""
-    help_text = """*LocalOS в Telegram*
+    help_text = f"""*LocalOS в {'MAX' if owner_bot_platform() == 'max' else 'Telegram'}*
 
 Здесь можно увидеть, что требует внимания, переключиться между сетью и точками, подготовить ответы и контент, проверить задачи и подтвердить безопасные действия.
 

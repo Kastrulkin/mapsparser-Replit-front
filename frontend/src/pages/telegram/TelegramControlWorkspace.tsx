@@ -1,3 +1,9 @@
+import MaxChannelConnection from "@/components/MaxChannelConnection";
+import { miniAppPlatform, miniAppPath, miniAppChannel, miniAppLabel, miniWebApp, miniAppLaunchParams } from "@/lib/miniAppPlatform";
+import MaxAccountLink from "@/components/MaxAccountLink";
+import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
+import { workDestinations, workNavigationCopy } from '@/lib/workNavigation';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import localOsLogo from '@/assets/images/logo.png';
 import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
 import { OperatorSpeech, OperatorVoiceInput, VoiceSubmission } from '@/components/operator/OperatorVoice';
@@ -42,6 +48,7 @@ import { FormEvent, Suspense, lazy, useEffect, useRef, useState } from 'react';
 
 const BusinessInputSettings = lazy(() => import('@/components/operator/BusinessInputSettings').then((module) => ({ default: module.BusinessInputSettings })));
 const ContentRules = lazy(() => import('@/components/operator/ContentRules').then((module) => ({ default: module.ContentRules })));
+const BusinessKnowledge = lazy(() => import('@/components/business-knowledge/BusinessKnowledge').then(module => ({default:module.BusinessKnowledge})));
 const WorkJournal = lazy(() => import('@/components/WorkJournal').then((module) => ({ default: module.WorkJournal })));
 const OperatorWorkdayInput = lazy(() => import('@/components/operator/OperatorWorkdayInput').then((module) => ({ default: module.OperatorWorkdayInput })));
 const PartnershipsMobileModule = lazy(() => import('@/components/telegram/PartnershipsMobileModule').then((module) => ({ default: module.PartnershipsMobileModule })));
@@ -61,7 +68,7 @@ declare global {
 }
 
 
-const webApp = () => window.Telegram?.WebApp;
+const webApp = miniWebApp;
 
 const readJson = readMobileJson;
 const scopeQuery = mobileScopeQuery;
@@ -71,8 +78,9 @@ const isTab = (value: string | null): value is Tab => Boolean(value && ['today',
 
 export const TelegramControlWorkspace = () => {
   const preview = isPreview();
+  const [linkRequired, setLinkRequired] = useState(false);
   const initData = webApp()?.initData || '';
-  const launchParams = new URLSearchParams(window.location.search);
+  const launchParams = miniAppLaunchParams();
   const rawJourneyParam = launchParams.get('journey_token') || launchParams.get('tgWebAppStartParam') || webApp()?.initDataUnsafe?.start_param || '';
   const journeyToken = rawJourneyParam.startsWith('journey_') ? rawJourneyParam.slice(8) : /^[A-Za-z0-9_-]{32,}$/.test(rawJourneyParam) ? rawJourneyParam : '';
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(preview ? previewBootstrap : null);
@@ -185,7 +193,7 @@ export const TelegramControlWorkspace = () => {
     void fetch('/api/product/events', {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ event_name: eventName, business_id: scope.id, surface: 'telegram_mini_app', object_type: objectId ? 'growth_action' : undefined, object_id: objectId }),
+      body: JSON.stringify({ event_name: eventName, business_id: scope.id, surface: miniAppChannel(), object_type: objectId ? 'growth_action' : undefined, object_id: objectId }),
       keepalive: true,
     }).catch(() => undefined);
   };
@@ -201,14 +209,17 @@ export const TelegramControlWorkspace = () => {
     if (!initData) { setLoading(false); return; }
     const requestVersion = catalogOnly ? requestedVersion ?? catalogSearchVersion.current + 1 : 0;
     if (catalogOnly && requestedVersion === undefined) catalogSearchVersion.current = requestVersion;
+    const controller = new AbortController();
+    const deadline = window.setTimeout(() => controller.abort(), 20000);
     const timer = catalogOnly ? undefined : window.setTimeout(() => setSlowLoading(true), 400);
     try {
-      const deepLink = new URLSearchParams(window.location.search);
+      const deepLink = miniAppLaunchParams();
       const filters: Record<string, string> = {};
       deepLink.forEach((value, key) => {
         if (key.startsWith('filter_')) filters[key.slice(7)] = value;
       });
-      const result = await fetch('/api/operator/telegram/bootstrap', {
+      const result = await fetch(`/api/operator/${miniAppPlatform()}/bootstrap`, {
+        signal: controller.signal,
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
           init_data: initData,
           q: query,
@@ -220,7 +231,14 @@ export const TelegramControlWorkspace = () => {
           item_id: deepLink.get('item_id'),
           filters,
         }),
-      }).then(readJson<Bootstrap>);
+      }).then(async (response) => {
+        if (response.status === 401 && miniAppPlatform() === 'max') {
+          const payload = await response.clone().json();
+          window.sessionStorage.removeItem('localos_mini_session'); setBootstrap(null); setMessages([]); setWorkspace(null); setTodayData(null);
+          if (payload.code === 'max_link_required') setLinkRequired(true);
+        }
+        return readJson<Bootstrap>(response);
+      });
       if (catalogOnly && requestVersion !== catalogSearchVersion.current) return;
       if (result.web_session_token) window.sessionStorage.setItem('localos_mini_session', result.web_session_token);
       if (!catalogOnly && journeyToken && result.selected_scope?.kind === 'business' && result.selected_scope.id) {
@@ -228,7 +246,7 @@ export const TelegramControlWorkspace = () => {
         try {
           const claimed = await fetch('/api/journeys/claim', {
             method: 'POST', headers: authHeaders(),
-            body: JSON.stringify({ token: journeyToken, business_id: result.selected_scope.id, surface: 'telegram_mini_app' }),
+            body: JSON.stringify({ token: journeyToken, business_id: result.selected_scope.id, surface: miniAppChannel() }),
           }).then(readJson<{ action?: JourneyAction }>);
           setJourneyAction(claimed.action || null);
           if (claimed.action) result.resolved_deep_link = { screen: 'today', item_type: 'journey_action', item_id: claimed.action.id };
@@ -261,6 +279,7 @@ export const TelegramControlWorkspace = () => {
     } catch (requestError) {
       if (!catalogOnly || requestVersion === catalogSearchVersion.current) setError(requestError instanceof Error ? requestError.message : 'Не удалось открыть ЛокалОС.');
     } finally {
+      window.clearTimeout(deadline);
       if (timer !== undefined) window.clearTimeout(timer);
       if (!catalogOnly) { setSlowLoading(false); setLoading(false); }
     }
@@ -361,7 +380,7 @@ export const TelegramControlWorkspace = () => {
     scopeRequestVersion.current = requestVersion;
     setLoading(true);
     try {
-      const result = await fetch('/api/operator/telegram/scope', {
+      const result = await fetch(`/api/operator/${miniAppPlatform()}/scope`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ init_data: initData, scope_type: kind, scope_id: id || null }),
       }).then(readJson<Bootstrap>);
       if (requestVersion !== scopeRequestVersion.current) return false;
@@ -466,7 +485,7 @@ export const TelegramControlWorkspace = () => {
       return;
     }
     if (!quietly) setModuleLoading(true);
-    if (moduleKey === 'work_journal' || moduleKey === 'company' || moduleKey === 'companies' || moduleKey === 'community_sources' || moduleKey === 'influencers') { setModuleLoading(false); setError(''); return; }
+    if (moduleKey === 'business_knowledge' || moduleKey === 'work_journal' || moduleKey === 'company' || moduleKey === 'companies' || moduleKey === 'community_sources' || moduleKey === 'influencers') { setModuleLoading(false); setError(''); return; }
     const params = scopeQuery(scope);
     if (moduleKey === 'progress') {
       if (!quietly) setProgressLoading(true);
@@ -624,7 +643,7 @@ export const TelegramControlWorkspace = () => {
     operatorSending.current = true; setOperatorBusy(true); setTab('operator');
     try {
       const result = await fetch('/api/operator/chat', {
-        method: 'POST', headers: authHeaders(), body: JSON.stringify({ business_id: scope.id, message: text, channel: 'telegram_mini_app', conversation_id: operatorConversationId, request_id: pendingOperatorRequest.current.id, ...source }),
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ business_id: scope.id, message: text, channel: miniAppChannel(), conversation_id: operatorConversationId, request_id: pendingOperatorRequest.current.id, ...source }),
       }).then(readJson<{ conversation_id?: string; operator_result?: { async_job_id?: string; message_id?: string; input_type?: string; chat_response?: string; summary?: string; status?: string; capability?: string; mobile_route?: { screen?: string }; approval?: { action_id?: string } } }>);
       if (version !== scopeRequestVersion.current) return;
       if(result.operator_result)result.operator_result=await waitForOperatorResult(result.operator_result,scope.id,authOnlyHeaders,()=>version===scopeRequestVersion.current);
@@ -743,7 +762,9 @@ export const TelegramControlWorkspace = () => {
   };
 
   if (!initData && !preview) return <TelegramGate />;
+  if (linkRequired) return <MaxAccountLink initData={initData} onLinked={() => { setLinkRequired(false); void loadBootstrap(); }} />;
   if (loading && !bootstrap) return <LoadingScreen slow={slowLoading} />;
+  if (error && !bootstrap) return <main className="grid min-h-[100dvh] place-items-center bg-zinc-950 p-6 text-white"><section className="max-w-sm text-center"><h1 className="text-xl font-semibold">Не удалось открыть LocalOS</h1><p role="alert" className="mt-3 text-sm text-zinc-400">{error}</p><button type="button" className="mt-6 min-h-12 rounded-2xl bg-primary px-5 font-semibold" onClick={() => { setLoading(true); void loadBootstrap(); }}>Повторить загрузку</button></section></main>;
 
   return (
     <Suspense fallback={<LoadingScreen slow={false} />}>
@@ -758,7 +779,7 @@ export const TelegramControlWorkspace = () => {
           <motion.div key={`${tab}-${module}-${picker}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={spring}>
             {picker && pickerNetwork ? <NetworkScopePicker network={pickerNetwork} currentScope={scope} locations={networkLocations.items || []} total={networkLocations.counts?.total || 0} nextCursor={networkLocations.cursor} search={networkSearch} setSearch={setNetworkSearch} loading={networkLocationsLoading} choose={chooseScope} back={() => { setPickerNetwork(null); setNetworkSearch(''); }} loadMore={() => void loadNetworkLocations(pickerNetwork, networkSearch, networkLocations.cursor || '', true)} /> : null}
             {picker && !pickerNetwork ? <ScopePicker catalog={catalog} search={search} setSearch={setSearch} choose={chooseScope} openNetwork={(network) => { setPickerNetwork(network); setNetworkSearch(''); }} loadMore={() => void loadBootstrap(search.trim(), catalog?.next_business_cursor || '', true, true)} /> : null}
-            {!picker && tab === 'today' ? <>{journeyAction && scope?.kind === 'business' && scope.id ? <div className="px-4 pb-4"><JourneyActionCard action={journeyAction} businessId={scope.id} surface="telegram_mini_app" dark onUpdated={(nextAction) => {
+            {!picker && tab === 'today' ? <>{journeyAction && scope?.kind === 'business' && scope.id ? <div className="px-4 pb-4"><JourneyActionCard action={journeyAction} businessId={scope.id} surface={miniAppChannel()} dark onUpdated={(nextAction) => {
               if (nextAction) setJourneyAction(nextAction);
               else void loadJourneyAction(journeyAction.id, scope.id || '');
               void loadToday(scope, true, true);
@@ -766,11 +787,11 @@ export const TelegramControlWorkspace = () => {
             {!picker && tab === 'tasks' ? <Tasks items={tasks} filter={taskFilter} setFilter={setTaskFilter} openTask={openTask} /> : null}
             {!picker && tab === 'feed' ? bootstrap?.navigation?.find((item) => item.key === 'feed')?.status === 'read_only' ? <Screen title="Лента" subtitle="Главные темы и сигналы из вашей индустрии."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'feed')} /></Screen> : <CommunityFeedMobile scope={scope} preview={preview} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} openTarget={openMobileTarget} /> : null}
             {!picker && tab === 'reviews' ? bootstrap?.navigation?.find((item) => item.key === 'reviews')?.status === 'read_only' ? <Screen title="Отзывы" subtitle="Новые отзывы и подготовленные ответы."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'reviews')} /></Screen> : <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
-            {!picker && tab === 'progress' ? <Screen title="Прогресс" subtitle="Выполненные шаги, текущие проблемы и одно следующее действие.">{bootstrap?.navigation?.find((item) => item.key === 'progress')?.status === 'read_only' ? <LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'progress')} /> : <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} />}</Screen> : null}
+            {!picker && tab === 'progress' ? <Screen title="Результаты" subtitle="Подтверждённая работа и доступные измерения.">{bootstrap?.navigation?.find((item) => item.key === 'progress')?.status === 'read_only' ? <LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'progress')} /> : <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} />}</Screen> : null}
             {!picker && tab === 'operator' ? bootstrap?.navigation?.find((item) => item.key === 'operator')?.status === 'read_only' ? <Screen title="Оператор" subtitle="Поручения, согласования и результаты работы."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'operator')} /></Screen> : <Operator businessId={scope?.kind === 'business' ? scope.id || '' : ''} conversationId={operatorConversationId} onConversation={setOperatorConversationId} sendVoice={sendOperator} messages={messages} busy={operatorBusy} actionBusy={operatorActionBusy} command={command} setCommand={setCommand} ask={askOperator} resolveAction={resolveOperatorAction} openScreen={openMobileTarget} /> : null}
-            {!picker && tab === 'more' && !module ? <More navigation={visibleNavigation} onOpen={openMobileTarget} openProgress={() => openMobileTarget('progress')} onLocked={setPaywall} restartTour={() => setShowOnboarding(true)} /> : null}
-            {!picker && tab === 'menu' ? <UtilityMenu navigation={visibleNavigation} onOpen={openMobileTarget} /> : null}
-            {!picker && tab === 'more' && module === 'settings' && scope?.kind === 'business' && scope.id ? <><BusinessInputSettings key={scope.id} businessId={scope.id} headers={authOnlyHeaders} /><ContentRules key={`rules-${scope.id}`} businessId={scope.id} headers={authOnlyHeaders} /></> : null}
+            {!picker && tab === 'more' && !module ? <More navigation={visibleNavigation} onOpen={openMobileTarget} openProgress={() => openMobileTarget('progress')} onLocked={setPaywall} restartTour={() => setShowOnboarding(true)} scope={scope} /> : null}
+            {!picker && tab === 'menu' ? <UtilityMenu navigation={visibleNavigation} onOpen={openMobileTarget} scope={scope} /> : null}
+            {!picker && tab === 'more' && module === 'settings' && scope?.kind === 'business' && scope.id ? <>{bootstrap?.max_enabled ? <MaxChannelConnection key={`max-${scope.id}`} businessId={scope.id} headers={authOnlyHeaders} /> : null}<BusinessInputSettings key={scope.id} businessId={scope.id} headers={authOnlyHeaders} /><ContentRules key={`rules-${scope.id}`} businessId={scope.id} headers={authOnlyHeaders} /></> : null}
             {!picker && tab === 'more' && module ? <ModuleScreen module={module} focusItemId={deepLinkItemId} scope={scope} access={bootstrap?.navigation?.find((item) => item.key === (module === 'finance_import' || module === 'analytics' ? 'finance' : module))} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={() => setModule('')} /> : null}
           </motion.div>
         </AnimatePresence>
@@ -876,8 +897,8 @@ const Operator = ({ businessId, conversationId, onConversation, sendVoice, messa
     }) : <Empty icon={Bot} title="Что поручить?" text="Например: «Подготовь ответы на плохие отзывы» или «Проверь свежесть карточки»." />}
     {busy ? <div className="flex items-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin text-primary motion-reduce:animate-none" />Определяю задачу и готовлю результат…</div> : null}
   </div>
-    {businessId && <OperatorVoiceInput key={businessId} businessId={businessId} channel="telegram_mini_app" conversationId={conversationId} onSubmit={sendVoice} disabled={busy} headers={authOnlyHeaders} />}
-    {businessId && <OperatorWorkdayInput key={`inputs:${businessId}`} businessId={businessId} channel="telegram_mini_app" conversationId={conversationId} disabled={busy} headers={authOnlyHeaders} onConversation={onConversation} />}
+    {businessId && <OperatorVoiceInput key={businessId} businessId={businessId} channel={miniAppChannel()} conversationId={conversationId} onSubmit={sendVoice} disabled={busy} headers={authOnlyHeaders} />}
+    {businessId && <OperatorWorkdayInput key={`inputs:${businessId}`} businessId={businessId} channel={miniAppChannel()} conversationId={conversationId} disabled={busy} headers={authOnlyHeaders} onConversation={onConversation} />}
   <form onSubmit={ask} className="sticky bottom-24 mt-4 flex gap-2 rounded-[20px] bg-zinc-900 p-2 ring-1 ring-inset ring-white/[0.08]"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Напишите задачу" className="min-h-12 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-zinc-700" /><button aria-label="Отправить задачу" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary transition-transform active:scale-[0.96]"><Send className="h-4 w-4" /></button></form>
 </Screen>;
 
@@ -885,32 +906,36 @@ const billingHref = (item?: NavigationItem) => {
   const target = item?.billing_url || '/dashboard/profile?focus=subscription#subscription';
   const [base, hash] = target.split('#');
   const separator = base.includes('?') ? '&' : '?';
-  return `${base}${separator}return_to=${encodeURIComponent(`/telegram/control?screen=${item?.key || 'today'}`)}${hash ? `#${hash}` : ''}`;
+  return `${base}${separator}return_to=${encodeURIComponent(`${miniAppPath()}?screen=${item?.key || 'today'}`)}${hash ? `#${hash}` : ''}`;
 };
 
 const SubscriptionPaywall = ({ item, close }: { item: NavigationItem; close: () => void }) => <div className="fixed inset-0 z-50 flex items-end bg-black/70 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Раздел доступен на другом тарифе"><div className="w-full rounded-[28px] bg-zinc-900 p-5 shadow-2xl ring-1 ring-inset ring-white/[0.08]"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/15 text-primary"><CreditCard className="h-5 w-5" /></span><h2 className="mt-4 text-xl font-semibold">Нужен тариф «{item.required_tier_name || 'Управление'}»</h2><p className="mt-2 text-sm leading-6 text-zinc-500">{item.reason || 'Подключите тариф для выбранной точки.'}</p><a href={billingHref(item)} className="mt-5 flex min-h-12 w-full items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold text-white transition-transform duration-150 active:scale-[0.96]">Выбрать тариф</a><button type="button" onClick={close} className="mt-2 min-h-12 w-full rounded-2xl bg-white/[0.04] text-sm font-semibold text-zinc-400 transition-transform duration-150 active:scale-[0.96]">Закрыть</button></div></div>;
 
 const LockedModulePreview = ({ item }: { item?: NavigationItem }) => <section className="overflow-hidden rounded-[24px] bg-gradient-to-b from-primary/[0.10] to-white/[0.035] p-5 shadow-[0_18px_54px_rgba(0,0,0,0.24),0_0_0_1px_rgba(255,92,51,0.14)]"><span className="text-xs font-semibold text-primary">Доступно на тарифе «{item?.required_tier_name || 'Управление'}»</span><h2 className="mt-3 text-balance text-xl font-semibold">Посмотрите, какой результат даст раздел</h2><p className="mt-2 text-pretty text-sm leading-6 text-zinc-500">{item?.reason || 'Полные данные и действия откроются после повышения тарифа.'}</p><div className="mt-5 space-y-2" aria-hidden="true">{[0, 1, 2].map((index) => <div key={index} className="rounded-[18px] bg-black/20 p-4 blur-[3px] select-none"><div className="h-3 w-2/3 rounded-full bg-white/15" /><div className="mt-3 h-2 w-full rounded-full bg-white/[0.08]" /><div className="mt-2 h-2 w-4/5 rounded-full bg-white/[0.08]" /></div>)}</div><a href={billingHref(item)} className="mt-5 flex min-h-12 w-full items-center justify-center rounded-2xl bg-primary px-4 text-center text-sm font-semibold text-white shadow-[0_12px_32px_rgba(255,92,51,0.22)] transition-transform duration-150 active:scale-[0.96]">Открыть раздел — тариф «{item?.required_tier_name || 'Управление'}»</a></section>;
 
-const More = ({ navigation, onOpen, openProgress, onLocked, restartTour }: { navigation: NavigationItem[]; onOpen: (key: string) => void; openProgress: () => void; onLocked: (item: NavigationItem) => void; restartTour: () => void }) => {
-  return <Screen title="Пути роста" subtitle="Выберите цель. Внутри будет первое действие и текущие данные.">
-    <GrowthNavigation navigation={navigation} onOpen={onOpen} onOpenProgress={openProgress} onLocked={onLocked} onRestartTour={restartTour} />
+const More = ({ navigation, onOpen, openProgress, onLocked, restartTour, scope }: { navigation: NavigationItem[]; onOpen: (key: string) => void; openProgress: () => void; onLocked: (item: NavigationItem) => void; restartTour: () => void; scope?: { kind?: string; id?: string } | null }) => {
+  const { language } = useLanguage(); const copy = workNavigationCopy(language);
+  return <Screen title={copy.label('more')} subtitle="">
+    <GrowthNavigation navigation={navigation} onOpen={onOpen} onOpenProgress={openProgress} onLocked={onLocked} onRestartTour={restartTour} language={language} scope={scope} />
   </Screen>;
 };
 
-const UtilityMenu = ({ navigation, onOpen }: { navigation: NavigationItem[]; onOpen: (key: string) => void }) => {
-  const hiddenFromMenu = new Set(['today', 'progress', 'cards', 'content', 'influencers', 'partnerships']);
-  const items = navigation.filter((item) => item.status !== 'hidden' && !hiddenFromMenu.has(item.key));
-  return <Screen title="Ещё" subtitle="Рабочие очереди, управление и настройки.">
-    <div className="space-y-2">
-      {items.map((item) => <button key={item.key} type="button" onClick={() => onOpen(item.key)} className="flex min-h-14 w-full items-center gap-3 rounded-[18px] bg-white/[0.04] px-4 text-left ring-1 ring-inset ring-white/[0.07] transition-[background-color,transform] duration-150 active:scale-[0.96]"><span className="grid h-10 w-10 place-items-center rounded-[13px] bg-primary/10 text-primary"><CircleEllipsis className="h-4 w-4" /></span><span className="min-w-0 flex-1"><b className="block text-sm">{item.label}</b>{item.reason ? <small className="mt-0.5 block truncate text-zinc-600">{item.reason}</small> : null}</span><ChevronRight className="h-4 w-4 text-zinc-700" /></button>)}
-    </div>
-  </Screen>;
+const UtilityMenu = ({ navigation, onOpen, scope }: { navigation: NavigationItem[]; onOpen: (key: string) => void; scope?: { kind?: string; id?: string } | null }) => {
+ const { language } = useLanguage(); const copy = workNavigationCopy(language);
+ return <Screen title={copy.menu} subtitle=""><div className="space-y-2">{workDestinations.map((destination, index) => {
+  const available = navigation.find(item => item.key === destination.mobileKey && item.status !== 'hidden');
+  const params = new URLSearchParams(); if (scope?.id) { params.set('business_id', scope.id); params.set('scope_type', scope.kind || 'business'); }
+  const href = destination.path + (params.size ? '?' + params : '');
+  const row = <><span className="min-w-0 flex-1">{copy.label(destination.id)}{!available && destination.id !== 'more' && destination.id !== 'today' ? <small className="mt-1 block text-zinc-400">{workCoherenceCopy(language).openWeb}</small> : null}{available?.reason ? <small className="mt-1 block text-zinc-400">{available.reason}</small> : null}</span><ChevronRight className="h-4 w-4 shrink-0" /></>;
+  const className = 'flex min-h-14 w-full items-center gap-3 rounded-xl bg-white/[0.04] p-4 text-left focus-visible:ring-2 focus-visible:ring-white';
+  return <div key={destination.id}>{workDestinations[index-1]?.group !== destination.group ? <h2 className="pb-2 pt-4 text-sm text-zinc-400">{copy.groups[destination.group]}</h2> : null}{available || destination.id === 'more' || destination.id === 'today' ? <button type="button" className={className} onClick={() => onOpen(destination.mobileKey)}>{row}</button> : <a className={className} href={href}>{row}</a>}{destination.id === 'maps' && navigation.some(item => item.key === 'reviews' && item.status !== 'hidden') ? <button type="button" className={className + ' mt-2'} onClick={() => onOpen('reviews')}>Отзывы<ChevronRight className="ml-auto h-4 w-4" /></button> : null}</div>;
+ })}</div></Screen>;
 };
 
 const moduleNames: Record<string, [string, string]> = {
   progress: ['Прогресс', 'Выполненные шаги, текущие проблемы и следующее действие.'],
   cards: ['Карточки на картах', 'Данные из Яндекса и 2ГИС, свежесть, ошибки и история обновлений.'], content: ['Контент', 'Календарь, текущий план, черновики и публикации.'], services: ['Услуги', 'Цены, описания, данные с карт и предложения по улучшению.'],
+  business_knowledge: ['Знания о бизнесе', 'Постоянные характеристики, правила и документы.'],
   work_journal: ['Рабочий журнал', 'Наблюдения команды и рекомендации по визитам.'],
   finance: ['Финансы', 'Выручка, прибыль, средний чек, загрузка и динамика.'], finance_import: ['Загрузить финансовую сводку', 'Сначала проверьте распознанные данные. В аналитику они попадут только после подтверждения.'], analytics: ['Финансы', 'Выручка, заказы и динамика по выбранному периоду.'], partnerships: ['Партнёрства', 'Договорённости с партнёрами и инструкции сотрудникам.'], company: ['Моя компания', 'Локации, карты, контакты, публичные услуги, аудиты и история.'], companies: ['Компании', 'Клиенты, лиды, партнёры, локации и история публичных данных.'], agents: ['Работа ЛокалОС', 'Запуски, текущие этапы, результаты и ошибки.'], settings: ['Настройки и подключения', 'Уведомления, источники, тариф и доступ.'], diagnostics: ['Диагностика', 'Ошибки парсеров, интеграций и фоновых задач.'],
   community_sources: ['Источники Ленты', 'Публичные Telegram-каналы и открытые группы, из которых ЛокалОС собирает ленту и главные темы.'], influencers: ['Инфлюенсеры', 'Подходящие локальные авторы, предложение, сообщения, размещения и результат.'],
@@ -919,7 +944,8 @@ const moduleNames: Record<string, [string, string]> = {
 const ModuleScreen = ({ module, focusItemId, scope, access, data, loading, progressData, progressLoading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, reload, openTarget, track, trackProduct, openTasks, requestCrm, back }: ModuleScreenProps) => {
   const content = moduleNames[module] || ['Раздел', 'Данные и доступные действия.'];
   return <Screen title={content[0]} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>
-    {module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'influencers' ? <InfluencersMobileModule scope={scope} focusItemId={focusItemId} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} openBusiness={id => openTarget('partnerships', { kind: 'business', id })} /> : access?.status === 'read_only' || data.status === 'payment_required' ? <LockedModulePreview item={access || data.access} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} trackProduct={trackProduct} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'work_journal' ? <WorkJournal embedded businessId={scope?.kind === 'business' ? scope.id : null} headers={authOnlyHeaders} /> : module === 'finance' || module === 'finance_import' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} requestCrm={requestCrm} initialSection={module === 'finance_import' ? 'import' : 'overview'} trackProduct={trackProduct} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
+    {module === 'company' && (scope?.kind==='business'||scope?.kind==='network') && <button type="button" onClick={()=>openTarget('business_knowledge')} className="mb-4 flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-input p-4 text-left focus-visible:ring-2 focus-visible:ring-ring"><span>Знания о бизнесе<small className="mt-1 block text-muted-foreground">Характеристики, постоянные правила и документы</small></span><ChevronRight className="h-4 w-4 shrink-0" /></button>}
+    {module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'influencers' ? <InfluencersMobileModule scope={scope} focusItemId={focusItemId} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} openBusiness={id => openTarget('partnerships', { kind: 'business', id })} /> : access?.status === 'read_only' || data.status === 'payment_required' ? <LockedModulePreview item={access || data.access} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} trackProduct={trackProduct} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'business_knowledge' ? <BusinessKnowledge embedded focusRecordId={focusItemId} headers={authOnlyHeaders} scope={scope?.kind==='business'||scope?.kind==='network'?{type:scope.kind,id:scope.id}:null} onBusinessChange={id=>openTarget('business_knowledge',{kind:'business',id})} /> : module === 'work_journal' ? <WorkJournal embedded businessId={scope?.kind === 'business' ? scope.id : null} headers={authOnlyHeaders} /> : module === 'finance' || module === 'finance_import' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} requestCrm={requestCrm} initialSection={module === 'finance_import' ? 'import' : 'overview'} trackProduct={trackProduct} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} canManage={Boolean(data.available_actions?.some((action) => action.key === 'agents.lifecycle'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
   </Screen>;
 };
 
@@ -954,7 +980,12 @@ const NotificationSettings = ({ preferences, saving, save }: { preferences: Noti
   const [value, setValue] = useState<NotificationPreferences>(preferences);
   useEffect(() => setValue(preferences), [preferences]);
   const rows: Array<[keyof NotificationPreferences, string, string]> = [['daily_digest', 'Утренняя сводка', 'Задачи и изменения за сутки'], ['content_publications', 'Публикации', 'Готовые тексты для ручного размещения'], ['finance_rhythm', 'Ритм статистики', 'Один раз перед сроком и один — после'], ['reviews', 'Новые отзывы', 'Когда нужен ответ'], ['tasks', 'Решения', 'Черновики и подтверждения'], ['errors', 'Ошибки', 'Точка или подключение требует внимания'], ['agent_results', 'Результаты ЛокалОС', 'Новый результат готов к проверке']];
-  return <div><div className="space-y-2">{rows.map(([key, title, description]) => <label key={key} className="flex min-h-16 items-center gap-3 rounded-[20px] bg-white/[0.04] px-4 ring-1 ring-inset ring-white/[0.07]"><span className="min-w-0 flex-1"><b className="block text-sm">{title}</b><small className="mt-1 block text-zinc-600">{description}</small></span><input type="checkbox" checked={Boolean(value[key])} onChange={(event) => setValue((current) => ({ ...current, [key]: event.target.checked }))} className="h-6 w-6 accent-primary" /></label>)}</div><button disabled={saving} onClick={() => void save(value)} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold active:scale-[0.96] disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}{saving ? 'Сохраняем…' : 'Сохранить'}</button></div>;
+  return <div><div className="space-y-2">{rows.map(([key, title, description]) => <label key={key} className="flex min-h-16 items-center gap-3 rounded-[20px] bg-white/[0.04] px-4 ring-1 ring-inset ring-white/[0.07]"><span className="min-w-0 flex-1"><b className="block text-sm">{title}</b><small className="mt-1 block text-zinc-600">{description}</small></span><input type="checkbox" checked={Boolean(value[key])} onChange={(event) => setValue((current) => ({ ...current, [key]: event.target.checked }))} className="h-6 w-6 accent-primary" /></label>)}</div>{value.content_publications && <div className="mt-3 space-y-3 rounded-[20px] bg-white/[0.04] p-4">
+    <label className="block text-sm">За сколько дней до публикации<input aria-label="За сколько дней до публикации" type="number" min={0} max={7} value={value.content_publications_lead_days ?? 0} onChange={event => setValue(current => ({ ...current, content_publications_lead_days: Number(event.target.value) }))} className="mt-2 min-h-11 w-full rounded-[14px] bg-black/20 px-3" /></label>
+    <label className="block text-sm">Время по часовому поясу бизнеса<input aria-label="Время передачи материалов" type="time" value={value.content_publications_time || ''} onChange={event => setValue(current => ({ ...current, content_publications_time: event.target.value }))} className="mt-2 min-h-11 w-full rounded-[14px] bg-black/20 px-3" /></label>
+    <label className="flex items-start gap-3 text-sm"><input type="checkbox" checked={(value.content_publications_platforms || []).length === 3} onChange={event => setValue(current => ({ ...current, content_publications_platforms: event.target.checked ? ['vk', 'telegram', 'max'] : [] }))} className="h-6 w-6 accent-primary" />Передавать только полный комплект для VK, Telegram и MAX</label>
+    <p className="text-xs text-zinc-500">Подготовленные тексты и фото придут через подключённого бота. Публикацию выполняет получатель.</p>
+  </div>}<button disabled={saving} onClick={() => void save(value)} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold active:scale-[0.96] disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}{saving ? 'Сохраняем…' : 'Сохранить'}</button></div>;
 };
 
 const locationCountLabel = (count: number) => {
@@ -994,14 +1025,15 @@ export const NetworkScopePicker = ({ network, currentScope, locations, total, ne
 const ScopePicker = ({ catalog, search, setSearch, choose, openNetwork, loadMore }: { catalog?: Catalog; search: string; setSearch: (value: string) => void; choose: (kind: string, id?: string | null) => void; openNetwork: (network: NetworkCatalogItem) => void; loadMore: () => void }) => <Screen title="Где работаем?" subtitle="Выбор сохранится для следующего запуска."><label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-zinc-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, город или адрес" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label><div className="mt-4 space-y-2">{catalog?.platform ? <ScopeRow icon={ShieldCheck} label="Вся платформа" meta="Операционная картина ЛокалОС" onClick={() => void choose('platform')} /> : null}{catalog?.networks?.map((item) => <ScopeRow key={item.id} icon={Network} label={item.name || 'Сеть'} meta={`${locationCountLabel(item.locations_count || 0)} · Выбрать`} onClick={() => openNetwork(item)} />)}{catalog?.businesses?.filter((item) => Boolean(search.trim()) || !item.network_id).map((item) => <ScopeRow key={item.id} icon={Building2} label={item.name || 'Бизнес'} meta={[item.network_name, item.address].filter(Boolean).join(' · ') || 'Самостоятельный бизнес'} onClick={() => void choose('business', item.id)} />)}{catalog?.has_more_businesses ? <button type="button" onClick={loadMore} className="min-h-12 w-full rounded-2xl bg-white/[0.05] text-sm font-semibold text-zinc-300 shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-transform active:scale-[0.96]">Показать ещё</button> : null}</div></Screen>;
 
 const BottomNav = ({ current, setCurrent }: { current: Tab; setCurrent: (tab: Tab) => void }) => {
-  const activeKey: Tab = current === 'reviews' ? 'more' : current === 'operator' ? 'menu' : current === 'tasks' ? 'today' : current;
-  const items: Array<[Tab, string, typeof Sparkles]> = [['today', 'Сегодня', Sparkles], ['more', 'Пути', LayoutGrid], ['feed', 'Лента', Radio], ['progress', 'Результаты', TrendingUp], ['menu', 'Ещё', CircleEllipsis]];
+  const { language } = useLanguage(); const copy = workNavigationCopy(language);
+  const activeKey: Tab = current === 'tasks' ? 'today' : current === 'more' || current === 'reviews' || current === 'feed' ? 'menu' : current;
+  const items: Array<[Tab, string, typeof Sparkles]> = [['today', copy.label('today'), Sparkles], ['operator', workCoherenceCopy(language).chat, Bot], ['progress', copy.label('progress'), TrendingUp], ['menu', copy.menu, CircleEllipsis]];
   return <nav aria-label="Главное меню" className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-xl border-t border-white/[0.07] bg-zinc-950/90 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl"><div className="grid grid-flow-col auto-cols-fr">{items.map(([key, label, Icon]) => <button key={key} type="button" aria-current={activeKey === key ? 'page' : undefined} onClick={() => setCurrent(key)} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[10px] transition-[color,transform,background-color] duration-150 active:scale-[0.96] ${activeKey === key ? 'bg-primary/10 text-primary' : 'text-zinc-600'}`}><Icon className="h-5 w-5" /><span>{label}</span></button>)}</div></nav>;
 };
 const PrimaryButton = ({ children, onClick }: { children: React.ReactNode; onClick: () => void }) => <button onClick={onClick} className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(255,92,51,0.24)] transition-[filter,transform] active:scale-[0.96]">{children}<ChevronRight className="h-4 w-4" /></button>;
 const TaskRow = ({ item, onClick }: { item: AttentionItem; onClick: () => void }) => <button onClick={onClick} className="mt-2 flex min-h-16 w-full items-center gap-3 rounded-[20px] bg-white/[0.035] px-4 py-3 text-left ring-1 ring-inset ring-white/[0.06] active:scale-[0.98]"><span className={`h-2.5 w-2.5 rounded-full ${item.severity === 'high' ? 'bg-rose-400' : item.severity === 'medium' ? 'bg-amber-400' : 'bg-emerald-400'}`} /><span className="min-w-0 flex-1"><b className="block truncate text-sm">{item.title || 'Задача'}</b><small className="mt-1 block truncate text-zinc-600">{item.description}</small>{item.progress !== undefined && item.progress !== null ? <span className="mt-2 block h-1 overflow-hidden rounded-full bg-white/[0.06]"><i className="block h-full rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(item.progress, 100))}%` }} /></span> : item.action_unavailable_reason ? <small className="mt-1 block truncate text-amber-300/70">{item.action_unavailable_reason}</small> : null}</span>{item.count ? <b className="tabular-nums text-zinc-400">{item.count}</b> : null}<ChevronRight className="h-4 w-4 text-zinc-700" /></button>;
 const ScopeRow = ({ icon: Icon, label, meta, selected = false, onClick }: { icon: typeof Star; label: string; meta: string; selected?: boolean; onClick: () => void }) => <button onClick={onClick} className={`flex min-h-16 w-full items-center gap-3 rounded-[20px] px-3 text-left shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-[background-color,transform] active:scale-[0.96] ${selected ? 'bg-primary/12' : 'bg-white/[0.04]'}`}><span className="grid h-10 w-10 place-items-center rounded-[14px] bg-primary/12 text-primary"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><b className="block truncate text-sm">{label}</b><small className="block truncate text-zinc-600">{meta}</small></span>{selected ? <Check className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-zinc-700" />}</button>;
 const LoadingScreen = ({ slow }: { slow: boolean }) => <main className="grid min-h-[100dvh] place-items-center bg-zinc-950 px-8 text-center text-white"><div><span className="relative mx-auto grid h-20 w-20 place-items-center rounded-[26px] bg-zinc-900 ring-1 ring-inset ring-white/[0.08]"><Sparkles className="h-7 w-7 text-primary" /></span><h1 className="mt-6 text-xl font-semibold tracking-[-0.03em]">Собираем ваш рабочий день</h1>{slow ? <p className="mt-3 text-sm text-zinc-500">Сверяем задачи и источники…</p> : null}</div></main>;
-const TelegramGate = () => <main className="grid min-h-[100dvh] place-items-center bg-zinc-950 p-6 text-center text-white"><div className="max-w-sm"><span className="mx-auto grid h-20 w-20 place-items-center rounded-[26px] bg-primary/12 text-primary ring-1 ring-inset ring-primary/20"><Send className="h-7 w-7" /></span><h1 className="mt-6 text-balance text-2xl font-semibold tracking-[-0.04em]">Откройте ЛокалОС в Telegram</h1><p className="mt-3 text-pretty text-sm leading-6 text-zinc-500">Вернитесь в чат с ЛокалОС и нажмите постоянную кнопку приложения внизу экрана.</p><a href="https://t.me/LocalOspro_bot" className="mt-6 flex min-h-12 items-center justify-center rounded-2xl bg-primary px-5 text-sm font-semibold text-white active:scale-[0.96]">Открыть бота</a></div></main>;
+const TelegramGate = () => <main className="grid min-h-[100dvh] place-items-center bg-zinc-950 p-6 text-center text-white"><div className="max-w-sm"><span className="mx-auto grid h-20 w-20 place-items-center rounded-[26px] bg-primary/12 text-primary ring-1 ring-inset ring-primary/20"><Send className="h-7 w-7" /></span><h1 className="mt-6 text-balance text-2xl font-semibold tracking-[-0.04em]">Откройте ЛокалОС в {miniAppLabel()}</h1><p className="mt-3 text-pretty text-sm leading-6 text-zinc-500">Вернитесь в чат с ЛокалОС и нажмите постоянную кнопку приложения внизу экрана.</p><a href={miniAppPlatform() === "max" ? "/dashboard/max" : "https://t.me/LocalOspro_bot"} className="mt-6 flex min-h-12 items-center justify-center rounded-2xl bg-primary px-5 text-sm font-semibold text-white active:scale-[0.96]">{miniAppPlatform() === "max" ? "Подключить MAX в кабинете" : "Открыть бота"}</a><button type="button" className="mt-4 min-h-11 text-sm underline" onClick={() => window.location.reload()}>Повторить загрузку</button></div></main>;
 
 export default TelegramControlWorkspace;

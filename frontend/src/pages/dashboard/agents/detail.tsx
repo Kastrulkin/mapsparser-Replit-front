@@ -395,16 +395,7 @@ export const AgentDetailPanel = ({
           {humanizeCategory(blueprint.category)} · {latestVersionNumber ? 'рабочий сценарий опубликован' : 'рабочий сценарий ещё не включён'}{voiceName ? ` · стиль: ${voiceName}` : ''}
         </p>
       </div>
-      <div className="mt-4 flex max-w-full flex-wrap gap-2">
-        <Button type="button" size="sm" className="shrink-0" variant={mode === 'overview' ? 'default' : 'outline'} onClick={() => onModeChange('overview')}>Обзор</Button>
-        <Button type="button" size="sm" className="shrink-0" variant={mode === 'results' ? 'default' : 'outline'} onClick={() => onModeChange('results')}>История</Button>
-        <Button type="button" size="sm" className="shrink-0" variant={mode === 'run' ? 'default' : 'outline'} onClick={() => onModeChange('run')}>Сценарий</Button>
-        <Button type="button" size="sm" className="shrink-0" variant={settingsActive ? 'default' : 'outline'} onClick={() => onModeChange('settings')}>Настройки</Button>
-        <Button type="button" size="sm" className="shrink-0 text-red-700 hover:text-red-800" variant="outline" onClick={onDeleteAgent} disabled={actionLoading}>
-          <Archive className="mr-2 h-4 w-4" />
-          Архивировать агента
-        </Button>
-      </div>
+      {settingsActive ? <Button type="button" variant="outline" className="mt-4" onClick={() => onModeChange('settings')}>К настройкам</Button> : null}
     </div>
     <div className="px-6 py-5">
     {mode === 'overview' ? (

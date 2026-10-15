@@ -1,3 +1,10 @@
+import { demoWalkthroughCopy } from '@/pages/dashboard/demo/demoWalkthroughCopy';
+import { demoNavigationCopy, demoNavigationSteps } from './demoNavigationCopy';
+import { workNavigationCopy } from '@/lib/workNavigation';
+import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
+import { getTodayPageCopy } from '@/i18n/todayPageCopy';
+import { todayClarityCopy } from '@/i18n/todayClarityCopy';
+import { progressResultsCopies } from '@/pages/dashboard/progressResultsCopy';
 import type { Language } from '@/i18n/LanguageContext.logic';
 
 type GuidedTourStepText = {
@@ -653,7 +660,7 @@ const russianTourClarity: Record<string, GuidedTourStepText> = {
   'progress-recent-results': { title: 'Готовые результаты с датами', body: 'Список показывает, когда был готов аудит, контент-план, предложение о совместной акции, результат автоматизации или новая допродажа.' },
   'card-nav': { title: 'Перейдите к карточке бизнеса', body: 'Здесь собраны данные карточек на Яндекс Картах, в 2ГИС и Google: рейтинг, отзывы, услуги, новости и видимость в поиске.' },
   'card-overview': { title: 'Все данные карточки в одном месте', body: 'Переключайте источник и вкладку, чтобы проверить рейтинг, отзывы, услуги, новости, поисковые запросы и конкурентов. Обновление внешних данных в демо отключено.' },
-  'card-services': { title: 'Найдите слабые услуги', body: 'В демо загружена 101 услуга. LocalOS отмечает повторы, непонятные названия и пустые описания, чтобы клиенту было проще выбрать.' },
+  'card-services': { title: 'Найдите слабые услуги', body: 'Проверьте повторы, понятность названий и полноту описаний услуг. Это помогает клиенту выбрать; внешняя карточка в демо не изменяется.' },
   'card-reviews': { title: 'Ответьте на отзывы без ответа', body: 'LocalOS собирает отзывы с карт и готовит черновик ответа. Перед публикацией владелец проверяет и при необходимости меняет текст.' },
   'card-news': { title: 'Подготовьте новость для карт', body: 'Введите тему, проверьте готовый текст и сохраните черновик. На карты новость попадёт только после ручного подтверждения.' },
   'card-seo': { title: 'Узнайте, как клиенты ищут услуги', body: 'Таблица показывает поисковые фразы и их частотность. По ним можно уточнить названия услуг, описания и темы новостей.' },
@@ -721,12 +728,17 @@ const humanTourClarity: Record<Language, Record<string, GuidedTourStepText>> = {
 export const guidedTourCopyForLanguage = (language: Language): GuidedTourCopy => {
   const base = copyByLanguage[language];
   const automation = automationCopy[language];
+  const results = progressResultsCopies[language];
+  const today = todayClarityCopy(language);
+  const navigation = workNavigationCopy(language);
+  const coherence = workCoherenceCopy(language);
+  const sample = demoWalkthroughCopy(language);
   const contentPlan = base.steps['content-calendar'];
   return {
     ...base,
-    welcome: clarityWelcomeCopy[language],
+    welcome: { ...clarityWelcomeCopy[language], intro: demoNavigationCopy(language).chat, capabilities: ['maps', 'content', 'partnerships', 'influencers', 'upsells', 'automation'].map(id => navigation.label(id)) },
     chapters: { ...base.chapters, automation: automation.chapter, partnership: clarityPartnershipChapter[language] },
-    steps: { ...base.steps, ...menuPurposeCopy[language], 'content-plan-setup': contentPlan, 'content-plan-preview': contentPlan, 'content-plan-save': contentPlan, 'content-plan-review': contentPlan, 'agents-nav': automation.nav, 'agents-signals': automation.signals, 'agents-today': automation.today, 'agents-employees': automation.employees, 'agents-control': automation.control, 'agents-run': automation.run, 'agents-review': automation.review, 'agents-history': automation.history, ...(language === 'ru' ? russianTourClarity : {}), ...humanTourClarity[language] },
+    steps: { ...base.steps, ...menuPurposeCopy[language], 'content-plan-setup': contentPlan, 'content-plan-preview': contentPlan, 'content-plan-save': contentPlan, 'content-plan-review': contentPlan, 'agents-nav': { title: navigation.label('automation'), body: automation.nav.body }, 'agents-signals': automation.signals, 'agents-today': automation.today, 'agents-employees': automation.employees, 'agents-control': automation.control, 'agents-run': automation.run, 'agents-review': automation.review, 'agents-history': automation.history, ...(language === 'ru' ? russianTourClarity : {}), ...humanTourClarity[language], 'operator-nav': { title: navigation.label('operator'), body: `${navigation.discuss}. ${navigation.open}.` },  'card-nav': { title: navigation.label('maps'), body: base.steps['card-nav'].body }, 'content-nav': { title: navigation.label('content'), body: base.steps['content-nav'].body },  'chats-nav': { title: coherence.utilities[2], body: coherence.moreIntro }, 'profile-nav': { title: navigation.label('profile'), body: `${navigation.label('profile')}. ${coherence.locations}.` }, 'settings-nav': { title: navigation.label('settings'), body: `${navigation.label('settings')}. ${coherence.billing}.` }, 'progress-overview': { title: results.resultsIn30Days, body: results.confirmedSteps }, 'progress-recent-results': { title: results.recentResults, body: sample.mapConnected }, 'today-nav': { title: getTodayPageCopy(language).title, body: today.description }, 'today-overview': { title: today.next, body: `${today.decisions}. ${today.continue}. ${today.completed}.` }, 'progress-nav': { title: results.title, body: results.description }, 'progress-summary': { title: results.resultsIn30Days, body: results.confirmedSteps }, 'progress-focus-action': { title: results.needAttention, body: results.growthAreasDescription }, 'progress-areas': { title: results.growthAreas, body: sample.mapsEvidence }, 'progress-results': { title: results.recentResults, body: results.recentResultsEmpty }, ...demoNavigationSteps(language), ...(language === 'ru' || language === 'en' ? { 'content-plan-preview': {title: language === 'ru' ? 'Проверьте тему и черновик' : 'Review the topic and draft', body: sample.reason}, 'content-plan-save': {title: sample.saveTitle, body: sample.saveHint}, 'content-plan-review': {title: language === 'ru' ? 'Проверьте перед публикацией' : 'Review before publishing', body: sample.approveNote} } : {}), 'operator-overview': { title: navigation.label('operator'), body: sample.chatHint }, 'finance-nav': { title: navigation.label('finance'), body: sample.financeHint }, 'network-switcher': { title: base.steps['network-switcher'].title, body: demoNavigationCopy(language).scope }, 'card-services': { title: base.steps['card-services'].title, body: demoNavigationCopy(language).services }, welcome: { title: humanTourClarity[language].welcome.title, body: [navigation.label('today'), navigation.label('operator'), navigation.groups.directions, navigation.label('progress'), navigation.label('profile'), navigation.label('more')].join(' → ') }, 'partnership-nav': { title: navigation.label('partnerships'), body: (language === 'ru' ? russianTourClarity['partnership-nav'] : base.steps['partnership-nav']).body } },
   };
 };
 

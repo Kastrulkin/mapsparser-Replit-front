@@ -13,6 +13,8 @@ from typing import Any
 
 from auth_encryption import decrypt_auth_data, encrypt_auth_data
 from database_manager import DatabaseManager
+from core.ai_learning import record_ai_learning_event  # noqa: F401 - compatibility namespace export
+from core.auth_helpers import verify_business_write_access  # noqa: F401 - compatibility namespace export
 from core.outbound_network import outbound_urlopen
 from core.telegram_network import telegram_urlopen
 from core.telegram_token_store import decode_telegram_bot_token
@@ -20,9 +22,11 @@ from core.helpers import get_business_owner_id
 from services.media_file_storage import load_media_file
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
 from services.vk_oauth_service import oauth_token_expiry, refresh_vk_oauth_tokens
+from services.social_posts.platform_variants import build_platform_variants  # noqa: F401 - compatibility namespace export
 from services.social_posts.approval_binding import (
     auth_scope_allows,
     auth_scope_is_explicit,
+    build_approval_snapshot,  # noqa: F401 - compatibility namespace export
     current_snapshot_matches,
     frozen_external_account,
     meta_channel_readiness,
@@ -53,8 +57,8 @@ SOCIAL_POST_PLATFORMS = [
 ]
 CONTENT_PUBLICATION_PLATFORMS = [platform for platform in SOCIAL_POST_PLATFORMS if platform != "two_gis"]
 
-API_PLATFORMS = {"google_business", "telegram", "vk", "instagram", "facebook"}
-BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis", "max"}
+API_PLATFORMS = {"google_business", "telegram", "vk", "max", "instagram", "facebook"}
+BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis"}
 FIRST_API_PROOF_PLATFORMS = ("telegram", "vk")
 
 SOCIAL_POST_STATUSES = {

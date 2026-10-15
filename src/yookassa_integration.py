@@ -8,7 +8,7 @@ import hashlib
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, Optional, Tuple
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import requests
 from flask import Blueprint, jsonify, request
@@ -405,7 +405,10 @@ def _mark_subscription_needs_payment_method(cursor, *, sub: Dict[str, Any], reas
 
 def _safe_checkout_return_to(value: Any) -> str:
     candidate = str(value or "").strip()
-    if not candidate.startswith("/dashboard/") or candidate.startswith("//") or len(candidate) > 500:
+    if not candidate.startswith("/") or candidate.startswith("//") or len(candidate) > 500 or any(ord(char) < 32 or char == "\\" for char in candidate):
+        return ""
+    path = urlsplit(candidate).path
+    if not (path.startswith("/dashboard/") or path in {"/telegram/control", "/max/control"}):
         return ""
     return candidate
 

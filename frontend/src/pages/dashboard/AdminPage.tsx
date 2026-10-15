@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Settings, BarChart3, FileText, X, Search, ShieldCheck, KeyRound, CreditCard, CalendarDays, Radar, BookOpen, Download, Loader2, PlugZap, Activity, Link2 } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
+import { complimentaryMapsAccess } from '../../lib/complimentaryMapsAccess';
 import { featureFlags } from '../../config/featureFlags';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
@@ -591,7 +592,7 @@ const closeConfirmDialog = (
     confirmText: string;
     cancelText: string;
     onConfirm: () => void;
-    variant?: 'delete' | 'block';
+    variant?: 'delete' | 'block' | 'default';
   }>>,
 ) => {
   setConfirmDialog((previous) => ({ ...previous, isOpen: false }));
@@ -605,7 +606,7 @@ interface ConfirmDialogProps {
   cancelText: string;
   onConfirm: () => void;
   onCancel: () => void;
-  variant?: 'delete' | 'block';
+  variant?: 'delete' | 'block' | 'default';
 }
 
 const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
@@ -716,7 +717,7 @@ export const AdminPage: React.FC = () => {
     confirmText: string;
     cancelText: string;
     onConfirm: () => void;
-    variant?: 'delete' | 'block';
+    variant?: 'delete' | 'block' | 'default';
   }>({
     isOpen: false,
     title: '',
@@ -1102,6 +1103,33 @@ export const AdminPage: React.FC = () => {
       'Не удалось изменить оплату',
     );
     closePaymentDialog();
+  };
+
+  const offerComplimentaryMapsAccess = () => {
+    if (paymentDialog.scope !== 'business' || paymentDialog.isPaid) return;
+    const targetName = paymentDialog.targetName;
+    const grant = complimentaryMapsAccess(paymentDialog.targetId, new Date());
+    const endLabel = new Date(grant.payload.subscription_ends_at).toLocaleString('ru-RU');
+    closePaymentDialog();
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Бесплатные 30 дней «Карт»',
+      message: `Бизнес: ${targetName}. Доступ к «Картам» до ${endLabel}. Оплата не записывается, деньги не списываются, кредиты не начисляются. Расписания не меняются.`,
+      confirmText: 'Выдать бесплатный доступ',
+      cancelText: 'Отмена',
+      variant: 'default',
+      onConfirm: async () => {
+        await runReloadingMutation(
+          () => newAuth.makeRequest(grant.endpoint, {
+            method: 'POST',
+            body: JSON.stringify(grant.payload),
+          }),
+          `Бесплатный доступ «Карты» для ${targetName} до ${endLabel}. Без оплаты и начисления кредитов.`,
+          'Не удалось выдать бесплатный доступ',
+          { closeDialog: true },
+        );
+      },
+    });
   };
 
   const handleCreateSuccess = () => {
@@ -2374,6 +2402,11 @@ export const AdminPage: React.FC = () => {
               </div>
 
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+                {paymentDialog.scope === 'business' && !paymentDialog.isPaid && (
+                  <Button variant="outline" onClick={offerComplimentaryMapsAccess}>
+                    Бесплатные 30 дней «Карт»
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   onClick={() => submitPaymentDialog(false)}

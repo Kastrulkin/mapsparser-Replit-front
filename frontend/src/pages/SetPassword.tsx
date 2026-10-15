@@ -1,3 +1,4 @@
+import { consumeMaxConnection } from "@/lib/maxAuthContinuation";
 import { Button } from '@/components/ui/button';
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -121,7 +122,7 @@ const SetPassword: React.FC = () => {
         } else if (result.user) {
           setInfo('Пароль успешно установлен! Выполняется вход...');
           setTimeout(() => {
-            navigate('/dashboard');
+            navigate(consumeMaxConnection() ? '/dashboard/max' : '/dashboard');
           }, 2000);
         }
       }

@@ -1,3 +1,4 @@
+import { AgentSettingsPage } from './settings-v2';
 import {
 	Archive,
 	Bot,
@@ -97,7 +98,7 @@ import {
 import { AgentDetailPanel } from './detail';
 import { AgentCockpitPanel, AgentExecutionModePanel, AgentRunParametersPanel, AgentRunProgressPanel, AgentScheduleSetupPanel, EmployeeAgentOverviewPanel, EmployeeAgentScenarioPanel, EmployeeAgentsList, EmployeeHistoryPanel, EmployeeTestResultPanel } from './employee';
 import { ApprovalPayloadSummary } from './runs';
-import { AgentTemplateGallery } from './template-gallery';
+import { AgentTemplateCatalogDialog } from './template-catalog-dialog';
 
 
 export const AgentBlueprintsView = ({ scope }) => {
@@ -176,7 +177,27 @@ export const AgentBlueprintsView = ({ scope }) => {
               <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />
               {pageCopy.refresh}
             </Button>
-            <Button type="button" onClick={() => setCreateWizardOpen(true)} disabled={actionLoading || !currentBusinessId}>
+            {currentBusinessId ? (
+              <AgentTemplateCatalogDialog
+                key={currentBusinessId}
+                error={error}
+                language={language}
+                templates={agentTemplates}
+                loading={templatesLoading}
+                usingTemplateKey={usingTemplateKey}
+                onUse={useAgentTemplate}
+                companyAgents={blueprints}
+                onOpenAdded={(id) => {
+                  setAgentSearch('');
+                  setAgentRegistryFilter('all');
+                  setSelectedBlueprintId(id);
+                  setActiveRun(null);
+                  setDecisionNotice(null);
+                  setWorkspaceMode('overview');
+                }}
+              />
+            ) : null}
+            <Button type="button" variant="outline" onClick={() => setCreateWizardOpen(true)} disabled={actionLoading || !currentBusinessId}>
               <Sparkles className="mr-2 h-4 w-4" />
               {pageCopy.create}
             </Button>
@@ -184,15 +205,7 @@ export const AgentBlueprintsView = ({ scope }) => {
         )}
       />
 
-      {currentBusinessId && blueprints.length === 0 ? (
-        <AgentTemplateGallery
-          language={language}
-          templates={agentTemplates}
-          loading={templatesLoading}
-          usingTemplateKey={usingTemplateKey}
-          onUse={useAgentTemplate}
-        />
-      ) : null}
+
 
       <Dialog open={createWizardOpen} onOpenChange={(open) => {
         setCreateWizardOpen(open);
@@ -412,7 +425,8 @@ export const AgentBlueprintsView = ({ scope }) => {
       ) : null}
 
       {currentBusinessId ? (
-        <div className="space-y-4">
+        <section aria-labelledby="company-agents-title" className="space-y-4 rounded-3xl border border-border bg-muted/30 p-4 sm:p-5">
+          <header><h2 id="company-agents-title" tabIndex={-1} className="text-xl font-semibold">{language === 'ru' ? 'Агенты компании' : 'Company agents'}</h2><p className="mt-1 text-sm text-muted-foreground">{language === 'ru' ? 'Уже добавленные агенты: выбирайте, проверяйте результаты и управляйте запусками. Чтобы добавить нового, нажмите «Добавить агента».' : 'Agents already added to this company: select one, review results and manage runs. Choose “Add agent” to open the catalog.'}</p></header>
           <section data-tour-target="agents-today" className="rounded-2xl bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600">
               <span className="font-semibold text-slate-950">{pageCopy.today}</span>
@@ -495,7 +509,7 @@ export const AgentBlueprintsView = ({ scope }) => {
                       onClick={() => value === 'results'
                         ? void openLatestRunResults()
                         : setWorkspaceMode(value === 'scenario' || value === 'settings' ? value : 'overview')}
-                      className={cn('min-h-10 shrink-0 rounded-lg px-4 text-sm font-semibold transition-[background-color,color,box-shadow] active:scale-[0.96]', workspaceMode === value || (value === 'overview' && workspaceMode === 'run') ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950')}
+                      className={cn('min-h-10 shrink-0 rounded-lg px-4 text-sm font-semibold transition-[background-color,color,box-shadow] active:scale-[0.96]', workspaceMode === value || (value === 'overview' && workspaceMode === 'run') || (value === 'settings' && ['connections', 'voice', 'advanced'].includes(workspaceMode)) ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950')}
                     >
                       {label}
                     </button>
@@ -650,126 +664,128 @@ export const AgentBlueprintsView = ({ scope }) => {
                     )}
                   </div>
                 ) : workspaceMode === 'settings' ? (
-                  <div className="space-y-4">
-                    <AgentExecutionModePanel
-                      mode={selectedExecutionMode}
-                      confirmationRequired={Boolean(blueprintDetails?.execution_mode_confirmation_required || selectedBlueprint.execution_mode_confirmation_required)}
-                      time={scheduleTime}
-                      timezone={scheduleTimezone}
-                      actionLoading={actionLoading}
-                      onModeChange={setSelectedExecutionMode}
-                      onTimeChange={setScheduleTime}
-                      onTimezoneChange={setScheduleTimezone}
-                      onSave={saveExecutionMode}
+                  <AgentSettingsPage key={`${currentBusinessId}:${selectedBlueprint.id}`} scope={scope} onOpenResult={openLatestRunResults} supportTools={(<>{currentBusinessId && showAdvancedAgentTools ? (
+        <details className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+            {deepCopy.supportTools}
+          </summary>
+          <div className="mt-4 min-w-0 space-y-5">
+            <p className="text-sm text-muted-foreground">{language === 'ru' ? 'Инструменты поддержки всех агентов компании. Для обычной работы не требуются.' : 'Support tools for all company agents. Not required for everyday work.'}</p>
+            <AgentCockpitPanel
+              blueprints={blueprints}
+              systemAgents={systemAgents}
+              migrationPlan={legacyMigrationPlan}
+              migrationStats={migrationStats}
+              migrationNotice={legacyMigrationNotice}
+              actionLoading={actionLoading}
+              onApplyMigration={applyLegacyMigration}
+              onOpenLegacySettings={() => setWorkspaceMode('voice')}
+            />
+
+            {availablePersonaAgents.length ? (
+              <DashboardActionPanel
+                title="Голоса и стиль перенесены внутрь агента"
+                description={`${availablePersonaAgents.length} старых голосов доступны во вкладке “Голос и стиль” выбранного агента. Отдельный редактор старой логики больше не используется как основной вход.`}
+                tone="sky"
+              />
+            ) : null}
+
+            {selectedBlueprint ? (
+              <div className="grid gap-5 xl:grid-cols-2">
+                <DashboardSection
+                  title="Последние запуски"
+                  description="Короткая история выбранного агента."
+                  actions={(
+                    <div className="flex flex-wrap gap-2">
+                      {runStatusFilters.map((filter) => (
+                        <Button
+                          key={filter.value}
+                          type="button"
+                          size="sm"
+                          variant={runStatusFilter === filter.value ? 'default' : 'outline'}
+                          onClick={() => setRunStatusFilter(filter.value)}
+                        >
+                          {filter.label}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                >
+                  {blueprintDetails?.runs?.length ? (
+                    <div className="grid gap-3">
+                      {blueprintDetails.runs.map((run) => (
+                        <button
+                          key={run.id}
+                          type="button"
+                          className={cn(
+                            'rounded-xl border px-4 py-3 text-left transition',
+                            activeRun?.id === run.id ? 'border-slate-900 bg-slate-950 text-white' : 'border-slate-200 bg-white hover:border-slate-300',
+                          )}
+                          onClick={() => void loadRun(run.id)}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <Workflow className="h-4 w-4 shrink-0" />
+                              <span className="truncate text-sm font-semibold">Запуск {run.id.slice(0, 8)}</span>
+                            </div>
+                            <StatusBadge status={run.status} />
+                          </div>
+                          <div className={cn('mt-2 text-xs', activeRun?.id === run.id ? 'text-slate-300' : 'text-slate-500')}>
+                            {run.started_at || 'Дата запуска недоступна'}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <DashboardEmptyState
+                      title="История пуста"
+                      description="Запустите агента, чтобы здесь появилась история."
                     />
-                    <AgentDetailPanel
-                  mode={workspaceMode}
-                  blueprint={selectedBlueprint}
-                  blueprintDetails={blueprintDetails}
-                  activeRun={activeRun}
-                  availablePersonaAgents={availablePersonaAgents}
-                  pendingApproval={selectedPendingApproval}
-                  queuedButNotDispatched={queuedButNotDispatched}
-                  agentReview={agentReview}
-                  feedbackText={feedbackText}
-                  feedbackTrigger={feedbackTrigger}
-                  feedbackVersionNotice={feedbackVersionNotice}
-                  actionLoading={actionLoading}
-                  setupDataSources={setupDataSources}
-                  setupExtractionRules={setupExtractionRules}
-                  setupProcessingRules={setupProcessingRules}
-                  setupOutputFormat={setupOutputFormat}
-                  setupManualControl={setupManualControl}
-                  sourceName={sourceName}
-                  sourceText={sourceText}
-                  internalSource={internalSource}
-                  sourceCatalog={sourceCatalog}
-                  agentIntegrations={agentIntegrations}
-                  availableAgentIntegrations={availableAgentIntegrations}
-                  agentIntegrationCatalog={agentIntegrationCatalog}
-                  agentExternalAuthOptions={agentExternalAuthOptions}
-                  agentBindingStatus={agentBindingStatus}
-                  agentConnectionPlan={agentConnectionPlan}
-                  postCreateHandoff={recentPostCreateHandoff}
-                  selectedConnectionBindingKey={selectedConnectionBindingKey}
-                  sheetSpreadsheetId={sheetSpreadsheetId}
-                  sheetName={sheetName}
-                  sheetAuthRef={sheetAuthRef}
-                  sheetDailyCap={sheetDailyCap}
-                  browserTargetUrls={browserTargetUrls}
-                  browserDailyCap={browserDailyCap}
-                  telegramBotMode={telegramBotMode}
-                  telegramDailyCap={telegramDailyCap}
-                  whatsappChannelMode={whatsappChannelMode}
-                  whatsappDailyCap={whatsappDailyCap}
-                  matonAuthRef={matonAuthRef}
-                  matonChannel={matonChannel}
-                  matonDailyCap={matonDailyCap}
-                  processRowValues={processRowValues}
-                  processPreviewMessage={processPreviewMessage}
-                  runSource={runSource}
-                  runCity={runCity}
-                  runCategory={runCategory}
-                  runLimit={runLimit}
-                  onModeChange={setWorkspaceMode}
-                  onStartRun={() => startRun(selectedBlueprint)}
-                  onStartVersionRun={(versionId) => startRun(selectedBlueprint, versionId)}
-                  onActivateVersion={(versionId) => activateVersion(versionId, 'activate')}
-                  onRollbackVersion={(versionId) => activateVersion(versionId, 'rollback')}
-                  onApprove={() => decideApproval('approve')}
-                  onReject={() => decideApproval('reject')}
-                  onDeleteAgent={deleteSelectedAgent}
-                  onFeedbackTextChange={setFeedbackText}
-                  onFeedbackTriggerChange={setFeedbackTrigger}
-                  onSubmitFeedback={sendRunFeedback}
-                  onActivateFeedbackVersion={(versionId) => activateVersion(versionId, 'activate')}
-                  onRollbackFeedbackVersion={(versionId) => activateVersion(versionId, 'rollback')}
-                  onSetupDataSourcesChange={setSetupDataSources}
-                  onSetupExtractionRulesChange={setSetupExtractionRules}
-                  onSetupProcessingRulesChange={setSetupProcessingRules}
-                  onSetupOutputFormatChange={setSetupOutputFormat}
-                  onSetupManualControlChange={setSetupManualControl}
-                  onSourceNameChange={setSourceName}
-                  onSourceTextChange={setSourceText}
-                  onInternalSourceChange={setInternalSource}
-                  onSaveSetup={saveAgentSetup}
-                  onAddTextSource={addTextSource}
-                  onAddInternalSource={addInternalSource}
-                  onAddCatalogSource={addInternalSourceByKey}
-                  onAddFileSource={addFileSource}
-                  onSheetSpreadsheetIdChange={setSheetSpreadsheetId}
-                  onSheetNameChange={setSheetName}
-                  onSheetAuthRefChange={setSheetAuthRef}
-                  onSheetDailyCapChange={setSheetDailyCap}
-                  onBrowserTargetUrlsChange={setBrowserTargetUrls}
-                  onBrowserDailyCapChange={setBrowserDailyCap}
-                  onTelegramBotModeChange={setTelegramBotMode}
-                  onTelegramDailyCapChange={setTelegramDailyCap}
-                  onWhatsappChannelModeChange={setWhatsappChannelMode}
-                  onWhatsappDailyCapChange={setWhatsappDailyCap}
-                  onMatonAuthRefChange={setMatonAuthRef}
-                  onMatonChannelChange={setMatonChannel}
-                  onMatonDailyCapChange={setMatonDailyCap}
-                  onProcessRowValuesChange={setProcessRowValues}
-                  onProcessPreviewMessageChange={setProcessPreviewMessage}
-                  onSaveSheetIntegration={saveSheetIntegration}
-                  onSaveBrowserUseIntegration={saveBrowserUseIntegration}
-                  onSaveTelegramIntegration={saveTelegramIntegration}
-                  onSaveWhatsappIntegration={saveWhatsappIntegration}
-                  onSaveMatonIntegration={saveMatonIntegration}
-                  onChooseProviderRoute={chooseProviderRoute}
-                  onAttachExistingIntegration={attachExistingAgentIntegration}
-                  onSelectConnectionBinding={setSelectedConnectionBindingKey}
-                  onSaveCustomProcess={saveCustomProcess}
-                  onRunCustomProcessPreview={runCustomProcessPreview}
-                  onRunSourceChange={setRunSource}
-                  onRunCityChange={setRunCity}
-                  onRunCategoryChange={setRunCategory}
-                  onRunLimitChange={setRunLimit}
-                  onApplyFinanceRequests={applyFinanceRequests}
-                  showAdvancedTools={showAdvancedAgentTools}
-                />
-                  </div>
+                  )}
+                </DashboardSection>
+
+                <DashboardSection
+                  title="Ждут решения"
+                  description="Решения, без которых агент не продолжит рискованное действие."
+                >
+                  {pendingApprovals.length ? (
+                    <div className="grid gap-3">
+                      {pendingApprovals.map((approval) => (
+                        <button
+                          key={approval.id}
+                          type="button"
+                          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left transition hover:border-amber-300"
+                          onClick={() => approval.run_id ? void loadRun(approval.run_id) : undefined}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold text-slate-950">{approval.title}</div>
+                              <div className="mt-1 text-xs text-amber-700">
+                                Запуск {approval.run_id ? approval.run_id.slice(0, 8) : 'неизвестен'} · {humanizeMeta(approval.approval_type)}
+                              </div>
+                            </div>
+                            <StatusBadge status={approval.status} />
+                          </div>
+                          <div className="mt-2 text-xs text-slate-500">{approval.requested_at || humanizeStatus(approval.run_status || 'pending')}</div>
+                          <div className="mt-2 rounded-lg bg-white/70 px-2 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-100">
+                            {explainApproval(approval)}
+                          </div>
+                          <ApprovalPayloadSummary approval={approval} />
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <DashboardEmptyState
+                      title="Очередь решений пуста"
+                      description="Когда агент остановится на ручном подтверждении, решение появится здесь."
+                    />
+                  )}
+                </DashboardSection>
+              </div>
+            ) : null}
+          </div>
+        </details>
+      ) : null}</>)} />
                 ) : (
                   <AgentDetailPanel
                   mode={workspaceMode}
@@ -887,141 +903,12 @@ export const AgentBlueprintsView = ({ scope }) => {
               )}
             </main>
           </div>
-        </div>
-      ) : null}
-
-      {currentBusinessId && blueprints.length > 0 ? (
-        <AgentTemplateGallery
-          language={language}
-          templates={agentTemplates}
-          loading={templatesLoading}
-          usingTemplateKey={usingTemplateKey}
-          onUse={useAgentTemplate}
-        />
+        </section>
       ) : null}
 
 
-      {currentBusinessId && showAdvancedAgentTools ? (
-        <details className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-          <summary className="cursor-pointer text-sm font-semibold text-slate-800">
-            {deepCopy.supportTools}
-          </summary>
-          <div className="mt-4 min-w-0 space-y-5">
-            <AgentCockpitPanel
-              blueprints={blueprints}
-              systemAgents={systemAgents}
-              migrationPlan={legacyMigrationPlan}
-              migrationStats={migrationStats}
-              migrationNotice={legacyMigrationNotice}
-              actionLoading={actionLoading}
-              onApplyMigration={applyLegacyMigration}
-              onOpenLegacySettings={() => setWorkspaceMode('voice')}
-            />
 
-            {availablePersonaAgents.length ? (
-              <DashboardActionPanel
-                title="Голоса и стиль перенесены внутрь агента"
-                description={`${availablePersonaAgents.length} старых голосов доступны во вкладке “Голос и стиль” выбранного агента. Отдельный редактор старой логики больше не используется как основной вход.`}
-                tone="sky"
-              />
-            ) : null}
 
-            {selectedBlueprint ? (
-              <div className="grid gap-5 xl:grid-cols-2">
-                <DashboardSection
-                  title="Последние запуски"
-                  description="Короткая история выбранного агента."
-                  actions={(
-                    <div className="flex flex-wrap gap-2">
-                      {runStatusFilters.map((filter) => (
-                        <Button
-                          key={filter.value}
-                          type="button"
-                          size="sm"
-                          variant={runStatusFilter === filter.value ? 'default' : 'outline'}
-                          onClick={() => setRunStatusFilter(filter.value)}
-                        >
-                          {filter.label}
-                        </Button>
-                      ))}
-                    </div>
-                  )}
-                >
-                  {blueprintDetails?.runs?.length ? (
-                    <div className="grid gap-3">
-                      {blueprintDetails.runs.map((run) => (
-                        <button
-                          key={run.id}
-                          type="button"
-                          className={cn(
-                            'rounded-xl border px-4 py-3 text-left transition',
-                            activeRun?.id === run.id ? 'border-slate-900 bg-slate-950 text-white' : 'border-slate-200 bg-white hover:border-slate-300',
-                          )}
-                          onClick={() => void loadRun(run.id)}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <Workflow className="h-4 w-4 shrink-0" />
-                              <span className="truncate text-sm font-semibold">Запуск {run.id.slice(0, 8)}</span>
-                            </div>
-                            <StatusBadge status={run.status} />
-                          </div>
-                          <div className={cn('mt-2 text-xs', activeRun?.id === run.id ? 'text-slate-300' : 'text-slate-500')}>
-                            {run.started_at || 'Дата запуска недоступна'}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <DashboardEmptyState
-                      title="История пуста"
-                      description="Запустите агента, чтобы здесь появилась история."
-                    />
-                  )}
-                </DashboardSection>
-
-                <DashboardSection
-                  title="Ждут решения"
-                  description="Решения, без которых агент не продолжит рискованное действие."
-                >
-                  {pendingApprovals.length ? (
-                    <div className="grid gap-3">
-                      {pendingApprovals.map((approval) => (
-                        <button
-                          key={approval.id}
-                          type="button"
-                          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left transition hover:border-amber-300"
-                          onClick={() => approval.run_id ? void loadRun(approval.run_id) : undefined}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold text-slate-950">{approval.title}</div>
-                              <div className="mt-1 text-xs text-amber-700">
-                                Запуск {approval.run_id ? approval.run_id.slice(0, 8) : 'неизвестен'} · {humanizeMeta(approval.approval_type)}
-                              </div>
-                            </div>
-                            <StatusBadge status={approval.status} />
-                          </div>
-                          <div className="mt-2 text-xs text-slate-500">{approval.requested_at || humanizeStatus(approval.run_status || 'pending')}</div>
-                          <div className="mt-2 rounded-lg bg-white/70 px-2 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-100">
-                            {explainApproval(approval)}
-                          </div>
-                          <ApprovalPayloadSummary approval={approval} />
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <DashboardEmptyState
-                      title="Очередь решений пуста"
-                      description="Когда агент остановится на ручном подтверждении, решение появится здесь."
-                    />
-                  )}
-                </DashboardSection>
-              </div>
-            ) : null}
-          </div>
-        </details>
-      ) : null}
     </div>
   );
 };

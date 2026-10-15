@@ -43,8 +43,8 @@ SOCIAL_POST_PLATFORMS = [
     "facebook",
 ]
 
-API_PLATFORMS = {"google_business", "telegram", "vk", "instagram", "facebook"}
-BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis", "max"}
+API_PLATFORMS = {"google_business", "telegram", "vk", "max", "instagram", "facebook"}
+BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis"}
 FIRST_API_PROOF_PLATFORMS = ("telegram", "vk")
 PUBLISH_OUTCOMES = {"accepted", "not_attempted", "rejected", "uncertain"}
 
@@ -490,6 +490,9 @@ def _publish_api_post(cursor: Any, post: dict[str, Any], approval_snapshot: dict
         }
     if not snapshot_is_well_formed(approval_snapshot, post) or not snapshot_is_sendable(approval_snapshot, post):
         return approval_binding_drift_result("approval_binding_missing_or_invalid")
+    if platform == "max":
+        from services.max_publication import publish_max_post
+        return publish_max_post(cursor, post, approval_snapshot)
     if platform == "telegram":
         return _publish_telegram_post(cursor, post, approval_snapshot)
     if platform == "vk":

@@ -1,3 +1,4 @@
+import { miniAppChannel, miniAppPath } from "@/lib/miniAppPlatform";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { PartnershipResults } from '../prospecting/PartnershipResults';
 import { AnimatePresence, motion } from "framer-motion";
@@ -762,7 +763,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness }: { scope?: Scop
         <div className="space-y-2">
           {leads.map((lead) => <article key={lead.id} className="rounded-[20px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><b className="block truncate text-sm">{lead.name || "Компания"}</b><small className="mt-1 block truncate text-zinc-600">{[lead.category, lead.city].filter(Boolean).join(" · ") || lead.address || "Данные уточняются"}</small></div><span className="shrink-0 rounded-full bg-white/[0.05] px-2 py-1 text-[9px] text-zinc-400">★ {lead.rating || "—"}</span></div><div className="mt-3 flex items-center justify-between gap-3"><small className="text-zinc-600">{lead.reviews_count || 0} отзывов</small><button type="button" disabled={busy === `${lead.id}:catalog-shortlist`} onClick={() => void toggleCatalogShortlist(lead)} className="min-h-10 rounded-[13px] bg-white/[0.06] px-3 text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.08] active:scale-[0.96] disabled:opacity-50">{lead.catalog_shortlisted ? "В shortlist" : "Добавить"}</button></div></article>)}
         </div>
-        <a href={`/dashboard/profile?focus=subscription&return_to=${encodeURIComponent("/telegram/control?screen=partnerships")}#subscription`} className="btn-iridescent flex min-h-12 w-full items-center justify-center rounded-[15px] px-4 text-center text-sm">Подготовить сообщения — тариф «Привлечение»</a>
+        <a href={`/dashboard/profile?focus=subscription&return_to=${encodeURIComponent(`${miniAppPath()}?screen=partnerships`)}#subscription`} className="btn-iridescent flex min-h-12 w-full items-center justify-center rounded-[15px] px-4 text-center text-sm">Подготовить сообщения — тариф «Привлечение»</a>
       </div>
     );
   const tabs: Array<[PartnershipTab, string]> = [

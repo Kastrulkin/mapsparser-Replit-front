@@ -61,7 +61,7 @@ def scope(cursor, business_id, user_id):
 
 
 def receive(business_id, user_id, channel, message, payload, input_origin='user'):
-    if channel not in {'web', 'telegram', 'telegram_mini_app'}:
+    if channel not in {'web', 'telegram', 'telegram_mini_app', 'max_bot', 'max_mini_app'}:
         raise ValueError('Неизвестный канал')
     if not isinstance(message, str) or not message.strip() or len(message) > 10000:
         raise ValueError('Проверьте длину команды')

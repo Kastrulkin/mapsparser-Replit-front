@@ -111,6 +111,43 @@ export const subscriptionPlanCopy = (language: string) => language === 'ru' ? {
     ],
   },
   approval: 'Чат арқылы басқару барлық тарифте бар. Қолжетімді әрекеттер жазылымға байланысты. Жарияланымдар мен хабарламалар тек сіз растағаннан кейін жіберіледі.',
+} : language === 'tr' ? {
+  subtitle: 'LocalOS’un işletmenize hangi konularda yardımcı olacağını seçin',
+  starter: {
+    name: 'Haritalar',
+    lead: 'Müşterilerin sizi haritalarda bulmasına ve seçmesine yardımcı olun',
+    features: [
+      'İşletme profili denetimi ve iyileştirme planı',
+      'Hizmetler, yorumlar, fotoğraflar ve rakip karşılaştırmaları',
+      'Harita profilleri için yorum yanıtı ve haber taslakları',
+      'Telegram Radar ile sektör haberleri',
+      'Web sitesi ziyaretleri ve ziyaretçi işlemleri',
+    ],
+  },
+  professional: {
+    name: 'Müşteri Kazanımı',
+    lead: 'Yerel içerik üreticileri ve iş ortakları aracılığıyla müşterilere ulaşın',
+    features: [
+      'Haritalar planındaki tüm özellikler',
+      'İçerik üreticisi ve iş ortağı katalogları, filtreler ve kısa listeler',
+      'İş birliği teklifleri ve kişiselleştirilmiş mesajlar',
+      'Onayınızdan sonra bağlı kanallar üzerinden gönderim',
+      'Yanıtları, paylaşımları ve iş birliği sonuçlarını takip etme',
+      'İşletmenizin yapay zekâ sohbetlerindeki görünürlüğünü kontrol etme',
+    ],
+  },
+  concierge: {
+    name: 'Yönetim',
+    lead: 'Tekrarlanan işleri yapay zekâya devredin ve sonuçları gözden geçirin',
+    features: [
+      'Müşteri Kazanımı planındaki tüm özellikler',
+      'Bağlı sosyal kanallar için içerik planları, taslaklar ve paylaşımlar',
+      'Finansal göstergeler ve ortalama sepet tutarı',
+      'Tekrarlanan işletme işleri için yapay zekâ çalışanları',
+      'İş sohbetleri ve görev geçmişi',
+    ],
+  },
+  approval: 'Sohbet üzerinden yönetim her planda kullanılabilir. Yapılabilecek işlemler aboneliğinize bağlıdır. Paylaşımlar ve mesajlar yalnızca onayınızdan sonra gönderilir.',
 } : {
   subtitle: 'Choose the business tasks you want LocalOS to help with',
   starter: {

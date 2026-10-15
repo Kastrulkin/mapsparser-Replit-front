@@ -1,3 +1,4 @@
+import { requestMiniAppMicrophone } from "@/lib/miniAppPlatform";
 import { Button } from '@/components/ui/button';
 import { useLatestCallback } from '@/hooks/useLatestCallback';
 import { Mic, Square } from 'lucide-react';
@@ -17,8 +18,8 @@ async function waitJob(jobId: string, businessId: string, headers: HeadersProvid
   throw new Error('Обработка занимает больше времени. Результат доступен в заданиях.');
 }
 
-export function OperatorVoiceInput({ businessId, channel, conversationId, disabled, directSubmit = true, onSubmit, headers = voiceHeaders }: {
-  businessId: string; channel: string; conversationId?: string | null; disabled?: boolean; directSubmit?: boolean;
+export function OperatorVoiceInput({ businessId, channel, conversationId, disabled, directSubmit = true, onSubmit, headers = voiceHeaders, compact = false }: {
+  businessId: string; channel: string; conversationId?: string | null; disabled?: boolean; directSubmit?: boolean; compact?: boolean;
   onSubmit: (text: string, source: VoiceSubmission) => Promise<void>; headers?: HeadersProvider;
 }) {
   const [available, setAvailable] = useState(false);
@@ -89,6 +90,8 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
     setError(''); const signal = lifetime.current.signal;
     try {
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') throw new Error('Микрофон недоступен. Загрузите аудиофайл или напишите текст.');
+      await requestMiniAppMicrophone();
+      signal.throwIfAborted();
       const media = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (signal.aborted) { media.getTracks().forEach((track) => track.stop()); return; }
       stream.current = media;
@@ -124,12 +127,11 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
   };
   if (!available) return null;
   return <div className="space-y-2" aria-label="Голосовая команда">
-    {showExamples && <div className="text-sm text-muted-foreground"><p>Можно сказать: «Покажи ближайший пост», «Запомни для будущих текстов: …», «Есть пожелание клиента: …».</p><Button type="button" variant="ghost" onClick={()=>{sessionStorage.setItem('localos-voice-examples-hidden','true');setShowExamples(false);}}>Скрыть подсказки</Button></div>}
     {!clip && !source && <div className="flex flex-wrap items-center gap-2">
-      <Button type="button" variant="outline" disabled={disabled || busy} onClick={() => recording ? recorder.current?.stop() : void start()}>
-        {recording ? <Square className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}{recording ? `Остановить · ${seconds} с` : 'Записать голосом'}
+      <Button type="button" variant="ghost" size={compact && !recording ? "icon" : "default"} aria-label={recording ? "Остановить запись" : "Записать голосом"} title="Записать голосом" disabled={disabled || busy} onClick={() => recording ? recorder.current?.stop() : void start()}>
+        {recording ? <Square className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}{recording ? `Остановить · ${seconds} с` : compact ? null : 'Записать голосом'}
       </Button>
-      <Button type="button" variant="outline" disabled={disabled || busy || recording} onClick={() => fileInput.current?.click()}>Загрузить аудио</Button>
+      <Button type="button" variant="ghost" className={compact ? "px-2" : undefined} disabled={disabled || busy || recording} onClick={() => fileInput.current?.click()}>Загрузить аудио</Button>
       <input ref={fileInput} className="sr-only" aria-label="Загрузить аудио" type="file" accept="audio/*,.webm,.m4a" disabled={disabled || busy || recording} onChange={(event) => { setSource(null); setClip(event.target.files?.[0] || null); }} />
     </div>}
     {clipUrl && <audio controls src={clipUrl} preload="metadata" />}
@@ -138,14 +140,13 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
     {source && <div className="space-y-2"><label className="block text-sm">{busy ? 'Распознано' : 'Команда'}<textarea disabled={busy} className="block w-full rounded-md border bg-background p-2 text-foreground" value={text} onChange={(event) => setText(event.target.value)} /></label>
       {!busy && <Button type="button" disabled={disabled || !text.trim()} onClick={async () => { setBusy(true); try { await onSubmit(text, source); setSource(null); setClip(null); asset.current = ''; } catch { setError('Не удалось отправить. Повторите с тем же текстом.'); } finally { setBusy(false); } }}>Повторить отправку</Button>}</div>}
     {(clip || recording || busy || source) && !(busy && source) && <Button type="button" variant="ghost" className="!bg-transparent !text-muted-foreground hover:!bg-muted" onClick={cancel}>Отменить запись</Button>}
-    {busy && <p role="status">{delayed && asset.current ? 'Задание сохранено, ещё выполняется. Повторять сообщение не нужно.' : source ? 'Обрабатываю команду…' : 'Распознаю запись…'}</p>}
     {error && <p role="alert" className="text-sm">{error}</p>}
-    <p className="text-xs text-muted-foreground">До 2 минут. Распознавание — Яндекс SpeechKit. Рабочая заметка сохранится с возможностью отмены. Финансовые записи и публикации потребуют подтверждения.</p>
+    {(!compact || recording || clip || busy || source) && <p className="text-xs text-muted-foreground">Запись до 2 минут. Перед отправкой можно проверить распознанный текст.</p>}
   </div>;
 }
 
-export function OperatorSpeech({ messageId, businessId, prepare = false, headers = voiceHeaders }: {
-  messageId: string; businessId: string; prepare?: boolean; headers?: HeadersProvider;
+export function OperatorSpeech({ messageId, businessId, prepare = false, headers = voiceHeaders, compact = false }: {
+  messageId: string; businessId: string; prepare?: boolean; headers?: HeadersProvider; compact?: boolean;
 }) {
   const [available, setAvailable] = useState(false); const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);

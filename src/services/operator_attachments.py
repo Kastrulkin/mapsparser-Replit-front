@@ -39,7 +39,7 @@ def public(item):
 
 def receive(cursor, *, business_id, user_id, channel, content, name, mime_type, request_key, conversation_id=None):
     authorize(cursor, business_id, user_id)
-    if channel not in {'web','telegram','telegram_mini_app'} or not request_key or len(request_key)>200:
+    if channel not in {'web','telegram','telegram_mini_app','max_bot','max_mini_app'} or not request_key or len(request_key)>200:
         raise ValueError('Проверьте канал и идентификатор файла.')
     extension = Path(name).suffix.lower()
     if extension not in EXTENSIONS or not content or len(content)>MAX_BYTES:

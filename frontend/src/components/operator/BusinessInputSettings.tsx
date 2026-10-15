@@ -1,3 +1,4 @@
+import { miniAppChannel } from "@/lib/miniAppPlatform";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -46,7 +47,7 @@ export function BusinessInputSettings({ businessId, disabled, headers = voiceHea
     try {
       const response = await fetch(`/api/operator/input-settings?business_id=${encodeURIComponent(businessId)}`, {
         method: 'PATCH', headers: { ...headers(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...fields, settingsVersion: saved?.version, request_id: crypto.randomUUID(), channel: 'telegram_mini_app' }),
+        body: JSON.stringify({ ...fields, settingsVersion: saved?.version, request_id: crypto.randomUUID(), channel: miniAppChannel() }),
       });
       const data: Settings = await response.json();
       if (version !== generation.current) return;

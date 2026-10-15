@@ -3,6 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { LanguageContext } from '@/i18n/LanguageContext.logic';
+import { en } from '@/i18n/locales/en';
 import { TelegramControlPage } from './TelegramControlPage';
 
 const jsonResponse = (payload: unknown) => Promise.resolve(new Response(JSON.stringify(payload), {
@@ -11,12 +13,11 @@ const jsonResponse = (payload: unknown) => Promise.resolve(new Response(JSON.str
 }));
 
 const openOperator = async (user: ReturnType<typeof userEvent.setup>) => {
-  await user.click(await screen.findByRole('button', { name: 'Ещё' }));
-  await user.click(await screen.findByRole('button', { name: 'Оператор' }));
+  await user.click(await screen.findByRole('button', { name: 'Чат' }));
 };
 
 const openGrowthPaths = async (user: ReturnType<typeof userEvent.setup>) => {
-  await user.click(await screen.findByRole('button', { name: 'Пути' }));
+  await user.click(await screen.findByRole('button', { name: 'Меню' }));
 };
 
 describe('TelegramControlPage scope integrity', () => {
@@ -82,7 +83,7 @@ describe('TelegramControlPage scope integrity', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
-    render(<TelegramControlPage />);
+    render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
     await openOperator(user);
     expect(await screen.findByText('Секрет точки один')).toBeInTheDocument();
 
@@ -125,11 +126,11 @@ describe('TelegramControlPage scope integrity', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<TelegramControlPage />);
+    render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
 
     expect(await screen.findByRole('heading', { name: 'Отзывы' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Отзывы' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Пути' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'Меню' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: 'Сегодня' })).not.toHaveAttribute('aria-current');
     expect(screen.queryByText(/Invalid Date/i)).not.toBeInTheDocument();
     expect(screen.getByText(/дата не указана источником/i)).toBeInTheDocument();
@@ -161,11 +162,12 @@ describe('TelegramControlPage scope integrity', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
-    render(<TelegramControlPage />);
+    render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
     await openGrowthPaths(user);
 
-    expect(await screen.findByRole('heading', { name: 'Пути роста' })).toBeInTheDocument();
-    expect(screen.getByText('Привести карточки в порядок')).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Ещё' }));
+    expect(await screen.findByRole('heading', { name: 'Ещё' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Пути роста/ })).toHaveAttribute('href', '/dashboard/growth-paths?business_id=business-1&scope_type=business');
     expect(screen.queryByText('Раздел пока недоступен')).not.toBeInTheDocument();
   });
 
@@ -215,7 +217,7 @@ describe('TelegramControlPage scope integrity', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
-    render(<TelegramControlPage />);
+    render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
     expect(await screen.findByText('Приоритет точки один')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Точка один/ }));
     await user.click(await screen.findByRole('button', { name: /Точка два/ }));
@@ -293,7 +295,7 @@ describe('TelegramControlPage scope integrity', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
-    render(<TelegramControlPage />);
+    render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
     expect(await screen.findByText('Автор один')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Точка один/ }));
@@ -304,7 +306,7 @@ describe('TelegramControlPage scope integrity', () => {
     await user.click(await screen.findByRole('button', { name: /Точка три/ }));
     await waitFor(() => expect(screen.getByRole('button', { name: /Точка три/ })).toBeInTheDocument());
     await openGrowthPaths(user);
-    await user.click(await screen.findByRole('button', { name: 'Ответить на отзывы' }));
+    await user.click(await screen.findByRole('button', { name: 'Отзывы' }));
     expect(await screen.findByText('Автор три')).toBeInTheDocument();
 
     resolveBusinessTwo?.(new Response(JSON.stringify(reviewsPayload('business-2', 'Автор два')), {
@@ -352,7 +354,7 @@ describe('TelegramControlPage scope integrity', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<TelegramControlPage />);
+    render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
 
     expect(await screen.findByRole('heading', { name: 'Контент' })).toBeInTheDocument();
     expect(await screen.findByText('Тема из плана')).toBeInTheDocument();
@@ -405,7 +407,7 @@ describe('TelegramControlPage scope integrity', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
-    render(<TelegramControlPage />);
+    render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
     await openOperator(user);
     await user.click(screen.getByRole('button', { name: /Точка один/ }));
     await user.click(await screen.findByRole('button', { name: /Точка два/ }));
@@ -449,7 +451,7 @@ describe('TelegramControlPage scope integrity', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
-    render(<TelegramControlPage />);
+    render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
     await user.click(await screen.findByRole('button', { name: /Точка один/ }));
     const search = await screen.findByPlaceholderText('Название, город или адрес');
     await user.type(search, 'ста');
@@ -496,7 +498,7 @@ describe('TelegramControlPage scope integrity', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
-    render(<TelegramControlPage />);
+    render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
     await user.click(await screen.findByRole('button', { name: /Сеть/ }));
     const search = await screen.findByPlaceholderText('Название или адрес точки');
     await user.type(search, 'ста');
@@ -549,14 +551,14 @@ describe('TelegramControlPage scope integrity', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
-    render(<TelegramControlPage />);
+    render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
     expect(await screen.findByText('Автор один')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Выбрать отзыв' }));
     expect(screen.getByText('Выбрано: 1')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Точка один/ }));
     await user.click(await screen.findByRole('button', { name: /Точка два/ }));
     await openGrowthPaths(user);
-    await user.click(await screen.findByRole('button', { name: 'Ответить на отзывы' }));
+    await user.click(await screen.findByRole('button', { name: 'Отзывы' }));
     expect(await screen.findByText('Автор два')).toBeInTheDocument();
 
     expect(screen.queryByText(/Выбрано:/)).not.toBeInTheDocument();
@@ -595,7 +597,7 @@ describe('TelegramControlPage scope integrity', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
-    render(<TelegramControlPage />);
+    render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
     await screen.findByRole('heading', { name: 'Отзывы' });
     await user.click(screen.getByRole('button', { name: /^Фильтры/ }));
     await user.selectOptions(screen.getByLabelText('Точка'), 'location-old');
@@ -603,7 +605,7 @@ describe('TelegramControlPage scope integrity', () => {
     await user.click(screen.getByRole('button', { name: /Точка один/ }));
     await user.click(await screen.findByRole('button', { name: /Точка два/ }));
     await openGrowthPaths(user);
-    await user.click(await screen.findByRole('button', { name: 'Ответить на отзывы' }));
+    await user.click(await screen.findByRole('button', { name: 'Отзывы' }));
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('scope_id=business-2'))).toBe(true));
 
     expect(fetchMock.mock.calls.some(([input]) => {
@@ -641,7 +643,7 @@ describe('TelegramControlPage scope integrity', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
-    render(<TelegramControlPage />);
+    render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
     await openOperator(user);
     await user.type(await screen.findByPlaceholderText('Напишите задачу'), 'Проверь первую точку');
     await user.click(screen.getByRole('button', { name: 'Отправить задачу' }));
@@ -685,7 +687,7 @@ describe('TelegramControlPage scope integrity', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
-    render(<TelegramControlPage />);
+    render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
     expect(await screen.findByRole('dialog', { name: 'Обновляем данные карточки' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Точка один/ }));
     await user.click(await screen.findByRole('button', { name: /Точка два/ }));
@@ -724,7 +726,7 @@ describe('TelegramControlPage scope integrity', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
-    render(<TelegramControlPage />);
+    render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
     await screen.findByRole('heading', { name: 'Отзывы' });
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => {
       const url = String(input);
@@ -739,7 +741,7 @@ describe('TelegramControlPage scope integrity', () => {
     })).toBe(true));
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Где работаем?' })).not.toBeInTheDocument());
     await openGrowthPaths(user);
-    await user.click(await screen.findByRole('button', { name: 'Ответить на отзывы' }));
+    await user.click(await screen.findByRole('button', { name: 'Отзывы' }));
     await screen.findByRole('heading', { name: 'Отзывы' });
     await user.click(screen.getByRole('button', { name: /^\u0424\u0438\u043b\u044c\u0442\u0440\u044b/ }));
     await user.selectOptions(screen.getByLabelText('\u041e\u0446\u0435\u043d\u043a\u0430'), '5');
@@ -802,7 +804,7 @@ describe('TelegramControlPage scope integrity', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
-    render(<TelegramControlPage />);
+    render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
     await openOperator(user);
     expect(await screen.findByText('Применить изменение цены?')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Подтвердить' })).toHaveLength(2);
@@ -852,7 +854,7 @@ describe('TelegramControlPage scope integrity', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
-    render(<TelegramControlPage />);
+    render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
     await openOperator(user);
     await user.click(await screen.findByRole('button', { name: 'Подтвердить' }));
 

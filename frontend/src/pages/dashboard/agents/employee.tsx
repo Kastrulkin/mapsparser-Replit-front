@@ -1,3 +1,4 @@
+import { getMapCardReport } from './map-card-report.logic';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import {
 	AlertTriangle,
@@ -894,7 +895,7 @@ export const EmployeeAgentsList = ({
     <div className="flex items-center justify-between gap-3 px-1">
       <div>
         <h2 className="text-sm font-semibold leading-6 text-slate-950">{copy.title}</h2>
-        <p className="text-xs leading-5 text-slate-500">{copy.description}</p>
+
       </div>
       <span className="inline-flex min-h-7 items-center rounded-full bg-slate-50 px-2.5 py-0.5 text-xs font-medium tabular-nums text-slate-600 ring-1 ring-slate-200">
         {blueprints.length}
@@ -1091,6 +1092,8 @@ export const EmployeeTestResultPanel = ({
   const [evaluationLoading, setEvaluationLoading] = useState(false);
   const [evaluationError, setEvaluationError] = useState('');
   const chargedCredits = Number(activeRun?.run_billing?.actual_credits || activeRun?.run_billing?.charge_credits || 0);
+  const mapReport = getMapCardReport(result.resultPayload);
+  const mapResultTitle = mapReport?.kind === 'preparation' ? 'Пакет оформления карточек' : 'Результат проверки карточек';
   const labels = approvalActionLabels(pendingApproval);
   const isBlocked = result.state === 'blocker';
   const canApprove = Boolean(pendingApproval && !isBlocked);
@@ -1158,9 +1161,9 @@ export const EmployeeTestResultPanel = ({
       <div className="space-y-4">
         <div className="min-w-0 max-w-4xl">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{isWorkRun ? 'Результат работы' : 'Результат проверки'}</div>
-          <h2 className="mt-2 max-w-3xl text-2xl font-semibold leading-8 text-slate-950 [text-wrap:balance]">{result.summary}</h2>
+          <h2 className="mt-2 max-w-3xl text-2xl font-semibold leading-8 text-slate-950 [text-wrap:balance]">{mapReport ? mapResultTitle : result.summary}</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 [text-wrap:pretty]">
-            Это только бизнес-результат. Технические подробности находятся в расширенных настройках.
+            {mapReport ? (mapReport.kind === 'preparation' ? 'Выберите площадку, проверьте тексты и подготовьте перенос в её кабинет.' : 'Посмотрите, что требует внимания. Подробности и источники раскрываются отдельно.') : 'Это только бизнес-результат. Технические подробности находятся в расширенных настройках.'}
           </p>
         </div>
         {pendingApproval?.approval_type === 'drafts' ? <ApprovalPayloadSummary approval={pendingApproval} /> : null}
@@ -1213,7 +1216,7 @@ export const EmployeeTestResultPanel = ({
           <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
             {result.state === 'blocker' ? 'Что мешает продолжить' : 'Подготовленный результат'}
           </div>
-          <HumanResultView result={result.resultPayload} resultState={activeRun?.result_state} />
+          <HumanResultView result={result.resultPayload} resultState={activeRun?.result_state} runId={activeRun?.id} />
           {needsScenarioRebuild ? (
             <div className="mt-3 rounded-xl bg-white px-3 py-3 text-sm leading-6 text-amber-950 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.18)]">
               Этот агент создан старой версией сценария: в нём нет шага чтения Google Sheets. Пересоберите сценарий, и LocalOS сразу запустит тест по новой версии.
@@ -1529,7 +1532,15 @@ export const AgentRunParametersPanel = ({
               {field.enum?.length ? (
                 <select className={inputClassName} value={String(value ?? '')} onChange={(event) => onChange(key, event.target.value)}>
                   <option value="">{deepCopy.select}</option>
-                  {field.enum.map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}
+                  {field.enum.map((option) => {
+                    const platformLabels: Record<string, string> = {
+                      all: language === 'ru' ? 'Все площадки' : 'All platforms',
+                      google: 'Google',
+                      yandex: language === 'ru' ? 'Яндекс' : 'Yandex',
+                      '2gis': language === 'ru' ? '2ГИС' : '2GIS',
+                    };
+                    return <option key={String(option)} value={String(option)}>{key === 'platform' ? platformLabels[String(option)] || String(option) : String(option)}</option>;
+                  })}
                 </select>
               ) : field.type === 'boolean' ? (
                 <span className="mt-2 flex min-h-10 items-center gap-2">
@@ -1594,10 +1605,11 @@ export const EmployeeAgentOverviewPanel = ({
   const story = buildEmployeeWorkspaceStory(blueprint, details, pendingApproval);
   const latestRun = details?.runs?.[0] || null;
   const detailedLatestRun = activeRun?.id && activeRun.id === latestRun?.id ? activeRun : latestRun;
-  const latestResult = findPreparedResultPayload(detailedLatestRun, pendingApproval)
-    || details?.last_business_result
-    || blueprint.last_business_result
-    || null;
+  const latestResult = [
+    findPreparedResultPayload(detailedLatestRun, pendingApproval),
+    details?.last_business_result,
+    blueprint.last_business_result,
+  ].find((result) => result && Object.keys(result).length > 0) || null;
   const healthy = story.state === 'working' && story.attention.length === 0;
   const problem = story.state === 'error' || story.state === 'waiting_for_review' || story.state === 'blocked_result' || story.state === 'needs_connection' || story.state === 'needs_attention';
   const actionDisabled = actionLoading || story.state === 'running_test';

@@ -49,6 +49,8 @@ from services.operator_conversations import (
 from subscription_manager import get_subscription_access, get_subscription_info
 
 
+from services.owner_bot_context import owner_bot_channel
+
 logger = logging.getLogger(__name__)
 
 
@@ -493,7 +495,7 @@ def route_operator_chat_for_telegram(
     from services.operator_chat_service import process_chat
     from services.operator_audio import authorize_actor
     actor, access = authorize_actor(cursor, user_id, business_id, require_write=True)
-    return process_chat(cursor, business_id=business_id, user_id=user_id, channel="telegram",
+    return process_chat(cursor, business_id=business_id, user_id=user_id, channel=owner_bot_channel(),
         message=message, payload={"limit": limit, **(transport_key if isinstance(transport_key, dict) else {})},
         router=route_operator_message, actor_context=actor, subscription_access=access,
         refresh_handler=refresh_reviews_from_operator, ai_router_handler=classify_operator_intent_with_ai,
@@ -575,7 +577,7 @@ def build_operator_chat_result(business_ctx: dict[str, Any], message_text: Any) 
                 user_id=user_id,
                 event_type="operator_tool_executed",
                 action_key=str(tool_step.get("tool") or "operator_tool"),
-                channel="telegram",
+                channel=owner_bot_channel(),
                 status=str(tool_step.get("status") or "completed"),
                 input_summary={"step": tool_step.get("step")},
                 output_summary={"risk_class": tool_step.get("risk_class")},
@@ -597,7 +599,7 @@ def build_operator_chat_result(business_ctx: dict[str, Any], message_text: Any) 
                 user_id=user_id,
                 event_type="operator_usage_charged",
                 action_key="operator_tool_plan",
-                channel="telegram",
+                channel=owner_bot_channel(),
                 status=str(tool_plan_finalization.get("status") or "completed"),
                 input_summary={"action_key": "operator_tool_plan"},
                 output_summary={
@@ -629,7 +631,7 @@ def build_operator_chat_result(business_ctx: dict[str, Any], message_text: Any) 
                 user_id=user_id,
                 event_type="operator_usage_charged",
                 action_key="operator_intent_classify",
-                channel="telegram",
+                channel=owner_bot_channel(),
                 status=str(record_payload.get("status") or "completed"),
                 input_summary={"action_key": "operator_intent_classify"},
                 output_summary=record_payload,

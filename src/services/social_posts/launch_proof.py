@@ -36,8 +36,8 @@ SOCIAL_POST_PLATFORMS = [
     "facebook",
 ]
 
-API_PLATFORMS = {"google_business", "telegram", "vk", "instagram", "facebook"}
-BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis", "max"}
+API_PLATFORMS = {"google_business", "telegram", "vk", "max", "instagram", "facebook"}
+BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis"}
 FIRST_API_PROOF_PLATFORMS = ("telegram", "vk")
 
 SOCIAL_POST_STATUSES = {
@@ -1053,17 +1053,26 @@ def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
 def approve_social_posts(user_id: str, post_ids: list[str]) -> dict[str, Any]:
     return run_post_batch(post_ids, lambda post_id: approve_social_post(user_id, post_id), _normalize_ids, _summary_for_posts, build_social_queue_groups, lambda: str(sys.exc_info()[1]))
 
+class SocialPostVersionConflict(RuntimeError):
+    """The social post changed after the caller loaded its editable version."""
+
+
 def update_social_post_text(
     user_id: str,
     post_id: str,
     platform_text: str,
     base_text: str = "",
+    expected_updated_at: str = "",
 ) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
         post = _load_post_for_write(cursor, user_id, post_id)
+        current_updated_at = post.get("updated_at")
+        current_updated_at_text = current_updated_at.isoformat() if isinstance(current_updated_at, datetime) else str(current_updated_at or "")
+        if expected_updated_at and current_updated_at_text != expected_updated_at:
+            raise SocialPostVersionConflict("Пост уже изменился. Обновите его и повторите правку.")
         current_status = str(post.get("status") or "").strip()
         if current_status in {"queued", "publishing", "published"}:
             raise ValueError("Нельзя менять текст после постановки в расписание или публикации")
@@ -1099,6 +1108,7 @@ def update_social_post_text(
                 updated_at = NOW()
             WHERE id = %s
               AND status = %s
+              AND (%s = '' OR updated_at = %s)
             RETURNING *
             """,
             (
@@ -1108,11 +1118,13 @@ def update_social_post_text(
                 _json_dumps(metadata),
                 post_id,
                 current_status,
+                expected_updated_at,
+                expected_updated_at or current_updated_at_text,
             ),
         )
         updated = _serialize_social_post(cursor, cursor.fetchone())
         if not updated:
-            raise RuntimeError("Состояние публикации изменилось; обновите карточку перед изменением текста")
+            raise SocialPostVersionConflict("Пост уже изменился. Обновите его и повторите правку.")
         db.conn.commit()
         return updated
     except Exception:

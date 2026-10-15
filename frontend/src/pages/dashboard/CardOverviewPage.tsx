@@ -1355,7 +1355,7 @@ export const CardOverviewPage = () => {
               automationLockedMessage={mapsLockedMessage}
               businessName={currentBusiness?.name}
               selectedSource={selectedSource}
-              aggregateScope={isNetworkRepresentative ? 'network' : 'business'}
+              aggregateScope={!isDemoMode && isNetworkRepresentative ? 'network' : 'business'}
               onOpenLocation={onBusinessChange}
               initialFilter={reviewFocus}
             />

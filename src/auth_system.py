@@ -12,7 +12,7 @@ import hashlib
 import secrets
 import time
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
 from pg_db_utils import get_db_connection
@@ -250,6 +250,14 @@ def create_session(
     cursor = conn.cursor()
     
     try:
+        max_session = user_agent == 'localos-max-mini-app'
+        if max_session:
+            from services.max_webapp_auth import max_enabled, max_session_user_agent
+            if not max_enabled():
+                return None
+            user_agent = max_session_user_agent(cursor, user_id)
+            if not user_agent:
+                return None
         session_id = str(uuid.uuid4())
         normalized_kind = str(session_kind or "standard").strip().lower()
         if normalized_kind not in {"standard", "demo"}:
@@ -277,7 +285,7 @@ def create_session(
                 expires_at.isoformat(),
                 ip_address,
                 user_agent,
-                datetime.now().isoformat(),
+                (datetime.now(timezone.utc) if max_session else datetime.now()).isoformat(),
                 normalized_kind,
                 scope_business_id,
             ),
@@ -463,7 +471,7 @@ def verify_session(
             cursor.execute(
                 f"""
                 SELECT s.user_id, s.expires_at, u.email, u.name, u.phone, u.is_active, u.is_superadmin,
-                       s.id AS session_id, s.session_kind, s.scope_business_id
+                       s.id AS session_id, s.session_kind, s.scope_business_id, s.user_agent
                 FROM UserSessions s
                 JOIN Users u ON s.user_id = u.id
                 WHERE s.token = {PLACEHOLDER} AND s.expires_at > {PLACEHOLDER}
@@ -515,6 +523,16 @@ def verify_session(
                 session_kind = session[8] if len(session) > 8 else 'standard'
                 scope_business_id = session[9] if len(session) > 9 else None
             
+            messenger_platform = "telegram"
+            session_agent = session['user_agent'] if hasattr(session, 'keys') and 'user_agent' in session.keys() else (session[10] if not hasattr(session, 'keys') and len(session) > 10 else '')
+            if str(session_agent or '').startswith('localos-max-mini-app'):
+                from services.max_webapp_auth import max_enabled, max_session_user_agent
+                if not max_enabled():
+                    return None
+                binding = max_session_user_agent(cursor, user_id)
+                if not binding or not secrets.compare_digest(str(session_agent), binding):
+                    return None
+                messenger_platform = "max"
             normalized_session_kind = str(session_kind or "standard")
             is_active = is_active_val not in (False, 0, "0")
             if not is_active and not include_inactive:
@@ -533,6 +551,7 @@ def verify_session(
                 ),
                 "session_id": session_id,
                 "session_kind": normalized_session_kind,
+                "messenger_platform": messenger_platform,
                 "scope_business_id": scope_business_id,
             }
         except Exception as e:

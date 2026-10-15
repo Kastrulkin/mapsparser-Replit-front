@@ -14,7 +14,7 @@ export const TelegramRadarPage = () => {
   const copy = getDemoWorkspaceCopy(language).telegram;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-7 pb-10">
+    <div data-tour-target="radar-overview" className="mx-auto max-w-6xl space-y-7 pb-10">
       <DashboardPageHeader
         eyebrow="Telegram"
         title={copy.pageTitle}

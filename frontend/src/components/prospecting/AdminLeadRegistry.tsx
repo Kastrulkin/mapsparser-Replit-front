@@ -1,55 +1,61 @@
-import { useLatestCallback } from '@/hooks/useLatestCallback';
-import {
-	ArrowRight,
-	Building2,
-	Check,
-	ChevronDown,
-	CircleAlert,
-	ExternalLink,
-	MapPin,
-	MessageCircle,
-	Plus,
-	RadioTower,
-	RefreshCw,
-	Search,
-	Send,
-	ShieldCheck,
-	Sparkles,
-	UserRound,
-	Users,
-} from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ArrowRight,
+  Building2,
+  Check,
+  ChevronDown,
+  CircleAlert,
+  ExternalLink,
+  MapPin,
+  MessageCircle,
+  Plus,
+  RadioTower,
+  RefreshCw,
+  Search,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  UserRound,
+  Users,
+} from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
 import { leadMapLink } from '../../lib/leadMapLink';
-import { matchesSelectedSignalKeys } from '../../lib/leadSignalFilters';
 import { researchSourcePresentation } from '../../lib/researchSourcePresentation';
-import { OutreachEmailSetup } from '../OutreachEmailSetup';
-import { Badge } from '../ui/badge';
+import { matchesSelectedSignalKeys } from '../../lib/leadSignalFilters';
 import { Button } from '../ui/button';
-import { Checkbox } from '../ui/checkbox';
+import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
-import {
-	Sheet,
-	SheetContent,
-	SheetDescription,
-	SheetHeader,
-	SheetTitle,
-} from '../ui/sheet';
-import { outreachDefaultsForWorkstream, workstreamLabel, type ContactPoint, type EnrichmentState, type LeadWorkstream, type MessageReadiness, type SenderMode, type WorkstreamResearch, type WorkstreamType } from './AdminLeadRegistry.logic';
-import { OutreachDateTimePicker } from './OutreachDateTimePicker';
+import { Checkbox } from '../ui/checkbox';
+import { ReadyEmailImport } from './ReadyEmailImport';
+import { OutreachEmailSetup } from '../OutreachEmailSetup';
 import { OutreachLearningInsights } from './OutreachLearningInsights';
-import { OutreachMessageQueue } from './OutreachMessageQueue';
-import { OutreachScheduleCalendar } from './OutreachScheduleCalendar';
-import { buildProjectedOutreachTouches, defaultOutreachStartValue, outreachStartIso } from './OutreachScheduleCalendar.logic';
 import { OutreachSuppressionManager } from './OutreachSuppressionManager';
+import { OutreachMessageQueue } from './OutreachMessageQueue';
 import {
-	OutreachTouchMessageEditor,
+  buildProjectedOutreachTouches,
+  defaultOutreachStartValue,
+  OutreachScheduleCalendar,
+  outreachStartIso,
+} from './OutreachScheduleCalendar';
+import {
+  OutreachTouchMessageEditor,
 } from './OutreachTouchMessageEditor';
+import { OutreachDateTimePicker } from './OutreachDateTimePicker';
 import {
-	OutreachTouchMessageDraft,
-	outreachTouchMessageDraft,
-	outreachTouchMessageText,
+  OutreachTouchMessageDraft,
+  outreachTouchMessageDraft,
+  outreachTouchMessageText,
 } from './outreachTouchMessage';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '../ui/sheet';
+
+type WorkstreamType = 'localos_sales' | 'client_partnership' | 'creator_collaboration';
+type SenderMode = 'localos' | 'partner_business' | 'localos_for_partner';
 type RegistryView = 'leads' | 'messages' | 'results';
 type ScopeFilter = 'all' | 'localos_sales' | 'client_partnership';
 
@@ -80,6 +86,77 @@ interface PartnerTypeFilterOption {
   id: string;
   label: string;
   count?: number;
+}
+
+interface WorkstreamState {
+  code?: string;
+  label?: string;
+  url?: string | null;
+}
+
+interface WorkstreamAction {
+  code?: string;
+  label?: string;
+}
+
+interface RelationshipStage {
+  code?: 'preparing_first_touch' | 'touch_sent' | 'responded' | 'response_touch_unknown';
+  label?: string;
+  touch_number?: number;
+  channel?: string | null;
+  occurred_at?: string | null;
+}
+
+interface ReadinessCheck {
+  code?: string;
+  label?: string;
+  passed?: boolean;
+}
+
+interface ReadinessGate {
+  code?: 'ready' | 'needs_attention';
+  label?: string;
+  checks?: ReadinessCheck[];
+  blockers?: string[];
+}
+
+interface ResearchSource {
+  title?: string;
+  url?: string;
+  source_type?: string;
+  published_at?: string;
+}
+
+interface WorkstreamResearch {
+  id?: string;
+  score?: number;
+  qualification_stage?: string;
+  signal_label?: 'strong_signal' | 'reason_to_check' | 'fit_only';
+  why_now?: string;
+  signals?: Array<{
+    signal_combo?: string;
+    pattern_key?: string;
+    key?: string;
+    label?: string;
+  }>;
+  sources?: ResearchSource[];
+  suggested_opener?: string;
+  opener_source_url?: string;
+  limitations?: string[];
+  message_brief?: {
+    operator_approved_reason?: string;
+    operator_approved_at?: string;
+    operator_approved_by?: string;
+    operator_approved_source_type?: string;
+    preparation_steps?: Record<string, {
+      status?: 'started' | 'completed';
+      label?: string;
+      completed_at?: string;
+      metadata?: Record<string, unknown>;
+    }>;
+  };
+  researched_at?: string;
+  stale?: boolean;
 }
 
 const outreachSignalLabels: Record<string, string> = {
@@ -130,6 +207,39 @@ function PreparationStepStatus({ step }: { step?: PreparationStep }) {
       <span>{step.label || 'Действие выполнено'}{time ? ` · ${time}` : ''}</span>
     </div>
   );
+}
+
+interface ContactPoint {
+  id: string;
+  type?: string;
+  value?: string;
+  owner_type?: 'company' | 'person';
+  person_name?: string | null;
+  role_title?: string | null;
+  source_url?: string | null;
+  source_type?: string;
+  confidence?: number;
+  verification_status?: string;
+  observed_at?: string;
+  verified_at?: string | null;
+}
+
+interface MessageReadiness {
+  code?: 'ready' | 'needs_contact' | 'needs_facts' | 'needs_evidence' | 'suppressed';
+  label?: string;
+  missing?: string[];
+  missing_items?: Array<{
+    code?: string;
+    label?: string;
+  }>;
+}
+
+interface EnrichmentState {
+  id?: string;
+  status?: string;
+  phase?: string;
+  error?: string | null;
+  updated_at?: string;
 }
 
 interface ContactIntelligence {
@@ -402,6 +512,21 @@ interface OutreachCampaignSetupDraft {
   senderMode: SenderMode;
 }
 
+export const outreachDefaultsForWorkstream = (workstreamType?: string) => {
+  if (workstreamType === 'creator_collaboration') {
+    return {
+      senderMode: 'localos_for_partner' as SenderMode,
+      sequenceChannels: ['email'],
+      sequenceDays: [0],
+    };
+  }
+  return {
+    senderMode: (workstreamType === 'localos_sales' ? 'localos' : 'partner_business') as SenderMode,
+    sequenceChannels: ['telegram', 'email', 'max', 'vk'],
+    sequenceDays: [0, 3, 7, 12],
+  };
+};
+
 interface OutreachSenderAccountSummary {
   id: string;
   channel?: string;
@@ -464,6 +589,61 @@ interface ChannelSetupBlocker {
   target: string;
   focusTarget?: string;
   actionHref?: string;
+}
+
+interface LeadWorkstream {
+  id?: string | null;
+  workstream_type: WorkstreamType;
+  client_business_id?: string | null;
+  client_business_name?: string | null;
+  status?: string;
+  selected_channel?: string | null;
+  last_contact_at?: string | null;
+  channel_state?: WorkstreamState;
+  room_state?: WorkstreamState;
+  next_action?: WorkstreamAction;
+  relationship_stage?: RelationshipStage;
+  readiness_gate?: ReadinessGate;
+  research?: WorkstreamResearch | null;
+  contact_points?: ContactPoint[];
+  contact_summary?: { found?: number; verified?: number };
+  selected_recipient?: ContactPoint | null;
+  enrichment_state?: EnrichmentState | null;
+  message_readiness?: MessageReadiness;
+  service_compatibility_score?: number | null;
+  campaign_state?: {
+    id?: string;
+    status?: string;
+    version?: number;
+    touches_count?: number;
+    confirmed_touches_count?: number;
+    sequence_has_gap?: boolean;
+    last_confirmed_touch?: {
+      id?: string;
+      touch_number?: number;
+      channel?: string;
+      sent_at?: string;
+    } | null;
+    next_pending_touch?: {
+      id?: string;
+      touch_number?: number;
+      channel?: string;
+      status?: string;
+      scheduled_at?: string;
+    } | null;
+    first_human_response?: {
+      id?: string;
+      touch_number?: number;
+      channel?: string;
+      classification?: string;
+      occurred_at?: string;
+    } | null;
+    created_at?: string;
+    updated_at?: string;
+    approved_at?: string | null;
+    stop_reason?: string | null;
+  } | null;
+  legacy?: boolean;
 }
 
 interface LeadItem {
@@ -619,6 +799,16 @@ const sourceLabel = (lead: LeadItem) => {
     return 'Найден LocalOS';
   }
   return 'Добавлен в работу';
+};
+
+export const workstreamLabel = (workstream: LeadWorkstream) => {
+  if (workstream.workstream_type === 'localos_sales') {
+    return 'Лид LocalOS';
+  }
+  if (workstream.workstream_type === 'creator_collaboration') {
+    return 'Автор LocalOS';
+  }
+  return `Лид-партнёр · ${workstream.client_business_name || 'клиент'}`;
 };
 
 const statusLabel = (workstream: LeadWorkstream) =>
@@ -1504,8 +1694,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     void loadSenderAccounts();
   }, [loadSenderAccounts]);
 
-  // Resolve missing sender choices; persisting uses the latest campaign draft.
-  const selectReadySenders = useLatestCallback(() => {
+  useEffect(() => {
     if (senderAccountsLoading || !selectedWorkstream?.id) return;
     const additions: Record<number, string> = {};
     sequenceChannels.forEach((channel, index) => {
@@ -1526,8 +1715,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       setOutreachPreview(null);
       setNotice(`LocalOS выбрал единственный готовый аккаунт для касаний ${steps}. Проверьте и сохраните изменения.`);
     }
-  });
-  useEffect(selectReadySenders, [savedOutreachCampaign?.id, selectedWorkstream?.id, senderAccounts, senderAccountsLoading, sequenceChannels, sequenceSenders, selectReadySenders]);
+  }, [savedOutreachCampaign?.id, selectedWorkstream?.id, senderAccounts, senderAccountsLoading, sequenceChannels, sequenceSenders]);
 
   useEffect(() => {
     if (!selectedLead?.id || !selectedWorkstream?.id) {
@@ -1561,8 +1749,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     };
   }, [selectedLead?.id, selectedWorkstream?.id, senderMode, contactIntelligence?.job?.id]);
 
-  // Hydrate on profile/workstream selection, not every background contact refresh.
-  const hydrateSenderForm = useLatestCallback(() => {
+  useEffect(() => {
     const profile = contactIntelligence?.sender_profile;
     const suggestions = contactIntelligence?.sender_profile_suggestions;
     if (profile) {
@@ -1603,11 +1790,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setSenderPartnerTypes((suggestions?.desired_partner_types || []).join('\n'));
     setSenderDisqualifiers('');
     setSenderCtas('');
-  });
-  useEffect(hydrateSenderForm, [contactIntelligence?.sender_profile?.id, contactIntelligence?.sender_profile_suggestions, selectedWorkstream?.id, usesPlatformSender, hydrateSenderForm]);
+  }, [contactIntelligence?.sender_profile?.id, contactIntelligence?.sender_profile_suggestions, selectedWorkstream?.id, usesPlatformSender]);
 
-  // A new workstream owns a fresh draft; polling must not discard unsaved edits.
-  const resetWorkstreamDraft = useLatestCallback(() => {
+  useEffect(() => {
     const defaults = outreachDefaultsForWorkstream(selectedWorkstream?.workstream_type);
     setOutreachPreview(null);
     setSavedOutreachCampaign(null);
@@ -1629,8 +1814,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       selectedWorkstream?.research?.message_brief?.operator_approved_reason || '',
     ));
     setDataPreparationMessage('');
-  });
-  useEffect(resetWorkstreamDraft, [selectedWorkstream?.id, resetWorkstreamDraft]);
+  }, [selectedWorkstream?.id]);
 
   useEffect(() => {
     const workstreamId = String(selectedWorkstream?.id || '');
@@ -1763,10 +1947,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     return () => {
       active = false;
     };
-  }, [outreachCampaignSetupStorageKey, selectedWorkstream?.id, selectedWorkstream?.workstream_type]);
+  }, [outreachCampaignSetupStorageKey, selectedWorkstream?.id]);
 
-  // Restore local edits once for the selected campaign version, not on delivery updates.
-  const restoreTouchEdits = useLatestCallback(() => {
+  useEffect(() => {
     if (!outreachTouchEditsStorageKey) return;
     try {
       const storedValue = localStorage.getItem(outreachTouchEditsStorageKey);
@@ -1812,8 +1995,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     } catch {
       localStorage.removeItem(outreachTouchEditsStorageKey);
     }
-  });
-  useEffect(restoreTouchEdits, [outreachTouchEditsStorageKey, savedOutreachCampaign?.id, savedOutreachCampaign?.version, restoreTouchEdits]);
+  }, [outreachTouchEditsStorageKey, savedOutreachCampaign?.id, savedOutreachCampaign?.version]);
 
   useEffect(() => {
     if (!hasTouchEdits) return undefined;
@@ -2635,10 +2817,13 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
             ))}
           </div>
           {view === 'leads' ? (
-            <Button onClick={() => setSearchOpen(true)} className="min-h-11">
-              <Search className="mr-2 h-4 w-4" />
-              Найти лидов
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <ReadyEmailImport onSaved={loadLeads} />
+              <Button onClick={() => setSearchOpen(true)} className="min-h-11">
+                <Search className="mr-2 h-4 w-4" />
+                Найти лидов
+              </Button>
+            </div>
           ) : null}
         </div>
 

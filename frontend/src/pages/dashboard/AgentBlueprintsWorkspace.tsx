@@ -1,3 +1,4 @@
+import type { AgentSettingsDraft, ExecutionSettingsDraft } from './agents/settings-v2.logic';
 import { featureFlags } from '@/config/featureFlags';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { newAuth } from '@/lib/auth_new';
@@ -484,16 +485,20 @@ export const AgentBlueprintsWorkspace = () => {
       const response = await api.post(`/agent-templates/${template.key}/use`, { business_id: currentBusinessId });
       const blueprint = response.data?.blueprint;
       await loadBlueprints();
+      setAgentSearch('');
+      setAgentRegistryFilter('all');
       if (blueprint?.id) {
         selectBlueprint(blueprint.id);
         setWorkspaceMode('scenario');
       }
       setDecisionNotice(response.data?.created === false
-        ? 'Этот агент уже был создан. Открыли его текущий сценарий.'
-        : 'Агент подготовлен. Проверьте сценарий и запустите безопасный тест.');
+        ? 'Этот агент уже добавлен в компанию. Открыли его текущий сценарий.'
+        : 'Агент добавлен в компанию. Проверьте сценарий и запустите безопасный тест.');
+      return true;
     } catch (requestError) {
       console.error(requestError);
-      setError(getRequestErrorMessage(requestError, 'Не удалось использовать готовую практику.'));
+      setError(getRequestErrorMessage(requestError, 'Не удалось добавить агента. Попробуйте ещё раз.'));
+      return false;
     } finally {
       setUsingTemplateKey('');
     }
@@ -795,35 +800,33 @@ export const AgentBlueprintsWorkspace = () => {
     const requestedBlueprintId = params.get('blueprint_id') || '';
     const requestedRunId = params.get('run_id') || '';
     const requestedBusinessId = params.get('business_id') || '';
-    const requestKey = `${requestedBlueprintId}:${requestedRunId}:${requestedBusinessId}`;
+    const requestKey = `${currentBusinessId}:${requestedBlueprintId}:${requestedRunId}:${requestedBusinessId}`;
     if (!requestedBlueprintId && !requestedRunId) return;
     if (requestedDeepLinkRef.current === requestKey || !currentBusinessId || !blueprints.length) return;
-    if (requestedBusinessId && requestedBusinessId !== currentBusinessId) {
-      return;
-    }
-    const blueprint = blueprints.find((item) => item.id === requestedBlueprintId);
-    if (!blueprint) {
-      requestedDeepLinkRef.current = requestKey;
-      setError('Агент из ссылки не найден или недоступен в выбранном бизнесе.');
-      return;
-    }
+    if (requestedBusinessId && requestedBusinessId !== currentBusinessId) return;
     requestedDeepLinkRef.current = requestKey;
-    selectBlueprint(blueprint.id);
-    if (!requestedRunId) return;
-    setExplicitRunTarget({ blueprintId: blueprint.id, runId: requestedRunId });
     const requestRevision = ++runRequestRevisionRef.current;
     const requestBusiness = currentBusinessId;
-    void api.get(`/agent-runs/${requestedRunId}`).then(async (response) => {
-      if (requestedDeepLinkRef.current !== requestKey || requestRevision !== runRequestRevisionRef.current || requestBusiness !== runBusinessRef.current) return;
-      const run: AgentRun | null = response.data?.run && typeof response.data.run === 'object' ? response.data.run : null;
-      if (!run || run.blueprint_id !== blueprint.id) {
-        setError('Запуск из ссылки не принадлежит выбранному агенту.');
+    const matches = () => requestedDeepLinkRef.current === requestKey && requestRevision === runRequestRevisionRef.current && requestBusiness === runBusinessRef.current;
+    const open = async () => {
+      const response = requestedRunId ? await api.get(`/agent-runs/${encodeURIComponent(requestedRunId)}`) : null;
+      if (!matches()) return;
+      const run: AgentRun | null = response?.data?.run && typeof response.data.run === 'object' ? response.data.run : null;
+      const blueprintId = requestedBlueprintId || run?.blueprint_id;
+      const blueprint = blueprints.find(item => item.id === blueprintId && item.business_id === requestBusiness);
+      if (!blueprint || requestedRunId && (!run || run.id !== requestedRunId || run.blueprint_id !== blueprint.id)) {
+        setError('Работа из ссылки не найдена или недоступна в выбранном бизнесе.');
         return;
       }
-      setActiveRun(run); setWorkspaceMode('results');
-      await loadBlueprintDetails(blueprint.id);
-    }).catch(() => { if (requestedDeepLinkRef.current === requestKey && requestRevision === runRequestRevisionRef.current && requestBusiness === runBusinessRef.current) setError('Запуск из ссылки не найден или недоступен.'); });
-  }, [blueprints, currentBusinessId, loadBlueprintDetails, location.search, selectBlueprint]);
+      selectBlueprint(blueprint.id);
+      if (run) {
+        setExplicitRunTarget({ blueprintId: blueprint.id, runId: run.id });
+        setActiveRun(run);
+        setWorkspaceMode('results');
+      }
+    };
+    void open().catch(() => { if (matches()) setError('Запуск из ссылки не найден или недоступен.'); });
+  }, [blueprints, currentBusinessId, location.search, selectBlueprint]);
 
   const { waitForAgentRun } = useAgentRunTracking({ currentBusinessId, blueprints, blueprintDetails, selectedBlueprint, runAnimation, compiledRunContext, explicitRunTarget,
   requestedDeepLinkRef, setSelectedBlueprintId: selectBlueprintFromRunTracking, setRunAnimation, setActiveRun, setWorkspaceMode, setError,
@@ -1408,22 +1411,25 @@ export const AgentBlueprintsWorkspace = () => {
     }
   };
 
-  const saveExecutionMode = async () => {
+  const saveExecutionMode = async (draft?: ExecutionSettingsDraft, stayInSettings = false) => {
     if (!selectedBlueprint) {
       return;
     }
+    const submittedMode = draft?.mode || selectedExecutionMode;
+    const submittedTime = draft?.time ?? scheduleTime;
+    const submittedTimezone = draft?.timezone ?? scheduleTimezone;
     setActionLoading(true);
     setError(null);
     const savedHydration = scheduleHydrationRef.current;
     const savedTimeRevision = savedHydration.timeRevision;
     const savedTimezoneRevision = savedHydration.timezoneRevision;
     const savedModeRevision = savedHydration.modeRevision;
-    const savedExecutionMode = selectedExecutionMode;
+    const savedExecutionMode = submittedMode;
     try {
       await api.post(`/agent-blueprints/${selectedBlueprint.id}/execution-mode`, {
-        execution_mode: selectedExecutionMode,
-        time: selectedExecutionMode === 'scheduled' ? scheduleTime : undefined,
-        timezone: selectedExecutionMode === 'scheduled' ? scheduleTimezone : undefined,
+        execution_mode: submittedMode,
+        time: submittedMode === 'scheduled' ? submittedTime : undefined,
+        timezone: submittedMode === 'scheduled' ? submittedTimezone : undefined,
       });
       if (scheduleHydrationRef.current === savedHydration && scheduleHydrationRef.current.modeRevision === savedModeRevision) {
         scheduleHydrationRef.current.modeDirty = false;
@@ -1439,10 +1445,12 @@ export const AgentBlueprintsWorkspace = () => {
         : 'Тип запуска сохранён. Теперь можно проверить агента.');
       await loadBlueprints();
       await loadBlueprintDetails(selectedBlueprint.id);
-      setWorkspaceMode('overview');
+      if (!stayInSettings) setWorkspaceMode('overview');
+      return true;
     } catch (requestError) {
       console.error(requestError);
       setError(getRequestErrorMessage(requestError, 'Не удалось сохранить тип запуска.'));
+      return false;
     } finally {
       setActionLoading(false);
     }
@@ -1648,7 +1656,7 @@ export const AgentBlueprintsWorkspace = () => {
     }
   };
 
-  const saveAgentSetup = async () => {
+  const saveAgentSetup = async (draft?: AgentSettingsDraft) => {
     if (!selectedBlueprint) {
       return;
     }
@@ -1657,19 +1665,21 @@ export const AgentBlueprintsWorkspace = () => {
     try {
       await api.post(`/agent-blueprints/${selectedBlueprint.id}/setup`, {
         workflow_description: selectedBlueprint.latest_goal || selectedBlueprint.description || selectedBlueprint.name,
-        data_sources: setupDataSources.split(',').map((item) => item.trim()).filter(Boolean),
-        extraction_rules: setupExtractionRules,
-        processing_rules: setupProcessingRules,
-        output_format: setupOutputFormat,
+        data_sources: (draft?.dataSources ?? setupDataSources).split(',').map((item) => item.trim()).filter(Boolean),
+        extraction_rules: draft?.extractionRules ?? setupExtractionRules,
+        processing_rules: draft?.processingRules ?? setupProcessingRules,
+        output_format: draft?.outputFormat ?? setupOutputFormat,
         approval_boundaries: ['final_output', 'external_delivery'],
-        manual_control: setupManualControl,
+        manual_control: draft?.manualControl ?? setupManualControl,
       });
       await loadBlueprintDetails(selectedBlueprint.id);
       await loadBlueprintReview(selectedBlueprint.id);
       await loadSourceCatalog(selectedBlueprint.id);
+      return true;
     } catch (requestError) {
       console.error(requestError);
       setError('Не удалось сохранить настройку агента.');
+      return false;
     } finally {
       setActionLoading(false);
     }

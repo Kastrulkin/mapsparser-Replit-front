@@ -111,7 +111,7 @@ export const loadJourneyActions = async (businessId: string): Promise<JourneyAct
   return data.actions || [];
 };
 
-export const claimLeadJourney = async (token: string, businessId: string, surface: 'web' | 'telegram_mini_app' = 'web'): Promise<JourneyAction> => {
+export const claimLeadJourney = async (token: string, businessId: string, surface: 'web' | 'telegram_mini_app' | 'max_mini_app' = 'web'): Promise<JourneyAction> => {
   const data = await newAuth.makeRequest('/journeys/claim', {
     method: 'POST',
     body: JSON.stringify({ token, business_id: businessId, surface }),
@@ -135,7 +135,7 @@ export const runJourneyCommand = async ({
   businessId: string;
   command: string;
   payload?: Record<string, unknown>;
-  surface?: 'web' | 'telegram_mini_app';
+  surface?: 'web' | 'telegram_mini_app' | 'max_mini_app';
   idempotencyKey?: string;
 }) => {
   if (surface === 'web') {

@@ -1,6 +1,8 @@
-"""Media transport helpers; runtime dependencies are bound by social_post_service."""
+"""Media transport helpers with explicit defaults and facade runtime rebinding."""
 
 from __future__ import annotations
+
+from services.media_library_scope import PHOTO_LIBRARY_SCOPE_SQL, PHOTO_USAGE_LIBRARY_SCOPE_SQL
 
 import json
 import sys
@@ -11,8 +13,16 @@ from typing import Any
 from urllib.parse import urljoin
 
 from core import outbound_network
-from services.media_file_storage import load_media_file
-from services.social_posts.recommendations_handoff import _publish_adapter
+from core.outbound_network import outbound_urlopen
+from core.telegram_network import telegram_urlopen
+from services.media_file_storage import build_media_delivery_url, load_media_file
+from services.social_posts.metrics_policy import _json_dict, _row_to_dict
+from services.social_posts.provider_adapters import _telegram_post_url
+from services.social_posts.recommendations_handoff import (
+    _http_publish_outcome,
+    _provider_json_object,
+    _publish_adapter,
+)
 
 
 _MAX_EXTERNAL_MEDIA_BYTES = 10_000_000
@@ -91,13 +101,15 @@ def _selected_media_assets(cursor: Any, post: dict[str, Any], limit: int = 10) -
         return result[:normalized_limit]
     try:
         cursor.execute(
-            """
+            f"""
             SELECT pa.id, pa.asset_version, pa.content_hash, pa.original_url, pa.storage_key, pa.versions_json, pa.metadata_json,
                    usage.target_platform, usage.created_at
             FROM photo_asset_usage_events usage
             JOIN photo_assets pa
               ON pa.id = usage.photo_asset_id
-             AND pa.business_id = usage.business_id
+             AND pa.business_id IN ({PHOTO_USAGE_LIBRARY_SCOPE_SQL})
+             AND pa.metadata_json->>'publication_candidate' IS DISTINCT FROM 'false'
+             AND pa.category IS DISTINCT FROM 'document'
             WHERE usage.business_id = %s
               AND usage.usage_type = 'publication'
               AND usage.target_id = ANY(%s)
@@ -112,6 +124,17 @@ def _selected_media_assets(cursor: Any, post: dict[str, Any], limit: int = 10) -
     except Exception:
         return result[:normalized_limit]
     return result[:normalized_limit]
+
+
+def _media_public_url(item: dict[str, Any], original: dict[str, Any]) -> str:
+    """Use the same delivery identity for approval and pre-publication checks."""
+    public_url = str(item.get("public_url") or original.get("public_url") or item.get("original_url") or "").strip()
+    if public_url.startswith(("https://", "http://")):
+        return public_url
+    return build_media_delivery_url(
+        asset_id=str(item.get("id") or "").strip(),
+        content_hash=str(item.get("content_hash") or "").strip(),
+    )
 
 
 def _strict_selected_media_assets(cursor: Any, post: dict[str, Any], limit: int = 10) -> list[dict[str, Any]]:
@@ -136,10 +159,12 @@ def _strict_selected_media_assets(cursor: Any, post: dict[str, Any], limit: int 
         raise ValueError("Для публикации выбрано слишком много медиафайлов; выберите не более 10.")
     if inline_ids:
         cursor.execute(
-            """
+            f"""
             SELECT id, asset_version, content_hash, original_url, storage_key, versions_json, metadata_json
             FROM photo_assets
-            WHERE business_id=%s AND id = ANY(%s)
+            WHERE business_id IN ({PHOTO_LIBRARY_SCOPE_SQL}) AND id = ANY(%s)
+              AND metadata_json->>'publication_candidate' IS DISTINCT FROM 'false'
+              AND category IS DISTINCT FROM 'document'
             """,
             (business_id, inline_ids),
         )
@@ -149,14 +174,16 @@ def _strict_selected_media_assets(cursor: Any, post: dict[str, Any], limit: int 
             raise ValueError("Выбранное медиа больше недоступно; выберите файл заново.")
     else:
         cursor.execute(
-        """
+        f"""
         SELECT pa.id, pa.asset_version, pa.content_hash, pa.original_url,
                pa.storage_key, pa.versions_json, pa.metadata_json,
                usage.created_at
         FROM photo_asset_usage_events usage
         JOIN photo_assets pa
           ON pa.id = usage.photo_asset_id
-         AND pa.business_id = usage.business_id
+         AND pa.business_id IN ({PHOTO_USAGE_LIBRARY_SCOPE_SQL})
+         AND pa.metadata_json->>'publication_candidate' IS DISTINCT FROM 'false'
+         AND pa.category IS DISTINCT FROM 'document'
         WHERE usage.business_id = %s
           AND usage.usage_type = 'publication'
           AND usage.target_id = ANY(%s)
@@ -185,7 +212,7 @@ def _strict_selected_media_assets(cursor: Any, post: dict[str, Any], limit: int 
         versions = _json_dict(item.get("versions_json"))
         original = _json_dict(versions.get("original"))
         original_url = str(item.get("original_url") or "").strip()
-        public_url = str(item.get("public_url") or original.get("public_url") or original_url).strip()
+        public_url = _media_public_url(item, original)
         storage_path = str(item.get("storage_key") or original.get("storage_path") or "").strip()
         content_hash = str(item.get("content_hash") or "").strip()
         asset_id = str(item.get("id") or "").strip()
@@ -220,10 +247,12 @@ def _approved_media_assets(cursor: Any, post: dict[str, Any], snapshot: dict[str
     if len(asset_ids) != len(approved) or len(set(asset_ids)) != len(asset_ids):
         return None
     cursor.execute(
-        """
+        f"""
         SELECT id, asset_version, content_hash, original_url, storage_key, versions_json
         FROM photo_assets
-        WHERE business_id=%s AND id = ANY(%s)
+        WHERE business_id IN ({PHOTO_LIBRARY_SCOPE_SQL}) AND id = ANY(%s)
+          AND metadata_json->>'publication_candidate' IS DISTINCT FROM 'false'
+          AND category IS DISTINCT FROM 'document'
         """,
         (business_id, asset_ids),
     )
@@ -242,7 +271,7 @@ def _approved_media_assets(cursor: Any, post: dict[str, Any], snapshot: dict[str
             "asset_version": int(item.get("asset_version") or 0),
             "content_hash": str(item.get("content_hash") or "").strip(),
             "storage_path": str(item.get("storage_key") or original.get("storage_path") or "").strip(),
-            "public_url": str(item.get("public_url") or original.get("public_url") or item.get("original_url") or "").strip(),
+            "public_url": _media_public_url(item, original),
             "mime_type": str(item.get("mime_type") or original.get("mime_type") or "image/jpeg").strip(),
         }
         if any(str(current[key]) != str(approved_item.get(key) or "") for key in ("asset_version", "content_hash", "storage_path", "public_url", "mime_type")):
@@ -408,7 +437,7 @@ def send_telegram_photo_message(
 ) -> dict[str, Any]:
     file_data = _media_asset_file(media_asset)
     if not file_data:
-        return {"success": False, "message_id": 0, "reason_code": "media_unavailable"}
+        return {"success": False, "message_id": 0, "reason_code": "media_unavailable", "publish_outcome": "not_attempted"}
     response = _telegram_api_call(
         bot_token,
         "sendPhoto",
@@ -416,11 +445,15 @@ def send_telegram_photo_message(
         [{**file_data, "field_name": "photo"}],
     )
     result = response.get("result") if isinstance(response.get("result"), dict) else {}
-    return {
+    delivery = {
         "success": bool(response.get("ok")),
         "message_id": int(result.get("message_id") or 0),
         "reason_code": str(response.get("provider_status") or response.get("error") or ""),
     }
+    if not delivery["success"]:
+        delivery["publish_outcome"] = str(response.get("publish_outcome") or "uncertain")
+    return delivery
+
 
 @_publish_adapter
 def _publish_telegram_media_post(
@@ -435,7 +468,9 @@ def _publish_telegram_media_post(
     for index, asset in enumerate(media_assets[:10]):
         file_data = _media_asset_file(asset)
         if not file_data:
-            continue
+            # Approval covers the complete selection, never a reduced album.
+            files.clear()
+            break
         files.append({**file_data, "field_name": f"photo{index}"})
     if not files:
         return {

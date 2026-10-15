@@ -15,6 +15,9 @@ def save_bot_feature_request(
     category: str,
     request_text: str,
     metadata: dict[str, Any] | None = None,
+    max_id: str | None = None,
+    request_key: str | None = None,
+    commit: bool = True,
 ) -> dict[str, Any]:
     payload = {
         "id": str(uuid.uuid4()),
@@ -27,6 +30,12 @@ def save_bot_feature_request(
         "metadata_json": json.dumps(metadata or {}, ensure_ascii=False),
     }
     cursor = conn.cursor()
+    if max_id:
+        cursor.execute('''INSERT INTO botfeaturerequests(id,telegram_id,max_id,user_id,business_id,source,category,request_text,metadata_json)
+            VALUES (%s,NULL,%s,%s,%s,%s,%s,%s,%s::jsonb) ON CONFLICT(id) DO NOTHING''',
+            (payload['id'],str(max_id),payload['user_id'],payload['business_id'],payload['source'],payload['category'],payload['request_text'],payload['metadata_json']))
+        if commit: conn.commit()
+        return payload
     cursor.execute(
         """
         INSERT INTO botfeaturerequests (

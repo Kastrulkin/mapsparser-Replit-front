@@ -3,7 +3,7 @@ import asyncio
 import json
 import logging
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
+from services.owner_bot_ui import InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
 from database_manager import DatabaseManager
 from services.operator_audio import (MAX_BYTES, create_transcription, create_speech, load_asset,
     private_path, authorize_actor, enabled)

@@ -1,5 +1,8 @@
+import { Textarea } from '@/components/ui/textarea';
+import { demoWalkthroughCopy } from './demoWalkthroughCopy';
+import { demoNavigationCopy } from '@/components/guided-tour/demoNavigationCopy';
 import { Bot, CheckCircle2, Clock3, FileCheck2, MapPinned, MessageCircle, Newspaper, Play, ShieldCheck } from 'lucide-react';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useLanguage, type Language } from '@/i18n/LanguageContext.logic';
@@ -49,29 +52,36 @@ export function DemoAgentsPage() {
   const { language } = useLanguage();
   const t = useMemo(() => ({ ...copy[language], ...clarityCopy[language] }), [language]);
   const [selected, setSelected] = useState(0);
-  const [stage, setStage] = useState<'idle' | 'running' | 'review' | 'approved'>('idle');
+  const [stage, setStage] = useState<'idle' | 'running' | 'review' | 'editing' | 'approved'>('idle');
   const agent = t.cards[selected];
-  const tabs = useMemo(() => [t.overview, t.history, t.scenario, t.settings], [t]);
+  const sample = demoWalkthroughCopy(language);
+  const [drafts,setDrafts] = useState(sample.reviewTexts);
+  const [preparedAt,setPreparedAt] = useState<string>();
+  const [confirmedAt,setConfirmedAt] = useState<string>();
 
-  const run = () => {
-    setStage('running');
-    window.setTimeout(() => setStage('review'), 650);
-  };
+
+  useEffect(() => {
+    if (stage !== 'running') return;
+    const timer = window.setTimeout(() => { setStage('review'); setPreparedAt(new Date().toLocaleString(language)); setConfirmedAt(undefined); }, 650);
+    return () => window.clearTimeout(timer);
+  }, [stage, selected]);
+  const run = () => { setDrafts(selected === 0 ? sample.reviewTexts : [selected === 1 ? sample.taskBody : sample.observationBody]); setStage('running'); };
 
   return <div className="space-y-5 pb-16" data-tour-target="agents-workspace">
     <section className="rounded-2xl bg-gradient-to-br from-orange-50 to-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(249,115,22,0.16)]">
       <div className="flex items-start gap-4"><div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white"><Bot className="h-6 w-6" /></div><div><div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{t.eyebrow}</div><h1 className="mt-1 text-balance text-3xl font-semibold text-slate-950">{t.title}</h1><p className="mt-2 max-w-4xl text-pretty text-sm leading-6 text-slate-600">{t.description}</p></div></div>
       <div className="mt-4 rounded-xl bg-white/80 px-4 py-3 text-sm font-semibold text-slate-700 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)]">{t.flow}</div>
     </section>
+    <p role="note" className="rounded-lg border bg-muted p-4 text-sm">{demoNavigationCopy(language).example}</p>
     <section data-tour-target="agents-today" className="rounded-2xl bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]"><div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600"><strong className="text-slate-950">{t.today}</strong><span><b className="tabular-nums text-slate-950">7</b> {t.completed}</span><span><b className="tabular-nums text-slate-950">3</b> {t.prepared}</span><span className="text-amber-800"><b className="tabular-nums">1</b> {t.decisions}</span></div></section>
     <div className="grid gap-5 lg:grid-cols-[22rem_minmax(0,1fr)]">
       <section data-tour-target="agents-employees" className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]"><h2 className="text-balance text-lg font-semibold text-slate-950">{t.employees}</h2><p className="mt-1 text-pretty text-sm text-slate-500">{t.employeesHint}</p><div className="mt-4 space-y-2">{t.cards.map((card, index) => <button key={card.name} type="button" onClick={() => { setSelected(index); setStage('idle'); }} className={cn('min-h-20 w-full rounded-xl px-3 py-3 text-start transition-[background-color,box-shadow,scale] active:scale-[0.96]', selected === index ? 'bg-orange-50 shadow-[inset_0_0_0_1px_rgba(249,115,22,0.35)]' : 'bg-slate-50 hover:bg-slate-100')}><span className="block text-sm font-semibold text-slate-950">{card.name}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{card.job}</span><span className="mt-2 inline-flex rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-slate-700">{card.status}</span></button>)}</div></section>
       <main data-tour-target="agents-control" className="min-w-0 space-y-4">
-        <nav className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1" aria-label={t.title}>{tabs.map((tab, index) => <button key={tab} type="button" className={cn('min-h-10 shrink-0 rounded-lg px-4 text-sm font-semibold transition-[background-color,color,scale] active:scale-[0.96]', index === 0 ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600')}>{tab}</button>)}</nav>
+
         <section className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="text-balance text-xl font-semibold text-slate-950">{agent.name}</h2><p className="mt-1 text-pretty text-sm leading-6 text-slate-600">{agent.job}</p></div><span className="inline-flex w-fit rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">{agent.status}</span></div><div className="mt-5 grid gap-3 sm:grid-cols-2"><Info icon={<MapPinned />} label={t.input} value={agent.sources} /><Info icon={<Clock3 />} label={t.schedule} value={agent.schedule} /></div></section>
-        <section data-tour-target="agents-run" className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]"><div className="flex items-start gap-3"><Play className="mt-0.5 h-5 w-5 text-orange-600" /><div className="flex-1"><h3 className="font-semibold text-slate-950">{t.result}</h3><p className="mt-1 text-sm leading-6 text-slate-600">{stage === 'running' ? t.running : t.resultBody}</p><Button type="button" onClick={run} disabled={stage === 'running'} className="mt-4 min-h-10 transition-transform active:scale-[0.96]">{t.run}</Button></div></div></section>
-        <section data-tour-target="agents-review" className="rounded-2xl bg-amber-50 p-5 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)]"><div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 text-amber-700" /><div className="flex-1"><h3 className="font-semibold text-slate-950">{t.approvalTitle}</h3><p className="mt-1 text-sm leading-6 text-slate-700">{stage === 'approved' ? t.approved : t.approvalBody}</p>{stage === 'review' ? <Button type="button" onClick={() => setStage('approved')} className="mt-4 min-h-10 transition-transform active:scale-[0.96]">{t.review}</Button> : null}</div></div></section>
-        <section data-tour-target="agents-history" className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]"><div className="flex items-start gap-3"><FileCheck2 className="mt-0.5 h-5 w-5 text-emerald-600" /><div><h3 className="font-semibold text-slate-950">{t.historyTitle}</h3><p className="mt-1 text-sm leading-6 text-slate-600">{t.historyBody}</p><div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-slate-600"><span className="rounded-full bg-slate-100 px-3 py-1.5"><CheckCircle2 className="me-1 inline h-3.5 w-3.5 text-emerald-600" />{t.resultTitle}</span><span className="rounded-full bg-slate-100 px-3 py-1.5"><Newspaper className="me-1 inline h-3.5 w-3.5" />4</span><span className="rounded-full bg-slate-100 px-3 py-1.5"><MessageCircle className="me-1 inline h-3.5 w-3.5" />{t.sources}</span></div></div></div></section>
+        <section data-tour-target="agents-run" className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]"><div className="flex items-start gap-3"><Play className="mt-0.5 h-5 w-5 text-orange-600" /><div className="flex-1"><h3 className="font-semibold text-slate-950">{t.result}</h3><p className="mt-1 text-sm leading-6 text-slate-600">{stage === 'running' ? t.running : selected === 0 ? t.resultBody : selected === 1 ? sample.task : sample.observation}</p><Button type="button" onClick={run} disabled={stage === 'running'} className="mt-4 min-h-10 transition-transform active:scale-[0.96]">{t.run}</Button></div></div></section>
+        <section data-tour-target="agents-review" className="rounded-2xl bg-amber-50 p-5 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)]"><div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 text-amber-700" /><div className="flex-1"><h3 className="font-semibold text-slate-950">{t.approvalTitle}</h3><p className="mt-1 text-sm leading-6 text-slate-700">{stage === 'approved' ? sample.reviewed : t.approvalBody}</p>{stage === 'review' ? <Button type="button" onClick={() => setStage('editing')} className="mt-4 min-h-10 transition-transform active:scale-[0.96]">{t.review}</Button> : null}{stage === 'editing' ? <div className="mt-4 space-y-4"><h4 className="font-medium">{sample.reviewTitle}</h4>{drafts.map((text,index)=><Textarea key={index} aria-label={`${sample.reviewTitle} ${index+1}`} value={text} onChange={event=>setDrafts(previous=>previous.map((value,position)=>position===index?event.target.value:value))} className="min-h-24 bg-background" />)}<p className="text-sm">{sample.approveNote}</p><Button onClick={()=>{setStage('approved');setConfirmedAt(new Date().toLocaleString(language));}}>{sample.approve}</Button></div>:null}</div></div></section>
+        <section data-tour-target="agents-history" className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]"><div className="flex items-start gap-3"><FileCheck2 className="mt-0.5 h-5 w-5 text-emerald-600" /><div><h3 className="font-semibold text-slate-950">{language === 'ru' ? 'История учебных запусков' : t.historyTitle}</h3><p className="mt-1 text-sm leading-6 text-slate-600">{t.historyBody}</p>{preparedAt?<ol className="mt-4 space-y-3 text-sm"><li>{sample.preparedEvent} · <time>{preparedAt}</time><p>{sample.assistant} · {agent.sources}</p></li>{confirmedAt?<li>{sample.reviewed} · <time>{confirmedAt}</time><p>{sample.author} · {sample.approveNote}</p></li>:null}</ol>:<p className="mt-3 text-sm">{sample.noData}</p>}<div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-slate-600"><span className="rounded-full bg-slate-100 px-3 py-1.5"><CheckCircle2 className="me-1 inline h-3.5 w-3.5 text-emerald-600" />{t.resultTitle}</span><span className="rounded-full bg-slate-100 px-3 py-1.5"><Newspaper className="me-1 inline h-3.5 w-3.5" />4</span><span className="rounded-full bg-slate-100 px-3 py-1.5"><MessageCircle className="me-1 inline h-3.5 w-3.5" />{t.sources}</span></div></div></div></section>
       </main>
     </div>
   </div>;

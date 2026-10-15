@@ -9,7 +9,7 @@ import uuid
 from pathlib import Path
 from contextvars import ContextVar
 
-from core.auth_helpers import verify_business_access, verify_business_write_access
+from core.auth_helpers import verify_business_access
 from services.operator_conversations import _row, get_or_create_operator_conversation, find_latest_operator_conversation
 from services.operator_async_jobs import create_operator_async_job
 from subscription_manager import build_subscription_capabilities, capability_access_payload
@@ -20,7 +20,7 @@ MAX_BYTES = 10 * 1024 * 1024
 MAX_SECONDS = 120
 
 
-def authorize_actor(cursor, user_id, business_id, check_subscription=True, *, require_write=False):
+def authorize_actor(cursor, user_id, business_id, check_subscription=True):
     cursor.execute('SELECT id, is_active, is_superadmin FROM users WHERE id=%s', (user_id,))
     user = _row(cursor, cursor.fetchone())
     if not user or not user.get('is_active'):
@@ -36,8 +36,7 @@ def authorize_actor(cursor, user_id, business_id, check_subscription=True, *, re
         if current_scope and (current_scope.get('scope_type')!='business' or current_scope.get('scope_id')!=execution['business_id']):
             raise PermissionError('Выбранный бизнес изменился. Команда остановлена.')
     user['user_id'] = user_id
-    access_verifier = verify_business_write_access if require_write else verify_business_access
-    allowed, owner = access_verifier(cursor, business_id, user)
+    allowed, owner = verify_business_access(cursor, business_id, user)
     if not allowed:
         raise PermissionError('Нет доступа к бизнесу')
     owns_network = False
@@ -87,7 +86,7 @@ def reserve_asset(cursor, *, user_id, business_id, channel, conversation_id, kin
     authorize_actor(cursor, user_id, business_id)
     if not enabled(kind, business_id):
         raise ValueError('Голосовая функция пока недоступна для этого бизнеса')
-    if channel not in {'web', 'telegram_mini_app', 'telegram'} or not request_id or len(request_id) > 200:
+    if channel not in {'web', 'telegram_mini_app', 'telegram', 'max_bot', 'max_mini_app'} or not request_id or len(request_id) > 200:
         raise ValueError('Неверный канал или идентификатор запроса')
     cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))', ('audio:' + user_id,))
     cursor.execute('SELECT * FROM operator_audio_assets WHERE user_id=%s AND business_id=%s AND channel=%s AND kind=%s AND request_id=%s AND expires_at>NOW()',
@@ -219,6 +218,24 @@ def cleanup_orphan_audio():
             path.unlink(missing_ok=True)
 
 
+def _authorize_max_audio(cursor, asset):
+    if asset.get('channel') not in {'max_bot', 'max_mini_app'}:
+        return
+    from services.max_webapp_auth import max_enabled
+    if not max_enabled():
+        raise PermissionError('MAX отключён')
+    cursor.execute('''SELECT max_id FROM max_identities WHERE user_id=%s
+        AND revoked_at IS NULL AND linked_at<=%s''', (asset['user_id'], asset['created_at']))
+    identity = _row(cursor, cursor.fetchone())
+    if not identity:
+        raise PermissionError('Привязка MAX изменилась')
+    if asset['channel'] == 'max_bot':
+        from services.telegram_control_scope import resolve_control_scope
+        scope = resolve_control_scope(cursor, user_id=asset['user_id'], platform='max') or {}
+        if scope.get('kind') != 'business' or scope.get('id') != asset['business_id']:
+            raise PermissionError('Выбранный бизнес изменился')
+
+
 def process_audio_job(claimed):
     from database_manager import DatabaseManager
     from services.operator_speechkit import SpeechKit
@@ -229,6 +246,7 @@ def process_audio_job(claimed):
     try:
         cursor = db.conn.cursor()
         asset = load_asset(cursor,claimed['payload_json']['asset_id'],claimed['user_id'],claimed['business_id'])
+        _authorize_max_audio(cursor, asset)
         if not enabled(asset['kind'],asset['business_id']):
             raise ValueError('Голосовая функция отключена')
         if asset['status'] in {'ready','submitted'}:
@@ -301,6 +319,7 @@ def process_audio_job(claimed):
             authorize_actor(cursor,asset['user_id'],asset['business_id'])
             cursor.execute("UPDATE operator_audio_assets SET status='ready',path=%s,format=%s WHERE id=%s",(str(path),mime,asset['id']))
             result={'asset_id':asset['id'],'audio_url':'/api/operator/audio/'+asset['id'],'message_id':asset['message_id']}
+        _authorize_max_audio(cursor, asset)
         cursor.execute('SELECT status,lease_token FROM operator_async_jobs WHERE id=%s FOR UPDATE',(claimed['id'],))
         current = _row(cursor,cursor.fetchone())
         if current.get('status') != 'running' or current.get('lease_token') != claimed.get('lease_token'):

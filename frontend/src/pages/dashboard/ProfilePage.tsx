@@ -1,3 +1,7 @@
+import DemoBusinessKnowledge from './demo/DemoBusinessKnowledge';
+import { NetworkManagement } from '@/components/NetworkManagement';
+import { BusinessKnowledge } from '@/components/business-knowledge/BusinessKnowledge';
+import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
 import { SubscriptionManagement } from '@/components/SubscriptionManagement';
 import { BusinessMembers } from '@/components/dashboard/BusinessMembers';
 import { BusinessAdditionalSettings } from '@/components/dashboard/BusinessAdditionalSettings';
@@ -106,8 +110,7 @@ const defaultBusinessTypeOptions: Array<{ type_key: string; label: string }> = [
   { type_key: 'gym', label: 'Спортзал' },
   { type_key: 'shawarma', label: 'Шаверма' },
   { type_key: 'theater', label: 'Театр' },
-  { type_key: 'hotel', label: 'Отель' },
-  { type_key: 'guest_house', label: 'Гостевой дом' },
+  { type_key: 'transport', label: 'Транспорт' },
   { type_key: 'other', label: 'Другое' },
 ];
 
@@ -161,7 +164,7 @@ const isGoogleMapUrl = (value: string) => {
 export const ProfilePage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, currentBusinessId, currentBusiness, updateBusiness, businesses, setBusinesses, reloadBusinesses, onBusinessChange } = useOutletContext<DashboardOutletContext>();
+  const { user, currentBusinessId, currentBusiness, controlScope, updateBusiness, businesses, setBusinesses, reloadBusinesses, onBusinessChange } = useOutletContext<DashboardOutletContext>();
   const [editMode, setEditMode] = useState(false);
   const [editClientInfo, setEditClientInfo] = useState(false);
   const { t, language } = useLanguage();
@@ -893,9 +896,11 @@ export const ProfilePage = () => {
     return Math.round((filled / fieldsTotal) * 100);
   })();
 
-  const businessTypeOptions = businessTypes.length > 0
-    ? businessTypes
-    : defaultBusinessTypeOptions;
+  const availableBusinessTypeOptions = businessTypes.length > 0 ? businessTypes : defaultBusinessTypeOptions;
+  const savedBusinessType = clientInfo.businessType || currentBusiness?.business_type;
+  const businessTypeOptions = savedBusinessType && !availableBusinessTypeOptions.some(item=>item.type_key===savedBusinessType)
+    ? [...availableBusinessTypeOptions,{type_key:savedBusinessType,label:getBusinessTypeLabel(savedBusinessType)}]
+    : availableBusinessTypeOptions;
   const websiteHref = (() => {
     const value = String(clientInfo.website || '').trim();
     if (!value) return '';
@@ -980,14 +985,22 @@ export const ProfilePage = () => {
     },
   ];
 
+  if (new URLSearchParams(location.search).get('section') === 'knowledge') {
+    const knowledgeScope = controlScope?.kind === 'platform' ? null : controlScope?.kind === 'network' ? {type:'network',id:controlScope.id} : currentBusinessId ? {type:'business',id:currentBusinessId} : null;
+    return <div className="space-y-4"><Button variant="ghost" onClick={()=>navigate('/dashboard/profile')}>{isRu?'Бизнес и команда':'Business and team'}</Button>{user?.demo_mode ? <DemoBusinessKnowledge /> : <BusinessKnowledge scope={knowledgeScope?.type==='network'?{type:'network',id:knowledgeScope.id}:knowledgeScope?{type:'business',id:knowledgeScope.id}:null} onBusinessChange={onBusinessChange} />}</div>;
+  }
+
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-10">
+      <a href="/dashboard/max" className="inline-flex min-h-11 items-center text-primary underline">Подключить LocalOS к MAX</a>
       <DashboardPageHeader
         eyebrow={isRu ? 'Профиль LocalOS' : 'LocalOS profile'}
         icon={User}
         title={t.dashboard.profile.title}
         description={t.dashboard.profile.subtitle}
         actions={(
+          <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={()=>navigate('/dashboard/profile?section=knowledge')}>{isRu?'Знания о бизнесе':'Business knowledge'}</Button>
           <Button
             type="button"
             variant="outline"
@@ -998,6 +1011,7 @@ export const ProfilePage = () => {
             <ArrowRight className="mr-2 h-4 w-4" />
             {isRu ? 'Работа с картами' : 'Maps workspace'}
           </Button>
+          </div>
         )}
       />
 
@@ -1516,6 +1530,7 @@ export const ProfilePage = () => {
         )}
       </DashboardSection>
 
+<details className="rounded-xl border p-4"><summary className="min-h-11 cursor-pointer py-2 font-medium">{workCoherenceCopy(language).locations}</summary><NetworkManagement key={effectiveBusinessId} /></details>
       <BusinessMembers businessId={effectiveBusinessId} isRu={isRu} />
       <BusinessAdditionalSettings businessId={effectiveBusinessId} isRu={isRu} />
 

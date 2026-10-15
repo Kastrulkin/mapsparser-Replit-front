@@ -18,7 +18,7 @@ SPA_ENTRY_ROUTES = {
     "/articles", "/documents", "/cases", "/bazich", "/dashboard-old",
     "/wizard", "/sprint", "/phrases", "/card-recs", "/set-password",
     "/reset-password", "/verify-email", "/checkout/return", "/growth",
-    "/telegram/control", "/yclients/connect", "/veselaya-rascheska-hit",
+    "/telegram/control", "/max/control", "/yclients/connect", "/veselaya-rascheska-hit",
     "/web-analytics", "/creator", "/creator/login", "/creator/login/telegram",
     "/documents/checklist-audita-kartochki-kompanii",
     "/documents/shablony-otvetov-na-otzyvy",
@@ -42,7 +42,7 @@ def should_noindex_spa_route(route_path):
     return path in {
         "/login", "/set-password", "/reset-password", "/verify-email",
         "/checkout/return", "/wizard", "/sprint", "/phrases", "/card-recs",
-        "/dashboard-old", "/telegram/control", "/yclients/connect", "/web-analytics",
+        "/dashboard-old", "/telegram/control", "/max/control", "/yclients/connect", "/web-analytics",
     } or any(path == prefix or path.startswith(prefix + "/") for prefix in (
         "/dashboard", "/start", "/room", "/creator-room", "/creator",
     ))

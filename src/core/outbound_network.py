@@ -154,6 +154,8 @@ def public_pinned_get(
     headers: dict[str, str],
     timeout: int = 8,
     max_bytes: int = 1_000_001,
+    *,
+    ssl_context=None,
 ) -> OutboundHttpFetchResponse:
     clean_url, public_addresses, port = _public_addresses_for_url(value)
     parsed = urlsplit(clean_url)
@@ -174,6 +176,7 @@ def public_pinned_get(
             retries=False,
             cert_reqs="CERT_REQUIRED",
             ca_certs=certifi.where(),
+            **({"ssl_context": ssl_context} if ssl_context is not None else {}),
             assert_hostname=hostname,
             server_hostname=hostname,
         )
@@ -204,12 +207,15 @@ def public_pinned_get(
         pool.close()
 
 
+
 def public_pinned_https_post(
     value: str,
     body: bytes,
     headers: dict[str, str],
     timeout: int = 20,
     max_bytes: int = 1_000_001,
+    *,
+    ssl_context=None,
 ) -> OutboundHttpFetchResponse:
     """Post to a validated public IP, preserving TLS identity and explicit proxy routing."""
     if urlsplit(str(value or "").strip()).scheme != "https":
@@ -229,6 +235,7 @@ def public_pinned_https_post(
         "retries": False,
         "cert_reqs": "CERT_REQUIRED",
         "ca_certs": certifi.where(),
+        **({"ssl_context": ssl_context} if ssl_context is not None else {}),
         "assert_hostname": hostname,
         "server_hostname": hostname,
     }
@@ -270,6 +277,7 @@ def public_pinned_https_post(
             response.release_conn()
     finally:
         manager.clear()
+
 
 
 class _PublicRedirectHandler(urllib_request.HTTPRedirectHandler):

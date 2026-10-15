@@ -18,11 +18,11 @@ const localizedCardLanguages = supportedLanguages.filter((language) => language 
 const nonRussianLanguages = supportedLanguages.filter((language) => language !== 'ru');
 
 describe('demo language coverage', () => {
-  it('keeps the language contract aligned with all 44 guided-tour steps', () => {
+  it('keeps the language contract aligned with the current guided-tour steps', () => {
     expect(supportedLanguages).toHaveLength(12);
-    expect(GUIDED_TOUR_STEP_LAYOUTS).toHaveLength(44);
+    expect(new Set(GUIDED_TOUR_STEP_LAYOUTS.map(step => step.key)).size).toBe(GUIDED_TOUR_STEP_LAYOUTS.length);
     supportedLanguages.forEach((language) => {
-      expect(guidedTourStepsForLanguage(language)).toHaveLength(44);
+      expect(guidedTourStepsForLanguage(language)).toHaveLength(GUIDED_TOUR_STEP_LAYOUTS.length);
     });
   });
 

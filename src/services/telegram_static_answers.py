@@ -1,4 +1,5 @@
 from __future__ import annotations
+from services.owner_bot_context import owner_bot_platform
 
 import os
 from decimal import Decimal
@@ -62,7 +63,7 @@ def get_web_urls() -> dict[str, str]:
 def guest_welcome_text() -> str:
     return (
         "📍 Покажем, где вы теряете клиентов на Яндекс Картах и 2ГИС.\n"
-        "🤖 Бесплатный аудит прямо в Telegram.\n"
+        f"🤖 Бесплатный аудит прямо в {'MAX' if owner_bot_platform() == 'max' else 'Telegram'}.\n"
         "💸 LocalOS — от 1200 ₽/мес, в 10 и более раз дешевле агентства.\n\n"
         "Пришлите ссылку на карточку бизнеса и я запущу аудит."
     )
@@ -94,6 +95,11 @@ def guest_compare_text() -> str:
 
 
 def guest_connect_account_text() -> str:
+    if owner_bot_platform() == 'max':
+        return ('Чтобы связать MAX с кабинетом LocalOS:\n\n'
+            '1. Откройте https://localos.pro/dashboard/max и войдите в свой аккаунт.\n'
+            '2. Получите одноразовый код.\n3. Отправьте его сюда: /link КОД.\n\n'
+            'Код действует 10 минут и используется один раз.')
     return (
         "Чтобы связать Telegram с кабинетом LocalOS:\n\n"
         "1. В LocalOS откройте Профиль или Настройки интеграций.\n"
@@ -129,7 +135,7 @@ def guest_tariffs_text() -> str:
         "— нужны финансы и рост среднего чека\n"
         "— нужны ИИ-сотрудники, Оператор и рабочие чаты\n"
         "— хотите автоматизировать бизнес и вести соцсети\n\n"
-        "Оплата доступна в кабинете LocalOS и прямо в Telegram."
+        + ("Оплата доступна в кабинете LocalOS с возвратом в MAX." if owner_bot_platform() == "max" else "Оплата доступна в кабинете LocalOS и прямо в Telegram.")
     )
 
 

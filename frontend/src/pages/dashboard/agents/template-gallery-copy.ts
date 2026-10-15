@@ -26,19 +26,19 @@ export type AgentTemplateGalleryCopy = {
 
 export const agentTemplateGalleryCopy: Record<Language, AgentTemplateGalleryCopy> = {
   ru: {
-    eyebrow: 'Готовые задачи', title: 'Что поручить LocalOS',
-    description: 'Выберите задачу — LocalOS создаст агента в режиме проверки. Запуски, публикации и отправки начнутся только после вашей проверки.',
+    eyebrow: 'Добавить нового агента', title: 'Каталог готовых агентов',
+    description: 'Выберите готового агента и добавьте в компанию. Он появится в списке «Агенты компании». Затем проверьте настройки и выполните тест перед включением.',
     count: 'вариантов', loading: 'Загружаются готовые задачи', scheduled: 'Каждый день', weekly: 'Каждую неделю', review: 'При новом отзыве', manual: 'По команде',
-    certified: 'Проверено', beta: 'Готово к проверке', testing: 'Идёт проверка', draft: 'В разработке',
-    needs: 'Нужно подключить', localos: 'Только данные LocalOS', preparing: 'Создаём…', use: 'Создать для проверки',
+    certified: 'Проверено', beta: 'Готов к добавлению', testing: 'Идёт проверка', draft: 'В разработке',
+    needs: 'Нужно подключить', localos: 'Только данные LocalOS', preparing: 'Добавляем…', use: 'Добавить в компанию',
     plannedTitle: 'В разработке', plannedDescription: 'Эти задачи пока нельзя включить.', recommended: 'Рекомендуем начать',
   },
   en: {
-    eyebrow: 'Ready tasks', title: 'What should LocalOS handle?',
-    description: 'Choose a task and LocalOS will create an agent in review mode. Runs, publishing, and messages start only after your review.',
+    eyebrow: 'Add an agent', title: 'Ready-made agent catalog',
+    description: 'Add a ready-made agent to your company. It will appear in Company agents. Review its settings and test it before enabling.',
     count: 'options', loading: 'Loading ready tasks', scheduled: 'Every day', weekly: 'Every week', review: 'When a new review arrives', manual: 'On demand',
-    certified: 'Verified', beta: 'Ready to review', testing: 'Being tested', draft: 'In development',
-    needs: 'Connect', localos: 'LocalOS data only', preparing: 'Creating…', use: 'Create for review',
+    certified: 'Verified', beta: 'Ready to add', testing: 'Being tested', draft: 'In development',
+    needs: 'Connect', localos: 'LocalOS data only', preparing: 'Adding…', use: 'Add to company',
     plannedTitle: 'In development', plannedDescription: 'These tasks cannot be enabled yet.', recommended: 'Recommended start',
   },
   fr: {

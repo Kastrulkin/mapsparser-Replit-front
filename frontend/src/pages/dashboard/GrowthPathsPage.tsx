@@ -1,131 +1,61 @@
 import { AccessPreview, type BlockAccess } from '@/components/access/AccessBoundary';
 import { Button } from '@/components/ui/button';
-import { useLatestCallback } from '@/hooks/useLatestCallback';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { growthPathsCopyFor } from '@/i18n/growthPathsCopy';
 import { newAuth } from '@/lib/auth_new';
 import { journeyActionRoute, type JourneyAction } from '@/lib/leadJourney';
-import { cn } from '@/lib/utils';
-import { ArrowRight, BadgeDollarSign, Bot, FileText, MapPinned, RefreshCw, Users, WandSparkles } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
+import { workStatusLabel } from '@/lib/workStatus';
+import { workNavigationCopy } from '@/lib/workNavigation';
+import type { TodayPreference } from './todayWorkModel';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 
-type GrowthFlow = 'maps' | 'maps_content' | 'content' | 'influencer' | 'partnership' | 'automation' | 'average_ticket';
-
-type GrowthPath = {
-  flow_type: GrowthFlow;
-  title: string;
-  status: string;
-  opportunity: string;
-  obstacle?: string;
-  access: BlockAccess;
-  action?: JourneyAction | null;
-};
-
-type GrowthPathsResponse = {
-  paths?: GrowthPath[];
-  focus_action?: JourneyAction | null;
-};
-
-const pathMeta = {
-  maps: { icon: MapPinned, tone: 'bg-sky-50 text-sky-700 ring-sky-100', route: '/dashboard/card' },
-  maps_content: { icon: FileText, tone: 'bg-cyan-50 text-cyan-700 ring-cyan-100', route: '/dashboard/card?tab=news&mode=plan' },
-  content: { icon: FileText, tone: 'bg-violet-50 text-violet-700 ring-violet-100', route: '/dashboard/content' },
-  influencer: { icon: WandSparkles, tone: 'bg-rose-50 text-rose-700 ring-rose-100', route: '/dashboard/influencers' },
-  partnership: { icon: Users, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-100', route: '/dashboard/promotion/partnerships' },
-  automation: { icon: Bot, tone: 'bg-orange-50 text-orange-700 ring-orange-100', route: '/dashboard/agents' },
-  average_ticket: { icon: BadgeDollarSign, tone: 'bg-amber-50 text-amber-700 ring-amber-100', route: '/dashboard/average-ticket' },
-};
-
-const statusCopy = (path: GrowthPath, statuses: { payment: string; blocked: string; action: string; available: string }) => {
-  if (path.access.status === 'payment_required') return statuses.payment;
-  if (path.status === 'blocked') return statuses.blocked;
-  if (path.action) return statuses.action;
-  return statuses.available;
-};
+type Flow = 'maps' | 'content' | 'influencer' | 'partnership' | 'automation' | 'average_ticket';
+type Path = { flow_type: Flow; status: string; access: BlockAccess; action?: JourneyAction | null; obstacle?: string;
+ locations?: Array<{ business_id: string; business_name?: string; access: BlockAccess; action?: JourneyAction | null }> };
+type Data = { paths?: Path[]; focus_action?: JourneyAction | null };
+type Scope = { kind: 'business' | 'network' | 'platform'; id: string };
+const route: Record<Flow, string> = { maps: '/dashboard/card', content: '/dashboard/content', influencer: '/dashboard/influencers', partnership: '/dashboard/partnerships', automation: '/dashboard/agents', average_ticket: '/dashboard/average-ticket' };
+const preferenceFlow: Record<Flow, TodayPreference['primary_flow']> = { maps: 'maps', content: 'content', influencer: 'influencers', partnership: 'partnerships', automation: 'automation', average_ticket: 'upsells' };
 
 export const GrowthPathsPage = () => {
-  const { currentBusinessId } = useOutletContext<{ currentBusinessId?: string | null }>();
-  const { language } = useLanguage();
-  const copy = growthPathsCopyFor(language);
-  const [data, setData] = useState<GrowthPathsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  const load = useLatestCallback(async () => {
-    if (!currentBusinessId) return;
-    setLoading(true);
-    setError('');
-    try {
-      const response = await newAuth.makeRequest(`/growth-paths?business_id=${encodeURIComponent(currentBusinessId)}`);
-      setData(response);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : copy.loadError);
-    } finally {
-      setLoading(false);
-    }
-  });
-
-  useEffect(() => { void load(); }, [currentBusinessId, load]);
-
-  const paths = useMemo(() => {
-    const items = (data?.paths || []).filter((path) => path.flow_type !== 'maps_content');
-    const focusFlow = data?.focus_action?.flow_type;
-    return [...items].sort((left, right) => Number(right.flow_type === focusFlow) - Number(left.flow_type === focusFlow));
-  }, [data]);
-
-  if (!currentBusinessId) return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">{copy.chooseBusiness}</div>;
-
-  return (
-    <div className="space-y-6 pb-10">
-      <header className="rounded-[28px] border border-slate-200/80 bg-white p-6 shadow-sm sm:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-700">{copy.eyebrow}</p>
-        <h1 className="mt-2 max-w-3xl text-balance text-3xl font-semibold tracking-tight text-slate-950">{copy.title}</h1>
-        <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-slate-600">{copy.intro}</p>
-      </header>
-
-      {loading ? (
-        <div className="grid gap-4 md:grid-cols-2" aria-label={copy.loading}>
-          {[0, 1, 2, 3].map((item) => <div key={item} className="h-64 animate-pulse rounded-[24px] bg-slate-200/70" />)}
-        </div>
-      ) : error ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-900">
-          <p>{error}</p>
-          <Button type="button" variant="outline" className="mt-3 min-h-10" onClick={() => void load()}><RefreshCw className="mr-2 h-4 w-4" />{copy.retry}</Button>
-        </div>
-      ) : paths.length ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          {paths.map((path, index) => {
-            const meta = pathMeta[path.flow_type];
-            const direction = copy.directions[path.flow_type];
-            const Icon = meta.icon;
-            const actionRoute = path.action ? journeyActionRoute(path.action) : meta.route;
-            const locked = path.access.status !== 'available';
-            const centeredLastCard = paths.length % 2 === 1 && index === paths.length - 1;
-            return (
-              <article key={path.flow_type} className={cn('rounded-[24px] border bg-white p-5 shadow-sm', centeredLastCard && 'md:col-span-2 md:w-[calc(50%-0.5rem)] md:justify-self-center', index === 0 && path.action ? 'border-orange-300 ring-2 ring-orange-100' : 'border-slate-200')}>
-                <div className="flex items-start justify-between gap-4">
-                  <span className={cn('grid h-12 w-12 shrink-0 place-items-center rounded-2xl ring-1', meta.tone)}><Icon className="h-5 w-5" aria-hidden="true" /></span>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{statusCopy(path, copy.statuses)}</span>
-                </div>
-                <h2 className="mt-5 text-balance text-xl font-semibold text-slate-950">{direction.title}</h2>
-                <p className="mt-2 min-h-12 text-pretty text-sm leading-6 text-slate-600">{direction.description}</p>
-                {path.obstacle && language === 'ru' ? <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{copy.obstacle} {path.obstacle}</p> : null}
-                {locked ? <AccessPreview access={{ ...path.access, reason: copy.lockedReason, cta_label: copy.lockedCta }} title={copy.accessTitle} className="mt-4" /> : (
-                  <Link to={actionRoute} className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition-[background-color,transform] duration-150 hover:bg-slate-800 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2">
-                    {direction.cta}<ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                )}
-              </article>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h2 className="text-lg font-semibold text-slate-950">{copy.emptyTitle}</h2>
-          <p className="mt-2 text-sm text-slate-600">{copy.emptyDescription}</p>
-        </div>
-      )}
-    </div>
-  );
+ const { currentBusinessId, controlScope, onControlScopeChange } = useOutletContext<{ currentBusinessId?: string | null; controlScope?: Scope; onControlScopeChange?: (scope: Scope) => void }>();
+ const [params] = useSearchParams();
+ const clientDirections = params.get('group') === 'clients';
+ const scope = controlScope?.kind === 'network' ? controlScope : { kind: 'business', id: currentBusinessId || '' };
+ return <GrowthPathsWorkspace key={scope.kind + ':' + scope.id} scope={scope} selectScope={onControlScopeChange} clientDirections={clientDirections} />;
+};
+const GrowthPathsWorkspace = ({ scope, selectScope, clientDirections }: { clientDirections?: boolean; scope: { kind: string; id: string }; selectScope?: (scope: Scope) => void }) => {
+ const { businesses = [] } = useOutletContext<{ businesses?: Array<{ id: string; address?: string | null }> }>();
+ const { language } = useLanguage(); const copy = growthPathsCopyFor(language); const navigation = workNavigationCopy(language); const extra = workCoherenceCopy(language); const navigate = useNavigate();
+ const [data, setData] = useState<Data | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+ const [preference, setPreference] = useState<TodayPreference | null>(null); const [pending, setPending] = useState<Flow | null>(null); const [saving, setSaving] = useState(false);
+ const sequence = useRef(0); const active = useRef(true);
+ const scopeQuery = new URLSearchParams({ scope_type: scope.kind, scope_id: scope.id }).toString();
+ const load = useCallback(async () => {
+  if (!scope.id) { setLoading(false); return; } const generation = ++sequence.current;
+  setLoading(true); setError('');
+  try { const response = await newAuth.makeRequest('/growth-paths?' + (scope.kind === 'network' ? new URLSearchParams({ scope_type: 'network', scope_id: scope.id }) : new URLSearchParams({ business_id: scope.id })));
+   if (active.current && generation === sequence.current) setData(response);
+  } catch (failure) { if (active.current && generation === sequence.current) { if (typeof failure === 'object' && failure && 'status' in failure && [401,403,404].includes(Number(failure.status))) setData(null); setError(failure instanceof Error ? failure.message : copy.loadError); } }
+  finally { if (active.current && generation === sequence.current) setLoading(false); }
+ }, [scope.id, scope.kind, copy.loadError]);
+ useEffect(() => { active.current = true; void load(); return () => { active.current = false; sequence.current++; }; }, [load]);
+ useEffect(() => { let current = true; void newAuth.makeRequest('/operator/today/preference?' + scopeQuery).then(response => { if (current) setPreference(response.preference || null); }).catch(() => { if(current) setPreference(null); }); return () => { current = false; }; }, [scopeQuery]);
+ const choose = async () => { if (!preference || !pending) return; setSaving(true); try { const response = await newAuth.makeRequest('/operator/today/preference?' + scopeQuery, { method: 'POST', body: JSON.stringify({ action: 'set', expected_revision: preference.revision, primary_flow: preferenceFlow[pending] }) }); if (active.current) { setPreference(response.preference); setPending(null); } } catch (failure) { if (active.current) setError(failure instanceof Error ? failure.message : copy.loadError); } finally { if (active.current) setSaving(false); } };
+ const open = (path: Path, businessId = scope.id, action = path.action) => { if (scope.kind === 'network') { if(!selectScope) return; selectScope({ kind: 'business', id: businessId }); } const target = action ? journeyActionRoute(action) : route[path.flow_type]; const url = new URL(target, 'https://localos.pro'); url.searchParams.set('business_id', businessId); navigate(url.pathname + url.search); };
+ if (!scope.id) return <p>{copy.chooseBusiness}</p>;
+ const paths = (data?.paths || []).filter(path => path && Object.prototype.hasOwnProperty.call(route, path.flow_type) && (!clientDirections || ['maps','content','partnership','influencer'].includes(path.flow_type))).sort((left, right) => Number(right.flow_type === data?.focus_action?.flow_type) - Number(left.flow_type === data?.focus_action?.flow_type));
+ return <div className="space-y-6 pb-10"><header><p className="text-sm text-muted-foreground">{copy.eyebrow}</p><h1 className="text-3xl font-semibold">{copy.title}</h1><p className="mt-2 max-w-2xl text-sm text-muted-foreground">{extra.focusIntro}</p></header>
+ {error ? <div role="alert" className="rounded-xl border border-amber-200 p-4"><p>{error}</p><Button variant="outline" onClick={() => void load()}>{copy.retry}</Button></div> : null}
+ {pending ? <section aria-label={navigation.focus} className="rounded-xl border bg-card p-4"><p>{navigation.focus}: {copy.directions[pending].title}</p><p className="my-2 text-sm text-muted-foreground">{extra.focusHint}</p><Button disabled={saving} onClick={() => void choose()}>{navigation.focus}</Button><Button variant="ghost" disabled={saving} onClick={() => setPending(null)}>{extra.cancel}</Button></section> : null}
+ {loading && !data ? <p role="status">{copy.loading}</p> : paths.length ? <div className="divide-y rounded-xl border bg-card">{paths.map(path => <section key={path.flow_type} className="p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div className="max-w-2xl"><h2 className="text-xl font-semibold">{copy.directions[path.flow_type].title}</h2><p className="mt-1 text-sm text-muted-foreground">{workStatusLabel(path.status, language)}</p><p className="mt-2 text-sm text-muted-foreground">{copy.directions[path.flow_type].description}</p>{path.obstacle && language === 'ru' ? <p className="mt-2 text-sm">{copy.obstacle} {path.obstacle}</p> : null}</div>
+ {preference && preference.available_flows?.includes(preferenceFlow[path.flow_type]) ? <Button variant="outline" disabled={saving || preference.primary_flow === preferenceFlow[path.flow_type]} onClick={() => setPending(path.flow_type)}>{preference.primary_flow === preferenceFlow[path.flow_type] ? extra.currentFocus : navigation.focus}</Button> : null}</div>
+ {scope.kind === 'network' ? <details className="mt-4"><summary className="min-h-11 cursor-pointer py-2 font-medium">{extra.locations} · {path.locations?.length || 0}</summary><div className="divide-y">{path.locations?.map(location => {
+   const address = businesses.find(business => business.id === location.business_id)?.address;
+   const name = location.business_name || location.business_id;
+   return <div key={location.business_id} className="flex flex-wrap items-center justify-between gap-3 py-3"><span className="min-w-0"><span className="block">{name}</span>{address ? <span className="block break-words text-sm text-muted-foreground">{address}</span> : null}</span>{location.access.status === 'available' ? <Button variant="outline" aria-label={address ? `${copy.directions[path.flow_type].cta}: ${name}, ${address}` : undefined} disabled={!selectScope} onClick={() => open(path, location.business_id, location.action)}>{copy.directions[path.flow_type].cta}</Button> : <AccessPreview access={location.access} businessId={location.business_id} />}</div>;
+  })}</div></details> : path.access.status === 'available' ? <Button variant="outline" className="mt-4" asChild><Link to={(() => { const target = new URL(path.action ? journeyActionRoute(path.action) : route[path.flow_type], 'https://localos.pro'); target.searchParams.set('business_id', scope.id); return target.pathname + target.search; })()}>{path.action?.cta_label || copy.directions[path.flow_type].cta}</Link></Button> : <AccessPreview access={path.access} className="mt-4" />}</section>)}</div> : !error && !loading ? <section><h2 className="text-xl font-semibold">{copy.emptyTitle}</h2><p className="mt-2 text-sm text-muted-foreground">{copy.emptyDescription}</p></section> : null}
+ </div>;
 };

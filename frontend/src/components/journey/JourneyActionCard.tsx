@@ -12,7 +12,7 @@ import { journeyActionCopy } from '@/i18n/journeyActionCopy';
 
 const primaryCommand = (action: JourneyAction) => action.allowed_commands.find((item) => item !== 'copy') || action.allowed_commands[0] || '';
 
-type JourneyActionCardProps = { action: JourneyAction; businessId: string; surface?: 'web' | 'telegram_mini_app'; dark?: boolean; onUpdated: (nextAction?: JourneyAction) => void };
+type JourneyActionCardProps = { action: JourneyAction; businessId: string; surface?: 'web' | 'telegram_mini_app' | 'max_mini_app'; dark?: boolean; showDiscussion?: boolean; onUpdated: (nextAction?: JourneyAction) => void };
 
 export const JourneyActionCard = (props: JourneyActionCardProps) => (
   <JourneyActionForm key={JSON.stringify([props.businessId, props.action.id])} {...props} />

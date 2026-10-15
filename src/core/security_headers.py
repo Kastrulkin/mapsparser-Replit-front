@@ -1,6 +1,7 @@
 """Central browser security headers for LocalOS responses."""
 
 import os
+from flask import request
 
 
 CSP_REPORT_ONLY = (
@@ -30,7 +31,13 @@ def register_security_headers(app):
     def apply_security_headers(response):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if request.path in {'/telegram/control', '/max/control'}:
+            parent = 'https://web.telegram.org' if request.path.startswith('/telegram/') else 'https://max.ru https://web.max.ru'
+            response.headers.pop('X-Frame-Options', None)
+            response.headers['Content-Security-Policy'] = "frame-ancestors 'self' " + parent
+
+        if response.headers.get("Referrer-Policy") != "no-referrer":
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = PERMISSIONS_POLICY
         response.headers["Content-Security-Policy-Report-Only"] = CSP_REPORT_ONLY
         if str(os.getenv("APP_ENV", "") or "").strip().lower() == "production":

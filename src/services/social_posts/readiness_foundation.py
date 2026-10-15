@@ -39,8 +39,8 @@ SOCIAL_POST_PLATFORMS = [
     "facebook",
 ]
 
-API_PLATFORMS = {"google_business", "telegram", "vk", "instagram", "facebook"}
-BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis", "max"}
+API_PLATFORMS = {"google_business", "telegram", "vk", "max", "instagram", "facebook"}
+BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis"}
 FIRST_API_PROOF_PLATFORMS = ("telegram", "vk")
 
 SOCIAL_POST_STATUSES = {

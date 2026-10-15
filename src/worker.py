@@ -8,13 +8,11 @@ from datetime import datetime, timedelta, timezone
 import signal
 import sys
 import multiprocessing
-import queue
-import tempfile
 import asyncio
 import random
 import threading
 import requests
-from typing import Dict, List, Any, Optional
+from typing import Callable, Dict, List, Any, Optional
 from urllib import request as urllib_request, error as urllib_error
 from urllib.parse import quote
 from dotenv import load_dotenv
@@ -43,15 +41,10 @@ from parsed_payload_validation import (
     FIELDS_CRITICAL,
     SOURCE_YANDEX_BUSINESS,
 )
-from parsing_failure_taxonomy import (
-    classify_failure_reason,
-    safe_parser_error_code,
-    with_reason_code_prefix,
-)
+from parsing_failure_taxonomy import with_reason_code_prefix
 from core.action_orchestrator import ActionOrchestrator
 from core.parsing_runtime_config import get_use_apify_map_parsing, resolve_map_source_for_queue
 from core.map_url_normalizer import is_google_map_url
-from core.parser_debug_artifacts import debug_url_summary, debug_value_shape
 from core.review_response_utils import extract_review_response_text
 from core.sensitive_text import redact_sensitive_text
 from yookassa_integration import run_due_renewals
@@ -75,6 +68,10 @@ from services.content_publish_notifications import (
     collect_due_content_publish_handoffs,
     format_content_publish_handoff,
     mark_content_publish_handoff_sent,
+    deliver_content_publish_handoff,
+    queue_handoff_alert,
+    collect_exhausted_content_plan_alerts,
+    dispatch_handoff_alerts,
 )
 from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
 from services.agent_run_queue import claim_next_agent_run, execute_claimed_agent_run, execute_claimed_compiled_agent_run
@@ -112,6 +109,7 @@ from services.superadmin_telegram_notifications import (
     mark_outreach_reply_notification_sent,
 )
 from services.riderra_systematic_outreach_service import (
+    DAILY_LIMIT as RIDERRA_DAILY_LIMIT,
     format_run_notification,
     mark_run_notified,
     prepare_systematic_batch,
@@ -161,7 +159,6 @@ _LAST_BILLING_RECONCILE_AT = 0.0
 _LAST_BILLING_ALERT_BY_TENANT: Dict[str, float] = {}
 _LAST_CALLBACK_ALERT_BY_TENANT: Dict[str, float] = {}
 _LAST_CALLBACK_ALERT_SCAN_AT = 0.0
-_LAST_CALLBACK_ALERT_TENANT_CURSOR = ""
 _LAST_YOOKASSA_RENEWALS_AT = 0.0
 _LAST_KNOWLEDGE_EMBEDDINGS_AT = 0.0
 _LAST_KNOWLEDGE_SEMANTIC_INGEST_AT = 0.0
@@ -655,8 +652,8 @@ def _mark_proxy_result(proxy_id: Optional[str], *, success: bool, reason: str = 
                 (fatal_proxy_reason, min_samples, min_score, proxy_id),
             )
         conn.commit()
-    except Exception:
-        print(f"⚠️ Не удалось обновить статистику прокси {proxy_id}: proxy_stats_write_failed", flush=True)
+    except Exception as e:
+        print(f"⚠️ Не удалось обновить статистику прокси {proxy_id}: {e}; reason={reason}", flush=True)
     finally:
         try:
             if cursor:
@@ -668,23 +665,6 @@ def _mark_proxy_result(proxy_id: Optional[str], *, success: bool, reason: str = 
                 conn.close()
         except Exception:
             pass
-
-
-def _proxy_preflight_diagnostic_reason(reason: Any) -> str:
-    """Project preflight diagnostics without changing raw proxy-health input."""
-    code = str(reason or "").strip()
-    if code in {
-        "ok", "direct_native", "proxy_unavailable", "proxy_server_missing",
-        "forbidden", "rate_limited", "limited", "captcha", "empty_body", "org_id_missing",
-    } or re.fullmatch(r"http_[45][0-9]{2}", code):
-        return code
-    error_class = code.partition(":")[0]
-    if error_class in {
-        "RequestException", "ProxyError", "ConnectionError", "Timeout",
-        "ConnectTimeout", "ReadTimeout", "SSLError",
-    }:
-        return error_class
-    return "proxy_preflight_failed"
 
 
 def _preflight_yandex_proxy(url: str, active_proxy: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1257,31 +1237,33 @@ def _parse_card_via_apify_subprocess_entry(
     result_queue: Any,
     url: str,
     kwargs: Dict[str, Any],
-    result_file: Any = None,
 ) -> None:
+    result_file_path = str(kwargs.pop("result_file_path", "") or "").strip()
     try:
         result = _parse_card_via_apify(url, **kwargs)
+        if result_file_path:
+            os.makedirs(os.path.dirname(result_file_path), exist_ok=True)
+            with open(result_file_path, "w", encoding="utf-8") as fh:
+                json.dump(result, fh, ensure_ascii=False, indent=2, default=str)
+            result_queue.put({"result_file_path": result_file_path})
+            return
+        result_queue.put(result)
     except Exception as exc:
-        result = {
+        error_payload = {
             "error": "apify_parser_subprocess_exception",
             "message": redact_sensitive_text(exc, limit=1200),
             "url": url,
         }
-    if result_file is None:
-        result_queue.put(result)
-        return
-    try:
-        result_file.seek(0)
-        result_file.truncate()
-        json.dump(result, result_file, ensure_ascii=False, indent=2, default=str)
-        result_file.flush()
-        result_queue.put({"transport_ready": True})
-    except Exception:
-        result_queue.put({
-            "error": "apify_parser_subprocess_exception",
-            "message": "Apify result transport could not be written",
-            "url": url,
-        })
+        if result_file_path:
+            try:
+                os.makedirs(os.path.dirname(result_file_path), exist_ok=True)
+                with open(result_file_path, "w", encoding="utf-8") as fh:
+                    json.dump(error_payload, fh, ensure_ascii=False, indent=2, default=str)
+                result_queue.put({"result_file_path": result_file_path})
+                return
+            except Exception:
+                pass
+        result_queue.put(error_payload)
 
 
 def _parse_card_via_apify_with_timeout(
@@ -1292,135 +1274,90 @@ def _parse_card_via_apify_with_timeout(
     debug_context: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    # The existing fork context inherits this private, unnamed file handle.
-    # Only a small readiness marker crosses the queue, so join cannot wait on
-    # a feeder blocked by a large provider response. Debug bundles stay separate.
-    result_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
-    result_queue = None
-    proc = None
-    proc_started = False
-    try:
-        ctx = multiprocessing.get_context("fork")
-        result_queue = ctx.Queue(maxsize=1)
-        subprocess_kwargs = dict(kwargs)
-        subprocess_kwargs["timeout_sec"] = timeout_sec
+    ctx = multiprocessing.get_context("fork")
+    result_queue = ctx.Queue(maxsize=1)
+    subprocess_kwargs = dict(kwargs)
+    subprocess_kwargs["timeout_sec"] = timeout_sec
+    if debug_bundle_dir:
+        subprocess_kwargs["debug_bundle_dir"] = debug_bundle_dir
+        subprocess_kwargs["result_file_path"] = os.path.join(debug_bundle_dir, "apify_result.json")
+    if debug_context:
+        subprocess_kwargs["debug_context"] = dict(debug_context)
+    proc = ctx.Process(
+        target=_parse_card_via_apify_subprocess_entry,
+        args=(result_queue, url, subprocess_kwargs),
+        daemon=True,
+    )
+    proc.start()
+    proc.join(timeout_sec)
+
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(timeout=5)
         if debug_bundle_dir:
-            subprocess_kwargs["debug_bundle_dir"] = debug_bundle_dir
-        if debug_context:
-            subprocess_kwargs["debug_context"] = dict(debug_context)
-        proc = ctx.Process(
-            target=_parse_card_via_apify_subprocess_entry,
-            args=(result_queue, url, subprocess_kwargs, result_file),
-            daemon=True,
-        )
-        proc.start()
-        proc_started = True
-        proc.join(timeout_sec)
-
-        if proc.is_alive():
-            if debug_bundle_dir:
-                try:
-                    os.makedirs(debug_bundle_dir, exist_ok=True)
-                    timeout_payload = {
-                        "diagnostics_version": 2,
-                        "error": "apify_parser_subprocess_timeout",
-                        "message": f"Apify business parse timeout after {timeout_sec}s",
-                        "url": debug_url_summary(url),
-                        "timeout_sec": timeout_sec,
-                        "debug_context": debug_value_shape(debug_context or {}),
-                        "kwargs": debug_value_shape(kwargs),
-                    }
-                    with open(os.path.join(debug_bundle_dir, "timeout.json"), "w", encoding="utf-8") as fh:
-                        json.dump(timeout_payload, fh, ensure_ascii=False, indent=2, default=str)
-                except Exception:
-                    print("⚠️ Failed to write timeout.json: diagnostic_write_failed", flush=True)
-            return {
-                "error": "apify_parser_subprocess_timeout",
-                "message": f"Apify business parse timeout after {timeout_sec}s",
-                "url": url,
-            }
-
-        try:
-            result = result_queue.get(timeout=1)
-        except queue.Empty:
-            if debug_bundle_dir:
-                try:
-                    os.makedirs(debug_bundle_dir, exist_ok=True)
-                    no_result_payload = {
-                        "diagnostics_version": 2,
-                        "error": "apify_parser_subprocess_no_result",
-                        "message": "Apify business parse subprocess finished without payload",
-                        "url": debug_url_summary(url),
-                        "timeout_sec": timeout_sec,
-                        "debug_context": debug_value_shape(debug_context or {}),
-                        "kwargs": debug_value_shape(kwargs),
-                    }
-                    with open(os.path.join(debug_bundle_dir, "subprocess_no_result.json"), "w", encoding="utf-8") as fh:
-                        json.dump(no_result_payload, fh, ensure_ascii=False, indent=2, default=str)
-                except Exception:
-                    print("⚠️ Failed to write subprocess_no_result.json: diagnostic_write_failed", flush=True)
-            return {
-                "error": "apify_parser_subprocess_no_result",
-                "message": "Apify business parse subprocess finished without payload",
-                "url": url,
-            }
-
-        if isinstance(result, dict) and "transport_ready" in result:
-            if result["transport_ready"] is not True:
-                return {
-                    "error": "apify_parser_subprocess_invalid_result",
-                    "message": "Apify business parse returned invalid payload",
-                    "url": url,
-                }
             try:
-                result_file.seek(0)
-                loaded_result = json.load(result_file)
-            except Exception:
-                return {
-                    "error": "apify_parser_subprocess_result_read_failed",
-                    "message": "Apify result transport could not be read",
+                os.makedirs(debug_bundle_dir, exist_ok=True)
+                timeout_payload = {
+                    "error": "apify_parser_subprocess_timeout",
+                    "message": f"Apify business parse timeout after {timeout_sec}s",
                     "url": url,
+                    "timeout_sec": timeout_sec,
+                    "debug_context": debug_context or {},
+                    "kwargs": kwargs,
                 }
-            if isinstance(loaded_result, dict):
-                return loaded_result
-            return {
-                "error": "apify_parser_subprocess_invalid_result",
-                "message": "Apify business parse returned invalid payload",
-                "url": url,
-            }
-        if isinstance(result, dict) and "result_file_path" in result:
-            return {
-                "error": "apify_parser_subprocess_result_read_failed",
-                "message": "Unexpected Apify result transport",
-                "url": url,
-            }
-        if isinstance(result, dict):
-            return result
+                with open(os.path.join(debug_bundle_dir, "timeout.json"), "w", encoding="utf-8") as fh:
+                    json.dump(timeout_payload, fh, ensure_ascii=False, indent=2, default=str)
+            except Exception as timeout_bundle_exc:
+                print(f"⚠️ Failed to write timeout.json: {timeout_bundle_exc}", flush=True)
         return {
-            "error": "apify_parser_subprocess_invalid_result",
-            "message": "Apify business parse returned invalid payload",
+            "error": "apify_parser_subprocess_timeout",
+            "message": f"Apify business parse timeout after {timeout_sec}s",
             "url": url,
         }
-    finally:
-        try:
-            if proc is not None:
-                if proc_started and proc.is_alive():
-                    proc.terminate()
-                    proc.join(timeout=5)
-                    if proc.is_alive():
-                        proc.kill()
-                        proc.join(timeout=5)
-                    if proc.is_alive():
-                        print("⚠️ Apify subprocess cleanup incomplete: process_still_alive", flush=True)
-                if not proc_started or not proc.is_alive():
-                    proc.close()
-        finally:
+
+    if result_queue.empty():
+        if debug_bundle_dir:
             try:
-                if result_queue is not None:
-                    result_queue.close()
-                    result_queue.join_thread()
-            finally:
-                result_file.close()
+                os.makedirs(debug_bundle_dir, exist_ok=True)
+                no_result_payload = {
+                    "error": "apify_parser_subprocess_no_result",
+                    "message": "Apify business parse subprocess finished without payload",
+                    "url": url,
+                    "timeout_sec": timeout_sec,
+                    "debug_context": debug_context or {},
+                    "kwargs": kwargs,
+                }
+                with open(os.path.join(debug_bundle_dir, "subprocess_no_result.json"), "w", encoding="utf-8") as fh:
+                    json.dump(no_result_payload, fh, ensure_ascii=False, indent=2, default=str)
+            except Exception as no_result_bundle_exc:
+                print(f"⚠️ Failed to write subprocess_no_result.json: {no_result_bundle_exc}", flush=True)
+        return {
+            "error": "apify_parser_subprocess_no_result",
+            "message": "Apify business parse subprocess finished without payload",
+            "url": url,
+        }
+
+    result = result_queue.get()
+    if isinstance(result, dict) and str(result.get("result_file_path") or "").strip():
+        result_file_path = str(result.get("result_file_path") or "").strip()
+        try:
+            with open(result_file_path, "r", encoding="utf-8") as fh:
+                loaded_result = json.load(fh)
+            if isinstance(loaded_result, dict):
+                return loaded_result
+        except Exception as read_result_exc:
+            return {
+                "error": "apify_parser_subprocess_result_read_failed",
+                "message": str(read_result_exc),
+                "url": url,
+            }
+    if isinstance(result, dict):
+        return result
+    return {
+        "error": "apify_parser_subprocess_invalid_result",
+        "message": "Apify business parse returned invalid payload",
+        "url": url,
+    }
 
 
 def _parse_yandex_card_with_playwright_fallback(
@@ -1708,13 +1645,34 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
 
         reply_sync_limit = max(1, min(int(os.getenv("OUTREACH_REPLY_SYNC_BATCH_SIZE", "50")), 200))
         telegram_reply_sync = _sync_telegram_app_replies(limit=reply_sync_limit)
-        email_reply_sync = sync_email_replies(
-            sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_SENDER_LIMIT", "25")), 200)),
-            per_sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_MESSAGE_LIMIT", "100")), 500)),
-        )
         vk_reply_sync = sync_vk_replies(
             sender_limit=max(1, min(int(os.getenv("OUTREACH_VK_SYNC_SENDER_LIMIT", "25")), 200)),
             per_conversation_limit=max(1, min(int(os.getenv("OUTREACH_VK_SYNC_MESSAGE_LIMIT", "50")), 200)),
+        )
+        # Keep the email receipt closest to dispatch. Telegram/VK sync can take
+        # several minutes, while email preflight deliberately accepts only a
+        # very fresh complete-mailbox receipt.
+        # A mailbox with no active sends must not delay another sender's
+        # complete-history receipt. Idle reply monitoring resumes after draining.
+        pending_sender_db = DatabaseManager()
+        try:
+            with pending_sender_db.conn.cursor() as pending_sender_cursor:
+                pending_sender_cursor.execute("""SELECT DISTINCT q.sender_account_id
+                    FROM outreachsendqueue q
+                    JOIN outreachsendbatches b ON b.id=q.batch_id
+                    JOIN outreach_campaign_touches t ON t.id=q.campaign_touch_id
+                    JOIN outreach_campaigns c ON c.id=t.campaign_id
+                    WHERE q.channel='email' AND q.delivery_status IN ('queued','retry','sending')
+                      AND c.status IN ('active','approved')
+                      AND b.status IN ('ready','approved','sending','queued')
+                      AND q.sender_account_id IS NOT NULL""")
+                pending_sender_ids = [str(row['sender_account_id']) for row in pending_sender_cursor.fetchall()]
+        finally:
+            pending_sender_db.close()
+        email_reply_sync = sync_email_replies(
+            sender_account_id=pending_sender_ids[0] if len(pending_sender_ids) == 1 else None,
+            sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_SENDER_LIMIT", "25")), 200)),
+            per_sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_MESSAGE_LIMIT", "100")), 500)),
         )
         yougile_sync = (
             process_yougile_outbox(
@@ -1783,7 +1741,7 @@ def _prepare_riderra_systematic_outreach_if_due() -> None:
         cursor = db.conn.cursor(cursor_factory=RealDictCursor)
         result = prepare_systematic_batch(
             cursor,
-            target_count=max(1, min(int(os.getenv("RIDERRA_SYSTEMATIC_OUTREACH_TARGET", "150")), 150)),
+            target_count=max(1, min(int(os.getenv("RIDERRA_SYSTEMATIC_OUTREACH_TARGET", str(RIDERRA_DAILY_LIMIT))), RIDERRA_DAILY_LIMIT)),
         )
         db.conn.commit()
         print(
@@ -1816,7 +1774,7 @@ def _prepare_riderra_systematic_outreach_if_due() -> None:
                 pass
 
 
-def _dispatch_outreach_queue_if_due() -> None:
+def _dispatch_outreach_queue_cycle() -> None:
     global _LAST_OUTREACH_DISPATCH_AT
     reply_sync_ready = _sync_outreach_replies_if_due()
     if not _env_bool("OUTREACH_DISPATCH_ENABLED", False):
@@ -1837,7 +1795,8 @@ def _dispatch_outreach_queue_if_due() -> None:
         if item.strip()
     })
     allow_platform = _env_bool("OUTREACH_DISPATCH_PLATFORM_SCOPE_ENABLED", False)
-    if not allowed_business_ids and not allow_platform:
+    platform_campaign_ids = sorted({item.strip() for item in str(os.getenv("OUTREACH_DISPATCH_PLATFORM_CAMPAIGN_IDS") or "").split(",") if item.strip()})
+    if not allowed_business_ids and not allow_platform and not platform_campaign_ids:
         print(
             "[OUTREACH_DISPATCH] skipped: dispatch_cohort_not_configured",
             flush=True,
@@ -1863,11 +1822,30 @@ def _dispatch_outreach_queue_if_due() -> None:
         finally:
             timeout_db.close()
         batch_size = max(1, min(int(os.getenv("OUTREACH_DISPATCH_BATCH_SIZE", "20")), 200))
+        # Bound the approved Finland cohort so each batch finishes within the
+        # existing complete-history receipt window. Never extend that window.
+        if "edbd961a-273f-4f15-836e-33aacc0aa0e3" in allowed_business_ids:
+            finland_db = DatabaseManager()
+            try:
+                with finland_db.conn.cursor() as finland_cursor:
+                    finland_cursor.execute("""SELECT EXISTS (
+                        SELECT 1 FROM outreachsendqueue q
+                        JOIN outreach_campaign_touches t ON t.id=q.campaign_touch_id
+                        JOIN outreach_campaigns c ON c.id=t.campaign_id
+                        WHERE q.delivery_status IN ('queued','retry')
+                          AND c.business_id='edbd961a-273f-4f15-836e-33aacc0aa0e3'
+                          AND t.message_brief_json->'riderra_template_record'->>'template_id' IN ('riderra_buyer_finland_short_prices_v1','riderra_buyer_vancouver_short_prices_v1')
+                    ) AS pending""")
+                    if (finland_cursor.fetchone() or {}).get("pending"):
+                        batch_size = min(batch_size, 5)
+            finally:
+                finland_db.close()
         result = dispatch_due_outreach_queue(
             batch_size=batch_size,
             campaign_only=True,
             allowed_business_ids=allowed_business_ids,
             allow_platform=allow_platform,
+            allowed_platform_campaign_ids=platform_campaign_ids,
             blocked_sender_ids=list(reply_sync_ready.get("blocked_sender_ids") or []),
             author_reply_sync_started_at=reply_sync_ready.get("cycle_started_at"),
         )
@@ -1883,6 +1861,14 @@ def _dispatch_outreach_queue_if_due() -> None:
             )
     except Exception as e:
         print(f"[OUTREACH_DISPATCH] error: {e}", flush=True)
+
+
+from services.outreach_dispatch_loop import SerializedDispatchLoop
+_OUTREACH_SEND_LOOP = SerializedDispatchLoop(_dispatch_outreach_queue_cycle)
+
+
+def _dispatch_outreach_queue_if_due():
+    return _OUTREACH_SEND_LOOP.tick()
 
 
 def _dispatch_creator_notifications_if_due() -> None:
@@ -2132,44 +2118,33 @@ def _run_card_automation_if_due() -> None:
                 print(f"[JOURNEY_ACTION_REMINDER] failed to send reminder to {telegram_id}", flush=True)
         content_handoffs = collect_due_content_publish_handoffs(db.conn)
         for handoff in content_handoffs:
-            telegram_id = str(handoff.get("telegram_id") or "").strip()
-            post_id = str(handoff.get("id") or "").strip()
-            user_id = str(handoff.get("user_id") or "").strip()
-            message, reply_markup = format_content_publish_handoff(handoff)
-            photo_message_id = 0
-            selected_photo = handoff.get("selected_photo")
-            if isinstance(selected_photo, dict) and selected_photo:
-                photo_result = send_telegram_photo_message(
-                    bot_token=(os.getenv("TELEGRAM_BOT_TOKEN") or "").strip(),
-                    chat_id=telegram_id,
-                    media_asset=selected_photo,
-                    caption="Фото для публикации",
+            try:
+                from services.social_post_service import _media_asset_file
+                outcome = deliver_content_publish_handoff(
+                    db.conn, handoff, validate_media=_media_asset_file,
+                    send_photo=lambda item: send_telegram_photo_message(
+                        bot_token=(os.getenv("TELEGRAM_BOT_TOKEN") or "").strip(),
+                        chat_id=item["telegram_id"], media_asset=item["selected_photo"],
+                        caption="Обновлённое фото для публикации" if item.get("is_update") else "Фото для публикации",
+                    ),
+                    send_text=lambda chat_id, text, **kwargs: _send_telegram_message_result(chat_id, text, include_outcome=True, **kwargs),
                 )
-                photo_message_id = int(photo_result.get("message_id") or 0)
-                if not bool(photo_result.get("success")) or not photo_message_id:
-                    db.conn.rollback()
-                    print(
-                        f"[CONTENT_PUBLISH_HANDOFF] failed to send photo post_id={post_id} telegram_id={telegram_id}",
-                        flush=True,
-                    )
-                    continue
-            send_result = _send_telegram_message_result(telegram_id, message, reply_markup=reply_markup)
-            message_id = int(send_result.get("message_id") or 0)
-            if not bool(send_result.get("success")) or not message_id:
+                if outcome in {"incomplete", "uncertain", "needs_reconciliation", "needs_attention"}:
+                    queue_handoff_alert(db.conn, business_id=handoff["business_id"],
+                        event_key=f"post:{handoff['id']}:{handoff['revision']}:{outcome}",
+                        message=f"{handoff.get('business_name') or 'Бизнес'}: материалы для {handoff.get('platform')} требуют проверки ({outcome}). Передача не подтверждена полностью.")
+                    db.conn.commit()
+                print(f"[CONTENT_PUBLISH_HANDOFF] {outcome} post_id={handoff.get('id')}", flush=True)
+            except Exception:
                 db.conn.rollback()
-                print(f"[CONTENT_PUBLISH_HANDOFF] failed post_id={post_id} telegram_id={telegram_id}", flush=True)
-                continue
-            if mark_content_publish_handoff_sent(
-                db.conn,
-                post_id=post_id,
-                user_id=user_id,
-                telegram_message_id=message_id,
-                telegram_photo_message_id=photo_message_id,
-            ):
-                db.conn.commit()
-                print(f"[CONTENT_PUBLISH_HANDOFF] sent post_id={post_id} telegram_id={telegram_id}", flush=True)
-    except Exception as e:
-        print(f"[CARD_AUTOMATION] error: {e}", flush=True)
+                print(f"[CONTENT_PUBLISH_HANDOFF] needs_reconciliation post_id={handoff.get('id')}", flush=True)
+
+        collect_exhausted_content_plan_alerts(db.conn)
+        db.conn.commit()
+        dispatch_handoff_alerts(db.conn, send_text=_send_telegram_message_result)
+
+    except Exception:
+        print("[CARD_AUTOMATION] card_automation_failed", flush=True)
     finally:
         try:
             if db:
@@ -2239,8 +2214,10 @@ def _run_founder_content_if_due() -> None:
                 pass
 
 
-def _dispatch_agent_schedules_if_due() -> None:
+def _dispatch_agent_schedules_if_due(should_stop: Callable[[], bool] | None = None) -> None:
     global _LAST_AGENT_SCHEDULE_DISPATCH_AT
+    if should_stop and should_stop():
+        return
     if not _env_bool("AGENT_SCHEDULE_DISPATCH_ENABLED", False):
         return
 
@@ -2254,10 +2231,18 @@ def _dispatch_agent_schedules_if_due() -> None:
     try:
         db = DatabaseManager()
         batch_size = max(1, min(int(os.getenv("AGENT_SCHEDULE_DISPATCH_BUSINESS_LIMIT", "50")), 500))
-        results = [
-            dispatch_due_scheduled_agent_blueprints(db.conn.cursor(), business_limit=batch_size, trigger=trigger)
-            for trigger in ("schedule.daily", "schedule.weekly")
-        ]
+        results = []
+        for trigger in ("schedule.daily", "schedule.weekly"):
+            if should_stop and should_stop():
+                break
+            results.append(
+                dispatch_due_scheduled_agent_blueprints(
+                    db.conn.cursor(),
+                    business_limit=batch_size,
+                    trigger=trigger,
+                    should_stop=should_stop,
+                )
+            )
         db.conn.commit()
         result = {
             "checked_businesses": max((int(item.get("checked_businesses") or 0) for item in results), default=0),
@@ -2360,6 +2345,21 @@ def _process_sheet_provider_queue_if_due() -> None:
         print("[AGENT_SHEET_PROVIDER] error", flush=True)
         traceback.print_exc(file=sys.stdout)
         sys.stdout.flush()
+
+
+_LAST_MAX_NOTIFICATION_AT = 0.0
+
+
+def _process_max_event_if_due() -> None:
+    global _LAST_MAX_NOTIFICATION_AT
+    from services.max_webapp_auth import max_enabled
+    if max_enabled():
+        from services.max_bot import process_next_max_event
+        process_next_max_event()
+        if time.time() - _LAST_MAX_NOTIFICATION_AT > 60:
+            _LAST_MAX_NOTIFICATION_AT = time.time()
+            from services.max_notifications import collect_max_notifications
+            collect_max_notifications()
 
 
 def _process_operator_async_job_if_due() -> None:
@@ -2500,7 +2500,7 @@ def _revalidate_creator_profiles_if_due() -> None:
     _CREATOR_PROFILE_REVALIDATION_THREAD.start()
 
 
-def _process_contact_intelligence_if_due() -> None:
+def _process_contact_intelligence_if_due(*, reviewed_sources_only: bool = False) -> None:
     global _LAST_CONTACT_INTELLIGENCE_AT, _CONTACT_INTELLIGENCE_RECOVERY_DONE
     if not _env_bool("PROSPECTING_CONTACT_INTELLIGENCE_ENABLED", False):
         return
@@ -2534,11 +2534,15 @@ def _process_contact_intelligence_if_due() -> None:
         min(20, int(os.getenv("PROSPECTING_CONTACT_INTELLIGENCE_BATCH_SIZE", "1"))),
     )
     for _index in range(batch_size):
-        if not _process_one_contact_intelligence_job():
+        if not _process_one_contact_intelligence_job(reviewed_sources_only=reviewed_sources_only):
             break
+        # Long enrichment batches must not starve the existing send owner.
+        # The ordinary dispatcher retains its interval, sync, caps and preflight.
+        if _worker_role_enabled("dispatcher"):
+            _dispatch_outreach_queue_if_due()
 
 
-def _process_one_contact_intelligence_job() -> bool:
+def _process_one_contact_intelligence_job(*, reviewed_sources_only: bool = False) -> bool:
     """Claim and finish one bounded enrichment job; return False when queue is empty."""
 
     db = None
@@ -2546,7 +2550,7 @@ def _process_one_contact_intelligence_job() -> bool:
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        job = claim_next_enrichment_job(cursor)
+        job = claim_next_enrichment_job(cursor, reviewed_sources_only=reviewed_sources_only)
         db.conn.commit()
         if not job:
             return False
@@ -2978,11 +2982,13 @@ def _dispatch_openclaw_callback_outbox_if_due() -> None:
         print(f"[CALLBACK_DISPATCH] error: {e}", flush=True)
 
 
-def _send_telegram_message_result(chat_id: str, text: str, reply_markup: dict | None = None) -> dict[str, Any]:
+def _send_telegram_message_result(chat_id: str, text: str, reply_markup: dict | None = None, *, include_outcome: bool = False) -> dict[str, Any]:
+    def classified(result, outcome):
+        return {**result, "publish_outcome": outcome} if include_outcome else result
     token = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
     chat_id = str(chat_id or "").strip()
     if not token or not chat_id:
-        return {"success": False, "message_id": 0, "reason_code": "telegram_not_configured"}
+        return classified({"success": False, "message_id": 0, "reason_code": "telegram_not_configured"}, "not_attempted")
     try:
         payload_dict = {
             "chat_id": chat_id,
@@ -3004,17 +3010,18 @@ def _send_telegram_message_result(chat_id: str, text: str, reply_markup: dict | 
             data = json.loads(raw.decode("utf-8")) if raw else {}
             result = data.get("result") if isinstance(data, dict) else {}
             message_id = int(result.get("message_id") or 0) if isinstance(result, dict) else 0
-            return {
+            return classified({
                 "success": 200 <= status < 300 and bool(data.get("ok")),
                 "message_id": message_id,
                 "reason_code": "",
-            }
+            }, "confirmed" if 200 <= status < 300 and bool(data.get("ok")) and message_id else (
+                "rejected" if 400 <= status < 500 or (200 <= status < 300 and data.get("ok") is False) else "uncertain"))
     except (urllib_error.URLError, urllib_error.HTTPError, TimeoutError) as e:
-        print(f"[BILLING_RECONCILE] telegram send failed chat_id={chat_id}: {e}", flush=True)
-        return {"success": False, "message_id": 0, "reason_code": type(e).__name__}
+        print("[BILLING_RECONCILE] telegram_send_failed", flush=True)
+        return classified({"success": False, "message_id": 0, "reason_code": type(e).__name__}, "rejected" if isinstance(e, urllib_error.HTTPError) and 400 <= e.code < 500 else "uncertain")
     except Exception as e:
-        print(f"[BILLING_RECONCILE] telegram unexpected error chat_id={chat_id}: {e}", flush=True)
-        return {"success": False, "message_id": 0, "reason_code": type(e).__name__}
+        print("[BILLING_RECONCILE] telegram_send_unexpected_error", flush=True)
+        return classified({"success": False, "message_id": 0, "reason_code": type(e).__name__}, "rejected" if isinstance(e, urllib_error.HTTPError) and 400 <= e.code < 500 else "uncertain")
 
 
 def _send_telegram_plain_message(chat_id: str, text: str, reply_markup: dict | None = None) -> bool:
@@ -3092,16 +3099,9 @@ def _load_problematic_action_ids_for_tenant(tenant_id: str, *, limit: int = 2) -
             SELECT action_id
             FROM action_callback_outbox
             WHERE tenant_id = %s
-              AND (
-                    status IN ('dlq', 'retry')
-                    OR (status = 'sending' AND locked_at <= (CURRENT_TIMESTAMP - INTERVAL '1 hour'))
-              )
+              AND status IN ('dlq', 'retry')
             ORDER BY
-              CASE
-                  WHEN status = 'dlq' THEN 0
-                  WHEN status = 'sending' THEN 1
-                  ELSE 2
-              END,
+              CASE WHEN status = 'dlq' THEN 0 ELSE 1 END,
               updated_at DESC,
               created_at DESC
             LIMIT %s
@@ -3459,7 +3459,7 @@ def _notify_superadmins_callback_alerts(
 
 
 def _check_openclaw_callback_alerts_if_due() -> None:
-    global _LAST_CALLBACK_ALERT_SCAN_AT, _LAST_CALLBACK_ALERT_TENANT_CURSOR
+    global _LAST_CALLBACK_ALERT_SCAN_AT
     if not _env_bool("OPENCLAW_CALLBACK_ALERT_NOTIFY_ENABLED", True):
         return
 
@@ -3479,35 +3479,14 @@ def _check_openclaw_callback_alerts_if_due() -> None:
         cursor = conn.cursor()
         cursor.execute(
             """
-            WITH candidate_tenants AS (
-                SELECT DISTINCT tenant_id
-                FROM action_callback_outbox
-                WHERE tenant_id IS NOT NULL
-                  AND (
-                        created_at >= (CURRENT_TIMESTAMP - (%s || ' minutes')::interval)
-                        OR (status = 'sending' AND locked_at <= (CURRENT_TIMESTAMP - INTERVAL '1 hour'))
-                        OR (
-                            status = 'dlq'
-                            AND last_error = 'callback_delivery_uncertain_after_interrupted_claim'
-                        )
-                  )
-            ), ordered_tenants AS (
-                SELECT tenant_id, 0 AS scan_segment
-                FROM candidate_tenants
-                WHERE tenant_id > %s
-
-                UNION ALL
-
-                SELECT tenant_id, 1 AS scan_segment
-                FROM candidate_tenants
-                WHERE tenant_id <= %s
-            )
-            SELECT tenant_id
-            FROM ordered_tenants
-            ORDER BY scan_segment ASC, tenant_id ASC
+            SELECT DISTINCT tenant_id
+            FROM action_callback_outbox
+            WHERE tenant_id IS NOT NULL
+              AND created_at >= (CURRENT_TIMESTAMP - (%s || ' minutes')::interval)
+            ORDER BY tenant_id
             LIMIT %s
             """,
-            (window_minutes, _LAST_CALLBACK_ALERT_TENANT_CURSOR, _LAST_CALLBACK_ALERT_TENANT_CURSOR, max_tenants),
+            (window_minutes, max_tenants),
         )
         tenant_rows = cursor.fetchall() or []
         tenant_ids = []
@@ -3518,8 +3497,6 @@ def _check_openclaw_callback_alerts_if_due() -> None:
                 value = row[0] if len(row) > 0 else None
             if value:
                 tenant_ids.append(str(value))
-        if tenant_ids:
-            _LAST_CALLBACK_ALERT_TENANT_CURSOR = tenant_ids[-1]
     except Exception as e:
         print(f"[CALLBACK_ALERTS] tenant scan error: {e}", flush=True)
         return
@@ -4250,13 +4227,11 @@ def _validate_parsing_result(card_data: dict, source: str = SOURCE_YANDEX_BUSINE
         return False, "captcha_detected", None
     if card_data.get("error"):
         error_name = str(card_data.get("error") or "").strip()
-        policy_detail = str(card_data.get("message") or "").strip().replace("\n", " ")[:220]
-        reason_code = classify_failure_reason(
-            STATUS_ERROR, f"{error_name} {policy_detail}",
-        )
-        # Raw provider data remains available to retry classification, but the
-        # returned reason is also persisted and shown outside this process.
-        return False, f"error: {safe_parser_error_code(error_name)}; reason_code={reason_code};", None
+        detail = str(card_data.get("message") or "").strip()
+        if detail:
+            detail = detail.replace("\n", " ")[:220]
+            return False, f"error: {error_name} detail={detail}", None
+        return False, f"error: {error_name}", None
 
     validation = validate_parsed_payload(card_data, source=source or SOURCE_YANDEX_BUSINESS)
     hard_missing = validation.get("hard_missing") or []
@@ -4596,12 +4571,6 @@ def _queue_transient_parse_retry(queue_dict: dict, reason: str, card_data: Optio
     )
     is_apify_timeout = parser_error == "apify_parser_subprocess_timeout"
     reason_text = str(reason or "").lower()
-    if parser_error:
-        # Keep the legacy decision input only in memory. The validator now
-        # returns a safe display reason, but provider text aliases still drive
-        # the same retry rules (including the original 220-character detail).
-        policy_detail = str(card_data.get("message") or "").strip().replace("\n", " ")[:220]
-        reason_text = f"{reason_text} error: {parser_error} detail={policy_detail}".lower()
     if "business_closed:" in reason_text:
         return False
     is_apify_empty_dataset = (
@@ -4653,18 +4622,15 @@ def _queue_transient_parse_retry(queue_dict: dict, reason: str, card_data: Optio
 
     retry_delay = _transient_retry_delay_for_task(queue_dict, attempt_no)
     retry_after = datetime.now() + retry_delay
-    diagnostic_error = safe_parser_error_code(parser_error)
-    diagnostic_reason = classify_failure_reason(
-        STATUS_ERROR, f"{parser_error} {parser_message} {reason}",
-    )
+    detail = redact_sensitive_text(reason, limit=220)
     timeout_profile = ""
     if is_apify_timeout:
         timeout_profile = "slow_lane" if attempt_no >= max(int(os.getenv("APIFY_TIMEOUT_SLOW_LANE_AFTER_ATTEMPT", "1") or 1), 1) else "default"
     comment = (
         f"transient_retry_attempt={attempt_no}; "
-        f"transient_error={diagnostic_error}; "
+        f"transient_error={parser_error or 'unknown'}; "
         f"timeout_profile={timeout_profile or 'default'}; "
-        f"detail=reason_code={diagnostic_reason};"
+        f"detail={detail}"
     )
 
     conn = None
@@ -4691,13 +4657,13 @@ def _queue_transient_parse_retry(queue_dict: dict, reason: str, card_data: Optio
         conn.commit()
         print(
             f"🔁 Transient parse retry scheduled: queue_id={queue_dict.get('id')} "
-            f"error={diagnostic_error} attempt={attempt_no}/{max_attempts} "
+            f"error={parser_error} attempt={attempt_no}/{max_attempts} "
             f"retry_after={retry_after.isoformat()}",
             flush=True,
         )
         return True
-    except Exception:
-        print(f"⚠️ Не удалось поставить transient retry для {queue_dict.get('id')}: retry_write_failed", flush=True)
+    except Exception as ex:
+        print(f"⚠️ Не удалось поставить transient retry для {queue_dict.get('id')}: {ex}", flush=True)
         return False
     finally:
         try:
@@ -4832,7 +4798,7 @@ def _process_yandex_reviews_delta_task(queue_dict: Dict[str, Any]) -> None:
         else:
             preflight = _preflight_yandex_proxy(url, active_proxy)
         metrics["proxy_preflight_ms"] = int(preflight.get("elapsed_ms") or 0)
-        metrics["proxy_preflight_reason"] = _proxy_preflight_diagnostic_reason(preflight.get("reason"))
+        metrics["proxy_preflight_reason"] = str(preflight.get("reason") or "")
         native_data: Dict[str, Any] = {"error": "proxy_preflight_failed"}
 
         if bool(preflight.get("ok")):
@@ -4927,8 +4893,8 @@ def _process_yandex_reviews_delta_task(queue_dict: Dict[str, Any]) -> None:
             metrics["fallback_reason"] = completeness_reason
             _mark_proxy_result(proxy_id, success=False, reason=completeness_reason)
         else:
-            metrics["fallback_reason"] = metrics["proxy_preflight_reason"]
-            _mark_proxy_result(proxy_id, success=False, reason=str(preflight.get("reason") or "proxy_preflight_failed"))
+            metrics["fallback_reason"] = str(preflight.get("reason") or "proxy_preflight_failed")
+            _mark_proxy_result(proxy_id, success=False, reason=metrics["fallback_reason"])
 
         if not use_apify_fallback:
             metrics["route"] = "native_only_failed"
@@ -5741,14 +5707,12 @@ def _execute_map_card_task(
             proxy_preflight = _preflight_yandex_proxy(url, active_proxy)
             print(
                 f"🌐 Proxy preflight id={proxy_id} ok={bool(proxy_preflight.get('ok'))} "
-                f"reason={_proxy_preflight_diagnostic_reason(proxy_preflight.get('reason'))} "
-                f"elapsed_ms={proxy_preflight.get('elapsed_ms')}",
+                f"reason={proxy_preflight.get('reason')} elapsed_ms={proxy_preflight.get('elapsed_ms')}",
                 flush=True,
             )
             if not bool(proxy_preflight.get("ok")):
                 native_failure_reason = f"proxy_preflight:{proxy_preflight.get('reason') or 'failed'}"
                 _mark_proxy_result(proxy_id, success=False, reason=native_failure_reason)
-                native_failure_reason = f"proxy_preflight:{_proxy_preflight_diagnostic_reason(proxy_preflight.get('reason'))}"
                 active_proxy = None
                 proxy_id = ""
         if active_proxy:
@@ -5907,9 +5871,9 @@ def _execute_map_card_task(
                 card_data = _promote_nested_card_payload(card_data)
                 added_keys = sorted(list(set(card_data.keys()) - before_keys))
                 if added_keys:
-                    print(f"[WORKER_NORMALIZE] promoted key count: {len(added_keys)}", flush=True)
+                    print(f"[WORKER_NORMALIZE] promoted keys: {', '.join(added_keys[:10])}", flush=True)
                 if card_data.get("title_or_name"):
-                    print("[WORKER_NORMALIZE] title_or_name present", flush=True)
+                    print(f"[WORKER_NORMALIZE] title_or_name='{str(card_data.get('title_or_name'))[:60]}'", flush=True)
                 else:
                     print("[CRITICAL] Нет источников для title_or_name", flush=True)
                     identity = _load_business_identity_for_fallback(business_id)
@@ -5919,7 +5883,8 @@ def _execute_map_card_task(
                         business_address=identity.get("address") or "",
                     ):
                         print(
-                            "[WORKER_NORMALIZE] title_or_name fallback from business record applied",
+                            f"[WORKER_NORMALIZE] title_or_name fallback from business record: "
+                            f"'{str(card_data.get('title_or_name'))[:60]}'",
                             flush=True,
                         )
         except Exception as e:
@@ -5928,7 +5893,7 @@ def _execute_map_card_task(
             _mark_proxy_result(proxy_id, success=False, reason=msg[:240])
             if active_proxy and parsed_source == "yandex_maps":
                 print(
-                    f"⚠️ Ошибка при парсинге через прокси ({proxy_id}): parser_exception | retry without proxy",
+                    f"⚠️ Ошибка при парсинге через прокси ({proxy_id}): {msg[:160]} | retry without proxy",
                     flush=True,
                 )
                 try:
@@ -5953,7 +5918,7 @@ def _execute_map_card_task(
                     recovered_without_proxy = True
                 except Exception as retry_exc:
                     retry_msg = str(retry_exc)
-                    print("❌ Retry without proxy failed: parser_exception", flush=True)
+                    print(f"❌ Retry without proxy failed: {retry_msg[:180]}", flush=True)
                     if _is_playwright_sync_in_async_error(retry_msg):
                         e = retry_exc
                         msg = retry_msg
@@ -5972,9 +5937,10 @@ def _execute_map_card_task(
                         exc_path = os.path.join(bundle_dir, "exception.txt")
                         with open(exc_path, "w", encoding="utf-8") as f:
                             f.write("Playwright Sync-in-async crash\n\n")
-                            f.write("Exception and traceback omitted to protect session and private data.\n")
-                except Exception:
-                    print("⚠️ Не удалось сохранить exception.txt: diagnostic_write_failed")
+                            f.write(repr(e) + "\n\n")
+                            f.write(traceback.format_exc())
+                except Exception as we:
+                    print(f"⚠️ Не удалось сохранить exception.txt: {we}")
 
                 err_msg = f"playwright_sync_in_async_loop exc={type(e).__name__}"
                 if bundle_path:
@@ -5982,8 +5948,8 @@ def _execute_map_card_task(
 
                 try:
                     _handle_worker_error(queue_dict["id"], err_msg)
-                except Exception:
-                    print("❌ Не удалось обновить parsequeue для playwright-sync ошибки: status_update_failed")
+                except Exception as db_ex:
+                    print(f"❌ Не удалось обновить parsequeue для playwright-sync ошибки: {db_ex}")
                 return
             elif "apify returned empty dataset" in msg.lower() or "empty dataset for business card parsing" in msg.lower():
                 print(
@@ -6005,10 +5971,11 @@ def _execute_map_card_task(
             if card_error == "parser_subprocess_exception":
                 sub_msg = str(card_data.get("message") or "").strip()
                 if sub_msg:
-                    print("⚠️ parser_subprocess_exception: message_redacted", flush=True)
+                    print(f"⚠️ parser_subprocess_exception: {sub_msg[:240]}", flush=True)
                 sub_tb = str(card_data.get("traceback") or "").strip()
                 if sub_tb:
-                    print("⚠️ parser_subprocess_exception: traceback_redacted", flush=True)
+                    tb_head = sub_tb.splitlines()[:5]
+                    print("⚠️ traceback head: " + " | ".join(tb_head), flush=True)
                 if active_proxy and parsed_source == "yandex_maps":
                     print(
                         f"⚠️ parser_subprocess_exception через proxy ({proxy_id}) -> retry without proxy",
@@ -6037,9 +6004,10 @@ def _execute_map_card_task(
                             card_error = ""
                             print("✅ Retry without proxy succeeded after parser_subprocess_exception", flush=True)
                         else:
-                            print("❌ Retry without proxy returned error: error_redacted", flush=True)
-                    except Exception:
-                        print("❌ Retry without proxy failed: parser_exception", flush=True)
+                            retry_err = str((retry_card_data or {}).get("error") or "unknown")
+                            print(f"❌ Retry without proxy returned error: {retry_err[:140]}", flush=True)
+                    except Exception as retry_exc:
+                        print(f"❌ Retry without proxy failed: {str(retry_exc)[:180]}", flush=True)
             if hybrid_yandex_parser and used_apify_parser:
                 _mark_proxy_result(proxy_id, success=False, reason=native_failure_reason[:120])
             elif not card_error:
@@ -6071,11 +6039,9 @@ def _execute_map_card_task(
             try:
                 apify_debug_path = os.path.join(bundle_dir, "apify_debug.json")
                 with open(apify_debug_path, "w", encoding="utf-8") as f:
-                    # The original payload is still needed for cost settlement below.
-                    json.dump({"diagnostics_version": 2, "payload_shape": debug_value_shape(apify_debug_payload)},
-                              f, ensure_ascii=False, indent=2)
-            except Exception:
-                print("⚠️ Failed to write apify_debug.json: diagnostic_write_failed")
+                    json.dump(apify_debug_payload, f, ensure_ascii=False, indent=2, default=str)
+            except Exception as apify_debug_exc:
+                print(f"⚠️ Failed to write apify_debug.json: {apify_debug_exc}")
 
         # пишем validation.json в bundle (если он есть)
         if bundle_dir and validation_result:
@@ -6085,19 +6051,18 @@ def _execute_map_card_task(
                 parser_warnings = list(card_data.get("warnings") or []) if isinstance(card_data, dict) else []
                 all_warnings = list(dict.fromkeys(val_warnings + parser_warnings))
                 payload = {
-                    "diagnostics_version": 2,
                     "is_successful": bool(is_successful),
-                    "reason": debug_value_shape(reason),
-                    "quality_score": debug_value_shape(validation_result.get("quality_score")),
-                    "hard_missing": debug_value_shape(validation_result.get("hard_missing") or []),
-                    "missing_fields": debug_value_shape(validation_result.get("missing_fields") or []),
-                    "found_fields": debug_value_shape(validation_result.get("found_fields") or []),
-                    "warnings": debug_value_shape(all_warnings),
+                    "reason": str(reason),
+                    "quality_score": validation_result.get("quality_score"),
+                    "hard_missing": validation_result.get("hard_missing") or [],
+                    "missing_fields": validation_result.get("missing_fields") or [],
+                    "found_fields": validation_result.get("found_fields") or [],
+                    "warnings": all_warnings,
                 }
                 with open(v_path, "w", encoding="utf-8") as f:
                     json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
-            except Exception:
-                print("⚠️ Failed to write validation.json: diagnostic_write_failed")
+            except Exception as ve:
+                print(f"⚠️ Failed to write validation.json: {ve}")
 
         # Лог покрытия полей (coverage), если валидация отработала
         if validation_result:
@@ -7906,119 +7871,73 @@ def _process_sync_2gis_task(queue_dict):
         _handle_worker_error(queue_dict["id"], str(e))
 
 
-class WorkerStopRequest:
-    def __init__(self):
-        self.requested = False
-
-    def is_set(self):
-        return self.requested
-
-    def set(self):
-        self.requested = True
-
-    def wait(self, seconds):
-        deadline = time.monotonic() + seconds
-        while not self.requested:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                return False
-            time.sleep(min(remaining, 0.1))
-        return True
+def _agent_work_cycle():
+    _dispatch_agent_schedules_if_due()
+    _process_agent_run_queue_if_due()
+    _process_sheet_provider_queue_if_due()
 
 
-def install_worker_shutdown_handlers(stop_event):
-    def request_shutdown(_signum, _frame):
-        stop_event.set()
-
-    signal.signal(signal.SIGTERM, request_shutdown)
-    signal.signal(signal.SIGINT, request_shutdown)
-
-
-def _run_worker_callbacks(stop_event, callbacks):
-    for callback in callbacks:
-        if stop_event.is_set():
-            return
-        callback()
-
-
-def _run_worker_polling_cycle(stop_event):
-    try:
-        if stop_event.is_set():
-            return
-        if _worker_role_enabled("parser"):
-            _run_worker_callbacks(stop_event, (process_queue,))
-        if stop_event.is_set():
-            return
-        if _worker_role_enabled("dispatcher"):
-            _run_worker_callbacks(stop_event, (
-                _prepare_riderra_systematic_outreach_if_due,
-                _dispatch_outreach_queue_if_due,
-                _run_card_automation_if_due,
-                _run_founder_content_if_due,
-                _dispatch_social_posts_if_due,
-                _collect_social_post_metrics_if_due,
-                _process_creator_offer_distribution_if_due,
-                _dispatch_creator_notifications_if_due,
-                _notify_superadmin_outreach_replies_if_due,
-                _notify_superadmin_community_sources_if_due,
-                _dispatch_openclaw_callback_outbox_if_due,
-                _check_openclaw_callback_alerts_if_due,
-            ))
-        if stop_event.is_set():
-            return
-        if _worker_role_enabled("maintenance"):
-            _run_worker_callbacks(stop_event, (
-                _enrich_creator_sources_if_due,
-                _revalidate_creator_profiles_if_due,
-                _process_creator_search_if_due,
-                _process_contact_intelligence_if_due,
-                _run_telegram_opportunity_monitor_if_due,
-                _run_knowledge_telegram_monitor_if_due,
-                _refresh_outreach_pain_library_if_due,
-                _run_knowledge_embeddings_if_due,
-                _reconcile_openclaw_billing_if_due,
-                _run_yookassa_renewals_if_due,
-                _run_web_tracking_maintenance_if_due,
-                _materialize_today_priority_proposals_if_due,
-                _purge_compiled_inputs_if_due,
-            ))
-        if stop_event.is_set():
-            return
-        if _worker_role_enabled("general"):
-            # Keep a slot for unclassified legacy work while individual
-            # workloads move into the five explicit roles above.
-            pass
-        if stop_event.is_set():
-            return
-        if _worker_role_enabled("agent"):
-            _run_worker_callbacks(stop_event, (
-                _dispatch_agent_schedules_if_due,
-                _process_agent_run_queue_if_due,
-                _process_sheet_provider_queue_if_due,
-            ))
-        if stop_event.is_set():
-            return
-        if _worker_role_enabled("operator"):
-            _run_worker_callbacks(stop_event, (_process_operator_async_job_if_due,))
-    except Exception:
-        error = sys.exception()
-        print(f"❌ Критическая ошибка worker loop: {error}", flush=True)
-        traceback.print_exc(file=sys.stdout)
-        sys.stdout.flush()
-
-
-def run_worker_polling_loop(stop_event, sleep_seconds=10):
-    while not stop_event.is_set():
-        _run_worker_polling_cycle(stop_event)
-        if stop_event.wait(sleep_seconds):
-            break
+_AGENT_WORK_LOOP = SerializedDispatchLoop(_agent_work_cycle, interval=2)
 
 
 if __name__ == "__main__":
-    worker_stop_event = WorkerStopRequest()
-    install_worker_shutdown_handlers(worker_stop_event)
-    if not worker_stop_event.is_set() and _worker_role_enabled("operator"):
+    if _worker_role_enabled("dispatcher"):
+        _OUTREACH_SEND_LOOP.start()
+    if _worker_role_enabled("agent"):
+        _AGENT_WORK_LOOP.start()
+    if _worker_role_enabled("operator"):
         from services.disk_import_worker import start
         start()
     print("Worker запущен. Проверка очереди каждые 5 минут...")
-    run_worker_polling_loop(worker_stop_event)
+    while True:
+        try:
+            if _worker_role_enabled("parser"):
+                process_queue()
+            if _worker_role_enabled("dispatcher"):
+                _prepare_riderra_systematic_outreach_if_due()
+                _dispatch_outreach_queue_if_due()
+                _run_card_automation_if_due()
+                _run_founder_content_if_due()
+                _dispatch_social_posts_if_due()
+                _collect_social_post_metrics_if_due()
+                _process_creator_offer_distribution_if_due()
+                _dispatch_creator_notifications_if_due()
+                _notify_superadmin_outreach_replies_if_due()
+                _notify_superadmin_community_sources_if_due()
+                _dispatch_openclaw_callback_outbox_if_due()
+                _check_openclaw_callback_alerts_if_due()
+            if _worker_role_enabled("maintenance"):
+                _enrich_creator_sources_if_due()
+                _revalidate_creator_profiles_if_due()
+                _process_creator_search_if_due()
+                _process_contact_intelligence_if_due()
+                _run_telegram_opportunity_monitor_if_due()
+                _run_knowledge_telegram_monitor_if_due()
+                _refresh_outreach_pain_library_if_due()
+                _run_knowledge_embeddings_if_due()
+                _reconcile_openclaw_billing_if_due()
+                _run_yookassa_renewals_if_due()
+                _run_web_tracking_maintenance_if_due()
+                _materialize_today_priority_proposals_if_due()
+                _purge_compiled_inputs_if_due()
+            if _worker_role_enabled("general"):
+                # Keep a slot for unclassified legacy work while individual
+                # workloads move into the five explicit roles above.
+                pass
+            if _worker_role_enabled("agent"):
+                _AGENT_WORK_LOOP.tick()
+            if _worker_role_enabled("operator"):
+                if _env_bool("OPENCLAW_WEBSITE_RESEARCH_ENABLED", False) and not _worker_role_enabled("maintenance"):
+                    _process_contact_intelligence_if_due(reviewed_sources_only=True)
+                _process_max_event_if_due()
+                _process_operator_async_job_if_due()
+        except Exception as e:
+            print(f"❌ Критическая ошибка worker loop: {e}", flush=True)
+            traceback.print_exc(file=sys.stdout)
+            sys.stdout.flush()
+
+        try:
+            time.sleep(10)  # 10 секунд
+        except Exception as e:
+             # Если sleep прерван сигналом или ошибкой, просто логируем и продолжаем
+             print(f"⚠️ Sleep interrupted: {e}", flush=True)

@@ -136,6 +136,7 @@ from api.agent_builder_api import agent_builder_bp
 from api.agent_blueprints_api import agent_blueprints_bp
 from api.capabilities_api import capabilities_bp, PHASE1_ACTION_ORCHESTRATOR
 from api.work_journal_api import work_journal_bp
+from api.business_knowledge_api import business_knowledge_bp
 from api.average_ticket_api import average_ticket_bp
 from api.reports_api import reports_bp
 from api.operator_api import operator_bp
@@ -339,10 +340,13 @@ app.register_blueprint(agent_blueprints_bp)
 app.register_blueprint(capabilities_bp)
 app.register_blueprint(average_ticket_bp)
 app.register_blueprint(work_journal_bp)
+app.register_blueprint(business_knowledge_bp)
 app.register_blueprint(reports_bp)
 app.register_blueprint(operator_bp)
 app.register_blueprint(auth_user_bp)
 app.register_blueprint(guided_tour_bp)
+from api.max_api import max_bp
+app.register_blueprint(max_bp)
 app.register_blueprint(superadmin_business_bp)
 app.register_blueprint(company_registry_bp)
 app.register_blueprint(telegram_opportunity_radar_bp)
@@ -404,8 +408,17 @@ SITE_URL = "https://localos.pro"
 DEFAULT_OG_IMAGE = "https://localos.pro/assets/hero-image-BXgvVNKj.jpg"
 PUBLIC_AUDIT_APP_ROUTES = {
     "about",
+    "articles",
+    "cases",
     "contact",
+    "creator",
+    "data-deletion",
+    "demo",
+    "docs",
+    "documents",
+    "growth",
     "policy",
+    "privacy",
     "requisites",
     "login",
     "dashboard",
@@ -420,6 +433,8 @@ PUBLIC_AUDIT_APP_ROUTES = {
     "bazich",
     "public-audit",
     "assets",
+    "veselaya-rascheska-hit",
+    "web-analytics",
 }
 
 # HTML шаблон для главной страницы

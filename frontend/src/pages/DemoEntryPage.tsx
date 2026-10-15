@@ -46,7 +46,7 @@ export default function DemoEntryPage() {
         if (existingUser?.demo_mode) {
           const scopeBusinessId = existingUser.demo_scope_business_id || existingUser.businesses?.[0]?.id;
           if (scopeBusinessId) window.localStorage.setItem('demo_selectedBusinessId', scopeBusinessId);
-          navigate('/dashboard/operator', { replace: true });
+          navigate('/dashboard/today', { replace: true });
           return;
         }
       }
@@ -62,7 +62,7 @@ export default function DemoEntryPage() {
       }
       newAuth.activateDemoSession(data.token);
       window.localStorage.setItem('demo_selectedBusinessId', data.business_id);
-      navigate(data.start_path || '/dashboard/operator', { replace: true });
+      navigate('/dashboard/today', { replace: true });
     } catch (requestError) {
       newAuth.deactivateDemoSession(true);
       setError(requestError instanceof Error ? requestError.message : copy.entry.openFailed);

@@ -1,4 +1,3 @@
-import type { PartnershipBlockers, PartnershipFunnel, PartnershipHealth, PartnershipOutcomes, PartnershipRalphLoop, PartnershipSourceQuality } from './partnershipTypes';
 type OperatorSnapshotPayload = {
   generated_at: string;
   business_id?: string;
@@ -10,12 +9,12 @@ type OperatorSnapshotPayload = {
     waitingOutcome?: number;
     acceptance?: number;
   };
-  ralph_loop?: PartnershipRalphLoop;
-  blockers?: PartnershipBlockers;
-  funnel?: PartnershipFunnel;
-  outcomes?: PartnershipOutcomes;
-  health?: PartnershipHealth;
-  source_quality?: PartnershipSourceQuality;
+  ralph_loop?: any;
+  blockers?: any;
+  funnel?: any;
+  outcomes?: any;
+  health?: any;
+  source_quality?: any;
 };
 
 type OperatorSnapshotInput = Omit<OperatorSnapshotPayload, 'generated_at'>;
@@ -72,7 +71,7 @@ export const buildOperatorSnapshotMarkdown = (snapshot: OperatorSnapshotPayload)
   lines.push('', '### Prompt Versions');
   const promptPerf = Array.isArray(snapshot.ralph_loop?.prompt_performance) ? snapshot.ralph_loop?.prompt_performance || [] : [];
   if (promptPerf.length > 0) {
-    promptPerf.slice(0, 10).forEach((item) => {
+    promptPerf.slice(0, 10).forEach((item: any) => {
       lines.push(
         `- ${item.prompt_key || 'unknown'} / v${item.prompt_version || 'unknown'} | approved=${item.approved_total ?? 0} | edited=${item.edited_before_accept_pct ?? 0}% | sent=${item.sent_total ?? 0} | positive=${item.positive_rate_pct ?? 0}%`
       );
@@ -98,7 +97,7 @@ export const buildOperatorSnapshotMarkdown = (snapshot: OperatorSnapshotPayload)
   lines.push('', '### Funnel');
   const funnelItems = Array.isArray(snapshot.funnel?.funnel) ? snapshot.funnel?.funnel || [] : [];
   if (funnelItems.length > 0) {
-    funnelItems.forEach((item) => {
+    funnelItems.forEach((item: any) => {
       lines.push(`- ${item.label}: ${item.count ?? 0} (conv ${item.conversion_from_prev_pct ?? 0}%)`);
     });
   } else {
@@ -108,7 +107,7 @@ export const buildOperatorSnapshotMarkdown = (snapshot: OperatorSnapshotPayload)
   lines.push('', '### Source Quality');
   const sourceItems = Array.isArray(snapshot.source_quality?.items) ? snapshot.source_quality?.items || [] : [];
   if (sourceItems.length > 0) {
-    sourceItems.slice(0, 10).forEach((item) => {
+    sourceItems.slice(0, 10).forEach((item: any) => {
       lines.push(
         `- ${item.source_kind || 'unknown'} / ${item.source_provider || 'unknown'} | leads=${item.leads_total ?? 0} | draft=${item.draft_rate_pct ?? 0}% | sent=${item.sent_rate_pct ?? 0}% | lead_to_positive=${item.lead_to_positive_pct ?? 0}%`
       );

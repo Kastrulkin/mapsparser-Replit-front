@@ -1,3 +1,4 @@
+import { miniAppChannel } from "@/lib/miniAppPlatform";
 import { FormEvent, ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -221,7 +222,7 @@ export const TodayMobileV2 = ({
 
   return (
     <div className="px-4">
-      {journeyActions.length && !personalizedFocus ? <section className="space-y-3">{journeyActions.slice(0, 3).map((action) => action.business_id ? <JourneyActionCard key={action.id} action={action} businessId={action.business_id} surface="telegram_mini_app" dark onUpdated={() => refresh?.()} /> : null)}</section> : <motion.section
+      {journeyActions.length && !personalizedFocus ? <section className="space-y-3">{journeyActions.slice(0, 3).map((action) => action.business_id ? <JourneyActionCard key={action.id} action={action} businessId={action.business_id} surface={miniAppChannel()} dark onUpdated={() => refresh?.()} /> : null)}</section> : <motion.section
         initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
         animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
         transition={spring}

@@ -92,6 +92,8 @@ def _action_with_access(action: dict[str, Any], subscription_access: dict[str, A
         result["allowed_commands"].append("open_upgrade")
         result["cta_label"] = access.get("cta_label")
         result["cta_target"] = access.get("cta_target")
+        from services.work_coherence import redact_unavailable_work
+        result = redact_unavailable_work(result)
     return result
 
 
@@ -435,7 +437,7 @@ def public_journey_event(token: str):
     surface = str(payload.get("surface") or "web").strip()
     if event_name not in PUBLIC_EVENT_NAMES:
         return jsonify({"success": False, "error": "Событие не поддерживается"}), 400
-    if surface not in {"web", "telegram_mini_app"}:
+    if surface not in {"web", "telegram_mini_app", "max_mini_app"}:
         return jsonify({"success": False, "error": "Поверхность не поддерживается"}), 400
     db = DatabaseManager()
     cursor = db.conn.cursor(cursor_factory=RealDictCursor)
@@ -510,7 +512,7 @@ def claim():
         return disabled
     payload = request.get_json(silent=True) or {}
     surface = str(payload.get("surface") or "web").strip()
-    if surface not in {"web", "telegram_mini_app"}:
+    if surface not in {"web", "telegram_mini_app", "max_mini_app"}:
         return jsonify({"success": False, "error": "Поверхность не поддерживается"}), 400
     business_id = str(payload.get("business_id") or "").strip()
     db, cursor, user_data, error = _authorized_business_cursor(business_id)
@@ -575,20 +577,50 @@ def growth_paths():
     disabled = _require_enabled("GROWTH_PATHS_NAVIGATION_ENABLED")
     if disabled:
         return disabled
+    kind = str(request.args.get("scope_type") or "").strip()
+    scope_id = str(request.args.get("scope_id") or "").strip()
     business_id = str(request.args.get("business_id") or "").strip()
-    db, cursor, user_data, error = _authorized_business_cursor(business_id)
-    if error:
-        return error
+    if not kind and not scope_id:
+        db, cursor, user_data, error = _authorized_business_cursor(business_id)
+        scope = {"kind": "business", "id": business_id, "business_ids": [business_id]}
+        if error:
+            return error
+    else:
+        if kind not in {"business", "network"} or not scope_id:
+            return jsonify({"success": False, "error": "invalid_scope"}), 400
+        user_data = require_auth_from_request()
+        if not user_data:
+            return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+        db = DatabaseManager()
+        cursor = db.conn.cursor(cursor_factory=RealDictCursor)
+        from services.telegram_control_scope import resolve_control_scope
+        scope = resolve_control_scope(cursor, user_id=_user_id(user_data), requested_kind=kind, requested_id=scope_id)
+        if not scope:
+            db.close()
+            return jsonify({"success": False, "error": "Нет доступа к выбранному контексту"}), 403
     try:
-        access = _subscription_access(cursor, business_id, user_data)
-        actions = _actions_with_access(list_actions(cursor, business_id=business_id), access)
-        paths = build_growth_paths(actions=actions, capabilities=set(access.get("capabilities") or []))
-        db.conn.commit()
-        return jsonify({
-            "success": True,
-            "focus_action": actions[0] if actions else None,
-            "paths": paths,
-        })
+        locations = []
+        for identifier in scope.get("business_ids") or []:
+            allowed, _owner = verify_business_access(cursor, identifier, user_data)
+            if not allowed:
+                continue
+            name = ""
+            if scope.get("kind") == "network":
+                cursor.execute("SELECT name FROM businesses WHERE id=%s", (identifier,))
+                name = (cursor.fetchone() or {}).get("name") or ""
+            access = _subscription_access(cursor, identifier, user_data)
+            actions = _actions_with_access(list_actions(cursor, business_id=identifier), access)
+            paths = build_growth_paths(actions=actions, capabilities=set(access.get("capabilities") or []))
+            locations.append({"business_id": identifier, "business_name": name, "paths": paths})
+        if scope.get("kind") == "business":
+            paths = locations[0]["paths"] if locations else []
+            focus = actions[0] if locations and actions else None
+        else:
+            from services.work_coherence import aggregate_growth_paths
+            paths = aggregate_growth_paths(locations)
+            focus = None
+        return jsonify({"success": True, "scope": {"kind": scope["kind"], "id": scope["id"]},
+            "focus_action": focus, "paths": paths, "locations": locations})
     finally:
         db.close()
 
@@ -643,7 +675,7 @@ def action_command(action_id: str):
     if not idempotency_key:
         idempotency_key = str(uuid.uuid4())
     surface = str(payload.get("surface") or "web")
-    if surface not in {"web", "telegram_mini_app"}:
+    if surface not in {"web", "telegram_mini_app", "max_mini_app"}:
         return jsonify({"success": False, "error": "Поверхность не поддерживается"}), 400
     try:
         current_action = load_action(cursor, action_id=action_id, business_id=business_id)

@@ -131,16 +131,20 @@ const formatDate = (value: string | null | undefined, language: Language) => {
   return new Intl.DateTimeFormat(managedCardDateLocale[language], { day: 'numeric', month: 'long', year: 'numeric' }).format(date);
 };
 
-const formatNumber = (value: number | undefined, language: Language) => new Intl.NumberFormat(managedCardDateLocale[language]).format(value || 0);
+const formatNumber = (value: number | undefined, language: Language) => value == null ? '—' : new Intl.NumberFormat(managedCardDateLocale[language]).format(value);
 
 export function ManagedCardGrowthPanel({
   businessId,
   growth,
   onUpdated,
+  canEditGoal = true,
+  embedded = false,
 }: {
   businessId: string;
   growth: ManagedCardGrowth;
   onUpdated: () => void;
+  canEditGoal?: boolean;
+  embedded?: boolean;
 }) {
   const { language } = useLanguage();
   const copy = managedCardGrowthCopyForLanguage(language);
@@ -150,7 +154,7 @@ export function ManagedCardGrowthPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const locations = growth.card_state?.locations || [];
-  const singleLocation = locations.length === 1;
+  const singleLocation = locations.length === 1 && canEditGoal;
 
   useEffect(() => {
     setGoal(growth.goal?.value || firstOption || 'inquiries');
@@ -178,7 +182,7 @@ export function ManagedCardGrowthPanel({
   };
 
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" aria-labelledby="managed-growth-title">
+    <section className={cn('overflow-hidden bg-white', !embedded && 'rounded-xl border border-slate-200 shadow-sm')} aria-labelledby="managed-growth-title">
       <div className="grid gap-5 border-b border-slate-200 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.55fr)] lg:p-6">
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold text-orange-700">
@@ -202,7 +206,7 @@ export function ManagedCardGrowthPanel({
             </SelectContent>
           </Select>
           {singleLocation && growth.goal?.status !== 'confirmed' ? (
-            <Button type="button" className="mt-3 min-h-11 w-full bg-orange-600 text-white hover:bg-orange-700" onClick={confirmGoal} disabled={saving}>
+            <Button type="button" className="mt-3 min-h-11 w-full" onClick={confirmGoal} disabled={saving}>
               <Check className="mr-2 h-4 w-4" />
               {saving ? copy.saving : copy.confirmGoal}
             </Button>
@@ -344,12 +348,12 @@ export function ManagedCardGrowthPanel({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-5 py-3 text-xs text-slate-500 lg:px-6">
+      {!embedded ? <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-5 py-3 text-xs text-slate-500 lg:px-6">
         <span>{copy.policyVersion}: {growth.policy_version || copy.policyUnknown}</span>
         <a className="inline-flex min-h-10 items-center gap-1.5 font-semibold text-slate-700 underline-offset-4 hover:underline" href="/dashboard/progress?section=maps&audit=open">
           {copy.openEvidence} <ExternalLink className="h-3.5 w-3.5" />
         </a>
-      </div>
+      </div> : null}
     </section>
   );
 }

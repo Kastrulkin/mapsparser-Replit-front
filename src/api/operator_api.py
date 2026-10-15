@@ -35,6 +35,8 @@ from services.telegram_control_scope import (
     save_scope_notification_preferences,
     toggle_favorite_control_scope,
 )
+from services.max_webapp_auth import max_enabled
+from services.max_notifications import DEFAULT_MAX_NOTIFICATIONS
 from services.telegram_webapp_auth import load_localos_user_for_telegram, validate_telegram_webapp_init_data
 from services.operator_fresh_reviews import classify_fresh_reviews_intent, refresh_reviews_from_operator
 from services.operator_intent_ai_router import classify_operator_intent_with_ai, should_use_ai_intent_router
@@ -101,75 +103,9 @@ operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
 logger = logging.getLogger(__name__)
 
 
-def _content_handoff_status(metadata: dict | str | None) -> str:
-    if isinstance(metadata, str):
-        try:
-            metadata = json.loads(metadata)
-        except (TypeError, ValueError):
-            metadata = {}
-    handoff = metadata.get("staff_handoff") if isinstance(metadata, dict) else {}
-    deliveries = handoff.get("telegram_deliveries") if isinstance(handoff, dict) else {}
-    receipts = list(deliveries.values()) if isinstance(deliveries, dict) else []
-    part_states = [
-        str(part.get("status") or "")
-        for receipt in receipts if isinstance(receipt, dict)
-        for part in (receipt.get("parts") or {}).values()
-        if isinstance(receipt.get("parts"), dict) and isinstance(part, dict)
-    ]
-    if any(state in {"uncertain", "attempting"} for state in part_states):
-        return "needs_reconciliation"
-    if any(state == "not_sent" for state in part_states):
-        return "failed"
-    if any(isinstance(receipt, dict) and receipt.get("sent_at") for receipt in receipts):
-        return "delivered"
-    if any(state == "sent" for state in part_states):
-        return "needs_reconciliation"
-    return "not_sent"
-
-
-MOBILE_NAVIGATION_CAPABILITIES = {
-    "feed": "telegram_radar",
-    "reviews": "maps.reviews",
-    "operator": "operator",
-    "progress": "progress",
-    "cards": "maps",
-    "content": "social_content",
-    "services": "maps.services",
-    "work_journal": "operator",
-    "finance": "finance",
-    "partnerships": "partnerships",
-    "influencers": "influencers",
-    "agents": "agents",
-    "community_sources": "telegram_radar",
-}
-MOBILE_MODULE_CAPABILITIES = {
-    "cards": "maps",
-    "content": "social_content",
-    "services": "maps.services",
-    "finance": "finance",
-    "analytics": "finance",
-    "partnerships": "partnerships",
-    "agents": "agents",
-}
-MOBILE_ACTION_CAPABILITIES = {
-    "cards.": "maps",
-    "content.": "social_content",
-    "finance.": "finance",
-    "partnerships.": "partnerships",
-    "review_replies.": "maps.reviews",
-    "agents.": "agents",
-    "reviews.": "maps.reviews",
-    "services.": "maps.services",
-    "community_sources.": "telegram_radar",
-}
-JOURNEY_FLOW_CAPABILITIES = {
-    "maps": "maps",
-    "content": "social_content",
-    "influencer": "influencers",
-    "partnership": "partnerships",
-    "automation": "automation",
-    "average_ticket": "average_ticket",
-}
+def _content_handoff_status(metadata):
+    from services.content_delivery_status import delivery_status
+    return delivery_status(metadata)
 
 
 def _inline_scope_subscription_access(scope: dict) -> dict | None:
@@ -292,7 +228,8 @@ def _decorate_mobile_journey_actions(payload: dict, subscription_access: dict) -
         if not isinstance(raw_action, dict):
             continue
         action = dict(raw_action)
-        capability = JOURNEY_FLOW_CAPABILITIES.get(str(action.get("flow_type") or ""), "management")
+        from api.lead_journey_api import FLOW_CAPABILITIES
+        capability = FLOW_CAPABILITIES.get(str(action.get("flow_type") or ""), "management")
         access = capability_access_payload(subscription_access, capability)
         action["access"] = access
         if not access.get("allowed"):
@@ -302,6 +239,8 @@ def _decorate_mobile_journey_actions(payload: dict, subscription_access: dict) -
             safe_commands.append("open_upgrade")
             action["allowed_commands"] = safe_commands
             action["cta_label"] = access.get("cta_label")
+            from services.work_coherence import redact_unavailable_work
+            action = redact_unavailable_work(action)
         decorated.append(action)
     payload["journey_actions"] = decorated
     if decorated and str((payload.get("focus_action") or {}).get("source") or "") == "lead_journey":
@@ -349,6 +288,8 @@ def _mobile_navigation(
         items.append({"key": "diagnostics", "label": "Диагностика", "group": "more", "status": "available", "reason": "", "available_actions": ["retry_one"], "supported_scopes": ["platform"], "deep_link_targets": ["diagnostic_job", "integration_error"], "version": 2})
     if kind == 'business':
         items.append({'key':'work_journal','label':'Рабочий журнал','group':'more','status':'available','supported_scopes':['business'],'available_actions':['open'],'version':1})
+    if kind in {'business','network'}:
+        items.append({'key':'business_knowledge','label':'Знания о бизнесе','group':'more','status':'available','supported_scopes':['business','network'],'available_actions':['open'],'version':1})
     if enforce_capabilities:
         for item in items:
             capability = MOBILE_NAVIGATION_CAPABILITIES.get(str(item.get("key") or ""))
@@ -524,7 +465,34 @@ def _scope_request_values(payload: dict | None = None) -> tuple[str, str | None]
     return kind, scope_id
 
 
+def _control_platform() -> str:
+    return "max" if "/operator/max/" in request.path else "telegram"
+
+
+def _mobile_channel(user_data: dict) -> str:
+    return "max_mini_app" if user_data.get("messenger_platform") == "max" else "telegram_mini_app"
+
+
+@operator_bp.before_request
+def _max_control_gate():
+    if _control_platform() == "max":
+        from services.max_webapp_auth import max_enabled
+        if not max_enabled():
+            return jsonify(success=False, error="MAX пока не включён"), 503
+
+
+@operator_bp.after_request
+def _max_control_response(response):
+    if _control_platform() == 'max':
+        response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
 def _telegram_control_actor(cursor, payload: dict):
+    if _control_platform() == "max":
+        from services.max_webapp_auth import validate_max_init_data, load_localos_user_for_max
+        verified = validate_max_init_data(payload.get("init_data"))
+        return (verified, load_localos_user_for_max(cursor, verified["max_id"])) if verified else (None, None)
     verified = validate_telegram_webapp_init_data(payload.get("init_data"))
     if not verified:
         return None, None
@@ -532,6 +500,7 @@ def _telegram_control_actor(cursor, payload: dict):
     if not user:
         return None, None
     return verified, user
+
 
 
 def _attach_ai_router(result: dict, ai_router: dict) -> dict:
@@ -648,6 +617,7 @@ def operator_scope_summary():
         db.close()
 
 
+@operator_bp.route("/max/bootstrap", methods=["POST"])
 @operator_bp.route("/telegram/bootstrap", methods=["POST"])
 def operator_telegram_bootstrap():
     payload = request.get_json(silent=True) or {}
@@ -658,7 +628,7 @@ def operator_telegram_bootstrap():
         cursor = db.conn.cursor()
         verified, user = _telegram_control_actor(cursor, payload)
         if not verified or not user:
-            return jsonify({"success": False, "error": "Telegram-сессия недействительна"}), 401
+            return jsonify({"success": False, "error": "Свяжите аккаунт LocalOS с MAX" if verified else "Сессия недействительна. Откройте приложение заново.", "code": "max_link_required" if verified and _control_platform() == "max" else "invalid_session"}), 401
         user_id = str(user.get("id") or "")
         query = str(payload.get("q") or "").strip()
         business_cursor = str(payload.get("cursor") or "").strip()
@@ -675,17 +645,18 @@ def operator_telegram_bootstrap():
             user_id=user_id,
             requested_kind=requested_kind,
             requested_id=requested_id,
+            platform=_control_platform(),
         )
         if not selected and requested_kind:
-            selected = resolve_control_scope(cursor, user_id=user_id)
+            selected = resolve_control_scope(cursor, user_id=user_id, platform=_control_platform())
         summary = build_operator_scope_summary(cursor, scope=selected, user_id=user_id) if selected else None
-        preferences = load_control_preferences(cursor, user_id)
+        preferences = load_control_preferences(cursor, user_id, platform=_control_platform())
         web_session_token = None
         if not query:
             web_session_token = create_session(
                 user_id,
                 ip_address=request.headers.get("X-Forwarded-For") or request.remote_addr,
-                user_agent="localos-telegram-mini-app",
+                user_agent=f"localos-{_control_platform()}-mini-app",
                 expires_days=1,
             )
         navigation = _mobile_navigation(
@@ -728,12 +699,15 @@ def operator_telegram_bootstrap():
                 "mini_app_v2_enabled": str(os.getenv("TELEGRAM_MINI_APP_V2_ENABLED", "true")).lower() in {"1", "true", "yes", "on"},
                 "today_v2_enabled": str(os.getenv("TELEGRAM_MINI_APP_TODAY_V2_ENABLED", "true")).lower() in {"1", "true", "yes", "on"},
                 "navigation": navigation,
+                "max_enabled": max_enabled(),
             }
         )
     finally:
         db.close()
 
 
+
+@operator_bp.route("/max/scope", methods=["POST"])
 @operator_bp.route("/telegram/scope", methods=["POST"])
 def operator_telegram_select_scope():
     payload = request.get_json(silent=True) or {}
@@ -745,15 +719,16 @@ def operator_telegram_select_scope():
         cursor = db.conn.cursor()
         verified, user = _telegram_control_actor(cursor, payload)
         if not verified or not user:
-            return jsonify({"success": False, "error": "Telegram-сессия недействительна"}), 401
+            return jsonify({"success": False, "error": "Свяжите аккаунт LocalOS с MAX" if verified else "Сессия недействительна. Откройте приложение заново.", "code": "max_link_required" if verified and _control_platform() == "max" else "invalid_session"}), 401
         user_id = str(user.get("id") or "")
         scope = resolve_control_scope(
             cursor,
             user_id=user_id,
             requested_kind=kind,
             requested_id=scope_id,
+            platform=_control_platform(),
             persist=True,
-            telegram_id=str(verified.get("telegram_id") or ""),
+            telegram_id=str(verified.get("max_id") or verified.get("telegram_id") or ""),
         )
         if not scope:
             db.conn.rollback()
@@ -772,6 +747,7 @@ def operator_telegram_select_scope():
         raise
     finally:
         db.close()
+
 
 
 @operator_bp.route("/mobile/network-locations", methods=["GET"])
@@ -823,6 +799,7 @@ def operator_mobile_network_locations():
         db.close()
 
 
+@operator_bp.route("/max/favorite", methods=["POST"])
 @operator_bp.route("/telegram/favorite", methods=["POST"])
 def operator_telegram_toggle_favorite():
     payload = request.get_json(silent=True) or {}
@@ -833,24 +810,26 @@ def operator_telegram_toggle_favorite():
         cursor = db.conn.cursor()
         verified, user = _telegram_control_actor(cursor, payload)
         if not verified or not user:
-            return jsonify({"success": False, "error": "Telegram-сессия недействительна"}), 401
+            return jsonify({"success": False, "error": "Свяжите аккаунт LocalOS с MAX" if verified else "Сессия недействительна. Откройте приложение заново.", "code": "max_link_required" if verified and _control_platform() == "max" else "invalid_session"}), 401
         user_id = str(user.get("id") or "")
-        scope = resolve_control_scope(cursor, user_id=user_id)
+        scope = resolve_control_scope(cursor, user_id=user_id, platform=_control_platform())
         if not scope:
             return jsonify({"success": False, "error": "Рабочий раздел не найден"}), 404
         favorite = toggle_favorite_control_scope(
             cursor,
             user_id=user_id,
-            telegram_id=str(verified.get("telegram_id") or ""),
+            telegram_id=str(verified.get("max_id") or verified.get("telegram_id") or ""),
             scope=scope,
+            platform=_control_platform(),
         )
         db.conn.commit()
-        return jsonify({"success": True, "favorite": favorite, "preferences": load_control_preferences(cursor, user_id)})
+        return jsonify({"success": True, "favorite": favorite, "preferences": load_control_preferences(cursor, user_id, platform=_control_platform())})
     except Exception:
         db.conn.rollback()
         raise
     finally:
         db.close()
+
 
 
 @operator_bp.route("/attention-brief", methods=["GET"])
@@ -1340,7 +1319,7 @@ def operator_chat():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        has_access, owner_id = verify_business_write_access(cursor, business_id, user_data)
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
         if not has_access:
             status_code = 403 if owner_id else 404
             message_text = "Нет доступа" if owner_id else "Бизнес не найден"
@@ -1360,11 +1339,47 @@ def operator_chat():
             input_summary={"message": message[:500]},
             output_summary={"channel": "web"},
         )
+        selected_action = None
+        selected_action_id = str(payload.get("journey_action_id") or "").strip()
+        if selected_action_id:
+            try:
+                uuid.UUID(selected_action_id)
+            except ValueError:
+                return jsonify({"success": False, "error": "invalid_action_id"}), 400
+            from services.lead_journey_service import load_action, JourneyError
+            try:
+                selected_action = load_action(cursor, action_id=selected_action_id, business_id=business_id)
+            except JourneyError as failure:
+                return jsonify({"success": False, "error": str(failure)}), failure.status_code
+            from api.lead_journey_api import FLOW_CAPABILITIES
+            capability = FLOW_CAPABILITIES.get(str(selected_action.get("flow_type") or ""))
+            if capability:
+                selected_access = capability_access_payload(_scope_subscription_access(cursor, business_scope, bool(user_data.get("is_superadmin"))), capability)
+                if not selected_access.get("allowed"):
+                    return jsonify({"success": False, "error": "payment_required", **selected_access}), 402
+            payload = dict(payload)
+            source_payload = selected_action.get("payload_json") or {}
+            if selected_action.get("entity_type") == "work_observation" and source_payload.get("source_entry_id"):
+                from services import work_review
+                if not work_review.can_review(cursor, business_id, user_id):
+                    return jsonify({"success": False, "error": "Нет доступа к разбору журнала"}), 403
+                linked = work_review.links(cursor, business_id, user_id, source_payload["source_entry_id"])
+                if not any(str(item["id"]) == selected_action_id for item in linked):
+                    return jsonify({"success": False, "error": "Нет доступа к связанной задаче"}), 403
+        from services.work_coherence import internal_work_ref, unavailable_work_context
+        work_ref = internal_work_ref(payload.get('work_ref'), business_id)
         from services.operator_chat_service import process_chat
+        def selected_work_router(selected_cursor, **arguments):
+            if selected_action is not None:
+                from services.work_coherence import discuss_existing_work
+                return discuss_existing_work(selected_action, business_id), {}
+            if work_ref and not payload.get('selected_object'):
+                return unavailable_work_context(work_ref), {}
+            return route_operator_message(selected_cursor, **arguments)
         result = process_chat(
             cursor, business_id=business_id, user_id=user_id,
             channel=str(payload.get("channel") or "web"), message=message, payload=payload,
-            router=route_operator_message,
+            router=selected_work_router,
             subscription_access=_scope_subscription_access(cursor, business_scope, bool(user_data.get("is_superadmin"))),
             actor_context={"role": "business_owner" if owner_id == user_id else "business_user", "is_superadmin": bool(user_data.get("is_superadmin")), "permissions": ["business.access"], "session_kind": user_data.get("session_kind", "standard"), "scope_business_id": user_data.get('scope_business_id'), "impersonating": bool(user_data.get("impersonating") or user_data.get("impersonated_by"))},
             refresh_handler=refresh_reviews_from_operator, ai_router_handler=classify_operator_intent_with_ai,
@@ -1633,7 +1648,7 @@ def operator_review_replies_generate():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        has_access, owner_id = verify_business_write_access(cursor, business_id, user_data)
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
         if not has_access:
             status_code = 403 if owner_id else 404
             message = "Нет доступа" if owner_id else "Бизнес не найден"
@@ -2211,7 +2226,7 @@ def operator_news_generate():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        has_access, owner_id = verify_business_write_access(cursor, business_id, user_data)
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
         if not has_access:
             status_code = 403 if owner_id else 404
             message_text = "Нет доступа" if owner_id else "Бизнес не найден"
@@ -2286,7 +2301,7 @@ def operator_review_reply_draft_mark_manual_published(draft_id: str):
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        has_access, owner_id = verify_business_write_access(cursor, business_id, user_data)
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
         if not has_access:
             status_code = 403 if owner_id else 404
             message = "Нет доступа" if owner_id else "Бизнес не найден"
@@ -2334,7 +2349,9 @@ def _resolve_mobile_scope(cursor, user_data: dict) -> dict | None:
         user_id=user_id,
         requested_kind=kind,
         requested_id=scope_id,
+        platform=str(user_data.get("messenger_platform") or "telegram"),
     )
+
 
 
 def _resolve_operator_read_scope(cursor, user_data: dict) -> dict | None:
@@ -2537,11 +2554,13 @@ def operator_content_today():
         if from_date and to_date and (to_date < from_date or (to_date - from_date).days > 90):
             return jsonify({"success": False, "error": "Период должен быть от 1 до 91 дня"}), 400
         cursor.execute(
-            """SELECT id, name, address, timezone
-               FROM businesses
-               WHERE entity_group = 'client' AND COALESCE(is_active, TRUE) = TRUE
-                 AND (%s OR id = ANY(%s))
-               ORDER BY name""",
+            """SELECT b.id, b.name, b.address,
+                      COALESCE(NULLIF(settings.timezone, ''), to_jsonb(b)->>'timezone') AS timezone
+               FROM businesses b
+               LEFT JOIN business_finance_settings settings ON settings.business_id = b.id
+               WHERE b.entity_group = 'client' AND COALESCE(b.is_active, TRUE) = TRUE
+                 AND (%s OR b.id = ANY(%s))
+               ORDER BY b.name""",
             (platform_scope, business_ids),
         )
         businesses = [dict(row) for row in cursor.fetchall() or []]
@@ -2763,7 +2782,7 @@ def operator_mobile_interaction():
         return jsonify({"success": False, "error": "Требуется авторизация"}), 401
     payload = request.get_json(silent=True) or {}
     event_name = str(payload.get("event_name") or "").strip()
-    _, _, validation_error = validate_product_event(event_name, "telegram_mini_app")
+    _, _, validation_error = validate_product_event(event_name, _mobile_channel(user_data))
     if validation_error:
         return jsonify({"success": False, "error": validation_error}), 400
     db = DatabaseManager()
@@ -2779,7 +2798,7 @@ def operator_mobile_interaction():
             business_id=business_id,
             user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
             event_type="operator_mobile_interaction",
-            channel="telegram_mini_app",
+            channel=_mobile_channel(user_data),
             action_key=event_name,
             status="completed",
             input_summary={"screen": payload.get("screen")},
@@ -2793,7 +2812,7 @@ def operator_mobile_interaction():
         record_product_event(
             cursor,
             event_name=event_name,
-            surface="telegram_mini_app",
+            surface=_mobile_channel(user_data),
             business_id=business_id or None,
             user_id=str(user_data.get("user_id") or user_data.get("id") or "") or None,
             scope_type=str(scope.get("kind") or "") or None,
@@ -2848,7 +2867,7 @@ def operator_mobile_module(module: str):
                 })
         if module == "settings":
             user_id = str(user_data.get("user_id") or user_data.get("id") or "")
-            preferences = load_control_preferences(cursor, user_id)
+            preferences = load_control_preferences(cursor, user_id, platform=str(user_data.get("messenger_platform") or "telegram"))
             notifications = preferences.get("notification_preferences_json") if isinstance(preferences, dict) else {}
             preference_key = f"{scope.get('kind')}:{scope.get('id') or 'all'}"
             return jsonify({
@@ -2863,7 +2882,7 @@ def operator_mobile_module(module: str):
                 "data_warnings": [],
                 "available_actions": [{"key": "notifications.update", "label": "Сохранить"}],
                 "filters": {},
-                "preferences": (notifications or {}).get(preference_key, {}),
+                "preferences": {**(DEFAULT_MAX_NOTIFICATIONS if user_data.get("messenger_platform") == "max" else {}), **((notifications or {}).get(preference_key, {}))},
             })
         if module == "diagnostics" and scope.get("kind") != "platform":
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
@@ -2976,9 +2995,7 @@ def operator_mobile_content_plan_generate():
             content_mix=payload.get("content_mix") if isinstance(payload.get("content_mix"), dict) else {},
         )
         return jsonify({"success": True, "scope": scope, "plan": plan})
-    except PermissionError:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
-    except ValueError:
+    except (PermissionError, ValueError):
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
 
 
@@ -3164,7 +3181,7 @@ def operator_mobile_services_analyze():
                 business_id=business_id,
                 user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
                 limit=len(services),
-                channel="telegram_mini_app",
+                channel=_mobile_channel(user_data),
             )
             if str(result.get("status") or "") != "completed":
                 db.conn.rollback()
@@ -3415,10 +3432,19 @@ def operator_mobile_notification_settings_update():
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        identity = str(user_data.get("telegram_id") or "")
+        messenger = str(user_data.get("messenger_platform") or "telegram")
+        if messenger == "max":
+            cursor.execute("SELECT max_id FROM max_identities WHERE user_id=%s AND revoked_at IS NULL", (user_id,))
+            identity_row = cursor.fetchone()
+            if not identity_row:
+                return jsonify(success=False, error="Привязка MAX отключена"), 401
+            identity = str(identity_row['max_id'] if hasattr(identity_row, 'keys') else identity_row[0])
         saved = save_scope_notification_preferences(
             cursor,
             user_id=user_id,
-            telegram_id=str(user_data.get("telegram_id") or ""),
+            telegram_id=identity,
+            platform=messenger,
             scope=scope,
             notifications=notifications,
         )
@@ -3429,6 +3455,7 @@ def operator_mobile_notification_settings_update():
         raise
     finally:
         db.close()
+
 
 
 @operator_bp.route("/mobile/reviews", methods=["GET"])
@@ -3672,6 +3699,7 @@ def operator_mobile_action_confirm(action_id: str):
                     return False
             return True
 
+
         def generate_executor(envelope: dict, targets: list[str], _scope: dict):
             review_ids = [str(item) for item in envelope.get("review_ids") or []]
             drafts: list[dict] = []
@@ -3691,7 +3719,7 @@ def operator_mobile_action_confirm(action_id: str):
                     user_id=user_id,
                     limit=len(scoped_review_ids),
                     review_ids=scoped_review_ids,
-                    channel="telegram_mini_app",
+                    channel=_mobile_channel(user_data),
                 )
                 if str(generated.get("status") or "") != "completed":
                     blocked_reasons.extend(str(item) for item in generated.get("blocked_reasons") or ["generation_failed"])
@@ -3898,7 +3926,7 @@ def operator_mobile_action_confirm(action_id: str):
                 estimated_credits=DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS,
                 explicit_consent=True,
                 metadata={
-                    "channel": "telegram_mini_app",
+                    "channel": _mobile_channel(user_data),
                     "operator_action_id": str(envelope.get("_action_id") or ""),
                     "operator_idempotency_key": str(envelope.get("_idempotency_key") or ""),
                     "requested_source": str(envelope.get("source") or "all"),
@@ -3933,7 +3961,7 @@ def operator_mobile_action_confirm(action_id: str):
                 estimated_credits=DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS,
                 explicit_consent=True,
                 metadata={
-                    "channel": "telegram_mini_app_diagnostics",
+                    "channel": _mobile_channel(user_data) + "_diagnostics",
                     "retry_source_queue_id": source_job_id,
                     "operator_action_id": str(envelope.get("_action_id") or ""),
                 },
@@ -4046,7 +4074,7 @@ def operator_mobile_action_confirm(action_id: str):
                 status="completed",
                 input_summary={"plan_id": plan_id},
                 output_summary={"title": str(deleted_row.get("title") or "")},
-                metadata={"channel": "telegram_mini_app"},
+                metadata={"channel": _mobile_channel(user_data)},
             )
             return {
                 "status": "completed",
@@ -4085,7 +4113,7 @@ def operator_mobile_action_confirm(action_id: str):
                 business_id=business_id,
                 user_id=user_id,
                 limit=len(services),
-                channel="telegram_mini_app",
+                channel=_mobile_channel(user_data),
             )
             if str(result.get("status") or "") != "completed":
                 return {"status": "blocked", "blocked_reasons": result.get("blocked_reasons") or ["service_optimization_failed"]}
@@ -4221,8 +4249,7 @@ def operator_mobile_action_confirm(action_id: str):
         )
         if result.get("status") == "blocked":
             db.conn.rollback()
-            status_code = 403 if result.get("access_denied") else 400
-            return jsonify({"success": False, "error": "Действие не выполнено", "operator_result": result}), status_code
+            return jsonify({"success": False, "error": "Действие не выполнено", "operator_result": result}), 400
         db.conn.commit()
         return jsonify({"success": True, "idempotent": idempotent, "operator_result": result})
     except Exception:
@@ -4376,7 +4403,7 @@ def operator_mobile_review_draft_update(draft_id: str):
         business_id = str((dict(row) if row else {}).get("business_id") or "")
         if not scope or (scope.get("kind") != "platform" and business_id not in [str(item) for item in scope.get("business_ids") or []]):
             return jsonify({"success": False, "error": "Черновик недоступен"}), 403
-        has_access, owner_id = verify_business_write_access(cursor, business_id, user_data)
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
         if not has_access:
             return jsonify({"success": False, "error": "Нет доступа" if owner_id else "Черновик не найден"}), 403 if owner_id else 404
         access = _scope_capability_access(cursor, scope, "maps.reviews", bool(user_data.get("is_superadmin")))
@@ -4422,7 +4449,7 @@ def operator_mobile_review_draft_manual_publish(draft_id: str):
         business_id = str((dict(row) if row else {}).get("business_id") or "")
         if not scope or (scope.get("kind") != "platform" and business_id not in [str(item) for item in scope.get("business_ids") or []]):
             return jsonify({"success": False, "error": "Черновик недоступен"}), 403
-        has_access, _owner_id = verify_business_write_access(cursor, business_id, user_data)
+        has_access, _owner_id = verify_business_access(cursor, business_id, user_data)
         if not has_access:
             return jsonify({"success": False, "error": "Черновик недоступен"}), 403
         access = _scope_capability_access(cursor, scope, "maps.reviews", bool(user_data.get("is_superadmin")))
@@ -4474,12 +4501,12 @@ def operator_mobile_history():
                 JOIN operatorconversations conversation ON conversation.id = message.conversation_id
                 LEFT JOIN businesses business ON business.id = message.business_id
                 WHERE message.user_id = %s
-                  AND conversation.channel = 'telegram_mini_app'
+                  AND conversation.channel = %s
                   AND (%s OR message.business_id = ANY(%s))
                 ORDER BY message.created_at DESC
                 LIMIT %s
                 """,
-                (user_id, platform, business_ids, limit),
+                (user_id, _mobile_channel(user_data), platform, business_ids, limit),
             )
             items = [dict(item) for item in (cursor.fetchall() or [])]
             items.reverse()
@@ -4501,7 +4528,7 @@ def operator_mobile_history():
             cursor,
             business_id=business_id,
             user_id=user_id,
-            channel="telegram_mini_app",
+            channel=_mobile_channel(user_data),
         )
         conversation_id = str(conversation.get("id") or "")
         items = list_operator_messages(
@@ -4524,6 +4551,7 @@ def operator_mobile_history():
         })
     finally:
         db.close()
+
 
 
 @operator_bp.route("/mobile/reviews/<review_id>/generate", methods=["POST"])
@@ -4567,16 +4595,13 @@ def operator_mobile_review_reply_generate(review_id: str):
                 "confirmation_required": True,
                 "idempotency_key": f"mobile:{user_id}:review_reply_generate:{review_id}",
             }})
-        has_write_access, _owner_id = verify_business_write_access(cursor, business_id, user_data)
-        if not has_write_access:
-            return jsonify({"success": False, "error": "Отзыв недоступен"}), 403
         result = generate_review_reply_drafts_for_unanswered_reviews(
             cursor,
             business_id=business_id,
             user_id=user_id,
             limit=1,
             review_id=review_id,
-            channel="telegram_mini_app",
+            channel=_mobile_channel(user_data),
         )
         db.conn.commit()
         return jsonify({"success": str(result.get("status") or "") == "completed", "operator_result": result})

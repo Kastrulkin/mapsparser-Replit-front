@@ -54,7 +54,7 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
     payload = payload or {}
     if not isinstance(message, str) or not message.strip() or len(message) > 10000 or len(str(payload.get("request_id") or "")) > 200:
         raise ValueError("Проверьте длину команды и идентификатор запроса")
-    if channel not in {"web", "telegram", "telegram_mini_app"}:
+    if channel not in {"web", "telegram", "telegram_mini_app", "max_bot", "max_mini_app"}:
         raise ValueError("Неизвестный канал")
     # Lock before resolving the active conversation, including first-message races.
     cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
@@ -78,11 +78,15 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
         digest = hashlib.sha256((digest + str(payload["input_context"])).encode()).hexdigest()
     if payload.get("work_entry_id") or payload.get("work_action_id"):
         digest=hashlib.sha256((digest+json.dumps([payload.get("work_entry_id"),payload.get("work_action_id")])).encode()).hexdigest()
+    if payload.get("work_ref"):
+        digest = hashlib.sha256((digest + str(payload["work_ref"])).encode()).hexdigest()
+    if payload.get("journey_action_id"):
+        digest = hashlib.sha256((digest + str(payload["journey_action_id"])).encode()).hexdigest()
     if payload.get("work_change_hash"):
         digest = hashlib.sha256((digest + str(payload["work_change_hash"])).encode()).hexdigest()
-    if any(key in payload for key in ('attachment_ids','selected_object','clear_input_context')):
+    if any(key in payload for key in ('attachment_ids','selected_object','clear_input_context','search_task_id')):
         digest = hashlib.sha256((digest + json.dumps({key:payload.get(key) for key in
-            ('attachment_ids','selected_object','clear_input_context')},sort_keys=True,ensure_ascii=False)).encode()).hexdigest()
+            ('attachment_ids','selected_object','clear_input_context','search_task_id')},sort_keys=True,ensure_ascii=False)).encode()).hexdigest()
     if request_id:
         cursor.execute("SELECT * FROM operator_chat_requests WHERE user_id=%s AND business_id=%s AND channel=%s AND request_id=%s FOR UPDATE",
                        (user_id, business_id, channel, request_id))
@@ -117,7 +121,7 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
     finally:
         current_request_key.reset(request_token)
     from services.operator_followups import remember_selection
-    remember_selection(cursor, business_id, result)
+    remember_selection(cursor, business_id, result, history=list_operator_messages(cursor, conversation_id=conversation_id, business_id=business_id, limit=12))
     result["conversation_id"] = conversation_id
     result['user_message_id'] = user_message_id
     approval = result.get("approval") or {}
