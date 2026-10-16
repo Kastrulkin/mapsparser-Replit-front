@@ -193,3 +193,29 @@ def test_generate_news_draft_releases_when_model_returns_empty_text() -> None:
     assert "empty_generated_news" in result["blocked_reasons"]
     assert len(cursor.news_drafts) == 0
     assert len(cursor.ledger_entries) == 0
+
+
+def test_unconfirmed_procedure_claim_releases_credits_without_saving_or_retry(monkeypatch):
+    import services.content_rules
+    monkeypatch.setattr(services.content_rules,'enforce',lambda *_: (_ for _ in ()).throw(AssertionError('Must reject before repair')))
+    calls=[]
+    def generator(*_,**__):
+        calls.append(1)
+        return '{"news":"Прокол ушей Система 75. Процедура выполняется с соблюдением всех необходимых требований."}'
+    cursor=FakeCursor(balance=100)
+    result=generate_news_draft_from_operator(cursor,business_id='biz-1',user_id='user-1',message='Подготовь новость: Прокол ушей Система 75',news_generator=generator)
+    assert calls==[1]
+    assert result['blocked_reasons']==['unsupported_news_claims']
+    assert result['factual_issues']
+    assert result['finalization_result']['status']=='released'
+    assert not cursor.news_drafts and not cursor.ledger_entries
+
+
+def test_business_rule_repair_is_checked_again_before_saving(monkeypatch):
+    import services.content_rules
+    monkeypatch.setattr(services.content_rules,'enforce',lambda *_:'Прокол ушей выполняется стерильно.')
+    cursor=FakeCursor(balance=100)
+    result=generate_news_draft_from_operator(cursor,business_id='biz-1',user_id='user-1',message='Подготовь новость: Прокол ушей Система 75',news_generator=lambda *_,**__:'{"news":"В салоне доступен прокол ушей Система 75."}')
+    assert result['blocked_reasons']==['unsupported_news_claims']
+    assert result['finalization_result']['status']=='released'
+    assert not cursor.news_drafts and not cursor.ledger_entries

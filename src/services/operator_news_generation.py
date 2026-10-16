@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import sys
 import json
 import uuid
 from typing import Any, Callable
 
 from core.db_helpers import assert_schema_columns
+from services.content_factual_safety import PROCEDURE_FACT_CONTRACT, UnsupportedContentClaims, validate_procedure_claims
 from services.llm import analyze_text_with_gigachat
 from services.knowledge_retrieval import semantic_context_for_cursor
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
@@ -158,6 +160,7 @@ def _build_news_prompt(*, source_text: str, business: dict[str, Any]) -> str:
             "Ты - редактор LocalOS для локального бизнеса.",
             "Подготовь короткую профессиональную новость для публикации в карточке компании или локальном канале.",
             "Пиши на русском. Без эмодзи, без выдуманных фактов, без обещаний скидок, если их нет в исходных данных.",
+            PROCEDURE_FACT_CONTRACT,
             "Структура: заголовок одной строкой, затем 1-2 коротких абзаца.",
             "Верни СТРОГО JSON: {\"news\": \"текст новости\"}.",
             "",
@@ -315,6 +318,7 @@ def generate_news_draft_from_operator(
             "\n\nПодтверждённый контекст LocalOS. Используй только подходящие факты, "
             "избегай смысловых дублей:\n" + knowledge_context
         )
+    factual_sources = [source_text, str(business.get('description') or ''), knowledge_context or '']
     generator = news_generator or _default_news_generator
     try:
         generated = generator(
@@ -322,10 +326,12 @@ def generate_news_draft_from_operator(
             business_id=business_id,
             user_id=user_id,
         )
-        news_text = _normalize_news_text(generated)
+        news_text = validate_procedure_claims(_normalize_news_text(generated), factual_sources)
         from services.content_rules import enforce
         news_text = enforce(cursor,business_id,user_id,news_text,generator,source_text)
+        news_text = validate_procedure_claims(news_text, factual_sources)
     except Exception:
+        failure = sys.exception()
         release = finalize_reserved_action_credits(
             cursor,
             reservation_id=_clean_text(reservation.get("reservation_id")),
@@ -337,14 +343,15 @@ def generate_news_draft_from_operator(
         return {
             "status": "blocked",
             "intent": NEWS_GENERATE_ACTION_KEY,
-            "chat_response": "Новость не удалось сгенерировать. Кредиты не списаны.",
+            "chat_response": "В тексте есть неподтверждённые свойства процедуры. Уточните факты и запустите подготовку снова. Кредиты не списаны." if isinstance(failure, UnsupportedContentClaims) else "Новость не удалось сгенерировать. Кредиты не списаны.",
             "preflight": preflight,
             "reservation_result": reservation,
             "finalization_result": release,
             "news_text": "",
             "charged_credits": 0,
             "credit_charged": False,
-            "blocked_reasons": ["news_generation_failed"],
+            "blocked_reasons": ["unsupported_news_claims"] if isinstance(failure, UnsupportedContentClaims) else ["news_generation_failed"],
+            "factual_issues": failure.issues if isinstance(failure, UnsupportedContentClaims) else [],
         }
 
     if not news_text:

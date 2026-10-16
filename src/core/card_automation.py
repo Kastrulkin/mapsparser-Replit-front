@@ -979,17 +979,20 @@ Write all generated text in {language_name}.
         f"{industry_pattern_context}\n\n"
         f"{prompt}"
     )
+    from services.content_factual_safety import PROCEDURE_FACT_CONTRACT, validate_procedure_claims
+    prompt += '\n' + PROCEDURE_FACT_CONTRACT
     generated = analyze_text_with_gigachat(
         prompt,
         task_type="news_generation",
         business_id=business_id,
         user_id=owner_id,
     )
-    generated_text = _extract_json_field(generated, "news").strip()
+    generated_text = validate_procedure_claims(_extract_json_field(generated, "news").strip(), [service_text, transaction_text])
     from services.content_rules import enforce
     from services.operator_social_post_generation import _default_social_post_generator
     generated_text = enforce(conn.cursor(), business_id, owner_id, generated_text,
         _default_social_post_generator, raw_info)
+    generated_text = validate_procedure_claims(generated_text, [service_text, transaction_text])
 
     if not generated_text:
         raise ValueError("AI не вернул текст новости")

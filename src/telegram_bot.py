@@ -602,6 +602,8 @@ def _telegram_capability_news_generate(envelope: dict, user_data: dict) -> dict:
         },
     )
 
+    from services.content_factual_safety import PROCEDURE_FACT_CONTRACT, validate_procedure_claims
+    prompt += '\n' + PROCEDURE_FACT_CONTRACT
     result_text = analyze_text_with_gigachat(
         prompt,
         task_type="news_generation",
@@ -609,6 +611,7 @@ def _telegram_capability_news_generate(envelope: dict, user_data: dict) -> dict:
         user_id=str(user_data.get("user_id") or ""),
     )
     generated_text = _normalize_news_text(result_text if isinstance(result_text, str) else str(result_text))
+    generated_text = validate_procedure_claims(generated_text, [raw_info])
     if not generated_text:
         raise ValueError("Пустой результат генерации")
 
@@ -620,6 +623,7 @@ def _telegram_capability_news_generate(envelope: dict, user_data: dict) -> dict:
         from services.operator_social_post_generation import _default_social_post_generator
         generated_text = enforce(cursor, tenant_id, str(user_data.get('user_id') or ''), generated_text,
             _default_social_post_generator, raw_info)
+        generated_text = validate_procedure_claims(generated_text, [raw_info])
         assert_schema_columns(cursor, "usernews", (
             "id", "user_id", "business_id", "service_id", "source_text", "generated_text", "approved", "created_at",
         ))

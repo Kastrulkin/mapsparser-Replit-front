@@ -431,6 +431,9 @@ Write all generated text in {language_name}.
             f"{prompt}"
         )
 
+        from services.content_factual_safety import PROCEDURE_FACT_CONTRACT, unsupported_procedure_claims
+        prompt += '\n' + PROCEDURE_FACT_CONTRACT
+        factual_sources = [service_context, transaction_context, raw_info]
         result = _analyze_news_text_with_fallback(
             prompt,
             business_name=business_name,
@@ -555,6 +558,12 @@ Write all generated text in {language_name}.
                     "Check the listing contacts for the current schedule, details, and booking."
                 )
 
+        factual_issues = unsupported_procedure_claims(generated_text, factual_sources)
+        if factual_issues:
+            db.rollback_and_close()
+            return jsonify({'error': 'Текст содержит неподтверждённые свойства процедуры. Уточните исходные факты.',
+                            'code': 'unsupported_news_claims', 'factual_issues': factual_issues}), 422
+
         from services.content_rules import enforce
         from services.operator_social_post_generation import _default_social_post_generator
         generated_text = enforce(
@@ -565,6 +574,12 @@ Write all generated text in {language_name}.
             _default_social_post_generator,
             raw_info,
         )
+
+        factual_issues = unsupported_procedure_claims(generated_text, factual_sources)
+        if factual_issues:
+            db.rollback_and_close()
+            return jsonify({'error': 'Текст содержит неподтверждённые свойства процедуры. Уточните исходные факты.',
+                            'code': 'unsupported_news_claims', 'factual_issues': factual_issues}), 422
 
         news_id = str(uuid.uuid4())
         prompt_key = "news_social_generation" if content_mode == "social" else "news_generation"

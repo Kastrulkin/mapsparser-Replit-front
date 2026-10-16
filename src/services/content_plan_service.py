@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from services.content_factual_safety import PROCEDURE_FACT_CONTRACT, strip_generated_markup, transform_outside_urls, unsupported_procedure_claims, validate_procedure_claims
 from services.content_generation_options import candidate_instruction, merge_alternatives, alternative_result, alternative_base_hash
 
 import json
@@ -4202,15 +4203,7 @@ def _sanitize_generated_news_text(raw_text: str) -> str:
     text = re.sub(r"\s*}\s*$", "", text).strip()
 
     text = text.replace("\\n", "\n")
-    text = re.sub(r"[*_`]+", "", text)
-    text = re.sub(r"^\s*#+\s*", "", text, flags=re.MULTILINE)
-    text = re.sub(r"#[\wа-яА-ЯёЁ-]+", "", text)
-    text = text.replace("{", "").replace("}", "")
-    text = "".join(
-        char
-        for char in text
-        if unicodedata.category(char) not in {"So", "Sk"}
-    )
+    text = strip_generated_markup(text)
     # Keep deliberate paragraph breaks: they are part of the publication, not
     # transport whitespace. Single line breaks inside a paragraph are joined.
     paragraphs = []
@@ -4284,7 +4277,7 @@ def _repair_generated_brand_name(text: str, business_name: str) -> str:
                 return canonical
         return candidate
 
-    return re.sub(r"[^\W\d_]+", replace_near_match, str(text or ""), flags=re.UNICODE)
+    return transform_outside_urls(str(text or ""), lambda fragment: re.sub(r"[^\W\d_]+", replace_near_match, fragment, flags=re.UNICODE))
 
 
 def _content_plan_knowledge_context(cursor: Any, item: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -5067,7 +5060,7 @@ def _unsupported_candidate_claims(text: str, brief: dict[str, Any]) -> list[str]
             *(str(value or "") for value in brief.get("confirmed_details") or []),
         ]
     ).lower()
-    issues: list[str] = []
+    issues: list[str] = unsupported_procedure_claims(text, source_facts + [str(value) for value in brief.get("confirmed_details") or []])
     factual_numbers = set(re.findall(r"\b\d+(?:[.,]\d+)?\b", factual_text))
     candidate_numbers = set(re.findall(r"\b\d+(?:[.,]\d+)?\b", text))
     if source_facts:
@@ -5231,6 +5224,7 @@ def _content_generation_v2_prompt(
         "- не копируй источник дословно и не имитируй стиль конкретного автора;\n"
         "- не добавляй масштаб, количество клиентов, возраст, родственную роль, оценку характера или достижение, если этого нет в фактах;\n"
         f"{NATURAL_CONTENT_CONTRACT}\n"
+        f"{PROCEDURE_FACT_CONTRACT}\n"
         "- редакционные паттерны ниже описывают только приёмы подачи; не переноси из чужих публикаций факты, героев, названия, цифры или обещания;\n"
         f"- {story_variant_rule}\n"
         "- завершай одним естественным следующим шагом, только если он следует из редакторского брифа.\n"
@@ -5500,12 +5494,16 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             fallback_preview = "" if generation_v2 else _fallback_draft_text(business_name, item, business_facts, normalized_language)
             generated_text = ""
         if generated_text:
+            validate_procedure_claims(generated_text, [str(source.get('fact') or '') for source in content_brief.get('sources') or []] + [str(value) for value in content_brief.get('confirmed_details') or []])
             from services.content_rules import enforce
             from services.operator_social_post_generation import _default_social_post_generator
             try:
                 generated_text=enforce(cursor,str(item.get('business_id') or ''),user_id,generated_text,_default_social_post_generator)
             except Exception:
                 raise ValueError('Текст не прошёл проверку правил бизнеса. Предыдущий черновик сохранён.') from None
+        if generated_text:
+            # Recheck after any business-rule repair, including the legacy path.
+            validate_procedure_claims(generated_text, [str(source.get('fact') or '') for source in content_brief.get('sources') or []] + [str(value) for value in content_brief.get('confirmed_details') or []])
         if generated_text and _looks_like_ice_rink_hallucination(generated_text, business_facts):
             generation_source = "failed" if generation_v2 else "fallback"
             generation_error_reason = "hallucination_filter"
