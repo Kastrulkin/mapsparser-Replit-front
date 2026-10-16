@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from services.content_generation_options import candidate_instruction, merge_alternatives, alternative_result, alternative_base_hash
+
 import json
 import os
 import re
@@ -5185,6 +5187,8 @@ def _content_generation_v2_prompt(
     publication_objective_context: str = "",
     industry_pattern_context: str = "",
     editorial_pattern_context: str = "",
+    candidate_count: int = 1,
+    current_draft: str = "",
 ) -> str:
     voice_preferences = voice.get("preferences") if isinstance(voice.get("preferences"), dict) else {}
     business_description = str(voice_preferences.get("business_description") or "").strip()
@@ -5209,7 +5213,9 @@ def _content_generation_v2_prompt(
         "Вместо человеческой истории дай ситуационный вариант без конкретного героя."
     )
     return (
-        "Ты — редактор публикаций локального бизнеса. Создай ровно три содержательно разных варианта на основе только перечисленных фактов.\n"
+        "Ты — редактор публикаций локального бизнеса. "
+        + candidate_instruction(candidate_count, current_draft)
+        + 
         f"{_content_plan_language_instruction(language)}\n"
         "Варианты: конкретный анонс/объяснение, человеческая история, спокойный атмосферный подход. "
         "Не добавляй факты, даты, участников, цены, адреса или обещания, которых нет в источниках. До 700 символов каждый.\n"
@@ -5244,8 +5250,17 @@ def _content_generation_v2_prompt(
     )
 
 
-def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | None = None) -> dict[str, Any]:
+class ContentPlanItemConflict(ValueError):
+    pass
+
+
+def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | None = None, *, additional_variants: bool = False, expected_draft_text: str | None = None, request_id: str = "") -> dict[str, Any]:
     normalized_language = _normalize_content_plan_language(language)
+    if type(additional_variants) is not bool:
+        raise ValueError("Неверный режим генерации")
+    if additional_variants and (not request_id or len(request_id) > 100):
+        raise ValueError("Для дополнительных вариантов нужен идентификатор запроса")
+    candidate_count = 2 if additional_variants else 1
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
@@ -5274,6 +5289,17 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
             if not bool(_row_get(cursor.fetchone(), "coalesce", 0, False)):
                 raise PermissionError("Нет доступа к элементу плана")
+        if additional_variants:
+            if not str(item.get("draft_text") or "").strip():
+                raise ValueError("Сначала создайте или сохраните основной текст")
+            if expected_draft_text is None or expected_draft_text != item.get("draft_text"):
+                raise ContentPlanItemConflict("Текст изменился. Обновите материал перед запросом вариантов.")
+            prior = (item.get("metadata_json") or {}).get("content_generation_v2") or {}
+            if prior.get("last_alternatives_request_id") == request_id:
+                if prior.get("alternatives_base_hash") != alternative_base_hash(item):
+                    raise ContentPlanItemConflict("Материал изменился после запроса вариантов")
+                db.conn.rollback()
+                return alternative_result(get_content_plan(user_id, str(item.get("plan_id") or "")), prior.get("variants") or [])
         cursor.execute(
             """
             SELECT name, city, business_type, industry, categories, address, description, site, website
@@ -5313,6 +5339,8 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
         knowledge_context, knowledge_metadata = _content_plan_knowledge_context(cursor, item)
         knowledge_prompt_block = f"{knowledge_context}\n\n" if knowledge_context else ""
         generation_v2 = _content_generation_v2_enabled()
+        if additional_variants and not generation_v2:
+            raise ValueError("Дополнительные варианты требуют включённого нового редактора")
         content_evidence = _load_business_content_evidence(cursor, item, limit=6) if generation_v2 else []
         from services.operator_editorial import editorial_evidence
         content_evidence = editorial_evidence(cursor,str(item.get('business_id') or '')) + content_evidence
@@ -5325,6 +5353,8 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             business_id=str(item.get("business_id") or ""),
             limit=5,
         ) if generation_v2 else {}
+        if additional_variants and not content_brief.get("complete"):
+            raise ValueError("Уточните факты материала перед запросом дополнительных вариантов")
         if generation_v2 and not content_brief.get("complete"):
             brief_metadata = {
                 "generation_source": "needs_context",
@@ -5382,6 +5412,8 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             publication_objective_context=publication_objective_context,
             industry_pattern_context=industry_pattern_context,
             editorial_pattern_context=editorial_pattern_context,
+            candidate_count=candidate_count,
+            current_draft=str(item.get("draft_text") or "") if additional_variants else "",
         ) if generation_v2 else (
             "Ты — маркетолог локального бизнеса. Напиши короткую новость для публикации на картах. "
             "До 700 символов.\n\n"
@@ -5447,9 +5479,9 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
                 ]
                 eligible_candidates = [candidate for candidate in scored_candidates if candidate.get("quality_passed")]
                 eligible_candidates.sort(key=lambda candidate: int(candidate.get("score") or 0), reverse=True)
-                if len(parsed_candidates) != 3:
+                if len(parsed_candidates) != candidate_count:
                     generation_source = "failed"
-                    generation_error_reason = "three_candidates_required"
+                    generation_error_reason = "candidate_count_mismatch"
                 elif eligible_candidates:
                     generated_text = str(eligible_candidates[0].get("text") or "").strip()
                 else:
@@ -5484,6 +5516,17 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             generation_error_reason = "sanity_filter"
             fallback_preview = "" if generation_v2 else _fallback_draft_text(business_name, item, business_facts, normalized_language)
             generated_text = ""
+        if additional_variants:
+            if generation_source != "ai":
+                db.conn.rollback()
+                return alternative_result(get_content_plan(user_id, str(item.get("plan_id") or "")), [], success=False)
+            variant_metadata, added = merge_alternatives(item, scored_candidates, request_id)
+            if not added:
+                db.conn.rollback()
+                return alternative_result(get_content_plan(user_id, str(item.get("plan_id") or "")), [], success=False, message="Новых подходящих вариантов нет. Текущий текст сохранён.")
+            cursor.execute("UPDATE contentplanitems SET metadata_json = jsonb_set(COALESCE(metadata_json, '{}'::jsonb), '{content_generation_v2}', %s::jsonb, TRUE), updated_at = CURRENT_TIMESTAMP WHERE id = %s", (json.dumps(variant_metadata, ensure_ascii=False), item_id))
+            db.conn.commit()
+            return alternative_result(get_content_plan(user_id, str(item.get("plan_id") or "")), variant_metadata["variants"])
         if active_patterns and generation_source == "ai":
             record_industry_pattern_impact_event(
                 db.conn,

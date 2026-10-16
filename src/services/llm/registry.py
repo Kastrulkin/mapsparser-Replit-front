@@ -167,8 +167,8 @@ CONTENT_PLAN_GENERATION_SCHEMA: dict[str, Any] = {
     "properties": {
         "candidates": {
             "type": "array",
-            "minItems": 3,
-            "maxItems": 3,
+            "minItems": 1,
+            "maxItems": 2,
             "items": {
                 "type": "object",
                 "properties": {
@@ -238,7 +238,7 @@ def _task(
 
 TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
     "review_reply": _task("review_reply", data_class="pii", prompt_version="review_reply_v1", allow_text_fallback=True, fallback_data_class="business_internal", pipeline_stage="copy"),
-    "news_generation": _task("news_generation", data_class="public", prompt_version="news_generation_v1", allow_text_fallback=True, pipeline_stage="copy"),
+    "news_generation": _task("news_generation", thinking_enabled=False, data_class="public", prompt_version="news_generation_v1", allow_text_fallback=True, pipeline_stage="copy"),
     "content_plan_direction": _task(
         "content_plan_direction", profile="gigachat_max", response_kind="json",
         schema={"type": "object", "properties": {"groups": {"type": "array"}, "items": {"type": "array"}, "error": {"type": "string"}}},
@@ -253,7 +253,8 @@ TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
         max_tokens=3000,
         temperature=0.2,
         timeout=60,
-        prompt_version="content_plan_generation_v2",
+        prompt_version="content_plan_generation_v3_single_default",
+        thinking_enabled=False,
         allow_text_fallback=True,
         pipeline_stage="copy",
     ),

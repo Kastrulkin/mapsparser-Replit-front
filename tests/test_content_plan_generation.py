@@ -861,7 +861,7 @@ def test_generate_draft_v2_uses_json_generation_contract(monkeypatch):
                         "used_fact_ids": ["event", "source_ref"],
                         "unsupported_facts": [],
                     }
-                    for index in range(1, 4)
+                    for index in range(1, 2)
                 ]
             },
             ensure_ascii=False,
@@ -925,7 +925,7 @@ def test_generate_draft_v2_repairs_long_single_paragraph_before_quality_gate(mon
                         "used_fact_ids": ["event"],
                         "unsupported_facts": [],
                     }
-                    for index in range(1, 4)
+                    for index in range(1, 2)
                 ]
             },
             ensure_ascii=False,

@@ -116,7 +116,7 @@ type ContentBrief = {
 };
 type GenerationAlternative = { id?: string; angle?: string; text?: string; score?: number; quality_passed?: boolean };
 type GenerationDetails = {
-  status?: 'generated' | 'needs_context' | 'failed';
+  status?: 'generated' | 'alternatives_ready' | 'needs_context' | 'failed';
   message?: string;
   source?: string;
   action?: {
@@ -1617,17 +1617,21 @@ function ContentWorkspace() {
     }
   };
 
-  const generateSelectedDraft = async () => {
+  const generateSelectedDraft = async (additionalVariants = false) => {
     if (!selectedItem) return;
+    if (additionalVariants && String(draftEdits[selectedItem.id] ?? selectedItem.draft_text ?? '') !== String(selectedItem.draft_text || '')) {
+      setError('Сначала сохраните изменения текста, затем запросите другие варианты.');
+      return;
+    }
     const startedAt = Date.now();
-    setBusyAction('generate-draft');
+    setBusyAction(additionalVariants ? 'generate-alternatives' : 'generate-draft');
     setDraftGenerationReady(false);
     setError('');
     setActionMessage('');
     try {
       const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}/generate-draft`, {
         method: 'POST',
-        body: JSON.stringify({ language: 'ru' }),
+        body: JSON.stringify({ language: 'ru', ...(additionalVariants ? { additional_variants: true, expected_draft_text: selectedItem.draft_text || '', request_id: crypto.randomUUID() } : {}) }),
       });
       const plan = response.plan || null;
       setCurrentPlan(plan);
@@ -2993,7 +2997,7 @@ function ContentWorkspace() {
                     <Button
                       type="button"
                       variant={hasDraftText ? 'outline' : 'default'}
-                      onClick={generateSelectedDraft}
+                      onClick={() => void generateSelectedDraft()}
                       disabled={Boolean(busyAction)}
                       className={cn('rounded-2xl', !hasDraftText ? 'bg-slate-950 text-white hover:bg-slate-800' : '')}
                     >
@@ -3055,6 +3059,15 @@ function ContentWorkspace() {
                     className="min-h-[260px] rounded-2xl border-slate-200 text-base leading-7"
                     placeholder="Текст публикации"
                   />
+                  {hasDraftText ? (
+                    <div className="space-y-2">
+                      <Button type="button" variant="outline" disabled={Boolean(busyAction) || hasUnsavedItemChanges} onClick={() => void generateSelectedDraft(true)}>
+                        {busyAction === 'generate-alternatives' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                        {busyAction === 'generate-alternatives' ? 'Готовим варианты...' : 'Подготовить ещё 2 варианта'}
+                      </Button>
+                      <p className="text-sm text-slate-500">{hasUnsavedItemChanges ? 'Сначала сохраните изменения материала.' : 'Отдельный AI-запрос. Текущий текст останется без изменений; новый вариант можно выбрать после проверки.'}</p>
+                    </div>
+                  ) : null}
                   {generationAlternatives.length > 1 ? (
                     <details className="rounded-2xl bg-white shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
                       <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 text-sm font-semibold text-slate-800">

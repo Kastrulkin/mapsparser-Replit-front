@@ -856,5 +856,47 @@ describe('Content page publication settings', () => {
 
     expect(await screen.findByRole('button', { name: 'Подготовить версии для каналов' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Утвердить' })).not.toBeInTheDocument();
+  });  it('requests alternatives only on click and preserves the current draft', async () => {
+    vi.mocked(newAuth.makeRequest).mockClear();
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/content-plans/context')) return { context: {} };
+      if (path.startsWith('/content-plans?')) return { plans: [plan] };
+      if (path === '/content-plans/plan-1') return { plan };
+      if (path === '/content-plans/plan-1/social-posts') return { posts: [], summary: {} };
+      if (path.endsWith('/generate-draft')) return new Promise(() => undefined);
+      return {};
+    });
+    renderContentPage();
+    fireEvent.click(await screen.findByRole('button', { name: /Тестовая тема публикации/ }));
+    const button = await screen.findByRole('button', { name: 'Подготовить ещё 2 варианта' });
+    expect(vi.mocked(newAuth.makeRequest).mock.calls.filter(([path]) => path.endsWith('/generate-draft'))).toHaveLength(0);
+    fireEvent.click(button);
+    await waitFor(() => {
+      const call = vi.mocked(newAuth.makeRequest).mock.calls.find(([path]) => path.endsWith('/generate-draft'));
+      expect(call).toBeDefined();
+      expect(JSON.parse(String(call?.[1]?.body))).toEqual(expect.objectContaining({ additional_variants: true, expected_draft_text: plan.items[0].draft_text, request_id: expect.any(String) }));
+    });
+    expect(screen.getByRole('button', { name: 'Готовим варианты...' })).toBeDisabled();
+    expect(screen.getByPlaceholderText('Текст публикации')).toHaveValue(plan.items[0].draft_text);
   });
+
+  it('requires saving edited text before requesting alternatives', async () => {
+    vi.mocked(newAuth.makeRequest).mockClear();
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/content-plans/context')) return { context: {} };
+      if (path.startsWith('/content-plans?')) return { plans: [plan] };
+      if (path === '/content-plans/plan-1') return { plan };
+      if (path === '/content-plans/plan-1/social-posts') return { posts: [], summary: {} };
+      if (path.endsWith('/generate-draft')) return new Promise(() => undefined);
+      return {};
+    });
+    renderContentPage();
+    fireEvent.click(await screen.findByRole('button', { name: /Тестовая тема публикации/ }));
+    const draft = await screen.findByPlaceholderText('Текст публикации');
+    fireEvent.change(draft, { target: { value: 'Несохранённый текст' } });
+    expect(screen.getByRole('button', { name: 'Подготовить ещё 2 варианта' })).toBeDisabled();
+    expect(screen.getByText('Сначала сохраните изменения материала.')).toBeInTheDocument();
+    expect(vi.mocked(newAuth.makeRequest).mock.calls.filter(([path]) => path.endsWith('/generate-draft'))).toHaveLength(0);
+  });
+
 });

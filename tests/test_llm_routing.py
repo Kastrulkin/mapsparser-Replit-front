@@ -84,15 +84,15 @@ def test_registry_has_an_explicit_provider_for_every_supported_task():
     assert all(item.primary_provider in {"gigachat", "deepseek"} for item in definitions.values())
 
 
-def test_content_plan_v2_has_strict_three_candidate_json_contract():
+def test_content_plan_v2_has_bounded_candidate_json_contract():
     definition = get_task_definition("content_plan_generation_v2")
 
     assert definition is not None
     assert definition.response_kind == "json"
     assert definition.response_schema["required"] == ["candidates"]
     candidates = definition.response_schema["properties"]["candidates"]
-    assert candidates["minItems"] == 3
-    assert candidates["maxItems"] == 3
+    assert candidates["minItems"] == 1
+    assert candidates["maxItems"] == 2
 
 
 def test_finance_sales_recognition_is_registered_as_sensitive_json():
