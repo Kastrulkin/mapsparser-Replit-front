@@ -27,7 +27,6 @@ def test_signed_bootstrap_session_and_revocation(max_pg, monkeypatch):
     monkeypatch.setattr(operator_api, 'list_control_scopes', lambda *args, **kwargs: {'businesses': [], 'networks': []})
     monkeypatch.setattr(operator_api, 'resolve_control_scope', lambda *args, **kwargs: None)
     monkeypatch.setattr(operator_api, '_scope_subscription_access', lambda *args: {})
-    monkeypatch.setattr(operator_api, '_mobile_navigation', lambda *args: [])
     monkeypatch.setattr(operator_api, 'resolve_mobile_deep_link', lambda *args, **kwargs: {})
     monkeypatch.setattr(operator_api, '_mobile_active_job', lambda *args, **kwargs: None)
     app = Flask(__name__)

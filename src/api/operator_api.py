@@ -108,6 +108,45 @@ def _content_handoff_status(metadata):
     return delivery_status(metadata)
 
 
+MOBILE_NAVIGATION_CAPABILITIES = {
+    "feed": "telegram_radar",
+    "reviews": "maps.reviews",
+    "operator": "operator",
+    "progress": "progress",
+    "cards": "maps",
+    "content": "social_content",
+    "services": "maps.services",
+    "work_journal": "operator",
+    "finance": "finance",
+    "partnerships": "partnerships",
+    "influencers": "influencers",
+    "agents": "agents",
+    "community_sources": "telegram_radar",
+}
+
+MOBILE_MODULE_CAPABILITIES = {
+    "cards": "maps",
+    "content": "social_content",
+    "services": "maps.services",
+    "finance": "finance",
+    "analytics": "finance",
+    "partnerships": "partnerships",
+    "agents": "agents",
+}
+
+MOBILE_ACTION_CAPABILITIES = {
+    "cards.": "maps",
+    "content.": "social_content",
+    "finance.": "finance",
+    "partnerships.": "partnerships",
+    "review_replies.": "maps.reviews",
+    "agents.": "agents",
+    "reviews.": "maps.reviews",
+    "services.": "maps.services",
+    "community_sources.": "telegram_radar",
+}
+
+
 def _inline_scope_subscription_access(scope: dict) -> dict | None:
     if "subscription_tier" not in scope and "subscription_status" not in scope:
         return None
