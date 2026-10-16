@@ -181,7 +181,7 @@ def create_mobile_action_preview(
             return {"status": "blocked", "blocked_reasons": ["business_not_found_or_forbidden"]}
         if capability == "cards.refresh":
             source = str(input_payload.get("source") or "all").strip().lower()
-            if source not in {"all", "yandex", "2gis"}:
+            if source not in {"all", "yandex"}:
                 return {"status": "blocked", "blocked_reasons": ["invalid_card_source"]}
             targets = [requested_business_id]
             objects = [{
@@ -194,7 +194,7 @@ def create_mobile_action_preview(
             changes = [{
                 "object_id": requested_business_id,
                 "operation": capability,
-                "label": "Обновить данные Яндекса и 2ГИС" if source == "all" else f"Обновить данные: {source}",
+                "label": "Обновить данные Яндекса",
             }]
         else:
             try:

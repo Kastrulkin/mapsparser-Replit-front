@@ -3,7 +3,7 @@ from services.operator_map_refresh import build_operator_map_refresh_plan, enque
 
 
 class FakeCursor:
-    def __init__(self, *, map_url="https://yandex.ru/maps/org/oliver", balance=100):
+    def __init__(self, *, map_url="https://yandex.ru/maps/org/oliver/12345/", balance=100):
         self.map_url = map_url
         self.balance = balance
         self.last_query = ""
@@ -153,3 +153,22 @@ def test_paid_map_refresh_blocks_when_balance_is_insufficient() -> None:
     assert "insufficient_balance" in result["blocked_reasons"]
     assert len(cursor.inserted_reservations) == 0
     assert len(cursor.inserted_jobs) == 0
+
+
+def test_yandex_profile_link_becomes_a_parser_compatible_organization_url():
+    plan = build_operator_map_refresh_plan(FakeCursor(map_url='https://yandex.ru/profile/243875812972?utm_source=share'),business_id='biz-1',user_id='user-1',require_runtime_flag=False)
+    assert plan['status'] == 'ready'
+    assert plan['url'] == 'https://yandex.ru/maps/org/243875812972/'
+    assert plan['side_effects']['credit_charged'] is False
+
+
+def test_profile_link_never_normalizes_an_untrusted_host():
+    plan = build_operator_map_refresh_plan(FakeCursor(map_url='https://yandex.ru.evil.example/profile/243875812972'),business_id='biz-1',user_id='user-1',require_runtime_flag=False)
+    assert plan['status'] == 'blocked'
+    assert 'unsupported_map_provider' in plan['blocked_reasons']
+
+
+def test_profile_link_rejects_non_http_schemes():
+    plan = build_operator_map_refresh_plan(FakeCursor(map_url='ftp://yandex.ru/profile/243875812972'), business_id='biz-1', user_id='user-1', require_runtime_flag=False)
+    assert plan['status'] == 'blocked'
+    assert 'unsupported_map_provider' in plan['blocked_reasons']

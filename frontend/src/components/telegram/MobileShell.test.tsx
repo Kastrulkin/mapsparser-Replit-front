@@ -1,6 +1,7 @@
 import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import MobileShell from './MobileShell';
+import { readMobileJson } from '@/lib/mobileDataClient';
 
 describe('MobileShell', () => {
   it('scopes dark theme tokens to the dark mini app, including overlays and navigation', () => {
@@ -21,6 +22,14 @@ describe('MobileShell', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('Нет сети');
     expect(screen.getByText('Загруженные задачи')).toBeInTheDocument();
+  });
+
+  it('clears a stale device-offline warning after the server responds', async () => {
+    render(<MobileShell header={<div>ЛокалОС</div>}><div>Карточки</div></MobileShell>);
+    act(() => window.dispatchEvent(new Event('offline')));
+    expect(screen.getByRole('status')).toHaveTextContent('Нет сети');
+    await act(async () => { await readMobileJson(new Response(JSON.stringify({success:true}),{status:200})); });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('announces request errors', () => {
