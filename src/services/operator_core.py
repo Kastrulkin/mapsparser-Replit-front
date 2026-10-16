@@ -896,7 +896,9 @@ def _operator_tool_catalog(
         arguments=arguments,
         user_id=user_id,
     )
+    from services.operator_knowledge_search import knowledge_search_tool
     tools = [
+        knowledge_search_tool(cursor, business_id, user_id),
         query_tool,
         {
             "name": "business.get_profile",

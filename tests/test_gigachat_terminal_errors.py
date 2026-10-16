@@ -13,6 +13,12 @@ from services.gigachat_client import GigaChatClient, GigaChatProviderError
 from services.outreach_personalization_ai import generate_personalized_sequence
 
 
+@pytest.fixture(autouse=True)
+def isolated_spend_ledger(monkeypatch):
+    monkeypatch.setattr('services.ai_spend_budget.reserve', lambda *_: 'synthetic-reservation')
+    monkeypatch.setattr('services.ai_spend_budget.settle', lambda *_, **__: None)
+
+
 class ProviderResponse:
     status_code = 402
     text = "provider billing body must stay private"

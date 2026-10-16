@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -148,17 +149,21 @@ def _load_actor_id(cursor: Any, requested_actor_id: str | None) -> str:
 
 
 def _load_platform_email_sender(cursor: Any) -> str | None:
+    sender_identity = _text(os.getenv("OUTREACH_PLATFORM_EMAIL_SENDER"))
+    if not sender_identity:
+        return None
     cursor.execute(
         """
         SELECT id
         FROM outreach_sender_accounts
         WHERE scope_type = 'platform'
           AND channel = 'email'
-          AND sender_identity = 'localosgo@gmail.com'
+          AND sender_identity = %s
           AND status = 'connected'
         ORDER BY updated_at DESC
         LIMIT 1
-        """
+        """,
+        (sender_identity,),
     )
     row = cursor.fetchone()
     return _text(row.get("id")) if row else None
@@ -881,7 +886,10 @@ def enqueue_enrichment(
     execute: bool = False,
     freshness_days: int = DEFAULT_FRESHNESS_DAYS,
     force_all: bool = False,
+    requested_by_user_id: str = "",
 ) -> dict[str, Any]:
+    if execute and not str(requested_by_user_id or '').strip():
+        raise ValueError('Укажите автора явной команды подготовки (--actor-id).')
     snapshot = inventory(
         workstream_type=workstream_type,
         business_ids=business_ids,
@@ -941,6 +949,7 @@ def enqueue_enrichment(
                     item["workstream_id"],
                     force=True,
                     allow_paid_enrichment=False,
+                    requested_by_user_id=requested_by_user_id,
                 )
                 conn.commit()
                 result["job_ids"].append(_text(job.get("id")))
@@ -1207,6 +1216,7 @@ def main() -> None:
             execute=args.execute,
             freshness_days=args.freshness_days,
             force_all=args.force_all,
+            requested_by_user_id=args.actor_id or '',
         )
     else:
         result = prepare_campaigns(

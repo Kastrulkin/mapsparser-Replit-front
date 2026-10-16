@@ -1523,7 +1523,7 @@ def partnership_enrich_lead_contacts(lead_id):
                 expected_type="client_partnership",
                 client_business_id=business_id,
             )
-            job = enqueue_enrichment_job(cur, str(workstream.get("id")), force=bool(data.get("force")))
+            job = enqueue_enrichment_job(cur, str(workstream.get("id")), force=bool(data.get("force")), prepare_draft=False, requested_by_user_id=str(user_data.get("user_id") or user_data.get("id") or ""))
             conn.commit()
             return jsonify(
                 {
@@ -1602,6 +1602,7 @@ def partnership_bulk_enrich_contacts():
                     cur,
                     str(workstream.get("id")),
                     allow_paid_enrichment=bool(data.get("allow_paid_enrichment")),
+                    prepare_draft=False, requested_by_user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
                 )
                 jobs.append(
                     {
@@ -1667,6 +1668,7 @@ def partnership_draft_offer(lead_id):
                     cur,
                     str(workstream.get("id")),
                     allow_paid_enrichment=bool(data.get("allow_paid_enrichment")),
+                    requested_by_user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
                 )
                 conn.commit()
                 return jsonify(

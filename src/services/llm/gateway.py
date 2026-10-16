@@ -4,6 +4,8 @@ import json
 from dataclasses import replace
 import os
 import threading
+from contextvars import copy_context
+from services.ai_spend_budget import spend_operation
 
 from services.llm.adapters import DeepSeekAdapter, GigaChatAdapter, _record_llm_usage
 from services.llm.contracts import LLMTaskDefinition, LLMTaskRequest, LLMTaskResult
@@ -357,8 +359,8 @@ def run_llm_shadow_task(request: LLMTaskRequest) -> bool:
     )
     try:
         threading.Thread(
-            target=_run_shadow_request,
-            args=(shadow_request, definition),
+            target=copy_context().run,
+            args=(_run_shadow_request, shadow_request, definition),
             name=f"llm-shadow-{request.task_key}",
             daemon=True,
         ).start()
@@ -389,6 +391,7 @@ def _recovery_prompt(request, definition, result):
     )
 
 
+@spend_operation
 def run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
     definition = get_task_definition(request.task_key)
     if definition is None:
@@ -408,6 +411,12 @@ def run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
         shadow=request.shadow,
     )
     first_result = result
+    if result.fallback_reason in {'gigachat_budget_exceeded', 'deepseek_budget_exceeded'}:
+        # A spend refusal is terminal across providers and shadow processing.
+        result.primary_provider = provider
+        result.output_source = result.provider
+        _record_result(request, definition, result)
+        return result
     correction_attempted = False
     if result.status in {"invalid_json", "schema_invalid"} or (request.task_key == "operator_tool_plan" and result.status in {"empty_response", "truncated_response", "provider_error", "provider_unavailable", "provider_timeout"}):
         correction_attempted = True

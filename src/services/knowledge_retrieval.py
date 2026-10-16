@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any
 
@@ -24,6 +25,7 @@ class KnowledgeSearchRequest:
     limit: int = 12
     pipeline_id: str = ""
     consumer: str = "knowledge"
+    public_only: bool = False
 
 
 @dataclass
@@ -70,6 +72,9 @@ def _filters(request: KnowledgeSearchRequest, *, include_chunk: bool = True) -> 
         "AND source.visibility NOT IN ('private', 'invite')) OR "
         "(document.business_id IS NULL AND document.sensitivity_class = 'shared_deidentified'))",
     ]
+    if request.public_only:
+        filters.extend(["document.sensitivity_class IN ('public','shared_deidentified')",
+                        "source.visibility NOT IN ('private','invite')"])
     if include_chunk:
         filters[0:0] = ["chunk.status = 'ready'", "chunk.stale_at IS NULL"]
     params: list[Any] = [request.purpose, request.business_id]
@@ -277,6 +282,17 @@ def _rrf(vector_rows: list[dict[str, Any]], lexical_rows: list[dict[str, Any]]) 
     )
 
 
+def _public_query_terms(query):
+    # User instructions stay unchanged in the planner; only the lexical search
+    # fallback removes question boilerplate when the original query has no hits.
+    head = re.split(r'[?!.]|ничего не|не публикуй|не изменяй|приведи|укажи', query.lower(), maxsplit=1)[0]
+    stop = {'какие','какая','какой','как','что','есть','базе','база','базы','знаний',
+            'знания','найди','найти','покажи','поиск','рекомендации','компании',
+            'бизнеса','пожалуйста','документам','документах','материалы'}
+    return list(dict.fromkeys(word for word in re.findall(r'[^\W\d_]{3,}', head)
+                              if word not in stop))[:6]
+
+
 def retrieve_knowledge(conn, request: KnowledgeSearchRequest) -> dict[str, Any]:
     started = time.monotonic()
     safe_limit = max(1, min(int(request.limit or 12), 15))
@@ -287,9 +303,13 @@ def retrieve_knowledge(conn, request: KnowledgeSearchRequest) -> dict[str, Any]:
         cursor.close()
         return {"hits": [], "mode": "none", "event_id": "", "reason": "SCHEMA_UNAVAILABLE"}
     lexical_rows = _lexical_rows(cursor, request)
+    if not lexical_rows and request.public_only:
+        terms = _public_query_terms(request.query)
+        if terms and ' '.join(terms) != request.query:
+            lexical_rows = _lexical_rows(cursor, replace(request, query=' '.join(terms)))
     vector_rows: list[dict[str, Any]] = []
     vector_error = ""
-    if _enabled() and _business_allowed(request.business_id):
+    if _enabled() and (_business_allowed(request.business_id) or request.public_only):
         try:
             response = GigaChatEmbeddingClient().embed([_query_instruction(request)])
             vectors = response.get("vectors") or []
@@ -371,22 +391,26 @@ def retrieval_context(result: dict[str, Any], *, max_chars: int = 12000) -> tupl
     hits = result.get("hits") if isinstance(result.get("hits"), list) else []
     blocks: list[str] = []
     used = 0
+    included = []
     for index, hit in enumerate(hits, start=1):
         if not isinstance(hit, KnowledgeHit):
             continue
-        block = f"[{index}] {hit.excerpt}\nИсточник: {hit.permalink or hit.source_id}"
-        remaining = max_chars - used
-        if remaining <= 0:
+        source = f"\nИсточник: {hit.permalink or hit.source_id}"
+        prefix = f"[{index}] "
+        remaining = max_chars - used - (2 if blocks else 0)
+        excerpt_budget = remaining - len(source) - len(prefix)
+        if excerpt_budget < 80:
             break
-        blocks.append(block[:remaining])
-        used += len(blocks[-1])
+        blocks.append(prefix + hit.excerpt[:excerpt_budget] + source)
+        included.append(hit)
+        used += len(blocks[-1]) + (2 if len(blocks) > 1 else 0)
     metadata = {
         "retrieval_event_id": str(result.get("event_id") or ""),
         "retrieval_mode": str(result.get("mode") or "none"),
-        "knowledge_document_ids": [hit.document_id for hit in hits if isinstance(hit, KnowledgeHit)],
-        "knowledge_chunk_ids": [hit.chunk_id for hit in hits if isinstance(hit, KnowledgeHit)],
+        "knowledge_document_ids": [hit.document_id for hit in included],
+        "knowledge_chunk_ids": [hit.chunk_id for hit in included],
         "knowledge_evidence_ids": list(dict.fromkeys(
-            evidence_id for hit in hits if isinstance(hit, KnowledgeHit) for evidence_id in hit.evidence_ids
+            evidence_id for hit in included for evidence_id in hit.evidence_ids
         )),
     }
     return "\n\n".join(blocks), metadata
@@ -401,8 +425,12 @@ def semantic_context_for_connection(
     consumer: str,
     pipeline_id: str = "",
     source_types: tuple[str, ...] = (),
+    use_in_prompt: bool = False,
+    public_only: bool = False,
+    max_chars: int = 12000,
+    limit: int = 12,
 ) -> tuple[str, dict[str, Any]]:
-    if not _enabled() or not _business_allowed(business_id):
+    if not _enabled() or (not _business_allowed(business_id) and not (use_in_prompt and public_only)):
         return "", {"retrieval_reason": "disabled_or_outside_cohort"}
     safe_query, _ = redact_text(query)
     if not safe_query.strip():
@@ -417,11 +445,19 @@ def semantic_context_for_connection(
                 source_types=source_types,
                 pipeline_id=pipeline_id,
                 consumer=consumer,
+                public_only=public_only,
+                limit=limit,
             ),
         )
-        context, metadata = retrieval_context(result)
-        if _shadow_enabled():
+        context, metadata = retrieval_context(result, max_chars=max(500, min(max_chars, 12000)))
+        if _shadow_enabled() and not use_in_prompt:
             return "", {**metadata, "retrieval_shadow": True}
+        if result.get('event_id') and use_in_prompt:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE knowledge_retrieval_events SET metadata_json=COALESCE(metadata_json,'{}') || %s WHERE id=%s",
+                           (Json({'shadow': False, 'used_in_prompt': bool(context), 'context_chars': len(context),
+                                  'public_only': public_only}), result['event_id']))
+            cursor.close()
         return context, {**metadata, "retrieval_shadow": False}
     except Exception as error:
         return "", {"retrieval_reason": "retrieval_failed", "retrieval_error": type(error).__name__}

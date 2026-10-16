@@ -622,7 +622,7 @@ def _save_sender_profile(
 
 @admin_prospecting_bp.route("/api/admin/prospecting/leads/<string:lead_id>/contact-intelligence", methods=["POST"])
 def admin_start_contact_intelligence(lead_id: str):
-    _, error = _require_superadmin()
+    user_data, error = _require_superadmin()
     if error:
         return error
     data = request.get_json(silent=True) or {}
@@ -640,6 +640,7 @@ def admin_start_contact_intelligence(lead_id: str):
             workstream_id,
             force=bool(data.get("force")),
             allow_paid_enrichment=bool(data.get("allow_paid_enrichment")),
+            requested_by_user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
         )
         conn.commit()
         return jsonify({"success": True, "job": _serialize_job(job), "reused": bool(job.get("reused"))}), 202
@@ -901,7 +902,9 @@ def partnership_contact_intelligence(lead_id: str):
                 cursor,
                 workstream_id,
                 force=bool(data.get("force")),
+                prepare_draft=bool(data.get("prepare_draft")),
                 allow_paid_enrichment=bool(data.get("allow_paid_enrichment")),
+                requested_by_user_id=str(context.get("user", {}).get("user_id") or context.get("user", {}).get("id") or ""),
             )
             conn.commit()
             return jsonify({"success": True, "job": _serialize_job(job), "reused": bool(job.get("reused"))}), 202
@@ -1035,3 +1038,17 @@ def partnership_sender_profile():
         return jsonify({"error": str(validation_error)}), 400
     finally:
         conn.close()
+
+
+@admin_prospecting_bp.route('/api/admin/prospecting/ai-budget', methods=['GET'])
+def admin_ai_spend_budget():
+    _, error = _require_superadmin()
+    if error:
+        return error
+    from services.ai_spend_budget import status, BudgetDenied
+    try:
+        giga = status()
+        deepseek = status(provider='deepseek')
+        return jsonify({'success': True, **giga, 'providers': {'gigachat': giga, 'deepseek': deepseek}})
+    except Exception:
+        return jsonify({'success': False, 'error': 'Не удалось проверить бюджет AI. Генерация заблокирована.'}), 503

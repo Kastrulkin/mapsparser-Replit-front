@@ -3210,7 +3210,7 @@ def enrichment_backfill():
         job_ids = []
         if should_queue:
             for workstream in workstreams:
-                job = enqueue_enrichment_job(cursor, str(workstream["id"]), force=force)
+                job = enqueue_enrichment_job(cursor, str(workstream["id"]), force=force, requested_by_user_id=str(user_data.get("user_id") or user_data.get("id") or ""))
                 job_ids.append(str(job.get("id")))
                 if job.get("reused"):
                     reused += 1

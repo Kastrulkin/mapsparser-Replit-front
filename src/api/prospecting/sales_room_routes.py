@@ -1360,7 +1360,7 @@ def generate_outreach_draft(lead_id):
             if workstream:
                 from services.contact_intelligence_service import enqueue_enrichment_job
 
-                job = enqueue_enrichment_job(cur, str(workstream.get("id")), force=bool(data.get("force")))
+                job = enqueue_enrichment_job(cur, str(workstream.get("id")), force=bool(data.get("force")), requested_by_user_id=str(user_data.get("user_id") or user_data.get("id") or ""))
                 conn.commit()
                 return jsonify(
                     {

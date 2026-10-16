@@ -329,13 +329,7 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
                 ),
             )
             cursor.close()
-            if workstream_ids and messages:
-                from services.contact_intelligence_service import enqueue_enrichment_job
-
-                cursor = conn.cursor()
-                for workstream_id in workstream_ids:
-                    enqueue_enrichment_job(cursor, workstream_id, force=True)
-                cursor.close()
+            # Monitoring saves evidence only. Draft preparation requires a separate user command.
         except Exception as error:
             errors.append({"source_id": str(source.get("id") or ""), "message": str(error)[:300]})
             cursor = conn.cursor()

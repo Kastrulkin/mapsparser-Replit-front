@@ -2624,6 +2624,8 @@ def enqueue_enrichment_job(
     workstream_id: str,
     force: bool = False,
     allow_paid_enrichment: bool = False,
+    requested_by_user_id: str = "",
+    prepare_draft: bool = True,
 ) -> dict[str, Any]:
     cursor.execute(
         "SELECT pg_advisory_xact_lock(hashtext(%s))",
@@ -2639,6 +2641,10 @@ def enqueue_enrichment_job(
         (workstream_id,),
     )
     latest = cursor.fetchone()
+    actor = str(requested_by_user_id or "").strip()
+    if not actor:
+        return {**dict(latest or {}), "reused": True, "skipped": True,
+                "reason": "manual_request_required", "workstream_id": workstream_id}
     if latest and str(latest.get("status") if isinstance(latest, dict) else latest[2]) in ACTIVE_JOB_STATUSES:
         payload = dict(latest)
         if allow_paid_enrichment and not bool(payload.get("allow_paid_enrichment")):
@@ -2663,11 +2669,13 @@ def enqueue_enrichment_job(
         """
         INSERT INTO lead_enrichment_jobs (
             id, workstream_id, status, current_phase, attempt_count,
-            max_attempts, next_attempt_at, allow_paid_enrichment, created_at, updated_at
-        ) VALUES (%s, %s, 'queued', 'collecting', 0, 2, NOW(), %s, NOW(), NOW())
+            max_attempts, next_attempt_at, allow_paid_enrichment, result_json, created_at, updated_at
+        ) VALUES (%s, %s, 'queued', 'collecting', 0, 2, NOW(), %s, %s, NOW(), NOW())
         RETURNING *
         """,
-        (job_id, workstream_id, allow_paid_enrichment),
+        (job_id, workstream_id, allow_paid_enrichment, Json({'generation_request': {
+            'source': 'user_request', 'actor_user_id': actor, 'prepare_draft': prepare_draft,
+            'requested_at': datetime.now(timezone.utc).isoformat(), 'workstream_id': workstream_id}})),
     )
     payload = dict(cursor.fetchone())
     payload["reused"] = False
@@ -2680,15 +2688,7 @@ def sync_parsed_lead_contacts(cursor, lead: dict[str, Any]) -> dict[str, int]:
         return {"contacts_saved": 0, "jobs_queued": 0}
     contacts = exclude_public_channel_contacts(cursor, lead_id, legacy_contact_candidates(lead))
     contacts_saved = upsert_contact_points(cursor, lead_id, contacts)
-    cursor.execute("SELECT id FROM lead_workstreams WHERE lead_id = %s", (lead_id,))
-    workstream_rows = cursor.fetchall() or []
-    jobs_queued = 0
-    for row in workstream_rows:
-        workstream_id = row.get("id") if isinstance(row, dict) else row[0]
-        job = enqueue_enrichment_job(cursor, str(workstream_id), force=True)
-        if not job.get("reused"):
-            jobs_queued += 1
-    return {"contacts_saved": contacts_saved, "jobs_queued": jobs_queued}
+    return {"contacts_saved": contacts_saved, "jobs_queued": 0}
 
 
 def claim_next_enrichment_job(cursor) -> dict[str, Any] | None:
@@ -2698,6 +2698,8 @@ def claim_next_enrichment_job(cursor) -> dict[str, Any] | None:
         FROM lead_enrichment_jobs job
         WHERE job.status IN ('queued', 'retry_wait')
           AND job.next_attempt_at <= NOW()
+          AND job.result_json->'generation_request'->>'source' = 'user_request'
+          AND COALESCE(job.result_json->'generation_request'->>'actor_user_id','') <> ''
         ORDER BY CASE WHEN job.status = 'retry_wait' THEN 0 ELSE 1 END,
                  job.next_attempt_at ASC, job.created_at ASC
         FOR UPDATE SKIP LOCKED
@@ -2869,6 +2871,25 @@ def _sync_legacy_best_contact(cursor, lead_id: str) -> None:
     )
 
 
+def _manual_preparation(function):
+    from functools import wraps
+    from services.ai_spend_budget import request_scope
+
+    @wraps(function)
+    def execute(cursor, job):
+        authorization = (job.get('result_json') or {}).get('generation_request') or {}
+        actor = str(authorization.get('actor_user_id') or '').strip()
+        if (authorization.get('source') != 'user_request' or not actor
+                or authorization.get('workstream_id') != str(job.get('workstream_id') or '')):
+            raise PersonalizationGenerationError('manual_request_required',
+                'Переподготовка обращений разрешена только по вашей команде.', retryable=False)
+        with request_scope(operation_id=str(job['id']), user_id=actor,
+                           task_key='outreach_personalization'):
+            return function(cursor, job)
+    return execute
+
+
+@_manual_preparation
 def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
     cursor.execute(
         """
@@ -2959,6 +2980,16 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
 
     cursor.execute("UPDATE lead_enrichment_jobs SET status = 'researching', current_phase = 'researching', updated_at = NOW() WHERE id = %s", (job.get("id"),))
     research = upsert_native_research(cursor, lead, workstream)
+    authorization = (job.get('result_json') or {}).get('generation_request') or {}
+    if authorization.get('prepare_draft') is not True:
+        # A contact lookup cannot create or replace an outreach draft.
+        result = {'lead_id': str(lead['id']), 'workstream_id': str(workstream['id']),
+                  'contacts_collected': len(contacts), 'mode': 'contact_research',
+                  'draft_prepared': False, 'external_dispatch_performed': False}
+        cursor.execute("""UPDATE lead_enrichment_jobs SET status='ready',current_phase='ready',
+            completed_at=NOW(),result_json=COALESCE(result_json,'{}'::jsonb) || %s,
+            updated_at=NOW() WHERE id=%s RETURNING *""", (Json(result),job['id']))
+        return dict(cursor.fetchone())
     sender = (
         _load_platform_sender_profile(cursor)
         if workstream.get("sender_mode") in {
@@ -3132,7 +3163,8 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
         UPDATE lead_enrichment_jobs
         SET status = %s, current_phase = %s, completed_at = NOW(),
             hunter_requests_used = hunter_requests_used + %s,
-            message_brief_json = %s, readiness_json = %s, result_json = %s,
+            message_brief_json = %s, readiness_json = %s,
+            result_json = COALESCE(result_json, '{}'::jsonb) || %s,
             updated_at = NOW()
         WHERE id = %s
         RETURNING *

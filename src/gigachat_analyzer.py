@@ -9,6 +9,11 @@ from typing import Dict, Any, List, Tuple
 import time
 import random
 
+
+def _guarded_generation_post(url, headers, body, **kwargs):
+    from services.ai_spend_budget import guarded_post
+    return guarded_post(lambda: requests.post(url, headers=headers, json=body, **kwargs), body)
+
 class GigaChatAnalyzer:
     def __init__(self, client_id: str = None, client_secret: str = None):
         """Поддержка одиночного ключа и пула ключей с ротацией.
@@ -233,7 +238,7 @@ class GigaChatAnalyzer:
         last_error = None
         for attempt in range(max_retries):
             try:
-                response = requests.post(url, json=json_body, headers=headers, timeout=60)
+                response = _guarded_generation_post(url, headers, json_body, timeout=60, verify=self.verify_tls)
                 # Если лимиты/авторизация — пробуем ротацию ключа и повтор
                 if response.status_code in (401, 403, 429, 503):
                     last_error = RuntimeError(f"HTTP {response.status_code}")
@@ -382,7 +387,7 @@ class GigaChatAnalyzer:
                 "max_tokens": 4000
             }
             
-            response = requests.post(url, headers=headers, json=data, timeout=60)
+            response = _guarded_generation_post(url, headers, data, timeout=60, verify=self.verify_tls)
             response.raise_for_status()
             
             result = response.json()
@@ -415,7 +420,7 @@ class GigaChatAnalyzer:
                 "max_tokens": 4000
             }
             
-            response = requests.post(url, headers=headers, json=data, timeout=60, verify=self.verify_tls)
+            response = _guarded_generation_post(url, headers, data, timeout=60, verify=self.verify_tls)
             response.raise_for_status()
             
             result = response.json()

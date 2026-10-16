@@ -14,6 +14,7 @@ from psycopg2.extras import Json, RealDictCursor
 
 from core.knowledge_policy import detect_pii_flags, redact_text
 from services.gigachat_client import get_gigachat_client
+from services.ai_spend_budget import BudgetDenied
 
 
 EMBEDDING_VERSION = "semantic_memory_v1"
@@ -130,13 +131,13 @@ class GigaChatEmbeddingClient:
         if not texts:
             return {"vectors": [], "usage": 0, "request_id": ""}
         started = time.monotonic()
-        response = requests.post(
-            f"{self.base_url}/embeddings",
-            headers=self._headers(),
-            json={"model": self.model, "input": texts},
-            timeout=90,
-            verify=get_gigachat_client().verify_tls,
-        )
+        from services.ai_spend_budget import guarded_post
+        body = {"model": self.model, "input": texts, "max_tokens": 1}
+        response = guarded_post(
+            lambda: requests.post(f"{self.base_url}/embeddings", headers=self._headers(),
+                                  json={"model": self.model, "input": texts}, timeout=90,
+                                  verify=get_gigachat_client().verify_tls),
+            body, {'provider': 'gigachat_embeddings', 'task_key': 'knowledge_embedding'})
         response.raise_for_status()
         payload = response.json()
         items = payload.get("data") if isinstance(payload.get("data"), list) else []
@@ -452,6 +453,15 @@ def process_embedding_jobs(conn, *, batch_size: int | None = None) -> dict[str, 
             "tokens": int(response.get("usage") or 0),
             "balance": balance,
         }
+    except BudgetDenied:
+        cursor = conn.cursor()
+        for job in jobs:
+            cursor.execute("""UPDATE knowledge_embedding_jobs SET status='queued',
+                attempt_count=GREATEST(0,attempt_count-1),error_code='embedding_budget_exceeded',
+                next_attempt_at=NOW()+INTERVAL '1 hour',updated_at=NOW() WHERE id=%s""", (job['id'],))
+            cursor.execute("UPDATE knowledge_embedding_chunks SET status='pending',error_code='embedding_budget_exceeded',updated_at=NOW() WHERE id=%s", (job['chunk_id'],))
+        cursor.close()
+        return {'status': 'budget_guard', 'processed': 0, 'attempted': len(jobs)}
     except Exception as error:
         cursor = conn.cursor()
         code = "EMBEDDING_PROVIDER_ERROR"

@@ -7,6 +7,7 @@ import uuid
 from typing import Any
 
 import requests
+from services.ai_spend_budget import guarded_post, BudgetDenied
 from services.llm.contracts import LLMTaskDefinition, LLMTaskRequest, LLMTaskResult
 from services.llm.registry import model_for_definition
 
@@ -117,6 +118,7 @@ class GigaChatAdapter:
                 shadow=shadow,
                 record_usage=False,
                 model_override=model,
+                max_output_tokens=definition.max_tokens,
             )
             result = LLMTaskResult(
                 status="completed",
@@ -206,12 +208,12 @@ class DeepSeekAdapter:
         attempts = 1 if request.task_key in {"operator_tool_plan", "content_plan_direction"} else 2
         for attempt in range(attempts):
             try:
-                response = requests.post(
-                    f"{self.base_url}/chat/completions",
-                    headers=headers,
-                    json=body,
-                    timeout=definition.timeout_seconds,
-                )
+                response = guarded_post(
+                    lambda: requests.post(
+                        f"{self.base_url}/chat/completions",
+                        headers=headers, json=body, timeout=definition.timeout_seconds),
+                    body, {'provider': 'deepseek', 'task_key': request.task_key,
+                           'business_id': request.business_id, 'user_id': request.user_id})
                 if response.status_code in {429, 500, 502, 503, 504} and attempt + 1 < attempts:
                     last_error = f"HTTP_{response.status_code}"
                     time.sleep(0.4)
@@ -235,6 +237,11 @@ class DeepSeekAdapter:
                     provider_request_id=str(payload.get("id") or ""),
                 )
                 return result
+            except BudgetDenied:
+                return LLMTaskResult(
+                    status="budget_exceeded", provider=self.provider, model=model,
+                    fallback_reason="deepseek_budget_exceeded", shadow=shadow,
+                    latency_ms=int((time.monotonic() - started) * 1000))
             except Exception:
                 last_error = str(sys.exc_info()[1])[:240]
                 failure = sys.exception()

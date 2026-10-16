@@ -20,10 +20,11 @@ class PlannerContext:
         self.reverse = {}
 
     def tools(self, tools):
-        if not self.domains:
-            return tools
-        selected = [tool for tool in tools if tool['name'].split('.')[0] in self.domains or tool['name'].startswith(('operator.', 'settings.', 'localos.'))]
-        return selected or tools
+        # Keep every tool and its complete input contract. Output schemas and
+        # duplicated execution metadata stay on the server, where validation runs.
+        fields = {'name', 'description', 'input_schema', 'risk_class', 'approval_required'}
+        return [{key: value for key, value in tool.items() if key in fields}
+                for tool in tools]
 
     def encode(self, value):
         if isinstance(value, dict):

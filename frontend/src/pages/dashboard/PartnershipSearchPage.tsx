@@ -51,7 +51,6 @@ import {
 	recordPartnershipReaction,
 	runPartnershipGeoSearch,
 	runPartnershipLeadAction,
-	startPartnershipContactIntelligence,
 	updatePartnershipQueueDelivery,
 } from '@/components/prospecting/partnershipApi';
 import {
@@ -1196,26 +1195,10 @@ export const PartnershipSearchPage: React.FC = () => {
 
   const handleSenderProfileChanged = (state: { confirmed: boolean; ready: boolean }) => {
     if (!currentBusinessId || !selectedLead) return;
-    if (!state.confirmed || !state.ready) {
-      setMessage('Черновик профиля сохранён. Заполните оставшиеся пункты и подтвердите факты — LocalOS сразу повторит проверку выбранного лида.');
-      void refreshOperationalData();
-      return;
-    }
-    const leadId = selectedLead.id;
-    const workstreamId = String(selectedLead.active_workstream_id || selectedLead.workstream_id || '').trim();
-    void runPartnershipAction('Профиль сохранён, но не удалось обновить выбранного лида', async () => {
-      const matchPayload = await runPartnershipLeadAction(currentBusinessId, leadId, 'match');
-      setMatchData(matchPayload.result || null);
-      if (workstreamId) {
-        await startPartnershipContactIntelligence(currentBusinessId, leadId, workstreamId);
-      }
-      setMessage(
-        workstreamId
-          ? 'Факты подтверждены. LocalOS заново проверил совместимость и обновляет персонализацию выбранного лида.'
-          : 'Факты подтверждены. LocalOS заново проверил совместимость; для персонализации нужно создать рабочий поток лида.',
-      );
-      await refreshAllPartnershipData();
-    });
+    setMessage(state.confirmed && state.ready
+      ? 'Профиль подтверждён. Для нового черновика запустите подготовку письма отдельно.'
+      : 'Черновик профиля сохранён. Заполните недостающие сведения и подтвердите факты.');
+    void refreshOperationalData();
   };
 
   const enrichContacts = async (leadId: string) => {

@@ -135,7 +135,7 @@ def test_enrichment_enqueue_reuses_terminal_job_until_explicit_retry():
     assert reused["reused"] is True
     assert cursor.inserted is False
 
-    restarted = enqueue_enrichment_job(cursor, "ws-1", force=True)
+    restarted = enqueue_enrichment_job(cursor, "ws-1", force=True, requested_by_user_id="owner")
 
     assert restarted["id"] == "new-job"
     assert restarted["reused"] is False
@@ -269,9 +269,9 @@ def test_booking_provider_contacts_are_not_attributed_to_the_salon():
         """
         <html><body>
           <a href="tel:+7 812 555-01-47">Телефон 047 Beauty Zone</a>
-          <a href="mailto:beauty047@gmail.com">Почта салона</a>
+          <a href="mailto:beauty047@example.com">Почта салона</a>
           <section class="dikidi-booking-widget">
-            <a href="mailto:info@dikidi.net">Поддержка сервиса записи</a>
+            <a href="mailto:info@booking.example.com">Поддержка сервиса записи</a>
             <a href="https://t.me/dikidi_business">Telegram сервиса Dikidi</a>
           </section>
         </body></html>
@@ -281,8 +281,8 @@ def test_booking_provider_contacts_are_not_attributed_to_the_salon():
 
     typed_values = {(item["contact_type"], item["normalized_value"]) for item in contacts}
     assert ("phone", "+78125550147") in typed_values
-    assert ("email", "beauty047@gmail.com") in typed_values
-    assert ("email", "info@dikidi.net") not in typed_values
+    assert ("email", "beauty047@example.com") in typed_values
+    assert ("email", "info@booking.example.com") not in typed_values
     assert ("telegram", "https://t.me/dikidi_business") not in typed_values
 
 
@@ -1745,8 +1745,8 @@ def test_manual_contact_uses_schema_allowed_unverified_status(monkeypatch):
                 "id": "contact-1",
                 "lead_id": "lead-1",
                 "contact_type": "email",
-                "value": "pr@yesapart.com",
-                "normalized_value": "pr@yesapart.com",
+                "value": "pr@hotel.example.com",
+                "normalized_value": "pr@hotel.example.com",
                 "owner_type": "company",
                 "verification_status": "found",
             }
@@ -1759,7 +1759,7 @@ def test_manual_contact_uses_schema_allowed_unverified_status(monkeypatch):
         workstream={"lead_id": "lead-1"},
         data={
             "contact_type": "email",
-            "value": "pr@yesapart.com",
+            "value": "pr@hotel.example.com",
             "owner_type": "company",
         },
         actor_id="user-1",

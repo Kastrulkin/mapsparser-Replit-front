@@ -38,6 +38,7 @@ import {
 import { outreachDefaultsForWorkstream, workstreamLabel, type ContactPoint, type EnrichmentState, type LeadWorkstream, type MessageReadiness, type SenderMode, type WorkstreamResearch, type WorkstreamType } from './AdminLeadRegistry.logic';
 import { OutreachDateTimePicker } from './OutreachDateTimePicker';
 import { OutreachLearningInsights } from './OutreachLearningInsights';
+import { OutreachBudgetStatus } from './OutreachBudgetStatus';
 import { OutreachMessageQueue } from './OutreachMessageQueue';
 import { OutreachScheduleCalendar } from './OutreachScheduleCalendar';
 import { buildProjectedOutreachTouches, defaultOutreachStartValue, outreachStartIso } from './OutreachScheduleCalendar.logic';
@@ -2132,8 +2133,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         sender_profile_completeness: completeness,
       } : current);
       if (savedProfile?.confirmed_at) {
-        setNotice('Профиль отправителя подтверждён. Перезапускаем проверку письма.');
-        await startContactIntelligence();
+        setNotice('Профиль отправителя подтверждён. Для подготовки письма нажмите «Подготовить обращение».');
       } else {
         const missing = Array.isArray(completeness?.missing_items)
           ? completeness.missing_items.map((item: { label?: string }) => String(item.label || '')).filter(Boolean)
@@ -2611,6 +2611,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
 
   return (
     <div className="min-h-[620px] bg-white">
+      <OutreachBudgetStatus />
       <div className="border-b border-slate-200 px-4 py-4 sm:px-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex min-w-0 items-center gap-2 overflow-x-auto pb-1 xl:pb-0">
@@ -3725,7 +3726,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       {busyAction === 'contact-intelligence' || ['queued', 'collecting', 'verifying', 'researching', 'drafting'].includes(String(contactIntelligence?.job?.status || selectedWorkstream.enrichment_state?.status || ''))
                         ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                         : <Search className="mr-2 h-4 w-4" />}
-                      {drawerContacts.length ? 'Проверить ещё раз' : 'Найти контакты'}
+                      {drawerContacts.length ? 'Переподготовить обращение (AI)' : 'Подготовить обращение (AI)'}
                     </Button>
                   </div>
                 </div>

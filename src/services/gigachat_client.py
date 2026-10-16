@@ -18,7 +18,8 @@ class GigaChatProviderError(RuntimeError):
     """Safe provider failure that preserves retry semantics without response bodies."""
 
     def __init__(self, *, code: str, status_code: int, retryable: bool):
-        super().__init__(f"GigaChat request rejected (HTTP {status_code})")
+        super().__init__('Лимит расхода AI достигнут или бюджет недоступен. Генерация остановлена; проверьте бюджет перед повтором.'
+                         if code == 'gigachat_budget_exceeded' else f"GigaChat request rejected (HTTP {status_code})")
         self.code = code
         self.status_code = status_code
         self.retryable = retryable
@@ -178,13 +179,19 @@ class GigaChatClient:
         
         raise RuntimeError(f"Не удалось получить токен GigaChat: {last_error}")
     
-    def _post_with_retry(self, url: str, headers: Dict[str, str], json_body: Dict[str, Any], max_retries: int = 3, timeout: int = 60) -> Dict[str, Any]:
+    def _post_with_retry(self, url: str, headers: Dict[str, str], json_body: Dict[str, Any], max_retries: int = 3, timeout: int = 60, budget_context=None) -> Dict[str, Any]:
         """POST запрос с retry и ротацией ключей"""
         last_error = None
         
         for attempt in range(max_retries):
             try:
-                response = requests.post(url, json=json_body, headers=headers, timeout=timeout, verify=self.verify_tls)
+                from services.ai_spend_budget import guarded_post, BudgetDenied
+                try:
+                    response = guarded_post(
+                        lambda: requests.post(url, json=json_body, headers=headers, timeout=timeout, verify=self.verify_tls),
+                        json_body, budget_context)
+                except BudgetDenied:
+                    raise GigaChatProviderError(code='gigachat_budget_exceeded', status_code=429, retryable=False) from None
                 
                 status_code = int(response.status_code or 0)
                 if 200 <= status_code < 300:
@@ -404,7 +411,7 @@ class GigaChatClient:
                      business_id: str = None, user_id: str = None,
                      usage_reference: str = None, prompt_version: str = None,
                      shadow: bool = False, record_usage: bool = True,
-                     model_override: str = "") -> Tuple[str, Dict[str, Any]]:
+                     model_override: str = "", max_output_tokens: int = 0) -> Tuple[str, Dict[str, Any]]:
         """Анализ текста с поддержкой Function Calling
         
         Args:
@@ -454,7 +461,11 @@ class GigaChatClient:
                 data["functions"] = functions
                 data["parameters"]["function_call"] = "auto"
             
-            result = self._post_with_retry(url, headers, data, max_retries=3)
+            data['max_tokens'] = min(model_config['max_tokens'], max_output_tokens) if max_output_tokens > 0 else model_config['max_tokens']
+            context = {'task_key': task_type, 'business_id': business_id, 'user_id': user_id}
+            if usage_reference:
+                context['operation_id'] = usage_reference
+            result = self._post_with_retry(url, headers, data, max_retries=3, budget_context=context)
             
             # Извлекаем usage из ответа
             usage_info = {}

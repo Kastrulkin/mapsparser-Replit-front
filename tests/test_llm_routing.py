@@ -1,3 +1,4 @@
+import pytest
 from pathlib import Path
 import threading
 
@@ -13,6 +14,12 @@ from services.llm.analytics import (
     build_service_catalog_analysis_payload,
 )
 from services.llm.schema import validate_json_schema
+
+
+@pytest.fixture(autouse=True)
+def isolated_spend_ledger(monkeypatch):
+    monkeypatch.setattr('services.ai_spend_budget.reserve', lambda *_: 'synthetic-reservation')
+    monkeypatch.setattr('services.ai_spend_budget.settle', lambda *_, **__: None)
 
 
 def test_registry_assigns_expected_provider_and_models(monkeypatch):

@@ -793,10 +793,8 @@ def create_workstream(
     )
     payload = dict(cur.fetchone())
     payload.pop("agreement_json", None)
-    from services.contact_intelligence_service import enqueue_enrichment_job
-
-    enrichment_job = enqueue_enrichment_job(cur, workstream_id)
-    payload["enrichment_job_id"] = str(enrichment_job.get("id"))
+    # Creating/opening a workstream does not authorize paid draft preparation.
+    payload["enrichment_job_id"] = None
     payload["reused"] = False
     return payload
 
