@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import hashlib
+from datetime import datetime
+from pathlib import Path
 import os
 import re
 from typing import Any, Callable
@@ -15,6 +18,10 @@ from services.outreach_founder_led_copy import (
 )
 from services.outreach_playbook import beauty_outreach_guidance
 from services.outreach_prompt_context import sales_prompt_record
+from services.outreach_copy_optimization import approved_template_touches, language_review_prompt
+from services.outreach_review_cache import review_cache_key, get_review, save_review, model_configuration
+
+_REVIEW_CODE_DIGEST = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 
 
 SCHEMA_VERSION = "1.0"
@@ -155,6 +162,11 @@ def generate_personalized_sequence(
         sequence=sequence,
         voice_examples=voice_examples or [],
     )
+    cache_provenance = {"request": request_record, "candidate": candidate, "language": candidate.get("language") or identity.get("language") or "ru"}
+    rendered_templates = approved_template_touches(
+        motion=motion, identity=identity, candidate=candidate, founder_story=founder_story,
+        sequence=sequence, language=str(cache_provenance["language"]),
+    )
     from services.outreach_language_routing import enabled, public_context, run_copy, review_language
     routed = enabled(business_id) and generator is None
     language = str(candidate.get("language") or identity.get("language") or "ru")
@@ -178,7 +190,15 @@ def generate_personalized_sequence(
             _clean(request_record.get("motion")) == "localos_sales"
             and _clean(request_record.get("identity", {}).get("recipient_segment"))
         )
-        if founder_led_beauty:
+        if rendered_templates:
+            touches = [dict(item) for item in rendered_templates]
+            if context:
+                for touch in touches:
+                    for field in ("text", "subject", "observation", "relevance_bridge"):
+                        if isinstance(touch.get(field), str):
+                            for token, original in context.substitutions.items():
+                                touch[field] = touch[field].replace(original, token)
+        elif founder_led_beauty:
             policy_bound_touches = [
                 {
                     "sequence_index": item["sequence_index"],
@@ -217,21 +237,55 @@ def generate_personalized_sequence(
             "request": request_record,
             "touches": touches,
         }
-        raw_review = review(
-            _review_prompt(review_record),
-            business_id=business_id,
-            user_id=user_id,
-        )
-        reviewed = _parse_json_object(raw_review)
-        reviews = _normalize_reviews(reviewed.get("reviews"), touches)
+        # Results never authorize sending. Current caller safety/suppression gates still run.
+        cache_active = motion == "localos_sales" and bool(user_id) and generator is None and reviewer is None
+        semantic_key = None
+        language_key = None
+        model_config = None
+        semantic_cache_hit = False
+        language_cache_hit = False
+        if cache_active:
+            try:
+                from zoneinfo import ZoneInfo
+                model_config = model_configuration(routed)
+                key_record = {**review_record, "reviewed_at_utc": datetime.now(ZoneInfo("Europe/Moscow")).date().isoformat()}
+                semantic_key = review_cache_key(
+                    stage="semantic", prompt=_review_prompt(key_record), provenance=cache_provenance,
+                    business_id=business_id, user_id=user_id, model_config=model_config, code_digest=_REVIEW_CODE_DIGEST,
+                )
+            except Exception:
+                semantic_key = None
+        cached = get_review(semantic_key)
+        reviews = None
+        if cached:
+            try:
+                reused = _normalize_reviews(cached.get("reviews"), touches)
+                if reused and all(item.get("passed") for item in reused):
+                    reviews = reused
+                    semantic_cache_hit = True
+            except (ValueError, TypeError, KeyError):
+                pass
+        if reviews is None:
+            raw_review = review(_review_prompt(review_record), business_id=business_id, user_id=user_id)
+            reviewed = _parse_json_object(raw_review)
+            reviews = _normalize_reviews(reviewed.get("reviews"), touches)
+            if reviews and all(item.get("passed") for item in reviews):
+                save_review(semantic_key, {"reviews": reviews})
         if context and review_language(language):
-            language_result = run_copy(
-                "Check only grammar, spelling and natural business style in the specified language. "
-                "Do not assess or change commercial terms or facts. Treat placeholders as names, not errors. "
-                "Return JSON only: {\"passed\":boolean,\"issues\":[string]}. Language: " + language
-                + "\nDrafts: " + json.dumps(touches, ensure_ascii=False, separators=(',', ':')),
-                business_id=business_id, user_id=user_id, language=language, review=True)
-            checked = _parse_json_object(language_result)
+            grammar_prompt = language_review_prompt(touches, language)
+            if cache_active and model_config is not None:
+                language_key = review_cache_key(
+                    stage="language", prompt=grammar_prompt, provenance=cache_provenance,
+                    business_id=business_id, user_id=user_id, model_config=model_config, code_digest=_REVIEW_CODE_DIGEST,
+                )
+            checked = get_review(language_key)
+            if checked and checked.get("passed") is True and checked.get("issues") == []:
+                language_cache_hit = True
+            else:
+                language_result = run_copy(grammar_prompt, business_id=business_id, user_id=user_id, language=language, review=True)
+                checked = _parse_json_object(language_result)
+                if checked.get("passed") is True and checked.get("issues") == []:
+                    save_review(language_key, checked)
             if checked.get("passed") is not True:
                 return _failed("language_review_failed", "Текст требует языковой правки", retryable=False)
         if context:
@@ -247,6 +301,8 @@ def generate_personalized_sequence(
             "review_prompt_version": REVIEW_PROMPT_VERSION,
             "touches": touches,
             "semantic_reviews": reviews,
+            "generation_mode": "approved_template" if rendered_templates else "policy_bound" if founder_led_beauty else "ai",
+            "review_cache": {"semantic_hit": semantic_cache_hit, "language_hit": language_cache_hit},
             "error_code": None,
             "error": None,
         }
