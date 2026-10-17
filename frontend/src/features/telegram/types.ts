@@ -185,6 +185,7 @@ export type ModuleScreenProps = {
   generateContentDraft: (item: ModuleItem) => Promise<void>;
   updateContentItem: (item: ModuleItem, values: { theme: string; draft_text: string; scheduled_for: string; expected_version?: string }) => Promise<void>;
   discussContent?: (item: ModuleItem) => void;
+  discussPartner?: (item: ModuleItem) => void;
   reload: () => Promise<void>;
   openTarget: (screen?: string, targetScope?: { kind?: string; id?: string }) => void;
   track: (eventName: string, target?: string) => void;

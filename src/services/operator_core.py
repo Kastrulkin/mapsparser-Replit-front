@@ -2270,6 +2270,11 @@ def route_operator_message(
     subscription_access: dict | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     clean_message = str(message or "").strip()
+    if (pending_context or {}).get('selected_partner'):
+        from services import operator_partner_work
+        result, next_context = operator_partner_work.route(cursor, user_id=user_id, business_id=business_id,
+            message=clean_message, selected=pending_context['selected_partner'], conversation_id=conversation_id)
+        return standardize_operator_result(result, result.get('capability') or 'partnerships.read'), next_context
     # Explicit task reviews replace unfinished clarifications; permissions remain in operator_task.
     from services.operator_outreach_read_request import send_review_request
     requested_send = send_review_request(clean_message)
@@ -2996,6 +3001,12 @@ def confirm_pending_operator_action(
     if isinstance(envelope, str):
         envelope = json.loads(envelope)
     envelope = envelope if isinstance(envelope, dict) else {}
+    if capability == 'partnerships.selected_draft':
+        from services import operator_partner_work
+        result = standardize_operator_result(operator_partner_work.apply(cursor, user_id=user_id, business_id=business_id, envelope=envelope), capability)
+        if result.get('status') == 'completed':
+            finish_operator_action(cursor, action_id=action_id, result=result)
+        return result, False
     if capability == 'communications.control_email':
         from services.operator_control_email import execute
         result = standardize_operator_result(execute(cursor, business_id=business_id, user_id=user_id,

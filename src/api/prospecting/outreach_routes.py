@@ -1653,34 +1653,13 @@ def partnership_draft_offer(lead_id):
             if not lead:
                 return jsonify({"error": "Lead not found"}), 404
             if letter_type == "first_note":
-                from services.contact_intelligence_service import enqueue_enrichment_job
-                from services.lead_workstream_service import resolve_workstream
-
-                workstream = resolve_workstream(
-                    conn,
-                    lead_id=lead_id,
-                    workstream_id=str(data.get("workstream_id") or "").strip() or None,
-                    expected_type="client_partnership",
-                    client_business_id=business_id,
-                )
-                job = enqueue_enrichment_job(
-                    cur,
-                    str(workstream.get("id")),
-                    allow_paid_enrichment=bool(data.get("allow_paid_enrichment")),
-                )
+                from services.operator_partner_work import queue_first_note
+                job = queue_first_note(cur, user_id=str(user_data.get('user_id') or user_data.get('id') or ''),
+                    business_id=business_id, lead_id=lead_id, workstream_id=str(data.get('workstream_id') or '').strip() or None,
+                    allow_paid_enrichment=bool(data.get('allow_paid_enrichment')))
                 conn.commit()
-                return jsonify(
-                    {
-                        "success": True,
-                        "accepted": True,
-                        "job": {
-                            "id": str(job.get("id")),
-                            "status": job.get("status"),
-                            "phase": job.get("current_phase"),
-                        },
-                        "message": "Первое письмо будет создано после проверки контакта и оснований",
-                    }
-                ), 202
+                return jsonify({'success': True, 'accepted': True, 'job': job,
+                    'message': 'Первое письмо будет создано после проверки контакта и оснований'}), 202
 
             cur.execute("SELECT match_json FROM partnershipleadartifacts WHERE lead_id = %s", (lead_id,))
             row = cur.fetchone()

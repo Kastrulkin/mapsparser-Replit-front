@@ -1,4 +1,5 @@
-import { miniAppChannel, miniAppPath } from "@/lib/miniAppPlatform";
+import { WorkDiscussion } from './WorkDiscussion';
+import { miniAppChannel, miniAppPath, miniAppLaunchParams } from "@/lib/miniAppPlatform";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { PartnershipResults } from '../prospecting/PartnershipResults';
 import { AnimatePresence, motion } from "framer-motion";
@@ -253,11 +254,11 @@ const Empty = ({ title, text }: { title: string; text: string }) => (
   </div>
 );
 
-export const PartnershipsMobileModule = ({ scope, openBusiness }: { scope?: Scope; openBusiness?: (businessId: string) => void }) => {
+export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onDiscuss }: { scope?: Scope; openBusiness?: (businessId: string) => void; focusItemId?: string; onDiscuss?: (lead: Lead) => void }) => {
   const businessId = scope?.kind === "business" ? String(scope.id || "") : "";
-  const requestedLeadId = new URLSearchParams(window.location.search).get("item_type") === "partner"
-    ? new URLSearchParams(window.location.search).get("item_id") || ""
-    : "";
+  const requestedLeadId = focusItemId || (miniAppLaunchParams().get("item_type") === "partner"
+    ? miniAppLaunchParams().get("item_id") || ""
+    : "");
   const [tab, setTab] = useState<PartnershipTab>("overview");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -295,6 +296,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness }: { scope?: Scop
   const [access, setAccess] = useState<PartnershipAccess>({ allowed: true });
   const [totalCandidates, setTotalCandidates] = useState(0);
   const loadVersion = useRef(0);
+  const appliedFocus = useRef('');
 
   const load = async (silent = false, filters = { query, stage }) => {
     const current = ++loadVersion.current;
@@ -367,10 +369,11 @@ export const PartnershipsMobileModule = ({ scope, openBusiness }: { scope?: Scop
       setOutcomes(outcomeData);
       setSourceQuality(sourceData);
       setBlockers(blockerData);
-      if (!selectedLead && requestedLeadId) {
+      if (requestedLeadId && appliedFocus.current !== `${businessId}:${requestedLeadId}`) {
         const requestedLead = nextLeads.find((item) => item.id === requestedLeadId);
         if (requestedLead) {
           setSelectedLead(requestedLead);
+          appliedFocus.current = `${businessId}:${requestedLeadId}`;
           setTab("leads");
         }
       } else if (selectedLead)
@@ -394,7 +397,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness }: { scope?: Scop
     setSelectedLeads([]);
     void load();
     return () => { loadVersion.current += 1; };
-  }, [businessId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [businessId, requestedLeadId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const action = async (
     key: string,
@@ -1512,6 +1515,8 @@ export const PartnershipsMobileModule = ({ scope, openBusiness }: { scope?: Scop
             update={updateLead}
             run={runLeadAction}
             operate={operateLead}
+            businessId={businessId}
+            discuss={onDiscuss}
           />
         ) : null}
         {confirmBatch ? (
@@ -1535,6 +1540,8 @@ export const PartnershipsMobileModule = ({ scope, openBusiness }: { scope?: Scop
 };
 
 const LeadSheet = ({
+  businessId,
+  discuss,
   lead,
   busy,
   close,
@@ -1542,6 +1549,8 @@ const LeadSheet = ({
   run,
   operate,
 }: {
+  businessId: string;
+  discuss?: (lead: Lead) => void;
   lead: Lead;
   busy: string;
   close: () => void;
@@ -1731,6 +1740,10 @@ const LeadSheet = ({
                 ) : null}
               </div>
             ) : null}
+            <div className="mt-4">
+              <WorkDiscussion businessId={businessId} itemId={lead.id} updatedAt={lead.updated_at} itemType="partner"
+                disabled={editing || Boolean(busy)} onDiscuss={discuss ? () => discuss(lead) : undefined} />
+            </div>
             <button
               disabled={busy !== ""}
               onClick={() =>

@@ -108,7 +108,7 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
                             user_id=user_id, role="user", content=message,
                             result={"input_type": "voice" if transcript else "text", "transcription_id": transcript, 'input_origin': input_origin})
     pending_context = conversation_pending_context(conversation)
-    if payload.get('clear_input_context') and pending_context.get('capability') == 'content.editorial.selected':
+    if payload.get('clear_input_context') and (pending_context.get('selected_item') or pending_context.get('selected_partner')):
         pending_context = {}
     if payload.get('selected_object') is not None:
         selected = payload['selected_object']
@@ -120,6 +120,14 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
             if selected.get('version') and selected['version'] != selection['version']:
                 raise ValueError('Пост изменился. Откройте актуальную версию.')
             pending_context = {'capability': 'content.editorial.selected', 'selected_item': selection}
+        elif selected.get('type') == 'partner':
+            from services.operator_partner_work import partner_selection
+            selection = partner_selection(cursor, user_id=user_id, business_id=business_id, item_id=selected.get('id'), expected_updated_at=selected.get('updated_at'))
+            if selected.get('version') and selected['version'] != selection['version']:
+                raise ValueError('Карточка партнёра изменилась. Откройте её заново.')
+            pending_context = {'capability': 'partnerships.selected', 'selected_partner': selection}
+        else:
+            raise ValueError('Этот тип обсуждения не поддерживается.')
     request_token = current_request_key.set(f"{conversation_id}:{request_id or user_message_id}")
     try:
         result, pending = router(
@@ -143,6 +151,13 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
         result['selected_item'] = selected_result
         if result.get('status') != 'cancelled':
             pending = {**pending, 'capability': pending.get('capability') or 'content.editorial.selected', 'selected_item': selected_result}
+    partner = result.get('selected_partner') or pending.get('selected_partner') or pending_context.get('selected_partner')
+    if partner and partner.get('item_id') and result.get('status') != 'cancelled':
+        from services.operator_work_handoff import mobile_work_url
+        platform = 'max' if channel in {'max_bot', 'max_mini_app'} else 'telegram'
+        result['work_return_url'] = mobile_work_url(business_id, partner['item_id'], platform, 'partnerships', 'partner')
+        result['selected_partner'] = partner
+        pending = {**pending, 'selected_partner': partner}
     result["conversation_id"] = conversation_id
     result['user_message_id'] = user_message_id
     approval = result.get("approval") or {}

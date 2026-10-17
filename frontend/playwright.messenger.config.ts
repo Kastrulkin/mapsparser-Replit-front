@@ -1,0 +1,2 @@
+import { defineConfig } from '@playwright/test';
+export default defineConfig({testDir:'./e2e',testMatch:['partner-work.spec.ts','meliora-content.spec.ts'],outputDir:'test-results-messenger',timeout:45000,expect:{timeout:8000},workers:1,use:{baseURL:'http://127.0.0.1:4181',trace:'retain-on-failure',screenshot:'only-on-failure'},projects:[{name:'phone',use:{viewport:{width:390,height:844}}},{name:'desktop',use:{viewport:{width:1440,height:960}}}],webServer:{command:'npm run dev -- --host 127.0.0.1 --port 4181',url:'http://127.0.0.1:4181',reuseExistingServer:false}});

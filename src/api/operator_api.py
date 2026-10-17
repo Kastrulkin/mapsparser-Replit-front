@@ -1362,7 +1362,7 @@ def operator_work_handoff():
         from services.operator_work_handoff import prepare_handoff
         result = prepare_handoff(cursor, user_id=str(user.get('user_id') or user.get('id') or ''),
             business_id=business_id, platform=payload.get('platform'), item_id=payload.get('item_id'),
-            request_id=str(payload.get('request_id') or ''), updated_at=payload.get('updated_at'))
+            request_id=str(payload.get('request_id') or ''), updated_at=payload.get('updated_at'), item_type=payload.get('item_type') or 'content_item')
         db.conn.commit()
         return jsonify({'success': True, **result})
     except PermissionError:
