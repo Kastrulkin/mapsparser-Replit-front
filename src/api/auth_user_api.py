@@ -97,6 +97,7 @@ def _attach_business_capabilities(businesses, *, is_superadmin=False):
             _safe_get(business, "id")
         )
         business_payload["subscription_access"] = build_subscription_capabilities(
+            business_id=str(_safe_get(business, "id") or ""),
             tier=str(_safe_get(business, "subscription_tier", "") or ""),
             status=str(_safe_get(business, "subscription_status", "") or ""),
             subscription_ends_at=_safe_get(business, "subscription_ends_at"),
@@ -114,7 +115,7 @@ def get_user_info():
         if not token:
             return jsonify({"error": "Требуется авторизация"}), 401
 
-        user_data = verify_session(token, include_inactive=True)
+        user_data = verify_session(token)
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
 

@@ -39,11 +39,11 @@ export const workNavigationCopy = (language: Language) => {
 };
 
 export const safeWorkReturn = (value: string | null | undefined): string | null => {
- if (!value || !value.startsWith('/dashboard/') && !value.startsWith('/telegram/control')) return null;
+ if (!value || !value.startsWith('/dashboard/') && !value.startsWith('/telegram/control') && !value.startsWith('/max/control')) return null;
  if (/[\\\r\n]/.test(value) || value.includes('://')) return null;
  const url = new URL(canonicalWorkRoute(value), 'https://localos.pro');
  if (url.origin !== 'https://localos.pro') return null;
- const allowed = [...workDestinations.map(item => item.path), '/dashboard/growth-paths', '/dashboard/work-journal', '/dashboard/chats', '/dashboard/telegram-radar', '/dashboard/web-analytics', '/dashboard/ai-chat-promotion', '/telegram/control'];
+ const allowed = [...workDestinations.map(item => item.path), '/dashboard/growth-paths', '/dashboard/work-journal', '/dashboard/chats', '/dashboard/telegram-radar', '/dashboard/web-analytics', '/dashboard/ai-chat-promotion', '/telegram/control', '/max/control'];
  return allowed.some(path => url.pathname === path || url.pathname.startsWith(path + '/')) ? url.pathname + url.search + url.hash : null;
 };
 export const canonicalWorkRoute = (value: string): string => value.replace('/dashboard/promotion/partnerships', '/dashboard/partnerships').replace('/dashboard/promotion/influencers', '/dashboard/influencers').replace('/dashboard/content-plan', '/dashboard/content');

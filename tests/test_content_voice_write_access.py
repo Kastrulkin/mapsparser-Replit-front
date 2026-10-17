@@ -19,6 +19,7 @@ class VoiceState:
     business_state: str = "active"
     business_access_queries: int = 0
     write_role_queries: int = 0
+    read_role_queries: int = 0
     advisory_locks: int = 0
     profile_upserts: int = 0
     explicit_write_commits: int = 0
@@ -51,6 +52,11 @@ class StrictVoiceCursor:
             self.state.business_access_queries += 1
             self.last_operation = "business_access"
             return
+        if normalized.startswith("select role from business_members"):
+            assert bound_params == ("business-1", actor_id, "business-1", actor_id)
+            self.state.read_role_queries += 1
+            self.last_operation = "read_roles"
+            return
         if "select bm.role" in normalized:
             assert bound_params == (
                 "business-1",
@@ -82,7 +88,7 @@ class StrictVoiceCursor:
             self.state.advisory_locks += 1
             self.last_operation = "advisory"
             return
-        if normalized == "select preferences_json from content_voice_profiles where business_id=%s":
+        if normalized == "select preferences_json,version from content_voice_profiles where business_id=%s for update":
             assert bound_params == ("business-1",)
             self.last_operation = "preferences"
             return
@@ -125,7 +131,7 @@ class StrictVoiceCursor:
     def fetchall(self):
         if self.last_operation == "examples":
             return []
-        if self.last_operation == "write_roles":
+        if self.last_operation in {"write_roles", "read_roles"}:
             roles = {
                 "viewer-1": ["viewer"],
                 "member-1": ["member"],
@@ -256,9 +262,11 @@ def test_content_voice_patch_denies_viewers_before_write_connection_effects(monk
     )
 
     assert (response.status_code, state.profile_upserts, state.explicit_write_commits) == (403, 0, 0)
-    assert state.example_reads == [state.actor_id]
-    assert state.business_access_queries == 2
-    assert state.write_role_queries == 1
+    # The current request-level admission rejects restricted staff before the profile read.
+    assert state.example_reads == []
+    assert state.business_access_queries == 1
+    assert state.read_role_queries == 1
+    assert state.write_role_queries == 0
     assert state.advisory_locks == 0
     assert state.profile_upserts == 0
     assert state.explicit_write_commits == 0
@@ -319,7 +327,8 @@ def test_content_voice_patch_rechecks_write_membership_after_initial_profile_rea
 
     assert (response.status_code, state.profile_upserts, state.explicit_write_commits) == (403, 0, 0)
     assert state.business_access_queries == 2
-    assert state.write_role_queries == 1
+    assert state.write_role_queries == 0
+    assert state.read_role_queries == 2
     assert state.advisory_locks == 0
     assert state.profile_upserts == 0
     assert state.explicit_write_commits == 0
@@ -348,3 +357,28 @@ def test_content_voice_get_preserves_viewer_read_access_and_personal_example_sco
     assert state.advisory_locks == 0
     assert state.profile_upserts == 0
     assert state.explicit_write_commits == 0
+
+
+def test_founder_story_is_shared_and_existing_bot_notes_are_preserved(monkeypatch):
+    state = VoiceState(actor_id="owner-1")
+    existing = {"id": "bot-fact", "kind": "company_fact", "text": "Подтверждённый факт из бота"}
+    state.profiles["business-1"]["preferences_json"]["editorial_notes"] = [existing]
+    client = _client(monkeypatch, state)
+    response = client.patch("/api/content-voice", headers={"Authorization": "Bearer session"}, json={
+        "business_id": "business-1", "expected_version": 3, "founder_story": "История владельца",
+        "preferences": {"editorial_notes": []}, "confirm": True})
+    assert response.status_code == 200
+    notes = state.profiles["business-1"]["preferences_json"]["editorial_notes"]
+    assert notes[0] == existing
+    assert notes[1]["kind"] == "founder_story"
+    assert notes[1]["text"] == "История владельца"
+
+
+def test_stale_settings_version_never_overwrites_bot_facts(monkeypatch):
+    state = VoiceState(actor_id="owner-1")
+    client = _client(monkeypatch, state)
+    response = client.patch("/api/content-voice", headers={"Authorization": "Bearer session"}, json={
+        "business_id": "business-1", "expected_version": 2, "founder_story": "Старый ввод", "confirm": True})
+    assert response.status_code == 409
+    assert state.profile_upserts == 0
+    assert state.rollbacks == 1

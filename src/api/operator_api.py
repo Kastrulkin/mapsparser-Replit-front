@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+from core.api_errors import internal_error_response
 import base64
 import hashlib
 import json
@@ -87,7 +88,7 @@ from services.operator_conversations import (
     list_operator_messages,
     set_operator_pending_context,
 )
-from services.content_plan_service import create_generated_content_plan, delete_content_plan, generate_draft_for_plan_item, update_content_plan_item
+from services.content_plan_service import create_generated_content_plan, delete_content_plan, generate_draft_for_plan_item, update_content_plan_item, ContentPlanItemConflict
 from core.card_automation import get_card_automation_snapshot, save_card_automation_settings
 from core.service_catalog_compression import build_service_catalog_compression_draft
 from services.gigachat_client import analyze_screenshot_with_gigachat
@@ -151,6 +152,7 @@ def _inline_scope_subscription_access(scope: dict) -> dict | None:
     if "subscription_tier" not in scope and "subscription_status" not in scope:
         return None
     return build_subscription_capabilities(
+        business_id=str(scope.get("id") or "") if scope.get("kind") == "business" else None,
         tier=str(scope.get("subscription_tier") or ""),
         status=str(scope.get("subscription_status") or ""),
         subscription_ends_at=scope.get("subscription_ends_at"),
@@ -179,6 +181,7 @@ def _scope_subscription_access(cursor, scope: dict, is_superadmin: bool = False)
         return build_subscription_capabilities(tier="none", status="inactive")
     row_access = [
         build_subscription_capabilities(
+            business_id=str(row.get("id") or ""),
             tier=str(row.get("subscription_tier") or ""),
             status=str(row.get("subscription_status") or ""),
             subscription_ends_at=row.get("subscription_ends_at"),
@@ -1337,6 +1340,40 @@ def operator_request_history(receipt_id=None):
         return jsonify({'error': str(sys.exception())}), 403
     except ValueError:
         return jsonify({'error': str(sys.exception())}), 400
+    finally:
+        db.close()
+
+
+@operator_bp.route('/work-handoff', methods=['POST'])
+def operator_work_handoff():
+    user = require_auth_from_request()
+    if not user:
+        return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify({'success': False, 'error': 'Проверьте параметры перехода'}), 400
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        business_id = str(payload.get('business_id') or '')
+        allowed, _ = verify_business_write_access(cursor, business_id, user)
+        if not allowed:
+            raise PermissionError('Нет доступа к выбранному бизнесу')
+        from services.operator_work_handoff import prepare_handoff
+        result = prepare_handoff(cursor, user_id=str(user.get('user_id') or user.get('id') or ''),
+            business_id=business_id, platform=payload.get('platform'), item_id=payload.get('item_id'),
+            request_id=str(payload.get('request_id') or ''), updated_at=payload.get('updated_at'))
+        db.conn.commit()
+        return jsonify({'success': True, **result})
+    except PermissionError:
+        db.conn.rollback()
+        return jsonify({'success': False, 'error': str(sys.exception())}), 403
+    except (ValueError, TypeError, AttributeError):
+        db.conn.rollback()
+        return jsonify({'success': False, 'error': str(sys.exception())}), 400
+    except Exception:
+        db.conn.rollback()
+        return internal_error_response('Не удалось открыть обсуждение')
     finally:
         db.close()
 
@@ -3411,7 +3448,7 @@ def operator_mobile_content_item_update(item_id: str):
     payload = request.get_json(silent=True) or {}
     allowed_payload = {
         key: payload.get(key)
-        for key in ("theme", "goal", "draft_text", "scheduled_for")
+        for key in ("theme", "goal", "draft_text", "scheduled_for", "expected_version")
         if key in payload
     }
     if not allowed_payload:
@@ -3425,10 +3462,14 @@ def operator_mobile_content_item_update(item_id: str):
     finally:
         db.close()
     try:
-        plan = update_content_plan_item(str(user_data.get("user_id") or user_data.get("id") or ""), item_id, allowed_payload)
+        from core.auth_context import AuthContext
+        plan = update_content_plan_item(str(user_data.get("user_id") or user_data.get("id") or ""), item_id, allowed_payload,
+            auth_context=AuthContext.from_session(user_data))
         return jsonify({"success": True, "scope": scope, "plan": plan})
     except PermissionError as exc:
         return jsonify({"success": False, "error": str(exc)}), 403
+    except ContentPlanItemConflict as exc:
+        return jsonify({'success': False, 'error': str(exc), 'code': 'content_item_stale'}), 409
     except ValueError as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
 

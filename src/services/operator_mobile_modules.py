@@ -101,7 +101,8 @@ def _content(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
     cursor.execute(
         """
         WITH current_plans AS (
-            SELECT id, business_id, title, period_days
+            SELECT id, business_id, title, period_days, created_at,
+                   plan_status
             FROM contentplans
             WHERE (%s OR business_id = ANY(%s))
               AND COALESCE(plan_status, '') <> 'archived'
@@ -109,12 +110,12 @@ def _content(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
         SELECT i.id, i.business_id, b.name AS business_name,
                COALESCE(NULLIF(TRIM(i.theme), ''), 'Элемент контент-плана') AS title,
                COALESCE(NULLIF(TRIM(i.draft_text), ''), NULLIF(TRIM(i.goal), ''), 'Черновик ещё не подготовлен') AS subtitle,
-               i.status, i.updated_at, i.plan_id, p.title AS plan_title, p.period_days AS plan_period_days,
+               i.status, i.updated_at, i.updated_at::text AS version, i.plan_id, p.title AS plan_title, p.period_days AS plan_period_days,
                i.scheduled_for, i.content_type, i.draft_text
         FROM contentplanitems i
         JOIN current_plans p ON p.id = i.plan_id AND p.business_id = i.business_id
         JOIN businesses b ON b.id = i.business_id
-        ORDER BY i.scheduled_for ASC, i.updated_at DESC LIMIT 200
+        ORDER BY p.created_at DESC, i.scheduled_for ASC, i.updated_at DESC LIMIT 200
         """,
         (platform, business_ids),
     )
@@ -341,7 +342,8 @@ def _agents(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
     items = []
     for value in cursor.fetchall() or []:
         item = _row(cursor, value)
-        items.append({**item, "kind": "agent", "status": item.get("run_status") or item.get("status")})
+        items.append({**item, "kind": "agent", "automation_status": item.get("status"),
+                      "status": item.get("run_status") or item.get("status")})
     return items
 
 
@@ -446,11 +448,12 @@ def list_operator_mobile_module(cursor: Any, *, module: str, scope: dict[str, An
             {"key": "partnerships.draft", "label": "Подготовить предложение"},
             {"key": "partnerships.send_preview", "label": "Проверить отправку"},
         ],
-        "agents": (
-            [{"key": "agents.run", "label": "Запустить"}]
-            if str(os.getenv("AGENT_ASYNC_RUNS_ENABLED", "false")).lower() in {"1", "true", "yes", "on"}
-            else []
-        ),
+        "agents": [
+            {"key": "agents.lifecycle", "label": "Управлять автоматизацией"},
+            *([{"key": "agents.run", "label": "Запустить"}]
+              if str(os.getenv("AGENT_ASYNC_RUNS_ENABLED", "false")).lower() in {"1", "true", "yes", "on"}
+              else []),
+        ],
         "diagnostics": [{"key": "diagnostics.retry", "label": "Повторить одну задачу"}],
     }.get(module, [])
     return {

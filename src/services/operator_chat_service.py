@@ -107,11 +107,24 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
     user_message_id = append_operator_message(cursor, conversation_id=conversation_id, business_id=business_id,
                             user_id=user_id, role="user", content=message,
                             result={"input_type": "voice" if transcript else "text", "transcription_id": transcript, 'input_origin': input_origin})
+    pending_context = conversation_pending_context(conversation)
+    if payload.get('clear_input_context') and pending_context.get('capability') == 'content.editorial.selected':
+        pending_context = {}
+    if payload.get('selected_object') is not None:
+        selected = payload['selected_object']
+        if not isinstance(selected, dict):
+            raise ValueError('Проверьте выбранный объект.')
+        if selected.get('type') == 'content_item':
+            from services.operator_work_handoff import content_selection
+            selection = content_selection(cursor, user_id=user_id, business_id=business_id, item_id=selected.get('id'), expected_updated_at=selected.get('updated_at'))
+            if selected.get('version') and selected['version'] != selection['version']:
+                raise ValueError('Пост изменился. Откройте актуальную версию.')
+            pending_context = {'capability': 'content.editorial.selected', 'selected_item': selection}
     request_token = current_request_key.set(f"{conversation_id}:{request_id or user_message_id}")
     try:
         result, pending = router(
             cursor, business_id=business_id, user_id=user_id, channel=channel, message=message,
-            conversation_id=conversation_id, pending_context=conversation_pending_context(conversation),
+            conversation_id=conversation_id, pending_context=pending_context,
             conversation_history=list_operator_messages(cursor, conversation_id=conversation_id, business_id=business_id, limit=12),
             pending_approvals=list_pending_operator_actions(cursor, conversation_id=conversation_id, business_id=business_id, user_id=user_id),
             actor_context=actor_context, subscription_access=subscription_access,
@@ -122,6 +135,14 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
         current_request_key.reset(request_token)
     from services.operator_followups import remember_selection
     remember_selection(cursor, business_id, result, history=list_operator_messages(cursor, conversation_id=conversation_id, business_id=business_id, limit=12))
+    selected_result = result.get('selected_item') or pending.get('selected_item') or pending_context.get('selected_item')
+    if selected_result and selected_result.get('item_id'):
+        from services.operator_work_handoff import mobile_work_url
+        platform = 'max' if channel in {'max_bot', 'max_mini_app'} else 'telegram'
+        result['work_return_url'] = mobile_work_url(business_id, selected_result['item_id'], platform)
+        result['selected_item'] = selected_result
+        if result.get('status') != 'cancelled':
+            pending = {**pending, 'capability': pending.get('capability') or 'content.editorial.selected', 'selected_item': selected_result}
     result["conversation_id"] = conversation_id
     result['user_message_id'] = user_message_id
     approval = result.get("approval") or {}

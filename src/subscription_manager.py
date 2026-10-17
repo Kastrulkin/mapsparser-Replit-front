@@ -4,6 +4,7 @@
 """
 
 from datetime import datetime
+import os
 
 # Суперадмин email (исключение)
 SUPERADMIN_EMAIL = 'demyanovap@yandex.ru'
@@ -84,7 +85,7 @@ def _safe_fromisoformat(value):
     return parsed_value
 
 
-def build_subscription_capabilities(*, tier: str, status: str, subscription_ends_at=None, is_superadmin: bool = False) -> dict:
+def build_subscription_capabilities(*, tier: str, status: str, subscription_ends_at=None, is_superadmin: bool = False, business_id: str | None = None) -> dict:
     normalized_tier = _normalize_tier(tier)
     normalized_status = _normalize_status(status)
     ends_at = _safe_fromisoformat(subscription_ends_at)
@@ -98,6 +99,10 @@ def build_subscription_capabilities(*, tier: str, status: str, subscription_ends
     capabilities = set(MANAGEMENT_CAPABILITIES) if is_superadmin else {'operator'}
     if active and not is_superadmin:
         capabilities |= set(TIER_CAPABILITIES.get(normalized_tier, set()))
+    # A scoped pilot opens content only; it never changes a tariff or grants automation.
+    content_pilots = {value.strip() for value in os.getenv('CONTENT_ACCESS_BUSINESS_IDS', '').split(',') if value.strip()}
+    if business_id and str(business_id) in content_pilots and normalized_status in ACTIVE_SUBSCRIPTION_STATUSES and not expired:
+        capabilities.add('social_content')
     return {
         'tier': normalized_tier,
         'tier_name': TIER_PUBLIC_NAMES.get(normalized_tier, normalized_tier.title()),
@@ -220,6 +225,7 @@ def get_subscription_access(business_id: str) -> dict:
             tier in PAID_TIERS and subscription_ends_at and now > subscription_ends_at
         )
         capability_contract = build_subscription_capabilities(
+            business_id=business_id,
             tier=tier,
             status=status,
             subscription_ends_at=subscription_ends_at,

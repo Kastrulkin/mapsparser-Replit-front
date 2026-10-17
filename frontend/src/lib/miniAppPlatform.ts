@@ -26,11 +26,11 @@ export const miniAppSdkUrl = () => miniAppPlatform() === 'max'
 
 export const miniAppLaunchParams = () => {
   const params = new URLSearchParams(window.location.search);
-  const start = miniWebApp()?.initDataUnsafe?.start_param;
-  if (miniAppPlatform() === 'max' && start?.startsWith('nav_') && start.length <= 512) {
+  const start = miniWebApp()?.initDataUnsafe?.start_param || params.get(miniAppPlatform() === 'max' ? 'WebAppStartParam' : 'tgWebAppStartParam');
+  if (start?.startsWith('nav_') && start.length <= 512) {
     try {
       const encoded = start.slice(4).replace(/-/g, '+').replace(/_/g, '/');
-      const navigation: unknown = JSON.parse(atob(encoded));
+      const navigation: unknown = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(encoded), character => character.charCodeAt(0))));
       if (navigation && typeof navigation === 'object') {
         for (const [key, value] of Object.entries(navigation)) {
           if (['screen', 'scope_type', 'scope_id', 'item_type', 'item_id'].includes(key) && typeof value === 'string' && !params.has(key)) params.set(key, value);

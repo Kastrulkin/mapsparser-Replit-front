@@ -12,10 +12,50 @@ from services.content_voice_service import (
     delete_content_voice_example,
     get_content_voice,
     update_content_voice,
+    ContentVoiceConflict,
 )
 
 
 content_voice_bp = Blueprint("content_voice", __name__, url_prefix="/api/content-voice")
+
+
+@content_voice_bp.route('/references', methods=['GET', 'POST'])
+def editorial_references():
+    user, error = _require_auth()
+    if error:
+        return error
+    from database_manager import DatabaseManager
+    from services import content_references
+    from services.content_voice_service import _verify_access
+    data = request.get_json(silent=True) or {} if request.method == 'POST' else {}
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Проверьте параметры запроса'}), 400
+    business_id = str(request.args.get('business_id') or data.get('business_id') or '').strip()
+    if not business_id:
+        return jsonify({'error': 'Выберите бизнес'}), 400
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        auth = _verify_access(cursor, AuthContext.from_session(user), business_id, require_write=request.method == 'POST')
+        if request.method == 'POST':
+            content_references.change_reference(cursor, business_id, auth, data)
+        result = content_references.list_references(cursor, business_id, auth)
+        db.conn.commit()
+        return jsonify(result)
+    except content_references.ReferenceConflict:
+        db.conn.rollback()
+        return jsonify({'error': str(sys.exception())}), 409
+    except PermissionError:
+        db.conn.rollback()
+        return jsonify({'error': str(sys.exception())}), 403
+    except ValueError:
+        db.conn.rollback()
+        return jsonify({'error': str(sys.exception())}), 400
+    except Exception:
+        db.conn.rollback()
+        return internal_error_response('Не удалось обработать ориентиры')
+    finally:
+        db.close()
 
 
 def _require_auth():
@@ -43,6 +83,8 @@ def content_voice_profile():
         return jsonify({"success": True, "profile": profile})
     except PermissionError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ContentVoiceConflict:
+        return jsonify({'success': False, 'error': str(sys.exception())}), 409
     except ValueError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
     except Exception:

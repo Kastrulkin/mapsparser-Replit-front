@@ -2093,11 +2093,19 @@ def _build_ask_localos_menu() -> InlineKeyboardMarkup:
 
 def _build_operator_result_markup(result: dict[str, Any]) -> InlineKeyboardMarkup:
     rows = []
+    work_return = str(result.get('work_return_url') or '')
+    if work_return.startswith(('https://localos.pro/telegram/control?', 'https://localos.pro/max/control?')):
+        rows.append([InlineKeyboardButton('Вернуться к посту', web_app=WebAppInfo(url=work_return))])
     result_ref = result.get("result_ref") if isinstance(result.get("result_ref"), dict) else {}
     href = str(result_ref.get("href") or "").strip()
     if href:
         absolute_href = href if href.startswith("http") else str(os.getenv("PUBLIC_BASE_URL") or "https://localos.pro").rstrip("/") + href
-        rows.append([InlineKeyboardButton(str(result_ref.get("label") or "Открыть результат"), url=absolute_href)])
+        from services.operator_mini_app_links import result_mini_app_url
+        mini_url = result_mini_app_url(result)
+        if mini_url and globals().get('owner_bot_platform', lambda: 'telegram')() == 'telegram':
+            rows.append([InlineKeyboardButton(str(result_ref.get("label") or "Открыть результат"), web_app=WebAppInfo(url=mini_url))])
+        else:
+            rows.append([InlineKeyboardButton(str(result_ref.get("label") or "Открыть результат"), url=absolute_href)])
     for action in result.get('ui_actions') or []:
         target=str(action.get('href') or '')
         if action.get('action')=='open_journal' and target.startswith('/dashboard/work-journal?'):
@@ -3722,6 +3730,40 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if args and len(args) > 0:
             bind_token = args[0]
+            if bind_token.startswith('content_'):
+                from services.operator_work_handoff import mobile_work_url
+                try:
+                    business_id = str(uuid.UUID(bind_token.removeprefix('content_')))
+                    scope = _resolve_telegram_control_scope(user_id, requested_kind='business', requested_id=business_id, persist=True)
+                    if not scope or str(scope.get('id')) != business_id:
+                        raise PermissionError('Нет доступа к этому бизнесу. Привяжите свой аккаунт LocalOS или попросите владельца пригласить вас.')
+                    await _reply_effective_message(update, f"LocalOS · {scope.get('name') or 'Бизнес'}\n\nОткройте контент-план. В разделе «О компании, основателе и стиле» можно добавить сведения о себе и ориентиры для новых текстов.",
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('Открыть контент-план', web_app=WebAppInfo(url=mobile_work_url(business_id, platform=owner_bot_platform())))]]))
+                except (ValueError, PermissionError):
+                    await _reply_effective_message(update, str(sys.exception()))
+                return
+            if bind_token.startswith('work_'):
+                db_user_id = get_user_id_from_telegram(user_id)
+                if not db_user_id:
+                    await _reply_effective_message(update, 'Сначала привяжите свой аккаунт LocalOS, затем откройте обсуждение из мини-приложения.')
+                    return
+                from services.operator_work_handoff import resume_handoff
+                connection = get_db_connection()
+                try:
+                    work = resume_handoff(connection.cursor(), user_id=str(db_user_id), token=bind_token, platform=owner_bot_platform())
+                    connection.commit()
+                    scope = _resolve_telegram_control_scope(user_id, requested_kind='business', requested_id=work['business_id'], persist=True)
+                    if not scope or str(scope.get('id')) != work['business_id']:
+                        raise PermissionError('Нет доступа к выбранному бизнесу.')
+                    user_states[user_id] = {'state': 'idle'}
+                    await _reply_effective_message(update, f"LocalOS · {scope.get('name') or 'Бизнес'}\n\nОткрыто обсуждение выбранного поста. Напишите или надиктуйте, что изменить. Сам переход ничего не меняет.",
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('Вернуться к посту', web_app=WebAppInfo(url=work['return_url']))]]))
+                except (ValueError, PermissionError, TypeError):
+                    connection.rollback()
+                    await _reply_effective_message(update, str(sys.exception()))
+                finally:
+                    connection.close()
+                return
             if bind_token.startswith("creator_claim_"):
                 await handle_creator_claim(update, bind_token.removeprefix("creator_claim_"), user_id)
                 return

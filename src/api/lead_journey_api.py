@@ -69,6 +69,7 @@ def _subscription_access(cursor, business_id: str, user_data: dict[str, Any]) ->
     )
     business = cursor.fetchone() or {}
     return build_subscription_capabilities(
+        business_id=business_id,
         tier=str(business.get("subscription_tier") or ""),
         status=str(business.get("subscription_status") or ""),
         subscription_ends_at=business.get("subscription_ends_at"),
@@ -688,6 +689,7 @@ def action_command(action_id: str):
             cursor.execute("SELECT subscription_tier, subscription_status, subscription_ends_at FROM businesses WHERE id = %s", (business_id,))
             subscription_row = cursor.fetchone() or {}
             subscription_access = build_subscription_capabilities(
+                business_id=business_id,
                 tier=str(subscription_row.get("subscription_tier") or ""),
                 status=str(subscription_row.get("subscription_status") or ""),
                 subscription_ends_at=subscription_row.get("subscription_ends_at"),

@@ -1,0 +1,1170 @@
+--- a/src/api/operator_api.py
++++ b/src/api/operator_api.py
+@@ -2,6 +2,7 @@
+ 
+ import os
+ import sys
++from core.api_errors import internal_error_response
+ import base64
+ import hashlib
+ import json
+@@ -87,7 +88,7 @@
+     list_operator_messages,
+     set_operator_pending_context,
+ )
+-from services.content_plan_service import create_generated_content_plan, delete_content_plan, generate_draft_for_plan_item, update_content_plan_item
++from services.content_plan_service import create_generated_content_plan, delete_content_plan, generate_draft_for_plan_item, update_content_plan_item, ContentPlanItemConflict
+ from core.card_automation import get_card_automation_snapshot, save_card_automation_settings
+ from core.service_catalog_compression import build_service_catalog_compression_draft
+ from services.gigachat_client import analyze_screenshot_with_gigachat
+@@ -1337,6 +1338,40 @@
+         return jsonify({'error': str(sys.exception())}), 403
+     except ValueError:
+         return jsonify({'error': str(sys.exception())}), 400
++    finally:
++        db.close()
++
++
++@operator_bp.route('/work-handoff', methods=['POST'])
++def operator_work_handoff():
++    user = require_auth_from_request()
++    if not user:
++        return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
++    payload = request.get_json(silent=True) or {}
++    if not isinstance(payload, dict):
++        return jsonify({'success': False, 'error': 'Проверьте параметры перехода'}), 400
++    db = DatabaseManager()
++    try:
++        cursor = db.conn.cursor()
++        business_id = str(payload.get('business_id') or '')
++        allowed, _ = verify_business_write_access(cursor, business_id, user)
++        if not allowed:
++            raise PermissionError('Нет доступа к выбранному бизнесу')
++        from services.operator_work_handoff import prepare_handoff
++        result = prepare_handoff(cursor, user_id=str(user.get('user_id') or user.get('id') or ''),
++            business_id=business_id, platform=payload.get('platform'), item_id=payload.get('item_id'),
++            request_id=str(payload.get('request_id') or ''), updated_at=payload.get('updated_at'))
++        db.conn.commit()
++        return jsonify({'success': True, **result})
++    except PermissionError:
++        db.conn.rollback()
++        return jsonify({'success': False, 'error': str(sys.exception())}), 403
++    except (ValueError, TypeError, AttributeError):
++        db.conn.rollback()
++        return jsonify({'success': False, 'error': str(sys.exception())}), 400
++    except Exception:
++        db.conn.rollback()
++        return internal_error_response('Не удалось открыть обсуждение')
+     finally:
+         db.close()
+ 
+@@ -3411,7 +3446,7 @@
+     payload = request.get_json(silent=True) or {}
+     allowed_payload = {
+         key: payload.get(key)
+-        for key in ("theme", "goal", "draft_text", "scheduled_for")
++        for key in ("theme", "goal", "draft_text", "scheduled_for", "expected_version")
+         if key in payload
+     }
+     if not allowed_payload:
+@@ -3425,10 +3460,14 @@
+     finally:
+         db.close()
+     try:
+-        plan = update_content_plan_item(str(user_data.get("user_id") or user_data.get("id") or ""), item_id, allowed_payload)
++        from core.auth_context import AuthContext
++        plan = update_content_plan_item(str(user_data.get("user_id") or user_data.get("id") or ""), item_id, allowed_payload,
++            auth_context=AuthContext.from_session(user_data))
+         return jsonify({"success": True, "scope": scope, "plan": plan})
+     except PermissionError as exc:
+         return jsonify({"success": False, "error": str(exc)}), 403
++    except ContentPlanItemConflict as exc:
++        return jsonify({'success': False, 'error': str(exc), 'code': 'content_item_stale'}), 409
+     except ValueError as exc:
+         return jsonify({"success": False, "error": str(exc)}), 400
+ 
+--- a/src/api/content_voice_api.py
++++ b/src/api/content_voice_api.py
+@@ -12,6 +12,7 @@
+     delete_content_voice_example,
+     get_content_voice,
+     update_content_voice,
++    ContentVoiceConflict,
+ )
+ 
+ 
+@@ -82,6 +83,8 @@
+         return jsonify({"success": True, "profile": profile})
+     except PermissionError:
+         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
++    except ContentVoiceConflict:
++        return jsonify({'success': False, 'error': str(sys.exception())}), 409
+     except ValueError:
+         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+     except Exception:
+--- /dev/null
++++ b/src/services/operator_work_handoff.py
+@@ -0,0 +1,109 @@
++"""Authorized work selection shared by messenger bots and mobile workspaces.
++
++Opening a handoff never invokes the Operator or confirms a business action.
++The existing conversation storage owns the selection; no second task store.
++"""
++import json
++import os
++import uuid
++from datetime import datetime
++from urllib.parse import urlencode
++
++from services.operator_conversations import _row, get_or_create_operator_conversation, set_operator_pending_context
++
++
++def content_selection(cursor, *, user_id, business_id, item_id, expected_updated_at=None):
++    from services.operator_audio import authorize_actor
++    from services import operator_editorial
++    _, access = authorize_actor(cursor, user_id, business_id, require_write=True)
++    from subscription_manager import capability_access_payload
++    if not capability_access_payload(access, 'social_content').get('allowed'):
++        raise PermissionError('Контент недоступен на текущем тарифе этого бизнеса. Проверьте доступ в настройках.')
++    uuid.UUID(str(item_id))
++    rows = operator_editorial._items(cursor, business_id, item_id=str(item_id))
++    if len(rows) != 1 or str(rows[0]['id']) != str(item_id):
++        raise PermissionError('Пост недоступен в выбранном бизнесе.')
++    row = rows[0]
++    if expected_updated_at:
++        seen = datetime.fromisoformat(str(expected_updated_at).replace('Z', '+00:00'))
++        current = datetime.fromisoformat(str(row.get('updated_at')).replace('Z', '+00:00'))
++        if seen != current:
++            raise ValueError('Пост изменился. Обновите список и проверьте актуальный текст.')
++    if row.get('plan_status') == 'archived':
++        raise ValueError('План архивирован. Выберите пост из действующего плана.')
++    return {'item_id': str(row['id']), 'plan_id': str(row['plan_id']), 'version': operator_editorial._version(row)}
++
++
++def mobile_work_url(business_id, item_id=None, platform='telegram', screen='content'):
++    if platform not in {'telegram', 'max'}:
++        raise ValueError('Неизвестная платформа.')
++    params = {'screen': screen, 'scope_type': 'business', 'scope_id': str(business_id)}
++    if item_id:
++        params.update(item_type='content_item', item_id=str(item_id))
++    return 'https://localos.pro/' + platform + '/control?' + urlencode(params)
++
++
++def prepare_handoff(cursor, *, user_id, business_id, platform, item_id, request_id, updated_at=None):
++    if platform not in {'telegram', 'max'}:
++        raise ValueError('Неизвестная платформа.')
++    uuid.UUID(str(request_id))
++    selection = content_selection(cursor, user_id=user_id, business_id=business_id, item_id=item_id, expected_updated_at=updated_at)
++    if platform == 'telegram':
++        cursor.execute('SELECT telegram_id FROM users WHERE id=%s AND is_active=TRUE', (user_id,))
++        binding = _row(cursor, cursor.fetchone()).get('telegram_id')
++        name = os.getenv('TELEGRAM_BOT_USERNAME', 'LocalOspro_bot').strip().removeprefix('@')
++        base = 'https://t.me/'
++    else:
++        cursor.execute('SELECT max_id FROM max_identities WHERE user_id=%s AND revoked_at IS NULL', (user_id,))
++        binding = _row(cursor, cursor.fetchone()).get('max_id')
++        name = os.getenv('MAX_BOT_USERNAME', '').strip().removeprefix('@')
++        base = 'https://max.ru/'
++    if not binding or not name or not name.replace('_', '').isalnum():
++        raise ValueError('Сначала подключите аккаунт и бота этого мессенджера в настройках.')
++    channel = 'max_bot' if platform == 'max' else 'telegram'
++    cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))', ('work-handoff:' + user_id + ':' + request_id,))
++    conversation = get_or_create_operator_conversation(cursor, business_id=business_id, user_id=user_id,
++        channel=channel, transport_key='work-handoff:' + request_id)
++    current = conversation.get('pending_context') or {}
++    if isinstance(current, str):
++        current = json.loads(current)
++    if current.get('selected_item') and current['selected_item']['item_id'] != selection['item_id']:
++        raise ValueError('Этот переход уже создан для другого поста.')
++    if current.get('selected_item') and current['selected_item'].get('version') != selection['version']:
++        raise ValueError('Пост изменился. Откройте его заново перед переходом.')
++    stored = conversation.get('input_context_json') or {}
++    if isinstance(stored, str):
++        stored = json.loads(stored)
++    if stored.get('work_handoff') and stored['work_handoff'] != selection:
++        raise ValueError('Этот переход устарел. Откройте актуальный пост заново.')
++    pending = {'capability': 'content.editorial.selected', 'selected_item': selection}
++    set_operator_pending_context(cursor, str(conversation['id']), pending)
++    if not stored.get('work_handoff'):
++        # Preparing a link cannot steal the bot's currently active discussion.
++        cursor.execute("UPDATE operatorconversations SET status='handoff_prepared',input_context_json=%s::jsonb WHERE id=%s AND user_id=%s",
++            (json.dumps({'work_handoff': selection}), str(conversation['id']), user_id))
++    return {'url': base + name + '?start=work_' + uuid.UUID(str(conversation['id'])).hex,
++            'return_url': mobile_work_url(business_id, item_id, platform), 'selected_item': selection}
++
++
++def resume_handoff(cursor, *, user_id, token, platform):
++    channel = {'telegram': 'telegram', 'max': 'max_bot'}.get(platform)
++    if not channel:
++        raise ValueError('Неизвестная платформа.')
++    identifier = str(uuid.UUID(token.removeprefix('work_')))
++    cursor.execute("SELECT * FROM operatorconversations WHERE id=%s AND user_id=%s AND channel=%s AND status IN ('active','handoff_prepared')",
++                   (identifier, user_id, channel))
++    conversation = _row(cursor, cursor.fetchone())
++    if not conversation:
++        raise PermissionError('Переход недоступен. Откройте пост в своём кабинете.')
++    pending = conversation.get('pending_context') or {}
++    if isinstance(pending, str):
++        pending = json.loads(pending)
++    selected = pending.get('selected_item') or {}
++    selection = content_selection(cursor, user_id=user_id, business_id=str(conversation['business_id']), item_id=selected.get('item_id'))
++    # Reopening an old link must not silently approve a stale content version.
++    if selected.get('version') != selection['version']:
++        raise ValueError('Пост изменился. Откройте его в мини-приложении и начните обсуждение заново.')
++    cursor.execute("UPDATE operatorconversations SET status='active',updated_at=NOW() WHERE id=%s AND user_id=%s", (identifier, user_id))
++    return {'business_id': str(conversation['business_id']), 'conversation_id': identifier,
++            'return_url': mobile_work_url(conversation['business_id'], selection['item_id'], platform)}
+--- a/src/services/operator_chat_service.py
++++ b/src/services/operator_chat_service.py
+@@ -107,11 +107,24 @@
+     user_message_id = append_operator_message(cursor, conversation_id=conversation_id, business_id=business_id,
+                             user_id=user_id, role="user", content=message,
+                             result={"input_type": "voice" if transcript else "text", "transcription_id": transcript, 'input_origin': input_origin})
++    pending_context = conversation_pending_context(conversation)
++    if payload.get('clear_input_context') and pending_context.get('capability') == 'content.editorial.selected':
++        pending_context = {}
++    if payload.get('selected_object') is not None:
++        selected = payload['selected_object']
++        if not isinstance(selected, dict):
++            raise ValueError('Проверьте выбранный объект.')
++        if selected.get('type') == 'content_item':
++            from services.operator_work_handoff import content_selection
++            selection = content_selection(cursor, user_id=user_id, business_id=business_id, item_id=selected.get('id'), expected_updated_at=selected.get('updated_at'))
++            if selected.get('version') and selected['version'] != selection['version']:
++                raise ValueError('Пост изменился. Откройте актуальную версию.')
++            pending_context = {'capability': 'content.editorial.selected', 'selected_item': selection}
+     request_token = current_request_key.set(f"{conversation_id}:{request_id or user_message_id}")
+     try:
+         result, pending = router(
+             cursor, business_id=business_id, user_id=user_id, channel=channel, message=message,
+-            conversation_id=conversation_id, pending_context=conversation_pending_context(conversation),
++            conversation_id=conversation_id, pending_context=pending_context,
+             conversation_history=list_operator_messages(cursor, conversation_id=conversation_id, business_id=business_id, limit=12),
+             pending_approvals=list_pending_operator_actions(cursor, conversation_id=conversation_id, business_id=business_id, user_id=user_id),
+             actor_context=actor_context, subscription_access=subscription_access,
+@@ -122,6 +135,14 @@
+         current_request_key.reset(request_token)
+     from services.operator_followups import remember_selection
+     remember_selection(cursor, business_id, result, history=list_operator_messages(cursor, conversation_id=conversation_id, business_id=business_id, limit=12))
++    selected_result = result.get('selected_item') or pending.get('selected_item') or pending_context.get('selected_item')
++    if selected_result and selected_result.get('item_id'):
++        from services.operator_work_handoff import mobile_work_url
++        platform = 'max' if channel in {'max_bot', 'max_mini_app'} else 'telegram'
++        result['work_return_url'] = mobile_work_url(business_id, selected_result['item_id'], platform)
++        result['selected_item'] = selected_result
++        if result.get('status') != 'cancelled':
++            pending = {**pending, 'capability': pending.get('capability') or 'content.editorial.selected', 'selected_item': selected_result}
+     result["conversation_id"] = conversation_id
+     result['user_message_id'] = user_message_id
+     approval = result.get("approval") or {}
+--- a/src/services/max_owner_dialogues.py
++++ b/src/services/max_owner_dialogues.py
+@@ -258,7 +258,12 @@
+         update = SimpleNamespace(message=message, effective_message=message, effective_user=identity,
+             effective_chat=SimpleNamespace(id=int(max_id), type='private'),
+             callback_query=Callback(callback, message, output) if callback else None)
+-        context = SimpleNamespace(args=message.text.split()[1:] if command != 'start' else [], bot_data={}, user_data={}, bot=InputBot(message))
++        start_payload = str(payload.get('payload') or '') if payload.get('update_type') == 'bot_started' else ''
++        start_args = [start_payload] if start_payload.startswith(('work_', 'content_')) else []
++        command_args = message.text.split()[1:]
++        if command == 'start' and not (command_args and command_args[0].startswith(('work_', 'content_'))):
++            command_args = []  # MAX account linking retains its separate /link boundary.
++        context = SimpleNamespace(args=start_args if payload.get('update_type') == 'bot_started' else command_args, bot_data={}, user_data={}, bot=InputBot(message))
+         async def dispatch():
+             if command == 'industry_patterns_recalibrate' or callback == 'industry_patterns_recalibrate' or callback.startswith('industry_recalibrate:'):
+                 from services.max_commands import handle_command
+--- a/src/services/content_voice_service.py
++++ b/src/services/content_voice_service.py
+@@ -16,6 +16,10 @@
+ CONTENT_EXAMPLE_PLATFORMS = {"", "yandex_maps", "two_gis", "google_business", "telegram", "vk", "instagram", "facebook"}
+ CONTENT_EXAMPLE_ORIGINS = {"manual", "published", "approved_edit", "import"}
+ CONTENT_EXAMPLE_QUALITY = {"reference", "regular", "avoid"}
++
++
++class ContentVoiceConflict(ValueError):
++    pass
+ 
+ 
+ def _row_to_dict(cursor: Any, row: Any) -> dict[str, Any]:
+@@ -302,11 +306,32 @@
+     db = DatabaseManager()
+     cursor = db.conn.cursor()
+     try:
+-        _verify_access(cursor, auth, business_id)
++        _verify_access(cursor, auth, business_id, require_write=True)
+         # Rules have their own versioned write boundary. Legacy style edits cannot overwrite them.
+         cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))',('editorial-profile:'+business_id,))
+-        cursor.execute('SELECT preferences_json FROM content_voice_profiles WHERE business_id=%s',(business_id,))
+-        latest=_row_to_dict(cursor,cursor.fetchone()).get('preferences_json') or {}
++        cursor.execute('SELECT preferences_json,version FROM content_voice_profiles WHERE business_id=%s FOR UPDATE',(business_id,))
++        latest_profile = _row_to_dict(cursor,cursor.fetchone())
++        latest = latest_profile.get('preferences_json') or {}
++        if payload.get('expected_version') is not None and payload['expected_version'] != int(latest_profile.get('version') or 1):
++            raise ContentVoiceConflict('Настройки изменились в другом окне. Сохраните свой текст и откройте настройки заново.')
++        if 'summary' in payload:
++            preferences['tone_instruction'] = summary
++        # Editorial facts can be added from either bot. A stale form must never
++        # overwrite them or the other existing protected profile sections.
++        preferences.pop('editorial_notes', None)
++        if 'editorial_notes' in latest:
++            preferences['editorial_notes'] = latest['editorial_notes']
++        if 'founder_story' in payload:
++            story = payload['founder_story']
++            if not isinstance(story, str) or not 1 <= len(story.strip()) <= 6000:
++                raise ValueError('Добавьте историю основателя длиной до 6000 символов.')
++            notes = list(preferences.get('editorial_notes') or [])
++            if not any(note.get('kind') == 'founder_story' and note.get('text') == story.strip() for note in notes):
++                if len(notes) >= 100:
++                    raise ValueError('Сначала пересмотрите сохранённые сведения: достигнут лимит 100 заметок.')
++                notes.append({'id': str(uuid.uuid4()), 'kind': 'founder_story', 'text': story.strip(),
++                    'source': 'user_statement', 'actor_id': user_id, 'created_at': datetime.now(timezone.utc).isoformat()})
++            preferences['editorial_notes'] = notes
+         preferences.pop('content_rules',None)
+         if 'content_rules' in latest:
+             preferences['content_rules']=latest['content_rules']
+--- a/src/services/operator_mobile_modules.py
++++ b/src/services/operator_mobile_modules.py
+@@ -101,7 +101,7 @@
+     cursor.execute(
+         """
+         WITH current_plans AS (
+-            SELECT id, business_id, title, period_days,
++            SELECT id, business_id, title, period_days, created_at,
+                    plan_status
+             FROM contentplans
+             WHERE (%s OR business_id = ANY(%s))
+@@ -110,12 +110,12 @@
+         SELECT i.id, i.business_id, b.name AS business_name,
+                COALESCE(NULLIF(TRIM(i.theme), ''), 'Элемент контент-плана') AS title,
+                COALESCE(NULLIF(TRIM(i.draft_text), ''), NULLIF(TRIM(i.goal), ''), 'Черновик ещё не подготовлен') AS subtitle,
+-               i.status, i.updated_at, i.plan_id, p.title AS plan_title, p.period_days AS plan_period_days,
++               i.status, i.updated_at, i.updated_at::text AS version, i.plan_id, p.title AS plan_title, p.period_days AS plan_period_days,
+                i.scheduled_for, i.content_type, i.draft_text
+         FROM contentplanitems i
+         JOIN current_plans p ON p.id = i.plan_id AND p.business_id = i.business_id
+         JOIN businesses b ON b.id = i.business_id
+-        ORDER BY i.scheduled_for ASC, i.updated_at DESC LIMIT 200
++        ORDER BY p.created_at DESC, i.scheduled_for ASC, i.updated_at DESC LIMIT 200
+         """,
+         (platform, business_ids),
+     )
+--- a/src/telegram_bot.py
++++ b/src/telegram_bot.py
+@@ -2093,6 +2093,9 @@
+ 
+ def _build_operator_result_markup(result: dict[str, Any]) -> InlineKeyboardMarkup:
+     rows = []
++    work_return = str(result.get('work_return_url') or '')
++    if work_return.startswith(('https://localos.pro/telegram/control?', 'https://localos.pro/max/control?')):
++        rows.append([InlineKeyboardButton('Вернуться к посту', web_app=WebAppInfo(url=work_return))])
+     result_ref = result.get("result_ref") if isinstance(result.get("result_ref"), dict) else {}
+     href = str(result_ref.get("href") or "").strip()
+     if href:
+@@ -3727,6 +3730,40 @@
+     try:
+         if args and len(args) > 0:
+             bind_token = args[0]
++            if bind_token.startswith('content_'):
++                from services.operator_work_handoff import mobile_work_url
++                try:
++                    business_id = str(uuid.UUID(bind_token.removeprefix('content_')))
++                    scope = _resolve_telegram_control_scope(user_id, requested_kind='business', requested_id=business_id, persist=True)
++                    if not scope or str(scope.get('id')) != business_id:
++                        raise PermissionError('Нет доступа к этому бизнесу. Привяжите свой аккаунт LocalOS или попросите владельца пригласить вас.')
++                    await _reply_effective_message(update, f"LocalOS · {scope.get('name') or 'Бизнес'}\n\nОткройте контент-план. В разделе «О компании, основателе и стиле» можно добавить сведения о себе и ориентиры для новых текстов.",
++                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('Открыть контент-план', web_app=WebAppInfo(url=mobile_work_url(business_id, platform=owner_bot_platform())))]]))
++                except (ValueError, PermissionError):
++                    await _reply_effective_message(update, str(sys.exception()))
++                return
++            if bind_token.startswith('work_'):
++                db_user_id = get_user_id_from_telegram(user_id)
++                if not db_user_id:
++                    await _reply_effective_message(update, 'Сначала привяжите свой аккаунт LocalOS, затем откройте обсуждение из мини-приложения.')
++                    return
++                from services.operator_work_handoff import resume_handoff
++                connection = get_db_connection()
++                try:
++                    work = resume_handoff(connection.cursor(), user_id=str(db_user_id), token=bind_token, platform=owner_bot_platform())
++                    connection.commit()
++                    scope = _resolve_telegram_control_scope(user_id, requested_kind='business', requested_id=work['business_id'], persist=True)
++                    if not scope or str(scope.get('id')) != work['business_id']:
++                        raise PermissionError('Нет доступа к выбранному бизнесу.')
++                    user_states[user_id] = {'state': 'idle'}
++                    await _reply_effective_message(update, f"LocalOS · {scope.get('name') or 'Бизнес'}\n\nОткрыто обсуждение выбранного поста. Напишите или надиктуйте, что изменить. Сам переход ничего не меняет.",
++                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('Вернуться к посту', web_app=WebAppInfo(url=work['return_url']))]]))
++                except (ValueError, PermissionError, TypeError):
++                    connection.rollback()
++                    await _reply_effective_message(update, str(sys.exception()))
++                finally:
++                    connection.close()
++                return
+             if bind_token.startswith("creator_claim_"):
+                 await handle_creator_claim(update, bind_token.removeprefix("creator_claim_"), user_id)
+                 return
+--- a/frontend/src/lib/miniAppPlatform.ts
++++ b/frontend/src/lib/miniAppPlatform.ts
+@@ -26,11 +26,11 @@
+ 
+ export const miniAppLaunchParams = () => {
+   const params = new URLSearchParams(window.location.search);
+-  const start = miniWebApp()?.initDataUnsafe?.start_param;
+-  if (miniAppPlatform() === 'max' && start?.startsWith('nav_') && start.length <= 512) {
++  const start = miniWebApp()?.initDataUnsafe?.start_param || params.get(miniAppPlatform() === 'max' ? 'WebAppStartParam' : 'tgWebAppStartParam');
++  if (start?.startsWith('nav_') && start.length <= 512) {
+     try {
+       const encoded = start.slice(4).replace(/-/g, '+').replace(/_/g, '/');
+-      const navigation: unknown = JSON.parse(atob(encoded));
++      const navigation: unknown = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(encoded), character => character.charCodeAt(0))));
+       if (navigation && typeof navigation === 'object') {
+         for (const [key, value] of Object.entries(navigation)) {
+           if (['screen', 'scope_type', 'scope_id', 'item_type', 'item_id'].includes(key) && typeof value === 'string' && !params.has(key)) params.set(key, value);
+--- a/frontend/src/lib/workNavigation.ts
++++ b/frontend/src/lib/workNavigation.ts
+@@ -39,11 +39,11 @@
+ };
+ 
+ export const safeWorkReturn = (value: string | null | undefined): string | null => {
+- if (!value || !value.startsWith('/dashboard/') && !value.startsWith('/telegram/control')) return null;
++ if (!value || !value.startsWith('/dashboard/') && !value.startsWith('/telegram/control') && !value.startsWith('/max/control')) return null;
+  if (/[\\\r\n]/.test(value) || value.includes('://')) return null;
+  const url = new URL(canonicalWorkRoute(value), 'https://localos.pro');
+  if (url.origin !== 'https://localos.pro') return null;
+- const allowed = [...workDestinations.map(item => item.path), '/dashboard/growth-paths', '/dashboard/work-journal', '/dashboard/chats', '/dashboard/telegram-radar', '/dashboard/web-analytics', '/dashboard/ai-chat-promotion', '/telegram/control'];
++ const allowed = [...workDestinations.map(item => item.path), '/dashboard/growth-paths', '/dashboard/work-journal', '/dashboard/chats', '/dashboard/telegram-radar', '/dashboard/web-analytics', '/dashboard/ai-chat-promotion', '/telegram/control', '/max/control'];
+  return allowed.some(path => url.pathname === path || url.pathname.startsWith(path + '/')) ? url.pathname + url.search + url.hash : null;
+ };
+ export const canonicalWorkRoute = (value: string): string => value.replace('/dashboard/promotion/partnerships', '/dashboard/partnerships').replace('/dashboard/promotion/influencers', '/dashboard/influencers').replace('/dashboard/content-plan', '/dashboard/content');
+--- a/frontend/src/features/telegram/ContentModule.tsx
++++ b/frontend/src/features/telegram/ContentModule.tsx
+@@ -1,3 +1,6 @@
++import { ContentPersonalization } from '@/components/content-plan/ContentPersonalization';
++import { WorkDiscussion } from '@/components/telegram/WorkDiscussion';
++import { Button } from '@/components/ui/button';
+ import { spring } from './motion';
+ import { useMobileJobPolling } from '@/components/telegram/useMobileJobPolling';
+ import ActionPreviewSheet,{ type MobileActionPreview } from '@/components/telegram/ActionPreviewSheet';
+@@ -43,7 +46,13 @@
+   return new Date(`${key}T12:00:00`).toLocaleDateString('ru-RU', withWeekday ? { weekday: 'long', day: 'numeric', month: 'long' } : { day: 'numeric', month: 'long' });
+ };
+ 
+-export const ContentModule = ({ focusItemId, scope, items, filters, busy, generate, update, reload }: { focusItemId?: string; scope?: MobileScope; items: ModuleItem[]; filters?: ModuleData['filters']; busy: string; generate: (item: ModuleItem) => Promise<void>; update: (item: ModuleItem, values: { theme: string; draft_text: string; scheduled_for: string }) => Promise<void>; reload: () => Promise<void> }) => {
++export const ContentModule = ({ focusItemId, scope, items: allItems, filters, busy, generate, update, reload, onDiscuss, openKnowledge }: { focusItemId?: string; onDiscuss?: (item: ModuleItem) => void; openKnowledge?: () => void; scope?: MobileScope; items: ModuleItem[]; filters?: ModuleData['filters']; busy: string; generate: (item: ModuleItem) => Promise<void>; update: (item: ModuleItem, values: { theme: string; draft_text: string; scheduled_for: string; expected_version?: string }) => Promise<void>; reload: () => Promise<void> }) => {
++  const [selectedPlanId, setSelectedPlanId] = useState('');
++  const plans = Array.from(new Map(allItems.filter(item => item.plan_id).map(item => [item.plan_id, item.plan_title || 'Контент-план'])).entries());
++  const focusedPlanId = allItems.find(item => item.id === focusItemId)?.plan_id;
++  const activePlanId = plans.some(([id]) => id === selectedPlanId) ? selectedPlanId : focusedPlanId || plans[0]?.[0];
++  const items = activePlanId ? allItems.filter(item => item.plan_id === activePlanId) : allItems;
++  const [settingsOpen, setSettingsOpen] = useState(false);
+   const [editing, setEditing] = useState('');
+   const [contentSection, setContentSection] = useState('calendar');
+   const [generating, setGenerating] = useState(false);
+@@ -67,7 +76,7 @@
+   useEffect(() => {
+     if (!focusItemId || !items.some((item) => item.id === focusItemId)) return;
+     setContentSection('posts');
+-    setEditing(focusItemId);
++    setEditing('');
+     window.requestAnimationFrame(() => document.getElementById(`content-item-${focusItemId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+   }, [focusItemId, items]);
+   const scrollTo = (section: 'calendar' | 'posts') => {
+@@ -149,13 +158,14 @@
+   };
+   const prepareDeletePlan = async () => { if (!planId) return; setDeleting(true); try { const result = await fetch('/api/operator/mobile/actions/preview', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null, capability: 'content.plan.delete', input: { plan_id: planId, business_id: scope?.kind === 'business' ? scope.id : null } }) }).then(readJson<{ preview?: MobileActionPreview }>); setDeletePreview(result.preview || null); setPlanAction(''); setError(''); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось проверить удаление плана.'); } finally { setDeleting(false); } };
+   const confirmDeletePlan = async () => { if (!deletePreview?.action_id) return; setDeleting(true); try { await fetch(`/api/operator/mobile/actions/${deletePreview.action_id}/confirm`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null }) }).then(readJson); setDeletePreview(null); await reload(); setPlanAction(''); setError(''); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось удалить план.'); } finally { setDeleting(false); } };
+-  return <>{planId ? <PlanDownload key={`${scope?.kind}:${scope?.id}:${planId}`} planId={planId} mobile dirty={Boolean(editing)} /> : null}<AnimatePresence initial={false} mode="wait">
++  return <>{scope?.kind === 'business' && scope.id && <><div className="mb-4"><Button variant="outline" disabled={Boolean(editing)} onClick={() => setSettingsOpen(true)}>О компании, основателе и стиле</Button><p className="mt-2 text-sm text-muted-foreground">Добавьте факты о себе и ориентиры, чтобы новые тексты были индивидуальными.</p></div><ContentPersonalization key={scope.id} businessId={scope.id} open={settingsOpen} onOpenChange={setSettingsOpen} headers={authOnlyHeaders} onOpenKnowledge={openKnowledge} /></>}{planId ? <PlanDownload key={`${scope?.kind}:${scope?.id}:${planId}`} planId={planId} mobile dirty={Boolean(editing)} /> : null}<AnimatePresence initial={false} mode="wait">
+     <motion.div key="content" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={spring}>
++      {plans.length > 1 && <label className="mb-4 block text-sm">Контент-план<select aria-label="Выбрать контент-план" className="mt-2 min-h-11 w-full rounded-lg border bg-background p-2" value={activePlanId || ''} disabled={Boolean(editing)} onChange={event => { setSelectedPlanId(event.target.value); setEditing(''); }}>{plans.map(([id, title]) => <option key={id} value={id}>{title}</option>)}</select></label>}
+       {planTitle ? <section className="mb-3 rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><small className="text-zinc-600">Текущий контент-план</small><b className="mt-1 block text-balance text-base">{planTitle}</b><p className="mt-2 text-pretty text-xs text-zinc-500"><span className="tabular-nums">{items.length}</span> публикаций{items[0]?.plan_period_days ? <> · <span className="tabular-nums">{items[0].plan_period_days}</span> дней</> : null}</p></div><button type="button" aria-label="Дополнительные действия с планом" aria-expanded={planAction === 'menu'} onClick={() => setPlanAction(planAction === 'menu' ? '' : 'menu')} className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-white/[0.05] text-zinc-400 ring-1 ring-inset ring-white/[0.07] transition-transform active:scale-[0.96]"><CircleEllipsis className="h-5 w-5" /></button></div><div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-2"><button type="button" onClick={() => { setEditing(''); scrollTo('posts'); }} className="flex min-h-11 items-center justify-center gap-2 rounded-[14px] bg-primary px-3 text-xs font-semibold text-white shadow-[0_10px_24px_rgba(255,92,51,0.2)] transition-transform active:scale-[0.96]"><Pencil className="h-4 w-4" />Редактировать публикации</button><button type="button" onClick={() => setPlanAction('new')} className="min-h-11 rounded-[14px] bg-white/[0.05] px-4 text-xs font-semibold text-zinc-300 ring-1 ring-inset ring-white/[0.07] transition-transform active:scale-[0.96]">Новый план</button></div>{planAction === 'menu' ? <div className="mt-3"><button type="button" disabled={deleting} onClick={() => void prepareDeletePlan()} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-rose-500/[0.08] px-3 text-xs font-semibold text-rose-300 ring-1 ring-inset ring-rose-400/15 transition-transform active:scale-[0.96] disabled:opacity-50">{deleting ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Trash2 className="h-4 w-4" />}{deleting ? 'Проверяем…' : 'Удалить текущий план'}</button></div> : null}</section> : null}
+       {error ? <InlineError text={error} /> : null}
+       {(!items.length || planAction === 'new') && scope?.kind === 'business' ? <ContentPlanSetup periods={allowedPeriods} periodDays={periodDays} setPeriodDays={setPeriodDays} density={density} setDensity={setDensity} existingPlan={Boolean(items.length)} cancel={items.length ? () => setPlanAction('') : undefined} generate={() => void prepareGeneratePlan()} /> : null}
+       {scope?.kind !== 'business' && !items.length ? <Empty icon={Building2} title="Выберите одну точку" text="Сеть можно анализировать целиком, но календарь создаётся для конкретного бизнеса." /> : null}
+-      {items.length && planAction !== 'new' ? <><div role="navigation" aria-label="Разделы контент-плана" className="sticky top-2 z-10 mb-3 grid grid-cols-2 rounded-[20px] bg-zinc-900/90 p-1 shadow-[0_12px_38px_rgba(0,0,0,0.34)] ring-1 ring-inset ring-white/[0.08] backdrop-blur-xl"><button type="button" aria-current={contentSection === 'calendar' ? 'page' : undefined} onClick={() => scrollTo('calendar')} className={`min-h-11 rounded-[16px] text-sm font-semibold transition-[background-color,color,transform,box-shadow] active:scale-[0.96] ${contentSection === 'calendar' ? 'bg-white/[0.1] text-white shadow-[0_4px_14px_rgba(0,0,0,0.24)]' : 'text-zinc-500'}`}>Календарь</button><button type="button" aria-current={contentSection === 'posts' ? 'page' : undefined} onClick={() => scrollTo('posts')} className={`min-h-11 rounded-[16px] text-sm font-semibold transition-[background-color,color,transform,box-shadow] active:scale-[0.96] ${contentSection === 'posts' ? 'bg-white/[0.1] text-white shadow-[0_4px_14px_rgba(0,0,0,0.24)]' : 'text-zinc-500'}`}>Посты <span className="ml-1 tabular-nums text-[11px] opacity-60">{items.length}</span></button></div><div ref={calendarRef} className="scroll-mt-20"><ContentCalendar items={items} openDate={scrollToDate} /></div><ContentPostList postsRef={postsRef} items={items} editing={editing} busy={busy} setEditing={setEditing} generate={prepareDraft} update={update} /></> : null}
++      {items.length && planAction !== 'new' ? <><div role="navigation" aria-label="Разделы контент-плана" className="sticky top-2 z-10 mb-3 grid grid-cols-2 rounded-[20px] bg-zinc-900/90 p-1 shadow-[0_12px_38px_rgba(0,0,0,0.34)] ring-1 ring-inset ring-white/[0.08] backdrop-blur-xl"><button type="button" aria-current={contentSection === 'calendar' ? 'page' : undefined} onClick={() => scrollTo('calendar')} className={`min-h-11 rounded-[16px] text-sm font-semibold transition-[background-color,color,transform,box-shadow] active:scale-[0.96] ${contentSection === 'calendar' ? 'bg-white/[0.1] text-white shadow-[0_4px_14px_rgba(0,0,0,0.24)]' : 'text-zinc-500'}`}>Календарь</button><button type="button" aria-current={contentSection === 'posts' ? 'page' : undefined} onClick={() => scrollTo('posts')} className={`min-h-11 rounded-[16px] text-sm font-semibold transition-[background-color,color,transform,box-shadow] active:scale-[0.96] ${contentSection === 'posts' ? 'bg-white/[0.1] text-white shadow-[0_4px_14px_rgba(0,0,0,0.24)]' : 'text-zinc-500'}`}>Посты <span className="ml-1 tabular-nums text-[11px] opacity-60">{items.length}</span></button></div><div ref={calendarRef} className="scroll-mt-20"><ContentCalendar items={items} openDate={scrollToDate} /></div><ContentPostList postsRef={postsRef} items={items} focusItemId={focusItemId} businessId={scope?.kind === 'business' ? scope.id : undefined} onDiscuss={onDiscuss} editing={editing} busy={busy} setEditing={setEditing} generate={prepareDraft} update={update} /></> : null}
+     </motion.div>
+   </AnimatePresence><ActionPreviewSheet preview={deletePreview} busy={deleting} confirmLabel="Удалить план" onCancel={() => setDeletePreview(null)} onConfirm={() => void confirmDeletePlan()} /><ActionPreviewSheet preview={generatePreview} busy={generating} confirmLabel="Собрать план" onCancel={() => setGeneratePreview(null)} onConfirm={() => void confirmGeneratePlan()} /><ActionPreviewSheet preview={draftPreview} busy={jobBusy} confirmLabel="Создать текст" onCancel={() => { setDraftPreview(null); setDraftItem(null); }} onConfirm={() => void confirmDraft()} /><JobProgressSheet job={activeJob} busy={jobBusy} onClose={() => { setActiveJob(null); if (activeJob?.status === 'completed') void reload(); }} onRetry={() => void retryJob()} onCancel={() => void cancelJob()} /></>;
+ };
+@@ -206,27 +216,32 @@
+   </section>;
+ };
+ 
+-const ContentPostList = ({ postsRef, items, editing, busy, setEditing, generate, update }: { postsRef: { current: HTMLDivElement | null }; items: ModuleItem[]; editing: string; busy: string; setEditing: (id: string) => void; generate: (item: ModuleItem) => Promise<void>; update: (item: ModuleItem, values: { theme: string; draft_text: string; scheduled_for: string }) => Promise<void> }) => {
++const ContentPostList = ({ postsRef, items, editing, busy, setEditing, generate, update, businessId, onDiscuss, focusItemId }: { postsRef: { current: HTMLDivElement | null }; businessId?: string | null; focusItemId?: string; onDiscuss?: (item: ModuleItem) => void; items: ModuleItem[]; editing: string; busy: string; setEditing: (id: string) => void; generate: (item: ModuleItem) => Promise<void>; update: (item: ModuleItem, values: { theme: string; draft_text: string; scheduled_for: string; expected_version?: string }) => Promise<void> }) => {
+   const groups = items.reduce<Record<string, ModuleItem[]>>((result, item) => {
+     const key = contentDateKey(item.scheduled_for) || 'undated';
+     result[key] = [...(result[key] || []), item];
+     return result;
+   }, {});
+   const orderedGroups = Object.entries(groups).sort(([left], [right]) => left === 'undated' ? 1 : right === 'undated' ? -1 : left.localeCompare(right));
+-  return <div ref={postsRef} className="scroll-mt-20 pt-6"><div className="mb-3 flex items-end justify-between px-1"><div><small className="text-[10px] font-semibold uppercase tracking-[0.13em] text-primary">Публикации</small><h2 className="mt-1 text-lg font-semibold tracking-[-0.025em]">Посты по плану</h2></div><span className="text-xs tabular-nums text-zinc-500">{items.length}</span></div><div className="space-y-5">{orderedGroups.map(([date, dayItems]) => <section id={`content-day-${date}`} key={date} className="scroll-mt-20"><div className="mb-2 flex items-center gap-2 px-1"><CalendarDays className="h-4 w-4 text-primary" /><b className="text-sm capitalize text-zinc-300">{date === 'undated' ? 'Без даты' : contentDateLabel(date, true)}</b><span className="ml-auto text-[10px] tabular-nums text-zinc-600">{dayItems.length}</span></div><div className="space-y-2">{dayItems.map((item) => <ContentItemCard key={item.id} item={item} editing={editing === item.id} busy={busy === item.id} setEditing={() => setEditing(editing === item.id ? '' : item.id || '')} generate={generate} update={async (values) => { await update(item, values); setEditing(''); }} />)}</div></section>)}</div></div>;
++  return <div ref={postsRef} className="scroll-mt-20 pt-6"><div className="mb-3 flex items-end justify-between px-1"><div><small className="text-[10px] font-semibold uppercase tracking-[0.13em] text-primary">Публикации</small><h2 className="mt-1 text-lg font-semibold tracking-[-0.025em]">Посты по плану</h2></div><span className="text-xs tabular-nums text-zinc-500">{items.length}</span></div><div className="space-y-5">{orderedGroups.map(([date, dayItems]) => <section id={`content-day-${date}`} key={date} className="scroll-mt-20"><div className="mb-2 flex items-center gap-2 px-1"><CalendarDays className="h-4 w-4 text-primary" /><b className="text-sm capitalize text-zinc-300">{date === 'undated' ? 'Без даты' : contentDateLabel(date, true)}</b><span className="ml-auto text-[10px] tabular-nums text-zinc-600">{dayItems.length}</span></div><div className="space-y-2">{dayItems.map((item) => <div key={item.id}><ContentItemCard expandedInitially={item.id === focusItemId} item={item} editing={editing === item.id} busy={busy === item.id} setEditing={() => setEditing(editing === item.id ? '' : item.id || '')} generate={generate} update={async (values) => { await update(item, values); setEditing(''); }} />{item.id && !item.id.startsWith('content-') && (item.business_id || businessId) && <WorkDiscussion key={`${item.business_id || businessId}:${item.id}`} businessId={item.business_id || businessId || ''} itemId={item.id} updatedAt={item.updated_at} disabled={Boolean(editing) || Boolean(busy)} onDiscuss={onDiscuss ? () => onDiscuss(item) : undefined} />}</div>)}</div></section>)}</div></div>;
+ };
+ 
+ const ContentDraftProgress = ({ ready }: { ready: boolean }) => {
+   return <motion.div aria-live="polite" initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} transition={spring} className={`rounded-[18px] p-4 ring-1 ring-inset transition-[background-color,box-shadow] ${ready ? 'bg-emerald-500/[0.08] ring-emerald-400/15' : 'bg-primary/[0.08] ring-primary/20'}`}><div className="flex items-center gap-3"><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-[14px] ${ready ? 'bg-emerald-400/15 text-emerald-300' : 'bg-primary/15 text-primary'}`}><AnimatePresence initial={false} mode="popLayout">{ready ? <motion.span key="done" initial={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }} exit={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} transition={spring}><Check className="h-5 w-5" /></motion.span> : <motion.span key="work" initial={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }} exit={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} transition={spring}><Sparkles className="h-5 w-5" /></motion.span>}</AnimatePresence></span><div className="min-w-0 flex-1"><b className="block text-balance text-sm">{ready ? 'Черновик готов' : 'ЛокалОС готовит текст'}</b><small className="mt-1 block text-pretty text-zinc-500">{ready ? 'Проверьте формулировки перед публикацией.' : 'Можно закрыть экран — результат сохранится в публикации.'}</small></div></div>{ready ? null : <div className="relative mt-3 h-1.5 overflow-hidden rounded-full bg-black/20"><motion.span className="absolute inset-y-0 w-1/3 rounded-full bg-primary" animate={{ x: ['-110%', '310%'] }} transition={{ duration: 1.1, repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut' }} /></div>}</motion.div>;
+ };
+ 
+-const ContentItemCard = ({ item, editing, busy, setEditing, generate, update }: { item: ModuleItem; editing: boolean; busy: boolean; setEditing: () => void; generate: (item: ModuleItem) => Promise<void>; update: (values: { theme: string; draft_text: string; scheduled_for: string }) => Promise<void> }) => {
++const ContentItemCard = ({ item, editing, busy, setEditing, generate, update, expandedInitially }: { item: ModuleItem; expandedInitially?: boolean; editing: boolean; busy: boolean; setEditing: () => void; generate: (item: ModuleItem) => Promise<void>; update: (values: { theme: string; draft_text: string; scheduled_for: string; expected_version?: string }) => Promise<void> }) => {
++  const [expanded, setExpanded] = useState(Boolean(expandedInitially));
++  useEffect(() => { if (expandedInitially) setExpanded(true); }, [expandedInitially]);
++  const [saveError, setSaveError] = useState('');
++  const draftVersion = useRef(item.version);
+   const [theme, setTheme] = useState(item.title || '');
+   const [draft, setDraft] = useState(item.draft_text || '');
+   const [scheduled, setScheduled] = useState(contentDateKey(item.scheduled_for));
+   const hasDraft = Boolean(item.draft_text?.trim());
+-  useEffect(() => { setTheme(item.title || ''); setDraft(item.draft_text || ''); setScheduled(contentDateKey(item.scheduled_for)); }, [item.title, item.draft_text, item.scheduled_for]);
+-  return <article id={`content-item-${item.id || ''}`} className={`scroll-mt-24 rounded-[22px] p-4 ring-1 ring-inset ${hasDraft ? 'bg-emerald-500/[0.025] ring-emerald-400/10' : 'bg-white/[0.04] ring-white/[0.07]'}`}><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><small className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary">{contentDateLabel(item.scheduled_for)} · {item.content_type || 'публикация'}</small><b className="mt-1 block text-sm leading-5">{item.title}</b><small className="mt-1 block truncate text-zinc-600">{item.business_name}</small></div><span className={`flex min-h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[10px] font-semibold ring-1 ring-inset ${hasDraft ? 'bg-emerald-400/10 text-emerald-300 ring-emerald-400/15' : 'bg-amber-400/[0.08] text-amber-300 ring-amber-400/15'}`}>{hasDraft ? <Check className="h-3.5 w-3.5" /> : <WandSparkles className="h-3.5 w-3.5" />}{hasDraft ? 'Текст готов' : 'Нужен текст'}</span></div>{editing ? <div className="mt-4 space-y-2"><input value={theme} onChange={(event) => setTheme(event.target.value)} aria-label="Тема публикации" className="min-h-11 w-full rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><input type="date" value={scheduled} onChange={(event) => setScheduled(event.target.value)} aria-label="Дата публикации" className="min-h-11 w-full rounded-[14px] bg-black/20 px-3 text-sm text-zinc-300 outline-none ring-1 ring-inset ring-white/[0.07]" /><textarea value={draft} onChange={(event) => setDraft(event.target.value)} aria-label="Текст публикации" rows={6} className="w-full rounded-[14px] bg-black/20 p-3 text-sm leading-6 outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" />{busy ? <ContentDraftProgress ready={Boolean(draft.trim())} /> : draft.trim() ? null : <button type="button" onClick={() => void generate(item)} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-primary/15 px-3 text-sm font-semibold text-primary ring-1 ring-inset ring-primary/20 transition-transform active:scale-[0.96]"><WandSparkles className="h-4 w-4" />Создать текст</button>}<button type="button" disabled={busy} onClick={() => void update({ theme, draft_text: draft, scheduled_for: scheduled })} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-primary text-xs font-semibold transition-transform active:scale-[0.96] disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}Сохранить</button></div> : <>{hasDraft ? <div className="mt-4"><small className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-300/80"><Check className="h-3.5 w-3.5" />Черновик ЛокалОС</small><p className="mt-2 line-clamp-6 whitespace-pre-wrap text-pretty text-sm leading-6 text-zinc-300">{item.draft_text}</p></div> : <div className="mt-4 rounded-[16px] bg-amber-400/[0.045] p-3 ring-1 ring-inset ring-amber-400/10"><small className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-300/80"><WandSparkles className="h-3.5 w-3.5" />Задача из контент-плана</small><p className="mt-2 line-clamp-5 whitespace-pre-wrap text-pretty text-sm leading-6 text-zinc-500">{item.subtitle || 'Есть тема, но текст ещё не создан.'}</p></div>}{hasDraft ? <button type="button" disabled={busy} onClick={setEditing} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-white/[0.055] text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.08] transition-transform active:scale-[0.96] disabled:opacity-50"><Pencil className="h-4 w-4" />Редактировать текст</button> : <div className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-2"><button type="button" disabled={busy} onClick={setEditing} className="flex min-h-12 items-center justify-center gap-2 rounded-[14px] bg-white/[0.05] px-4 text-xs font-semibold text-zinc-400 ring-1 ring-inset ring-white/[0.07] transition-transform active:scale-[0.96] disabled:opacity-50"><Pencil className="h-4 w-4" />Тема</button><button type="button" disabled={busy} onClick={() => { setEditing(); void generate(item); }} className="flex min-h-12 items-center justify-center gap-2 rounded-[14px] bg-primary px-3 text-sm font-semibold text-white shadow-[0_10px_28px_rgba(255,92,51,0.2)] transition-transform active:scale-[0.96] disabled:opacity-50"><WandSparkles className="h-4 w-4" />Создать текст</button></div>}</>}</article>;
++  useEffect(() => { if (!editing) { draftVersion.current = item.version; setTheme(item.title || ''); setDraft(item.draft_text || ''); setScheduled(contentDateKey(item.scheduled_for)); setSaveError(''); } }, [editing, item.title, item.draft_text, item.scheduled_for, item.version]);
++  const save = async () => { try { setSaveError(''); await update({ theme, draft_text: draft, scheduled_for: scheduled, expected_version: draftVersion.current }); } catch (reason) { setSaveError(reason instanceof Error ? reason.message : 'Не удалось сохранить. Повторите.'); } };
++  return <article id={`content-item-${item.id || ''}`} className={`scroll-mt-24 rounded-[22px] p-4 ring-1 ring-inset ${hasDraft ? 'bg-emerald-500/[0.025] ring-emerald-400/10' : 'bg-white/[0.04] ring-white/[0.07]'}`}><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><small className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary">{contentDateLabel(item.scheduled_for)} · {item.content_type || 'публикация'}</small><b className="mt-1 block text-sm leading-5">{item.title}</b><small className="mt-1 block truncate text-zinc-600">{item.business_name}</small></div><span className={`flex min-h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[10px] font-semibold ring-1 ring-inset ${hasDraft ? 'bg-emerald-400/10 text-emerald-300 ring-emerald-400/15' : 'bg-amber-400/[0.08] text-amber-300 ring-amber-400/15'}`}>{hasDraft ? <Check className="h-3.5 w-3.5" /> : <WandSparkles className="h-3.5 w-3.5" />}{hasDraft ? 'Текст готов' : 'Нужен текст'}</span></div>{editing ? <div className="mt-4 space-y-2"><input value={theme} onChange={(event) => setTheme(event.target.value)} aria-label="Тема публикации" className="min-h-11 w-full rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><input type="date" value={scheduled} onChange={(event) => setScheduled(event.target.value)} aria-label="Дата публикации" className="min-h-11 w-full rounded-[14px] bg-black/20 px-3 text-sm text-zinc-300 outline-none ring-1 ring-inset ring-white/[0.07]" /><textarea value={draft} onChange={(event) => setDraft(event.target.value)} aria-label="Текст публикации" rows={6} className="w-full rounded-[14px] bg-black/20 p-3 text-sm leading-6 outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" />{busy ? <ContentDraftProgress ready={Boolean(draft.trim())} /> : draft.trim() ? null : <button type="button" onClick={() => void generate(item)} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-primary/15 px-3 text-sm font-semibold text-primary ring-1 ring-inset ring-primary/20 transition-transform active:scale-[0.96]"><WandSparkles className="h-4 w-4" />Создать текст</button>}{saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}<button type="button" disabled={busy} onClick={() => void save()} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-primary text-xs font-semibold transition-transform active:scale-[0.96] disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}Сохранить</button><Button variant="outline" disabled={busy} onClick={setEditing}>Отменить правки</Button></div> : <>{hasDraft ? <div className="mt-4"><small className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-300/80"><Check className="h-3.5 w-3.5" />Черновик ЛокалОС</small><p className={`mt-2 whitespace-pre-wrap text-pretty text-sm leading-6 text-zinc-300 ${expanded ? '' : 'line-clamp-6'}`}>{item.draft_text}</p><Button variant="ghost" onClick={() => setExpanded(!expanded)}>{expanded ? 'Свернуть текст' : 'Прочитать целиком'}</Button></div> : <div className="mt-4 rounded-[16px] bg-amber-400/[0.045] p-3 ring-1 ring-inset ring-amber-400/10"><small className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-300/80"><WandSparkles className="h-3.5 w-3.5" />Задача из контент-плана</small><p className="mt-2 line-clamp-5 whitespace-pre-wrap text-pretty text-sm leading-6 text-zinc-500">{item.subtitle || 'Есть тема, но текст ещё не создан.'}</p></div>}{hasDraft ? <button type="button" disabled={busy} onClick={setEditing} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-white/[0.055] text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.08] transition-transform active:scale-[0.96] disabled:opacity-50"><Pencil className="h-4 w-4" />Редактировать текст</button> : <div className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-2"><button type="button" disabled={busy} onClick={setEditing} className="flex min-h-12 items-center justify-center gap-2 rounded-[14px] bg-white/[0.05] px-4 text-xs font-semibold text-zinc-400 ring-1 ring-inset ring-white/[0.07] transition-transform active:scale-[0.96] disabled:opacity-50"><Pencil className="h-4 w-4" />Тема</button><button type="button" disabled={busy} onClick={() => { setEditing(); void generate(item); }} className="flex min-h-12 items-center justify-center gap-2 rounded-[14px] bg-primary px-3 text-sm font-semibold text-white shadow-[0_10px_28px_rgba(255,92,51,0.2)] transition-transform active:scale-[0.96] disabled:opacity-50"><WandSparkles className="h-4 w-4" />Создать текст</button></div>}</>}</article>;
+ };
+ 
+ const PlanDownload = lazy(() => import('@/components/content-plan/PlanDownload').then((module) => ({ default: module.PlanDownload })));
+--- a/frontend/src/features/telegram/types.ts
++++ b/frontend/src/features/telegram/types.ts
+@@ -131,7 +131,7 @@
+ 
+ export type OperatorActionDecision = 'confirm' | 'reject';
+ 
+-export type ModuleItem = { id?: string; business_id?: string; kind?: string; title?: string; subtitle?: string; business_name?: string; status?: string; rating?: number; reviews_count?: number; seo_score?: number; price?: string; category?: string; source?: string; updated_at?: string; amount?: string | number; previous_amount?: string | number; unit?: string; metric_key?: string; period_label?: string; day?: string; orders_count?: number; transaction_type?: string; selected_channel?: string; run_id?: string; run_status?: string; error_text?: string; provider_sources?: string[]; parse_status?: string; parse_source?: string; parse_updated_at?: string; refresh_cost_credits?: number; scheduled_refresh_cost_credits?: number; review_sync_enabled?: boolean; review_sync_interval_hours?: number; review_sync_schedule_mode?: string; review_sync_schedule_days?: number[]; review_sync_schedule_time?: string; review_sync_next_run_at?: string; review_sync_last_run_at?: string; review_sync_last_status?: string; plan_id?: string; plan_title?: string; plan_period_days?: number; scheduled_for?: string; content_type?: string; draft_text?: string };
++export type ModuleItem = { id?: string; version?: string; business_id?: string; kind?: string; title?: string; subtitle?: string; business_name?: string; status?: string; rating?: number; reviews_count?: number; seo_score?: number; price?: string; category?: string; source?: string; updated_at?: string; amount?: string | number; previous_amount?: string | number; unit?: string; metric_key?: string; period_label?: string; day?: string; orders_count?: number; transaction_type?: string; selected_channel?: string; run_id?: string; run_status?: string; error_text?: string; provider_sources?: string[]; parse_status?: string; parse_source?: string; parse_updated_at?: string; refresh_cost_credits?: number; scheduled_refresh_cost_credits?: number; review_sync_enabled?: boolean; review_sync_interval_hours?: number; review_sync_schedule_mode?: string; review_sync_schedule_days?: number[]; review_sync_schedule_time?: string; review_sync_next_run_at?: string; review_sync_last_run_at?: string; review_sync_last_status?: string; plan_id?: string; plan_title?: string; plan_period_days?: number; scheduled_for?: string; content_type?: string; draft_text?: string };
+ 
+ export type NotificationPreferences = { daily_digest?: boolean; reviews?: boolean; tasks?: boolean; errors?: boolean; agent_results?: boolean; finance_rhythm?: boolean; content_publications?: boolean; content_publications_lead_days?: number; content_publications_time?: string; content_publications_platforms?: string[] };
+ 
+@@ -183,7 +183,8 @@
+   saveNotifications: (preferences: NotificationPreferences) => Promise<void>;
+   updateService: (item: ModuleItem, values: { name: string; description: string; price: string; category: string }) => Promise<void>;
+   generateContentDraft: (item: ModuleItem) => Promise<void>;
+-  updateContentItem: (item: ModuleItem, values: { theme: string; draft_text: string; scheduled_for: string }) => Promise<void>;
++  updateContentItem: (item: ModuleItem, values: { theme: string; draft_text: string; scheduled_for: string; expected_version?: string }) => Promise<void>;
++  discussContent?: (item: ModuleItem) => void;
+   reload: () => Promise<void>;
+   openTarget: (screen?: string, targetScope?: { kind?: string; id?: string }) => void;
+   track: (eventName: string, target?: string) => void;
+--- a/frontend/src/pages/telegram/TelegramControlWorkspace.tsx
++++ b/frontend/src/pages/telegram/TelegramControlWorkspace.tsx
+@@ -119,6 +119,8 @@
+   const [messages, setMessages] = useState<OperatorMessage[]>([]);
+   const [historyLoadedFor, setHistoryLoadedFor] = useState('');
+   const [operatorConversationId, setOperatorConversationId] = useState<string | null>(null);
++  const [selectedContent, setSelectedContent] = useState<(ModuleItem & { content_version?: string }) | null>(null);
++  const [clearWorkSelection, setClearWorkSelection] = useState(false);
+   const operatorSending = useRef(false);
+   const operatorHistoryVersion = useRef(0);
+   const pendingOperatorRequest = useRef({ businessId: "", text: "", id: "" });
+@@ -234,7 +236,7 @@
+       }).then(async (response) => {
+         if (response.status === 401 && miniAppPlatform() === 'max') {
+           const payload = await response.clone().json();
+-          window.sessionStorage.removeItem('localos_mini_session'); setBootstrap(null); setMessages([]); setWorkspace(null); setTodayData(null);
++          window.sessionStorage.removeItem('localos_mini_session'); setBootstrap(null); setMessages([]); setSelectedContent(null); setWorkspace(null); setTodayData(null);
+           if (payload.code === 'max_link_required') setLinkRequired(true);
+         }
+         return readJson<Bootstrap>(response);
+@@ -453,7 +455,7 @@
+ 
+   useEffect(() => {
+     operatorHistoryVersion.current++;
+-    setMessages([]); setOperatorConversationId(null); setHistoryLoadedFor(''); setOperatorBusy(false);
++    setMessages([]); setSelectedContent(null); setOperatorConversationId(null); setHistoryLoadedFor(''); setOperatorBusy(false);
+   }, [scope?.kind, scope?.id]);
+   const loadOperatorHistory = async () => {
+     if (preview || scope?.kind !== 'business' || !scope.id) return;
+@@ -557,7 +559,7 @@
+     finally { setModuleActionBusy(''); }
+   };
+ 
+-  const updateContentItem = async (item: ModuleItem, values: { theme: string; draft_text: string; scheduled_for: string }) => {
++  const updateContentItem = async (item: ModuleItem, values: { theme: string; draft_text: string; scheduled_for: string; expected_version?: string }) => {
+     if (!item.id || preview) return;
+     setModuleActionBusy(item.id);
+     try {
+@@ -565,7 +567,7 @@
+         method: 'PUT', headers: authHeaders(), body: JSON.stringify({ ...values, scope_type: scope?.kind, scope_id: scope?.id || null }),
+       }).then(readJson<{ plan?: unknown }>);
+       await loadModule('content', true); setError('');
+-    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось сохранить контент.'); }
++    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось сохранить контент.'); throw requestError; }
+     finally { setModuleActionBusy(''); }
+   };
+ 
+@@ -634,20 +636,30 @@
+     openMobileTarget(resolveMobileAttentionScreen(item), item.target_scope);
+   };
+ 
++  const discussContent = (item: ModuleItem) => {
++    if (!item.id || scope?.kind !== 'business' || item.business_id && item.business_id !== scope.id) return;
++    setSelectedContent({ ...item, business_id: scope.id }); setClearWorkSelection(false);
++    setTab('operator'); setModule(''); setCommand('');
++  };
++
+   const sendOperator = async (text: string, source?: VoiceSubmission) => {
+     if (!text.trim() || operatorSending.current) return;
+     if (scope?.kind !== 'business' || !scope.id) { setPicker(true); setError('Для команды выберите одну точку.'); return; }
+     const version = scopeRequestVersion.current;
+-    if (pendingOperatorRequest.current.businessId !== scope.id || pendingOperatorRequest.current.text !== text) pendingOperatorRequest.current = { businessId: scope.id, text, id: crypto.randomUUID() };
++    if (pendingOperatorRequest.current.businessId !== scope.id || pendingOperatorRequest.current.text !== `${selectedContent?.id || ''}:${text}`) pendingOperatorRequest.current = { businessId: scope.id, text: `${selectedContent?.id || ''}:${text}`, id: crypto.randomUUID() };
+     operatorHistoryVersion.current++;
+     operatorSending.current = true; setOperatorBusy(true); setTab('operator');
+     try {
+       const result = await fetch('/api/operator/chat', {
+-        method: 'POST', headers: authHeaders(), body: JSON.stringify({ business_id: scope.id, message: text, channel: miniAppChannel(), conversation_id: operatorConversationId, request_id: pendingOperatorRequest.current.id, ...source }),
+-      }).then(readJson<{ conversation_id?: string; operator_result?: { async_job_id?: string; message_id?: string; input_type?: string; chat_response?: string; summary?: string; status?: string; capability?: string; mobile_route?: { screen?: string }; approval?: { action_id?: string } } }>);
++        method: 'POST', headers: authHeaders(), body: JSON.stringify({ business_id: scope.id, message: text, channel: miniAppChannel(), conversation_id: operatorConversationId, request_id: pendingOperatorRequest.current.id, ...(clearWorkSelection ? { clear_input_context: true } : {}), ...(selectedContent?.business_id === scope.id ? { selected_object: { type: 'content_item', id: selectedContent.id, ...(selectedContent.content_version ? { version: selectedContent.content_version } : { updated_at: selectedContent.updated_at }) } } : {}), ...source }),
++      }).then(readJson<{ conversation_id?: string; operator_result?: { selected_item?: { item_id: string; version: string }; async_job_id?: string; message_id?: string; input_type?: string; chat_response?: string; summary?: string; status?: string; capability?: string; mobile_route?: { screen?: string }; approval?: { action_id?: string } } }>);
+       if (version !== scopeRequestVersion.current) return;
+       if(result.operator_result)result.operator_result=await waitForOperatorResult(result.operator_result,scope.id,authOnlyHeaders,()=>version===scopeRequestVersion.current);
+       if(version!==scopeRequestVersion.current)return;
++      setClearWorkSelection(false);
++      const selection = result.operator_result?.selected_item;
++      if (result.operator_result?.status === 'cancelled') setSelectedContent(null);
++      else if (selection) setSelectedContent(current => current?.id === selection.item_id ? { ...current, content_version: selection.version } : current);
+       pendingOperatorRequest.current = { businessId: "", text: "", id: "" };
+       setOperatorConversationId(result.conversation_id || null);
+       setMessages((current) => [...current, { role: 'user', text }, { role: 'operator', id: result.operator_result?.message_id,
+@@ -788,11 +800,12 @@
+             {!picker && tab === 'feed' ? bootstrap?.navigation?.find((item) => item.key === 'feed')?.status === 'read_only' ? <Screen title="Лента" subtitle="Главные темы и сигналы из вашей индустрии."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'feed')} /></Screen> : <CommunityFeedMobile scope={scope} preview={preview} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} openTarget={openMobileTarget} /> : null}
+             {!picker && tab === 'reviews' ? bootstrap?.navigation?.find((item) => item.key === 'reviews')?.status === 'read_only' ? <Screen title="Отзывы" subtitle="Новые отзывы и подготовленные ответы."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'reviews')} /></Screen> : <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
+             {!picker && tab === 'progress' ? <Screen title="Результаты" subtitle="Подтверждённая работа и доступные измерения.">{bootstrap?.navigation?.find((item) => item.key === 'progress')?.status === 'read_only' ? <LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'progress')} /> : <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} />}</Screen> : null}
++            {!picker && tab === 'operator' && selectedContent && selectedContent.business_id === scope?.id && <div className="mb-3 rounded-xl border p-3"><p className="text-sm">Обсуждаем пост: {selectedContent.title}</p><button type="button" className="min-h-11 underline" onClick={() => openMobileTarget('content')}>Вернуться к посту</button><button type="button" className="ml-3 min-h-11 underline" disabled={operatorBusy} onClick={() => { setSelectedContent(null); setClearWorkSelection(true); setMessages([]); }}>Завершить обсуждение</button></div>}
+             {!picker && tab === 'operator' ? bootstrap?.navigation?.find((item) => item.key === 'operator')?.status === 'read_only' ? <Screen title="Оператор" subtitle="Поручения, согласования и результаты работы."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'operator')} /></Screen> : <Operator businessId={scope?.kind === 'business' ? scope.id || '' : ''} conversationId={operatorConversationId} onConversation={setOperatorConversationId} sendVoice={sendOperator} messages={messages} busy={operatorBusy} actionBusy={operatorActionBusy} command={command} setCommand={setCommand} ask={askOperator} resolveAction={resolveOperatorAction} openScreen={openMobileTarget} /> : null}
+             {!picker && tab === 'more' && !module ? <More navigation={visibleNavigation} onOpen={openMobileTarget} openProgress={() => openMobileTarget('progress')} onLocked={setPaywall} restartTour={() => setShowOnboarding(true)} scope={scope} /> : null}
+             {!picker && tab === 'menu' ? <UtilityMenu navigation={visibleNavigation} onOpen={openMobileTarget} scope={scope} /> : null}
+             {!picker && tab === 'more' && module === 'settings' && scope?.kind === 'business' && scope.id ? <>{bootstrap?.max_enabled ? <MaxChannelConnection key={`max-${scope.id}`} businessId={scope.id} headers={authOnlyHeaders} /> : null}<BusinessInputSettings key={scope.id} businessId={scope.id} headers={authOnlyHeaders} /><ContentRules key={`rules-${scope.id}`} businessId={scope.id} headers={authOnlyHeaders} /></> : null}
+-            {!picker && tab === 'more' && module ? <ModuleScreen module={module} focusItemId={deepLinkItemId} scope={scope} access={bootstrap?.navigation?.find((item) => item.key === (module === 'finance_import' || module === 'analytics' ? 'finance' : module))} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={() => setModule('')} /> : null}
++            {!picker && tab === 'more' && module ? <ModuleScreen module={module} focusItemId={module === 'content' && selectedContent && selectedContent.business_id === scope?.id ? selectedContent.id : deepLinkItemId} scope={scope} access={bootstrap?.navigation?.find((item) => item.key === (module === 'finance_import' || module === 'analytics' ? 'finance' : module))} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} discussContent={discussContent} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={() => setModule('')} /> : null}
+           </motion.div>
+         </AnimatePresence>
+       </MobileShell>
+@@ -941,11 +954,14 @@
+   community_sources: ['Источники Ленты', 'Публичные Telegram-каналы и открытые группы, из которых ЛокалОС собирает ленту и главные темы.'], influencers: ['Инфлюенсеры', 'Подходящие локальные авторы, предложение, сообщения, размещения и результат.'],
+ };
+ 
+-const ModuleScreen = ({ module, focusItemId, scope, access, data, loading, progressData, progressLoading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, reload, openTarget, track, trackProduct, openTasks, requestCrm, back }: ModuleScreenProps) => {
++const ModuleScreen = ({ module, focusItemId, scope, access, data, loading, progressData, progressLoading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, discussContent, reload, openTarget, track, trackProduct, openTasks, requestCrm, back }: ModuleScreenProps) => {
+   const content = moduleNames[module] || ['Раздел', 'Данные и доступные действия.'];
+-  return <Screen title={content[0]} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>
++  const { language } = useLanguage();
++  const destination = workDestinations.find(item => item.mobileKey === module);
++  const title = destination ? workNavigationCopy(language).label(destination.id) : content[0];
++  return <Screen title={title} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>
+     {module === 'company' && (scope?.kind==='business'||scope?.kind==='network') && <button type="button" onClick={()=>openTarget('business_knowledge')} className="mb-4 flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-input p-4 text-left focus-visible:ring-2 focus-visible:ring-ring"><span>Знания о бизнесе<small className="mt-1 block text-muted-foreground">Характеристики, постоянные правила и документы</small></span><ChevronRight className="h-4 w-4 shrink-0" /></button>}
+-    {module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'influencers' ? <InfluencersMobileModule scope={scope} focusItemId={focusItemId} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} openBusiness={id => openTarget('partnerships', { kind: 'business', id })} /> : access?.status === 'read_only' || data.status === 'payment_required' ? <LockedModulePreview item={access || data.access} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} trackProduct={trackProduct} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'business_knowledge' ? <BusinessKnowledge embedded focusRecordId={focusItemId} headers={authOnlyHeaders} scope={scope?.kind==='business'||scope?.kind==='network'?{type:scope.kind,id:scope.id}:null} onBusinessChange={id=>openTarget('business_knowledge',{kind:'business',id})} /> : module === 'work_journal' ? <WorkJournal embedded businessId={scope?.kind === 'business' ? scope.id : null} headers={authOnlyHeaders} /> : module === 'finance' || module === 'finance_import' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} requestCrm={requestCrm} initialSection={module === 'finance_import' ? 'import' : 'overview'} trackProduct={trackProduct} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} canManage={Boolean(data.available_actions?.some((action) => action.key === 'agents.lifecycle'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
++    {module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'influencers' ? <InfluencersMobileModule scope={scope} focusItemId={focusItemId} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} openBusiness={id => openTarget('partnerships', { kind: 'business', id })} /> : access?.status === 'read_only' || data.status === 'payment_required' ? <LockedModulePreview item={access || data.access} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} trackProduct={trackProduct} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule key={`${scope?.kind}:${scope?.id}`} focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} onDiscuss={discussContent} openKnowledge={() => openTarget('business_knowledge')} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'business_knowledge' ? <BusinessKnowledge embedded focusRecordId={focusItemId} headers={authOnlyHeaders} scope={scope?.kind==='business'||scope?.kind==='network'?{type:scope.kind,id:scope.id}:null} onBusinessChange={id=>openTarget('business_knowledge',{kind:'business',id})} /> : module === 'work_journal' ? <WorkJournal embedded businessId={scope?.kind === 'business' ? scope.id : null} headers={authOnlyHeaders} /> : module === 'finance' || module === 'finance_import' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} requestCrm={requestCrm} initialSection={module === 'finance_import' ? 'import' : 'overview'} trackProduct={trackProduct} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} canManage={Boolean(data.available_actions?.some((action) => action.key === 'agents.lifecycle'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
+   </Screen>;
+ };
+ 
+--- a/frontend/src/components/content-plan/ContentReferences.tsx
++++ b/frontend/src/components/content-plan/ContentReferences.tsx
+@@ -4,7 +4,7 @@
+ import { Input } from '@/components/ui/input';
+ import { Textarea } from '@/components/ui/textarea';
+ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+-import { newAuth } from '@/lib/auth_new';
++import { contentRequest, ContentAccessError } from './contentRequest';
+ 
+ type Reference = {
+   id: string; source_name: string; source_url: string; techniques: string[];
+@@ -16,8 +16,8 @@
+   can_manage: boolean; can_moderate: boolean; pending: Reference[];
+ };
+ 
+-export function ContentReferences({ businessId, open, onOpenChange, language = 'ru' }: {
+-  businessId: string; open: boolean; onOpenChange: (open: boolean) => void; language?: string;
++export function ContentReferences({ businessId, open, onOpenChange, language = 'ru', headers }: {
++  businessId: string; open: boolean; onOpenChange: (open: boolean) => void; language?: string; headers?: () => HeadersInit;
+ }) {
+   const ru = language === 'ru';
+   const [data, setData] = useState<Catalogue | null>(null);
+@@ -43,7 +43,7 @@
+     requestId.current = crypto.randomUUID();
+     if (!open || !businessId) return;
+     setLoading(true);
+-    void newAuth.makeRequest(endpoint).then((result: Catalogue) => {
++    void contentRequest<Catalogue>(endpoint, undefined, headers).then((result) => {
+       if (current === generation.current) setData(result);
+     }).catch((reason: Error) => {
+       if (current === generation.current) setError(reason.message);
+@@ -51,15 +51,15 @@
+       if (current === generation.current) setLoading(false);
+     });
+     return () => { generation.current += 1; };
+-  }, [open, businessId, endpoint]);
++  }, [open, businessId, endpoint, headers]);
+ 
+   const change = async (payload: Record<string, unknown>) => {
+     const current = generation.current;
+     setBusy(true); setError(''); setMessage('');
+     try {
+-      const result: Catalogue = await newAuth.makeRequest(endpoint, {
++      const result = await contentRequest<Catalogue>(endpoint, {
+         method: 'POST', body: JSON.stringify({ ...payload, business_id: businessId }),
+-      });
++      }, headers);
+       if (current !== generation.current) return;
+       setData(result);
+       setMessage(ru ? 'Сохранено. Изменения применяются к подготовке новых текстов.' : 'Saved. Changes apply to newly prepared copy.');
+@@ -70,10 +70,11 @@
+     } catch (reason) {
+       if (current === generation.current) {
+         setError(reason instanceof Error ? reason.message : (ru ? 'Не удалось сохранить' : 'Could not save'));
++        if (reason instanceof ContentAccessError) { setData(null); setTitle(''); setUrl(''); setTechnique(''); setNotes({}); return; }
+         // A conflict may mean another user changed the same selection. Refresh
+         // the version while retaining the user's add form and error notice.
+         try {
+-          const result: Catalogue = await newAuth.makeRequest(endpoint);
++          const result = await contentRequest<Catalogue>(endpoint, undefined, headers);
+           if (current === generation.current) setData(result);
+         } catch { /* The original error remains visible with a retry action. */ }
+       }
+@@ -88,7 +89,7 @@
+   ) : null;
+ 
+   return <Sheet open={open} onOpenChange={(value) => { if (!busy) onOpenChange(value); }}>
+-    <SheetContent closeLabel={ru ? 'Закрыть ориентиры' : 'Close references'} className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-xl" onCloseAutoFocus={(event) => {
++    <SheetContent closeLabel={ru ? 'Закрыть ориентиры' : 'Close references'} className={`flex w-full flex-col gap-0 overflow-y-auto text-foreground sm:max-w-xl ${headers ? 'dark' : ''}`} onCloseAutoFocus={(event) => {
+       event.preventDefault(); (document.getElementById('content-references-button') || document.getElementById('content-settings-button'))?.focus();
+     }}>
+       <SheetHeader>
+@@ -99,7 +100,7 @@
+       {error && <div role="alert" className="mt-4 text-sm text-destructive">{error}<Button variant="outline" className="mt-2 block" disabled={busy} onClick={() => {
+         const current = generation.current;
+         setLoading(true);
+-        void newAuth.makeRequest(endpoint).then((result: Catalogue) => { if (current === generation.current) { setData(result); setError(''); } })
++        void contentRequest<Catalogue>(endpoint, undefined, headers).then((result) => { if (current === generation.current) { setData(result); setError(''); } })
+           .catch((reason: Error) => { if (current === generation.current) setError(reason.message); })
+           .finally(() => { if (current === generation.current) setLoading(false); });
+       }}>{ru ? 'Обновить список' : 'Refresh list'}</Button></div>}
+--- /dev/null
++++ b/frontend/src/components/content-plan/ContentPersonalization.tsx
+@@ -0,0 +1,120 @@
++import { useEffect, useRef, useState } from 'react';
++import { Button } from '@/components/ui/button';
++import { Textarea } from '@/components/ui/textarea';
++import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
++import { ContentReferences } from './ContentReferences';
++import { contentRequest, ContentAccessError } from './contentRequest';
++
++type Profile = {
++  version: number; summary?: string;
++  preferences?: { business_description?: string; audience_description?: string; tone_instruction?: string; editorial_notes?: Array<{ id: string; kind: string; text: string }> };
++  examples?: Array<{ id: string; text: string }>;
++};
++const steps = ['О бизнесе', 'О клиентах', 'Как писать'];
++
++/** One content setup for web, Telegram and MAX. Facts and examples retain their existing storage. */
++export function ContentPersonalization({ businessId, open, onOpenChange, headers, onOpenKnowledge }: {
++  businessId: string; open: boolean; onOpenChange: (open: boolean) => void;
++  headers?: () => HeadersInit; onOpenKnowledge?: () => void;
++}) {
++  const [profile, setProfile] = useState<Profile | null>(null);
++  const [business, setBusiness] = useState('');
++  const [audience, setAudience] = useState('');
++  const [tone, setTone] = useState('');
++  const [story, setStory] = useState('');
++  const [example, setExample] = useState('');
++  const [step, setStep] = useState(0);
++  const [references, setReferences] = useState(false);
++  const [busy, setBusy] = useState(false);
++  const [error, setError] = useState('');
++  const [saved, setSaved] = useState('');
++  const generation = useRef(0);
++  const endpoint = '/content-voice?business_id=' + encodeURIComponent(businessId);
++  useEffect(() => {
++    const version = ++generation.current;
++    setProfile(null); setBusiness(''); setAudience(''); setTone(''); setStory(''); setExample('');
++    setError(''); setSaved(''); setStep(0); setReferences(false); setBusy(false);
++    if (!open || !businessId) return;
++    setBusy(true);
++    void contentRequest<{ profile: Profile }>(endpoint, undefined, headers).then(({ profile: loaded }) => {
++      if (generation.current !== version) return;
++      setProfile(loaded); setBusiness(loaded.preferences?.business_description || '');
++      setAudience(loaded.preferences?.audience_description || ''); setTone(loaded.preferences?.tone_instruction || loaded.summary || '');
++    }).catch(reason => { if (generation.current === version) setError(reason instanceof Error ? reason.message : 'Не удалось загрузить настройки.'); })
++      .finally(() => { if (generation.current === version) setBusy(false); });
++    return () => { generation.current += 1; };
++  }, [businessId, open, endpoint, headers]);
++
++  const save = async () => {
++    if (!profile || busy) return;
++    const version = generation.current;
++    setBusy(true); setError(''); setSaved('');
++    try {
++      const result = await contentRequest<{ profile: Profile }>('/content-voice', {
++        method: 'PATCH', body: JSON.stringify({ business_id: businessId, expected_version: profile.version,
++          summary: tone, preferences: { business_description: business.trim(), audience_description: audience.trim() },
++          ...(story.trim() ? { founder_story: story.trim() } : {}), confirm: true }),
++      }, headers);
++      if (generation.current !== version) return;
++      setProfile(result.profile); setStory('');
++      setSaved('Сохранено для будущих текстов. Готовые посты не изменены.');
++    } catch (reason) {
++      if (generation.current === version) {
++        setError(reason instanceof Error ? reason.message : 'Не удалось сохранить.');
++        if (reason instanceof ContentAccessError) { setProfile(null); setBusiness(''); setAudience(''); setStory(''); setTone(''); setExample(''); }
++      }
++    } finally { if (generation.current === version) setBusy(false); }
++  };
++  const changeExample = async (id?: string) => {
++    const version = generation.current;
++    setBusy(true); setError('');
++    try {
++      await contentRequest(id ? '/content-voice/examples/' + encodeURIComponent(id) : '/content-voice/examples', {
++        method: id ? 'DELETE' : 'POST', ...(!id ? { body: JSON.stringify({ business_id: businessId, text: example, origin: 'manual', quality_status: 'reference' }) } : {}),
++      }, headers);
++      const result = await contentRequest<{ profile: Profile }>(endpoint, undefined, headers);
++      if (generation.current === version) { setProfile(result.profile); setExample(''); }
++    } catch (reason) { if (generation.current === version) setError(reason instanceof Error ? reason.message : 'Не удалось сохранить пример.'); }
++    finally { if (generation.current === version) setBusy(false); }
++  };
++  const knowledge = () => {
++    onOpenChange(false);
++    if (onOpenKnowledge) onOpenKnowledge();
++    else window.location.assign('/dashboard/profile?section=knowledge&business_id=' + encodeURIComponent(businessId));
++  };
++  return <>
++    <Dialog open={open && !references} onOpenChange={onOpenChange}>
++      <DialogContent className={`flex max-h-[90dvh] flex-col overflow-hidden text-foreground sm:max-w-xl ${headers ? 'dark' : ''}`}>
++        <DialogHeader><DialogTitle>Настроить контент</DialogTitle><DialogDescription>Три коротких шага, чтобы тексты были похожи на вас и понятны вашим клиентам.</DialogDescription></DialogHeader>
++        <Button id="content-references-button" variant="outline" onClick={() => setReferences(true)}>Ориентиры для постов</Button>
++        <Button variant="ghost" className="h-auto min-h-11 whitespace-normal" onClick={knowledge}>Общие сведения и документы о бизнесе</Button>
++        <nav aria-label="Шаги настройки контента" className="grid grid-cols-3 gap-2">{steps.map((label, index) => <Button key={label} className="h-auto min-h-11 min-w-0 whitespace-normal px-2 text-xs" variant={step === index ? 'default' : 'outline'} aria-current={step === index ? 'step' : undefined} onClick={() => setStep(index)}>{label}</Button>)}</nav>
++        {busy && !profile && <p role="status">Загружаем настройки…</p>}
++        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
++        {saved && <p role="status" className="text-sm">{saved}</p>}
++        {profile && <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
++          {step === 0 && <>
++            <label className="block space-y-2"><span>Что важно знать о бизнесе</span><Textarea value={business} maxLength={6000} onChange={event => setBusiness(event.target.value)} placeholder="Чем занимаетесь, чем отличаетесь и что нельзя искажать в текстах" /></label>
++            <label className="block space-y-2"><span>История основателя</span><Textarea value={story} maxLength={6000} onChange={event => setStory(event.target.value)} placeholder="Добавьте реальный эпизод: почему открыли компанию, во что верите, что делаете лично" /></label>
++            <p className="text-sm text-muted-foreground">История сохраняется как ваши сведения для контента. Примеры чужих компаний добавляйте в ориентиры.</p>
++            {(profile.preferences?.editorial_notes || []).filter(note => note.kind === 'founder_story' || note.kind === 'company_fact').map(note => <p key={note.id} className="whitespace-pre-wrap border-l-2 pl-3 text-sm">{note.text}</p>)}
++          </>}
++          {step === 1 && <label className="block space-y-2"><span>Кто ваши клиенты</span><Textarea value={audience} maxLength={6000} onChange={event => setAudience(event.target.value)} placeholder="Их ситуации, вопросы и причины выбрать вас" /></label>}
++          {step === 2 && <>
++            <label className="block space-y-2"><span>Как должны звучать тексты</span><Textarea value={tone} maxLength={600} onChange={event => setTone(event.target.value)} placeholder="Например: конкретно, тепло, без рекламных вопросов" /></label>
++            <details><summary className="min-h-11 cursor-pointer py-2">Примеры понравившихся постов · {profile.examples?.length || 0}</summary>
++              <label className="block space-y-2"><span>Полный текст примера</span><Textarea value={example} maxLength={12000} onChange={event => setExample(event.target.value)} /></label>
++              <Button variant="outline" disabled={busy || example.trim().length < 20} onClick={() => void changeExample()}>Добавить пример</Button>
++              {profile.examples?.map(item => <div key={item.id} className="border-b py-3"><p className="whitespace-pre-wrap text-sm">{item.text}</p><Button variant="ghost" disabled={busy} onClick={() => void changeExample(item.id)}>Удалить пример</Button></div>)}
++            </details>
++          </>}
++        </div>}
++        <DialogFooter className="shrink-0 border-t pt-3">
++          {step > 0 ? <Button variant="outline" onClick={() => setStep(step - 1)}>Назад</Button> : <Button variant="outline" onClick={() => onOpenChange(false)}>Закрыть</Button>}
++          {step < 2 ? <Button onClick={() => setStep(step + 1)}>Дальше</Button> : <Button disabled={busy || !profile} onClick={() => void save()}>{busy ? 'Сохраняем…' : 'Сохранить'}</Button>}
++        </DialogFooter>
++      </DialogContent>
++    </Dialog>
++    <ContentReferences businessId={businessId} open={open && references} onOpenChange={setReferences} headers={headers} />
++  </>;
++}
+--- /dev/null
++++ b/frontend/src/components/content-plan/contentRequest.ts
+@@ -0,0 +1,18 @@
++import { newAuth } from '@/lib/auth_new';
++import { readMobileJson } from '@/lib/mobileDataClient';
++
++export class ContentAccessError extends Error {}
++
++// The shared editor must use the current surface's session, never a leftover
++// dashboard token when running inside either messenger.
++export async function contentRequest<T>(path: string, init?: RequestInit, headers?: () => HeadersInit): Promise<T> {
++  if (!headers) return newAuth.makeRequest(path, init);
++  const requestHeaders = new Headers(headers());
++  if (init?.body) requestHeaders.set('Content-Type', 'application/json');
++  const response = await fetch('/api' + path, { ...init, headers: requestHeaders });
++  try { return await readMobileJson<T>(response); }
++  catch (reason) {
++    if (response.status === 401 || response.status === 403) throw new ContentAccessError(reason instanceof Error ? reason.message : 'Нет доступа.');
++    throw reason;
++  }
++}
+--- /dev/null
++++ b/frontend/src/components/telegram/WorkDiscussion.tsx
+@@ -0,0 +1,36 @@
++import { useEffect, useRef, useState } from 'react';
++import { Button } from '@/components/ui/button';
++import { miniAppLabel, miniAppPlatform, openMiniAppLink } from '@/lib/miniAppPlatform';
++import { mobileJsonHeaders, readMobileJson } from '@/lib/mobileDataClient';
++
++export function WorkDiscussion({ businessId, itemId, updatedAt, onDiscuss, disabled }: {
++  businessId: string; itemId: string; updatedAt?: string; onDiscuss?: () => void; disabled?: boolean;
++}) {
++  const [busy, setBusy] = useState(false);
++  const [error, setError] = useState('');
++  const requestId = useRef(crypto.randomUUID());
++  const active = useRef(true);
++  useEffect(() => { active.current = true; requestId.current = crypto.randomUUID(); return () => { active.current = false; }; }, [businessId, itemId, updatedAt]);
++  const openBot = async () => {
++    if (busy || disabled) return;
++    setBusy(true); setError('');
++    try {
++      const result = await fetch('/api/operator/work-handoff', { method: 'POST', headers: mobileJsonHeaders(),
++        body: JSON.stringify({ business_id: businessId, item_id: itemId, updated_at: updatedAt, platform: miniAppPlatform(), request_id: requestId.current }),
++      }).then(readMobileJson<{ url: string }>);
++      if (!active.current) return;
++      const url = new URL(result.url);
++      if (url.protocol !== 'https:' || url.hostname !== (miniAppPlatform() === 'max' ? 'max.ru' : 't.me')) throw new Error('Не удалось открыть бота.');
++      openMiniAppLink(result.url);
++    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось открыть бота. Повторите.'); }
++    finally { setBusy(false); }
++  };
++  return <div className="space-y-2 border-t pt-3">
++    <div className="flex flex-wrap gap-2">
++      {onDiscuss && <Button variant="outline" disabled={disabled || busy} onClick={onDiscuss}>Обсудить этот пост</Button>}
++      <Button variant="ghost" disabled={disabled || busy} onClick={() => void openBot()}>{busy ? 'Открываем…' : `Продолжить в боте ${miniAppLabel()}`}</Button>
++    </div>
++    {disabled && <p className="text-sm text-muted-foreground">Сохраните правки или закройте редактор перед переходом.</p>}
++    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
++  </div>;
++}
+--- a/frontend/src/pages/dashboard/ContentPage.tsx
++++ b/frontend/src/pages/dashboard/ContentPage.tsx
+@@ -35,7 +35,7 @@
+ 
+ import { AudienceInsights } from '@/components/AudienceInsights';
+ import { PublicationReconciliation } from '@/components/content-plan/PublicationReconciliation';
+-import { ContentReferences } from '@/components/content-plan/ContentReferences';
++import { ContentPersonalization } from '@/components/content-plan/ContentPersonalization';
+ import { Button } from '@/components/ui/button';
+ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+ import { Input } from '@/components/ui/input';
+@@ -131,20 +131,6 @@
+   sources?: ContentSource[];
+   alternatives?: GenerationAlternative[];
+ };
+-type VoiceExample = { id: string; text: string; business_id?: string; platform?: string };
+-type VoiceProfile = {
+-  summary?: string;
+-  preferences?: {
+-    business_description?: string;
+-    audience_description?: string;
+-    [key: string]: unknown;
+-  };
+-  status?: string;
+-  version?: number;
+-  examples?: VoiceExample[];
+-  learning_suggestion?: { text?: string } | null;
+-};
+-
+ type PlanPayload = {
+   id: string;
+   title?: string;
+@@ -294,7 +280,6 @@
+ type ContentSection = 'calendar' | 'media' | 'audience';
+ type MediaFilter = 'all' | 'maps' | 'posts' | 'weak';
+ type ModalStep = 'setup' | 'preview';
+-type ContentSetupStep = 'business' | 'audience' | 'voice';
+ 
+ type CreatePlanDraft = {
+   goal: string;
+@@ -884,14 +869,6 @@
+   const [generationDetails, setGenerationDetails] = useState<Record<string, GenerationDetails>>({});
+   const [briefAnswers, setBriefAnswers] = useState<Record<string, Record<string, string>>>({});
+   const [voiceOpen, setVoiceOpen] = useState(false);
+-  const [referencesOpen, setReferencesOpen] = useState(false);
+-  const [voiceLoading, setVoiceLoading] = useState(false);
+-  const [voiceProfile, setVoiceProfile] = useState<VoiceProfile | null>(null);
+-  const [voiceSummary, setVoiceSummary] = useState('');
+-  const [businessDescription, setBusinessDescription] = useState('');
+-  const [audienceDescription, setAudienceDescription] = useState('');
+-  const [contentSetupStep, setContentSetupStep] = useState<ContentSetupStep>('business');
+-  const [voiceExampleInput, setVoiceExampleInput] = useState('');
+   const [publicationChannels, setPublicationChannels] = useState<Record<string, boolean>>(() => buildChannelSelection());
+   const [publicationChannelsTouched, setPublicationChannelsTouched] = useState(false);
+   const [platformTextEdits, setPlatformTextEdits] = useState<Record<string, string>>({});
+@@ -1092,79 +1069,7 @@
+     }
+   });
+ 
+-  const openVoiceSettings = async () => {
+-    if (!currentBusinessId) return;
+-    setContentSetupStep('business');
+-    setVoiceOpen(true);
+-    setVoiceLoading(true);
+-    try {
+-      const response = await newAuth.makeRequest(`/content-voice?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
+-      const profile = response.profile || null;
+-      setVoiceProfile(profile);
+-      setVoiceSummary(String(profile?.summary || ''));
+-      setBusinessDescription(String(profile?.preferences?.business_description || ''));
+-      setAudienceDescription(String(profile?.preferences?.audience_description || ''));
+-    } catch (voiceError) {
+-      setError(voiceError instanceof Error ? voiceError.message : 'Не удалось загрузить стиль публикаций');
+-    } finally {
+-      setVoiceLoading(false);
+-    }
+-  };
+-
+-  const addVoiceExample = async () => {
+-    const text = voiceExampleInput.trim();
+-    if (!currentBusinessId || !text) return;
+-    setVoiceLoading(true);
+-    try {
+-      await newAuth.makeRequest('/content-voice/examples', {
+-        method: 'POST',
+-        body: JSON.stringify({ business_id: currentBusinessId, text, origin: 'manual', quality_status: 'reference' }),
+-      });
+-      setVoiceExampleInput('');
+-      await openVoiceSettings();
+-    } catch (voiceError) {
+-      setError(voiceError instanceof Error ? voiceError.message : 'Не удалось добавить пример');
+-      setVoiceLoading(false);
+-    }
+-  };
+-
+-  const deleteVoiceExample = async (exampleId: string) => {
+-    setVoiceLoading(true);
+-    try {
+-      await newAuth.makeRequest(`/content-voice/examples/${encodeURIComponent(exampleId)}`, { method: 'DELETE' });
+-      await openVoiceSettings();
+-    } catch (voiceError) {
+-      setError(voiceError instanceof Error ? voiceError.message : 'Не удалось удалить пример');
+-      setVoiceLoading(false);
+-    }
+-  };
+-
+-  const saveVoiceProfile = async () => {
+-    if (!currentBusinessId) return;
+-    setVoiceLoading(true);
+-    try {
+-      const response = await newAuth.makeRequest('/content-voice', {
+-        method: 'PATCH',
+-        body: JSON.stringify({
+-          business_id: currentBusinessId,
+-          summary: voiceSummary,
+-          preferences: {
+-            ...(voiceProfile?.preferences || {}),
+-            business_description: businessDescription.trim(),
+-            audience_description: audienceDescription.trim(),
+-          },
+-          confirm: true,
+-        }),
+-      });
+-      setVoiceProfile(response.profile || null);
+-      setVoiceOpen(false);
+-      setActionMessage('Настройки контента сохранены. LocalOS будет учитывать их в новых текстах.');
+-    } catch (voiceError) {
+-      setError(voiceError instanceof Error ? voiceError.message : 'Не удалось сохранить стиль');
+-    } finally {
+-      setVoiceLoading(false);
+-    }
+-  };
++  const openVoiceSettings = () => setVoiceOpen(true);
+ 
+   useEffect(() => {
+     void loadContent();
+@@ -3651,101 +3556,6 @@
+     );
+   };
+ 
+-  const contentSetupSteps: { key: ContentSetupStep; label: string }[] = [
+-    { key: 'business', label: 'О бизнесе' },
+-    { key: 'audience', label: 'О клиентах' },
+-    { key: 'voice', label: 'Как писать' },
+-  ];
+-  const contentSetupStepIndex = contentSetupSteps.findIndex((step) => step.key === contentSetupStep);
+-
+-  const renderVoiceDialog = () => (
+-    <Dialog open={voiceOpen} onOpenChange={setVoiceOpen}>
+-      <DialogContent className="max-h-[88vh] overflow-y-auto rounded-[28px] sm:max-w-xl">
+-        <DialogHeader>
+-          <DialogTitle className="text-balance text-2xl">Настроить контент</DialogTitle>
+-          <DialogDescription className="text-pretty">
+-            Три коротких шага, чтобы тексты были похожи на вас и понятны вашим клиентам.
+-          </DialogDescription>
+-        </DialogHeader>
+-        <Button id="content-references-button" type="button" variant="outline" className="min-h-11 justify-between" onClick={() => { setVoiceOpen(false); setReferencesOpen(true); }}>
+-          {language === 'ru' ? 'Ориентиры для постов' : 'Post references'}<ChevronDown className="size-4 -rotate-90" aria-hidden="true" />
+-        </Button>
+-        {voiceLoading && !voiceProfile ? (
+-          <div className="flex min-h-32 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Загружаем настройки...</div>
+-        ) : (
+-          <div className="space-y-5 py-2">
+-            <div className="grid grid-cols-3 gap-2" aria-label="Шаги настройки контента">
+-              {contentSetupSteps.map((step, index) => (
+-                <button
+-                  key={step.key}
+-                  type="button"
+-                  onClick={() => setContentSetupStep(step.key)}
+-                  className={cn(
+-                    'min-h-12 rounded-2xl px-2 py-2 text-xs font-semibold transition-colors',
+-                    contentSetupStep === step.key ? 'bg-slate-950 text-white' : index < contentSetupStepIndex ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+-                  )}
+-                >
+-                  <span className="block text-[11px] opacity-70">Шаг {index + 1}</span>
+-                  {step.label}
+-                </button>
+-              ))}
+-            </div>
+-
+-            {contentSetupStep === 'business' ? (
+-              <div>
+-                <div className="text-sm font-semibold text-slate-900">Что важно знать о бизнесе</div>
+-                <p className="mt-1 text-sm leading-6 text-slate-600">Коротко: чем вы занимаетесь, чем отличаетесь и что нельзя искажать в текстах.</p>
+-                <Textarea value={businessDescription} onChange={(event) => setBusinessDescription(event.target.value)} placeholder="Например: культурный центр для жителей района; главное — реальная афиша и конкретные события" className="mt-3 min-h-36 rounded-2xl" />
+-              </div>
+-            ) : null}
+-
+-            {contentSetupStep === 'audience' ? (
+-              <div>
+-                <div className="text-sm font-semibold text-slate-900">Кто ваши клиенты</div>
+-                <p className="mt-1 text-sm leading-6 text-slate-600">Опишите их ситуации, вопросы и причины выбрать вас. Не нужны сложные сегменты.</p>
+-                <Textarea value={audienceDescription} onChange={(event) => setAudienceDescription(event.target.value)} placeholder="Например: жители района, которые ищут интересные события рядом с домом и хотят заранее знать дату и формат" className="mt-3 min-h-36 rounded-2xl" />
+-              </div>
+-            ) : null}
+-
+-            {contentSetupStep === 'voice' ? (
+-              <div className="space-y-5">
+-                <div>
+-                  <div className="text-sm font-semibold text-slate-900">Как должны звучать тексты</div>
+-                  <Textarea value={voiceSummary} onChange={(event) => setVoiceSummary(event.target.value)} placeholder="Например: конкретно, тепло, без рекламных вопросов" className="mt-2 min-h-28 rounded-2xl" />
+-                </div>
+-                <details className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+-                  <summary className="cursor-pointer text-sm font-semibold text-slate-900">Примеры понравившихся постов · {(voiceProfile?.examples || []).length}</summary>
+-                  <div className="mt-4">
+-                    <Textarea value={voiceExampleInput} onChange={(event) => setVoiceExampleInput(event.target.value)} placeholder="Вставьте полный текст публикации" className="min-h-28 rounded-2xl bg-white" />
+-                    <Button type="button" variant="outline" onClick={() => { void addVoiceExample(); }} disabled={voiceLoading || voiceExampleInput.trim().length < 20} className="mt-2 min-h-11 rounded-2xl bg-white active:scale-[0.96] transition-transform"><Plus className="mr-2 h-4 w-4" />Добавить пример</Button>
+-                    {(voiceProfile?.examples || []).length > 0 ? (
+-                      <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
+-                        {(voiceProfile?.examples || []).map((example) => (
+-                          <div key={example.id} className="flex items-start gap-3 rounded-2xl bg-white p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]">
+-                            <p className="line-clamp-3 min-w-0 flex-1 text-pretty text-sm leading-6 text-slate-600">{example.text}</p>
+-                            <button type="button" onClick={() => { void deleteVoiceExample(example.id); }} className="grid min-h-10 min-w-10 place-items-center rounded-xl text-slate-400 transition-colors hover:bg-slate-50 hover:text-red-600" aria-label="Удалить пример"><Trash2 className="h-4 w-4" /></button>
+-                          </div>
+-                        ))}
+-                      </div>
+-                    ) : <p className="mt-3 text-xs leading-5 text-slate-600">Можно начать без примеров и добавить их позже.</p>}
+-                  </div>
+-                </details>
+-                {voiceProfile?.learning_suggestion?.text ? <div className="rounded-2xl bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">{voiceProfile.learning_suggestion.text}</div> : null}
+-              </div>
+-            ) : null}
+-          </div>
+-        )}
+-        <DialogFooter>
+-          {contentSetupStepIndex > 0 ? <Button type="button" variant="outline" onClick={() => setContentSetupStep(contentSetupSteps[contentSetupStepIndex - 1].key)} className="min-h-11 rounded-2xl">Назад</Button> : <Button type="button" variant="outline" onClick={() => setVoiceOpen(false)} className="min-h-11 rounded-2xl">Закрыть</Button>}
+-          {contentSetupStepIndex < contentSetupSteps.length - 1 ? (
+-            <Button type="button" onClick={() => setContentSetupStep(contentSetupSteps[contentSetupStepIndex + 1].key)} className="min-h-11 rounded-2xl bg-slate-950 text-white active:scale-[0.96] transition-transform">Дальше</Button>
+-          ) : (
+-            <Button type="button" onClick={() => { void saveVoiceProfile(); }} disabled={voiceLoading || !voiceSummary.trim()} className="min-h-11 rounded-2xl bg-slate-950 text-white active:scale-[0.96] transition-transform">Сохранить</Button>
+-          )}
+-        </DialogFooter>
+-      </DialogContent>
+-    </Dialog>
+-  );
+ 
+   if (!currentBusinessId) {
+     return (
+@@ -3761,8 +3571,7 @@
+     <div className="mx-auto max-w-[1500px] space-y-6 px-4 py-6">
+       {renderPlanModal()}
+       {renderDeletePlanDialog()}
+-      {renderVoiceDialog()}
+-      <ContentReferences key={currentBusinessId} businessId={currentBusinessId || ''} open={referencesOpen} onOpenChange={(open) => { setReferencesOpen(open); if (!open) setVoiceOpen(true); }} language={language} />
++      <ContentPersonalization key={currentBusinessId} businessId={currentBusinessId} open={voiceOpen} onOpenChange={setVoiceOpen} />
+       {renderDrawer()}
+ 
+       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

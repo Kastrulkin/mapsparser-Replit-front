@@ -62,3 +62,28 @@ def test_payment_required_payload_names_minimum_tier():
     assert payload['payment_required'] is True
     assert payload['required_tier'] == 'professional'
     assert payload['required_tier_name'] == 'Привлечение'
+
+
+def test_content_pilot_only_opens_content_for_exact_business(monkeypatch):
+    monkeypatch.setenv('CONTENT_ACCESS_BUSINESS_IDS', ' content-business,other-pilot ')
+    access = build_subscription_capabilities(tier='trial', status='active', business_id='content-business')
+    assert set(access['capabilities']) == {'operator', 'social_content'}
+    assert access['tier'] == 'trial'
+    assert access['active'] is False
+    assert capabilities('trial') == {'operator'}
+    assert build_subscription_capabilities(tier='trial', status='active', business_id='content')['capabilities'] == ['operator']
+
+
+def test_content_pilot_does_not_bypass_revocation_or_expiry(monkeypatch):
+    monkeypatch.setenv('CONTENT_ACCESS_BUSINESS_IDS', 'content-business')
+    for status, ends_at in [('inactive', None), ('active', datetime.now() - timedelta(seconds=1))]:
+        access = build_subscription_capabilities(tier='trial', status=status, subscription_ends_at=ends_at, business_id='content-business')
+        assert set(access['capabilities']) == {'operator'}
+
+
+def test_content_pilot_preserves_paid_capabilities_and_removal_closes_access(monkeypatch):
+    monkeypatch.setenv('CONTENT_ACCESS_BUSINESS_IDS', 'content-business')
+    access = build_subscription_capabilities(tier='starter', status='active', business_id='content-business')
+    assert set(access['capabilities']) == capabilities('starter') | {'social_content'}
+    monkeypatch.delenv('CONTENT_ACCESS_BUSINESS_IDS')
+    assert set(build_subscription_capabilities(tier='trial', status='active', business_id='content-business')['capabilities']) == {'operator'}

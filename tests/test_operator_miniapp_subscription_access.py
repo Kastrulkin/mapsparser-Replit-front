@@ -83,6 +83,26 @@ def test_concierge_opens_management_modules():
         assert navigation[key]["status"] == "available"
 
 
+def test_content_pilot_opens_miniapp_navigation_without_other_management(monkeypatch):
+    monkeypatch.setenv('CONTENT_ACCESS_BUSINESS_IDS', 'business-1')
+    navigation = _navigation('trial')
+    assert navigation['content']['status'] == 'available'
+    assert navigation['finance']['status'] == 'read_only'
+    monkeypatch.setenv('CONTENT_ACCESS_BUSINESS_IDS', 'another-business')
+    assert _navigation('trial')['content']['status'] == 'read_only'
+
+
+def test_network_does_not_inherit_single_business_content_pilot(monkeypatch):
+    monkeypatch.setenv('CONTENT_ACCESS_BUSINESS_IDS', 'business-1')
+    class Cursor:
+        def execute(self, query, params):
+            pass
+        def fetchall(self):
+            return [{'id': value, 'subscription_tier': 'trial', 'subscription_status': 'active'} for value in ('business-1', 'business-2')]
+    access = operator_api._scope_subscription_access(Cursor(), {'kind': 'network', 'business_ids': ['business-1', 'business-2']})
+    assert 'social_content' not in access['capabilities']
+
+
 def test_mobile_actions_map_to_the_same_capabilities_as_navigation():
     assert _mobile_capability_for_action("cards.refresh") == "maps"
     assert _mobile_capability_for_action("reviews.generate") == "maps.reviews"

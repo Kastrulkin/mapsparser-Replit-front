@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
+import psycopg2
 from datetime import datetime, timezone
 from typing import Any
 
@@ -15,6 +16,10 @@ CONTENT_EXAMPLE_LIMIT = 50
 CONTENT_EXAMPLE_PLATFORMS = {"", "yandex_maps", "two_gis", "google_business", "telegram", "vk", "instagram", "facebook"}
 CONTENT_EXAMPLE_ORIGINS = {"manual", "published", "approved_edit", "import"}
 CONTENT_EXAMPLE_QUALITY = {"reference", "regular", "avoid"}
+
+
+class ContentVoiceConflict(ValueError):
+    pass
 
 
 def _row_to_dict(cursor: Any, row: Any) -> dict[str, Any]:
@@ -45,9 +50,7 @@ def _auth_context(actor: AuthContext | str) -> AuthContext:
     return actor if isinstance(actor, AuthContext) else AuthContext(user_id=str(actor or ""))
 
 
-def _verify_access(
-    cursor: Any, actor: AuthContext | str, business_id: str, *, require_write: bool = False,
-) -> AuthContext:
+def _verify_access(cursor: Any, actor: AuthContext | str, business_id: str, *, require_write: bool = False) -> AuthContext:
     auth = _auth_context(actor)
     if not auth.permits_business(business_id):
         raise PermissionError("Нет доступа к стилю публикаций этого бизнеса")
@@ -306,11 +309,35 @@ def update_content_voice(actor: AuthContext | str, business_id: str, payload: di
         _verify_access(cursor, auth, business_id, require_write=True)
         # Rules have their own versioned write boundary. Legacy style edits cannot overwrite them.
         cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))',('editorial-profile:'+business_id,))
-        cursor.execute('SELECT preferences_json FROM content_voice_profiles WHERE business_id=%s',(business_id,))
-        latest=_row_to_dict(cursor,cursor.fetchone()).get('preferences_json') or {}
+        cursor.execute('SELECT preferences_json,version FROM content_voice_profiles WHERE business_id=%s FOR UPDATE',(business_id,))
+        latest_profile = _row_to_dict(cursor,cursor.fetchone())
+        latest = latest_profile.get('preferences_json') or {}
+        if payload.get('expected_version') is not None and payload['expected_version'] != int(latest_profile.get('version') or 1):
+            raise ContentVoiceConflict('Настройки изменились в другом окне. Сохраните свой текст и откройте настройки заново.')
+        if 'summary' in payload:
+            preferences['tone_instruction'] = summary
+        # Editorial facts can be added from either bot. A stale form must never
+        # overwrite them or the other existing protected profile sections.
+        preferences.pop('editorial_notes', None)
+        if 'editorial_notes' in latest:
+            preferences['editorial_notes'] = latest['editorial_notes']
+        if 'founder_story' in payload:
+            story = payload['founder_story']
+            if not isinstance(story, str) or not 1 <= len(story.strip()) <= 6000:
+                raise ValueError('Добавьте историю основателя длиной до 6000 символов.')
+            notes = list(preferences.get('editorial_notes') or [])
+            if not any(note.get('kind') == 'founder_story' and note.get('text') == story.strip() for note in notes):
+                if len(notes) >= 100:
+                    raise ValueError('Сначала пересмотрите сохранённые сведения: достигнут лимит 100 заметок.')
+                notes.append({'id': str(uuid.uuid4()), 'kind': 'founder_story', 'text': story.strip(),
+                    'source': 'user_statement', 'actor_id': user_id, 'created_at': datetime.now(timezone.utc).isoformat()})
+            preferences['editorial_notes'] = notes
         preferences.pop('content_rules',None)
         if 'content_rules' in latest:
             preferences['content_rules']=latest['content_rules']
+        preferences.pop('editorial_reference_settings', None)
+        if 'editorial_reference_settings' in latest:
+            preferences['editorial_reference_settings'] = latest['editorial_reference_settings']
         cursor.execute(
             """
             INSERT INTO content_voice_profiles (
@@ -354,6 +381,43 @@ def update_content_voice(actor: AuthContext | str, business_id: str, payload: di
 def load_content_voice_context(cursor: Any, *, user_id: str, business_id: str, limit: int = 5) -> dict[str, Any]:
     cursor.execute("SELECT * FROM content_voice_profiles WHERE business_id = %s", (business_id,))
     profile = _row_to_dict(cursor, cursor.fetchone())
+    cursor.execute('SAVEPOINT voice_manual_corrections')
+    try:
+        cursor.execute('''SELECT event.id, item.business_id, event.final_text AS example_text,
+            NULL AS platform, 'manual_correction' AS origin, 'reference' AS quality_status,
+            event.metadata_json, event.created_at
+            FROM ailearningevents event JOIN contentplanitems item
+              ON item.id::text = event.metadata_json->>'item_id'
+            JOIN contentplans plan ON plan.id = item.plan_id
+            WHERE item.business_id=%s AND plan.plan_status <> 'archived'
+              AND event.capability='content_plan.item'
+              AND event.event_type IN ('minor_edit','major_rewrite')
+              AND jsonb_exists(event.metadata_json->'fields', 'draft_text')
+              AND NULLIF(BTRIM(event.final_text),'') IS NOT NULL
+            ORDER BY event.created_at DESC LIMIT %s''', (business_id, min(limit, 3)))
+        corrections = [_serialize_example(cursor, row) for row in cursor.fetchall() or []]
+        cursor.execute('''SELECT item.id,item.business_id,item.draft_text AS example_text,
+            NULL AS platform,'manual_correction' AS origin,'reference' AS quality_status,
+            item.metadata_json,item.updated_at AS created_at
+            FROM contentplanitems item JOIN contentplans plan ON plan.id=item.plan_id
+            WHERE item.business_id=%s AND plan.plan_status <> 'archived'
+              AND item.metadata_json->>'generation_source'='operator_manual_edit'
+              AND item.status='edited' AND NULLIF(BTRIM(item.draft_text),'') IS NOT NULL
+            ORDER BY item.updated_at DESC LIMIT %s''', (business_id, min(limit,3)))
+        corrections = [_serialize_example(cursor, row) for row in cursor.fetchall() or []] + corrections
+        cursor.execute('''SELECT id,business_id,platform_text AS example_text,platform,
+            'manual_correction' AS origin,'reference' AS quality_status,
+            metadata_json,updated_at AS created_at
+            FROM social_posts WHERE business_id=%s
+              AND metadata_json->>'manually_edited'='true'
+              AND NULLIF(BTRIM(platform_text),'') IS NOT NULL
+            ORDER BY updated_at DESC LIMIT %s''', (business_id, min(limit,3)))
+        corrections = [_serialize_example(cursor, row) for row in cursor.fetchall() or []] + corrections
+    except (psycopg2.errors.UndefinedTable, psycopg2.errors.UndefinedColumn):
+        cursor.execute('ROLLBACK TO SAVEPOINT voice_manual_corrections')
+        corrections = []
+    finally:
+        cursor.execute('RELEASE SAVEPOINT voice_manual_corrections')
     cursor.execute(
         """
         SELECT id, business_id, example_text, platform, origin, quality_status, metadata_json, created_at
@@ -365,7 +429,7 @@ def load_content_voice_context(cursor: Any, *, user_id: str, business_id: str, l
         """,
         (user_id, business_id, business_id, max(1, min(limit, 5))),
     )
-    examples = [_serialize_example(cursor, row) for row in cursor.fetchall() or []]
+    examples = corrections + [_serialize_example(cursor, row) for row in cursor.fetchall() or []]
     remaining = max(0, min(limit, 5) - len(examples))
     if remaining:
         cursor.execute(

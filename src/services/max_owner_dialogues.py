@@ -258,7 +258,12 @@ def prepare_owner_dialogue(cursor, payload, event_key, max_id):
         update = SimpleNamespace(message=message, effective_message=message, effective_user=identity,
             effective_chat=SimpleNamespace(id=int(max_id), type='private'),
             callback_query=Callback(callback, message, output) if callback else None)
-        context = SimpleNamespace(args=message.text.split()[1:] if command != 'start' else [], bot_data={}, user_data={}, bot=InputBot(message))
+        start_payload = str(payload.get('payload') or '') if payload.get('update_type') == 'bot_started' else ''
+        start_args = [start_payload] if start_payload.startswith(('work_', 'content_')) else []
+        command_args = message.text.split()[1:]
+        if command == 'start' and not (command_args and command_args[0].startswith(('work_', 'content_'))):
+            command_args = []  # MAX account linking retains its separate /link boundary.
+        context = SimpleNamespace(args=start_args if payload.get('update_type') == 'bot_started' else command_args, bot_data={}, user_data={}, bot=InputBot(message))
         async def dispatch():
             if command == 'industry_patterns_recalibrate' or callback == 'industry_patterns_recalibrate' or callback.startswith('industry_recalibrate:'):
                 from services.max_commands import handle_command

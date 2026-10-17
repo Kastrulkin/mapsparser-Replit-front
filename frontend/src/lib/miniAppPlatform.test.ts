@@ -56,3 +56,13 @@ it("preserves messenger checkout returns and rejects external destinations", () 
   for (const path of ["/max/control?screen=settings", "/telegram/control?screen=content", "/dashboard/profile#subscription"]) expect(safeCheckoutReturn(path)).toBe(path);
   for (const path of ["//evil.test", "https://evil.test", "/max/control/extra", "/dashboard/\\evil", "/max/control\n"]) expect(safeCheckoutReturn(path)).toBeNull();
 });
+
+it.each(['telegram', 'max'])('restores the same object navigation from %s launch data', async platform => {
+  const { miniAppLaunchParams } = await import('./miniAppPlatform');
+  window.history.replaceState({}, '', `/${platform}/control`);
+  const navigation = {screen:'content',scope_type:'business',scope_id:'business-1',item_type:'content_item',item_id:'post-1'};
+  const start = 'nav_' + btoa(JSON.stringify(navigation));
+  if(platform==='max')window.WebApp={initDataUnsafe:{start_param:start}};
+  else window.Telegram={WebApp:{initDataUnsafe:{start_param:start}}};
+  expect(Object.fromEntries(miniAppLaunchParams())).toEqual(navigation);
+});
