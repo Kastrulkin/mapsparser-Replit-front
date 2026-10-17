@@ -22,6 +22,9 @@ class Cursor:
         if "from telegramcontrolpreferences" in normalized:
             self.description = [("user_id",), ("telegram_id",), ("notification_preferences_json",)]
             self.rows = [("user-1", "123", {"business:biz-1": {"content_publications": True}})]
+        elif "from agent_blueprints" in normalized:
+            self.description = []
+            self.rows = []
         elif "from social_posts sp" in normalized:
             self.social_query_params = params
             self.description = [

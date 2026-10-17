@@ -800,6 +800,7 @@ def test_generate_draft_does_not_save_fallback_as_ready_text(monkeypatch):
 
 def test_generate_draft_needs_context_points_to_details_editor(monkeypatch):
     fake_db = _FakeDraftDatabase()
+    monkeypatch.setattr(content_plan_service, "_load_editorial_pattern_library", lambda *_args, **_kwargs: [])
 
     monkeypatch.setattr(content_plan_service, "DatabaseManager", lambda: fake_db)
     monkeypatch.setattr(content_plan_service, "get_business_owner_id", lambda _cursor, _business_id: "user-1")
@@ -829,6 +830,7 @@ def test_generate_draft_needs_context_points_to_details_editor(monkeypatch):
 
 def test_generate_draft_v2_uses_json_generation_contract(monkeypatch):
     fake_db = _FakeDraftDatabase()
+    monkeypatch.setattr(content_plan_service, "_load_editorial_pattern_library", lambda *_args, **_kwargs: [])
     captured = {}
     complete_brief = {
         "event": "4 июля — Комик против ИИ",
@@ -861,7 +863,7 @@ def test_generate_draft_v2_uses_json_generation_contract(monkeypatch):
                         "used_fact_ids": ["event", "source_ref"],
                         "unsupported_facts": [],
                     }
-                    for index in range(1, 4)
+                    for index in range(1, 2)
                 ]
             },
             ensure_ascii=False,
@@ -890,6 +892,7 @@ def test_generate_draft_v2_uses_json_generation_contract(monkeypatch):
 
 def test_generate_draft_v2_repairs_long_single_paragraph_before_quality_gate(monkeypatch):
     fake_db = _FakeDraftDatabase()
+    monkeypatch.setattr(content_plan_service, "_load_editorial_pattern_library", lambda *_args, **_kwargs: [])
     complete_brief = {
         "event": "Научная лаборатория для детей: микромир под микроскопом",
         "confirmed_details": ["Дети знакомятся с микромиром под микроскопом"],
@@ -925,7 +928,7 @@ def test_generate_draft_v2_repairs_long_single_paragraph_before_quality_gate(mon
                         "used_fact_ids": ["event"],
                         "unsupported_facts": [],
                     }
-                    for index in range(1, 4)
+                    for index in range(1, 2)
                 ]
             },
             ensure_ascii=False,

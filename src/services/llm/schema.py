@@ -50,6 +50,13 @@ def validate_json_schema(value: Any, schema: dict[str, Any] | None, path: str = 
         for key, child_schema in properties.items():
             if key in value and isinstance(child_schema, dict):
                 errors.extend(validate_json_schema(value[key], child_schema, f"{path}.{key}"))
+    if isinstance(value, list):
+        minimum = schema.get("minItems")
+        maximum = schema.get("maxItems")
+        if isinstance(minimum, int) and len(value) < minimum:
+            errors.append(f"{path}: fewer than {minimum} items")
+        if isinstance(maximum, int) and len(value) > maximum:
+            errors.append(f"{path}: more than {maximum} items")
     if isinstance(value, list) and isinstance(schema.get("items"), dict):
         for index, item in enumerate(value):
             errors.extend(validate_json_schema(item, schema["items"], f"{path}[{index}]"))

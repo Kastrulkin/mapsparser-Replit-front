@@ -73,12 +73,13 @@ export const ContentModule = ({ focusItemId, scope, items: allItems, filters, bu
   const planTitle = items.find((item) => item.plan_title)?.plan_title;
   const planId = items.find((item) => item.plan_id)?.plan_id;
   const reloadEffect = useLatestCallback(reload);
+  const focusedItemAvailable = items.some((item) => item.id === focusItemId);
   useEffect(() => {
-    if (!focusItemId || !items.some((item) => item.id === focusItemId)) return;
+    if (!focusItemId || !focusedItemAvailable) return;
     setContentSection('posts');
     setEditing('');
     window.requestAnimationFrame(() => document.getElementById(`content-item-${focusItemId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
-  }, [focusItemId, items]);
+  }, [focusItemId, focusedItemAvailable]);
   const scrollTo = (section: 'calendar' | 'posts') => {
     setContentSection(section);
     const target = section === 'calendar' ? calendarRef.current : postsRef.current;

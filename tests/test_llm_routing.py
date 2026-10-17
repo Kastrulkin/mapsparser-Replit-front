@@ -44,6 +44,8 @@ def test_registry_has_an_explicit_provider_for_every_supported_task():
         "lead_audit_enrichment",
         "knowledge_semantic_analysis",
         "outreach_corpus_pattern_extract",
+        "outreach_audience_qualify",
+        "outreach_public_copy",
     }
     expected_tasks = {
         "review_reply",
@@ -68,6 +70,7 @@ def test_registry_has_an_explicit_provider_for_every_supported_task():
         "average_ticket_matrix",
         "finance_sales_recognition",
         "generic_russian_analysis",
+        "outreach_language_review",
         *deepseek_tasks,
     }
     definitions = {item.task_key: item for item in list_task_definitions()}
@@ -77,15 +80,20 @@ def test_registry_has_an_explicit_provider_for_every_supported_task():
     assert all(item.primary_provider in {"gigachat", "deepseek"} for item in definitions.values())
 
 
-def test_content_plan_v2_has_strict_three_candidate_json_contract():
+def test_content_plan_v2_has_bounded_single_or_two_candidate_json_contract():
     definition = get_task_definition("content_plan_generation_v2")
 
     assert definition is not None
     assert definition.response_kind == "json"
     assert definition.response_schema["required"] == ["candidates"]
     candidates = definition.response_schema["properties"]["candidates"]
-    assert candidates["minItems"] == 3
-    assert candidates["maxItems"] == 3
+    assert candidates["minItems"] == 1
+    assert candidates["maxItems"] == 2
+    candidate = {"id": "one", "angle": "Подход", "text": "Текст", "used_fact_ids": ["fact"], "unsupported_facts": []}
+    for count in (1, 2):
+        assert validate_json_schema({"candidates": [candidate] * count}, definition.response_schema) == []
+    for count in (0, 3):
+        assert validate_json_schema({"candidates": [candidate] * count}, definition.response_schema)
 
 
 def test_finance_sales_recognition_is_registered_as_sensitive_json():

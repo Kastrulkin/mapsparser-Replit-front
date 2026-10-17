@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import { ContentModule } from './ContentModule';
@@ -19,4 +20,16 @@ it('opens a linked post for reading and does not automatically enter editing', (
   render(<ContentModule {...props} focusItemId={item.id} />);
   expect(screen.getByRole('button',{name:'Свернуть текст'})).toBeInTheDocument();
   expect(screen.queryByRole('textbox',{name:'Текст публикации'})).not.toBeInTheDocument();
+});
+
+
+it('keeps a linked plan post editable during rerenders and background refresh', async () => {
+  HTMLElement.prototype.scrollIntoView = vi.fn();
+  const focused = {...item, plan_id: 'plan-1'};
+  const view = render(<Suspense fallback={null}><ContentModule {...props} items={[focused]} focusItemId={item.id} /></Suspense>);
+  await screen.findByRole('button', {name:'Редактировать текст'});
+  fireEvent.click(screen.getByRole('button', {name:'Редактировать текст'}));
+  fireEvent.change(screen.getByRole('textbox', {name:'Текст публикации'}), {target:{value:'Незавершённая правка по ссылке'}});
+  view.rerender(<Suspense fallback={null}><ContentModule {...props} items={[{...focused,version:'version-2',draft_text:'Обновлено в другом окне'}]} focusItemId={item.id} /></Suspense>);
+  expect(screen.getByRole('textbox', {name:'Текст публикации'})).toHaveValue('Незавершённая правка по ссылке');
 });

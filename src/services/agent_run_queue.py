@@ -77,6 +77,13 @@ def enqueue_agent_run(
     version_error = _validate_pinned_version(blueprint, version)
     if version_error:
         return {"success": False, "code": "AGENT_VERSION_NOT_EXECUTABLE", "error": version_error}
+    artifact = parse_json_field(version.get('compiled_artifact_json'), {})
+    if (artifact.get('manifest') or {}).get('content_handoff_contract') and not snapshot:
+        from services.compiled_content_program import create_content_snapshot
+        # A new run always reads current plan data. Idempotent replay above
+        # retains the original snapshot and never schedules another delivery.
+        snapshot = create_content_snapshot(cursor, blueprint=blueprint, version=version, user_id=user_id)
+        input_payload = snapshot['input']
     if str(version.get("compiled_state") or "legacy").strip() != "legacy" and (
         not str(snapshot.get("snapshot_id") or "") or not str(snapshot.get("content_hash") or "")
     ):
@@ -303,21 +310,30 @@ def _validate_pinned_version(blueprint: dict[str, Any], version: dict[str, Any])
     )
     if not validation.get("valid"):
         return "compiled script artifact hash or policy validation failed"
+    if (validation.get('manifest') or {}).get('content_handoff_contract'):
+        from services.compiled_content_program import contract_for, program_allowed
+        if not program_allowed(str(blueprint.get('business_id') or ''), str(blueprint.get('id') or '')):
+            return 'compiled content execution is unavailable for this automation'
+        if validation['manifest']['content_handoff_contract'] != contract_for(version, str(blueprint.get('business_id') or '')):
+            return 'compiled content conditions changed'
     return ""
 
 
 def claim_next_agent_run(cursor: Any) -> dict[str, Any] | None:
+    allowed_ids = [value.strip() for value in os.getenv('AGENT_RUN_QUEUE_BLUEPRINT_IDS', '').split(',') if value.strip()]
+    cohort_filter = 'AND blueprint_id = ANY(%s)' if allowed_ids else ''
     # Do not issue one broad UPDATE over every stale run. A live runner can hold
     # its row lock while invoking a provider; SKIP LOCKED lets this worker claim
     # another runnable item instead of waiting behind it.
     lease_token = str(uuid.uuid4())
     cursor.execute(
-        """
+        f"""
         WITH stale_runs AS (
             SELECT id
             FROM agent_runs
             WHERE status = 'running'
               AND heartbeat_at < NOW() - INTERVAL '5 minutes'
+              {cohort_filter}
             ORDER BY heartbeat_at ASC
             FOR UPDATE SKIP LOCKED
             LIMIT 50
@@ -335,7 +351,7 @@ def claim_next_agent_run(cursor: Any) -> dict[str, Any] | None:
         FROM stale_runs
         WHERE run.id = stale_runs.id
         RETURNING run.*
-        """
+        """, (allowed_ids,) if allowed_ids else None
     )
     expired = cursor.fetchall() if hasattr(cursor, "fetchall") else []
     for expired_run in expired:
@@ -350,12 +366,18 @@ def claim_next_agent_run(cursor: Any) -> dict[str, Any] | None:
         current["reserved_credits"] = int(reservation.get("reserved_credits") or AGENT_RUN_ESTIMATED_CREDITS)
         finalize_agent_run_credits(cursor, run=current, actual_tokens=0)
     cursor.execute(
-        """
+        f"""
         WITH next_run AS (
             SELECT id
             FROM agent_runs
-            WHERE status = 'queued'
-               OR (status = 'retry_wait' AND COALESCE(next_attempt_at, NOW()) <= NOW())
+            WHERE (status = 'queued'
+               OR (status = 'retry_wait' AND COALESCE(next_attempt_at, NOW()) <= NOW()))
+              {cohort_filter}
+              AND EXISTS (SELECT 1 FROM agent_blueprints blueprint
+                          WHERE blueprint.id = agent_runs.blueprint_id
+                            AND (blueprint.status IN ('active','draft')
+                                 OR (blueprint.status = 'paused'
+                                     AND agent_runs.input_json->>'preview_mode' = 'true')))
             ORDER BY COALESCE(next_attempt_at, queued_at, updated_at) ASC
             FOR UPDATE SKIP LOCKED
             LIMIT 1
@@ -372,7 +394,7 @@ def claim_next_agent_run(cursor: Any) -> dict[str, Any] | None:
         WHERE r.id = next_run.id
         RETURNING r.*
         """,
-        (lease_token,),
+        (allowed_ids, lease_token) if allowed_ids else (lease_token,),
     )
     row = cursor.fetchone()
     return dict(row) if row else None
@@ -498,9 +520,9 @@ def compiled_run_claim(run: dict[str, Any]) -> dict[str, Any] | None:
         manifest = validation.get("manifest") or {}
         snapshot_id = str(row.get("input_snapshot_id") or "")
         snapshot_hash = str(row.get("input_snapshot_hash") or "")
-        if "table_contract" in manifest and (not snapshot_id or not snapshot_hash):
+        if ("table_contract" in manifest or 'content_handoff_contract' in manifest) and (not snapshot_id or not snapshot_hash):
             return {"error": "compiled_input_snapshot_required"}
-        if "table_contract" in manifest:
+        if "table_contract" in manifest or 'content_handoff_contract' in manifest:
             from services.compiled_input_snapshots import content_hash
             if content_hash(parse_json_field(row.get("input_json"), {})) != snapshot_hash:
                 return {"error": "compiled_input_snapshot_hash_mismatch"}
@@ -530,12 +552,42 @@ def execute_claimed_compiled_agent_run(run: dict[str, Any]) -> dict[str, Any] | 
     except ValueError:
         error = sys.exception()
         return _finish_compiled_claim(run_id, lease_token, error=str(error))
+    if (prepared['artifact'].get('manifest') or {}).get('content_handoff_contract'):
+        try:
+            from services.compiled_content_program import dispatch_result
+            result = dispatch_result(prepared, result)
+        except Exception:
+            # The receipts own uncertain provider outcomes. Never retry a send
+            # merely because finalization or the delivery boundary failed.
+            exception = sys.exception()
+            frames = []
+            traceback = exception.__traceback__
+            while traceback is not None:
+                frames.append({'function': traceback.tb_frame.f_code.co_name,
+                               'line': traceback.tb_lineno})
+                traceback = traceback.tb_next
+            print(json.dumps({'event': 'compiled_content_dispatch_failed',
+                              'run_id': run_id, 'error_type': type(exception).__name__,
+                              'frames': frames}), flush=True)
+            return _finish_compiled_claim(run_id, lease_token, error='compiled_content_dispatch_needs_attention')
     return _finish_compiled_claim(run_id, lease_token, result=result)
+
+
+def _compiled_completion_error(result: dict[str, Any] | None, error: str = "") -> str:
+    if error or not isinstance(result, dict):
+        return error
+    handoff = result.get("handoff")
+    if isinstance(handoff, dict):
+        delivery = handoff.get("result") or handoff
+        if not isinstance(delivery, dict) or delivery.get("status") not in {"completed", "nothing_due"}:
+            return "compiled_content_handoff_needs_attention"
+    return ""
 
 
 def _finish_compiled_claim(run_id: str, lease_token: str, *, result: dict[str, Any] | None = None, error: str = "", retryable: bool = False) -> dict[str, Any]:
     from database_manager import DatabaseManager
 
+    error = _compiled_completion_error(result, error)
     database = DatabaseManager()
     try:
         cursor = database.conn.cursor()
@@ -547,7 +599,7 @@ def _finish_compiled_claim(run_id: str, lease_token: str, *, result: dict[str, A
                     next_attempt_at=CASE WHEN %s THEN NOW() + INTERVAL '1 minute' ELSE NULL END,
                     heartbeat_at=NOW(), lease_token=NULL, updated_at=NOW()
                WHERE id=%s AND status='running' AND lease_token=%s RETURNING *""",
-            (retry, "completed" if result is not None else "failed", json.dumps(result, ensure_ascii=False) if result is not None else None,
+            (retry, "completed" if result is not None and not error else "failed", json.dumps(result, ensure_ascii=False) if result is not None else None,
              json.dumps(result, ensure_ascii=False) if result is not None else None, error or None, retry, retry, run_id, lease_token),
         )
         current = cursor.fetchone()
@@ -566,7 +618,7 @@ def _finish_compiled_claim(run_id: str, lease_token: str, *, result: dict[str, A
         cursor.execute("UPDATE agent_runs SET output_json=COALESCE(output_json,'{}'::jsonb)||jsonb_build_object('run_billing',%s::jsonb) WHERE id=%s", (json.dumps(billing, ensure_ascii=False), run_id))
         database.conn.commit()
         current["run_billing"] = billing
-        return {"success": result is not None, "run": current}
+        return {"success": result is not None and not error, "run": current}
     except Exception:
         database.conn.rollback()
         raise

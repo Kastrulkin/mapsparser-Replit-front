@@ -3,7 +3,29 @@ import re
 from services import operator_editorial, operator_work_journal, work_journal, work_review
 
 
-def remember_selection(cursor, business_id, result):
+def _photo_target(cursor, business_id, history):
+    for entry in reversed(history or []):
+        value = entry.get('result_json') or {}
+        if value.get('selected_item'):
+            return value['selected_item']
+        if entry.get('role') == 'user':
+            match = re.search(r'пост\w*\s+[«"]([^»"]+)[»"]', entry.get('content') or '', re.I)
+            if match:
+                rows = [row for row in operator_editorial._items(cursor, business_id)
+                        if row.get('theme', '').casefold() == match[1].casefold()]
+                if len(rows) == 1:
+                    row = rows[0]
+                    return {'item_id':row['id'], 'plan_id':row['plan_id'], 'version':operator_editorial._version(row)}
+                return None
+    return None
+
+
+def remember_selection(cursor, business_id, result, history=None):
+    if result.get('photos'):
+        selected = _photo_target(cursor, business_id, history)
+        if selected:
+            result['selected_item'] = selected
+        return
     items = result.get('items')
     if result.get('resource') != 'content' or not isinstance(items, list) or len(items) != 1:
         return

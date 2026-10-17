@@ -337,11 +337,19 @@ def content_plan_item_generate_draft(item_id: str):
     if error_response:
         return error_response
     data = request.get_json(silent=True) or {}
+    options = {}
+    if "additional_variants" in data and type(data["additional_variants"]) is not bool:
+        return jsonify({"success": False, "error": "Неверный режим генерации"}), 400
+    if data.get("additional_variants"):
+        if not isinstance(data.get("request_id"), str) or not data["request_id"] or len(data["request_id"]) > 100 or not isinstance(data.get("expected_draft_text"), str):
+            return jsonify({"success": False, "error": "Обновите материал перед запросом вариантов"}), 400
+        options = {"additional_variants": True, "expected_draft_text": data["expected_draft_text"], "request_id": data["request_id"]}
     try:
         result = generate_draft_for_plan_item(
             str(user_data.get("user_id") or ""),
             item_id,
             language=str(data.get("language") or "").strip() or None,
+            **options,
         )
         return jsonify(
             {
@@ -352,6 +360,8 @@ def content_plan_item_generate_draft(item_id: str):
         )
     except PermissionError as exc:
         return jsonify({"success": False, "error": str(exc)}), 403
+    except ContentPlanItemConflict as exc:
+        return jsonify({"success": False, "error": str(exc), "code": "content_item_stale"}), 409
     except ValueError as exc:
         return jsonify({"success": False, "error": str(exc)}), 404
     except Exception as exc:

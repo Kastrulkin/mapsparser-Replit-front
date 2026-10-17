@@ -9,7 +9,20 @@ services:
       COMPILED_SCRIPT_EXECUTE_ENABLED: ${COMPILED_SCRIPT_EXECUTE_ENABLED:-false}
       COMPILED_SCRIPT_PILOT_BUSINESS_IDS: ${COMPILED_SCRIPT_PILOT_BUSINESS_IDS:-}
       COMPILED_SCRIPT_ADVANCED_ENABLED: ${COMPILED_SCRIPT_ADVANCED_ENABLED:-false}
+      COMPILED_CONTENT_HANDOFF_BLUEPRINT_IDS: ${COMPILED_CONTENT_HANDOFF_BLUEPRINT_IDS:-}
   worker:
+    networks: [default, compiled_script_internal]
+    environment:
+      AGENT_RUN_QUEUE_BLUEPRINT_IDS: ${AGENT_RUN_QUEUE_BLUEPRINT_IDS:-}
+      AGENT_SCHEDULE_BLUEPRINT_IDS: ${AGENT_SCHEDULE_BLUEPRINT_IDS:-}
+      COMPILED_SCRIPT_RUNNER_URL: ${COMPILED_SCRIPT_RUNNER_URL:-http://compiled-script-runner:8091}
+      COMPILED_SCRIPT_RUNNER_SHARED_SECRET: ${COMPILED_SCRIPT_RUNNER_SHARED_SECRET:-}
+      COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST: ${COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST:-}
+      COMPILED_SCRIPT_PREVIEW_ENABLED: ${COMPILED_SCRIPT_PREVIEW_ENABLED:-false}
+      COMPILED_SCRIPT_EXECUTE_ENABLED: ${COMPILED_SCRIPT_EXECUTE_ENABLED:-false}
+      COMPILED_SCRIPT_PILOT_BUSINESS_IDS: ${COMPILED_SCRIPT_PILOT_BUSINESS_IDS:-}
+      COMPILED_CONTENT_HANDOFF_BLUEPRINT_IDS: ${COMPILED_CONTENT_HANDOFF_BLUEPRINT_IDS:-}
+  operator-worker:
     networks: [default, compiled_script_internal]
     environment:
       COMPILED_SCRIPT_RUNNER_URL: ${COMPILED_SCRIPT_RUNNER_URL:-http://compiled-script-runner:8091}
@@ -18,9 +31,9 @@ services:
       COMPILED_SCRIPT_PREVIEW_ENABLED: ${COMPILED_SCRIPT_PREVIEW_ENABLED:-false}
       COMPILED_SCRIPT_EXECUTE_ENABLED: ${COMPILED_SCRIPT_EXECUTE_ENABLED:-false}
       COMPILED_SCRIPT_PILOT_BUSINESS_IDS: ${COMPILED_SCRIPT_PILOT_BUSINESS_IDS:-}
-  worker-agent:
-    networks: [default, compiled_script_internal]
+      COMPILED_CONTENT_HANDOFF_BLUEPRINT_IDS: ${COMPILED_CONTENT_HANDOFF_BLUEPRINT_IDS:-}
   compiled-script-runner:
+    restart: unless-stopped
     # Build/push separately, validate reference before pull and inspect container
     # with scripts/check_compiled_runner_deployment.py before enabling execution.
     image: ${COMPILED_SCRIPT_RUNNER_IMAGE:?pin_by_digest}
@@ -28,7 +41,9 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=8m
     cap_drop: ["ALL"]
-    cap_add: ["SETUID", "SETGID"]
+    # Only the transport parent keeps KILL so it can stop its unprivileged
+    # child on a wall-clock timeout. The source child drops UID and capabilities.
+    cap_add: ["SETUID", "SETGID", "KILL"]
     security_opt: ["no-new-privileges:true"]
     init: true
     pids_limit: 32
