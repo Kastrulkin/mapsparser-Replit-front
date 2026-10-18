@@ -30,7 +30,7 @@ it('does not expose owner configuration to a manager', async () => {
   vi.stubGlobal('fetch', vi.fn((url: RequestInfo | URL) => String(url).includes('/workday/config') ? reply({ ...config, can_configure: false }) : reply({ configured: false, connection: { status: 'disconnected' }, photos: [] })));
   render(<OperatorWorkdayInput businessId="b" channel="web" headers={headers} onConversation={vi.fn()} />);
   await screen.findByRole('button', { name: 'Фото или файл' });
-  expect(screen.queryByText('Настройки рабочего пилота')).not.toBeInTheDocument();
+  expect(screen.queryByText('Настройки материалов')).not.toBeInTheDocument();
 });
 
 it('does not restore stale business settings after switching scope', async () => {
@@ -40,7 +40,7 @@ it('does not restore stale business settings after switching scope', async () =>
   const view = render(<OperatorWorkdayInput businessId="old" channel="web" headers={headers} onConversation={vi.fn()} />);
   view.rerender(<OperatorWorkdayInput businessId="new" channel="web" headers={headers} onConversation={vi.fn()} />);
   resolveOld(new Response(JSON.stringify(config)));
-  await waitFor(() => expect(screen.queryByText('Настройки рабочего пилота')).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByText('Настройки материалов')).not.toBeInTheDocument());
 });
 
 
@@ -48,7 +48,7 @@ it('offers Google independently and keeps local uploads available without OAuth 
   vi.stubGlobal('fetch', vi.fn((url: RequestInfo | URL) => String(url).includes('/workday/config') ? reply(config) : reply({ configured: false, connection: { status: 'disconnected' }, photos: [] })));
   render(<OperatorWorkdayInput businessId="b" channel="web" headers={headers} onConversation={vi.fn()} />);
   await screen.findByRole('button', { name: 'Фото или файл' });
-  await userEvent.click(screen.getByText('Настройки рабочего пилота'));
+  await userEvent.click(screen.getByText('Настройки материалов'));
   expect(screen.getByRole('button', { name: 'Подключить Google Диск' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Подключить Яндекс Диск' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Фото или файл' })).toBeEnabled();

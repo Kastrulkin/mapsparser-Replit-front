@@ -2095,7 +2095,7 @@ def _build_operator_result_markup(result: dict[str, Any]) -> InlineKeyboardMarku
     rows = []
     work_return = str(result.get('work_return_url') or '')
     if work_return.startswith(('https://localos.pro/telegram/control?', 'https://localos.pro/max/control?')):
-        rows.append([InlineKeyboardButton('Вернуться к партнёру' if result.get('selected_partner') else 'Вернуться к посту', web_app=WebAppInfo(url=work_return))])
+        rows.append([InlineKeyboardButton('Открыть планёрку' if 'item_type=day_brief' in work_return else 'Вернуться к партнёру' if result.get('selected_partner') else 'Вернуться к посту', web_app=WebAppInfo(url=work_return))])
     result_ref = result.get("result_ref") if isinstance(result.get("result_ref"), dict) else {}
     href = str(result_ref.get("href") or "").strip()
     if href:
@@ -3756,10 +3756,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if not scope or str(scope.get('id')) != work['business_id']:
                         raise PermissionError('Нет доступа к выбранному бизнесу.')
                     user_states[user_id] = {'state': 'idle'}
+                    daily = work.get('item_type') == 'day_brief'
                     partner = work.get('item_type') == 'partner'
-                    message = 'Открыто обсуждение выбранного партнёра. Напишите или надиктуйте «Покажи письмо» или «Подготовь первое письмо».' if partner else 'Открыто обсуждение выбранного поста. Напишите или надиктуйте, что изменить. Сам переход ничего не меняет.'
+                    message = 'Открыта планёрка дня. Надиктуйте «Фокус дня: …» или «Подготовь передачу задач». Передача требует отдельного подтверждения.' if daily else 'Открыто обсуждение выбранного партнёра. Напишите или надиктуйте «Покажи письмо» или «Подготовь первое письмо».' if partner else 'Открыто обсуждение выбранного поста. Напишите или надиктуйте, что изменить. Сам переход ничего не меняет.'
                     await _reply_effective_message(update, f"LocalOS · {scope.get('name') or 'Бизнес'}\n\n{message}",
-                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('Вернуться к партнёру' if partner else 'Вернуться к посту', web_app=WebAppInfo(url=work['return_url']))]]))
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('Открыть планёрку' if daily else 'Вернуться к партнёру' if partner else 'Вернуться к посту', web_app=WebAppInfo(url=work['return_url']))]]))
                 except (ValueError, PermissionError, TypeError):
                     connection.rollback()
                     await _reply_effective_message(update, str(sys.exception()))

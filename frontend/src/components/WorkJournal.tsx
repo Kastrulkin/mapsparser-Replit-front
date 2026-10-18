@@ -1,4 +1,5 @@
-import { miniAppChannel } from "@/lib/miniAppPlatform";
+import { DayBriefing } from '@/components/operator/DayBriefing';
+import { miniAppLaunchParams, miniAppChannel } from "@/lib/miniAppPlatform";
 import { workStatusLabel, workStatusDetail } from '@/lib/workStatus';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { OperatorVoiceInput } from '@/components/operator/OperatorVoice';
@@ -28,6 +29,7 @@ export function WorkJournal({ businessId, headers = defaultHeaders, embedded = f
   const [selectedObservation,setSelectedObservation]=useState<Entry | null>(null); const [selectedTask,setSelectedTask]=useState<LinkedAction | null>(null);
   const [linked,setLinked]=useState<Record<string,LinkedAction[]>>({});
   const [digestTime,setDigestTime]=useState('18:00'); const [reviewerId,setReviewerId]=useState('');
+  const [briefingOpen, setBriefingOpen] = useState(() => miniAppLaunchParams().get('item_type') === 'day_brief');
   const [tab,setTab]=useState('journal'); const [inbox,setInbox]=useState<Entry[]>([]);
   const [reviewStatus,setReviewStatus]=useState('new'); const [reviewCategory,setReviewCategory]=useState('');
   const [reviewing,setReviewing]=useState<Entry | null>(null); const [resolution,setResolution]=useState('in_progress');
@@ -105,6 +107,9 @@ export function WorkJournal({ businessId, headers = defaultHeaders, embedded = f
   };
   if (!businessId) return <p>Выберите бизнес, чтобы открыть рабочий журнал.</p>;
   return <div className="space-y-5">
+    <Button variant="outline" aria-expanded={briefingOpen} onClick={() => setBriefingOpen(value => !value)}>{briefingOpen ? 'Вернуться к рабочему журналу' : 'Планёрка дня и задачи'}</Button>
+    {briefingOpen && <DayBriefing key={businessId} businessId={businessId} headers={headers} channel={headers === defaultHeaders ? 'web' : miniAppChannel()} />}
+    {!briefingOpen && <>
     <div>{!embedded && <h1 className="text-2xl font-semibold">Рабочий журнал</h1>}<p className="text-sm text-muted-foreground">Сообщайте о работе и спрашивайте, что предложить клиентам. Заметки сохраняются с возможностью отмены.</p></div>
     {error && <p role="alert">{error}</p>}
     {data && !data.enabled && <p role="status">Новый ввод пока отключён. Сохранённая история доступна.</p>}
@@ -147,5 +152,6 @@ export function WorkJournal({ businessId, headers = defaultHeaders, embedded = f
       <Button variant="outline" onClick={() => setText('Измени правила рекомендаций: ')}>Изменить правила через Оператора</Button>
       {data.policy_history?.filter((item) => item.kind === 'rules').map((item) => <div key={item.id}><span>{item.created_at}</span><Button variant="ghost" disabled={busy || !data.enabled} onClick={() => void run(async () => { const business = businessId; const preview: Answer = await request('/work-journal/policy/preview', { method: 'POST', body: JSON.stringify({ business_id: business, restore_history_id: item.id, request_id: crypto.randomUUID() }) }); if (scope.current === business) setAnswer(preview); })}>Подготовить откат</Button></div>)}
     </section>}
+    </>}
   </div>;
 }

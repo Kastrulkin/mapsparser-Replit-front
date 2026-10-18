@@ -126,6 +126,7 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability('business.knowledge', 'Изменение знаний о бизнесе', 'approval_required', 'internal_write', 'separate_confirmation', '/dashboard/profile?section=knowledge', ('Измени количество кресел',)),
     OperatorCapability("work.schedule", "Планёрка и расписание", "approval_required", "internal_write", "separate_confirmation", "/dashboard/operator", ("Проведи планёрку на сегодня",)),
     OperatorCapability("work.owner_action", "Задачи, напоминания и временный график", "approval_required", "internal_write", "separate_confirmation", "/dashboard/today", ("Напомни мне завтра", "Создай задачу с дедлайном")),
+    OperatorCapability("work.day_brief", "Фокус дня и задачи команды", "approval_required", "external_send", "separate_confirmation", "/dashboard/work-journal?item_type=day_brief", ("Фокус дня: внимательно встречаем клиентов", "Мои задачи дня", "Статус задач")),
     OperatorCapability("work.colleague", "Сообщение по планёрке", "approval_required", "external_send", "separate_confirmation", "/dashboard/operator", ("Подготовь сообщение коллеге",)),
     OperatorCapability("work.policy", "Правила рекомендаций", "approval_required", "owner_policy_write", "separate_confirmation", "/dashboard/work-journal", ("Не предлагайте домашний набор",), "work.policy.apply"),
     OperatorCapability("settings.input", "Город, валюта и часовой пояс бизнеса", "approval_required", "internal_write", "separate_confirmation", "/dashboard/operator", ("Укажи валюту и часовой пояс бизнеса",), "finance.daily.apply_operator"),
@@ -210,6 +211,17 @@ OPERATOR_ACTION_MARKERS = (
     "выдай",
     "назови",
     "перечисл",
+    "фокус дня",
+    "фокус на день",
+    "планёрка дня",
+    "планерка дня",
+    "мои задачи дня",
+    "статус задач",
+    "сотрудники:",
+    "сотрудники max:",
+    "сотрудники telegram:",
+    "задача для",
+    "выполнено:",
 )
 
 
@@ -2270,6 +2282,11 @@ def route_operator_message(
     subscription_access: dict | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     clean_message = str(message or "").strip()
+    from services import operator_day_brief
+    daily = operator_day_brief.route(cursor, business=business_id, user=user_id, message=clean_message, channel=channel,
+        pending=pending_context, conversation_id=conversation_id)
+    if daily:
+        return operator_day_brief.chat_result(daily[0]), daily[1]
     if (pending_context or {}).get('selected_partner'):
         from services import operator_partner_work
         result, next_context = operator_partner_work.route(cursor, user_id=user_id, business_id=business_id,
@@ -3001,6 +3018,16 @@ def confirm_pending_operator_action(
     if isinstance(envelope, str):
         envelope = json.loads(envelope)
     envelope = envelope if isinstance(envelope, dict) else {}
+    if capability == 'work.day_brief':
+        from services.operator_day_brief import apply
+        try:
+            result = standardize_operator_result(apply(cursor, business=business_id, user=user_id, envelope=envelope), capability)
+        except (ValueError, PermissionError):
+            import sys
+            return {'status': 'blocked', 'capability': capability, 'chat_response': str(sys.exception()), 'external_writes_performed': False}, False
+        if result.get('status') == 'completed':
+            finish_operator_action(cursor, action_id=action_id, result=result)
+        return result, False
     if capability == 'partnerships.selected_draft':
         from services import operator_partner_work
         result = standardize_operator_result(operator_partner_work.apply(cursor, user_id=user_id, business_id=business_id, envelope=envelope), capability)

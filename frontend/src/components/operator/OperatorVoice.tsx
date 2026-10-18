@@ -18,9 +18,9 @@ async function waitJob(jobId: string, businessId: string, headers: HeadersProvid
   throw new Error('Обработка занимает больше времени. Результат доступен в заданиях.');
 }
 
-export function OperatorVoiceInput({ businessId, channel, conversationId, disabled, directSubmit = true, onSubmit, headers = voiceHeaders, compact = false }: {
+export function OperatorVoiceInput({ businessId, channel, conversationId, disabled, directSubmit = true, onSubmit, headers = voiceHeaders, compact = false, submitLabel = 'Повторить отправку', draftLabel = 'Команда' }: {
   businessId: string; channel: string; conversationId?: string | null; disabled?: boolean; directSubmit?: boolean; compact?: boolean;
-  onSubmit: (text: string, source: VoiceSubmission) => Promise<void>; headers?: HeadersProvider;
+  onSubmit: (text: string, source: VoiceSubmission) => Promise<void>; headers?: HeadersProvider; submitLabel?: string; draftLabel?: string;
 }) {
   const [available, setAvailable] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -137,8 +137,8 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
     {clipUrl && <audio controls src={clipUrl} preload="metadata" />}
     {clip && !source && <Button type="button" disabled={busy || disabled} onClick={() => void transcribe()}>{busy ? 'Распознаю…' : 'Распознать запись'}</Button>}
     {text && !source && <p role="status" className="text-sm">Распознано: {text}</p>}
-    {source && <div className="space-y-2"><label className="block text-sm">{busy ? 'Распознано' : 'Команда'}<textarea disabled={busy} className="block w-full rounded-md border bg-background p-2 text-foreground" value={text} onChange={(event) => setText(event.target.value)} /></label>
-      {!busy && <Button type="button" disabled={disabled || !text.trim()} onClick={async () => { setBusy(true); try { await onSubmit(text, source); setSource(null); setClip(null); asset.current = ''; } catch { setError('Не удалось отправить. Повторите с тем же текстом.'); } finally { setBusy(false); } }}>Повторить отправку</Button>}</div>}
+    {source && <div className="space-y-2"><label className="block text-sm">{busy ? 'Распознано' : draftLabel}<textarea disabled={busy} className="block w-full rounded-md border bg-background p-2 text-foreground" value={text} onChange={(event) => setText(event.target.value)} /></label>
+      {!busy && <Button type="button" disabled={disabled || !text.trim()} onClick={async () => { setBusy(true); try { await onSubmit(text, source); setSource(null); setClip(null); asset.current = ''; } catch { setError('Не удалось отправить. Повторите с тем же текстом.'); } finally { setBusy(false); } }}>{submitLabel}</Button>}</div>}
     {(clip || recording || busy || source) && !(busy && source) && <Button type="button" variant="ghost" className="!bg-transparent !text-muted-foreground hover:!bg-muted" onClick={cancel}>Отменить запись</Button>}
     {error && <p role="alert" className="text-sm">{error}</p>}
     {(!compact || recording || clip || busy || source) && <p className="text-xs text-muted-foreground">Запись до 2 минут. Перед отправкой можно проверить распознанный текст.</p>}

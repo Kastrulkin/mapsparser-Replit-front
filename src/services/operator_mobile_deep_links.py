@@ -144,6 +144,7 @@ def resolve_mobile_deep_link(
     item_type: str,
     item_id: str,
     filters: dict[str, Any] | None = None,
+    user_id: str | None = None,
 ) -> dict[str, Any]:
     manifest = _screen_manifest(navigation)
     requested_screen = str(screen or "today").strip().lower()
@@ -162,6 +163,24 @@ def resolve_mobile_deep_link(
             "fallback_applied": bool(fallback_reason),
             "fallback_reason": fallback_reason or None,
         }
+
+    if clean_type == "day_brief":
+        import uuid
+        try:
+            uuid.UUID(clean_id)
+        except ValueError:
+            user_id = None
+        item = {}
+        if user_id and 'work_journal' in manifest:
+            cursor.execute("""SELECT business_id FROM operatorconversations
+                WHERE id=%s AND user_id=%s AND transport_key LIKE 'day-brief:%%'
+                UNION ALL SELECT business_id FROM journey_actions
+                WHERE id::text=%s AND user_id=%s AND entity_type='operator_colleague' AND action_type='day_brief' LIMIT 1""",
+                (clean_id, user_id, clean_id, user_id))
+            item = _row(cursor, cursor.fetchone())
+        if item and _business_allowed(scope, str(item['business_id'])):
+            return {'screen': 'work_journal', 'item_type': clean_type, 'item_id': clean_id, 'filters': filters or {}, 'fallback_applied': False, 'fallback_reason': None}
+        return {'screen': 'today', 'item_type': None, 'item_id': None, 'filters': {}, 'fallback_applied': True, 'fallback_reason': 'object_forbidden'}
 
     if clean_type == "company":
         company_screen = "companies" if scope.get("kind") == "platform" else "company"

@@ -1184,6 +1184,7 @@ def _load_journey_actions(cursor: Any, scope: dict[str, Any]) -> list[dict[str, 
         SELECT * FROM journey_actions
         WHERE business_id = ANY(%s)
           AND status IN ('ready', 'in_progress', 'waiting', 'blocked')
+          AND NOT (entity_type='operator_colleague' AND action_type='day_brief')
         ORDER BY CASE WHEN due_at IS NOT NULL AND due_at <= NOW() THEN 0 ELSE 1 END,
                  priority DESC, due_at NULLS LAST, created_at
         LIMIT 20

@@ -67,6 +67,9 @@ def enqueue(cursor,business,user,envelope,action_id):
 
 
 def process_job(job):
+    if job.get('payload_json', {}).get('briefing_delivery'):
+        from services.operator_day_brief import process_job
+        return process_job(job)
     db=DatabaseManager()
     try:
         c=db.conn.cursor();business=job['business_id'];payload=job['payload_json'];envelope=payload['envelope']

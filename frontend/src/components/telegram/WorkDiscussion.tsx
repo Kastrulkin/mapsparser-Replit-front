@@ -4,7 +4,7 @@ import { miniAppLabel, miniAppPlatform, openMiniAppLink } from '@/lib/miniAppPla
 import { mobileJsonHeaders, readMobileJson } from '@/lib/mobileDataClient';
 
 export function WorkDiscussion({ businessId, itemId, updatedAt, onDiscuss, disabled, itemType = 'content_item' }: {
-  itemType?: 'content_item' | 'partner'; businessId: string; itemId: string; updatedAt?: string; onDiscuss?: () => void; disabled?: boolean;
+  itemType?: 'content_item' | 'partner' | 'day_brief'; businessId: string; itemId: string; updatedAt?: string; onDiscuss?: () => void; disabled?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');

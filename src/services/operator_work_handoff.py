@@ -38,6 +38,13 @@ def content_selection(cursor, *, user_id, business_id, item_id, expected_updated
 def work_selection(cursor, *, item_type='content_item', **kwargs):
     if item_type == 'content_item':
         return content_selection(cursor, **kwargs)
+    if item_type == 'day_brief':
+        from services import operator_day_brief
+        operator_day_brief.authorize(cursor, kwargs['business_id'], kwargs['user_id'], owner=True)
+        value = operator_day_brief.draft(cursor, kwargs['business_id'], kwargs['user_id'], identifier=kwargs['item_id'])
+        if not value:
+            raise PermissionError('Планёрка недоступна.')
+        return {'item_id': value['id'], 'version': str(value['version'])}
     if item_type == 'partner':
         from services.operator_partner_work import partner_selection
         return partner_selection(cursor, **kwargs)
@@ -58,8 +65,8 @@ def prepare_handoff(cursor, *, user_id, business_id, platform, item_id, request_
         raise ValueError('Неизвестная платформа.')
     uuid.UUID(str(request_id))
     selection = work_selection(cursor, item_type=item_type, user_id=user_id, business_id=business_id, item_id=item_id, expected_updated_at=updated_at)
-    selected_key = 'selected_partner' if item_type == 'partner' else 'selected_item'
-    screen = 'partnerships' if item_type == 'partner' else 'content'
+    selected_key = {'partner': 'selected_partner', 'day_brief': 'selected_day_brief'}.get(item_type, 'selected_item')
+    screen = {'partner': 'partnerships', 'day_brief': 'work_journal'}.get(item_type, 'content')
     if platform == 'telegram':
         cursor.execute('SELECT telegram_id FROM users WHERE id=%s AND is_active=TRUE', (user_id,))
         binding = _row(cursor, cursor.fetchone()).get('telegram_id')
@@ -80,7 +87,7 @@ def prepare_handoff(cursor, *, user_id, business_id, platform, item_id, request_
     if isinstance(current, str):
         current = json.loads(current)
     other_key = 'selected_item' if item_type == 'partner' else 'selected_partner'
-    if current.get(other_key):
+    if any(current.get(key) for key in ('selected_item', 'selected_partner', 'selected_day_brief') if key != selected_key):
         raise ValueError('Этот переход уже используется для другого обсуждения.')
     if current.get(selected_key) and current[selected_key]['item_id'] != selection['item_id']:
         raise ValueError('Этот переход уже создан для другого партнёра.' if item_type == 'partner' else 'Этот переход уже создан для другого поста.')
@@ -91,7 +98,7 @@ def prepare_handoff(cursor, *, user_id, business_id, platform, item_id, request_
         stored = json.loads(stored)
     if stored.get('work_handoff') and stored['work_handoff'] != selection:
         raise ValueError('Этот переход устарел. Откройте актуальную карточку партнёра заново.' if item_type == 'partner' else 'Этот переход устарел. Откройте актуальный пост заново.')
-    pending = {'capability': 'partnerships.selected' if item_type == 'partner' else 'content.editorial.selected', selected_key: selection}
+    pending = {'capability': {'partner': 'partnerships.selected', 'day_brief': 'work.day_brief'}.get(item_type, 'content.editorial.selected'), selected_key: selection}
     set_operator_pending_context(cursor, str(conversation['id']), pending)
     if not stored.get('work_handoff'):
         # Preparing a link cannot steal the bot's currently active discussion.
@@ -114,8 +121,8 @@ def resume_handoff(cursor, *, user_id, token, platform):
     pending = conversation.get('pending_context') or {}
     if isinstance(pending, str):
         pending = json.loads(pending)
-    item_type = 'partner' if pending.get('selected_partner') else 'content_item'
-    selected = pending.get('selected_partner') or pending.get('selected_item') or {}
+    item_type = 'day_brief' if pending.get('selected_day_brief') else 'partner' if pending.get('selected_partner') else 'content_item'
+    selected = pending.get('selected_day_brief') or pending.get('selected_partner') or pending.get('selected_item') or {}
     selection = work_selection(cursor, item_type=item_type, user_id=user_id, business_id=str(conversation['business_id']), item_id=selected.get('item_id'))
     # Reopening an old link must not silently approve a stale content version.
     if selected.get('version') != selection['version']:
@@ -123,4 +130,4 @@ def resume_handoff(cursor, *, user_id, token, platform):
     cursor.execute("UPDATE operatorconversations SET status='active',updated_at=NOW() WHERE id=%s AND user_id=%s", (identifier, user_id))
     return {'business_id': str(conversation['business_id']), 'conversation_id': identifier,
             'item_type': item_type, 'return_url': mobile_work_url(conversation['business_id'], selection['item_id'], platform,
-                'partnerships' if item_type == 'partner' else 'content', item_type)}
+                {'partner': 'partnerships', 'day_brief': 'work_journal'}.get(item_type, 'content'), item_type)}

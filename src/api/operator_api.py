@@ -711,6 +711,7 @@ def operator_telegram_bootstrap():
             scope=selected or {},
             navigation=navigation,
             screen=str(payload.get("screen") or "today"),
+            user_id=user_id,
             item_type=str(payload.get("item_type") or ""),
             item_id=str(payload.get("item_id") or ""),
             filters=payload.get("filters") if isinstance(payload.get("filters"), dict) else {},
@@ -4730,3 +4731,6 @@ from api.business_member_directory_api import register_member_directory_routes
 register_member_directory_routes(operator_bp)
 from api.business_management_api import register_business_management_routes
 register_business_management_routes(operator_bp)
+
+from api.operator_day_brief_api import register_day_brief_routes
+register_day_brief_routes(operator_bp)

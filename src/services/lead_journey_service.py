@@ -847,6 +847,7 @@ def list_actions(cursor: Any, *, business_id: str, history: bool = False) -> lis
         """
         SELECT * FROM journey_actions
         WHERE business_id = %s AND status = ANY(%s)
+          AND NOT (entity_type='operator_colleague' AND action_type='day_brief')
         ORDER BY
           CASE WHEN due_at IS NOT NULL AND due_at <= NOW() THEN 0 ELSE 1 END,
           priority DESC, due_at NULLS LAST, created_at
@@ -955,7 +956,7 @@ def build_growth_paths(*, actions: list[dict[str, Any]], capabilities: set[str])
 def load_action(cursor: Any, *, action_id: str, business_id: str, lock: bool = False) -> dict[str, Any]:
     lock_clause = "FOR UPDATE" if lock else ""
     cursor.execute(
-        f"SELECT * FROM journey_actions WHERE id = %s AND business_id = %s {lock_clause}",
+        f"SELECT * FROM journey_actions WHERE id = %s AND business_id = %s AND NOT (entity_type='operator_colleague' AND action_type='day_brief') {lock_clause}",
         (action_id, business_id),
     )
     action = _row(cursor, cursor.fetchone())

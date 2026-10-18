@@ -56,6 +56,7 @@ for (const platform of ['telegram', 'max']) {
     await page.getByRole('button', { name: 'Ориентиры для постов' }).click();
     await expect(page.getByText('Как показать качество пошива')).toBeVisible();
     await page.getByRole('button', { name: 'Закрыть ориентиры', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Закрыть ориентиры', exact: true })).toHaveCount(0);
     await expect(page.getByRole('dialog', { name: 'Настроить контент' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Настроить контент' })).toHaveCount(0);
