@@ -152,6 +152,20 @@ describe('Results page', () => {
     expect(screen.queryByRole('button', { name: 'Запустить поиск' })).not.toBeInTheDocument();
   });
 
+  it('shows dated results and report freshness from the live mobile progress contract', async () => {
+    const { generated_at, recent_achievements, ...data } = fixture();
+    request.mockImplementation((url: string) => Promise.resolve(url.startsWith('/operator/progress?') ? {
+      ...data,
+      as_of: generated_at,
+      recent_results: [{ key: 'content:content_created', area: 'content', title: 'Подготовлен материал', description: 'Материалов: 37', occurred_at: '2026-10-14T10:00:00Z' }],
+    } : { success: true, status: 'idle' }));
+    mount();
+    expect(await screen.findByRole('heading', { name: 'Последние подтверждённые этапы' })).toBeVisible();
+    expect(screen.getByText('Подготовлен материал')).toBeVisible();
+    expect(screen.queryByText(progressResultsCopies.ru.recentResultsEmpty)).not.toBeInTheDocument();
+    expect(document.querySelector(`time[datetime="${generated_at}"]`)).toBeInTheDocument();
+  });
+
   it('sorts dated milestones newest first, excludes invalid dates and shows no more than eight', async () => {
     const events = Array.from({ length: 10 }, (_, i) => ({ key: `content:event${i}`, area: 'content', title: `Event ${i}`, description: '', occurred_at: `2026-10-${String(i + 1).padStart(2, '0')}T12:00:00Z` }));
     events.push({ key: 'invalid', area: 'content', title: 'Invalid date', description: '', occurred_at: 'unknown' });
@@ -197,7 +211,7 @@ describe('Results page', () => {
     expect(screen.getByRole('button', { name: /Карты и репутация/ })).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it.each([401, 403])('clears previous results on loss of access (%s)', async (status) => {
+  it.each([401, 403, 404])('clears previous results on loss of access (%s)', async (status) => {
     mount();
     expect(await screen.findByText('Map for First business')).toBeVisible();
     request.mockImplementation((url: string) => url.startsWith('/operator/progress?') ? Promise.reject(new HttpError('Access denied', status, 'HTTP_ERROR')) : Promise.resolve({ success: true, status: 'idle' }));

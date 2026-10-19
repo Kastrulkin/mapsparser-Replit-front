@@ -120,6 +120,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               <NetworkLocationsSwitcher
                 currentBusinessId={currentBusinessId || undefined}
                 onLocationChange={onBusinessChange}
+                allowedLocationIds={businesses.map(business => business.id)}
               />
             </div>
           )}

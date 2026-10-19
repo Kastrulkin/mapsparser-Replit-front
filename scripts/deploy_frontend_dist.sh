@@ -19,7 +19,7 @@ server_scp_prefix=(scp "${ssh_options[@]}")
 server_project_dir="/opt/seo-app"
 app_container_name="${APP_CONTAINER_NAME:-seo-app-app-1}"
 public_domain="${PUBLIC_DOMAIN:-https://localos.pro}"
-remote_tmp="/tmp/localos_frontend_dist_deploy"
+remote_tmp="/tmp/localos_frontend_dist_deploy_$(date +%s)_$$"
 
 build_dist=0
 skip_remote=0

@@ -78,9 +78,9 @@ def check(dist: Path) -> None:
             body = (dist / 'assets' / name).read_text()
             copy += body
             pending.extend(re.findall(r'\./([\w.-]+\.js)', body))
-        for label in ['Управление через чат', 'Автоматизация']:
-            if label not in copy:
-                raise ValueError('Outdated sidebar: ' + label)
+        for labels in [('Управление через чат', 'Чат с LocalOS'), ('Автоматизация',)]:
+            if not any(label in copy for label in labels):
+                raise ValueError('Outdated sidebar: ' + labels[0])
 
 
 if __name__ == '__main__':

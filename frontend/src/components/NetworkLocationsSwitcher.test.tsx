@@ -1,0 +1,40 @@
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+vi.mock('@/i18n/LanguageContext.logic', () => ({ useLanguage: () => ({ language: 'ru' }) }));
+vi.mock('@/lib/auth_new', () => ({ newAuth: { getToken: () => 'test-token' } }));
+import { NetworkLocationsSwitcher } from './NetworkLocationsSwitcher';
+const locations = [{ id: 'a', name: 'Точка A', address: 'Адрес A', network_id: 'network' }, { id: 'b', name: 'Точка B', address: 'Адрес B', network_id: 'network' }];
+beforeEach(() => { vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ locations }))); });
+afterEach(() => { vi.unstubAllGlobals(); });
+it('does not offer locations absent from the authenticated business list', async () => {
+  const select = vi.fn();
+  render(<NetworkLocationsSwitcher currentBusinessId="a" onLocationChange={select} allowedLocationIds={['a']} />);
+  const trigger = await screen.findByRole('button', { name: /Точка A.*Адрес A/ });
+  fireEvent.click(trigger);
+  const unavailable = screen.getByRole('button', { name: /Точка B.*Адрес B/ });
+  expect(unavailable).toBeDisabled();
+  fireEvent.click(unavailable);
+  expect(select).not.toHaveBeenCalled();
+  expect(trigger).toHaveTextContent('Точка A');
+});
+it('keeps the header tied to the accepted business rather than an optimistic click', async () => {
+  const select = vi.fn();
+  render(<NetworkLocationsSwitcher currentBusinessId="a" onLocationChange={select} allowedLocationIds={['a', 'b']} />);
+  const trigger = await screen.findByRole('button', { name: /Точка A.*Адрес A/ });
+  fireEvent.click(trigger);
+  fireEvent.click(screen.getByRole('button', { name: /Точка B.*Адрес B/ }));
+  expect(select).toHaveBeenCalledWith('b');
+  expect(trigger).toHaveTextContent('Точка A');
+  expect(trigger).not.toHaveTextContent('Точка B');
+});
+it('discards old location responses after a context change', async () => {
+  let resolveA: (response: Response) => void = () => {};
+  const pending = new Promise<Response>(resolve => { resolveA = resolve; });
+  vi.mocked(fetch).mockImplementation(url => String(url).includes('/a/') ? pending : Promise.resolve(Response.json({ locations })));
+  const view = render(<NetworkLocationsSwitcher currentBusinessId="a" onLocationChange={vi.fn()} allowedLocationIds={['a', 'b']} />);
+  view.rerender(<NetworkLocationsSwitcher currentBusinessId="b" onLocationChange={vi.fn()} allowedLocationIds={['a', 'b']} />);
+  expect(await screen.findByRole('button', { name: /Точка B.*Адрес B/ })).toBeVisible();
+  await act(async () => resolveA(Response.json({ locations: [{ ...locations[0], name: 'Old location' }] }))); 
+  await waitFor(() => expect(screen.getByRole('button', { name: /Точка B.*Адрес B/ })).toBeVisible());
+  expect(screen.queryByText('Old location')).not.toBeInTheDocument();
+});
