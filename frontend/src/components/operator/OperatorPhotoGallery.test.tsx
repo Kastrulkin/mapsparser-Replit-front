@@ -48,3 +48,14 @@ test('browses the whole result in pages without loading all images at once', asy
   await waitFor(() => expect(screen.getByAltText('10. photo-9.jpg')).toBeInTheDocument());
   expect(screen.getByText('Фото 10–18 из 120')).toBeInTheDocument();
 });
+
+test.each(['telegram','max'])('uses only the %s miniapp session to read a selected photo',async platform=>{
+ const {OperatorPhotoPreview}=await import('./OperatorPhotoGallery');
+ const fetchPhoto=vi.fn().mockResolvedValue({ok:true,blob:async()=>new Blob(['image'])});vi.stubGlobal('fetch',fetchPhoto);
+ vi.stubGlobal('URL',{createObjectURL:vi.fn(()=>'blob:mini-photo'),revokeObjectURL:vi.fn()});
+ const headers=()=>({Authorization:`Bearer ${platform}-mini-session`});
+ render(<OperatorPhotoPreview photo={{asset_id:'selected-photo',name:'Фото поста'}} headers={headers}/>);
+ await waitFor(()=>expect(screen.getByAltText('1. Фото поста')).toBeInTheDocument());
+ expect(fetchPhoto).toHaveBeenCalledWith(expect.stringContaining('/photos/selected-photo/file?variant=preview'),expect.objectContaining({headers:headers()}));
+ expect(fetchPhoto.mock.calls.some(([,options])=>options.headers.Authorization==='Bearer test-token')).toBe(false);
+});

@@ -31,7 +31,7 @@ for (const platform of ['telegram', 'max']) {
       } });
       if (path === '/api/operator/mobile/modules/content') return route.fulfill({ json: { items: [
         { id: 'other', business_id: businessId, plan_id: 'other-plan', plan_title: 'Другой план', title: 'Другой пост', draft_text: 'Другой текст', scheduled_for: '2060-02-01', version: 'v1' },
-        { id: itemId, business_id: businessId, plan_id: 'selected-plan', plan_title: 'План Мелиоры', title: 'Одежда для команды', draft_text: draft, scheduled_for: '2060-01-01', updated_at: '2060-01-01T00:00:00Z', version: saved ? 'v2' : 'v1' },
+        { id: itemId, business_id: businessId, plan_id: 'selected-plan', plan_title: 'План Мелиоры', title: 'Одежда для команды', draft_text: draft, selected_photo_asset_id:'selected-photo', scheduled_for: '2060-01-01', updated_at: '2060-01-01T00:00:00Z', version: saved ? 'v2' : 'v1' },
       ] } });
       if (path === '/api/content-voice') {
         if (request.method() === 'PATCH') { expect(request.postDataJSON().expected_version).toBe(3); founder = request.postDataJSON().founder_story; }
@@ -39,6 +39,7 @@ for (const platform of ['telegram', 'max']) {
       }
       if (path === '/api/content-voice/references') return route.fulfill({ json: { industry_label: 'Пошив одежды', items: [{ id: 'ref', source_name: 'Как показать качество пошива', source_url: 'https://example.test/ref', techniques: ['Показать детали'], scope: 'industry', enabled: true, moderation: 'approved', version: 1 }], settings_version: 1, can_manage: true, can_moderate: false, pending: [] } });
       if (path === `/api/operator/mobile/content/items/${itemId}` && request.method() === 'PUT') { expect(request.postDataJSON().expected_version).toBe('v1'); draft = request.postDataJSON().draft_text; saved = true; return route.fulfill({ json: { success: true } }); }
+      if (path === '/api/media-intelligence/photos/selected-photo/file') { expect(request.headers().authorization).toBe('Bearer fixture-session'); return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="blue"/></svg>'}); }
       if (path === '/api/operator/audio/config') return route.fulfill({ json: { input_enabled: true, output_enabled: false } });
       if (path === '/api/operator/audio/transcriptions') return route.fulfill({ status: 202, json: { asset_id: 'audio', job_id: 'audio-job', conversation_id: 'discussion' } });
       if (path === '/api/operator/mobile/jobs/audio-job') return route.fulfill({ json: { job: { status: 'completed', result: { transcript: 'Сделай этот пост короче' } } } });
@@ -48,6 +49,8 @@ for (const platform of ['telegram', 'max']) {
     });
     await page.goto(`/${platform}/control?screen=content&item_type=content_item&item_id=${itemId}`);
     await expect(page.getByRole('combobox', { name: 'Выбрать контент-план' })).toHaveValue('selected-plan');
+    await page.getByRole('button',{name:'Посмотреть фото к посту',exact:true}).click();
+    await expect(page.getByRole('img',{name:'1. Одежда для команды',exact:true})).toBeVisible();
     await page.getByRole('button', { name: 'О компании, основателе и стиле' }).click();
     await page.getByLabel('История основателя').fill('Я основала компанию после десяти лет практики.');
     await page.getByRole('button', { name: 'Как писать', exact: true }).click();

@@ -98,8 +98,19 @@ def _content(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
     if not _table_exists(cursor, "contentplans") or not _table_exists(cursor, "contentplanitems"):
         return []
     platform, business_ids = _business_filter(scope)
+    has_photos = _table_exists(cursor, "photo_assets")
+    has_usage = has_photos and _table_exists(cursor, "photo_asset_usage_events")
+    photo_source = "i.metadata_json->>'selected_photo_asset_id'" if has_photos else "NULL::text"
+    if has_usage:
+        photo_source = """COALESCE((SELECT usage.photo_asset_id::text
+            FROM photo_asset_usage_events usage
+            WHERE usage.business_id=i.business_id AND usage.target_id=i.id::text
+              AND usage.usage_type='publication'
+              AND (usage.target_platform IS NULL OR usage.target_platform='')
+            ORDER BY usage.created_at DESC, usage.id DESC LIMIT 1),
+            i.metadata_json->>'selected_photo_asset_id')"""
     cursor.execute(
-        """
+        f"""
         WITH current_plans AS (
             SELECT id, business_id, title, period_days, created_at,
                    plan_status
@@ -111,7 +122,7 @@ def _content(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
                COALESCE(NULLIF(TRIM(i.theme), ''), 'Элемент контент-плана') AS title,
                COALESCE(NULLIF(TRIM(i.draft_text), ''), NULLIF(TRIM(i.goal), ''), 'Черновик ещё не подготовлен') AS subtitle,
                i.status, i.updated_at, i.updated_at::text AS version, i.plan_id, p.title AS plan_title, p.period_days AS plan_period_days,
-               i.scheduled_for, i.content_type, i.draft_text
+               i.scheduled_for, i.content_type, i.draft_text, {photo_source} AS selected_photo_asset_id
         FROM contentplanitems i
         JOIN current_plans p ON p.id = i.plan_id AND p.business_id = i.business_id
         JOIN businesses b ON b.id = i.business_id
@@ -122,6 +133,17 @@ def _content(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
     items = []
     for value in cursor.fetchall() or []:
         item = _row(cursor, value)
+        photo_id = item.get("selected_photo_asset_id")
+        if photo_id:
+            from uuid import UUID
+            from services.media_library_scope import available_photo
+            try:
+                photo_id = str(UUID(str(photo_id)))
+            except (TypeError, ValueError):
+                photo_id = None
+            if photo_id and not available_photo(cursor, photo_id, str(item['business_id'])):
+                photo_id = None
+        item['selected_photo_asset_id'] = photo_id or None
         items.append({
             **item,
             "scheduled_for": _iso_value(item.get("scheduled_for")),

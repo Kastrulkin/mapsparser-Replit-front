@@ -8,7 +8,7 @@ import { X } from 'lucide-react';
 
 export type OperatorPhoto = { asset_id: string; name?: string; category?: string };
 
-const PhotoPreview = ({ photo, index }: { photo: OperatorPhoto; index: number }) => {
+export const OperatorPhotoPreview = ({ photo, index = 0, headers }: { photo: OperatorPhoto; index?: number; headers?: () => HeadersInit }) => {
   const [url, setUrl] = useState('');
   const [failed, setFailed] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -19,7 +19,7 @@ const PhotoPreview = ({ photo, index }: { photo: OperatorPhoto; index: number })
     setFailed(false);
     const token = newAuth.getToken();
     fetch(`${API_URL}/api/media-intelligence/photos/${encodeURIComponent(photo.asset_id)}/file?variant=preview`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      headers: headers ? headers() : token ? { Authorization: `Bearer ${token}` } : undefined,
       signal: controller.signal,
     }).then(async response => {
       if (!response.ok) throw new Error(`Фото недоступно (${response.status})`);
@@ -29,15 +29,15 @@ const PhotoPreview = ({ photo, index }: { photo: OperatorPhoto; index: number })
       setUrl(objectUrl);
     }).catch(() => { if (!controller.signal.aborted) setFailed(true); });
     return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [photo.asset_id]);
+  }, [photo.asset_id, headers]);
   const label = `${index + 1}. ${photo.name || 'Фото без названия'}`;
   return (
     <figure className="min-w-0 space-y-2">
       <Dialog open={expanded} onOpenChange={setExpanded}>
         <DialogTrigger asChild>
-          <button type="button" disabled={!url} aria-label={`Открыть фото: ${photo.name || index + 1}`} className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-lg bg-slate-50 ring-1 ring-slate-200 enabled:cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <button type="button" disabled={!url} aria-label={`Открыть фото: ${photo.name || index + 1}`} className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-lg bg-muted ring-1 ring-border enabled:cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             {url ? <img src={url} alt={label} className="h-full w-full object-contain" onError={() => { setUrl(''); setFailed(true); setExpanded(false); }} />
-              : <span role="status" className="p-3 text-center text-xs text-slate-500">{failed ? 'Не удалось загрузить фото' : 'Загружаю фото…'}</span>}
+              : <span role="status" className="p-3 text-center text-xs text-muted-foreground">{failed ? 'Не удалось загрузить фото' : 'Загружаю фото…'}</span>}
           </button>
         </DialogTrigger>
         {url && <DialogPortal>
@@ -51,7 +51,7 @@ const PhotoPreview = ({ photo, index }: { photo: OperatorPhoto; index: number })
           </Content>
         </DialogPortal>}
       </Dialog>
-      <figcaption className="break-words text-xs text-slate-600">{label}</figcaption>
+      <figcaption className="break-words text-xs text-muted-foreground">{label}</figcaption>
     </figure>
   );
 };
@@ -66,7 +66,7 @@ export const OperatorPhotoGallery = ({ photos }: { photos: OperatorPhoto[] }) =>
   <section aria-label="Варианты фотографий" className="space-y-3">
     <p className="text-sm text-slate-600">Посмотрите фото. Чтобы выбрать, напишите в чат его номер или название. Пока фото поста не меняется.</p>
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-      {photos.slice(start, start + pageSize).map((photo, index) => <PhotoPreview key={photo.asset_id} photo={photo} index={start + index} />)}
+      {photos.slice(start, start + pageSize).map((photo, index) => <OperatorPhotoPreview key={photo.asset_id} photo={photo} index={start + index} />)}
     </div>
     <div className="flex flex-wrap items-center gap-3">
       <span role="status" className="text-sm text-slate-600">Фото {start + 1}–{Math.min(start + pageSize, photos.length)} из {photos.length}</span>
