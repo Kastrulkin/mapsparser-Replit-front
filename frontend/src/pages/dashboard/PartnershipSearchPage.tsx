@@ -530,6 +530,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const showDemoPartner = searchParams.get('demo') === 'romashka';
   const requestedLeadId = searchParams.get('lead');
+  const openedRequestedLead = useRef<string | null>(null);
   const requestedFocus = searchParams.get('focus');
   const requestedSection = searchParams.get('section');
   const requestedSearchTaskId = searchParams.get('search_task_id');
@@ -913,18 +914,20 @@ export const PartnershipSearchPage: React.FC = () => {
 
   useEffect(() => {
     if (!requestedLeadId || !items.length) return;
+    const entryKey = `${currentBusinessId}:${requestedLeadId}`;
+    if (openedRequestedLead.current === entryKey) return;
     const requestedLead = items.find((item) => item.id === requestedLeadId);
     if (!requestedLead) return;
-    setWorkspaceView('pipeline');
+    openedRequestedLead.current = entryKey;
+    setWorkspaceView('raw');
     setLeadBucket('active');
     setLeadView('all');
     setStage('all');
-    setQuery(String(requestedLead.name || ''));
-    setSelectedLeadId(null);
+    setSelectedLeadId(requestedLead.id);
     if (requestedFocus === 'match') {
       setMessage(`Открыта подготовка предложения для ${requestedLead.name || 'этой компании'}. Выполните выделенный следующий шаг — результат появится прямо в карточке.`);
     }
-  }, [items, requestedFocus, requestedLeadId]);
+  }, [items, currentBusinessId, requestedFocus, requestedLeadId]);
 
   const loadRalphLoop = async () => {
     if (!currentBusinessId) return;

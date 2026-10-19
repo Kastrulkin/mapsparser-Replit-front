@@ -19,6 +19,15 @@ server_scp_prefix=(scp "${ssh_options[@]}")
 server_project_dir="/opt/seo-app"
 app_container_name="${APP_CONTAINER_NAME:-seo-app-app-1}"
 public_domain="${PUBLIC_DOMAIN:-https://localos.pro}"
+expected_entry="${DEPLOY_EXPECTED_ENTRY:-}"
+entry_guard=""
+if [[ -n "${expected_entry}" ]]; then
+  if [[ ! "${expected_entry}" =~ ^index-[A-Za-z0-9_-]+\.js$ ]]; then
+    echo "Invalid expected frontend entry" >&2
+    exit 1
+  fi
+  entry_guard="grep -Fq '/assets/${expected_entry}' frontend/dist/index.html && "
+fi
 remote_tmp="/tmp/localos_frontend_dist_deploy_$(date +%s)_$$"
 
 build_dist=0
@@ -129,7 +138,7 @@ retry_command "upload integrity verifier" "${server_scp_prefix[@]}" "${repo_root
 retry_command "ensure app service is running" remote_ensure_app_running
 
 retry_command "sync frontend dist into server runtime" remote_exec "\
-  mkdir -p frontend/dist && \
+  ${entry_guard}mkdir -p frontend/dist && \
   mkdir -p frontend/public-dist && \
   cp -R ${remote_tmp}/. frontend/dist/ && \
   cp -R ${remote_tmp}-public/. frontend/public-dist/ && \

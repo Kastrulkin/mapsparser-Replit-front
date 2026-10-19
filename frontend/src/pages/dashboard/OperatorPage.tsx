@@ -57,6 +57,7 @@ type OperatorChatResult = {
   input_type?: string;
   status: 'completed' | 'blocked' | 'unsupported' | string;
   delivery_status?: string;
+  preparation_job?: {status?: string};
   search_started?: boolean;
   task?: {
     id: string;
@@ -1142,7 +1143,8 @@ const OperatorResultActions = ({
   const hasUsefulResultRef = !searchPreview && (!('capability' in result) || result.capability !== 'communications.control_email' || Boolean(resultRef?.entity_id)) && Boolean(resultRef?.href && resultRef.href !== '/dashboard/operator');
   const aiRouter = result.ai_router;
   const queueId = result.queue_id;
-  const status = result.status || '';
+  const preparationStatus = 'preparation_job' in result ? result.preparation_job?.status : undefined;
+  const status = preparationStatus ? (['queued','collecting','verifying','researching','drafting','retry_wait'].includes(preparationStatus) ? 'processing' : preparationStatus === 'ready' ? 'completed' : 'blocked') : result.status || '';
   const reliabilityStatus = 'reliability_state' in result ? result.reliability_state?.status || '' : '';
   const outstandingCredits = 'billing_state' in result ? Number(result.billing_state?.outstanding_credits || 0) : 0;
   const showRecoveryActions =
