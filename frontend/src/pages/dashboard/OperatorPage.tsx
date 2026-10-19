@@ -1,5 +1,5 @@
 import { demoNavigationCopy } from '@/components/guided-tour/demoNavigationCopy';
-import { canonicalWorkRoute, safeWorkReturn, workNavigationCopy } from '@/lib/workNavigation';
+import { canonicalWorkRoute, safeWorkReturn, workNavigationCopy, selectedWorkObject } from '@/lib/workNavigation';
 import { businessResultHref } from '@/components/operator/businessResultHref';
 import { useChatAutoScroll } from '@/components/operator/useChatAutoScroll';
 import { OutreachChatSummary } from '@/components/operator/OutreachChatSummary';
@@ -286,6 +286,8 @@ export const OperatorPage = () => {
   const workRef = safeWorkReturn(workParams.get('work_ref'));
   const workActionId = workParams.get('journey_action');
   const { currentBusinessId, currentBusiness, controlScope, user } = useOutletContext<DashboardContext>();
+  const selectedWork = selectedWorkObject(workRef, currentBusinessId);
+  const selectedWorkName = selectedWork?.type === 'partner' ? workParams.get('partner_name') : null;
   const { language } = useLanguage();
   const copy = operatorPageCopyForLanguage(language);
   const demoMode = Boolean(user?.demo_mode);
@@ -414,22 +416,19 @@ export const OperatorPage = () => {
     setMessages([]); setConversationId(null); setPendingChatMessage(null);
     chatSendInFlightRef.current = false; setChatLoading(false); setConfirmingActionId(null); setRejectingActionId(null);
     const storageKey = `localos_operator_conversation_${currentBusinessId}`;
-    const storedConversationId = demoMode ? null : window.localStorage.getItem(storageKey);
+    // Resolve the conversation on the server for the current identity, never a previous login.
+    const storedConversationId = null;
     let cancelled = false;
     const version = ++historyVersion.current;
     setHistoryLoading(true);
     setHistoryError(null);
-    const request = storedConversationId
-      ? api.get(`/operator/conversations/${encodeURIComponent(storedConversationId)}/messages`, {
-          params: { business_id: currentBusinessId, limit: 100 },
-        })
-      : api.get('/operator/conversations/current', {
-          params: { business_id: currentBusinessId, channel: 'web', limit: 100 },
-        });
+    const request = api.get('/operator/conversations/current', {
+      params: { business_id: currentBusinessId, channel: 'web', limit: 100 },
+    });
     request.then((response) => {
       if (cancelled || version !== historyVersion.current) return;
       const storedMessages = Array.isArray(response.data.messages) ? response.data.messages : [];
-      const loadedConversationId = storedConversationId || response.data.conversation?.id || null;
+      const loadedConversationId = response.data.conversation?.id || null;
       setConversationId(loadedConversationId);
       setMessages(mapStoredMessages(storedMessages));
       if (loadedConversationId && !demoMode) window.localStorage.setItem(storageKey, loadedConversationId);
@@ -567,7 +566,7 @@ export const OperatorPage = () => {
         message: text,
         journey_action_id: workActionId || undefined,
         work_ref: workRef || undefined,
-        selected_object: workRef && new URL(workRef, 'https://localos.pro').searchParams.get('item_id') ? { type: 'content_item', id: new URL(workRef, 'https://localos.pro').searchParams.get('item_id') } : undefined,
+        selected_object: selectedWork,
         conversation_id: conversationId,
         channel: 'web',
         search_task_id: selectedSearchId || null,
@@ -849,6 +848,11 @@ export const OperatorPage = () => {
           </DropdownMenuContent></DropdownMenu>
         </div>
       </header>
+      {selectedWork?.type === 'partner' && workRef && <section aria-label="Выбранный партнёр" className="shrink-0 rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm">
+        <p className="font-medium">Обсуждаем партнёра{selectedWorkName ? `: ${selectedWorkName}` : ''}</p>
+        <p className="mt-1 text-muted-foreground">Проверьте запрос и отправьте его в чат. Подготовка письма ничего не отправляет партнёру.</p>
+        <Button variant="link" className="h-auto px-0 py-1" asChild><Link to={workRef}>Вернуться к партнёру</Link></Button>
+      </section>}
       <BetaFeedbackBanner dialogOnly onCloseAutoFocus={event => { event.preventDefault(); menuTriggerRef.current?.focus(); }} open={feedbackOpen} onOpenChange={setFeedbackOpen} area="operator" title={copy.title} description={copy.betaDescription} businessId={currentBusinessId} businessName={businessName} />
       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}><DialogContent onCloseAutoFocus={event => { event.preventDefault(); menuTriggerRef.current?.focus(); }} className="max-h-[90dvh] max-w-3xl overflow-y-auto"><DialogHeader><DialogTitle>История обращений</DialogTitle><DialogDescription>Сохранённые команды, ответы и распознавание голоса.</DialogDescription></DialogHeader>{historyOpen && currentBusinessId && <OperatorRequestHistory key={currentBusinessId} initiallyOpen businessId={currentBusinessId} language={language} />}</DialogContent></Dialog>
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}><DialogContent onCloseAutoFocus={event => { event.preventDefault(); menuTriggerRef.current?.focus(); }}><DialogHeader><DialogTitle>Как пользоваться</DialogTitle><DialogDescription>Напишите задачу обычным языком или запишите голосом.</DialogDescription></DialogHeader><p className="text-sm">LocalOS покажет результат или уточнит недостающее. Для продолжения поиска выберите его в «Задачах». Отправка писем и другие внешние действия требуют подтверждения.</p></DialogContent></Dialog>

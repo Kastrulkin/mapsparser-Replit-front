@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+import { workChatRoute } from '@/lib/workNavigation';
 import { ReactNode, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -343,6 +345,11 @@ export default function PartnershipLeadDetailDrawer({
         </div>
 
         <DrawerSection>
+          {currentBusinessId && <section aria-label="Первое письмо партнёру" className="space-y-2 rounded-xl border border-border bg-muted/30 p-4">
+            <h3 className="font-semibold">Подготовить одно письмо</h3>
+            <p className="text-sm text-muted-foreground">Обсудите эту компанию в чате: проверим контакт и подготовим черновик. Отправка согласуется отдельно.</p>
+            {contactGuard?.blocked ? <Button disabled>Подготовить первое письмо</Button> : <Button asChild><Link to={`${workChatRoute(`/dashboard/partnerships?lead=${encodeURIComponent(selectedLead.id)}&item_id=${encodeURIComponent(selectedLead.id)}`, currentBusinessId)}&partner_name=${encodeURIComponent(selectedLead.name || 'Партнёр')}&command=${encodeURIComponent('Подготовь первое письмо')}`}>Подготовить первое письмо в чате</Link></Button>}
+          </section>}
           {contactGuard?.blocked ? (
             <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950" role="alert">
               <div className="flex items-start gap-3">

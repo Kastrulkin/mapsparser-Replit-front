@@ -54,3 +54,16 @@ export const workChatRoute = (route: string, businessId: string, actionId?: stri
  if (actionId) params.set('journey_action', actionId);
  return '/dashboard/operator?' + params;
 };
+
+
+export const selectedWorkObject = (value: string | null | undefined, businessId: string | null | undefined): {type: 'content_item' | 'partner'; id: string} | undefined => {
+ const safe = safeWorkReturn(value);
+ if (!safe || !businessId) return undefined;
+ const target = new URL(safe, 'https://localos.pro');
+ if (target.searchParams.get('business_id') !== businessId) return undefined;
+ const id = target.searchParams.get('item_id') || '';
+ if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) return undefined;
+ if (target.pathname === '/dashboard/partnerships') return {type: 'partner', id};
+ if (target.pathname === '/dashboard/content') return {type: 'content_item', id};
+ return undefined;
+};
