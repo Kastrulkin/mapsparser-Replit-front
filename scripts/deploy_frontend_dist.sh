@@ -19,7 +19,7 @@ server_scp_prefix=(scp "${ssh_options[@]}")
 server_project_dir="/opt/seo-app"
 app_container_name="${APP_CONTAINER_NAME:-seo-app-app-1}"
 public_domain="${PUBLIC_DOMAIN:-https://localos.pro}"
-remote_tmp="/tmp/localos_frontend_dist_deploy_$(date +%s)_$$"
+remote_tmp="/tmp/localos_frontend_dist_deploy"
 
 build_dist=0
 skip_remote=0
@@ -133,9 +133,9 @@ retry_command "sync frontend dist into server runtime" remote_exec "\
   mkdir -p frontend/public-dist && \
   cp -R ${remote_tmp}/. frontend/dist/ && \
   cp -R ${remote_tmp}-public/. frontend/public-dist/ && \
-  tar -C ${remote_tmp} -cf - . | docker compose exec -T app sh -lc 'mkdir -p /app/frontend/dist && tar -xf - -C /app/frontend/dist' && \
+  tar -C frontend/dist -cf - . | docker compose exec -T app sh -lc 'mkdir -p /app/frontend/dist && tar -xf - -C /app/frontend/dist' && \
   docker compose exec -T app sh -lc 'mkdir -p /app/dist && cp -R /app/frontend/dist/. /app/dist/' && \
-  tar -C ${remote_tmp}-public -cf - . | docker compose exec -T app sh -lc 'mkdir -p /app/frontend/public-dist && tar -xf - -C /app/frontend/public-dist'"
+  tar -C frontend/public-dist -cf - . | docker compose exec -T app sh -lc 'mkdir -p /app/frontend/public-dist && tar -xf - -C /app/frontend/public-dist'"
 
 echo "Verification:"
 echo "1) docker compose ps"

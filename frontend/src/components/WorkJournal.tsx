@@ -1,8 +1,11 @@
+import { DayBriefing } from '@/components/operator/DayBriefing';
+import { miniAppLaunchParams, miniAppChannel } from "@/lib/miniAppPlatform";
 import { workStatusLabel, workStatusDetail } from '@/lib/workStatus';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { OperatorVoiceInput } from '@/components/operator/OperatorVoice';
 import { voiceHeaders, waitForOperatorResult } from '@/components/operator/OperatorVoice.logic';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -16,7 +19,7 @@ type PolicyHistory = { id: string; kind: string; created_at: string };
 type Data = { review_enabled?: boolean; can_review?: boolean; members?: { user_id: string; name: string }[]; enabled: boolean; role?: string; items: Entry[]; policy?: { version: number; rules_json: Rule[] }; policy_history?: PolicyHistory[] };
 type Answer = { async_job_id?: string; chat_response?: string; conversation_id?: string; status?: string; approval?: { action_id?: string; status?: string }; operator_result?: Answer };
 
-export function WorkJournal({ businessId, headers = defaultHeaders, embedded = false }: { embedded?: boolean; businessId?: string | null; headers?: () => Record<string, string> }) {
+export function WorkJournal({ businessId, headers = defaultHeaders, embedded = false, initialView = 'journal' }: { initialView?: 'journal' | 'day_brief'; embedded?: boolean; businessId?: string | null; headers?: () => Record<string, string> }) {
   const { language } = useLanguage();
   const [data, setData] = useState<Data | null>(null); const [text, setText] = useState('');
   const [query, setQuery] = useState(''); const [day, setDay] = useState('');
@@ -27,6 +30,8 @@ export function WorkJournal({ businessId, headers = defaultHeaders, embedded = f
   const [selectedObservation,setSelectedObservation]=useState<Entry | null>(null); const [selectedTask,setSelectedTask]=useState<LinkedAction | null>(null);
   const [linked,setLinked]=useState<Record<string,LinkedAction[]>>({});
   const [digestTime,setDigestTime]=useState('18:00'); const [reviewerId,setReviewerId]=useState('');
+  const [briefingOpen, setBriefingOpen] = useState(() => initialView === 'day_brief' || miniAppLaunchParams().get('item_type') === 'day_brief');
+  const [briefingVisited, setBriefingVisited] = useState(briefingOpen);
   const [tab,setTab]=useState('journal'); const [inbox,setInbox]=useState<Entry[]>([]);
   const [reviewStatus,setReviewStatus]=useState('new'); const [reviewCategory,setReviewCategory]=useState('');
   const [reviewing,setReviewing]=useState<Entry | null>(null); const [resolution,setResolution]=useState('in_progress');
@@ -76,7 +81,7 @@ export function WorkJournal({ businessId, headers = defaultHeaders, embedded = f
   };
   const submit = async (message: string, source?: { transcription_id: string; conversation_id: string; request_id: string }) => {
     const business = businessId;
-    const raw: Answer = await request('/operator/chat', { method: 'POST', body: JSON.stringify({ business_id: business, input_context: 'work_journal', work_entry_id:selectedObservation?.id, work_action_id:selectedTask?.id, channel: headers === defaultHeaders ? 'web' : 'telegram_mini_app', conversation_id: conversation, message, request_id: crypto.randomUUID(), ...source }) });
+    const raw: Answer = await request('/operator/chat', { method: 'POST', body: JSON.stringify({ business_id: business, input_context: 'work_journal', work_entry_id:selectedObservation?.id, work_action_id:selectedTask?.id, channel: headers === defaultHeaders ? 'web' : miniAppChannel(), conversation_id: conversation, message, request_id: crypto.randomUUID(), ...source }) });
     if (scope.current !== business) return;
     const final=await waitForOperatorResult(raw.operator_result || raw,business || '',headers,()=>scope.current===business);
     if(scope.current!==business)return;
@@ -102,16 +107,29 @@ export function WorkJournal({ businessId, headers = defaultHeaders, embedded = f
     await request(`/work-journal/${reviewing.id}/decision`,{method:'POST',body:JSON.stringify({business_id:business,version:reviewing.version,status:resolution,decision:reason,assigned_to:assignee || null,request_id:crypto.randomUUID()})});
     if(scope.current===business){setReviewing(null);await loadInbox();await load();}
   };
-  if (!businessId) return <p>Выберите бизнес, чтобы открыть рабочий журнал.</p>;
+  if (!businessId) return <p>Выберите бизнес, чтобы открыть планёрку и журнал.</p>;
   return <div className="space-y-5">
-    <div>{!embedded && <h1 className="text-2xl font-semibold">Рабочий журнал</h1>}<p className="text-sm text-muted-foreground">Сообщайте о работе и спрашивайте, что предложить клиентам. Заметки сохраняются с возможностью отмены.</p></div>
+    {!embedded && <h1 className="text-2xl font-semibold">Планёрка и журнал</h1>}
+    <p className="text-sm text-muted-foreground">Планёрка — что делаем сегодня. Журнал — что произошло в работе.</p>
+    <Tabs value={briefingOpen ? 'briefing' : 'journal'} onValueChange={value => { setBriefingOpen(value === 'briefing'); if (value === 'briefing') setBriefingVisited(true); }}>
+      <TabsList className="grid h-auto min-h-11 w-full grid-cols-2" aria-label="Планёрка и журнал">
+        <TabsTrigger className="min-h-11" value="briefing">Планёрка</TabsTrigger>
+        <TabsTrigger className="min-h-11" value="journal">Журнал</TabsTrigger>
+      </TabsList>
+      <TabsContent forceMount value="briefing" hidden={!briefingOpen} className="space-y-4 data-[state=inactive]:hidden">
+        {briefingVisited && <DayBriefing key={businessId} businessId={businessId} headers={headers} channel={headers === defaultHeaders ? 'web' : miniAppChannel()} />}
+      </TabsContent>
+      <TabsContent forceMount value="journal" hidden={briefingOpen} className="space-y-4 data-[state=inactive]:hidden">
+    <div><h2 className="text-xl font-semibold">Что произошло на работе?</h2><p className="text-sm text-muted-foreground">Запишите наблюдение: что заметили, что сказал клиент или что нужно исправить. Руководитель сможет разобрать запись и выбрать следующий шаг.</p></div>
     {error && <p role="alert">{error}</p>}
     {data && !data.enabled && <p role="status">Новый ввод пока отключён. Сохранённая история доступна.</p>}
     {data?.enabled && <section className="space-y-3 rounded-xl border bg-card p-4 text-card-foreground">
       {selectedObservation && <p className="text-sm">По записи: {selectedObservation.facts_json.quote}<Button variant="ghost" onClick={()=>{setSelectedObservation(null);setSelectedTask(null);}}>Убрать привязку</Button></p>}
-      <label className="block">Сообщение Оператору<Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Клиент отказался от ухода: дорого. Или: что предложить клиентам сегодня?" /></label>
-      <Button disabled={busy || !text.trim()} onClick={() => void run(() => submit(text))}>Отправить</Button>
-      <OperatorVoiceInput directSubmit disabled={busy} businessId={businessId} conversationId={conversation} channel={headers === defaultHeaders ? 'web' : 'telegram_mini_app'} headers={headers} onSubmit={submit} />
+      <label className="block">Что вы заметили?<Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Например: клиент отказался от ухода — сказал, что дорого." /></label>
+      <details className="text-sm text-muted-foreground"><summary className="cursor-pointer py-2">Примеры наблюдений</summary><ul className="list-disc space-y-1 pl-5"><li>У витрины грязное стекло, нужно протереть.</li><li>Клиент отказался от ухода: сказал, что дорого.</li><li>Закончился шампунь, нужно пополнить запас.</li></ul></details>
+      <p className="text-sm text-muted-foreground">Вопросы и поручения — в «Чат с LocalOS». Здесь сообщайте о том, что произошло; если деталей не хватает, LocalOS уточнит их.</p>
+      <Button disabled={busy || !text.trim()} onClick={() => void run(() => submit(text))}>Отправить наблюдение</Button>
+      <OperatorVoiceInput contextKey="work_journal" directSubmit disabled={busy} businessId={businessId} conversationId={conversation} channel={headers === defaultHeaders ? 'web' : miniAppChannel()} headers={headers} onSubmit={submit} />
       {answer?.chat_response && <p className="whitespace-pre-wrap" role="status">{answer.chat_response}</p>}
       {answer?.approval?.action_id && answer.approval.status === 'pending' && <div className="flex gap-2"><Button disabled={busy} onClick={() => void run(() => decision(true))}>Подтвердить изменение</Button><Button variant="outline" disabled={busy} onClick={() => void run(() => decision(false))}>Отклонить</Button></div>}
     </section>}
@@ -140,11 +158,13 @@ export function WorkJournal({ businessId, headers = defaultHeaders, embedded = f
     </article>)}
     </>}
     {data?.role==='owner' && data.review_enabled && <details className="rounded-xl border bg-card p-4"><summary>Настройки разбора и уведомлений</summary><div className="space-y-3 pt-3"><p>Управляющий получает доступ только к выбранному бизнесу. Изменение права требует подтверждения.</p><label className="block">Управляющий<select className="block rounded-md border bg-background p-2" value={reviewerId} onChange={e=>setReviewerId(e.target.value)}><option value="">Выберите участника</option>{data.members?.map(member=><option key={member.user_id} value={member.user_id}>{member.name}</option>)}</select></label>{[true,false].map(grant=><Button key={String(grant)} variant="outline" disabled={busy || !reviewerId} onClick={()=>void run(async()=>{const business=businessId;const preview:Answer=await request('/work-journal/policy/preview',{method:'POST',body:JSON.stringify({business_id:business,kind:'reviewer',user_id:reviewerId,enabled:grant,request_id:crypto.randomUUID()})});if(scope.current===business)setAnswer(preview);})}>{grant?'Предоставить право':'Отозвать право'}</Button>)}<label className="block">Время дневной сводки в часовом поясе бизнеса<Input type="time" value={digestTime} onChange={e=>setDigestTime(e.target.value)} /></label><Button variant="outline" disabled={busy} onClick={()=>void run(async()=>{const business=businessId;await request('/work-journal/digest-settings',{method:'POST',body:JSON.stringify({business_id:business,local_time:digestTime,enabled:true})});if(scope.current===business)setAnswer({chat_response:'Время сводки сохранено.'});})}>Сохранить время сводки</Button></div></details>}
-    {data?.role === 'owner' && <section className="space-y-3 rounded-xl border bg-card p-4 text-card-foreground"><h2 className="text-lg font-semibold">Правила рекомендаций</h2><p>Изменения применяются только после вашего подтверждения. Точка — выбранный бизнес.</p>
+    {data?.role === 'owner' && <details className="rounded-xl border bg-card p-4 text-card-foreground"><summary className="cursor-pointer font-semibold">Правила допродаж</summary><div className="space-y-3 pt-3"><p>Изменения применяются только после вашего подтверждения. Точка — выбранный бизнес.</p>
       {!data.policy?.rules_json.length && <p>Дополнительных правил пока нет.</p>}
       {data.policy?.rules_json.map((rule) => <p key={rule.id}>{rule.instruction} · {rule.permanent ? 'постоянно' : `${rule.starts_at || 'сразу'} — ${rule.ends_at}`}</p>)}
-      <Button variant="outline" onClick={() => setText('Измени правила рекомендаций: ')}>Изменить правила через Оператора</Button>
+      <Button variant="outline" onClick={() => setText('Измени правила рекомендаций: ')}>Подготовить изменение правил</Button>
       {data.policy_history?.filter((item) => item.kind === 'rules').map((item) => <div key={item.id}><span>{item.created_at}</span><Button variant="ghost" disabled={busy || !data.enabled} onClick={() => void run(async () => { const business = businessId; const preview: Answer = await request('/work-journal/policy/preview', { method: 'POST', body: JSON.stringify({ business_id: business, restore_history_id: item.id, request_id: crypto.randomUUID() }) }); if (scope.current === business) setAnswer(preview); })}>Подготовить откат</Button></div>)}
-    </section>}
+    </div></details>}
+      </TabsContent>
+    </Tabs>
   </div>;
 }

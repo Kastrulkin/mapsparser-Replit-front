@@ -1,3 +1,4 @@
+import { consumeMaxConnection } from "@/lib/maxAuthContinuation";
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clearLeadJourneyIntent, clearLeadJourneyToken, journeyActionRoute, readLeadJourneyToken, resolveStoredLeadJourney, type JourneyAction } from '@/lib/leadJourney';
@@ -38,6 +39,11 @@ const VerifyEmail: React.FC = () => {
         }
 
         setStatus('success');
+        if (consumeMaxConnection()) {
+          setMessage('Email подтверждён. Открываем подключение MAX…');
+          navigate('/dashboard/max', { replace: true });
+          return;
+        }
         if (data.journey_action && featureFlags.journeyPostAuthRedirect) {
           const action: JourneyAction = data.journey_action;
           clearLeadJourneyToken();

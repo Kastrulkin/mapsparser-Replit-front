@@ -992,6 +992,7 @@ export const ProfilePage = () => {
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-10">
+      <a href="/dashboard/max" className="inline-flex min-h-11 items-center text-primary underline">Подключить LocalOS к MAX</a>
       <DashboardPageHeader
         eyebrow={isRu ? 'Профиль LocalOS' : 'LocalOS profile'}
         icon={User}

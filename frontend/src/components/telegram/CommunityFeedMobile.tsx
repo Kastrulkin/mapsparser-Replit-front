@@ -1,3 +1,4 @@
+import { openMiniAppLink } from "@/lib/miniAppPlatform";
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowUpRight, BarChart3, CircleAlert, Loader2, MessageSquareText, Plus, Radio, RefreshCw, Send } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -63,12 +64,7 @@ const messageCountLabel = (value: number) => {
 
 const openExternal = (url?: string | null) => {
   if (!url) return;
-  const telegram = window.Telegram?.WebApp;
-  if (url.startsWith('https://t.me/') && telegram?.openTelegramLink) {
-    telegram.openTelegramLink(url);
-    return;
-  }
-  window.open(url, '_blank', 'noopener,noreferrer');
+  openMiniAppLink(url);
 };
 
 const FeedSkeleton = () => <div aria-label="Загружаем ленту" className="space-y-3 px-4">

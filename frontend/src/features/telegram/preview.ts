@@ -29,7 +29,7 @@ export const previewBootstrap: Bootstrap = {
     { key: 'today', label: 'Сегодня', group: 'primary', status: 'available' },
     { key: 'tasks', label: 'В работе', group: 'primary', status: 'available' },
     { key: 'reviews', label: 'Отзывы', group: 'more', status: 'available' },
-    { key: 'operator', label: 'Оператор', group: 'primary', status: 'available' },
+    { key: 'operator', label: 'Чат с LocalOS', group: 'primary', status: 'available' },
     { key: 'progress', label: 'Прогресс', group: 'primary', status: 'available' },
     { key: 'cards', label: 'Карточки', group: 'more', status: 'read_only' },
     { key: 'content', label: 'Контент', group: 'more', status: 'available' },

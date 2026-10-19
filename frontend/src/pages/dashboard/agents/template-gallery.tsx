@@ -5,7 +5,7 @@ import type { Language } from '@/i18n/LanguageContext.logic';
 import { cn } from '@/lib/utils';
 import { connectorLabel } from './normalization';
 import { getAgentTemplateGalleryCopy, getLocalizedAgentTemplateContent } from './template-gallery-copy';
-import type { AgentTemplate } from './types';
+import type { AgentBlueprint, AgentTemplate } from './types';
 
 type AgentTemplateGalleryProps = {
   templates: AgentTemplate[];
@@ -13,9 +13,11 @@ type AgentTemplateGalleryProps = {
   usingTemplateKey: string;
   onUse: (template: AgentTemplate) => void;
   language: Language;
+  companyAgents?: AgentBlueprint[];
+  onOpenAdded?: (id: string) => void;
 };
 
-export const AgentTemplateGallery = ({ templates, loading, usingTemplateKey, onUse, language }: AgentTemplateGalleryProps) => {
+export const AgentTemplateGallery = ({ templates, loading, usingTemplateKey, onUse, language, companyAgents = [], onOpenAdded }: AgentTemplateGalleryProps) => {
   const copy = getAgentTemplateGalleryCopy(language);
   const triggerLabel = (trigger: string) => trigger === 'schedule.daily' ? copy.scheduled : trigger === 'schedule.weekly' ? copy.weekly : trigger.includes('review') ? copy.review : copy.manual;
   const statusLabel = (status: AgentTemplate['certification_status']) => status === 'certified' ? copy.certified : status === 'beta' ? copy.beta : status === 'testing' ? copy.testing : copy.draft;
@@ -23,6 +25,8 @@ export const AgentTemplateGallery = ({ templates, loading, usingTemplateKey, onU
   const plannedTemplates = templates.filter((template) => template.certification_status !== 'beta' && template.certification_status !== 'certified');
   const renderTemplate = (template: AgentTemplate, available: boolean) => {
     const using = usingTemplateKey === template.key;
+    const added = companyAgents.find((agent) => agent.status !== 'archived' && agent.metadata_json?.template_key === template.key);
+    const openExisting = Boolean(added && onOpenAdded);
     const connections = template.required_connections || [];
     const content = getLocalizedAgentTemplateContent(template, language);
     return (
@@ -34,7 +38,7 @@ export const AgentTemplateGallery = ({ templates, loading, usingTemplateKey, onU
           <div className="flex flex-wrap justify-end gap-1.5">
             {template.key === 'daily_owner_digest' && available ? <span className="rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-semibold text-orange-800 ring-1 ring-orange-200">{copy.recommended}</span> : null}
             <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1', template.certification_status === 'certified' ? 'bg-emerald-50 text-emerald-800 ring-emerald-200' : template.certification_status === 'beta' ? 'bg-sky-50 text-sky-800 ring-sky-200' : 'bg-white text-slate-600 ring-slate-200')}>
-              {statusLabel(template.certification_status)}
+              {openExisting ? (language === 'ru' ? 'В компании' : 'Added to company') : statusLabel(template.certification_status)}
             </span>
           </div>
         </div>
@@ -44,17 +48,17 @@ export const AgentTemplateGallery = ({ templates, loading, usingTemplateKey, onU
           <div className="flex items-center gap-2"><Clock3 className="h-4 w-4 shrink-0" /><span>{triggerLabel(template.trigger)}</span></div>
           <div className="flex items-start gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /><span>{connections.length ? `${copy.needs}: ${connections.map(connectorLabel).join(', ')}` : copy.localos}</span></div>
         </div>
-        {available ? (
-          <Button type="button" className="mt-4 min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]" onClick={() => onUse(template)} disabled={Boolean(usingTemplateKey)}>
+        {available || openExisting ? (
+          <Button type="button" className="mt-4 min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]" onClick={() => { if (openExisting && added && onOpenAdded) onOpenAdded(added.id); else onUse(template); }} disabled={Boolean(usingTemplateKey)}>
             {using ? <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" /> : null}
-            {using ? copy.preparing : copy.use}
+            {using ? copy.preparing : openExisting ? (language === 'ru' ? 'Открыть агента' : 'Open agent') : copy.use}
           </Button>
         ) : null}
       </article>
     );
   };
   return (
-  <section className="rounded-3xl bg-white p-5 shadow-[0_18px_48px_rgba(15,23,42,0.07),0_0_0_1px_rgba(15,23,42,0.07)]">
+  <section aria-label={copy.title} className="rounded-3xl border border-border bg-background p-5 shadow-sm">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="max-w-2xl">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-orange-700">

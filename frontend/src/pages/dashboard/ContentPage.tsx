@@ -35,6 +35,7 @@ import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 
 import { AudienceInsights } from '@/components/AudienceInsights';
 import { PublicationReconciliation } from '@/components/content-plan/PublicationReconciliation';
+import { ContentPersonalization } from '@/components/content-plan/ContentPersonalization';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -116,7 +117,7 @@ type ContentBrief = {
 };
 type GenerationAlternative = { id?: string; angle?: string; text?: string; score?: number; quality_passed?: boolean };
 type GenerationDetails = {
-  status?: 'generated' | 'needs_context' | 'failed';
+  status?: 'generated' | 'alternatives_ready' | 'needs_context' | 'failed';
   message?: string;
   source?: string;
   action?: {
@@ -130,20 +131,6 @@ type GenerationDetails = {
   sources?: ContentSource[];
   alternatives?: GenerationAlternative[];
 };
-type VoiceExample = { id: string; text: string; business_id?: string; platform?: string };
-type VoiceProfile = {
-  summary?: string;
-  preferences?: {
-    business_description?: string;
-    audience_description?: string;
-    [key: string]: unknown;
-  };
-  status?: string;
-  version?: number;
-  examples?: VoiceExample[];
-  learning_suggestion?: { text?: string } | null;
-};
-
 type PlanPayload = {
   id: string;
   title?: string;
@@ -279,6 +266,7 @@ type MediaRecommendation = {
   title?: string;
   message?: string;
   selected_asset?: PhotoAsset | null;
+  selected_assets?: PhotoAsset[];
   alternatives?: PhotoAsset[];
   coverage?: {
     coverage_percent?: number;
@@ -292,7 +280,6 @@ type CalendarView = 'month' | 'week' | 'list';
 type ContentSection = 'calendar' | 'media' | 'audience';
 type MediaFilter = 'all' | 'maps' | 'posts' | 'weak';
 type ModalStep = 'setup' | 'preview';
-type ContentSetupStep = 'business' | 'audience' | 'voice';
 
 type CreatePlanDraft = {
   goal: string;
@@ -640,7 +627,15 @@ const isQueuedOrHandledStatus = (status?: string) => {
   return normalized === 'queued' || normalized === 'needs_supervised_publish' || normalized === 'published';
 };
 
-const getItemStatusLabel = (item: PlanItem, posts: SocialPost[]) => {
+const hasApprovedSelectedChannels = (item: PlanItem, posts: SocialPost[], plan: PlanPayload | null) => {
+  const itemChannels = selectedChannelsFromItem(item);
+  const planChannels = selectedChannelsFromPlan(plan);
+  const selected = itemChannels.length > 0 ? itemChannels : planChannels.length > 0 ? planChannels : posts.map((post) => post.platform);
+  return selected.length > 0 && selected.every((platform) => posts.some((post) => post.platform === platform
+    && ['approved', 'published'].includes(String(post.status || '').toLowerCase())));
+};
+
+const getItemStatusLabel = (item: PlanItem, posts: SocialPost[], plan: PlanPayload | null) => {
   if (posts.some((post) => String(post.status || '').toLowerCase() === 'publishing')) return 'Проверить результат отправки';
   if (posts.some((post) => String(post.status || '') === 'failed')) return 'Не удалось';
   if (posts.some((post) => String(post.status || '') === 'needs_supervised_publish' || String(post.status || '') === 'needs_manual_publish')) {
@@ -649,11 +644,12 @@ const getItemStatusLabel = (item: PlanItem, posts: SocialPost[]) => {
   if (posts.some((post) => String(post.status || '') === 'needs_review')) return 'Нужно проверить';
   if (posts.some((post) => String(post.status || '') === 'queued')) return 'Запланировано';
   if (posts.length > 0 && posts.every((post) => String(post.status || '') === 'published')) return 'Опубликовано';
+  if (hasApprovedSelectedChannels(item, posts, plan)) return 'Утверждено';
   if (itemHasUsableText(item)) return 'Нужно проверить';
   return 'Черновик';
 };
 
-const getCalendarItemState = (item: PlanItem, posts: SocialPost[]) => {
+const getCalendarItemState = (item: PlanItem, posts: SocialPost[], plan: PlanPayload | null) => {
   const statuses = posts.map((post) => String(post.status || '').toLowerCase());
   if (statuses.includes('publishing')) {
     return { status: 'Проверить результат отправки', action: 'Проверить площадку' };
@@ -670,11 +666,11 @@ const getCalendarItemState = (item: PlanItem, posts: SocialPost[]) => {
   if (posts.length > 0 && statuses.every((status) => status === 'published')) {
     return { status: 'Опубликовано', action: 'Готово' };
   }
-  if (statuses.includes('approved')) {
-    return { status: 'Текст утверждён', action: 'Выберите каналы' };
-  }
   if (statuses.includes('needs_review')) {
     return { status: 'Текст готов', action: 'Утвердить текст' };
+  }
+  if (hasApprovedSelectedChannels(item, posts, plan)) {
+    return { status: 'Текст утверждён', action: 'Готово' };
   }
   if (itemHasUsableText(item)) {
     return { status: 'Текст готов', action: 'Подготовить каналы' };
@@ -868,17 +864,11 @@ function ContentWorkspace() {
   const [channelDetailsOpen, setChannelDetailsOpen] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
   const [themeEdits, setThemeEdits] = useState<Record<string, string>>({});
+  const [contentTypeEdits, setContentTypeEdits] = useState<Record<string, string>>({});
   const [dateEdits, setDateEdits] = useState<Record<string, string>>({});
   const [generationDetails, setGenerationDetails] = useState<Record<string, GenerationDetails>>({});
   const [briefAnswers, setBriefAnswers] = useState<Record<string, Record<string, string>>>({});
   const [voiceOpen, setVoiceOpen] = useState(false);
-  const [voiceLoading, setVoiceLoading] = useState(false);
-  const [voiceProfile, setVoiceProfile] = useState<VoiceProfile | null>(null);
-  const [voiceSummary, setVoiceSummary] = useState('');
-  const [businessDescription, setBusinessDescription] = useState('');
-  const [audienceDescription, setAudienceDescription] = useState('');
-  const [contentSetupStep, setContentSetupStep] = useState<ContentSetupStep>('business');
-  const [voiceExampleInput, setVoiceExampleInput] = useState('');
   const [publicationChannels, setPublicationChannels] = useState<Record<string, boolean>>(() => buildChannelSelection());
   const [publicationChannelsTouched, setPublicationChannelsTouched] = useState(false);
   const [platformTextEdits, setPlatformTextEdits] = useState<Record<string, string>>({});
@@ -948,7 +938,7 @@ function ContentWorkspace() {
     return filled.size;
   }, [items]);
   const totalDays = Number(currentPlan?.period_days || 30);
-  const needsReviewCount = Number(socialSummary?.needs_review || 0) || items.filter((item) => itemHasUsableText(item) && getItemStatusLabel(item, postsByItem[item.id] || []) === 'Нужно проверить').length;
+  const needsReviewCount = Number(socialSummary?.needs_review || 0) || items.filter((item) => itemHasUsableText(item) && getItemStatusLabel(item, postsByItem[item.id] || [], currentPlan) === 'Нужно проверить').length;
   const nextItem = useMemo(() => {
     const today = toIsoDate(new Date());
     return [...items]
@@ -959,7 +949,7 @@ function ContentWorkspace() {
     const today = toIsoDate(new Date());
     return [...items]
       .filter((item) => {
-        const status = getItemStatusLabel(item, postsByItem[item.id] || []);
+        const status = getItemStatusLabel(item, postsByItem[item.id] || [], currentPlan);
         return status === 'Нужно проверить' || status === 'Черновик' || getItemDateKey(item) >= today;
       })
       .sort((left, right) => getItemDateKey(left).localeCompare(getItemDateKey(right)))[0] || null;
@@ -1079,79 +1069,7 @@ function ContentWorkspace() {
     }
   });
 
-  const openVoiceSettings = async () => {
-    if (!currentBusinessId) return;
-    setContentSetupStep('business');
-    setVoiceOpen(true);
-    setVoiceLoading(true);
-    try {
-      const response = await newAuth.makeRequest(`/content-voice?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
-      const profile = response.profile || null;
-      setVoiceProfile(profile);
-      setVoiceSummary(String(profile?.summary || ''));
-      setBusinessDescription(String(profile?.preferences?.business_description || ''));
-      setAudienceDescription(String(profile?.preferences?.audience_description || ''));
-    } catch (voiceError) {
-      setError(voiceError instanceof Error ? voiceError.message : 'Не удалось загрузить стиль публикаций');
-    } finally {
-      setVoiceLoading(false);
-    }
-  };
-
-  const addVoiceExample = async () => {
-    const text = voiceExampleInput.trim();
-    if (!currentBusinessId || !text) return;
-    setVoiceLoading(true);
-    try {
-      await newAuth.makeRequest('/content-voice/examples', {
-        method: 'POST',
-        body: JSON.stringify({ business_id: currentBusinessId, text, origin: 'manual', quality_status: 'reference' }),
-      });
-      setVoiceExampleInput('');
-      await openVoiceSettings();
-    } catch (voiceError) {
-      setError(voiceError instanceof Error ? voiceError.message : 'Не удалось добавить пример');
-      setVoiceLoading(false);
-    }
-  };
-
-  const deleteVoiceExample = async (exampleId: string) => {
-    setVoiceLoading(true);
-    try {
-      await newAuth.makeRequest(`/content-voice/examples/${encodeURIComponent(exampleId)}`, { method: 'DELETE' });
-      await openVoiceSettings();
-    } catch (voiceError) {
-      setError(voiceError instanceof Error ? voiceError.message : 'Не удалось удалить пример');
-      setVoiceLoading(false);
-    }
-  };
-
-  const saveVoiceProfile = async () => {
-    if (!currentBusinessId) return;
-    setVoiceLoading(true);
-    try {
-      const response = await newAuth.makeRequest('/content-voice', {
-        method: 'PATCH',
-        body: JSON.stringify({
-          business_id: currentBusinessId,
-          summary: voiceSummary,
-          preferences: {
-            ...(voiceProfile?.preferences || {}),
-            business_description: businessDescription.trim(),
-            audience_description: audienceDescription.trim(),
-          },
-          confirm: true,
-        }),
-      });
-      setVoiceProfile(response.profile || null);
-      setVoiceOpen(false);
-      setActionMessage('Настройки контента сохранены. LocalOS будет учитывать их в новых текстах.');
-    } catch (voiceError) {
-      setError(voiceError instanceof Error ? voiceError.message : 'Не удалось сохранить стиль');
-    } finally {
-      setVoiceLoading(false);
-    }
-  };
+  const openVoiceSettings = () => setVoiceOpen(true);
 
   useEffect(() => {
     void loadContent();
@@ -1558,6 +1476,8 @@ function ContentWorkspace() {
       if (currentTheme !== String(selectedItem.theme ?? selectedItem.goal ?? '')) payload.theme = currentTheme;
       if (normalizeIsoDate(currentDate) !== normalizeIsoDate(selectedItem.scheduled_for)) payload.scheduled_for = currentDate;
       if (currentDraft !== String(selectedItem.draft_text ?? '')) payload.draft_text = currentDraft;
+      const contentType = contentTypeEdits[selectedItem.id] ?? selectedItem.content_type ?? '';
+      if (contentType !== String(selectedItem.content_type ?? '')) payload.content_type = contentType;
       if (channelsChanged) payload.selected_channels = selectedPlatforms;
       const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}`, {
         method: 'PUT',
@@ -1565,6 +1485,13 @@ function ContentWorkspace() {
       });
       const plan = response.plan || null;
       setCurrentPlan(plan);
+      if ('content_type' in payload) {
+        setGenerationDetails((previous) => {
+          const next = { ...previous };
+          delete next[selectedItem.id];
+          return next;
+        });
+      }
       if (plan?.items) {
         const savedItem = plan.items.find((entry: PlanItem) => entry.id === selectedItem.id);
         if (savedItem) setDateEdits((previous) => ({ ...previous, [selectedItem.id]: getItemDateKey(savedItem) }));
@@ -1617,17 +1544,21 @@ function ContentWorkspace() {
     }
   };
 
-  const generateSelectedDraft = async () => {
+  const generateSelectedDraft = async (additionalVariants = false) => {
     if (!selectedItem) return;
+    if (additionalVariants && String(draftEdits[selectedItem.id] ?? selectedItem.draft_text ?? '') !== String(selectedItem.draft_text || '')) {
+      setError('Сначала сохраните изменения текста, затем запросите другие варианты.');
+      return;
+    }
     const startedAt = Date.now();
-    setBusyAction('generate-draft');
+    setBusyAction(additionalVariants ? 'generate-alternatives' : 'generate-draft');
     setDraftGenerationReady(false);
     setError('');
     setActionMessage('');
     try {
       const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}/generate-draft`, {
         method: 'POST',
-        body: JSON.stringify({ language: 'ru' }),
+        body: JSON.stringify({ language: 'ru', ...(additionalVariants ? { additional_variants: true, expected_draft_text: selectedItem.draft_text || '', request_id: crypto.randomUUID() } : {}) }),
       });
       const plan = response.plan || null;
       setCurrentPlan(plan);
@@ -2328,7 +2259,7 @@ function ContentWorkspace() {
 
   const renderCalendarCard = (item: PlanItem) => {
     const posts = postsByItem[item.id] || [];
-    const calendarState = getCalendarItemState(item, posts);
+    const calendarState = getCalendarItemState(item, posts, currentPlan);
     const channels = resolveItemSelectedChannels(item, posts, currentPlan);
     const canDrag = !posts.some((post) => ['publishing', 'published'].includes(String(post.status || '').toLowerCase()));
     return (
@@ -2451,7 +2382,7 @@ function ContentWorkspace() {
       <div className="divide-y divide-slate-100">
         {items.map((item) => {
           const posts = postsByItem[item.id] || [];
-          const calendarState = getCalendarItemState(item, posts);
+          const calendarState = getCalendarItemState(item, posts, currentPlan);
           return (
             <button
               key={item.id}
@@ -2804,6 +2735,7 @@ function ContentWorkspace() {
     const hasUnsavedItemChanges = Boolean(item) && (
       hasUnsavedDraftChanges
       || String(themeEdits[item.id] ?? item.theme ?? '') !== String(item.theme ?? '')
+      || String(contentTypeEdits[item.id] ?? item.content_type ?? '') !== String(item.content_type ?? '')
       || normalizeIsoDate(dateEdits[item.id] ?? item.scheduled_for) !== normalizeIsoDate(item.scheduled_for)
       || publicationChannelsTouched && !sameSelectedChannels(currentItemChannels, storedItemChannels)
     );
@@ -2993,7 +2925,7 @@ function ContentWorkspace() {
                     <Button
                       type="button"
                       variant={hasDraftText ? 'outline' : 'default'}
-                      onClick={generateSelectedDraft}
+                      onClick={() => void generateSelectedDraft()}
                       disabled={Boolean(busyAction)}
                       className={cn('rounded-2xl', !hasDraftText ? 'bg-slate-950 text-white hover:bg-slate-800' : '')}
                     >
@@ -3055,6 +2987,15 @@ function ContentWorkspace() {
                     className="min-h-[260px] rounded-2xl border-slate-200 text-base leading-7"
                     placeholder="Текст публикации"
                   />
+                  {hasDraftText ? (
+                    <div className="space-y-2">
+                      <Button type="button" variant="outline" disabled={Boolean(busyAction) || hasUnsavedItemChanges} onClick={() => void generateSelectedDraft(true)}>
+                        {busyAction === 'generate-alternatives' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                        {busyAction === 'generate-alternatives' ? 'Готовим варианты...' : 'Подготовить ещё 2 варианта'}
+                      </Button>
+                      <p className="text-sm text-slate-500">{hasUnsavedItemChanges ? 'Сначала сохраните изменения материала.' : 'Отдельный AI-запрос. Текущий текст останется без изменений; новый вариант можно выбрать после проверки.'}</p>
+                    </div>
+                  ) : null}
                   {generationAlternatives.length > 1 ? (
                     <details className="rounded-2xl bg-white shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
                       <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 text-sm font-semibold text-slate-800">
@@ -3112,6 +3053,16 @@ function ContentWorkspace() {
                       </Button>
                     </div>
                     {currentBusinessId && <ExternalDriveVideos key={`${currentBusinessId}-${item.id}`} businessId={currentBusinessId} itemId={item.id} onChanged={() => { void loadContent(); }} />}
+                    {(mediaRecommendation?.selected_assets?.length || 0) > 1 ? (
+                      <div className="mt-4">
+                        <div className="text-sm font-semibold">Фото в комплекте: {mediaRecommendation?.selected_assets?.length}</div>
+                        <div className="mt-2 grid grid-cols-2 gap-3">
+                          {mediaRecommendation?.selected_assets?.map((asset, index) => (
+                            <AuthenticatedImage key={asset.id} src={photoImageSrc(asset)} alt={`Выбранное фото ${index + 1}`} className="h-40 w-full rounded-2xl object-contain ring-1 ring-black/10" />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                     {selectedPhoto?.original_url ? (
                       <div className="mt-4 grid gap-4 sm:grid-cols-[140px_1fr]">
                         <AuthenticatedImage src={photoImageSrc(selectedPhoto)} alt="Подобранное фото" className="h-32 w-full rounded-2xl object-cover shadow-sm ring-1 ring-black/10" />
@@ -3232,6 +3183,23 @@ function ContentWorkspace() {
               <div className="space-y-4">
                 <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="text-sm font-semibold text-slate-950">Детали</div>
+                  <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    Тип публикации
+                    <select
+                      value={contentTypeEdits[item.id] ?? item.content_type ?? ''}
+                      onChange={(event) => setContentTypeEdits((previous) => ({ ...previous, [item.id]: event.target.value }))}
+                      className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm normal-case tracking-normal text-slate-950"
+                    >
+                      {!['news', 'service', 'faq', 'story', 'case'].includes(item.content_type || '') && (
+                        <option value={item.content_type || ''}>Текущий тип</option>
+                      )}
+                      <option value="news">Обычная новость</option>
+                      <option value="service">Об услуге</option>
+                      <option value="faq">Вопрос и ответ</option>
+                      <option value="story">Реальная история</option>
+                      <option value="case">Реальный кейс</option>
+                    </select>
+                  </label>
                   <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                     Дата
                     <Input
@@ -3601,98 +3569,6 @@ function ContentWorkspace() {
     );
   };
 
-  const contentSetupSteps: { key: ContentSetupStep; label: string }[] = [
-    { key: 'business', label: 'О бизнесе' },
-    { key: 'audience', label: 'О клиентах' },
-    { key: 'voice', label: 'Как писать' },
-  ];
-  const contentSetupStepIndex = contentSetupSteps.findIndex((step) => step.key === contentSetupStep);
-
-  const renderVoiceDialog = () => (
-    <Dialog open={voiceOpen} onOpenChange={setVoiceOpen}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto rounded-[28px] sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle className="text-balance text-2xl">Настроить контент</DialogTitle>
-          <DialogDescription className="text-pretty">
-            Три коротких шага, чтобы тексты были похожи на вас и понятны вашим клиентам.
-          </DialogDescription>
-        </DialogHeader>
-        {voiceLoading && !voiceProfile ? (
-          <div className="flex min-h-32 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Загружаем настройки...</div>
-        ) : (
-          <div className="space-y-5 py-2">
-            <div className="grid grid-cols-3 gap-2" aria-label="Шаги настройки контента">
-              {contentSetupSteps.map((step, index) => (
-                <button
-                  key={step.key}
-                  type="button"
-                  onClick={() => setContentSetupStep(step.key)}
-                  className={cn(
-                    'min-h-12 rounded-2xl px-2 py-2 text-xs font-semibold transition-colors',
-                    contentSetupStep === step.key ? 'bg-slate-950 text-white' : index < contentSetupStepIndex ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
-                  )}
-                >
-                  <span className="block text-[11px] opacity-70">Шаг {index + 1}</span>
-                  {step.label}
-                </button>
-              ))}
-            </div>
-
-            {contentSetupStep === 'business' ? (
-              <div>
-                <div className="text-sm font-semibold text-slate-900">Что важно знать о бизнесе</div>
-                <p className="mt-1 text-sm leading-6 text-slate-600">Коротко: чем вы занимаетесь, чем отличаетесь и что нельзя искажать в текстах.</p>
-                <Textarea value={businessDescription} onChange={(event) => setBusinessDescription(event.target.value)} placeholder="Например: культурный центр для жителей района; главное — реальная афиша и конкретные события" className="mt-3 min-h-36 rounded-2xl" />
-              </div>
-            ) : null}
-
-            {contentSetupStep === 'audience' ? (
-              <div>
-                <div className="text-sm font-semibold text-slate-900">Кто ваши клиенты</div>
-                <p className="mt-1 text-sm leading-6 text-slate-600">Опишите их ситуации, вопросы и причины выбрать вас. Не нужны сложные сегменты.</p>
-                <Textarea value={audienceDescription} onChange={(event) => setAudienceDescription(event.target.value)} placeholder="Например: жители района, которые ищут интересные события рядом с домом и хотят заранее знать дату и формат" className="mt-3 min-h-36 rounded-2xl" />
-              </div>
-            ) : null}
-
-            {contentSetupStep === 'voice' ? (
-              <div className="space-y-5">
-                <div>
-                  <div className="text-sm font-semibold text-slate-900">Как должны звучать тексты</div>
-                  <Textarea value={voiceSummary} onChange={(event) => setVoiceSummary(event.target.value)} placeholder="Например: конкретно, тепло, без рекламных вопросов" className="mt-2 min-h-28 rounded-2xl" />
-                </div>
-                <details className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <summary className="cursor-pointer text-sm font-semibold text-slate-900">Примеры понравившихся постов · {(voiceProfile?.examples || []).length}</summary>
-                  <div className="mt-4">
-                    <Textarea value={voiceExampleInput} onChange={(event) => setVoiceExampleInput(event.target.value)} placeholder="Вставьте полный текст публикации" className="min-h-28 rounded-2xl bg-white" />
-                    <Button type="button" variant="outline" onClick={() => { void addVoiceExample(); }} disabled={voiceLoading || voiceExampleInput.trim().length < 20} className="mt-2 min-h-11 rounded-2xl bg-white active:scale-[0.96] transition-transform"><Plus className="mr-2 h-4 w-4" />Добавить пример</Button>
-                    {(voiceProfile?.examples || []).length > 0 ? (
-                      <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
-                        {(voiceProfile?.examples || []).map((example) => (
-                          <div key={example.id} className="flex items-start gap-3 rounded-2xl bg-white p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]">
-                            <p className="line-clamp-3 min-w-0 flex-1 text-pretty text-sm leading-6 text-slate-600">{example.text}</p>
-                            <button type="button" onClick={() => { void deleteVoiceExample(example.id); }} className="grid min-h-10 min-w-10 place-items-center rounded-xl text-slate-400 transition-colors hover:bg-slate-50 hover:text-red-600" aria-label="Удалить пример"><Trash2 className="h-4 w-4" /></button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : <p className="mt-3 text-xs leading-5 text-slate-600">Можно начать без примеров и добавить их позже.</p>}
-                  </div>
-                </details>
-                {voiceProfile?.learning_suggestion?.text ? <div className="rounded-2xl bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">{voiceProfile.learning_suggestion.text}</div> : null}
-              </div>
-            ) : null}
-          </div>
-        )}
-        <DialogFooter>
-          {contentSetupStepIndex > 0 ? <Button type="button" variant="outline" onClick={() => setContentSetupStep(contentSetupSteps[contentSetupStepIndex - 1].key)} className="min-h-11 rounded-2xl">Назад</Button> : <Button type="button" variant="outline" onClick={() => setVoiceOpen(false)} className="min-h-11 rounded-2xl">Закрыть</Button>}
-          {contentSetupStepIndex < contentSetupSteps.length - 1 ? (
-            <Button type="button" onClick={() => setContentSetupStep(contentSetupSteps[contentSetupStepIndex + 1].key)} className="min-h-11 rounded-2xl bg-slate-950 text-white active:scale-[0.96] transition-transform">Дальше</Button>
-          ) : (
-            <Button type="button" onClick={() => { void saveVoiceProfile(); }} disabled={voiceLoading || !voiceSummary.trim()} className="min-h-11 rounded-2xl bg-slate-950 text-white active:scale-[0.96] transition-transform">Сохранить</Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
 
   if (!currentBusinessId) {
     return (
@@ -3708,7 +3584,7 @@ function ContentWorkspace() {
     <div className="mx-auto max-w-[1500px] space-y-6 px-4 py-6">
       {renderPlanModal()}
       {renderDeletePlanDialog()}
-      {renderVoiceDialog()}
+      <ContentPersonalization key={currentBusinessId} businessId={currentBusinessId} open={voiceOpen} onOpenChange={setVoiceOpen} />
       {renderDrawer()}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -3720,7 +3596,7 @@ function ContentWorkspace() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" onClick={() => { void openVoiceSettings(); }} className="min-h-12 rounded-2xl bg-white px-4 active:scale-[0.96] transition-transform">
+          <Button id="content-settings-button" type="button" variant="outline" onClick={() => { void openVoiceSettings(); }} className="min-h-12 rounded-2xl bg-white px-4 active:scale-[0.96] transition-transform">
             <Star className="mr-2 h-4 w-4" />{contentControls.configureContent}
           </Button>
           <Button type="button" onClick={() => { setCreateStep('setup'); setCreateOpen(true); }} className="min-h-12 rounded-2xl bg-slate-950 px-5 text-white hover:bg-slate-800 active:scale-[0.96] transition-transform">
@@ -3876,9 +3752,9 @@ function ContentWorkspace() {
                   </button>
                 ))}
               </div>
-              <div className="text-sm font-medium text-slate-500">
-                {needsReviewCount > 0 ? `${calendarCopy.needsReview}: ${needsReviewCount}` : calendarCopy.underControl}
-              </div>
+              {needsReviewCount > 0 ? <div className="text-sm font-medium text-slate-500">
+                {`${calendarCopy.needsReview}: ${needsReviewCount}`}
+              </div> : null}
             </div>
 
             {view === 'list' ? renderList() : renderCalendar()}

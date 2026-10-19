@@ -1,3 +1,7 @@
+import { Button } from '@/components/ui/button';
+import MaxChannelConnection from "@/components/MaxChannelConnection";
+import { miniAppPlatform, miniAppPath, miniAppChannel, miniAppLabel, miniWebApp, miniAppLaunchParams } from "@/lib/miniAppPlatform";
+import MaxAccountLink from "@/components/MaxAccountLink";
 import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
 import { workDestinations, workNavigationCopy } from '@/lib/workNavigation';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
@@ -41,7 +45,7 @@ import {
 	TrendingUp,
 	WandSparkles, X
 } from 'lucide-react';
-import { FormEvent, Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { FormEvent, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 
 const BusinessInputSettings = lazy(() => import('@/components/operator/BusinessInputSettings').then((module) => ({ default: module.BusinessInputSettings })));
 const ContentRules = lazy(() => import('@/components/operator/ContentRules').then((module) => ({ default: module.ContentRules })));
@@ -65,7 +69,7 @@ declare global {
 }
 
 
-const webApp = () => window.Telegram?.WebApp;
+const webApp = miniWebApp;
 
 const readJson = readMobileJson;
 const scopeQuery = mobileScopeQuery;
@@ -75,8 +79,9 @@ const isTab = (value: string | null): value is Tab => Boolean(value && ['today',
 
 export const TelegramControlWorkspace = () => {
   const preview = isPreview();
+  const [linkRequired, setLinkRequired] = useState(false);
   const initData = webApp()?.initData || '';
-  const launchParams = new URLSearchParams(window.location.search);
+  const launchParams = miniAppLaunchParams();
   const rawJourneyParam = launchParams.get('journey_token') || launchParams.get('tgWebAppStartParam') || webApp()?.initDataUnsafe?.start_param || '';
   const journeyToken = rawJourneyParam.startsWith('journey_') ? rawJourneyParam.slice(8) : /^[A-Za-z0-9_-]{32,}$/.test(rawJourneyParam) ? rawJourneyParam : '';
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(preview ? previewBootstrap : null);
@@ -88,6 +93,8 @@ export const TelegramControlWorkspace = () => {
   const [progressLoading, setProgressLoading] = useState(false);
   const [tab, setTab] = useState<Tab>('today');
   const [module, setModule] = useState('');
+  const moduleReturnTab = useRef<Tab>('today');
+  const closeModule = useCallback(() => { setModule(''); setTab(moduleReturnTab.current); }, []);
   const [loading, setLoading] = useState(!preview);
   const [slowLoading, setSlowLoading] = useState(false);
   const [error, setError] = useState('');
@@ -104,6 +111,7 @@ export const TelegramControlWorkspace = () => {
   const [reviewLocation, setReviewLocation] = useState('');
   const [deepLinkReviewId, setDeepLinkReviewId] = useState('');
   const [deepLinkItemId, setDeepLinkItemId] = useState('');
+  const [journalInitialView, setJournalInitialView] = useState<'journal' | 'day_brief'>('journal');
   const [selectedReviews, setSelectedReviews] = useState<string[]>([]);
   const [actionPreview, setActionPreview] = useState<MobileActionPreview | null>(null);
   const [reviews, setReviews] = useState<ReviewResult>(preview ? { items: previewReviews, counts: { total: 164, unanswered: 50, drafts: 12 } } : {});
@@ -115,6 +123,10 @@ export const TelegramControlWorkspace = () => {
   const [messages, setMessages] = useState<OperatorMessage[]>([]);
   const [historyLoadedFor, setHistoryLoadedFor] = useState('');
   const [operatorConversationId, setOperatorConversationId] = useState<string | null>(null);
+  const [selectedContent, setSelectedContent] = useState<(ModuleItem & { content_version?: string; selection_type?: 'content_item' | 'partner' }) | null>(null);
+  const [clearWorkSelection, setClearWorkSelection] = useState(false);
+  const [financeChatFor, setFinanceChatFor] = useState<string | null>(null);
+  useEffect(() => { if (module === 'finance_import') window.scrollTo(0, 0); }, [module]);
   const operatorSending = useRef(false);
   const operatorHistoryVersion = useRef(0);
   const pendingOperatorRequest = useRef({ businessId: "", text: "", id: "" });
@@ -189,7 +201,7 @@ export const TelegramControlWorkspace = () => {
     void fetch('/api/product/events', {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ event_name: eventName, business_id: scope.id, surface: 'telegram_mini_app', object_type: objectId ? 'growth_action' : undefined, object_id: objectId }),
+      body: JSON.stringify({ event_name: eventName, business_id: scope.id, surface: miniAppChannel(), object_type: objectId ? 'growth_action' : undefined, object_id: objectId }),
       keepalive: true,
     }).catch(() => undefined);
   };
@@ -205,14 +217,17 @@ export const TelegramControlWorkspace = () => {
     if (!initData) { setLoading(false); return; }
     const requestVersion = catalogOnly ? requestedVersion ?? catalogSearchVersion.current + 1 : 0;
     if (catalogOnly && requestedVersion === undefined) catalogSearchVersion.current = requestVersion;
+    const controller = new AbortController();
+    const deadline = window.setTimeout(() => controller.abort(), 20000);
     const timer = catalogOnly ? undefined : window.setTimeout(() => setSlowLoading(true), 400);
     try {
-      const deepLink = new URLSearchParams(window.location.search);
+      const deepLink = miniAppLaunchParams();
       const filters: Record<string, string> = {};
       deepLink.forEach((value, key) => {
         if (key.startsWith('filter_')) filters[key.slice(7)] = value;
       });
-      const result = await fetch('/api/operator/telegram/bootstrap', {
+      const result = await fetch(`/api/operator/${miniAppPlatform()}/bootstrap`, {
+        signal: controller.signal,
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
           init_data: initData,
           q: query,
@@ -224,7 +239,14 @@ export const TelegramControlWorkspace = () => {
           item_id: deepLink.get('item_id'),
           filters,
         }),
-      }).then(readJson<Bootstrap>);
+      }).then(async (response) => {
+        if (response.status === 401 && miniAppPlatform() === 'max') {
+          const payload = await response.clone().json();
+          window.sessionStorage.removeItem('localos_mini_session'); setBootstrap(null); setMessages([]); setSelectedContent(null); setWorkspace(null); setTodayData(null);
+          if (payload.code === 'max_link_required') setLinkRequired(true);
+        }
+        return readJson<Bootstrap>(response);
+      });
       if (catalogOnly && requestVersion !== catalogSearchVersion.current) return;
       if (result.web_session_token) window.sessionStorage.setItem('localos_mini_session', result.web_session_token);
       if (!catalogOnly && journeyToken && result.selected_scope?.kind === 'business' && result.selected_scope.id) {
@@ -232,7 +254,7 @@ export const TelegramControlWorkspace = () => {
         try {
           const claimed = await fetch('/api/journeys/claim', {
             method: 'POST', headers: authHeaders(),
-            body: JSON.stringify({ token: journeyToken, business_id: result.selected_scope.id, surface: 'telegram_mini_app' }),
+            body: JSON.stringify({ token: journeyToken, business_id: result.selected_scope.id, surface: miniAppChannel() }),
           }).then(readJson<{ action?: JourneyAction }>);
           setJourneyAction(claimed.action || null);
           if (claimed.action) result.resolved_deep_link = { screen: 'today', item_type: 'journey_action', item_id: claimed.action.id };
@@ -265,6 +287,7 @@ export const TelegramControlWorkspace = () => {
     } catch (requestError) {
       if (!catalogOnly || requestVersion === catalogSearchVersion.current) setError(requestError instanceof Error ? requestError.message : 'Не удалось открыть ЛокалОС.');
     } finally {
+      window.clearTimeout(deadline);
       if (timer !== undefined) window.clearTimeout(timer);
       if (!catalogOnly) { setSlowLoading(false); setLoading(false); }
     }
@@ -353,11 +376,11 @@ export const TelegramControlWorkspace = () => {
   useEffect(() => {
     const back = webApp()?.BackButton;
     if (!back) return;
-    const goBack = () => { if (module) setModule(''); else if (pickerNetwork) setPickerNetwork(null); else if (picker) setPicker(false); else setTab('today'); };
+    const goBack = () => { if (pickerNetwork) setPickerNetwork(null); else if (picker) setPicker(false); else if (module) closeModule(); else setTab('today'); };
     if (showOnboarding) back.hide();
     else if (module || picker || tab !== 'today') { back.show(); back.onClick(goBack); } else back.hide();
     return () => back.offClick(goBack);
-  }, [module, picker, pickerNetwork, showOnboarding, tab]);
+  }, [module, picker, pickerNetwork, showOnboarding, tab, closeModule]);
 
   const chooseScope = async (kind: string, id?: string | null) => {
     if (preview) { setPicker(false); setPickerNetwork(null); return true; }
@@ -365,12 +388,13 @@ export const TelegramControlWorkspace = () => {
     scopeRequestVersion.current = requestVersion;
     setLoading(true);
     try {
-      const result = await fetch('/api/operator/telegram/scope', {
+      const result = await fetch(`/api/operator/${miniAppPlatform()}/scope`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ init_data: initData, scope_type: kind, scope_id: id || null }),
       }).then(readJson<Bootstrap>);
       if (requestVersion !== scopeRequestVersion.current) return false;
       const scopeChanged = result.selected_scope?.kind !== scope?.kind || (result.selected_scope?.id || null) !== (scope?.id || null);
       if (scopeChanged) {
+        moduleReturnTab.current = 'today';
         setSelectedReviews([]);
         setActionPreview(null);
         setReviewLocation('');
@@ -438,7 +462,7 @@ export const TelegramControlWorkspace = () => {
 
   useEffect(() => {
     operatorHistoryVersion.current++;
-    setMessages([]); setOperatorConversationId(null); setHistoryLoadedFor(''); setOperatorBusy(false);
+    setMessages([]); setSelectedContent(null); setOperatorConversationId(null); setHistoryLoadedFor(''); setOperatorBusy(false);
   }, [scope?.kind, scope?.id]);
   const loadOperatorHistory = async () => {
     if (preview || scope?.kind !== 'business' || !scope.id) return;
@@ -542,7 +566,7 @@ export const TelegramControlWorkspace = () => {
     finally { setModuleActionBusy(''); }
   };
 
-  const updateContentItem = async (item: ModuleItem, values: { theme: string; draft_text: string; scheduled_for: string }) => {
+  const updateContentItem = async (item: ModuleItem, values: { theme: string; draft_text: string; scheduled_for: string; expected_version?: string }) => {
     if (!item.id || preview) return;
     setModuleActionBusy(item.id);
     try {
@@ -550,7 +574,7 @@ export const TelegramControlWorkspace = () => {
         method: 'PUT', headers: authHeaders(), body: JSON.stringify({ ...values, scope_type: scope?.kind, scope_id: scope?.id || null }),
       }).then(readJson<{ plan?: unknown }>);
       await loadModule('content', true); setError('');
-    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось сохранить контент.'); }
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось сохранить контент.'); throw requestError; }
     finally { setModuleActionBusy(''); }
   };
 
@@ -577,16 +601,23 @@ export const TelegramControlWorkspace = () => {
     setDeepLinkItemId(route.itemId);
   }, [bootstrap]);
 
-  const openMobileTarget = (screen = 'tasks', targetScope?: { kind?: string; id?: string }) => {
-    const destination = screen === 'analytics' || screen === 'finance_import' ? 'finance' : screen;
+  const openMobileTarget = (screen = 'tasks', targetScope?: { kind?: string; id?: string }, journalView: 'journal' | 'day_brief' = 'journal') => {
+    const destination = screen === 'analytics' || screen === 'finance_import' || screen === 'finance_chat' ? 'finance' : screen;
     const navigationEntry = bootstrap?.navigation?.find((item) => item.key === destination);
     if (navigationEntry?.status === 'read_only' && !navigationEntry.preview_available && navigationEntry.reason?.toLowerCase().includes('тариф')) {
       setPaywall(navigationEntry);
       return;
     }
     const navigate = () => {
+      if (screen === 'finance_chat') {
+        if (navigationEntry?.status === 'read_only') { setTab('more'); setModule('finance_import'); return; }
+        if (scope?.kind !== 'business' || !scope.id) { setPicker(true); return; }
+        setFinanceChatFor(scope.id); setSelectedContent(null); setClearWorkSelection(true); setCommand(''); setModule(''); setTab('operator'); return;
+      }
+      if (screen === 'work_journal') setJournalInitialView(journalView);
       if (isTab(screen)) { setModule(''); setTab(screen); return; }
       const moduleTarget = screen === 'analytics' ? 'finance' : screen;
+      if (!module) moduleReturnTab.current = tab;
       setTab('more'); setModule(moduleTarget || 'tasks');
     };
     if (targetScope?.id && (targetScope.id !== scope?.id || targetScope.kind !== scope?.kind)) {
@@ -619,20 +650,31 @@ export const TelegramControlWorkspace = () => {
     openMobileTarget(resolveMobileAttentionScreen(item), item.target_scope);
   };
 
+  const discussContent = (item: ModuleItem, selectionType: 'content_item' | 'partner' = 'content_item') => {
+    if (!item.id || scope?.kind !== 'business' || item.business_id && item.business_id !== scope.id) return;
+    setFinanceChatFor(null);
+    setSelectedContent({ ...item, business_id: scope.id, selection_type: selectionType }); setClearWorkSelection(false);
+    setTab('operator'); setModule(''); setCommand('');
+  };
+
   const sendOperator = async (text: string, source?: VoiceSubmission) => {
     if (!text.trim() || operatorSending.current) return;
     if (scope?.kind !== 'business' || !scope.id) { setPicker(true); setError('Для команды выберите одну точку.'); return; }
     const version = scopeRequestVersion.current;
-    if (pendingOperatorRequest.current.businessId !== scope.id || pendingOperatorRequest.current.text !== text) pendingOperatorRequest.current = { businessId: scope.id, text, id: crypto.randomUUID() };
+    if (pendingOperatorRequest.current.businessId !== scope.id || pendingOperatorRequest.current.text !== `${selectedContent?.selection_type || 'content_item'}:${selectedContent?.id || ''}:${text}`) pendingOperatorRequest.current = { businessId: scope.id, text: `${selectedContent?.selection_type || 'content_item'}:${selectedContent?.id || ''}:${text}`, id: crypto.randomUUID() };
     operatorHistoryVersion.current++;
     operatorSending.current = true; setOperatorBusy(true); setTab('operator');
     try {
       const result = await fetch('/api/operator/chat', {
-        method: 'POST', headers: authHeaders(), body: JSON.stringify({ business_id: scope.id, message: text, channel: 'telegram_mini_app', conversation_id: operatorConversationId, request_id: pendingOperatorRequest.current.id, ...source }),
-      }).then(readJson<{ conversation_id?: string; operator_result?: { async_job_id?: string; message_id?: string; input_type?: string; chat_response?: string; summary?: string; status?: string; capability?: string; mobile_route?: { screen?: string }; approval?: { action_id?: string } } }>);
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ business_id: scope.id, message: text, channel: miniAppChannel(), conversation_id: operatorConversationId, request_id: pendingOperatorRequest.current.id, ...(clearWorkSelection ? { clear_input_context: true } : {}), ...(selectedContent?.business_id === scope.id ? { selected_object: { type: selectedContent.selection_type || 'content_item', id: selectedContent.id, ...(selectedContent.content_version ? { version: selectedContent.content_version } : { updated_at: selectedContent.updated_at }) } } : {}), ...source }),
+      }).then(readJson<{ conversation_id?: string; operator_result?: { selected_partner?: { item_id: string; version: string }; selected_item?: { item_id: string; version: string }; async_job_id?: string; message_id?: string; input_type?: string; chat_response?: string; summary?: string; status?: string; capability?: string; mobile_route?: { screen?: string }; approval?: { action_id?: string } } }>);
       if (version !== scopeRequestVersion.current) return;
       if(result.operator_result)result.operator_result=await waitForOperatorResult(result.operator_result,scope.id,authOnlyHeaders,()=>version===scopeRequestVersion.current);
       if(version!==scopeRequestVersion.current)return;
+      setClearWorkSelection(false);
+      const selection = result.operator_result?.selected_partner || result.operator_result?.selected_item;
+      if (result.operator_result?.status === 'cancelled') setSelectedContent(null);
+      else if (selection) setSelectedContent(current => current?.id === selection.item_id ? { ...current, content_version: selection.version } : current);
       pendingOperatorRequest.current = { businessId: "", text: "", id: "" };
       setOperatorConversationId(result.conversation_id || null);
       setMessages((current) => [...current, { role: 'user', text }, { role: 'operator', id: result.operator_result?.message_id,
@@ -666,6 +708,7 @@ export const TelegramControlWorkspace = () => {
         action_error: undefined,
       } : item));
       await loadWorkspace();
+      if (financeChatFor === scope.id && decision === 'confirm') await loadToday(scope, bootstrap?.today_v2_enabled !== false, true);
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : 'Не удалось обработать решение.';
       setMessages((current) => current.map((item) => item.action_id === actionId ? { ...item, action_error: message } : item));
@@ -747,7 +790,9 @@ export const TelegramControlWorkspace = () => {
   };
 
   if (!initData && !preview) return <TelegramGate />;
+  if (linkRequired) return <MaxAccountLink initData={initData} onLinked={() => { setLinkRequired(false); void loadBootstrap(); }} />;
   if (loading && !bootstrap) return <LoadingScreen slow={slowLoading} />;
+  if (error && !bootstrap) return <main className="grid min-h-[100dvh] place-items-center bg-zinc-950 p-6 text-white"><section className="max-w-sm text-center"><h1 className="text-xl font-semibold">Не удалось открыть LocalOS</h1><p role="alert" className="mt-3 text-sm text-zinc-400">{error}</p><button type="button" className="mt-6 min-h-12 rounded-2xl bg-primary px-5 font-semibold" onClick={() => { setLoading(true); void loadBootstrap(); }}>Повторить загрузку</button></section></main>;
 
   return (
     <Suspense fallback={<LoadingScreen slow={false} />}>
@@ -762,20 +807,22 @@ export const TelegramControlWorkspace = () => {
           <motion.div key={`${tab}-${module}-${picker}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={spring}>
             {picker && pickerNetwork ? <NetworkScopePicker network={pickerNetwork} currentScope={scope} locations={networkLocations.items || []} total={networkLocations.counts?.total || 0} nextCursor={networkLocations.cursor} search={networkSearch} setSearch={setNetworkSearch} loading={networkLocationsLoading} choose={chooseScope} back={() => { setPickerNetwork(null); setNetworkSearch(''); }} loadMore={() => void loadNetworkLocations(pickerNetwork, networkSearch, networkLocations.cursor || '', true)} /> : null}
             {picker && !pickerNetwork ? <ScopePicker catalog={catalog} search={search} setSearch={setSearch} choose={chooseScope} openNetwork={(network) => { setPickerNetwork(network); setNetworkSearch(''); }} loadMore={() => void loadBootstrap(search.trim(), catalog?.next_business_cursor || '', true, true)} /> : null}
-            {!picker && tab === 'today' ? <>{journeyAction && scope?.kind === 'business' && scope.id ? <div className="px-4 pb-4"><JourneyActionCard action={journeyAction} businessId={scope.id} surface="telegram_mini_app" dark onUpdated={(nextAction) => {
+            {!picker && tab === 'today' ? <><TodayEntry openBriefing={scope?.kind === 'business' && bootstrap?.navigation?.some(item => item.key === 'work_journal' && item.status === 'available') ? () => openMobileTarget('work_journal', undefined, 'day_brief') : undefined} />{journeyAction && scope?.kind === 'business' && scope.id ? <div className="px-4 pb-4"><JourneyActionCard action={journeyAction} businessId={scope.id} surface={miniAppChannel()} dark onUpdated={(nextAction) => {
               if (nextAction) setJourneyAction(nextAction);
               else void loadJourneyAction(journeyAction.id, scope.id || '');
               void loadToday(scope, true, true);
             }} /></div> : null}{bootstrap?.today_v2_enabled !== false ? <TodayMobileV2 data={todayData} loading={todayLoading} slowLoading={todaySlowLoading} command={command} setCommand={setCommand} ask={askOperator} openTarget={openMobileTarget} openProgress={() => openMobileTarget(scope?.kind === 'platform' ? 'tasks' : 'progress')} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} track={trackMobileInteraction} trackProduct={trackProductEvent} openFinanceImport={() => openMobileTarget('finance_import')} refresh={() => void loadToday(scope, true, true)} /> : <Today summary={summary} tasks={tasks} command={command} setCommand={setCommand} ask={askOperator} openTask={openTask} />}</> : null}
+            
             {!picker && tab === 'tasks' ? <Tasks items={tasks} filter={taskFilter} setFilter={setTaskFilter} openTask={openTask} /> : null}
             {!picker && tab === 'feed' ? bootstrap?.navigation?.find((item) => item.key === 'feed')?.status === 'read_only' ? <Screen title="Лента" subtitle="Главные темы и сигналы из вашей индустрии."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'feed')} /></Screen> : <CommunityFeedMobile scope={scope} preview={preview} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} openTarget={openMobileTarget} /> : null}
             {!picker && tab === 'reviews' ? bootstrap?.navigation?.find((item) => item.key === 'reviews')?.status === 'read_only' ? <Screen title="Отзывы" subtitle="Новые отзывы и подготовленные ответы."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'reviews')} /></Screen> : <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
             {!picker && tab === 'progress' ? <Screen title="Результаты" subtitle="Подтверждённая работа и доступные измерения.">{bootstrap?.navigation?.find((item) => item.key === 'progress')?.status === 'read_only' ? <LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'progress')} /> : <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} />}</Screen> : null}
-            {!picker && tab === 'operator' ? bootstrap?.navigation?.find((item) => item.key === 'operator')?.status === 'read_only' ? <Screen title="Оператор" subtitle="Поручения, согласования и результаты работы."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'operator')} /></Screen> : <Operator businessId={scope?.kind === 'business' ? scope.id || '' : ''} conversationId={operatorConversationId} onConversation={setOperatorConversationId} sendVoice={sendOperator} messages={messages} busy={operatorBusy} actionBusy={operatorActionBusy} command={command} setCommand={setCommand} ask={askOperator} resolveAction={resolveOperatorAction} openScreen={openMobileTarget} /> : null}
+            {!picker && tab === 'operator' && selectedContent && selectedContent.business_id === scope?.id && <div className="mb-3 rounded-xl border p-3"><p className="text-sm">{selectedContent.selection_type === 'partner' ? 'Обсуждаем партнёра' : 'Обсуждаем пост'}: {selectedContent.title}</p><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1"><button type="button" className="min-h-11 underline" onClick={() => openMobileTarget(selectedContent.selection_type === 'partner' ? 'partnerships' : 'content')}>{selectedContent.selection_type === 'partner' ? 'Вернуться к партнёру' : 'Вернуться к посту'}</button><button type="button" className="min-h-11 underline" disabled={operatorBusy} onClick={() => { setSelectedContent(null); setClearWorkSelection(true); setMessages([]); }}>Завершить обсуждение</button></div></div>}
+            {!picker && tab === 'operator' ? bootstrap?.navigation?.find((item) => item.key === 'operator')?.status === 'read_only' ? <Screen title="Чат с LocalOS" subtitle="Поручения, согласования и результаты работы."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'operator')} /></Screen> : <Operator workContext={selectedContent?.business_id === scope?.id ? selectedContent.selection_type === 'partner' ? 'partner' : 'content_item' : undefined} financeInput={Boolean(financeChatFor && financeChatFor === scope?.id)} businessId={scope?.kind === 'business' ? scope.id || '' : ''} conversationId={operatorConversationId} onConversation={setOperatorConversationId} sendVoice={sendOperator} messages={messages} busy={operatorBusy} actionBusy={operatorActionBusy} command={command} setCommand={setCommand} ask={askOperator} resolveAction={resolveOperatorAction} openScreen={openMobileTarget} /> : null}
             {!picker && tab === 'more' && !module ? <More navigation={visibleNavigation} onOpen={openMobileTarget} openProgress={() => openMobileTarget('progress')} onLocked={setPaywall} restartTour={() => setShowOnboarding(true)} scope={scope} /> : null}
             {!picker && tab === 'menu' ? <UtilityMenu navigation={visibleNavigation} onOpen={openMobileTarget} scope={scope} /> : null}
-            {!picker && tab === 'more' && module === 'settings' && scope?.kind === 'business' && scope.id ? <><BusinessInputSettings key={scope.id} businessId={scope.id} headers={authOnlyHeaders} /><ContentRules key={`rules-${scope.id}`} businessId={scope.id} headers={authOnlyHeaders} /></> : null}
-            {!picker && tab === 'more' && module ? <ModuleScreen module={module} focusItemId={deepLinkItemId} scope={scope} access={bootstrap?.navigation?.find((item) => item.key === (module === 'finance_import' || module === 'analytics' ? 'finance' : module))} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={() => setModule('')} /> : null}
+            {!picker && tab === 'more' && module === 'settings' && scope?.kind === 'business' && scope.id ? <>{bootstrap?.max_enabled ? <MaxChannelConnection key={`max-${scope.id}`} businessId={scope.id} headers={authOnlyHeaders} /> : null}<BusinessInputSettings key={scope.id} businessId={scope.id} headers={authOnlyHeaders} /><ContentRules key={`rules-${scope.id}`} businessId={scope.id} headers={authOnlyHeaders} /></> : null}
+            {!picker && tab === 'more' && module ? <ModuleScreen journalInitialView={journalInitialView} module={module} focusItemId={selectedContent && selectedContent.business_id === scope?.id && module === (selectedContent.selection_type === 'partner' ? 'partnerships' : 'content') ? selectedContent.id : deepLinkItemId} scope={scope} access={bootstrap?.navigation?.find((item) => item.key === (module === 'finance_import' || module === 'analytics' ? 'finance' : module))} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} discussContent={discussContent} discussPartner={item => discussContent(item, 'partner')} reload={() => loadModule(module, module === 'finance' || module === 'finance_import')} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={closeModule} /> : null}
           </motion.div>
         </AnimatePresence>
       </MobileShell>
@@ -796,15 +843,23 @@ const TopBar = () => {
         ? 'Точка сети · Сменить точку'
         : 'Ваш бизнес';
   return <header className="px-4 pb-4 pt-[calc(16px+env(safe-area-inset-top))]">
-    <div className="mb-4 flex items-center justify-between"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-zinc-500"><span className="relative h-8 w-8 overflow-hidden rounded-[11px] bg-white shadow-[0_10px_28px_rgba(255,92,51,0.24)] ring-1 ring-inset ring-white/10"><img src={localOsLogo} alt="" className="absolute -left-3 -top-2 h-14 w-14 max-w-none outline outline-1 -outline-offset-1 outline-white/10" /></span>ЛокалОС</div><span className="flex items-center gap-2 rounded-full bg-white/[0.05] px-3 py-2 text-[11px] text-zinc-400 ring-1 ring-inset ring-white/[0.07]"><i className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Работает</span></div>
-    <button type="button" onClick={openSwitcher} disabled={!hasSwitcher} className="flex min-h-14 w-full items-center gap-3 rounded-[20px] bg-white/[0.045] px-3 text-left ring-1 ring-inset ring-white/[0.075] transition-[background-color,transform] active:scale-[0.96] disabled:active:scale-100"><span className="grid h-11 w-11 place-items-center rounded-[14px] bg-primary/15 text-primary"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><b className="block truncate text-[15px]">{scope?.name || 'ЛокалОС'}</b><small className="text-xs text-zinc-500">{meta}</small></span>{hasSwitcher ? <ChevronRight className="h-5 w-5 text-zinc-600" /> : null}</button>
+    <div className="mb-4 flex items-center justify-between"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground"><span className="relative h-8 w-8 overflow-hidden rounded-[11px] bg-white shadow-[0_10px_28px_rgba(255,92,51,0.24)] ring-1 ring-inset ring-white/10"><img src={localOsLogo} alt="" className="absolute -left-3 -top-2 h-14 w-14 max-w-none outline outline-1 -outline-offset-1 outline-white/10" /></span>ЛокалОС</div><span className="flex items-center gap-2 rounded-full bg-white/[0.05] px-3 py-2 text-[11px] text-zinc-400 ring-1 ring-inset ring-white/[0.07]"><i className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Работает</span></div>
+    <button type="button" onClick={openSwitcher} disabled={!hasSwitcher} className="flex min-h-14 w-full items-center gap-3 rounded-[20px] bg-white/[0.045] px-3 text-left ring-1 ring-inset ring-white/[0.075] transition-[background-color,transform] active:scale-[0.96] disabled:active:scale-100"><span className="grid h-11 w-11 place-items-center rounded-[14px] bg-secondary text-secondary-foreground"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><b className="block truncate text-[15px]">{scope?.name || 'ЛокалОС'}</b><small className="text-xs text-muted-foreground">{meta}</small></span>{hasSwitcher ? <ChevronRight className="h-5 w-5 text-muted-foreground" /> : null}</button>
+  </header>;
+};
+
+const TodayEntry = ({ openBriefing }: { openBriefing?: () => void }) => {
+  const { language } = useLanguage();
+  return <header className="px-4 pb-4">
+    <h1 className="mb-3 text-2xl font-semibold">{workNavigationCopy(language).label('today')}</h1>
+    {openBriefing ? <Button variant="outline" className="min-h-11 w-full whitespace-normal text-left" onClick={openBriefing}>Планёрка и журнал</Button> : null}
   </header>;
 };
 
 const Today = ({ summary, tasks, command, setCommand, ask, openTask }: { summary?: Summary; tasks: AttentionItem[]; command: string; setCommand: (value: string) => void; ask: (event: FormEvent) => void; openTask: (item: AttentionItem) => void }) => {
   const primary = tasks[0];
   return <div className="px-4">
-    <section className="rounded-[28px] bg-gradient-to-b from-zinc-900 to-zinc-900/70 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)] ring-1 ring-inset ring-white/[0.08]"><div className="flex items-center gap-2 text-xs text-zinc-500"><Sparkles className="h-4 w-4 text-primary" />Главное на сегодня</div><div className="mt-4 flex items-start gap-4"><div className="min-w-0 flex-1"><h1 className="text-balance text-[26px] font-semibold leading-8 tracking-[-0.045em]">{primary?.title || 'Новых задач нет'}</h1><p className="mt-2 text-pretty text-sm leading-6 text-zinc-400">{primary?.description || 'По последним загруженным данным решений от вас сейчас не требуется.'}</p></div>{primary?.count ? <b className="rounded-2xl bg-primary/15 px-3 py-2 text-xl tabular-nums text-primary">{primary.count}</b> : <Check className="h-8 w-8 text-emerald-400" />}</div>{primary ? <PrimaryButton onClick={() => openTask(primary)}>Открыть задачу</PrimaryButton> : null}</section>
+    <section className="rounded-[28px] bg-gradient-to-b from-zinc-900 to-zinc-900/70 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)] ring-1 ring-inset ring-white/[0.08]"><div className="flex items-center gap-2 text-xs text-zinc-500"><Sparkles className="h-4 w-4 text-primary" />Главное на сегодня</div><div className="mt-4 flex items-start gap-4"><div className="min-w-0 flex-1"><h2 className="text-balance text-[26px] font-semibold leading-8 tracking-[-0.045em]">{primary?.title || 'Новых задач нет'}</h2><p className="mt-2 text-pretty text-sm leading-6 text-zinc-400">{primary?.description || 'По последним загруженным данным решений от вас сейчас не требуется.'}</p></div>{primary?.count ? <b className="rounded-2xl bg-primary/15 px-3 py-2 text-xl tabular-nums text-primary">{primary.count}</b> : <Check className="h-8 w-8 text-emerald-400" />}</div>{primary ? <PrimaryButton onClick={() => openTask(primary)}>Открыть задачу</PrimaryButton> : null}</section>
   <form onSubmit={ask} className="mt-3 rounded-[22px] bg-white/[0.04] p-3 ring-1 ring-inset ring-white/[0.07]"><label className="px-1 text-xs font-medium text-zinc-500">Что сделать?</label><div className="mt-2 flex gap-2"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Например: подготовь ответы" className="min-h-12 min-w-0 flex-1 rounded-2xl bg-black/20 px-4 text-sm outline-none ring-1 ring-inset ring-white/[0.07] placeholder:text-zinc-700 focus:ring-primary/50" /><button aria-label="Отправить" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary text-white transition-transform active:scale-[0.96]"><Send className="h-4 w-4" /></button></div><p className="px-1 pt-2 text-[11px] leading-4 text-zinc-600">Опишите задачу. Внешние действия всегда попросят подтверждение.</p></form>
     {tasks.slice(1, 3).map((item) => <TaskRow key={item.id || item.title} item={item} onClick={() => openTask(item)} />)}
     <section className="mt-6"><h2 className="text-lg font-semibold tracking-[-0.025em]">Что уже сделано</h2><div className="mt-3 grid grid-cols-2 gap-2">{(summary?.metrics || []).slice(0, 4).map((metric) => <div key={metric.key} className="rounded-[20px] bg-white/[0.035] p-4 ring-1 ring-inset ring-white/[0.06]"><small className="text-zinc-600">{metric.label}</small><b className="mt-1 block text-2xl tabular-nums">{metric.value ?? '—'}</b><span className="mt-1 block truncate text-[10px] text-zinc-700">{metric.source_label || metric.source || 'ЛокалОС'}</span></div>)}</div></section>
@@ -847,8 +902,8 @@ const ReviewCard = ({ review, selected, toggle, busy, generate, updateDraft, mar
 
 const ResponseBox = ({ label, text }: { label: string; text: string }) => <div className="mt-4 rounded-[18px] bg-black/20 p-3 ring-1 ring-inset ring-white/[0.06]"><div className="flex items-center justify-between"><small className="font-semibold text-primary">{label}</small><button type="button" aria-label="Скопировать" onClick={() => void navigator.clipboard.writeText(text)} className="grid h-11 w-11 place-items-center text-zinc-500 active:scale-[0.96]"><Copy className="h-4 w-4" /></button></div><p className="text-sm leading-6 text-zinc-300">{text}</p></div>;
 
-const Operator = ({ businessId, conversationId, onConversation, sendVoice, messages, busy, actionBusy, command, setCommand, ask, resolveAction, openScreen }: {
-  businessId: string; conversationId: string | null; onConversation: (id: string) => void; sendVoice: (text: string, source?: VoiceSubmission) => Promise<void>;
+const Operator = ({ workContext, financeInput = false, businessId, conversationId, onConversation, sendVoice, messages, busy, actionBusy, command, setCommand, ask, resolveAction, openScreen }: {
+  workContext?: 'partner' | 'content_item'; financeInput?: boolean; businessId: string; conversationId: string | null; onConversation: (id: string) => void; sendVoice: (text: string, source?: VoiceSubmission) => Promise<void>;
   messages: OperatorMessage[];
   busy: boolean;
   actionBusy: { actionId: string; decision: OperatorActionDecision } | null;
@@ -857,7 +912,8 @@ const Operator = ({ businessId, conversationId, onConversation, sendVoice, messa
   ask: (event: FormEvent) => void;
   resolveAction: (actionId: string, decision: OperatorActionDecision) => void;
   openScreen: (screen: string) => void;
-}) => <Screen title="Оператор" subtitle="Напишите задачу обычными словами. Результат появится здесь или в нужном разделе.">
+}) => <Screen title="Чат с LocalOS" subtitle={financeInput ? "Внесите итоги за один день текстом, голосом или фото. Сначала проверьте распознанные показатели, затем подтвердите сохранение." : "Напишите задачу обычными словами. Результат появится здесь или в нужном разделе."}>
+  {financeInput && <div className="mb-4 rounded-xl border p-3 text-sm text-muted-foreground"><p>Например: «Вчера выручка 50 000 рублей, 20 чеков, 4 чека с допродажей». Укажите свои данные. Если дата или валюта неизвестна, LocalOS уточнит их.</p><button type="button" className="mt-2 min-h-11 underline" onClick={() => openScreen('finance_import')}>Другие способы ввода показателей</button></div>}
   {businessId && <button type="button" onClick={() => openScreen('settings')} className="text-sm text-primary underline">Город и валюта — в «Профиль и бизнес»</button>}
   <div className="min-h-[42vh] space-y-3">
     {messages.length ? messages.map((message, index) => {
@@ -877,19 +933,19 @@ const Operator = ({ businessId, conversationId, onConversation, sendVoice, messa
         </div> : null}
         {message.role === 'operator' && message.screen ? <button type="button" onClick={() => openScreen(message.screen || 'tasks')} className="mt-3 min-h-11 w-full rounded-[14px] bg-white/[0.05] text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.07] transition-[background-color,transform] active:scale-[0.96]">Открыть результат</button> : null}
       </div>;
-    }) : <Empty icon={Bot} title="Что поручить?" text="Например: «Подготовь ответы на плохие отзывы» или «Проверь свежесть карточки»." />}
+    }) : <Empty icon={Bot} title={financeInput ? "Какие итоги дня записать?" : "Что поручить?"} text={financeInput ? "Напишите дату, выручку и число чеков. Или нажмите микрофон ниже. Данные сохранятся только после подтверждения." : workContext === 'content_item' ? "Например: «Покажи текст этого поста» или «Сделай этот пост короче». Можно написать или надиктовать. Публикация требует отдельного подтверждения." : workContext === 'partner' ? "Например: «Покажи письмо этому партнёру» или «Подготовь первое письмо». Можно написать или надиктовать. Подготовка письма ничего не отправляет." : "Например: «Подготовь ответы на плохие отзывы» или «Проверь свежесть карточки»."} />}
     {busy ? <div className="flex items-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin text-primary motion-reduce:animate-none" />Определяю задачу и готовлю результат…</div> : null}
   </div>
-    {businessId && <OperatorVoiceInput key={businessId} businessId={businessId} channel="telegram_mini_app" conversationId={conversationId} onSubmit={sendVoice} disabled={busy} headers={authOnlyHeaders} />}
-    {businessId && <OperatorWorkdayInput key={`inputs:${businessId}`} businessId={businessId} channel="telegram_mini_app" conversationId={conversationId} disabled={busy} headers={authOnlyHeaders} onConversation={onConversation} />}
-  <form onSubmit={ask} className="sticky bottom-24 mt-4 flex gap-2 rounded-[20px] bg-zinc-900 p-2 ring-1 ring-inset ring-white/[0.08]"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Напишите задачу" className="min-h-12 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-zinc-700" /><button aria-label="Отправить задачу" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary transition-transform active:scale-[0.96]"><Send className="h-4 w-4" /></button></form>
+    {businessId && <OperatorVoiceInput key={businessId} businessId={businessId} channel={miniAppChannel()} conversationId={conversationId} onSubmit={sendVoice} disabled={busy} headers={authOnlyHeaders} />}
+    {businessId && <OperatorWorkdayInput key={`inputs:${businessId}`} businessId={businessId} channel={miniAppChannel()} conversationId={conversationId} disabled={busy} headers={authOnlyHeaders} onConversation={id => { onConversation(id); if (financeInput && !command.trim()) setCommand("Разбери финансовые итоги на фото за указанный день"); }} />}
+  <form onSubmit={ask} className="sticky bottom-24 mt-4 flex gap-2 rounded-[20px] bg-zinc-900 p-2 ring-1 ring-inset ring-white/[0.08]"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder={financeInput ? "Итоги дня: дата, выручка, чеки" : "Напишите задачу"} className="min-h-12 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-zinc-700" /><button aria-label={financeInput ? "Проверить показатели" : "Отправить задачу"} className="grid h-12 w-12 place-items-center rounded-2xl bg-primary transition-transform active:scale-[0.96]"><Send className="h-4 w-4" /></button></form>
 </Screen>;
 
 const billingHref = (item?: NavigationItem) => {
   const target = item?.billing_url || '/dashboard/profile?focus=subscription#subscription';
   const [base, hash] = target.split('#');
   const separator = base.includes('?') ? '&' : '?';
-  return `${base}${separator}return_to=${encodeURIComponent(`/telegram/control?screen=${item?.key || 'today'}`)}${hash ? `#${hash}` : ''}`;
+  return `${base}${separator}return_to=${encodeURIComponent(`${miniAppPath()}?screen=${item?.key || 'today'}`)}${hash ? `#${hash}` : ''}`;
 };
 
 const SubscriptionPaywall = ({ item, close }: { item: NavigationItem; close: () => void }) => <div className="fixed inset-0 z-50 flex items-end bg-black/70 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Раздел доступен на другом тарифе"><div className="w-full rounded-[28px] bg-zinc-900 p-5 shadow-2xl ring-1 ring-inset ring-white/[0.08]"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/15 text-primary"><CreditCard className="h-5 w-5" /></span><h2 className="mt-4 text-xl font-semibold">Нужен тариф «{item.required_tier_name || 'Управление'}»</h2><p className="mt-2 text-sm leading-6 text-zinc-500">{item.reason || 'Подключите тариф для выбранной точки.'}</p><a href={billingHref(item)} className="mt-5 flex min-h-12 w-full items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold text-white transition-transform duration-150 active:scale-[0.96]">Выбрать тариф</a><button type="button" onClick={close} className="mt-2 min-h-12 w-full rounded-2xl bg-white/[0.04] text-sm font-semibold text-zinc-400 transition-transform duration-150 active:scale-[0.96]">Закрыть</button></div></div>;
@@ -911,7 +967,7 @@ const UtilityMenu = ({ navigation, onOpen, scope }: { navigation: NavigationItem
   const href = destination.path + (params.size ? '?' + params : '');
   const row = <><span className="min-w-0 flex-1">{copy.label(destination.id)}{!available && destination.id !== 'more' && destination.id !== 'today' ? <small className="mt-1 block text-zinc-400">{workCoherenceCopy(language).openWeb}</small> : null}{available?.reason ? <small className="mt-1 block text-zinc-400">{available.reason}</small> : null}</span><ChevronRight className="h-4 w-4 shrink-0" /></>;
   const className = 'flex min-h-14 w-full items-center gap-3 rounded-xl bg-white/[0.04] p-4 text-left focus-visible:ring-2 focus-visible:ring-white';
-  return <div key={destination.id}>{workDestinations[index-1]?.group !== destination.group ? <h2 className="pb-2 pt-4 text-sm text-zinc-400">{copy.groups[destination.group]}</h2> : null}{available || destination.id === 'more' || destination.id === 'today' ? <button type="button" className={className} onClick={() => onOpen(destination.mobileKey)}>{row}</button> : <a className={className} href={href}>{row}</a>}</div>;
+  return <div key={destination.id}>{workDestinations[index-1]?.group !== destination.group ? <h2 className="pb-2 pt-4 text-sm text-zinc-400">{copy.groups[destination.group]}</h2> : null}{available || destination.id === 'more' || destination.id === 'today' ? <button type="button" className={className} onClick={() => onOpen(destination.mobileKey)}>{row}</button> : <a className={className} href={href}>{row}</a>}{destination.id === 'maps' && navigation.some(item => item.key === 'reviews' && item.status !== 'hidden') ? <button type="button" className={className + ' mt-2'} onClick={() => onOpen('reviews')}>Отзывы<ChevronRight className="ml-auto h-4 w-4" /></button> : null}</div>;
  })}</div></Screen>;
 };
 
@@ -919,16 +975,19 @@ const moduleNames: Record<string, [string, string]> = {
   progress: ['Прогресс', 'Выполненные шаги, текущие проблемы и следующее действие.'],
   cards: ['Карточки на картах', 'Данные из Яндекса и 2ГИС, свежесть, ошибки и история обновлений.'], content: ['Контент', 'Календарь, текущий план, черновики и публикации.'], services: ['Услуги', 'Цены, описания, данные с карт и предложения по улучшению.'],
   business_knowledge: ['Знания о бизнесе', 'Постоянные характеристики, правила и документы.'],
-  work_journal: ['Рабочий журнал', 'Наблюдения команды и рекомендации по визитам.'],
-  finance: ['Финансы', 'Выручка, прибыль, средний чек, загрузка и динамика.'], finance_import: ['Загрузить финансовую сводку', 'Сначала проверьте распознанные данные. В аналитику они попадут только после подтверждения.'], analytics: ['Финансы', 'Выручка, заказы и динамика по выбранному периоду.'], partnerships: ['Партнёрства', 'Договорённости с партнёрами и инструкции сотрудникам.'], company: ['Моя компания', 'Локации, карты, контакты, публичные услуги, аудиты и история.'], companies: ['Компании', 'Клиенты, лиды, партнёры, локации и история публичных данных.'], agents: ['Работа ЛокалОС', 'Запуски, текущие этапы, результаты и ошибки.'], settings: ['Настройки и подключения', 'Уведомления, источники, тариф и доступ.'], diagnostics: ['Диагностика', 'Ошибки парсеров, интеграций и фоновых задач.'],
+  work_journal: ['Планёрка и журнал', ''],
+  finance: ['Финансы', 'Выручка, прибыль, средний чек, загрузка и динамика.'], finance_import: ['Внести показатели', 'Сообщите итоги текстом, голосом или фото. Можно подключить CRM или загрузить файл. Перед сохранением проверьте показатели.'], analytics: ['Финансы', 'Выручка, заказы и динамика по выбранному периоду.'], partnerships: ['Партнёрства', 'Договорённости с партнёрами и инструкции сотрудникам.'], company: ['Моя компания', 'Локации, карты, контакты, публичные услуги, аудиты и история.'], companies: ['Компании', 'Клиенты, лиды, партнёры, локации и история публичных данных.'], agents: ['Работа ЛокалОС', 'Запуски, текущие этапы, результаты и ошибки.'], settings: ['Настройки и подключения', 'Уведомления, источники, тариф и доступ.'], diagnostics: ['Диагностика', 'Ошибки парсеров, интеграций и фоновых задач.'],
   community_sources: ['Источники Ленты', 'Публичные Telegram-каналы и открытые группы, из которых ЛокалОС собирает ленту и главные темы.'], influencers: ['Инфлюенсеры', 'Подходящие локальные авторы, предложение, сообщения, размещения и результат.'],
 };
 
-const ModuleScreen = ({ module, focusItemId, scope, access, data, loading, progressData, progressLoading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, reload, openTarget, track, trackProduct, openTasks, requestCrm, back }: ModuleScreenProps) => {
+const ModuleScreen = ({ journalInitialView, module, focusItemId, scope, access, data, loading, progressData, progressLoading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, discussContent, discussPartner, reload, openTarget, track, trackProduct, openTasks, requestCrm, back }: ModuleScreenProps) => {
   const content = moduleNames[module] || ['Раздел', 'Данные и доступные действия.'];
-  return <Screen title={content[0]} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>
+  const { language } = useLanguage();
+  const destination = workDestinations.find(item => item.mobileKey === module);
+  const title = destination ? workNavigationCopy(language).label(destination.id) : content[0];
+  return <Screen title={title} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>
     {module === 'company' && (scope?.kind==='business'||scope?.kind==='network') && <button type="button" onClick={()=>openTarget('business_knowledge')} className="mb-4 flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-input p-4 text-left focus-visible:ring-2 focus-visible:ring-ring"><span>Знания о бизнесе<small className="mt-1 block text-muted-foreground">Характеристики, постоянные правила и документы</small></span><ChevronRight className="h-4 w-4 shrink-0" /></button>}
-    {module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'influencers' ? <InfluencersMobileModule scope={scope} focusItemId={focusItemId} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} openBusiness={id => openTarget('partnerships', { kind: 'business', id })} /> : access?.status === 'read_only' || data.status === 'payment_required' ? <LockedModulePreview item={access || data.access} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} trackProduct={trackProduct} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'business_knowledge' ? <BusinessKnowledge embedded focusRecordId={focusItemId} headers={authOnlyHeaders} scope={scope?.kind==='business'||scope?.kind==='network'?{type:scope.kind,id:scope.id}:null} onBusinessChange={id=>openTarget('business_knowledge',{kind:'business',id})} /> : module === 'work_journal' ? <WorkJournal embedded businessId={scope?.kind === 'business' ? scope.id : null} headers={authOnlyHeaders} /> : module === 'finance' || module === 'finance_import' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} requestCrm={requestCrm} initialSection={module === 'finance_import' ? 'import' : 'overview'} trackProduct={trackProduct} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} canManage={Boolean(data.available_actions?.some((action) => action.key === 'agents.lifecycle'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
+    {module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'influencers' ? <InfluencersMobileModule scope={scope} focusItemId={focusItemId} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} focusItemId={focusItemId} onDiscuss={lead => discussPartner?.({id:lead.id,title:lead.name,business_id:scope?.id || undefined,updated_at:lead.updated_at})} openBusiness={id => openTarget('partnerships', { kind: 'business', id })} /> : access?.status === 'read_only' || data.status === 'payment_required' ? <LockedModulePreview item={access || data.access} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} trackProduct={trackProduct} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule key={`${scope?.kind}:${scope?.id}`} focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} onDiscuss={discussContent} openKnowledge={() => openTarget('business_knowledge')} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'business_knowledge' ? <BusinessKnowledge embedded focusRecordId={focusItemId} headers={authOnlyHeaders} scope={scope?.kind==='business'||scope?.kind==='network'?{type:scope.kind,id:scope.id}:null} onBusinessChange={id=>openTarget('business_knowledge',{kind:'business',id})} /> : module === 'work_journal' ? <WorkJournal key={`${scope?.id}:${journalInitialView}`} initialView={journalInitialView} embedded businessId={scope?.kind === 'business' ? scope.id : null} headers={authOnlyHeaders} /> : module === 'finance' || module === 'finance_import' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} requestCrm={requestCrm} initialSection={module === 'finance_import' ? 'import' : 'overview'} trackProduct={trackProduct} openChat={() => openTarget('finance_chat')} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} canManage={Boolean(data.available_actions?.some((action) => action.key === 'agents.lifecycle'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
   </Screen>;
 };
 
@@ -989,13 +1048,13 @@ export const NetworkScopePicker = ({ network, currentScope, locations, total, ne
     subtitle="Работайте со всей сетью или выберите одну точку."
     action={<button type="button" onClick={back} aria-label="Все бизнесы" className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-white/[0.05] text-zinc-400 shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-[background-color,transform] active:scale-[0.96]"><ArrowLeft className="h-5 w-5" /></button>}
   >
-    <button type="button" onClick={() => void choose('network', network.id)} className={`flex min-h-[76px] w-full items-center gap-3 rounded-[22px] px-4 text-left shadow-[0_0_0_1px_rgba(255,255,255,0.08)] transition-[background-color,transform] active:scale-[0.96] ${currentIsNetwork ? 'bg-primary/12' : 'bg-white/[0.045]'}`}>
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-primary/15 text-primary"><Network className="h-5 w-5" /></span>
-      <span className="min-w-0 flex-1"><b className="block text-sm">{currentIsNetworkLocation ? 'К сводке сети' : 'Сводка сети'}</b><small className="mt-1 block text-pretty text-zinc-500">{locationCountLabel(displayedTotal)} в общей картине</small></span>
-      {currentIsNetwork ? <Check className="h-5 w-5 text-primary" /> : <ChevronRight className="h-5 w-5 text-zinc-600" />}
+    <button type="button" onClick={() => void choose('network', network.id)} className={`flex min-h-[76px] w-full items-center gap-3 rounded-[22px] px-4 text-left shadow-[0_0_0_1px_rgba(255,255,255,0.08)] transition-[background-color,transform] active:scale-[0.96] ${currentIsNetwork ? 'bg-secondary' : 'bg-white/[0.045]'}`}>
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-secondary text-secondary-foreground"><Network className="h-5 w-5" /></span>
+      <span className="min-w-0 flex-1"><b className="block text-sm">{currentIsNetworkLocation ? 'К сводке сети' : 'Сводка сети'}</b><small className="mt-1 block text-pretty text-muted-foreground">{locationCountLabel(displayedTotal)} в общей картине</small></span>
+      {currentIsNetwork ? <Check className="h-5 w-5 text-foreground" /> : <ChevronRight className="h-5 w-5 text-muted-foreground" />}
     </button>
-    <div className="mb-3 mt-6 flex items-end justify-between gap-3"><div><h2 className="text-balance text-lg font-semibold">Точки сети</h2><p className="mt-1 text-xs text-zinc-600">Данные и действия будут относиться только к выбранной точке.</p></div><span className="shrink-0 text-xs tabular-nums text-zinc-600">{displayedTotal}</span></div>
-    <label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-zinc-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название или адрес точки" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label>
+    <div className="mb-3 mt-6 flex items-end justify-between gap-3"><div><h2 className="text-balance text-lg font-semibold">Точки сети</h2><p className="mt-1 text-xs text-muted-foreground">Данные и действия будут относиться только к выбранной точке.</p></div><span className="shrink-0 text-xs tabular-nums text-muted-foreground">{displayedTotal}</span></div>
+    <label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-muted-foreground" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название или адрес точки" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-muted-foreground focus:ring-ring" /></label>
     <div className="mt-3 space-y-2">
       {locations.map((item) => <ScopeRow key={item.id} icon={Building2} label={item.name || 'Точка'} meta={item.address || 'Адрес пока не указан'} selected={currentScope?.kind === 'business' && currentScope.id === item.id} onClick={() => void choose('business', item.id)} />)}
       {loading ? <div className="space-y-2" aria-label="Загружаем точки"><div className="h-16 animate-pulse rounded-[20px] bg-white/[0.04] motion-reduce:animate-none" /><div className="h-16 animate-pulse rounded-[20px] bg-white/[0.04] motion-reduce:animate-none" /></div> : null}
@@ -1005,18 +1064,18 @@ export const NetworkScopePicker = ({ network, currentScope, locations, total, ne
   </Screen>;
 };
 
-const ScopePicker = ({ catalog, search, setSearch, choose, openNetwork, loadMore }: { catalog?: Catalog; search: string; setSearch: (value: string) => void; choose: (kind: string, id?: string | null) => void; openNetwork: (network: NetworkCatalogItem) => void; loadMore: () => void }) => <Screen title="Где работаем?" subtitle="Выбор сохранится для следующего запуска."><label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-zinc-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, город или адрес" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label><div className="mt-4 space-y-2">{catalog?.platform ? <ScopeRow icon={ShieldCheck} label="Вся платформа" meta="Операционная картина ЛокалОС" onClick={() => void choose('platform')} /> : null}{catalog?.networks?.map((item) => <ScopeRow key={item.id} icon={Network} label={item.name || 'Сеть'} meta={`${locationCountLabel(item.locations_count || 0)} · Выбрать`} onClick={() => openNetwork(item)} />)}{catalog?.businesses?.filter((item) => Boolean(search.trim()) || !item.network_id).map((item) => <ScopeRow key={item.id} icon={Building2} label={item.name || 'Бизнес'} meta={[item.network_name, item.address].filter(Boolean).join(' · ') || 'Самостоятельный бизнес'} onClick={() => void choose('business', item.id)} />)}{catalog?.has_more_businesses ? <button type="button" onClick={loadMore} className="min-h-12 w-full rounded-2xl bg-white/[0.05] text-sm font-semibold text-zinc-300 shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-transform active:scale-[0.96]">Показать ещё</button> : null}</div></Screen>;
+const ScopePicker = ({ catalog, search, setSearch, choose, openNetwork, loadMore }: { catalog?: Catalog; search: string; setSearch: (value: string) => void; choose: (kind: string, id?: string | null) => void; openNetwork: (network: NetworkCatalogItem) => void; loadMore: () => void }) => <Screen title="Где работаем?" subtitle="Выбор сохранится для следующего запуска."><label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-muted-foreground" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, город или адрес" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-muted-foreground focus:ring-ring" /></label><div className="mt-4 space-y-2">{catalog?.platform ? <ScopeRow icon={ShieldCheck} label="Вся платформа" meta="Операционная картина ЛокалОС" onClick={() => void choose('platform')} /> : null}{catalog?.networks?.map((item) => <ScopeRow key={item.id} icon={Network} label={item.name || 'Сеть'} meta={`${locationCountLabel(item.locations_count || 0)} · Выбрать`} onClick={() => openNetwork(item)} />)}{catalog?.businesses?.filter((item) => Boolean(search.trim()) || !item.network_id).map((item) => <ScopeRow key={item.id} icon={Building2} label={item.name || 'Бизнес'} meta={[item.network_name, item.address].filter(Boolean).join(' · ') || 'Самостоятельный бизнес'} onClick={() => void choose('business', item.id)} />)}{catalog?.has_more_businesses ? <button type="button" onClick={loadMore} className="min-h-12 w-full rounded-2xl bg-white/[0.05] text-sm font-semibold text-zinc-300 shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-transform active:scale-[0.96]">Показать ещё</button> : null}</div></Screen>;
 
 const BottomNav = ({ current, setCurrent }: { current: Tab; setCurrent: (tab: Tab) => void }) => {
   const { language } = useLanguage(); const copy = workNavigationCopy(language);
   const activeKey: Tab = current === 'tasks' ? 'today' : current === 'more' || current === 'reviews' || current === 'feed' ? 'menu' : current;
   const items: Array<[Tab, string, typeof Sparkles]> = [['today', copy.label('today'), Sparkles], ['operator', workCoherenceCopy(language).chat, Bot], ['progress', copy.label('progress'), TrendingUp], ['menu', copy.menu, CircleEllipsis]];
-  return <nav aria-label="Главное меню" className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-xl border-t border-white/[0.07] bg-zinc-950/90 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl"><div className="grid grid-flow-col auto-cols-fr">{items.map(([key, label, Icon]) => <button key={key} type="button" aria-current={activeKey === key ? 'page' : undefined} onClick={() => setCurrent(key)} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[10px] transition-[color,transform,background-color] duration-150 active:scale-[0.96] ${activeKey === key ? 'bg-primary/10 text-primary' : 'text-zinc-600'}`}><Icon className="h-5 w-5" /><span>{label}</span></button>)}</div></nav>;
+  return <nav aria-label="Главное меню" className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-xl border-t border-white/[0.07] bg-zinc-950/90 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl"><div className="grid grid-cols-4">{items.map(([key, label, Icon]) => <button key={key} type="button" aria-current={activeKey === key ? 'page' : undefined} onClick={() => setCurrent(key)} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[10px] transition-[color,transform,background-color] duration-150 active:scale-[0.96] ${activeKey === key ? 'bg-secondary text-secondary-foreground' : 'text-muted-foreground'}`}><Icon className="h-5 w-5" /><span>{label}</span></button>)}</div></nav>;
 };
 const PrimaryButton = ({ children, onClick }: { children: React.ReactNode; onClick: () => void }) => <button onClick={onClick} className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(255,92,51,0.24)] transition-[filter,transform] active:scale-[0.96]">{children}<ChevronRight className="h-4 w-4" /></button>;
 const TaskRow = ({ item, onClick }: { item: AttentionItem; onClick: () => void }) => <button onClick={onClick} className="mt-2 flex min-h-16 w-full items-center gap-3 rounded-[20px] bg-white/[0.035] px-4 py-3 text-left ring-1 ring-inset ring-white/[0.06] active:scale-[0.98]"><span className={`h-2.5 w-2.5 rounded-full ${item.severity === 'high' ? 'bg-rose-400' : item.severity === 'medium' ? 'bg-amber-400' : 'bg-emerald-400'}`} /><span className="min-w-0 flex-1"><b className="block truncate text-sm">{item.title || 'Задача'}</b><small className="mt-1 block truncate text-zinc-600">{item.description}</small>{item.progress !== undefined && item.progress !== null ? <span className="mt-2 block h-1 overflow-hidden rounded-full bg-white/[0.06]"><i className="block h-full rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(item.progress, 100))}%` }} /></span> : item.action_unavailable_reason ? <small className="mt-1 block truncate text-amber-300/70">{item.action_unavailable_reason}</small> : null}</span>{item.count ? <b className="tabular-nums text-zinc-400">{item.count}</b> : null}<ChevronRight className="h-4 w-4 text-zinc-700" /></button>;
-const ScopeRow = ({ icon: Icon, label, meta, selected = false, onClick }: { icon: typeof Star; label: string; meta: string; selected?: boolean; onClick: () => void }) => <button onClick={onClick} className={`flex min-h-16 w-full items-center gap-3 rounded-[20px] px-3 text-left shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-[background-color,transform] active:scale-[0.96] ${selected ? 'bg-primary/12' : 'bg-white/[0.04]'}`}><span className="grid h-10 w-10 place-items-center rounded-[14px] bg-primary/12 text-primary"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><b className="block truncate text-sm">{label}</b><small className="block truncate text-zinc-600">{meta}</small></span>{selected ? <Check className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-zinc-700" />}</button>;
+const ScopeRow = ({ icon: Icon, label, meta, selected = false, onClick }: { icon: typeof Star; label: string; meta: string; selected?: boolean; onClick: () => void }) => <button onClick={onClick} className={`flex min-h-16 w-full items-center gap-3 rounded-[20px] px-3 text-left shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-[background-color,transform] active:scale-[0.96] ${selected ? 'bg-secondary' : 'bg-white/[0.04]'}`}><span className="grid h-10 w-10 place-items-center rounded-[14px] bg-secondary text-secondary-foreground"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><b className="block truncate text-sm">{label}</b><small className="block truncate text-muted-foreground">{meta}</small></span>{selected ? <Check className="h-4 w-4 text-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}</button>;
 const LoadingScreen = ({ slow }: { slow: boolean }) => <main className="grid min-h-[100dvh] place-items-center bg-zinc-950 px-8 text-center text-white"><div><span className="relative mx-auto grid h-20 w-20 place-items-center rounded-[26px] bg-zinc-900 ring-1 ring-inset ring-white/[0.08]"><Sparkles className="h-7 w-7 text-primary" /></span><h1 className="mt-6 text-xl font-semibold tracking-[-0.03em]">Собираем ваш рабочий день</h1>{slow ? <p className="mt-3 text-sm text-zinc-500">Сверяем задачи и источники…</p> : null}</div></main>;
-const TelegramGate = () => <main className="grid min-h-[100dvh] place-items-center bg-zinc-950 p-6 text-center text-white"><div className="max-w-sm"><span className="mx-auto grid h-20 w-20 place-items-center rounded-[26px] bg-primary/12 text-primary ring-1 ring-inset ring-primary/20"><Send className="h-7 w-7" /></span><h1 className="mt-6 text-balance text-2xl font-semibold tracking-[-0.04em]">Откройте ЛокалОС в Telegram</h1><p className="mt-3 text-pretty text-sm leading-6 text-zinc-500">Вернитесь в чат с ЛокалОС и нажмите постоянную кнопку приложения внизу экрана.</p><a href="https://t.me/LocalOspro_bot" className="mt-6 flex min-h-12 items-center justify-center rounded-2xl bg-primary px-5 text-sm font-semibold text-white active:scale-[0.96]">Открыть бота</a></div></main>;
+const TelegramGate = () => <main className="grid min-h-[100dvh] place-items-center bg-zinc-950 p-6 text-center text-white"><div className="max-w-sm"><span className="mx-auto grid h-20 w-20 place-items-center rounded-[26px] bg-primary/12 text-primary ring-1 ring-inset ring-primary/20"><Send className="h-7 w-7" /></span><h1 className="mt-6 text-balance text-2xl font-semibold tracking-[-0.04em]">Откройте ЛокалОС в {miniAppLabel()}</h1><p className="mt-3 text-pretty text-sm leading-6 text-zinc-500">Вернитесь в чат с ЛокалОС и нажмите постоянную кнопку приложения внизу экрана.</p><a href={miniAppPlatform() === "max" ? "/dashboard/max" : "https://t.me/LocalOspro_bot"} className="mt-6 flex min-h-12 items-center justify-center rounded-2xl bg-primary px-5 text-sm font-semibold text-white active:scale-[0.96]">{miniAppPlatform() === "max" ? "Подключить MAX в кабинете" : "Открыть бота"}</a><button type="button" className="mt-4 min-h-11 text-sm underline" onClick={() => window.location.reload()}>Повторить загрузку</button></div></main>;
 
 export default TelegramControlWorkspace;

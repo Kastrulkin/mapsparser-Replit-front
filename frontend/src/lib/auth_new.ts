@@ -174,7 +174,14 @@ export class NewAuth {
       if (!response.ok) {
         const errorBody = isRecord(data) ? data : {};
         const code = typeof errorBody.code === 'string' ? errorBody.code : typeof errorBody.error_code === 'string' ? errorBody.error_code : 'HTTP_ERROR';
-        if (response.status === 401) throw new HttpError('Сессия истекла. Войдите снова.', 401, code);
+        if (response.status === 401) {
+          const isCredentialLogin = endpoint === '/auth/login'
+            && String(options.method || 'GET').toUpperCase() === 'POST';
+          const message = isCredentialLogin
+            ? String(errorBody.message || errorBody.error || 'Не удалось войти. Проверьте email и пароль.')
+            : 'Сессия истекла. Войдите снова.';
+          throw new HttpError(message, 401, code, errorBody);
+        }
         throw new HttpError(String(errorBody.message || errorBody.error || `Ошибка запроса (${response.status})`), response.status, code, errorBody);
       }
 

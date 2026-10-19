@@ -1,3 +1,4 @@
+import { downloadMiniAppFile, openMiniAppLink } from "@/lib/miniAppPlatform";
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { newAuth } from '@/lib/auth_new';
@@ -30,10 +31,13 @@ export function PlanDownload({ planId, mobile = false, dirty = false }: { planId
     {busy ? <p role="status">Подготавливаем сохранённый план…</p> : null}
     {error ? <p role="alert">{error}</p> : null}
     {file ? <div className="space-y-2"><Button onClick={() => {
-      const url = new URL(file.download_url, window.location.origin).href;
-      const telegram = window.Telegram?.WebApp;
-      if (mobile && telegram?.downloadFile && telegram.isVersionAtLeast?.('8.0')) telegram.downloadFile({ url, file_name: file.filename });
-      else { const anchor = document.createElement('a'); anchor.href = url; anchor.download = file.filename; anchor.click(); }
-    }}>Сохранить файл</Button><a className="block min-h-11 text-sm underline" href={file.download_url} target="_blank" rel="noopener noreferrer">Если скачивание не началось — открыть файл в браузере</a><p className="text-xs">Ссылка действует 5 минут.</p></div> : null}
+      try {
+        const url = new URL(file.download_url, window.location.origin).href;
+        if (mobile && downloadMiniAppFile(url, file.filename)) return;
+        const anchor = document.createElement('a'); anchor.href = url; anchor.download = file.filename; anchor.click();
+      } catch (failure) {
+        setError(failure instanceof Error ? failure.message : 'Не удалось скачать файл. Откройте его в браузере.');
+      }
+    }}>Сохранить файл</Button><button type="button" className="block min-h-11 text-sm underline" onClick={() => openMiniAppLink(new URL(file.download_url, window.location.origin).href)}>Если скачивание не началось — открыть файл в браузере</button><p className="text-xs">Ссылка действует 5 минут.</p></div> : null}
   </div>;
 }

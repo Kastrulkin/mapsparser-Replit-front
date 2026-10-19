@@ -323,7 +323,7 @@ export const DashboardLayout = () => {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={location.pathname === "/dashboard/max" ? "/login?return_to=%2Fdashboard%2Fmax" : "/login"} replace />;
   }
 
   const lockedPaidSection = paidDashboardSections.find((section) => (

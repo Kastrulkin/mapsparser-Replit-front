@@ -235,6 +235,7 @@ const VeselayaRascheskaOfferPage = lazy(() => import("./pages/VeselayaRascheskaO
 const CheckoutReturn = lazy(() => import("./pages/CheckoutReturn"));
 const TelegramControlPage = lazy(() => import("./pages/TelegramControlPage"));
 const LeadJourneyPage = lazy(() => import("./pages/LeadJourneyPage"));
+const MaxConnectionPage = lazy(() => import("./pages/dashboard/MaxConnectionPage"));
 const IndustryPatternsE2EPage = import.meta.env.DEV
   ? lazy(() => import("./pages/dev/IndustryPatternsE2EPage"))
   : null;
@@ -303,7 +304,7 @@ const shouldRenderHeader = (pathname: string) => {
     return false;
   }
 
-  if (pathname === "/telegram/control") {
+  if (pathname === "/telegram/control" || pathname === "/max/control") {
     return false;
   }
 
@@ -349,6 +350,7 @@ const AppShell = () => {
           <Route path="/solutions/:slug" element={<SolutionPage />} />
           <Route path="/articles" element={<ArticlesPage />} />
           <Route path="/articles/:slug" element={<ArticleDetailPage />} />
+          <Route path="/max/control" element={<TelegramControlPage />} />
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/documents/:slug" element={<DocumentDetailPage />} />
           <Route path="/cases" element={<CasesPage />} />
@@ -358,6 +360,7 @@ const AppShell = () => {
             <Route index element={<Navigate to="/dashboard/today" replace />} />
             <Route path="today" element={<DemoRoute area="today"><TodayPage /></DemoRoute>} />
             <Route path="feed" element={<CommunityFeedPage />} />
+            <Route path="max" element={<MaxConnectionPage />} />
             <Route path="profile" element={<DemoRoute area="profile"><ProfilePage /></DemoRoute>} />
             <Route path="card" element={<JourneyWorkspaceFocus><CardOverviewPage /></JourneyWorkspaceFocus>} />
             <Route path="content" element={<JourneyWorkspaceFocus><ContentPage /></JourneyWorkspaceFocus>} />

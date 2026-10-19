@@ -1,3 +1,4 @@
+import { miniAppChannel } from "@/lib/miniAppPlatform";
 import { FormEvent, ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -221,21 +222,21 @@ export const TodayMobileV2 = ({
 
   return (
     <div className="px-4">
-      {journeyActions.length && !personalizedFocus ? <section className="space-y-3">{journeyActions.slice(0, 3).map((action) => action.business_id ? <JourneyActionCard key={action.id} action={action} businessId={action.business_id} surface="telegram_mini_app" dark onUpdated={() => refresh?.()} /> : null)}</section> : <motion.section
+      {journeyActions.length && !personalizedFocus ? <section className="space-y-3">{journeyActions.slice(0, 3).map((action) => action.business_id ? <JourneyActionCard key={action.id} action={action} businessId={action.business_id} surface={miniAppChannel()} dark onUpdated={() => refresh?.()} /> : null)}</section> : <motion.section
         initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
         animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
         transition={spring}
         className="rounded-[28px] bg-gradient-to-b from-zinc-900 to-zinc-900/70 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28),0_0_0_1px_rgba(255,255,255,0.08)]"
       >
-        <div className="flex items-center gap-2 text-xs font-medium text-primary">
+        <div className="flex items-center gap-2 text-xs font-medium text-zinc-300">
           <Sparkles className="h-4 w-4" />
           {focus ? 'Что сделать сейчас' : 'Новых задач нет'}
         </div>
         <div className="mt-4 flex items-start gap-4">
           <div className="min-w-0 flex-1">
-            <h1 className="text-balance text-[26px] font-semibold leading-8 tracking-[-0.045em]">
+            <h2 className="text-balance text-[26px] font-semibold leading-8 tracking-[-0.045em]">
               {focus?.title || 'Сегодня от вас ничего не требуется'}
-            </h1>
+            </h2>
             <p className="mt-2 text-pretty text-sm leading-6 text-zinc-400">
               {focus?.reason || (isNetwork ? 'По точкам сети нет задач, которые сейчас требуют вашего решения.' : 'По последним загруженным данным новых задач для вас нет.')}
             </p>
@@ -312,7 +313,7 @@ export const TodayMobileV2 = ({
         </motion.section>
       ) : null}
 
-      <GrowthLoopPanel growthLoop={data?.growth_loop} dataHealth={data?.data_health} analyticsLevel={data?.analytics_level} rhythm={data?.rhythm} scopeKind={data?.scope?.kind} analyticsModules={data?.analytics_modules} networkSummary={data?.network_summary} problemLocations={data?.problem_locations} locationBreakdown={data?.location_breakdown} showImportAction={!['finance', 'finance_import'].includes(focus?.screen || '')} onOpenImport={() => { trackProduct?.('statistics_flow_opened', 'finance_import'); openFinanceImport?.(); }} onOpenLocation={(businessId, screen) => { trackProduct?.('statistics_flow_opened', businessId); openTarget(screen, { kind: 'business', id: businessId }); }} />
+      <GrowthLoopPanel growthLoop={data?.growth_loop} dataHealth={data?.data_health} analyticsLevel={data?.analytics_level} rhythm={data?.rhythm} scopeKind={data?.scope?.kind} analyticsModules={data?.analytics_modules} networkSummary={data?.network_summary} problemLocations={data?.problem_locations} locationBreakdown={data?.location_breakdown} onOpenImport={() => { trackProduct?.('statistics_flow_opened', 'finance_import'); openFinanceImport?.(); }} onOpenLocation={(businessId, screen) => { trackProduct?.('statistics_flow_opened', businessId); openTarget(screen, { kind: 'business', id: businessId }); }} />
 
       {profileReminders.length ? (
         <Section title="Сделайте ЛокалОС точнее" subtitle="Один раз расскажите о бизнесе — дальше эти факты будут использоваться в работе.">

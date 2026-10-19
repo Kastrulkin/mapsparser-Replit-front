@@ -25,6 +25,7 @@ import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { cn } from '@/lib/utils';
 import {
 	approvalActionLabels,
+	buildEmployeeDescription,
 	approvalDecisionTitle,
 	explainApproval,
 	formatLastRun,
@@ -395,16 +396,7 @@ export const AgentDetailPanel = ({
           {humanizeCategory(blueprint.category)} · {latestVersionNumber ? 'рабочий сценарий опубликован' : 'рабочий сценарий ещё не включён'}{voiceName ? ` · стиль: ${voiceName}` : ''}
         </p>
       </div>
-      <div className="mt-4 flex max-w-full flex-wrap gap-2">
-        <Button type="button" size="sm" className="shrink-0" variant={mode === 'overview' ? 'default' : 'outline'} onClick={() => onModeChange('overview')}>Обзор</Button>
-        <Button type="button" size="sm" className="shrink-0" variant={mode === 'results' ? 'default' : 'outline'} onClick={() => onModeChange('results')}>История</Button>
-        <Button type="button" size="sm" className="shrink-0" variant={mode === 'run' ? 'default' : 'outline'} onClick={() => onModeChange('run')}>Сценарий</Button>
-        <Button type="button" size="sm" className="shrink-0" variant={settingsActive ? 'default' : 'outline'} onClick={() => onModeChange('settings')}>Настройки</Button>
-        <Button type="button" size="sm" className="shrink-0 text-red-700 hover:text-red-800" variant="outline" onClick={onDeleteAgent} disabled={actionLoading}>
-          <Archive className="mr-2 h-4 w-4" />
-          Архивировать агента
-        </Button>
-      </div>
+      {settingsActive ? <Button type="button" variant="outline" className="mt-4" onClick={() => onModeChange('settings')}>К настройкам</Button> : null}
     </div>
     <div className="px-6 py-5">
     {mode === 'overview' ? (
@@ -937,7 +929,7 @@ export const AgentOverviewPanel = ({
   const previewReady = activationGate?.preview_run_status?.ready === true;
   const activationVersionId = activationGate?.active_version_id || blueprint.active_version_id || '';
   const builderPreview = getBlueprintBuilderPreview(detailsBlueprint || blueprint);
-  const taskAnswer = builderPreview?.understood_task || blueprint.description || blueprint.active_goal || blueprint.latest_goal || 'Настройте задачу агента.';
+  const taskAnswer = blueprint.metadata_json?.template_key === 'maps_initial_setup' ? buildEmployeeDescription(blueprint) : builderPreview?.understood_task || blueprint.description || blueprint.active_goal || blueprint.latest_goal || 'Настройте задачу агента.';
   const readyAnswer = needsApproval
     ? 'ждёт решения человека'
     : !connectorsReady
@@ -1123,7 +1115,7 @@ export const AgentProductCockpit = ({
   const PrimaryIcon = needsApproval ? ShieldCheck : canActivate ? CheckCircle2 : needsConnections ? Database : canPreview ? Play : needsLogic ? Workflow : previewReady ? FileCheck2 : Play;
   const primaryAction = needsApproval ? onOpenResults : canActivate ? () => onActivateVersion(activationVersionId) : needsConnections ? onOpenConnections : canPreview ? onStartRun : needsLogic ? onOpenLogic : previewReady ? onOpenResults : onStartRun;
   const primaryVariant: 'default' | 'outline' = needsApproval || canActivate || needsConnections || canPreview || needsLogic ? 'default' : 'outline';
-  const task = preview?.understood_task || blueprint.description || blueprint.active_goal || blueprint.latest_goal || 'Настройте задачу агента.';
+  const task = blueprint.metadata_json?.template_key === 'maps_initial_setup' ? buildEmployeeDescription(blueprint) : preview?.understood_task || blueprint.description || blueprint.active_goal || blueprint.latest_goal || 'Настройте задачу агента.';
   const uniqueReadyTitles = Array.from(new Set(readyItems.map((item) => item.title || connectorLabel(item.provider)).filter(Boolean)));
   const uniqueMissingTitles = Array.from(new Set(missingItems.map((item) => item.title || connectorLabel(item.provider)).filter(Boolean)));
   const dataText = preview?.data_sources?.length

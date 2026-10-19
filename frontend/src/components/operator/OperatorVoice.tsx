@@ -1,3 +1,4 @@
+import { requestMiniAppMicrophone } from "@/lib/miniAppPlatform";
 import { Button } from '@/components/ui/button';
 import { useLatestCallback } from '@/hooks/useLatestCallback';
 import { Mic, Square } from 'lucide-react';
@@ -17,9 +18,9 @@ async function waitJob(jobId: string, businessId: string, headers: HeadersProvid
   throw new Error('Обработка занимает больше времени. Результат доступен в заданиях.');
 }
 
-export function OperatorVoiceInput({ businessId, channel, conversationId, disabled, directSubmit = true, onSubmit, headers = voiceHeaders, compact = false }: {
-  businessId: string; channel: string; conversationId?: string | null; disabled?: boolean; directSubmit?: boolean; compact?: boolean;
-  onSubmit: (text: string, source: VoiceSubmission) => Promise<void>; headers?: HeadersProvider;
+export function OperatorVoiceInput({ businessId, channel, conversationId, disabled, directSubmit = true, onSubmit, headers = voiceHeaders, compact = false, submitLabel = 'Повторить отправку', draftLabel = 'Команда', contextKey }: {
+  contextKey?: string; businessId: string; channel: string; conversationId?: string | null; disabled?: boolean; directSubmit?: boolean; compact?: boolean;
+  onSubmit: (text: string, source: VoiceSubmission) => Promise<void>; headers?: HeadersProvider; submitLabel?: string; draftLabel?: string;
 }) {
   const [available, setAvailable] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -38,7 +39,7 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
   const asset = useRef('');
   const fileInput = useRef<HTMLInputElement | null>(null);
   const onSubmitRef = useRef(onSubmit); onSubmitRef.current = onSubmit;
-  const pendingKey = `localos-voice:${channel}:${businessId}`;
+  const pendingKey = `localos-voice:${channel}:${businessId}${contextKey ? ':' + contextKey : ''}`;
   useEffect(() => {
     if (!busy) { setDelayed(false); return; }
     const timer=window.setTimeout(()=>setDelayed(true),15000);
@@ -64,13 +65,15 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
         if(signal.aborted)return;
         const submission={transcription_id:pending.asset_id,conversation_id:pending.conversation_id,request_id:`voice:${pending.asset_id}`};
         setText(result.transcript);setSource(submission);
-        await onSubmitRef.current(result.transcript,submission);
-        if(!signal.aborted){sessionStorage.removeItem(pendingKey);setSource(null);asset.current='';}
+        if (directSubmit) {
+          await onSubmitRef.current(result.transcript,submission);
+          if(!signal.aborted){sessionStorage.removeItem(pendingKey);setSource(null);asset.current='';}
+        }
       } catch(failure) { if(!signal.aborted)setError(failure instanceof Error ? failure.message:'Не удалось восстановить задание'); }
       finally { if(!signal.aborted)setBusy(false); }
     }
     void restore();
-  },[pendingKey, businessId, headers]);
+  },[pendingKey, businessId, headers, directSubmit]);
   useEffect(() => { if (!clip) { setClipUrl(''); return; } const url = URL.createObjectURL(clip); setClipUrl(url); return () => URL.revokeObjectURL(url); }, [clip]);
   useEffect(() => {
     if (!recording) return;
@@ -89,6 +92,8 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
     setError(''); const signal = lifetime.current.signal;
     try {
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') throw new Error('Микрофон недоступен. Загрузите аудиофайл или напишите текст.');
+      await requestMiniAppMicrophone();
+      signal.throwIfAborted();
       const media = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (signal.aborted) { media.getTracks().forEach((track) => track.stop()); return; }
       stream.current = media;
@@ -115,7 +120,7 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
       if (signal.aborted) return;
       const submission = { transcription_id: queued.asset_id, conversation_id: queued.conversation_id, request_id: `voice:${queued.asset_id}` };
       setText(result.transcript); setSource(submission);
-      if (directSubmit || result.auto_submit_finance || result.auto_submit_work) {
+      if (directSubmit) {
         await onSubmit(result.transcript, submission);
         if (!signal.aborted) { sessionStorage.removeItem(pendingKey); setSource(null); setClip(null); asset.current = ''; }
       }
@@ -134,8 +139,8 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
     {clipUrl && <audio controls src={clipUrl} preload="metadata" />}
     {clip && !source && <Button type="button" disabled={busy || disabled} onClick={() => void transcribe()}>{busy ? 'Распознаю…' : 'Распознать запись'}</Button>}
     {text && !source && <p role="status" className="text-sm">Распознано: {text}</p>}
-    {source && <div className="space-y-2"><label className="block text-sm">{busy ? 'Распознано' : 'Команда'}<textarea disabled={busy} className="block w-full rounded-md border bg-background p-2 text-foreground" value={text} onChange={(event) => setText(event.target.value)} /></label>
-      {!busy && <Button type="button" disabled={disabled || !text.trim()} onClick={async () => { setBusy(true); try { await onSubmit(text, source); setSource(null); setClip(null); asset.current = ''; } catch { setError('Не удалось отправить. Повторите с тем же текстом.'); } finally { setBusy(false); } }}>Повторить отправку</Button>}</div>}
+    {source && <div className="space-y-2"><label className="block text-sm">{busy ? 'Распознано' : draftLabel}<textarea disabled={busy} className="block w-full rounded-md border bg-background p-2 text-foreground" value={text} onChange={(event) => setText(event.target.value)} /></label>
+      {!busy && <Button type="button" disabled={disabled || !text.trim()} onClick={async () => { setBusy(true); try { await onSubmit(text, source); sessionStorage.removeItem(pendingKey); setSource(null); setClip(null); asset.current = ''; } catch { setError('Не удалось отправить. Повторите с тем же текстом.'); } finally { setBusy(false); } }}>{submitLabel}</Button>}</div>}
     {(clip || recording || busy || source) && !(busy && source) && <Button type="button" variant="ghost" className="!bg-transparent !text-muted-foreground hover:!bg-muted" onClick={cancel}>Отменить запись</Button>}
     {error && <p role="alert" className="text-sm">{error}</p>}
     {(!compact || recording || clip || busy || source) && <p className="text-xs text-muted-foreground">Запись до 2 минут. Перед отправкой можно проверить распознанный текст.</p>}

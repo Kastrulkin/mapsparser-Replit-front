@@ -24,7 +24,7 @@ const externalEffectCopy = (capability?: string) => {
   return 'Действие изменит данные во внешней системе.';
 };
 
-export default function ActionPreviewSheet({ preview, busy, confirmLabel = 'Подтвердить', onCancel, onConfirm }: { preview: MobileActionPreview | null; busy: boolean; confirmLabel?: string; onCancel: () => void; onConfirm: () => void }) {
+export default function ActionPreviewSheet({ preview, busy, confirmLabel = 'Подтвердить', onCancel, onConfirm, error }: { preview: MobileActionPreview | null; busy: boolean; error?: string; confirmLabel?: string; onCancel: () => void; onConfirm: () => void }) {
   return <AnimatePresence initial={false}>
     {preview ? <motion.div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-3 pb-[calc(12px+env(safe-area-inset-bottom))] backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target && !busy) onCancel(); }}>
       <motion.section role="dialog" aria-modal="true" aria-labelledby="mobile-action-preview-title" initial={{ opacity: 0, y: 40, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 24, scale: 0.98 }} transition={spring} className="w-full max-w-xl rounded-[28px] bg-zinc-900 p-5 shadow-[0_30px_100px_rgba(0,0,0,0.6)] ring-1 ring-inset ring-white/[0.09]">
@@ -40,6 +40,7 @@ export default function ActionPreviewSheet({ preview, busy, confirmLabel = 'По
         </div>
         {preview.external_effects ? <div className="mt-4 flex gap-3 rounded-[16px] bg-amber-400/[0.07] p-3 text-xs leading-5 text-amber-100/80 ring-1 ring-inset ring-amber-400/15"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />{externalEffectCopy(preview.capability)}</div> : null}
         <div className="mt-4 flex min-h-11 items-center gap-2 border-t border-white/[0.06] pt-3 text-xs text-zinc-500"><Coins className="h-4 w-4" /><span>Стоимость</span><b className="ml-auto tabular-nums text-zinc-200">{preview.estimated_credits || 0} кредитов</b></div>
+        {error ? <p role="alert" className="mt-4 rounded-[16px] bg-rose-500/10 p-3 text-sm text-rose-100 ring-1 ring-inset ring-rose-400/20">{error}</p> : null}
         <div className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-2">
           <button type="button" disabled={busy} onClick={onCancel} className="min-h-12 rounded-[16px] bg-white/[0.05] px-5 text-sm font-semibold text-zinc-400 ring-1 ring-inset ring-white/[0.07] transition-transform active:scale-[0.96] disabled:opacity-40">Отмена</button>
           <button type="button" disabled={busy} onClick={onConfirm} className="flex min-h-12 items-center justify-center gap-2 rounded-[16px] bg-primary px-4 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(255,92,51,0.24)] transition-[filter,transform] active:scale-[0.96] disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}{busy ? 'Выполняем…' : confirmLabel}</button>

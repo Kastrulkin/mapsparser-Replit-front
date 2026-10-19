@@ -1002,6 +1002,7 @@ export const buildEmployeeDescription = (
   blueprint: AgentBlueprint,
   details?: AgentBlueprintDetails | null,
 ) => {
+  if (blueprint.metadata_json?.template_key === 'maps_initial_setup') return 'Google: поддерживаемые правки через API после подтверждения. Яндекс и 2ГИС: ручной перенос текстов и файлов.';
   const preview = getBlueprintBuilderPreview(details?.blueprint || blueprint);
   return preview?.understood_task
     || blueprint.description

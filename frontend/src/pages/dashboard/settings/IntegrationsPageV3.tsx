@@ -51,6 +51,8 @@ import {
   ServiceConnection,
   OutreachSenderAccountSummary,
   mapIntegrationsState,
+  serviceGroups,
+  serviceGroup,
 } from './integrationsRegistryState';
 import {
   SettingsHubBusiness,
@@ -105,7 +107,6 @@ type MetaAsset = {
 
 type StatusFilter = ConnectionStatus | 'all' | 'needs_action';
 type TypeFilter = ConnectionType | 'all' | 'crm';
-type ServiceGroupKey = 'owner' | 'publishing' | 'data';
 
 const emptyLoadState: RegistryLoadState = {
   telegramOwnerLinked: null,
@@ -138,7 +139,7 @@ const serviceDescriptions: Record<string, string> = {
   outreach_vk: 'VK-сообщество используется только для одобренных сообщений и проверки ответов по кампаниям LocalOS.',
   outreach_max: 'LocalOS готовит MAX-сообщения, а владелец аккаунта отправляет их и отмечает ответы вручную.',
   google_sheets: 'Агенты могут читать таблицы и готовить изменения. Запись выполняется только после вашего подтверждения.',
-  google_business: 'Выберите карточку компании для отзывов, статистики и согласованных постов Google.',
+  google_business: 'Подключите карточку Google для чтения данных и отправки поддерживаемых правок после вашего подтверждения. Отзывы и посты используют это же подключение.',
   vk: 'Укажите ID и ключ сообщества. Текстовые публикации всё равно идут только после вашего подтверждения.',
   meta: 'Войдите через Meta, выберите Facebook Page и связанный Instagram Professional account.',
   yandex_maps: 'LocalOS готовит текст и задачу, финальный шаг в картах делает человек.',
@@ -163,18 +164,6 @@ const serviceHelp: Record<string, string[]> = {
   yclients: ['Возьмите ID филиала.', 'Заполните partner token и user token.', 'Сначала проверьте preview, потом подтверждайте импорт.'],
   altegio: ['Возьмите ID филиала.', 'Заполните partner token и user token.', 'Сначала проверьте preview, потом подтверждайте импорт.'],
   maton: ['Скопируйте API-ключ Maton.ai.', 'Сохраните ключ в LocalOS.', 'Проверьте, что агент видит этот маршрут.'],
-};
-
-const serviceGroups: Array<{ key: ServiceGroupKey; title: string; description: string }> = [
-  { key: 'owner', title: 'Связь с владельцем', description: 'Уведомления, команды и рабочие сообщения.' },
-  { key: 'publishing', title: 'Публикации и сообщения', description: 'Каналы, где внешнее действие требует проверки и подтверждения.' },
-  { key: 'data', title: 'Данные и CRM', description: 'Источники данных для агентов, финансов и отчётности.' },
-];
-
-const serviceGroup = (serviceId: string): ServiceGroupKey => {
-  if (serviceId === 'telegram') return 'owner';
-  if (['whatsapp', 'outreach_email', 'outreach_vk', 'outreach_max', 'google_business', 'vk', 'meta', 'yandex_maps', '2gis'].includes(serviceId)) return 'publishing';
-  return 'data';
 };
 
 const authHeaders = () => {

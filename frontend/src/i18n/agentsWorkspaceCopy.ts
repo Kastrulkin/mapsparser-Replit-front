@@ -81,6 +81,7 @@ export const getAgentsWorkspaceCopy = (language: Language): AgentsWorkspaceCopy 
   ...clarityCopy[language],
   ...supplementalCopy[language],
   ...supplementalClarityCopy[language],
+  ...(language === 'ru' ? { employees: 'Добавленные агенты', employeeDescription: 'Агенты, подключённые к выбранной компании', emptyEmployees: 'Добавьте готового агента из каталога ниже.', emptyTitle: 'Добавьте первого агента', emptyHint: 'Выберите готового агента в каталоге ниже. После добавления здесь появятся его настройки и результаты.' } : language === 'en' ? { employees: 'Added agents', employeeDescription: 'Agents added to the selected company', emptyEmployees: 'Add an agent from the catalog below.', emptyTitle: 'Add your first agent', emptyHint: 'Choose an agent from the catalog below. Its settings and results will appear here after adding.' } : {}),
 });
 
 type AgentsWorkspaceNavigationCopy = {

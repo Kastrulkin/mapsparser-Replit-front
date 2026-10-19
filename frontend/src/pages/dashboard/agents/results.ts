@@ -1,3 +1,4 @@
+import { getMapCardReport } from './map-card-report.logic';
 import type {
   DashboardContext,
   AgentBlueprint,
@@ -247,6 +248,8 @@ export const meaningfulResultKeys = [
 
 export const extractBusinessResultPayload = (value: unknown): Record<string, unknown> | null => {
   const record = toPlainRecord(value);
+  const mapReport = getMapCardReport(record);
+  if (mapReport) return mapReport;
   if (!record) {
     return null;
   }

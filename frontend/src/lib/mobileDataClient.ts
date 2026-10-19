@@ -10,8 +10,19 @@ export const readMobileJson = async <T,>(response: Response): Promise<T> => {
   } catch {
     throw new Error('Сервис временно вернул некорректный ответ. Попробуйте ещё раз.');
   }
+  window.dispatchEvent(new Event('localos:mobile-response'));
   if (!response.ok || payload?.success === false) {
-    throw new Error(payload?.error || 'Не удалось выполнить запрос.');
+    const reasons: Record<string, string> = {
+      map_link_required: 'Добавьте ссылку на карточку Яндекса в настройках бизнеса.',
+      map_organization_id_required: 'Не удалось определить организацию по ссылке Яндекса. Проверьте ссылку в настройках бизнеса.',
+      unsupported_map_provider: 'Это обновление поддерживает карточку Яндекса. Выберите ссылку Яндекса.',
+      preview_expired: 'Время подтверждения истекло. Закройте окно и проверьте обновление ещё раз.',
+      insufficient_balance: 'Недостаточно кредитов для обновления.',
+    };
+    const blocked = payload?.operator_result?.blocked_reasons;
+    const detail = Array.isArray(blocked) ? blocked.map((reason) => reasons[String(reason)]).filter(Boolean).join(' ') : '';
+    const explanation = typeof payload?.operator_result?.chat_response === 'string' ? payload.operator_result.chat_response : '';
+    throw new Error(detail || payload?.error || explanation || 'Не удалось выполнить запрос.');
   }
   return payload;
 };

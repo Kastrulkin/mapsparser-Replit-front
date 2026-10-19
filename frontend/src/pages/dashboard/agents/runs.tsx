@@ -15,6 +15,9 @@ import {
 } from 'lucide-react';
 import type React from 'react';
 import { useState } from 'react';
+import { MapCardReport } from './map-card-report';
+import { getMapCardReport } from './map-card-report.logic';
+import { MapCardTransfer } from './map-card-transfer';
 import { buildJournalFromSections, buildStepStatusMap, compactValue, findJournalDetailValue, findJournalEntryForGenericStage, formatPayloadItem, formatPayloadValue, getGenericStageDetail, getGenericStageStatus, hasCompleteDraftApprovalSnapshot, previewNextStepActionLabel, previewSimulationTone, toRecordOrNull } from './runs.logic';
 
 import {
@@ -593,10 +596,20 @@ const resultDestination = (result: Record<string, unknown>) => {
 export const HumanResultView = ({
   result,
   resultState,
+  runId,
 }: {
+  runId?: string;
   result: Record<string, unknown>;
   resultState?: 'missing' | 'prepared' | 'saved' | 'blocked';
 }) => {
+  const mapReport = getMapCardReport(result);
+  if (mapReport) {
+    if (mapReport.kind === 'preparation' && mapReport.preview !== true && mapReport.legacy_report !== true && runId) return <>
+      <MapCardTransfer key={runId} result={mapReport} runId={runId} />
+      <details className="mt-4"><summary className="cursor-pointer text-sm font-medium">Исходный отчёт, наблюдения и рекомендации</summary><div className="mt-3"><MapCardReport key={runId} result={mapReport} /></div></details>
+    </>;
+    return <MapCardReport key={runId} result={mapReport} />;
+  }
   const savedDestination = toRecordOrNull(result.saved_destination);
   const destinationStatus = String(savedDestination?.status || '').toLowerCase();
   const primaryItems = resultPrimaryItems(result);

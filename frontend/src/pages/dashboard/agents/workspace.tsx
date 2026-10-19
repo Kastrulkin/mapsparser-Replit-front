@@ -752,10 +752,10 @@ export const AgentIntegrationsPanel = ({
   const selectedProvider = selectedBinding?.provider || '';
   const hasRequiredBindings = bindingStatus.length > 0;
   const showBrowserUseForm = needsBrowserUse && (!hasRequiredBindings || selectedProvider === 'browser_use');
-  const showTelegramForm = (needsTelegram || !hasRequiredBindings) && (!hasRequiredBindings || selectedProvider === 'telegram');
+  const showTelegramForm = needsTelegram && (!hasRequiredBindings || selectedProvider === 'telegram');
   const showWhatsappForm = needsWhatsapp && (!hasRequiredBindings || selectedProvider === 'whatsapp');
   const showMatonForm = needsMaton && (!hasRequiredBindings || selectedProvider === 'maton');
-  const showSheetsForm = (needsSheets || !hasRequiredBindings) && (!hasRequiredBindings || selectedProvider === 'google_sheets');
+  const showSheetsForm = needsSheets && (!hasRequiredBindings || selectedProvider === 'google_sheets');
   const showCustomProcessForm = isTelegramToSheetsProcess && !hasRequiredBindings;
   const otherBindings = bindingStatus.filter((binding) => binding.key !== selectedBinding?.key);
   return (
@@ -765,7 +765,7 @@ export const AgentIntegrationsPanel = ({
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Источники и каналы</div>
           <div className="mt-1 text-xs leading-5 text-slate-500">Что запускает агента, откуда он берёт данные и куда готовит результат после подтверждения.</div>
         </div>
-        <span className="shrink-0 text-xs text-slate-400">{bindingStatus.length ? `${connectedBindings}/${bindingStatus.length}` : `${integrations.length}/${providerCatalog.length || 2}`}</span>
+        <span className="shrink-0 text-xs text-slate-400">{bindingStatus.length ? `${connectedBindings}/${bindingStatus.length}` : 'Дополнительные подключения не требуются'}</span>
       </div>
 
       <AgentConnectionDecisionBanner
@@ -803,10 +803,10 @@ export const AgentIntegrationsPanel = ({
       {!hasRequiredBindings ? (
       <div className="grid gap-2">
         {needsBrowserUse ? <AgentIntegrationStatusItem integration={browserIntegration} provider="browser_use" fallbackTitle="Browser use" /> : null}
-        {needsTelegram || !bindingStatus.length ? <AgentIntegrationStatusItem integration={telegramIntegration} provider="telegram" fallbackTitle="Telegram" /> : null}
+        {needsTelegram ? <AgentIntegrationStatusItem integration={telegramIntegration} provider="telegram" fallbackTitle="Telegram" /> : null}
         {needsWhatsapp ? <AgentIntegrationStatusItem integration={whatsappIntegration} provider="whatsapp" fallbackTitle="WhatsApp" /> : null}
         {needsMaton ? <AgentIntegrationStatusItem integration={matonIntegration} provider="maton" fallbackTitle="Maton.ai bridge" /> : null}
-        {needsSheets || !bindingStatus.length ? <AgentIntegrationStatusItem integration={sheetIntegration} provider="google_sheets" fallbackTitle={sheetsTitle} /> : null}
+        {needsSheets ? <AgentIntegrationStatusItem integration={sheetIntegration} provider="google_sheets" fallbackTitle={sheetsTitle} /> : null}
       </div>
       ) : null}
 
@@ -972,7 +972,7 @@ export const AgentIntegrationsPanel = ({
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
               <Database className="h-4 w-4" />
-              Подключите таблицу с поездками
+              Подключить Google Sheets
             </div>
             <div className="mt-1 text-xs leading-5 text-slate-600">
               LocalOS прочитает строки и подготовит результат. Наружу ничего не отправится.

@@ -14,7 +14,7 @@ const labels: Record<string, string> = { received: 'Обработка не за
   failed: 'Ошибка', blocked: 'Недоступно', approval_required: 'Ожидает подтверждения',
   clarification_required: 'Нужно уточнение', manual_handoff: 'Нужен ручной шаг', history: 'Из прежней переписки', cancelled: 'Отменено', rejected: 'Отклонено' };
 const reasons: Record<string, string> = { access: 'проверка доступа', understanding: 'разбор команды', execution: 'выполнение', stt: 'распознавание речи' };
-const channels: Record<string, string> = { web: 'Веб', telegram: 'Бот', telegram_mini_app: 'Mini App' };
+const channels: Record<string, string> = { web: 'Веб', telegram: 'Бот', telegram_mini_app: 'Telegram · приложение', max_bot: 'MAX · бот', max_mini_app: 'MAX · приложение' };
 
 const english: Record<string, string> = {
   "Обработка не завершена": "Processing unfinished",

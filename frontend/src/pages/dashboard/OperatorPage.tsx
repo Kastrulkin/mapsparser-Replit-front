@@ -369,6 +369,19 @@ export const OperatorPage = () => {
     void refresh();
     return () => { live = false; };
   }, [currentBusinessId]);
+  // Reopening Tasks must include work created since the page was loaded.
+  useEffect(() => {
+    if (!tasksOpen || !currentBusinessId) return;
+    let live = true;
+    const refresh = async () => {
+      try {
+        const response = await api.get('/partnership/continuations', { params: { business_id: currentBusinessId } });
+        if (live) setSearchTasks(response.data?.items || []);
+      } catch { /* Keep the last available task list on a temporary error. */ }
+    };
+    void refresh();
+    return () => { live = false; };
+  }, [currentBusinessId, tasksOpen]);
   const resultHistoryInFlight = useRef(false);
   const refreshOutreachResults = async () => {
     if (!currentBusinessId || !conversationId || resultHistoryInFlight.current) return;
@@ -466,7 +479,9 @@ export const OperatorPage = () => {
 
   const appendOperatorResult = (result: OperatorChatResult | RefreshResult, suffix: string) => {
     if ('task' in result && result.task?.id && (!result.task.business_id || result.task.business_id === currentBusinessId)) {
-      setSavedSearchTask({ ...result.task, business_id: currentBusinessId });
+      const task = { ...result.task, business_id: currentBusinessId };
+      setSavedSearchTask(task);
+      setSearchTasks(current => [task, ...current.filter(item => item.id !== task.id)]);
       setSelectedSearchId(result.task.id);
       setSearchParams(current => {
         const next = new URLSearchParams(current);
@@ -576,7 +591,9 @@ export const OperatorPage = () => {
       pendingRequest.current = { businessId: "", text: "", groupId: "", id: "" };
       appendPair(text, result);
       if (result.task?.id && (!result.task.business_id || result.task.business_id === currentBusinessId)) {
-        setSavedSearchTask({...result.task, business_id: currentBusinessId});
+        const task = { ...result.task, business_id: currentBusinessId };
+        setSavedSearchTask(task);
+        setSearchTasks(current => [task, ...current.filter(item => item.id !== task.id)]);
         setSelectedSearchId(result.task.id);
         setSearchParams(current => { const next = new URLSearchParams(current); next.set('search_task_id', result.task.id); next.set('business_id', currentBusinessId); return next; }, { replace: true });
       }
@@ -834,7 +851,7 @@ export const OperatorPage = () => {
       </header>
       <BetaFeedbackBanner dialogOnly onCloseAutoFocus={event => { event.preventDefault(); menuTriggerRef.current?.focus(); }} open={feedbackOpen} onOpenChange={setFeedbackOpen} area="operator" title={copy.title} description={copy.betaDescription} businessId={currentBusinessId} businessName={businessName} />
       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}><DialogContent onCloseAutoFocus={event => { event.preventDefault(); menuTriggerRef.current?.focus(); }} className="max-h-[90dvh] max-w-3xl overflow-y-auto"><DialogHeader><DialogTitle>История обращений</DialogTitle><DialogDescription>Сохранённые команды, ответы и распознавание голоса.</DialogDescription></DialogHeader>{historyOpen && currentBusinessId && <OperatorRequestHistory key={currentBusinessId} initiallyOpen businessId={currentBusinessId} language={language} />}</DialogContent></Dialog>
-      <Dialog open={helpOpen} onOpenChange={setHelpOpen}><DialogContent onCloseAutoFocus={event => { event.preventDefault(); menuTriggerRef.current?.focus(); }}><DialogHeader><DialogTitle>Как пользоваться</DialogTitle><DialogDescription>Напишите задачу обычным языком или запишите голосом.</DialogDescription></DialogHeader><p className="text-sm">Оператор покажет результат или уточнит недостающее. Для продолжения поиска выберите его в «Задачах». Отправка писем и другие внешние действия требуют подтверждения.</p></DialogContent></Dialog>
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}><DialogContent onCloseAutoFocus={event => { event.preventDefault(); menuTriggerRef.current?.focus(); }}><DialogHeader><DialogTitle>Как пользоваться</DialogTitle><DialogDescription>Напишите задачу обычным языком или запишите голосом.</DialogDescription></DialogHeader><p className="text-sm">LocalOS покажет результат или уточнит недостающее. Для продолжения поиска выберите его в «Задачах». Отправка писем и другие внешние действия требуют подтверждения.</p></DialogContent></Dialog>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-sm">
         {currentBusinessId && activeSearchTask?.id && <div className="shrink-0 border-b border-border px-3 py-2"><OutreachTaskStatus key={`${currentBusinessId}:${activeSearchTask.id}`} businessId={currentBusinessId} initialTask={activeSearchTask} onRefresh={refreshOutreachResults} onChange={() => setTasksOpen(true)} onContinue={command => {
           setSelectedSearchId(activeSearchTask.id);
@@ -951,7 +968,7 @@ export const OperatorPage = () => {
               disabled={demoMode}
               aria-describedby={demoMode ? 'operator-demo-readonly' : undefined}
               rows={1}
-              aria-label="Задача для Оператора"
+              aria-label="Вопрос или поручение для LocalOS"
               className="min-h-12 max-h-36 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-input bg-background px-3 py-3 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
               value={chatMessage}
               onChange={(event) => setChatMessage(event.target.value)}

@@ -5,6 +5,7 @@ import './index.css'
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { installDomOwnershipGuard } from './lib/domOwnershipGuard';
 import { installBrowserSessionFetch } from './lib/browserSessionFetch';
+import { loadMiniAppSdk } from './lib/miniAppPlatform';
 
 const CHUNK_RELOAD_STORAGE_KEY = 'localos_chunk_reload_attempted';
 const TELEGRAM_CONTROL_PATH = '/telegram/control';
@@ -105,7 +106,7 @@ const loadTelegramSdk = () => new Promise<void>((resolve) => {
 });
 
 const startApplication = async () => {
-    if (isTelegramControlRoute()) await loadTelegramSdk();
+    if (['/telegram/control', '/max/control'].includes(window.location.pathname)) await loadMiniAppSdk();
     renderApplication();
 };
 

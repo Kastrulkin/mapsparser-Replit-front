@@ -14,6 +14,7 @@ type FinanceCrmPanelProps = {
   onSynced?: () => void;
   surface?: 'section' | 'embedded';
   providerFilter?: string[];
+  requestHeaders?: () => Record<string, string>;
 };
 
 type CrmConnection = {
@@ -63,7 +64,7 @@ type CrmPreview = {
   errors?: Array<{ row?: number; errors?: string[] }>;
 };
 
-export const FinanceCrmPanel: React.FC<FinanceCrmPanelProps> = ({ currentBusinessId, onSynced, surface = 'section', providerFilter }) => {
+export const FinanceCrmPanel: React.FC<FinanceCrmPanelProps> = ({ currentBusinessId, onSynced, surface = 'section', providerFilter, requestHeaders }) => {
   const [providers, setProviders] = useState<CrmProvider[]>([]);
   const [loading, setLoading] = useState(false);
   const [runningProvider, setRunningProvider] = useState<string | null>(null);
@@ -72,13 +73,14 @@ export const FinanceCrmPanel: React.FC<FinanceCrmPanelProps> = ({ currentBusines
   const [previews, setPreviews] = useState<Record<string, CrmPreview>>({});
 
   const token = browserBearerToken();
+  const auth = useCallback(() => requestHeaders ? requestHeaders() : { Authorization: `Bearer ${token}` }, [requestHeaders, token]);
 
   const loadProviders = useCallback(async () => {
     if (!currentBusinessId) return;
     setLoading(true);
     try {
       const response = await fetch(`/api/finance/crm/providers?business_id=${currentBusinessId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: auth(),
       });
       const data = await response.json();
       if (!data.success) {
@@ -91,7 +93,7 @@ export const FinanceCrmPanel: React.FC<FinanceCrmPanelProps> = ({ currentBusines
     } finally {
       setLoading(false);
     }
-  }, [currentBusinessId, token]);
+  }, [currentBusinessId, auth]);
 
   useEffect(() => {
     loadProviders();
@@ -127,7 +129,7 @@ export const FinanceCrmPanel: React.FC<FinanceCrmPanelProps> = ({ currentBusines
       const response = await fetch('/api/finance/crm/connect', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
+          ...auth(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -171,7 +173,7 @@ export const FinanceCrmPanel: React.FC<FinanceCrmPanelProps> = ({ currentBusines
       const response = await fetch('/api/finance/crm/sync', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
+          ...auth(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -212,7 +214,7 @@ export const FinanceCrmPanel: React.FC<FinanceCrmPanelProps> = ({ currentBusines
       const response = await fetch('/api/finance/crm/preview', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
+          ...auth(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ business_id: currentBusinessId, provider, sample_limit: 5 }),
@@ -235,7 +237,7 @@ export const FinanceCrmPanel: React.FC<FinanceCrmPanelProps> = ({ currentBusines
   const content = (
     <>
       {message ? (
-        <div className="mb-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 ring-1 ring-slate-200">
+        <div className="mb-4 rounded-2xl bg-muted px-4 py-3 text-sm text-foreground ring-1 ring-border">
           {message}
         </div>
       ) : null}
@@ -246,20 +248,20 @@ export const FinanceCrmPanel: React.FC<FinanceCrmPanelProps> = ({ currentBusines
           const running = runningProvider === provider.provider;
           const previewReady = Boolean(previews[provider.provider]?.preview_token);
           return (
-            <Card key={provider.provider} className="border-slate-200/80 shadow-sm">
+            <Card key={provider.provider} className="border-border shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center justify-between gap-3 text-base">
                   <span className="flex items-center gap-2">
-                    <Cable className="h-4 w-4 text-slate-500" />
+                    <Cable className="h-4 w-4 text-muted-foreground" />
                     {provider.label}
                   </span>
-                  <span className={cn('rounded-full px-2.5 py-1 text-xs font-medium', connected ? 'bg-emerald-50 text-emerald-700' : provider.status === 'available' ? 'bg-sky-50 text-sky-700' : 'bg-slate-100 text-slate-600')}>
+                  <span className={cn('rounded-full px-2.5 py-1 text-xs font-medium', connected ? 'bg-emerald-50 text-emerald-700' : provider.status === 'available' ? 'bg-sky-50 text-sky-700' : 'bg-slate-100 text-muted-foreground')}>
                     {connected ? 'connected' : provider.status}
                   </span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 text-sm">
-                <p className="leading-6 text-slate-600">{provider.description}</p>
+                <p className="leading-6 text-muted-foreground">{provider.description}</p>
                 {provider.docs_url ? (
                   <a
                     href={provider.docs_url}
@@ -274,14 +276,14 @@ export const FinanceCrmPanel: React.FC<FinanceCrmPanelProps> = ({ currentBusines
                 {provider.capabilities?.length ? (
                   <div className="flex flex-wrap gap-2">
                     {provider.capabilities.map((capability) => (
-                      <span key={capability} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                      <span key={capability} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-muted-foreground">
                         {capability}
                       </span>
                     ))}
                   </div>
                 ) : null}
                 {provider.requires_auth && !connected ? (
-                  <div className="space-y-3 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                  <div className="space-y-3 rounded-2xl bg-muted p-3 ring-1 ring-border">
                     <div className="grid gap-3">
                       <div className="space-y-1.5">
                         <Label htmlFor={`${provider.provider}-location`}>ID филиала / location_id</Label>
@@ -314,7 +316,7 @@ export const FinanceCrmPanel: React.FC<FinanceCrmPanelProps> = ({ currentBusines
                       </div>
                     </div>
                     {provider.notes?.length ? (
-                      <div className="space-y-1 text-xs leading-5 text-slate-500">
+                      <div className="space-y-1 text-xs leading-5 text-muted-foreground">
                         {provider.notes.map((note) => (
                           <div key={note}>{note}</div>
                         ))}
@@ -322,9 +324,9 @@ export const FinanceCrmPanel: React.FC<FinanceCrmPanelProps> = ({ currentBusines
                     ) : null}
                   </div>
                 ) : null}
-                <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
-                  <div className="flex items-center gap-2 font-medium text-slate-950">
-                    {connected ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <ShieldCheck className="h-4 w-4 text-slate-500" />}
+                <div className="rounded-2xl bg-muted p-3 text-foreground">
+                  <div className="flex items-center gap-2 font-medium text-foreground">
+                    {connected ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <ShieldCheck className="h-4 w-4 text-muted-foreground" />}
                     Статус
                   </div>
                   <div className="mt-2 space-y-1">
@@ -378,11 +380,11 @@ export const FinanceCrmPanel: React.FC<FinanceCrmPanelProps> = ({ currentBusines
 
   if (surface === 'embedded') {
     return (
-      <div className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
+      <div className="space-y-4 rounded-3xl border border-slate-200 bg-muted/70 p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h3 className="text-base font-semibold text-slate-950">CRM для финансов</h3>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+            <h3 className="text-base font-semibold text-foreground">CRM для финансов</h3>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
               Подключите YCLIENTS или Altegio, чтобы подтягивать записи, оплаты, услуги, мастеров и рабочие места в финансовую модель.
             </p>
           </div>
@@ -429,9 +431,9 @@ const normalizedLabels: Record<string, string> = {
 };
 
 const CrmPreviewSummary: React.FC<{ preview: CrmPreview }> = ({ preview }) => (
-  <div className="space-y-3 rounded-2xl border border-sky-100 bg-sky-50/70 p-3 text-slate-700">
+  <div className="space-y-3 rounded-2xl border border-sky-100 bg-sky-50/70 p-3 text-foreground">
     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-      <div className="font-medium text-slate-950">Preview без записи в финансы</div>
+      <div className="font-medium text-foreground">Preview без записи в финансы</div>
       <div className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">
         {preview.preview_token ? 'готово к подтверждению' : preview.will_write ? 'будет запись' : 'только проверка'}
       </div>
@@ -446,7 +448,7 @@ const CrmPreviewSummary: React.FC<{ preview: CrmPreview }> = ({ preview }) => (
       <PreviewCounts title="LocalOS распознал" counts={preview.normalized_counts} labels={normalizedLabels} />
     </div>
     {preview.errors?.length ? (
-      <div className="rounded-xl bg-white/80 p-3 text-xs leading-5 text-rose-700 ring-1 ring-rose-100">
+      <div className="rounded-xl bg-background p-3 text-xs leading-5 text-rose-700 ring-1 ring-rose-100">
         {preview.errors.slice(0, 3).map((error, index) => (
           <div key={`${error.row || 'row'}-${index}`}>
             Строка {error.row || '?'}: {(error.errors || []).join(', ')}
@@ -458,20 +460,20 @@ const CrmPreviewSummary: React.FC<{ preview: CrmPreview }> = ({ preview }) => (
 );
 
 const PreviewMetric: React.FC<{ label: string; value: number; tone?: 'default' | 'warning' }> = ({ label, value, tone = 'default' }) => (
-  <div className={cn('rounded-xl bg-white/80 px-3 py-2 ring-1', tone === 'warning' ? 'ring-amber-200' : 'ring-sky-100')}>
-    <div className="text-xs text-slate-500">{label}</div>
-    <div className="text-lg font-semibold text-slate-950">{value}</div>
+  <div className={cn('rounded-xl bg-background px-3 py-2 ring-1', tone === 'warning' ? 'ring-amber-200' : 'ring-sky-100')}>
+    <div className="text-xs text-muted-foreground">{label}</div>
+    <div className="text-lg font-semibold text-foreground">{value}</div>
   </div>
 );
 
 const PreviewCounts: React.FC<{ title: string; counts: Record<string, number>; labels: Record<string, string> }> = ({ title, counts, labels }) => (
-  <div className="rounded-xl bg-white/80 p-3 ring-1 ring-sky-100">
-    <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{title}</div>
+  <div className="rounded-xl bg-background p-3 ring-1 ring-sky-100">
+    <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{title}</div>
     <div className="space-y-1">
       {Object.entries(counts || {}).map(([key, value]) => (
         <div key={key} className="flex items-center justify-between gap-3 text-xs">
           <span>{labels[key] || key}</span>
-          <span className="font-semibold text-slate-950">{value}</span>
+          <span className="font-semibold text-foreground">{value}</span>
         </div>
       ))}
     </div>
