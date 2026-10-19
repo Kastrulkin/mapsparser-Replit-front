@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-19",
+  "status": "deployed_browser_acceptance_pending_network",
+  "branch": "codex/results-real-data-20261019",
+  "implementation_commit": "8c492c0b9",
+  "compatible_release_commit": "973a3b5d1",
+  "frontend_entry": "/assets/index-DRtNGxVC.js",
+  "css": "/assets/index-3FcjhUwz.css",
+  "public_entry": "/public-audit/assets/index-BGl4VjvJ.js",
+  "frontend_only": true,
+  "database_changes": false,
+  "backend_changes": false,
+  "tests": {
+    "frontend_passed": 36,
+    "release_guard_passed": 9,
+    "red_checks": "contract, optimistic context, late reply and 404 reproduced before fixes",
+    "typescript_baseline_diagnostics": 11,
+    "typescript_candidate_diagnostics": 11,
+    "new_typescript_diagnostics": [],
+    "node_project": "pass",
+    "builds": "frontend and public pass",
+    "product_ui_guard": "pass; mocked cockpit skipped without port 3000",
+    "reachable_assets": {
+      "frontend": 218,
+      "public": 14
+    }
+  },
+  "browser": {
+    "before": "real authorized account; five areas and content transition inspected",
+    "local_fixture_widths": [
+      390,
+      768,
+      1280
+    ],
+    "local_fixture_console": "clean",
+    "local_failure_cases": [
+      "transient retains summary",
+      "404 clears private results",
+      "business change clears old context"
+    ],
+    "post_release": "not completed: connection reset in browser and external HTTPS; subsequent SSH transport also unavailable",
+    "human_research": "not conducted"
+  },
+  "deployment": {
+    "exit_code": 0,
+    "canonical_container_and_http_checks": "pass at publication",
+    "backup_frontend": "/opt/seo-app/data/backups/releases/results-real-data-20261019/frontend-before-release.tar.gz",
+    "backup_frontend_sha256": "ae0cd33326d2658c5d37de559504233480ba1bff339095402089a46843a617cb",
+    "backup_source": "/opt/seo-app/data/backups/releases/results-real-data-20261019/source-before.tar.gz",
+    "backup_source_sha256": "b796311a8773b73c74bfff0853bae97c758364d45e2882e39fc5a96d57d7c859",
+    "parallel_release_changes_preserved": true
+  }
+}
