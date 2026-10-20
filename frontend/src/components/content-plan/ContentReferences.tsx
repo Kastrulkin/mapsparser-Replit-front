@@ -5,14 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { contentRequest, ContentAccessError } from './contentRequest';
+import { ContentReferenceAnalysis, type EditorialReference } from './ContentReferenceAnalysis';
 
-type Reference = {
-  id: string; source_name: string; source_url: string; techniques: string[];
-  scope: string; owned: boolean; enabled: boolean; moderation: string;
-  moderation_note?: string; version: number;
-};
+import type { SourceResearch } from './ContentSourceResearch';
+
+type Reference = EditorialReference;
 type Catalogue = {
   industry_label: string; items: Reference[]; settings_version: number;
+  research?: SourceResearch | null;
   can_manage: boolean; can_moderate: boolean; pending: Reference[];
 };
 
@@ -89,12 +89,12 @@ export function ContentReferences({ businessId, open, onOpenChange, language = '
   ) : null;
 
   return <Sheet open={open} onOpenChange={(value) => { if (!busy) onOpenChange(value); }}>
-    <SheetContent closeLabel={ru ? 'Закрыть ориентиры' : 'Close references'} className={`flex w-full flex-col gap-0 overflow-y-auto text-foreground sm:max-w-xl ${headers ? 'dark' : ''}`} onCloseAutoFocus={(event) => {
+    <SheetContent data-content-reference-scroll closeLabel={ru ? 'Закрыть ориентиры' : 'Close references'} className={`flex w-full flex-col gap-0 overflow-y-auto text-foreground sm:max-w-2xl ${headers ? 'dark' : ''}`} onCloseAutoFocus={(event) => {
       event.preventDefault(); (document.getElementById('content-references-button') || document.getElementById('content-settings-button'))?.focus();
     }}>
       <SheetHeader>
-        <SheetTitle>{ru ? 'Ориентиры для постов' : 'Post references'}</SheetTitle>
-        <SheetDescription>{ru ? 'Примеры подачи для новых текстов. Чужие характеристики, цены и обещания не становятся фактами вашей компании.' : 'Writing references for new copy. Other companies’ specifications, prices and promises are not facts about your business.'}</SheetDescription>
+        <SheetTitle className="pr-8 leading-snug">{ru ? 'Источники и подходы' : 'Sources and approaches'}</SheetTitle>
+        <SheetDescription>{ru ? 'Изучаем примеры рынка и предлагаем приёмы для обсуждения с владельцем — до составления плана.' : 'Why these examples help, what guidance is saved and what can inform new copy.'}</SheetDescription>
       </SheetHeader>
       {loading && <p role="status" className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />{ru ? 'Загружаем ориентиры…' : 'Loading references…'}</p>}
       {error && <div role="alert" className="mt-4 text-sm text-destructive">{error}<Button variant="outline" className="mt-2 block" disabled={busy} onClick={() => {
@@ -106,33 +106,10 @@ export function ContentReferences({ businessId, open, onOpenChange, language = '
       }}>{ru ? 'Обновить список' : 'Refresh list'}</Button></div>}
       {message && <p role="status" className="mt-4 text-sm text-muted-foreground">{message}</p>}
       {data && <div className="space-y-6 py-5">
-        <section>
-          <h3 className="font-medium">{data.industry_label}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{ru ? 'Отключение действует только для выбранного бизнеса. Готовые посты не изменятся.' : 'Disabling only affects this business. Existing posts stay unchanged.'}</p>
-          {data.can_manage && <Button variant="outline" className="mt-3 min-h-11" onClick={() => document.getElementById('reference-title')?.focus()}>{ru ? 'Добавить свой ориентир' : 'Add your reference'}</Button>}
-          {!data.items.length && <p className="py-4 text-sm">{ru ? 'Для этого типа пока нет общих ориентиров. Добавьте свой пример ниже.' : 'No shared references yet. Add your own below.'}</p>}
-          <ul className="mt-3 divide-y">
-            {data.items.map((item) => <li key={item.id} className="py-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h4 className="break-words font-medium">{item.source_name}</h4>
-                  <p className="mt-1 text-xs text-muted-foreground">{item.scope === 'industry' ? (ru ? 'Общий ориентир типа бизнеса' : 'Shared industry reference') : (ru ? 'Ваш ориентир' : 'Your reference')}
-                    {item.moderation === 'pending' ? (ru ? ' · На модерации' : ' · Pending review') : item.moderation === 'rejected' ? (ru ? ' · Не включён в общий набор' : ' · Not accepted for sharing') : ''}
-                    {!item.enabled ? (ru ? ' · Не используется' : ' · Disabled') : ''}</p>
-                </div>
-                <Button variant="outline" className="min-h-11 shrink-0" disabled={!data.can_manage || busy} aria-label={`${item.enabled ? (ru ? 'Отключить' : 'Disable') : (ru ? 'Включить' : 'Enable')} ${item.source_name}`}
-                  onClick={() => void change({ action: item.enabled ? 'disable' : 'enable', id: item.id, expected_version: data.settings_version })}>
-                  {item.enabled ? (ru ? 'Отключить' : 'Disable') : (ru ? 'Включить' : 'Enable')}
-                </Button>
-              </div>
-              <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">{item.techniques.join(' · ')}</p>
-              {item.moderation_note && <p className="mt-2 text-sm text-muted-foreground">{ru ? 'Результат проверки: ' : 'Review: '}{item.moderation_note}</p>}
-              <div className="flex flex-wrap items-center justify-between gap-2">{link(item)}
-                {item.owned && item.scope !== 'industry' && data.can_manage && <Button variant="ghost" disabled={busy} onClick={() => void change({ action: 'remove', id: item.id, expected_version: data.settings_version })}>{ru ? 'Убрать из моих ориентиров' : 'Remove my reference'}</Button>}
-              </div>
-            </li>)}
-          </ul>
-        </section>
+        <ContentReferenceAnalysis key={businessId} items={data.items} industryLabel={data.industry_label}
+          canManage={data.can_manage} busy={busy} ru={ru} research={data.research}
+          onToggle={(item) => void change({ action: item.enabled ? 'disable' : 'enable', id: item.id, expected_version: data.settings_version })}
+          onRemove={(item) => void change({ action: 'remove', id: item.id, expected_version: data.settings_version })} />
         {data.can_manage && <form className="space-y-3 border-t pt-5" onSubmit={(event) => {
           event.preventDefault();
           void change({ action: 'add', title, url, technique, submit_for_review: share, request_id: requestId.current });

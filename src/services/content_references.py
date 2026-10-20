@@ -136,6 +136,7 @@ def resolve_generation_references(cursor, business_id, industry, references, top
 
 def list_references(cursor, business_id, auth):
     from services.content_rules import can_manage
+    from services.content_reference_research import get_research
     industry, label = business_industry(cursor, business_id)
     config = settings(cursor, business_id)
     disabled = set(config.get('disabled_ids') or [])
@@ -154,7 +155,8 @@ def list_references(cursor, business_id, auth):
         pending = [_reference(_row_to_dict(cursor, row), business_id) for row in cursor.fetchall()]
     return {'industry': industry, 'industry_label': label, 'items': items,
             'settings_version': config.get('version', 0), 'can_manage': can_manage(cursor, auth.user_id, business_id),
-            'can_moderate': is_moderator, 'pending': pending}
+            'can_moderate': is_moderator, 'pending': pending,
+            'research': get_research(cursor, business_id)}
 
 
 def change_reference(cursor, business_id, auth, data):

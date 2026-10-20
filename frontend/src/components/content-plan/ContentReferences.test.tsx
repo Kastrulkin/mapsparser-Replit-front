@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContentReferences } from './ContentReferences';
 
 const { request } = vi.hoisted(() => ({ request: vi.fn() }));
@@ -14,6 +14,20 @@ const catalogue = {
 
 describe('content references', () => {
   beforeEach(() => { request.mockReset(); });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each(['telegram', 'max'])('uses the %s session for the same source report', async (surface) => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(catalogue), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const headers = () => ({ 'X-LocalOS-Session': `${surface}-test-session` });
+    render(<ContentReferences businessId="a" open onOpenChange={vi.fn()} headers={headers} />);
+    await screen.findByRole('button', { name: 'BOMONTI' });
+    expect(request).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/content-voice/references?business_id=a');
+    expect(fetchMock.mock.calls[0][1].headers.get('X-LocalOS-Session')).toBe(`${surface}-test-session`);
+  });
 
   it('does not load a hidden settings panel', () => {
     render(<ContentReferences businessId="a" open={false} onOpenChange={vi.fn()} />);
@@ -25,6 +39,8 @@ describe('content references', () => {
     request.mockResolvedValueOnce(catalogue).mockResolvedValueOnce({ ...catalogue,
       settings_version: 1, items: [{ ...catalogue.items[0], enabled: false }] });
     render(<ContentReferences businessId="a" open onOpenChange={vi.fn()} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'BOMONTI', exact: true }));
+    fireEvent.click(screen.getByText('Использование ориентира в новых черновиках'));
     fireEvent.click(await screen.findByRole('button', { name: 'Отключить BOMONTI' }));
     await screen.findByRole('button', { name: 'Включить BOMONTI' });
     expect(JSON.parse(request.mock.calls[1][1].body)).toEqual({
@@ -36,7 +52,7 @@ describe('content references', () => {
   it('saves an own reference privately unless sharing is explicitly selected', async () => {
     request.mockResolvedValue(catalogue);
     render(<ContentReferences businessId="a" open onOpenChange={vi.fn()} />);
-    await screen.findByText('BOMONTI');
+    await screen.findByRole('button', { name: 'BOMONTI' });
     fireEvent.change(screen.getByLabelText('Название компании или примера'), { target: { value: 'Моя мастерская' } });
     fireEvent.change(screen.getByLabelText('Публичная ссылка'), { target: { value: 'https://example.com/work' } });
     fireEvent.change(screen.getByLabelText('Что взять из примера'), { target: { value: 'Показать общий вид вещи и детали отделки' } });
@@ -62,7 +78,7 @@ describe('content references', () => {
     render(<ContentReferences businessId="a" open onOpenChange={vi.fn()} />);
     expect(await screen.findByRole('alert')).toHaveTextContent('Временно недоступно');
     fireEvent.click(screen.getByRole('button', { name: 'Обновить список' }));
-    await screen.findByText('BOMONTI');
+    await screen.findByRole('button', { name: 'BOMONTI' });
     expect(request.mock.calls.every((call) => !call[1])).toBe(true);
   });
 });

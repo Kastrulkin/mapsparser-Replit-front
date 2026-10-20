@@ -86,7 +86,7 @@ export function ContentPersonalization({ businessId, open, onOpenChange, headers
     <Dialog open={open && !references} onOpenChange={value => { if (!busy) onOpenChange(value); }}>
       <DialogContent className={`flex max-h-[90dvh] flex-col overflow-hidden text-foreground sm:max-w-xl ${headers ? 'dark' : ''}`}>
         <DialogHeader><DialogTitle>Настроить контент</DialogTitle><DialogDescription>Три коротких шага, чтобы тексты были похожи на вас и понятны вашим клиентам.</DialogDescription></DialogHeader>
-        <Button id="content-references-button" variant="outline" disabled={busy} onClick={() => setReferences(true)}>Ориентиры для постов</Button>
+        <Button id="content-references-button" variant="outline" disabled={busy} onClick={() => setReferences(true)}>Источники и подходы</Button>
         <Button variant="ghost" className="h-auto min-h-11 whitespace-normal" disabled={busy} onClick={knowledge}>Общие сведения и документы о бизнесе</Button>
         <nav aria-label="Шаги настройки контента" className="grid grid-cols-3 gap-2">{steps.map((label, index) => <Button key={label} className="h-auto min-h-11 min-w-0 whitespace-normal px-2 text-xs" variant={step === index ? 'default' : 'outline'} aria-current={step === index ? 'step' : undefined} disabled={busy} onClick={() => setStep(index)}>{label}</Button>)}</nav>
         {busy && !profile && <p role="status">Загружаем настройки…</p>}
