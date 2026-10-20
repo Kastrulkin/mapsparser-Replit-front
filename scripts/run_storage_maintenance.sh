@@ -3,6 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Fail closed: no legacy pruning if the new verified backup step fails.
+python3 scripts/verified_backup_retention.py --apply
 bash scripts/compress_sql_backups.sh --apply
 python3 scripts/prune_postgres_backups.py --apply
 python3 scripts/prune_named_database_backups.py --apply
