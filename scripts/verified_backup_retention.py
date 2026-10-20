@@ -2,6 +2,7 @@
 """Verified database snapshots only. No recursive archive/data deletion."""
 import argparse
 import fcntl
+import gzip
 import hashlib
 import json
 import os
@@ -10,6 +11,7 @@ import re
 import shutil
 import subprocess
 import time
+import zlib
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -46,6 +48,23 @@ def pool(root, create=False):
     return current
 
 
+def globals_sidecar(plain):
+    if plain.is_symlink(): raise ValueError('Symlink globals sidecar')
+    if plain.exists():
+        if not plain.is_file() or not plain.stat().st_size: raise ValueError('Missing globals sidecar')
+        return plain
+    compressed=plain.with_name(plain.name+'.gz')
+    if compressed.is_symlink() or not compressed.is_file(): raise ValueError('Missing globals sidecar')
+    size=0
+    try:
+        with gzip.open(compressed,'rb') as source:
+            for block in iter(lambda:source.read(1024**2),b''): size+=len(block)
+    except (OSError,EOFError,zlib.error) as error:
+        raise ValueError('Invalid compressed globals sidecar') from error
+    if not size: raise ValueError('Empty compressed globals sidecar')
+    return compressed
+
+
 def records(folder, now):
     valid=[]; warnings=[]
     if not folder.exists(): return valid,warnings
@@ -62,7 +81,8 @@ def records(folder, now):
             if path.is_symlink() or not path.is_file(): raise ValueError('not a regular dump')
             stat=path.stat()
             if stat.st_size!=record['size'] or sha(path)!=record['sha256']: raise ValueError('checksum mismatch')
-            for suffix in ('.globals.sql','.toc'):
+            globals_sidecar(folder/(name+'.globals.sql'))
+            for suffix in ('.toc',):
                 side=folder/(name+suffix)
                 if side.is_symlink() or not side.is_file() or not side.stat().st_size: raise ValueError('missing sidecar')
             record={**record,'created':created,'identity':(stat.st_dev,stat.st_ino,stat.st_size,stat.st_mtime_ns),
@@ -105,8 +125,8 @@ def validate_archive(root,path,toc):
 
 
 def commit_record(folder,path,created,extra=None):
-    for suffix in ('','.globals.sql','.toc'):
-        with (folder/(path.name+suffix)).open('rb') as handle: os.fsync(handle.fileno())
+    for item in (path,globals_sidecar(folder/(path.name+'.globals.sql')),folder/(path.name+'.toc')):
+        with item.open('rb') as handle: os.fsync(handle.fileno())
     record={'version':1,'name':path.name,'created_at':created.isoformat(),'size':path.stat().st_size,
             'sha256':sha(path),'full_archive_read':True,**(extra or {})}
     atomic_json(folder/(path.name+'.verified.json'),record)
@@ -126,11 +146,13 @@ def adopt(root,folder):
     os.link(original,dest)
     try:
         validate_archive(root,dest,folder/(name+'.toc'))
-        shutil.copyfile(original.parent/'globals.sql',folder/(name+'.globals.sql'))
-        os.chmod(folder/(name+'.globals.sql'),0o600)
+        source=globals_sidecar(original.parent/'globals.sql')
+        side=folder/(name+'.globals.sql'+('.gz' if source.suffix=='.gz' else ''))
+        shutil.copyfile(source,side)
+        os.chmod(side,0o600)
         return commit_record(folder,dest,created,{'seed_source':str(original)})
     except Exception:
-        for suffix in ('','.toc','.globals.sql'):
+        for suffix in ('','.toc','.globals.sql','.globals.sql.gz'):
             (folder/(name+suffix)).unlink(missing_ok=True)
         raise
 
@@ -184,10 +206,10 @@ def rotate(folder,items,now):
         if path.is_symlink() or (stat.st_dev,stat.st_ino,stat.st_size,stat.st_mtime_ns)!=record['identity']:
             raise ValueError('Snapshot changed since verification; nothing more will be deleted')
         if (folder/(record['name']+'.keep')).exists(): continue
-        for suffix in ('.verified.json','.globals.sql','.toc','.stderr.log'):
+        for suffix in ('.verified.json','.globals.sql','.globals.sql.gz','.toc','.stderr.log'):
             if (folder/(record['name']+suffix)).is_symlink(): raise ValueError('Sidecar symlink rejected')
         path.unlink()
-        for suffix in ('.verified.json','.globals.sql','.toc','.stderr.log'):
+        for suffix in ('.verified.json','.globals.sql','.globals.sql.gz','.toc','.stderr.log'):
             side=folder/(record['name']+suffix)
             if side.is_symlink(): raise ValueError('Sidecar symlink rejected')
             side.unlink(missing_ok=True)

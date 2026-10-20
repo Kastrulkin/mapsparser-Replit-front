@@ -15,6 +15,14 @@ compressed=0
 skipped=0
 
 while IFS= read -r -d '' source; do
+  # These files belong to the verified snapshot contract, not legacy SQL dumps.
+  case "${source}" in
+    data/backups/verified/*|*.globals.sql|*/globals.sql)
+      echo "SKIP verified backup sidecar: ${source}"
+      skipped=$((skipped + 1))
+      continue
+      ;;
+  esac
   destination="${source}.gz"
   if [[ -e "${destination}" ]]; then
     echo "SKIP existing destination: ${destination}"
