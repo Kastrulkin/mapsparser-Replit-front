@@ -290,6 +290,8 @@ def build_bounded_model_artifact_payload(cursor: Any, run: Dict[str, Any], step:
         max_items=max_items,
         configured_scope=[_clean_text(item) for item in configured_scope if _clean_text(item)],
     )
+    from services.map_card_ai_preparation import prepare_sources, run_bounded_task
+    source_context = prepare_sources(cursor, run, preset, source_context, preview=safe_preview)
     if safe_preview:
         return {
             **dict(step.get("payload") if isinstance(step.get("payload"), dict) else {}),
@@ -317,7 +319,7 @@ def build_bounded_model_artifact_payload(cursor: Any, run: Dict[str, Any], step:
         "Входные данные:\n"
         + json.dumps(source_context, ensure_ascii=False, default=str)[:30000]
     )
-    llm_result = run_llm_task(
+    llm_result = run_bounded_task(
         LLMTaskRequest(
             task_key=task_key,
             prompt=prompt,
@@ -328,7 +330,8 @@ def build_bounded_model_artifact_payload(cursor: Any, run: Dict[str, Any], step:
             usage_reference=_clean_text(run.get("id")),
             pipeline_id=_clean_text(run.get("id")),
             pipeline_stage="bounded_workflow_step",
-        )
+        ),
+        preset,
     )
     parsed_result = llm_result.parsed_data if isinstance(llm_result.parsed_data, dict) else None
     result_payload = parsed_result or _bounded_fallback_result(

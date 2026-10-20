@@ -109,23 +109,31 @@ def reserve(body, context=None, *, database_factory=None):
     try:
         cursor = db.conn.cursor()
         cursor.execute("SELECT pg_advisory_xact_lock(hashtext('gigachat-spend-budget:v1'))")
-        # A map run owns one provider attempt, even after a router or worker retry.
+        # The trusted workflow supplies the intent before its run transaction
+        # commits; a separate budget connection cannot see that run row yet.
+        map_intent = str(_SCOPE.get().get('map_card_run_id') or '')
         intent = str((context or {}).get('operation_id') or '')
-        if scope.get('task_key') == 'agent_bounded_workflow_step' and intent:
+        if not map_intent and scope.get('task_key') == 'agent_bounded_workflow_step' and intent:
             cursor.execute("""SELECT r.id FROM agent_runs r
                 JOIN agent_blueprints b ON b.id=r.blueprint_id
                 WHERE r.id=%s AND r.business_id=%s
                   AND b.metadata_json->>'template_key' IN ('maps_initial_setup','maps_card_check')""",
                 (intent, str(scope.get('business_id') or '')))
             if cursor.fetchone():
-                operation = 'map-card-run:' + intent
-                body['max_tokens'] = min(body['max_tokens'], 3000)
-                if isinstance(body.get('parameters'), dict):
-                    body['parameters'] = {**body['parameters'], 'max_tokens': body['max_tokens']}
-                policy = {**policy, 'operation_calls': min(policy['operation_calls'], 1)}
-                cursor.execute('SELECT id FROM ai_spend_reservations WHERE operation_id=%s LIMIT 1', (operation,))
-                if cursor.fetchone():
-                    raise BudgetDenied('AI-подготовка этого запуска уже выполнялась. Автоматический повтор остановлен; проверьте сохранённый результат.')
+                map_intent = intent
+        if map_intent:
+            operation = 'map-card-run:' + map_intent
+            body['max_tokens'] = min(body['max_tokens'], 3000)
+            if isinstance(body.get('parameters'), dict):
+                body['parameters'] = {**body['parameters'], 'max_tokens': body['max_tokens']}
+            policy = {**policy, 'operation_calls': min(policy['operation_calls'], 1),
+                      'request_tokens': min(policy['request_tokens'], 15000),
+                      'operation_tokens': min(policy['operation_tokens'], 15000)}
+            cursor.execute("""SELECT id FROM ai_spend_reservations WHERE operation_id=%s
+                UNION ALL SELECT id FROM tokenusage WHERE endpoint=%s
+                  AND task_type='agent_bounded_workflow_step' AND total_tokens>0 LIMIT 1""", (operation, map_intent))
+            if cursor.fetchone():
+                raise BudgetDenied('AI-подготовка этого запуска уже выполнялась. Автоматический повтор остановлен; проверьте сохранённый результат.')
         day, month = windows()
         used = _usage(cursor, day, month, operation) if provider == 'gigachat' else _usage(cursor, day, month, operation, provider)
         _check(used, policy, reserved)
