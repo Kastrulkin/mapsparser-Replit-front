@@ -15,8 +15,8 @@ describe('sources before the content plan', () => {
     render(<ContentReferenceAnalysis {...base} items={[source]} />);
     expect(screen.getByText('Перед составлением контент-плана')).toBeVisible();
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
-    expect(screen.getByText(/Обсуждаем подходы с владельцем/)).toBeVisible();
-    expect(screen.getByText(/Датированное исследование страниц пока не сохранено/)).toBeVisible();
+    expect(screen.getByText(/Выбрать приёмы с владельцем/)).toBeVisible();
+    expect(screen.getByText(/Разбор источников пока не добавлен/)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: source.source_name, exact: true }));
     expect(screen.getByRole('button', { name: source.source_name, exact: true })).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('link')).toHaveAttribute('href', source.source_url);
@@ -33,33 +33,33 @@ describe('sources before the content plan', () => {
   it('keeps an excluded source readable and preserves its enable control', () => {
     render(<ContentReferenceAnalysis {...base} items={[{ ...source, enabled: false }]} />);
     fireEvent.click(screen.getByRole('button', { name: source.source_name, exact: true }));
-    fireEvent.click(screen.getByText('Использование ориентира в новых черновиках'));
-    expect(screen.getByText(/исключён из подготовки/)).toBeVisible();
+    fireEvent.click(screen.getByText('Учитывать в новых черновиках'));
+    expect(screen.getByText(/отключён для новых/)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Включить Пример ателье' }));
     expect(base.onToggle).toHaveBeenCalledWith({ ...source, enabled: false });
   });
   it('does not interpret availability as owner approval', () => {
     render(<ContentReferenceAnalysis {...base} items={[source]} />);
     fireEvent.click(screen.getByRole('button', { name: source.source_name, exact: true }));
-    fireEvent.click(screen.getByText('Использование ориентира в новых черновиках'));
-    expect(screen.getByText(/не означает согласование подхода/)).toBeVisible();
+    fireEvent.click(screen.getByText('Учитывать в новых черновиках'));
+    expect(screen.getByText(/Приём ещё нужно согласовать/)).toBeVisible();
     expect(screen.queryByText('Согласовано')).not.toBeInTheDocument();
   });
   it('blocks unsafe source links without inventing missing research', () => {
     render(<ContentReferenceAnalysis {...base} items={[{ ...source, source_url: 'javascript:alert(1)', techniques: [] }]} />);
     fireEvent.click(screen.getByRole('button', { name: source.source_name, exact: true }));
-    expect(screen.getByText(/цитаты и дата изучения страницы ещё не добавлены/)).toBeVisible();
+    expect(screen.getByText(/Разбор с цитатами ещё не добавлен/)).toBeVisible();
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
   it('retains read-only permissions', () => {
     render(<ContentReferenceAnalysis {...base} canManage={false} items={[source]} />);
     fireEvent.click(screen.getByRole('button', { name: source.source_name, exact: true }));
-    fireEvent.click(screen.getByText('Использование ориентира в новых черновиках'));
+    fireEvent.click(screen.getByText('Учитывать в новых черновиках'));
     expect(screen.getByRole('button', { name: 'Отключить Пример ателье' })).toBeDisabled();
   });
   it('offers a practical start for an empty set', () => {
     render(<ContentReferenceAnalysis {...base} items={[]} />);
-    expect(screen.getByText(/Добавьте публичную ссылку/)).toBeVisible();
+    expect(screen.getByText(/Добавьте ссылку на статью/)).toBeVisible();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });

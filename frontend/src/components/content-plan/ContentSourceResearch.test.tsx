@@ -24,14 +24,14 @@ describe('source approaches before planning', () => {
     expect(screen.getByText('«Test the sample first»')).toBeVisible();
     expect(screen.getByText('Как пишет источник')).toBeVisible();
     expect(screen.getByText('Предлагаем показать собственную проверку образца.')).toBeVisible();
-    expect(screen.getByText(/Наш учебный пример, не готовый пост/)).toBeVisible();
+    expect(screen.getByText(/Детали уточним/)).toBeVisible();
     expect(screen.getByText(/Какие этапы подтверждены/)).toBeVisible();
-    fireEvent.click(screen.getByText('Дата, контекст и границы вывода'));
+    fireEvent.click(screen.getByText('Источник и дата проверки'));
     expect(screen.getByText(/20.10.2026.*Дата публикации не указана/)).toBeVisible();
   });
   it('labels missing evidence rather than inventing it', () => {
     render(<ContentSourceEvidence report={report} referenceId="missing" ru />);
-    expect(screen.getByText(/датированный разбор ещё не сохранён/)).toBeVisible();
+    expect(screen.getByText(/Разбор этого источника ещё не добавлен/)).toBeVisible();
     expect(screen.queryByRole('blockquote')).not.toBeInTheDocument();
   });
   it('does not show a plan audit even if an older report contains one', () => {
@@ -42,7 +42,7 @@ describe('source approaches before planning', () => {
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Фабрика', exact: true }));
     expect(screen.queryByText('В текущем посте нет примерки.')).not.toBeInTheDocument();
-    expect(screen.getByText(/согласование ещё впереди/)).toBeVisible();
+    expect(screen.getByText(/Приёмы нужно согласовать/)).toBeVisible();
     expect(screen.queryByRole('button', { name: /генер|сохранить|опубликовать/i })).not.toBeInTheDocument();
   });
 });

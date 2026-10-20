@@ -40,7 +40,7 @@ describe('content references', () => {
       settings_version: 1, items: [{ ...catalogue.items[0], enabled: false }] });
     render(<ContentReferences businessId="a" open onOpenChange={vi.fn()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'BOMONTI', exact: true }));
-    fireEvent.click(screen.getByText('Использование ориентира в новых черновиках'));
+    fireEvent.click(screen.getByText('Учитывать в новых черновиках'));
     fireEvent.click(await screen.findByRole('button', { name: 'Отключить BOMONTI' }));
     await screen.findByRole('button', { name: 'Включить BOMONTI' });
     expect(JSON.parse(request.mock.calls[1][1].body)).toEqual({

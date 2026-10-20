@@ -94,7 +94,7 @@ export function ContentReferences({ businessId, open, onOpenChange, language = '
     }}>
       <SheetHeader>
         <SheetTitle className="pr-8 leading-snug">{ru ? 'Источники и подходы' : 'Sources and approaches'}</SheetTitle>
-        <SheetDescription>{ru ? 'Изучаем примеры рынка и предлагаем приёмы для обсуждения с владельцем — до составления плана.' : 'Why these examples help, what guidance is saved and what can inform new copy.'}</SheetDescription>
+        <SheetDescription>{ru ? 'Выберите приёмы для будущих публикаций и обсудите их с владельцем.' : 'Why these examples help, what guidance is saved and what can inform new copy.'}</SheetDescription>
       </SheetHeader>
       {loading && <p role="status" className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />{ru ? 'Загружаем ориентиры…' : 'Loading references…'}</p>}
       {error && <div role="alert" className="mt-4 text-sm text-destructive">{error}<Button variant="outline" className="mt-2 block" disabled={busy} onClick={() => {
