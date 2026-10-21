@@ -279,7 +279,8 @@ export const TelegramControlWorkspace = () => {
         setBootstrap((current) => ({ ...current, catalog: result.catalog }));
       } else {
         setBootstrap(result);
-        setRestoredJob(result.active_job || null);
+        const selectedWork = ['partner', 'content_item', 'day_brief', 'finance_input'].includes(result.resolved_deep_link?.item_type || '');
+        setRestoredJob(selectedWork ? null : result.active_job || null);
       }
       if (!catalogOnly && !query && !cursor) await Promise.all([loadWorkspace(result.selected_scope), loadToday(result.selected_scope, result.today_v2_enabled !== false)]);
       setError('');

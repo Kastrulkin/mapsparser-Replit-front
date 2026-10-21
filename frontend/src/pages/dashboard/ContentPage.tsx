@@ -3776,10 +3776,12 @@ export function ContentPage() {
 
 function PublicationPhotoPreview({ src }: { src: string }) {
   const [open, setOpen] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const [photoError, setPhotoError] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger type="button" className="w-full text-left" aria-label="Увеличить фото публикации">
-        <AuthenticatedImage src={src} alt="Подобранное фото" className="h-32 w-full rounded-2xl object-cover shadow-sm ring-1 ring-black/10" />
+        <AuthenticatedImage key={`thumbnail-${attempt}`} src={src} alt="Подобранное фото" className="h-32 w-full rounded-2xl object-cover shadow-sm ring-1 ring-black/10" />
         <span className="mt-2 block text-sm underline">Увеличить фото</span>
       </DialogTrigger>
       <DialogContent className="max-w-4xl">
@@ -3787,50 +3789,54 @@ function PublicationPhotoPreview({ src }: { src: string }) {
           <DialogTitle>Фото публикации</DialogTitle>
           <DialogDescription>Проверьте детали снимка. Закрытие вернёт вас к тексту публикации.</DialogDescription>
         </DialogHeader>
-        <AuthenticatedImage src={src} alt="Фото публикации крупно" className="max-h-[75vh] w-full rounded-2xl object-contain" />
-        <DialogFooter><button type="button" className="min-h-11 rounded-xl px-4" onClick={() => setOpen(false)}>Закрыть фото</button></DialogFooter>
+        <AuthenticatedImage key={`large-${attempt}`} src={src} onFailure={setPhotoError} alt="Фото публикации крупно" className="max-h-[75vh] w-full rounded-2xl object-contain" />
+        <DialogFooter>{photoError && <button type="button" className="min-h-11 rounded-xl border px-4" onClick={() => { setPhotoError(false); setAttempt(value => value + 1); }}>Повторить загрузку фото</button>}<button type="button" className="min-h-11 rounded-xl px-4" onClick={() => setOpen(false)}>Закрыть фото</button></DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-function AuthenticatedImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
+function AuthenticatedImage({ src, alt, className, onFailure }: { src: string; alt: string; className?: string; onFailure?: (failed: boolean) => void }) {
   const [resolvedSrc, setResolvedSrc] = useState(() => (src.startsWith('/api/') ? '' : src));
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    if (!src || !src.startsWith('/api/')) {
-      setResolvedSrc(src);
-      return undefined;
-    }
+    setFailed(false);
+    if (!src) { setFailed(true); onFailure?.(true); return; }
+    if (!src.startsWith('/api/')) { setResolvedSrc(src); return; }
     setResolvedSrc('');
     let cancelled = false;
     let objectUrl = '';
+    const controller = new AbortController();
+    const deadline = window.setTimeout(() => controller.abort(), 15000);
     const loadImage = async () => {
-      const token = newAuth.getToken() || '';
-      const response = await fetch(`${API_URL}${src}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-      if (!response.ok) return;
-      const blob = await response.blob();
-      if (cancelled) return;
-      objectUrl = URL.createObjectURL(blob);
-      setResolvedSrc(objectUrl);
+      try {
+        const token = newAuth.getToken() || '';
+        const response = await fetch(`${API_URL}${src}`, { signal: controller.signal,
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+        if (!response.ok) throw new Error('Image unavailable');
+        const blob = await response.blob();
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setResolvedSrc(objectUrl);
+      } catch {
+        if (!cancelled) { setFailed(true); onFailure?.(true); }
+      } finally { window.clearTimeout(deadline); }
     };
     void loadImage();
     return () => {
-      cancelled = true;
+      cancelled = true; controller.abort(); window.clearTimeout(deadline);
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [src]);
+  }, [src, onFailure]);
 
-  if (!resolvedSrc) {
-    return (
-      <div className={cn('flex items-center justify-center bg-slate-100 text-slate-400', className)}>
-        <ImageIcon className="h-5 w-5" />
-      </div>
-    );
-  }
-  return <img src={resolvedSrc} alt={alt} className={className} />;
+  if (failed || !resolvedSrc) return (
+    <div role={failed ? 'alert' : 'status'} className={cn('flex min-h-32 items-center justify-center gap-2 bg-muted p-3 text-center text-sm text-muted-foreground', className)}>
+      <ImageIcon className="h-5 w-5 shrink-0" />
+      <span>{failed ? 'Не удалось загрузить фото. Проверьте соединение и повторите.' : 'Загружаем фото…'}</span>
+    </div>
+  );
+  return <img src={resolvedSrc} alt={alt} className={className} onError={() => { setFailed(true); onFailure?.(true); }} />;
 }
 
 function Insight({ icon, text, detail }: { icon: React.ReactNode; text: string; detail?: string }) {

@@ -1,5 +1,5 @@
 import userEvent from '@testing-library/user-event';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -123,4 +123,25 @@ describe('ContentPage story-facts deep link', () => {
     expect(vi.mocked(newAuth.makeRequest).mock.calls.some(([, options]) => options?.method && options.method !== 'GET')).toBe(false);
   });
 
+  it('explains an unavailable enlarged photo, allows retry and keeps unsaved text', async () => {
+    const originalRequest = vi.mocked(newAuth.makeRequest).getMockImplementation();
+    const photoPlan = { ...storyPlan, items: [{ ...storyPlan.items[0], draft_text: 'Исходный текст.', metadata_json: { generation_source: 'manual' } }] };
+    vi.mocked(newAuth.makeRequest).mockImplementation(async path => {
+      if (path.startsWith('/content-plans?')) return { plans: [photoPlan] };
+      if (path === '/content-plans/plan-1') return { plan: photoPlan };
+      if (path.startsWith('/media-intelligence/posts/')) return { recommendation: { status: 'ready', selected_asset: { id: 'photo-1', original_url: 'https://example.test/missing.jpg' }, alternatives: [] } };
+      return originalRequest?.(path);
+    });
+    render(<MemoryRouter initialEntries={['/dashboard/content?plan_id=plan-1&item_id=item-1']}><LanguageProvider><Routes><Route element={<ContextRoute />}><Route path="/dashboard/content" element={<ContentPage />} /></Route></Routes></LanguageProvider></MemoryRouter>);
+    const user = userEvent.setup();
+    const text = await screen.findByRole('textbox', { name: 'Текст публикации' });
+    await user.clear(text); await user.type(text, 'Не терять правку при ошибке фото');
+    await user.click(await screen.findByRole('button', { name: 'Увеличить фото публикации' }));
+    fireEvent.error(screen.getByRole('img', { name: 'Фото публикации крупно' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось загрузить фото');
+    await user.click(screen.getByRole('button', { name: 'Повторить загрузку фото' }));
+    expect(screen.getByRole('img', { name: 'Фото публикации крупно' })).toHaveAttribute('src', 'https://example.test/missing.jpg');
+    await user.click(screen.getByRole('button', { name: 'Закрыть фото', exact: true }));
+    expect(screen.getByRole('textbox', { name: 'Текст публикации' })).toHaveValue('Не терять правку при ошибке фото');
+  });
 });
