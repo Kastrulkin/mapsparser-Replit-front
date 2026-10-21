@@ -57,3 +57,82 @@ it.each(['web', 'telegram_mini_app'])('sends financial transcription directly to
   await waitFor(() => expect(submit).toHaveBeenCalledExactlyOnceWith('10 продаж, выручка 350 евро', { transcription_id: 'a', conversation_id: 'c', request_id: 'voice:a' }));
   expect(screen.queryByText('Отправить Оператору')).not.toBeInTheDocument();
 });
+
+it.each(['auto_submit_work', 'auto_submit_finance'])('keeps a daily focus for review despite %s', async flag => {
+  sessionStorage.clear();
+  vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:recording'), revokeObjectURL: vi.fn() }));
+  vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+    if (String(input).includes('/config')) return reply({ input_enabled: true });
+    if (String(input).includes('/transcriptions')) return reply({ asset_id: 'daily-a', job_id: 'daily-j', conversation_id: 'daily-c' }, 202);
+    return reply({ job: { status: 'completed', result: { transcript: 'Сегодня предлагаем подходящий уход', [flag]: true } } });
+  }));
+  const submit=vi.fn(()=>Promise.resolve());const user=userEvent.setup();
+  render(<OperatorVoiceInput businessId="daily-business" channel="telegram_mini_app" contextKey="day_brief" directSubmit={false} submitLabel="Вставить в фокус дня" draftLabel="Распознанный фокус" onSubmit={submit} headers={headers} />);
+  await user.upload(await screen.findByLabelText('Загрузить аудио'),new File(['audio'],'daily.ogg',{type:'audio/ogg'}));
+  await user.click(screen.getByText('Распознать запись'));
+  await screen.findByLabelText('Распознанный фокус');
+  expect(submit).not.toHaveBeenCalled();
+  await user.click(screen.getByText('Вставить в фокус дня'));
+  expect(submit).toHaveBeenCalledExactlyOnceWith('Сегодня предлагаем подходящий уход',{transcription_id:'daily-a',conversation_id:'daily-c',request_id:'voice:daily-a'});
+  expect(sessionStorage.getItem('localos-voice:telegram_mini_app:daily-business:day_brief')).toBeNull();
+});
+
+it('restores interrupted daily transcription for explicit review without submitting', async()=>{
+ sessionStorage.clear();
+ sessionStorage.setItem('localos-voice:telegram_mini_app:daily-business:day_brief',JSON.stringify({asset_id:'restored-a',job_id:'restored-j',conversation_id:'restored-c'}));
+ vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL)=>String(input).includes('/config')?reply({input_enabled:true}):reply({job:{status:'completed',result:{transcript:'Фокус после перезапуска'}}})));
+ const submit=vi.fn(()=>Promise.resolve());
+ render(<OperatorVoiceInput businessId="daily-business" channel="telegram_mini_app" contextKey="day_brief" directSubmit={false} draftLabel="Распознанный фокус" onSubmit={submit} headers={headers}/>);
+ expect(await screen.findByLabelText('Распознанный фокус')).toHaveValue('Фокус после перезапуска');
+ expect(submit).not.toHaveBeenCalled();
+});
+
+it('does not restore a general chat recording into daily briefing',async()=>{
+ sessionStorage.clear();sessionStorage.setItem('localos-voice:telegram_mini_app:daily-business',JSON.stringify({asset_id:'chat-a',job_id:'chat-j',conversation_id:'chat-c'}));
+ const fetchMock=vi.fn(()=>reply({input_enabled:true}));vi.stubGlobal('fetch',fetchMock);
+ const submit=vi.fn(()=>Promise.resolve());
+ render(<OperatorVoiceInput businessId="daily-business" channel="telegram_mini_app" contextKey="day_brief" directSubmit={false} onSubmit={submit} headers={headers}/>);
+ await screen.findByLabelText('Загрузить аудио');expect(fetchMock).toHaveBeenCalledTimes(1);expect(submit).not.toHaveBeenCalled();
+});
+
+
+it.each(['telegram_mini_app', 'max_mini_app'])('explains denied microphone access without leaking browser errors in %s', async channel => {
+  sessionStorage.clear();
+  vi.stubGlobal('fetch', vi.fn(() => reply({ input_enabled: true })));
+  vi.stubGlobal('MediaRecorder', vi.fn());
+  vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn().mockRejectedValue(new DOMException('Permission denied by system', 'NotAllowedError')) } });
+  const submit=vi.fn(()=>Promise.resolve());
+  const user=userEvent.setup();
+  render(<OperatorVoiceInput businessId="denied-mic" channel={channel} directSubmit={false} onSubmit={submit} headers={headers}/>);
+  await user.click(await screen.findByRole('button',{name:'Записать голосом'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Нет доступа к микрофону');
+  expect(screen.getByRole('alert')).toHaveTextContent('загрузите аудиофайл');
+  expect(screen.getByRole('alert')).not.toHaveTextContent('Permission denied');
+  expect(screen.getByRole('button',{name:'Загрузить аудио'})).toBeEnabled();
+  expect(submit).not.toHaveBeenCalled();
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+
+it('rechecks the queued transcription instead of uploading the recording twice', async()=>{
+ sessionStorage.clear();
+ vi.stubGlobal('URL',Object.assign(URL,{createObjectURL:vi.fn(()=>'blob:retry'),revokeObjectURL:vi.fn()}));
+ let retried=false;
+ const mock=vi.fn((input:RequestInfo|URL)=>{
+  const url=String(input);
+  if(url.includes('/config'))return reply({input_enabled:true});
+  if(url.includes('/transcriptions'))return reply({asset_id:'slow-a',job_id:'slow-j',conversation_id:'slow-c'},202);
+  if(url.includes('/retry')){retried=true;return reply({job:{status:'queued'}});}
+  return reply({job:retried?{status:'completed',result:{transcript:'Проверяем чистоту окон'}}:{status:'failed',error:'Распознавание ещё не завершено. Повторите проверку'}});
+ });
+ vi.stubGlobal('fetch',mock);const submit=vi.fn(()=>Promise.resolve());const user=userEvent.setup();
+ render(<OperatorVoiceInput businessId="slow-business" channel="telegram_mini_app" directSubmit={false} draftLabel="Распознанный фокус" onSubmit={submit} headers={headers}/>);
+ await user.upload(await screen.findByLabelText('Загрузить аудио'),new File(['voice'],'focus.ogg',{type:'audio/ogg'}));
+ await user.click(screen.getByRole('button',{name:'Распознать запись'}));
+ await screen.findByRole('alert');
+ await user.click(screen.getByRole('button',{name:'Проверить распознавание'}));
+ expect(await screen.findByLabelText('Распознанный фокус')).toHaveValue('Проверяем чистоту окон');
+ expect(mock.mock.calls.filter(([url])=>String(url).includes('/transcriptions'))).toHaveLength(1);
+ expect(mock.mock.calls.filter(([url])=>String(url).includes('/retry'))).toHaveLength(1);
+ expect(submit).not.toHaveBeenCalled();
+});
