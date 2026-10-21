@@ -33,3 +33,20 @@ it('keeps a linked plan post editable during rerenders and background refresh', 
   view.rerender(<Suspense fallback={null}><ContentModule {...props} items={[{...focused,version:'version-2',draft_text:'Обновлено в другом окне'}]} focusItemId={item.id} /></Suspense>);
   expect(screen.getByRole('textbox', {name:'Текст публикации'})).toHaveValue('Незавершённая правка по ссылке');
 });
+
+it('reports an open editor and prevents the top action from discarding its text', async () => {
+  const onEditingChange = vi.fn();
+  const planned = { ...item, plan_id: 'qa-plan', plan_title: 'План QA' };
+  const view = render(<Suspense fallback={null}><ContentModule {...props} items={[planned]} onEditingChange={onEditingChange} /></Suspense>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Редактировать текст' }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Текст публикации' }), { target: { value: 'Не терять эту правку' } });
+  expect(onEditingChange).toHaveBeenLastCalledWith(true);
+  const topAction = screen.getByRole('button', { name: 'Вернуться к редактированию' });
+  expect(topAction).toBeEnabled();
+  fireEvent.click(topAction);
+  expect(screen.getByRole('textbox', { name: 'Текст публикации' })).toHaveValue('Не терять эту правку');
+  fireEvent.click(screen.getByRole('button', { name: 'Отменить правки' }));
+  expect(onEditingChange).toHaveBeenLastCalledWith(false);
+  view.unmount();
+  expect(onEditingChange).toHaveBeenLastCalledWith(false);
+});

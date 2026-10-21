@@ -45,7 +45,7 @@ import {
 	TrendingUp,
 	WandSparkles, X
 } from 'lucide-react';
-import { FormEvent, Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { FormEvent, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 
 const BusinessInputSettings = lazy(() => import('@/components/operator/BusinessInputSettings').then((module) => ({ default: module.BusinessInputSettings })));
 const ContentRules = lazy(() => import('@/components/operator/ContentRules').then((module) => ({ default: module.ContentRules })));
@@ -93,9 +93,13 @@ export const TelegramControlWorkspace = () => {
   const [progressLoading, setProgressLoading] = useState(false);
   const [tab, setTab] = useState<Tab>('today');
   const [module, setModule] = useState('');
+  const moduleReturnTab = useRef<Tab>('today');
+  const [contentEditing, setContentEditing] = useState(false);
+  const closeModule = useCallback(() => { if (contentEditing) { setError('Сначала сохраните или отмените редактирование публикации.'); return; } setModule(''); setTab(moduleReturnTab.current); }, [contentEditing]);
   const [loading, setLoading] = useState(!preview);
   const [slowLoading, setSlowLoading] = useState(false);
   const [error, setError] = useState('');
+  const onContentEditingChange = useCallback((editing: boolean) => { setContentEditing(editing); if (!editing) setError(current => current === 'Сначала сохраните или отмените редактирование публикации.' ? '' : current); }, []);
   const [picker, setPicker] = useState(false);
   const [pickerNetwork, setPickerNetwork] = useState<NetworkCatalogItem | null>(null);
   const [networkLocations, setNetworkLocations] = useState<NetworkLocationsResult>({});
@@ -371,11 +375,11 @@ export const TelegramControlWorkspace = () => {
   useEffect(() => {
     const back = webApp()?.BackButton;
     if (!back) return;
-    const goBack = () => { if (module) setModule(''); else if (pickerNetwork) setPickerNetwork(null); else if (picker) setPicker(false); else setTab('today'); };
+    const goBack = () => { if (pickerNetwork) setPickerNetwork(null); else if (picker) setPicker(false); else if (module) closeModule(); else setTab('today'); };
     if (showOnboarding) back.hide();
     else if (module || picker || tab !== 'today') { back.show(); back.onClick(goBack); } else back.hide();
     return () => back.offClick(goBack);
-  }, [module, picker, pickerNetwork, showOnboarding, tab]);
+  }, [module, picker, pickerNetwork, showOnboarding, tab, closeModule]);
 
   const chooseScope = async (kind: string, id?: string | null) => {
     if (preview) { setPicker(false); setPickerNetwork(null); return true; }
@@ -411,6 +415,7 @@ export const TelegramControlWorkspace = () => {
   };
 
   const openScopeSwitcher = () => {
+    if (contentEditing) { setError('Сначала сохраните или отмените редактирование публикации.'); return; }
     setSearch('');
     setNetworkSearch('');
     const parent = scope?.parent_scope;
@@ -596,6 +601,7 @@ export const TelegramControlWorkspace = () => {
   }, [bootstrap]);
 
   const openMobileTarget = (screen = 'tasks', targetScope?: { kind?: string; id?: string }) => {
+    if (contentEditing) { setError('Сначала сохраните или отмените редактирование публикации.'); return; }
     const destination = screen === 'analytics' || screen === 'finance_import' ? 'finance' : screen;
     const navigationEntry = bootstrap?.navigation?.find((item) => item.key === destination);
     if (navigationEntry?.status === 'read_only' && !navigationEntry.preview_available && navigationEntry.reason?.toLowerCase().includes('тариф')) {
@@ -605,6 +611,7 @@ export const TelegramControlWorkspace = () => {
     const navigate = () => {
       if (isTab(screen)) { setModule(''); setTab(screen); return; }
       const moduleTarget = screen === 'analytics' ? 'finance' : screen;
+      if (!module) moduleReturnTab.current = tab;
       setTab('more'); setModule(moduleTarget || 'tasks');
     };
     if (targetScope?.id && (targetScope.id !== scope?.id || targetScope.kind !== scope?.kind)) {
@@ -807,7 +814,7 @@ export const TelegramControlWorkspace = () => {
             {!picker && tab === 'more' && !module ? <More navigation={visibleNavigation} onOpen={openMobileTarget} openProgress={() => openMobileTarget('progress')} onLocked={setPaywall} restartTour={() => setShowOnboarding(true)} scope={scope} /> : null}
             {!picker && tab === 'menu' ? <UtilityMenu navigation={visibleNavigation} onOpen={openMobileTarget} scope={scope} /> : null}
             {!picker && tab === 'more' && module === 'settings' && scope?.kind === 'business' && scope.id ? <>{bootstrap?.max_enabled ? <MaxChannelConnection key={`max-${scope.id}`} businessId={scope.id} headers={authOnlyHeaders} /> : null}<BusinessInputSettings key={scope.id} businessId={scope.id} headers={authOnlyHeaders} /><ContentRules key={`rules-${scope.id}`} businessId={scope.id} headers={authOnlyHeaders} /></> : null}
-            {!picker && tab === 'more' && module ? <ModuleScreen module={module} focusItemId={selectedContent && selectedContent.business_id === scope?.id && module === (selectedContent.selection_type === 'partner' ? 'partnerships' : 'content') ? selectedContent.id : deepLinkItemId} scope={scope} access={bootstrap?.navigation?.find((item) => item.key === (module === 'finance_import' || module === 'analytics' ? 'finance' : module))} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} discussContent={discussContent} discussPartner={item => discussContent(item, 'partner')} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={() => setModule('')} /> : null}
+            {!picker && tab === 'more' && module ? <ModuleScreen onContentEditingChange={onContentEditingChange} module={module} focusItemId={selectedContent && selectedContent.business_id === scope?.id && module === (selectedContent.selection_type === 'partner' ? 'partnerships' : 'content') ? selectedContent.id : deepLinkItemId} scope={scope} access={bootstrap?.navigation?.find((item) => item.key === (module === 'finance_import' || module === 'analytics' ? 'finance' : module))} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} discussContent={discussContent} discussPartner={item => discussContent(item, 'partner')} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={closeModule} /> : null}
           </motion.div>
         </AnimatePresence>
       </MobileShell>
@@ -956,14 +963,14 @@ const moduleNames: Record<string, [string, string]> = {
   community_sources: ['Источники Ленты', 'Публичные Telegram-каналы и открытые группы, из которых ЛокалОС собирает ленту и главные темы.'], influencers: ['Инфлюенсеры', 'Подходящие локальные авторы, предложение, сообщения, размещения и результат.'],
 };
 
-const ModuleScreen = ({ module, focusItemId, scope, access, data, loading, progressData, progressLoading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, discussContent, discussPartner, reload, openTarget, track, trackProduct, openTasks, requestCrm, back }: ModuleScreenProps) => {
+const ModuleScreen = ({ onContentEditingChange, module, focusItemId, scope, access, data, loading, progressData, progressLoading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, discussContent, discussPartner, reload, openTarget, track, trackProduct, openTasks, requestCrm, back }: ModuleScreenProps) => {
   const content = moduleNames[module] || ['Раздел', 'Данные и доступные действия.'];
   const { language } = useLanguage();
   const destination = workDestinations.find(item => item.mobileKey === module);
   const title = destination ? workNavigationCopy(language).label(destination.id) : content[0];
   return <Screen title={title} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>
     {module === 'company' && (scope?.kind==='business'||scope?.kind==='network') && <button type="button" onClick={()=>openTarget('business_knowledge')} className="mb-4 flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-input p-4 text-left focus-visible:ring-2 focus-visible:ring-ring"><span>Знания о бизнесе<small className="mt-1 block text-muted-foreground">Характеристики, постоянные правила и документы</small></span><ChevronRight className="h-4 w-4 shrink-0" /></button>}
-    {module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'influencers' ? <InfluencersMobileModule scope={scope} focusItemId={focusItemId} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} focusItemId={focusItemId} onDiscuss={lead => discussPartner?.({id:lead.id,title:lead.name,business_id:scope?.id || undefined,updated_at:lead.updated_at})} openBusiness={id => openTarget('partnerships', { kind: 'business', id })} /> : access?.status === 'read_only' || data.status === 'payment_required' ? <LockedModulePreview item={access || data.access} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} trackProduct={trackProduct} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule key={`${scope?.kind}:${scope?.id}`} focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} onDiscuss={discussContent} openKnowledge={() => openTarget('business_knowledge')} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'business_knowledge' ? <BusinessKnowledge embedded focusRecordId={focusItemId} headers={authOnlyHeaders} scope={scope?.kind==='business'||scope?.kind==='network'?{type:scope.kind,id:scope.id}:null} onBusinessChange={id=>openTarget('business_knowledge',{kind:'business',id})} /> : module === 'work_journal' ? <WorkJournal embedded businessId={scope?.kind === 'business' ? scope.id : null} headers={authOnlyHeaders} /> : module === 'finance' || module === 'finance_import' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} requestCrm={requestCrm} initialSection={module === 'finance_import' ? 'import' : 'overview'} trackProduct={trackProduct} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} canManage={Boolean(data.available_actions?.some((action) => action.key === 'agents.lifecycle'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
+    {module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'influencers' ? <InfluencersMobileModule scope={scope} focusItemId={focusItemId} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} focusItemId={focusItemId} onDiscuss={lead => discussPartner?.({id:lead.id,title:lead.name,business_id:scope?.id || undefined,updated_at:lead.updated_at})} openBusiness={id => openTarget('partnerships', { kind: 'business', id })} /> : access?.status === 'read_only' || data.status === 'payment_required' ? <LockedModulePreview item={access || data.access} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} trackProduct={trackProduct} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule onEditingChange={onContentEditingChange} key={`${scope?.kind}:${scope?.id}`} focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} onDiscuss={discussContent} openKnowledge={() => openTarget('business_knowledge')} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'business_knowledge' ? <BusinessKnowledge embedded focusRecordId={focusItemId} headers={authOnlyHeaders} scope={scope?.kind==='business'||scope?.kind==='network'?{type:scope.kind,id:scope.id}:null} onBusinessChange={id=>openTarget('business_knowledge',{kind:'business',id})} /> : module === 'work_journal' ? <WorkJournal embedded businessId={scope?.kind === 'business' ? scope.id : null} headers={authOnlyHeaders} /> : module === 'finance' || module === 'finance_import' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} requestCrm={requestCrm} initialSection={module === 'finance_import' ? 'import' : 'overview'} trackProduct={trackProduct} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} canManage={Boolean(data.available_actions?.some((action) => action.key === 'agents.lifecycle'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
   </Screen>;
 };
 
