@@ -30,14 +30,19 @@ class SpeechKit:
         return result['id']
 
     def result(self, operation_id):
-        operation = self._json('GET', 'https://operation.api.cloud.yandex.net/operations/' + operation_id)
-        if not operation.get('done'):
-            return None
+        try:
+            operation = self._json('GET', 'https://operation.api.cloud.yandex.net/operations/' + operation_id)
+        except ValueError:
+            # Operation metadata may lag or fail while getRecognition already
+            # provides the complete final response. Never resubmit the audio.
+            operation = {}
         if operation.get('error'):
             raise ValueError('Не удалось распознать запись. Попробуйте записать ещё раз')
         try:
             response = requests.get('https://stt.api.cloud.yandex.net/stt/v3/getRecognition',
                 params={'operationId': operation_id}, headers=self.headers, timeout=(10, 45))
+            if operation.get('done') is False and response.status_code in {400, 404, 409, 425, 503}:
+                return None
             response.raise_for_status()
             import json
             parts = {}
@@ -52,7 +57,8 @@ class SpeechKit:
                 alternatives = final.get('alternatives') or []
                 if alternatives:
                     parts[index] = alternatives[0].get('text', '')
-            return ' '.join(parts.values()).strip()
+            text = ' '.join(parts.values()).strip()
+            return None if not text and operation.get('done') is False else text
         except (requests.RequestException, ValueError):
             raise ValueError('Не удалось получить расшифровку') from None
 
