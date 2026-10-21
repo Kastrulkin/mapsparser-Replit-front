@@ -63,6 +63,8 @@ type Lead = {
   catalog_shortlisted?: boolean;
 };
 type Draft = {
+  recipient_value?: string | null;
+  recipient_source_url?: string | null;
   has_local_edits?: boolean;
   id: string;
   lead_id: string;
@@ -768,7 +770,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
         </form>
         {error ? <div role="alert" className="rounded-[16px] bg-rose-500/10 p-3 text-xs leading-5 text-rose-200">{error}</div> : null}
         <div className="space-y-2">
-          {leads.map((lead) => <article key={lead.id} className="rounded-[20px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><b className="block truncate text-sm">{lead.name || "Компания"}</b><small className="mt-1 block truncate text-zinc-600">{[lead.category, lead.city].filter(Boolean).join(" · ") || lead.address || "Данные уточняются"}</small></div><span className="shrink-0 rounded-full bg-white/[0.05] px-2 py-1 text-[9px] text-zinc-400">★ {lead.rating || "—"}</span></div><div className="mt-3 flex items-center justify-between gap-3"><small className="text-zinc-600">{lead.reviews_count || 0} отзывов</small><button type="button" disabled={busy === `${lead.id}:catalog-shortlist`} onClick={() => void toggleCatalogShortlist(lead)} className="min-h-10 rounded-[13px] bg-white/[0.06] px-3 text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.08] active:scale-[0.96] disabled:opacity-50">{lead.catalog_shortlisted ? "В shortlist" : "Добавить"}</button></div></article>)}
+          {leads.map((lead) => <article key={lead.id} className="rounded-[20px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><b className="block truncate text-sm">{lead.name || "Компания"}</b><small className="mt-1 block truncate text-zinc-600">{[lead.category, lead.city].filter(Boolean).join(" · ") || lead.address || "Данные уточняются"}</small></div><span className="shrink-0 rounded-full bg-white/[0.05] px-2 py-1 text-[9px] text-zinc-400">★ {lead.rating && Number.isFinite(lead.rating) ? lead.rating.toFixed(1).replace(".", ",") : "—"}</span></div><div className="mt-3 flex items-center justify-between gap-3"><small className="text-zinc-600">{lead.reviews_count || 0} отзывов</small><button type="button" disabled={busy === `${lead.id}:catalog-shortlist`} onClick={() => void toggleCatalogShortlist(lead)} className="min-h-10 rounded-[13px] bg-white/[0.06] px-3 text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.08] active:scale-[0.96] disabled:opacity-50">{lead.catalog_shortlisted ? "В shortlist" : "Добавить"}</button></div></article>)}
         </div>
         <a href={`/dashboard/profile?focus=subscription&return_to=${encodeURIComponent(`${miniAppPath()}?screen=partnerships`)}#subscription`} className="btn-iridescent flex min-h-12 w-full items-center justify-center rounded-[15px] px-4 text-center text-sm">Подготовить сообщения — тариф «Привлечение»</a>
       </div>
@@ -1136,7 +1138,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                         </span>
                       </div>
                       <div className="mt-3 flex items-center gap-3 text-[10px] text-zinc-600">
-                        <span>★ {lead.rating || "—"}</span>
+                        <span>★ {lead.rating && Number.isFinite(lead.rating) ? lead.rating.toFixed(1).replace(".", ",") : "—"}</span>
                         <span>{lead.reviews_count || 0} отзывов</span>
                         <span>
                           {channelLabels[lead.selected_channel || ""] || "Канал нужно выбрать"}
@@ -1201,6 +1203,13 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                         </small>
                       </div>
                     </div>
+                    {!historicalRecord ? (
+                      <div className="mt-3 space-y-2 break-words text-xs leading-5 text-zinc-400">
+                        <p>Кому: {draft.recipient_value || "Перед отправкой проверьте адресата"}</p>
+                        {draft.recipient_source_url ? <a href={draft.recipient_source_url} target="_blank" rel="noopener noreferrer" className="block underline">Источник контакта</a> : null}
+                        {draft.channel === "email" && draft.recipient_value && /(^|[._+-])(jur|yur|legal|privacy|dpo|abuse|noreply|no-reply|unsubscribe)([._+-]|$)/i.test(draft.recipient_value.split('@')[0]) ? <p role="note" className="rounded-[14px] bg-amber-400/10 p-3 text-xs leading-5 text-amber-200">Похоже на служебный или юридический адрес. Перед отправкой найдите контакт для сотрудничества и проверьте получателя.</p> : null}
+                      </div>
+                    ) : null}
                     {historicalRecord ? (
                       <div
                         role="status"
@@ -1262,7 +1271,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
               <button
                 disabled={busy === "create-batch"}
                 onClick={() => void createBatch()}
-                className="btn-iridescent sticky bottom-24 min-h-12 w-full rounded-[15px] text-sm shadow-2xl disabled:opacity-45"
+                className="btn-iridescent min-h-12 w-full rounded-[15px] text-sm shadow-2xl disabled:opacity-45"
               >
                 {selectedDrafts.length
                   ? `Собрать пакет: ${selectedDrafts.length}`

@@ -1928,12 +1928,14 @@ def partnership_list_drafts():
                         d.id, d.lead_id, d.channel, d.angle_type, d.tone, d.status,
                         d.generated_text, d.edited_text, d.approved_text,
                         d.learning_note_json, d.created_at, d.updated_at,
+                        COALESCE(cp.value, d.learning_note_json->>'recipient') AS recipient_value, cp.source_url AS recipient_source_url,
                         l.name AS lead_name, l.category, l.city, l.email,
                         l.selected_channel, l.status AS lead_status,
                         l.pipeline_status AS lead_pipeline_status,
                         l.partnership_stage AS lead_partnership_stage
                     FROM outreachmessagedrafts d
                     JOIN prospectingleads l ON l.id = d.lead_id
+                    LEFT JOIN lead_contact_points cp ON cp.id = d.contact_point_id AND cp.lead_id = l.id
                     WHERE l.business_id = %s
                       AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
             """
@@ -1956,6 +1958,7 @@ def partnership_list_drafts():
                     id, lead_id, channel, angle_type, tone, status,
                     generated_text, edited_text, approved_text,
                     learning_note_json, created_at, updated_at,
+                    recipient_value, recipient_source_url,
                     lead_name, category, city, email,
                     selected_channel, lead_status,
                     lead_pipeline_status, lead_partnership_stage

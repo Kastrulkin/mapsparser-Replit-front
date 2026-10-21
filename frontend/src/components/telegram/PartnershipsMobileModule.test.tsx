@@ -223,3 +223,21 @@ describe('Draft-only saving', () => {
     expect(calls.some(url => url.includes('/approve') || url.includes('/confirm'))).toBe(false);
   });
 });
+
+describe('Partnership recipient review', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('shows the stored contact and its source beside a native draft without contact research metadata', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/drafts?')) return response({ drafts: [{ id: 'draft-native', lead_id: 'lead-native', lead_name: 'Тестовый партнёр', channel: 'email', status: 'draft', generated_text: 'Тестовое письмо', recipient_value: 'jur@example.test', recipient_source_url: 'https://example.test/contacts' }] });
+      return response({ drafts: [], batches: [], items: [], counts: { partners: 0, launched: 0, preparing: 0, needs_decision: 0 } });
+    }));
+    const user = userEvent.setup();
+    render(<PartnershipsMobileModule scope={{ kind: 'business', id: 'business-1' }} />);
+    await user.click(await screen.findByRole('button', { name: 'Письма', exact: true }));
+    expect(await screen.findByText('Кому: jur@example.test')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Источник контакта' })).toHaveAttribute('href', 'https://example.test/contacts');
+    expect(screen.getByRole('note')).toHaveTextContent('служебный или юридический');
+  });
+});
