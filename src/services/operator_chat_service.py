@@ -95,6 +95,12 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
             if previous.get("input_hash") != digest:
                 raise ValueError("Идентификатор запроса уже использован для другого текста")
             return {**previous.get("result_json", {}), "idempotent": True}
+    from services.operator_work_journal import literal_note, opens_journal
+    journal_mode=payload.get('input_context')=='work_journal' or literal_note(message) is not None or opens_journal(message)
+    if journal_mode:
+        payload=dict(payload)
+        payload['clear_input_context']=True
+        payload.pop('selected_object',None)
     transcript = payload.get("transcription_id")
     from services import operator_workday, operator_workday_router
     if operator_workday.enabled(business_id):
@@ -108,6 +114,7 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
                             user_id=user_id, role="user", content=message,
                             result={"input_type": "voice" if transcript else "text", "transcription_id": transcript, 'input_origin': input_origin})
     pending_context = conversation_pending_context(conversation)
+    if journal_mode:pending_context={}
     if payload.get('clear_input_context') and (pending_context.get('selected_item') or pending_context.get('selected_partner')):
         pending_context = {}
     if payload.get('selected_object') is not None:

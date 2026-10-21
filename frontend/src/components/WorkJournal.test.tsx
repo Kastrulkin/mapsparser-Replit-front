@@ -19,7 +19,7 @@ it('saves text through Operator and cancels with a version and unique request',a
   return reply({enabled:true,role:'member',items:saved?[{...note,is_voided:cancelled}]:[]});
  });vi.stubGlobal('fetch',mock);
  render(<WorkJournal businessId="b" headers={headers}/>, { wrapper: MemoryRouter });
- await user.type(await screen.findByLabelText('Сообщение Оператору'),'Клиент отказался');await user.click(screen.getByRole('button',{name:'Отправить'}));
+ await user.type(await screen.findByLabelText('Что вы заметили?'),'Клиент отказался');await user.click(screen.getByRole('button',{name:'Отправить наблюдение'}));
  await screen.findByText('Записал отказ');await user.click(await screen.findByRole('button',{name:'Отменить запись'}));
  await waitFor(()=>expect(cancelled).toBe(true));expect(mock.mock.calls.filter(([,i])=>i?.method==='PATCH')).toHaveLength(1);
 });
@@ -86,4 +86,80 @@ it('ignores old digest settings after changing the business',async()=>{
  await waitFor(()=>expect(screen.getByLabelText('Время дневной сводки в часовом поясе бизнеса')).toHaveValue('11:00'));
  resolveOld(new Response(JSON.stringify({local_time:'09:30'})));
  await waitFor(()=>expect(screen.getByLabelText('Время дневной сводки в часовом поясе бизнеса')).toHaveValue('11:00'));
+});
+
+it('keeps knowledge proposals inside MAX instead of switching to Telegram',async()=>{
+ window.history.replaceState({},'', '/max/control');
+ vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL)=>String(input).includes('/audio/')?reply({input_enabled:false}):reply({enabled:true,role:'member',items:[note]})));
+ render(<WorkJournal businessId="b" headers={headers} embedded/>, { wrapper: MemoryRouter });
+ const link=await screen.findByRole('link',{name:'Предложить изменение сведений'});
+ expect(link.getAttribute('href')).toContain('/max/control?screen=business_knowledge');
+ expect(link.getAttribute('href')).toContain('scope_id=b');
+ expect(link.getAttribute('href')).toContain('source_entry=note');
+ window.history.replaceState({},'', '/');
+});
+it('creates an owner-reviewed task from an observation without a chat planner',async()=>{
+ const user=userEvent.setup(); let created=false;
+ const accepted={...note,version:2,review_status:'in_progress'};
+ vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>{
+  const path=String(input);
+  if(path.includes('/audio/'))return reply({input_enabled:false});
+  if(path.includes('/review?'))return reply({items:[accepted]});
+  if(path.endsWith('/note/actions') && init?.method==='POST'){
+   expect(JSON.parse(String(init.body))).toMatchObject({business_id:'b',version:2,kind:'task',title:'Найти мойщика окон',text:'Запросить стоимость, ничего не обещать'});
+   created=true;return reply({action:{id:'action',version:1,status:'ready',title:'Найти мойщика окон'}});
+  }
+  if(path.endsWith('/operator/chat'))throw new Error('Task form must not require a planner');
+  return reply({enabled:true,role:'manager',can_review:true,items:[accepted],members:[]});
+ }));
+ render(<WorkJournal businessId="b" headers={headers}/>, {wrapper:MemoryRouter});
+ await user.click(await screen.findByRole('button',{name:'На разбор'}));
+ await user.click(await screen.findByRole('button',{name:'Назначить задачу'}));
+ await user.type(screen.getByLabelText('Задача'),'Найти мойщика окон');
+ await user.type(screen.getByLabelText('Подробности'),'Запросить стоимость, ничего не обещать');
+ await user.click(screen.getByRole('button',{name:'Создать задачу'}));
+ await waitFor(()=>expect(created).toBe(true));
+ await screen.findByText(/Найти мойщика окон ·/);
+ expect(screen.queryByRole('region',{name:'Задача по наблюдению'})).not.toBeInTheDocument();
+});
+it('edits the employee note directly with the observed version and current platform',async()=>{
+ const user=userEvent.setup();let edited=false;
+ window.history.replaceState({},'', '/max/control');
+ vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>{
+  const path=String(input);
+  if(path.includes('/audio/'))return reply({input_enabled:false});
+  if(path.endsWith('/operator/chat'))throw new Error('A literal correction needs no planner');
+  if(init?.method==='PATCH'){
+   expect(JSON.parse(String(init.body))).toMatchObject({business_id:'b',version:1,void:false,text:'У входа грязные окна',channel:'max_mini_app'});
+   edited=true;return reply({status:'completed'});
+  }
+  return reply({enabled:true,role:'member',items:[{...note,facts_json:{quote:edited?'У входа грязные окна':'Клиент отказался'}}]});
+ }));
+ render(<WorkJournal businessId="b" headers={headers} embedded/>, {wrapper:MemoryRouter});
+ await user.click(await screen.findByRole('button',{name:'Исправить'}));
+ await user.clear(screen.getByLabelText('Исправленный текст'));await user.type(screen.getByLabelText('Исправленный текст'),'У входа грязные окна');
+ await user.click(screen.getByRole('button',{name:'Сохранить исправление'}));
+ await waitFor(()=>expect(edited).toBe(true));await screen.findByText('У входа грязные окна');
+ window.history.replaceState({},'', '/');
+});
+it('reuses the request identity after a lost response instead of creating a duplicate observation',async()=>{
+ const user=userEvent.setup();let attempts=0;const identifiers:string[]=[];
+ vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>{
+  const path=String(input);
+  if(path.includes('/audio/'))return reply({input_enabled:false});
+  if(path.endsWith('/operator/chat')){
+   const body=JSON.parse(String(init?.body));identifiers.push(body.request_id);attempts++;
+   if(attempts===1)return Promise.reject(new TypeError('Failed to fetch'));
+   return reply({conversation_id:'c',status:'completed',chat_response:'Наблюдение сохранено'});
+  }
+  return reply({enabled:true,role:'member',items:attempts>1?[note]:[]});
+ }));
+ render(<WorkJournal businessId="b" headers={headers}/>,{wrapper:MemoryRouter});
+ await user.type(await screen.findByLabelText('Что вы заметили?'),'Клиент отказался');
+ await user.click(screen.getByRole('button',{name:'Отправить наблюдение'}));
+ await screen.findByRole('alert');expect(screen.getByLabelText('Что вы заметили?')).toHaveValue('Клиент отказался');
+ await user.click(screen.getByRole('button',{name:'Отправить наблюдение'}));
+ await screen.findByText('Наблюдение сохранено');
+ expect(identifiers).toHaveLength(2);expect(identifiers[0]).toBe(identifiers[1]);
+ expect(screen.getAllByRole('button',{name:'Исправить'})).toHaveLength(1);
 });

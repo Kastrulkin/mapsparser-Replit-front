@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from services.outreach_daily_limits import CHANNEL_DAILY_LIMITS, LIMITS_VERSION, sender_daily_limit, author_limits_match
+
 import os
 import re
 import uuid
@@ -5257,8 +5259,10 @@ def approve_campaign(
     cursor: Any, campaign_id: str, *, user_id: str | None,
     template_authorization: dict[str, Any] | None = None,
     riderra_template_authorization: dict[str, Any] | None = None,
+    reviewed_batch_id: str | None = None,
+    ai_authorization: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    if not user_id and not template_authorization and not riderra_template_authorization:
+    if not user_id and not template_authorization and not riderra_template_authorization and not ai_authorization:
         raise ValueError("campaign_approval_authority_required")
     cursor.execute(
         """
@@ -5282,6 +5286,8 @@ def approve_campaign(
     if ((campaign.get("policy_json") or {}).get("approval_mode") == "riderra_template"
             and not riderra_template_authorization):
         raise ValueError("riderra_template_authorization_required")
+    if (campaign.get("policy_json") or {}).get("approval_mode") == "ai_rules" and not ai_authorization:
+        raise ValueError("ai_rules_authorization_required")
     if template_authorization:
         policy = campaign.get("policy_json") or {}
         current_grant = load_author_template_authorization(
@@ -5308,19 +5314,7 @@ def approve_campaign(
             raise ValueError("riderra_template_authorization_changed")
     if is_localos_author_lane(campaign):
         policy = campaign.get("policy_json") if isinstance(campaign.get("policy_json"), dict) else {}
-        channel_limits = policy.get("channel_daily_limits") if isinstance(policy.get("channel_daily_limits"), dict) else {}
-        try:
-            policy_current = (
-                policy.get("author_policy_version") == AUTHOR_POLICY_VERSION
-                and int(policy.get("daily_limit") or 0) == AUTHOR_DAILY_LIMIT
-                and set(channel_limits) == set(AUTHOR_CHANNEL_DAILY_LIMITS)
-                and all(
-                    int(channel_limits.get(channel) or 0) == limit
-                    for channel, limit in AUTHOR_CHANNEL_DAILY_LIMITS.items()
-                )
-            )
-        except (TypeError, ValueError):
-            policy_current = False
+        policy_current = author_limits_match(policy)
         if not policy_current:
             raise ValueError("Author campaign daily policy is not current")
     if (
@@ -5359,6 +5353,14 @@ def approve_campaign(
     )
     if not channels_ready:
         raise ValueError("Campaign preflight failed")
+    if ai_authorization:
+        from services.outreach_ai_campaigns import validate
+        policy = campaign.get("policy_json") or {}
+        current_grant = validate(cursor, campaign=campaign, touches=approval_touches,
+            authorization_id=str(ai_authorization.get("id") or ""), job_id=policy.get("continuation_job_id"))
+        if (policy.get("approval_mode") != "ai_rules" or not current_grant
+                or str(current_grant["id"]) != policy.get("ai_authorization_id")):
+            raise ValueError("ai_rules_authorization_changed")
     author_template_approval = bool(
         template_authorization
         and is_localos_author_lane(campaign)
@@ -5369,7 +5371,7 @@ def approve_campaign(
         generation_contract_current(
             touch.get("message_brief_json"),
             touch.get("quality_gate_json"),
-            require_ai=False if deterministic_template_approval else None,
+            require_ai=True if ai_authorization else False if deterministic_template_approval else None,
         )
         for touch in approval_touches
     ):
@@ -5447,15 +5449,17 @@ def approve_campaign(
         "UPDATE outreach_campaign_touches SET status = 'approved', approved_text = generated_text, updated_at = NOW() WHERE campaign_id = %s",
         (campaign_id,),
     )
-    batch_id = str(uuid.uuid4())
-    cursor.execute(
-        """
-        INSERT INTO outreachsendbatches (
-            id, batch_date, daily_limit, status, created_by, approved_by, created_at, updated_at
-        ) VALUES (%s, (NOW() AT TIME ZONE 'Europe/Moscow')::date, %s, 'approved', %s, %s, NOW(), NOW())
-        """,
-        (batch_id, int((campaign.get("policy_json") or {}).get("daily_limit") or 10), user_id, user_id),
-    )
+    batch_id = reviewed_batch_id or str(uuid.uuid4())
+    if reviewed_batch_id:
+        cursor.execute("SELECT id FROM outreachsendbatches WHERE id=%s AND status='draft' FOR UPDATE", (batch_id,))
+        if not cursor.fetchone():
+            raise ValueError("reviewed_batch_not_draft")
+    else:
+        cursor.execute(
+            """INSERT INTO outreachsendbatches (
+                id, batch_date, daily_limit, status, created_by, approved_by, created_at, updated_at
+            ) VALUES (%s, (NOW() AT TIME ZONE 'Europe/Moscow')::date, %s, 'approved', %s, %s, NOW(), NOW())""",
+            (batch_id, sender_daily_limit("email", campaign.get("policy_json")), user_id, user_id))
     cursor.execute(
         """
         SELECT t.*, c.lead_id, c.workstream_id, c.sender_profile_id
@@ -5519,13 +5523,16 @@ def approve_campaign(
         payload={
             "version": int(result.get("version") or 0), "batch_id": batch_id,
             "approval_mode": (
+                "ai_rules" if ai_authorization else
                 "author_template" if template_authorization else
                 "riderra_template" if riderra_template_authorization else "manual"
             ),
             "template_authorization_id": (template_authorization or riderra_template_authorization or {}).get("id"),
+            "ai_authorization_id": str((ai_authorization or {}).get("id") or "") or None,
         },
     )
     result["approval_mode"] = (
+        "ai_rules" if ai_authorization else
         "author_template" if template_authorization else
         "riderra_template" if riderra_template_authorization else "manual"
     )

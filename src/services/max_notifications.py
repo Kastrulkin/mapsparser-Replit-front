@@ -29,6 +29,8 @@ def collect_max_notifications():
         cursor = db.conn.cursor()
         from services.max_guest_audits import collect_guest_audit_results
         collect_guest_audit_results(cursor)
+        from services.work_review_notifications import collect
+        collect(cursor)
         cursor.execute('''SELECT m.max_id,u.id,u.is_active,u.is_superadmin FROM max_identities m
             JOIN users u ON u.id=m.user_id WHERE m.revoked_at IS NULL AND m.notifications_enabled
             AND COALESCE(u.is_active,TRUE)=TRUE''')
@@ -59,6 +61,8 @@ def collect_max_notifications():
                         queue_notification(cursor, user_id=user_id, max_id=actor['max_id'], business_id=business_id,
                             preference_scope=context['kind'] + ':' + str(context['id']), category=category, key='job:' + str(job['id']) + ':' + str(job['status']),
                             text=('Задание требует внимания' if job['status'] == 'failed' else 'Результат задания готов') + ': ' + str(scope.get('name') or 'LocalOS'))
+                if categories.get('tasks'):
+                    collect_work_journal_notifications(cursor, actor=actor, scope=scope, preference_scope=context['kind'] + ':' + str(context['id']))
                 if categories.get('daily_digest'):
                     from services.operator_scope_summary import build_operator_scope_summary
                     summary = build_operator_scope_summary(cursor, scope=scope, user_id=user_id)
@@ -103,6 +107,23 @@ def collect_max_notifications():
         db.close()
 
 
+def collect_work_journal_notifications(cursor, *, actor, scope, preference_scope):
+    """Reuse journal tasks and the existing MAX durable outbox."""
+    from services.operator_conversations import _row
+    from services.work_review_notifications import recipient_allowed
+    cursor.execute("""SELECT id,version,entity_type,title,description FROM journey_actions
+        WHERE business_id=%s AND user_id=%s AND entity_type IN ('work_digest','work_observation')
+          AND status IN ('ready','waiting','blocked') AND due_at<=NOW()
+        ORDER BY priority DESC,due_at LIMIT 100""", (scope['id'],str(actor['id'])))
+    for value in cursor.fetchall():
+        action=_row(cursor,value)
+        if not recipient_allowed(cursor,scope['id'],str(actor['id']),action['entity_type']):continue
+        queue_notification(cursor,user_id=str(actor['id']),max_id=actor['max_id'],business_id=scope['id'],
+            category='tasks',key='work:'+str(action['id'])+':'+str(action['version']),
+            text='ЛокалОС\n\n'+str(action['title'])+'\n\n'+str(action.get('description') or ''),
+            preference_scope=preference_scope,screen='work_journal',work_action_id=str(action['id']),work_action_version=action['version'])
+
+
 def prepare_notification(cursor, payload):
     from services.max_webapp_auth import load_localos_user_for_max
     from services.telegram_control_scope import load_control_preferences
@@ -121,6 +142,15 @@ def prepare_notification(cursor, payload):
     categories = {**DEFAULT_MAX_NOTIFICATIONS, **(prefs.get('notification_preferences_json', {}).get(payload.get('preference_scope') or 'business:' + payload['business_id']) or {})}
     if not categories.get(payload['category']):
         return None
+    if payload.get('work_action_id'):
+        from services.work_review_notifications import recipient_allowed
+        cursor.execute("""SELECT id,version,entity_type,title,description FROM journey_actions
+            WHERE id=%s AND business_id=%s AND user_id=%s AND version=%s
+              AND entity_type IN ('work_digest','work_observation') AND status IN ('ready','waiting','blocked') AND due_at<=NOW()""",
+            (payload['work_action_id'],payload['business_id'],str(actor['id']),payload.get('work_action_version')))
+        action=_row(cursor,cursor.fetchone())
+        if not action or not recipient_allowed(cursor,payload['business_id'],str(actor['id']),action['entity_type']):return None
+        if payload.get('text')!='ЛокалОС\n\n'+str(action['title'])+'\n\n'+str(action.get('description') or ''):return None
     scope = {'kind': 'business', 'id': payload['business_id']}
     buttons = app_keyboard(payload.get('screen') or 'tasks', scope, payload.get('item_type'), payload.get('item_id'))
     if payload.get('post_id'):

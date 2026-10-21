@@ -19,7 +19,8 @@ def authorize(cursor, business, user, owner=False):
     from services.operator_audio import authorize_actor
     from subscription_manager import capability_access_payload
     _, access = authorize_actor(cursor, user, business)
-    if not capability_access_payload(access, 'management').get('allowed'):
+    from services.team_work_access import allowed
+    if not allowed(access):
         raise PermissionError('Планёрка команды недоступна на текущем тарифе бизнеса.')
     return work_journal.scope(cursor, business, user, write=owner, owner_only=owner)
 
@@ -214,7 +215,7 @@ def apply(cursor, *, business, user, envelope):
         # Same tasks across Telegram/MAX; each delivery has its own guarded job.
         cursor.execute("UPDATE journey_actions SET status='superseded',updated_at=NOW() WHERE business_id=%s AND entity_type='operator_colleague' AND action_type='day_brief' AND entity_id=%s AND user_id=%s AND id<>%s AND status<>'superseded'", (business, value['id'], row['user_id'], identifier))
         cursor.execute('''INSERT INTO journey_actions(id,business_id,user_id,flow_type,entity_type,entity_id,action_type,title,description,cta_label,cta_target_json,payload_json,dedupe_key,due_at)
-            VALUES(%s,%s,%s,'work_journal','operator_colleague',%s,'day_brief',%s,%s,'Открыть задачи',%s::jsonb,%s::jsonb,%s,NOW()) ON CONFLICT(dedupe_key) DO NOTHING''',
+            VALUES(%s,%s,%s,'work_journal','operator_colleague',%s,'day_brief',%s,%s,'Открыть задачи',%s::jsonb,%s::jsonb,%s,NOW()) ON CONFLICT(id) DO NOTHING''',
             (identifier, business, row['user_id'], value['id'], 'Планёрка на ' + value['date'], row['text'],
              json.dumps({'screen': 'work_journal', 'item_type': 'day_brief', 'item_id': identifier}), json.dumps(data, ensure_ascii=False), key))
         actions.append(identifier)
@@ -343,6 +344,27 @@ def process_job(job):
         db.close()
 
 
+def delivery_states(cursor, business, rows):
+    """Only metadata for already authorized assignments; never recipient bindings."""
+    if not rows:return []
+    cursor.execute("""SELECT status,payload_json->'briefing_delivery' delivery FROM operator_async_jobs
+        WHERE business_id=%s AND kind='operator_colleague_send'
+          AND payload_json->'briefing_delivery'->>'action_id'=ANY(%s)
+        ORDER BY created_at""",(business,[str(row['id']) for row in rows]))
+    result=[]
+    for item in cursor.fetchall():
+        job=_row(cursor,item);value=job['delivery'];state=value.get('state','unknown')
+        if state=='sent' and not value.get('provider_message_id'):state='unknown'
+        if state=='queued' and job['status'] in {'failed','cancelled','completed'}:state='stopped'
+        result.append({'action_id':value['action_id'],'platform':value['platform'],'state':state})
+    return result
+
+
+def delivery_label(state):
+    return {'sent':'Отправлено','queued':'В очереди','failed':'Не отправлено',
+            'stopped':'Доставка остановлена','unknown':'Результат доставки неизвестен; повторная отправка остановлена'}.get(state,'Проверьте доставку')
+
+
 def overview(cursor, *, business, user, day=None, item_id=None):
     actor = authorize(cursor, business, user)
     owner = actor['role'] == 'owner'
@@ -359,11 +381,12 @@ def overview(cursor, *, business, user, day=None, item_id=None):
             day = action['payload_json']['date']
     day = work_journal.local_day(cursor, business, day)
     people = members(cursor, business) if owner else []
+    rows = assignments(cursor, business, user, owner=owner, day=day)
     return {'date': day, 'user_id': user, 'can_complete': actor['role'] != 'viewer', 'can_manage': owner, 'delivery_enabled': delivery_enabled(),
         'draft': draft(cursor, business, user, day=day) if owner else None,
         'members': [{'id': str(row['id']), 'name': row['name'],
             'platforms': [p for p, connected in [('telegram', row.get('telegram_id')), ('max', row.get('max_id') and row.get('notifications_enabled'))] if connected]} for row in people],
-        'assignments': assignments(cursor, business, user, owner=owner, day=day)}
+        'assignments': rows, 'deliveries':delivery_states(cursor,business,rows)}
 
 
 def route(cursor, *, business, user, message, channel, pending=None, conversation_id=None):
@@ -414,6 +437,10 @@ def route(cursor, *, business, user, message, channel, pending=None, conversatio
         for row in rows:
             person = next((p for p in people if str(p['id']) == row['user_id']), {'name': 'Доступ отозван'})
             lines.append(person['name'] + ': ' + '; '.join(('✓ ' if task['done'] else 'В работе: ') + task['text'] for task in row['payload_json']['tasks']))
+        for delivery in delivery_states(cursor,business,rows):
+            assignee=next(row['user_id'] for row in rows if str(row['id'])==delivery['action_id'])
+            person=next((p for p in people if str(p['id'])==assignee),{'name':'Сотрудник'})
+            lines.append(person['name']+' · '+('MAX' if delivery['platform']=='max' else 'Telegram')+': '+delivery_label(delivery['state']))
         from services.operator_work_handoff import mobile_work_url
         return {'status': 'completed', 'capability': 'work.day_brief', 'chat_response': '\n\n'.join(lines) if rows else 'Подтверждённых задач пока нет.',
             'work_return_url': mobile_work_url(business, current.get('id'), platform, 'work_journal', 'day_brief')}, pending

@@ -17,7 +17,7 @@ TIER_ALIASES = {
     'paid': 'concierge',
 }
 MAPS_CAPABILITIES = {
-    'maps', 'maps.audit', 'maps.services', 'maps.reviews', 'maps.news',
+    'team_work', 'maps', 'maps.audit', 'maps.services', 'maps.reviews', 'maps.news',
     'maps.photos', 'maps.competitors', 'progress', 'telegram_radar', 'web_analytics',
 }
 ACQUISITION_CAPABILITIES = MAPS_CAPABILITIES | {

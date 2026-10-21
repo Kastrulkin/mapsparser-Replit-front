@@ -11,7 +11,8 @@ from services.operator_conversations import _row
 
 
 def enabled(business_id):
-    return business_id in {v.strip() for v in os.getenv('OPERATOR_WORK_JOURNAL_BUSINESS_IDS','').split(',') if v.strip()}
+    from services import team_work_access
+    return team_work_access.enabled(business_id, 'OPERATOR_WORK_JOURNAL_BUSINESS_IDS')
 
 
 def installed(cursor):
@@ -25,7 +26,10 @@ def digest(value):
 
 def scope(cursor,business_id,user_id,write=False,owner_only=False):
     from services.operator_audio import authorize_actor
-    actor,_=authorize_actor(cursor,user_id,business_id)
+    actor,access=authorize_actor(cursor,user_id,business_id)
+    from services.team_work_access import rolled_out, allowed
+    if rolled_out() and write and not allowed(access):
+        raise PermissionError('Для планёрки и журнала нужна действующая подписка любого тарифа.')
     if write and not enabled(business_id):raise PermissionError('Новый рабочий журнал пока отключён для этого бизнеса.')
     owner=actor.get('role')=='business_owner' or bool(actor.get('is_superadmin'))
     role='owner' if owner else 'viewer'
@@ -41,7 +45,8 @@ def scope(cursor,business_id,user_id,write=False,owner_only=False):
     if write and not roles_allow([role], 'work.facts.write'):raise PermissionError('Нет права вносить рабочие сведения.')
     cursor.execute('SELECT master_id FROM business_master_bindings WHERE business_id=%s AND user_id=%s',(business_id,user_id))
     master_id=_row(cursor,cursor.fetchone()).get('master_id')
-    return {'user_id':user_id,'role':role,'all_visits':role in {'owner','manager','admin'},'master_id':master_id}
+    return {'user_id':user_id,'role':role,'all_visits':role in {'owner','manager','admin'},'master_id':master_id,
+        'can_write':roles_allow([role],'work.facts.write') and (not rolled_out() or allowed(access))}
 
 
 def local_day(cursor,business_id,value=None):

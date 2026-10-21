@@ -1706,7 +1706,7 @@ def confirm_operator_action(action_id: str):
         })
     except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response('Не удалось подтвердить действие. Изменения не сохранены. Повторите попытку.')
     finally:
         db.close()
 

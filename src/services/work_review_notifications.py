@@ -8,19 +8,29 @@ from services import work_review
 from services.operator_conversations import _row
 
 
+def digest_enabled(business, settings):
+    legacy={value.strip() for value in os.getenv('OPERATOR_WORK_REVIEW_BUSINESS_IDS','').split(',') if value.strip()}
+    return settings.get('enabled', business in legacy) is True
+
+
 def recipient_allowed(cursor,business,user,entity_type="work_digest"):
     if not work_review.enabled(business):return False
     try:
         if entity_type=='work_observation':
             work_review.work_journal.scope(cursor,business,user,write=True)
             return True
+        work_review.work_journal.scope(cursor,business,user,write=True)
+        cursor.execute('SELECT enabled FROM business_work_digest_settings WHERE business_id=%s',(business,))
+        if not digest_enabled(business,_row(cursor,cursor.fetchone())):return False
         return work_review.can_review(cursor,business,user)
     except PermissionError:return False
 
 
 def collect(cursor,now=None):
     from services.business_input_settings import resolve
-    if not os.getenv('OPERATOR_WORK_REVIEW_BUSINESS_IDS','').strip():return
+    from services.team_work_access import rolled_out
+    legacy_businesses={value.strip() for value in os.getenv('OPERATOR_WORK_REVIEW_BUSINESS_IDS','').split(',') if value.strip()}
+    if not legacy_businesses and not rolled_out():return
     moment=now or datetime.now(timezone.utc)
     if not work_review.available(cursor):return
     cursor.execute('SELECT DISTINCT business_id FROM business_work_journal WHERE NOT is_voided')
@@ -31,7 +41,8 @@ def collect(cursor,now=None):
         zone=resolve(cursor,business).get('timezone')
         cursor.execute('SELECT * FROM business_work_digest_settings WHERE business_id=%s',(business,))
         settings=_row(cursor,cursor.fetchone())
-        if settings.get('enabled') is False:continue
+        # Opening team work for everyone must not subscribe existing clients to sends.
+        if not digest_enabled(business,settings):continue
         cursor.execute('SELECT owner_id user_id FROM businesses WHERE id=%s UNION SELECT user_id FROM business_work_reviewers WHERE business_id=%s AND enabled',(business,business))
         recipients=[row['user_id'] for row in [_row(cursor,value) for value in cursor.fetchall()]]
         for user in recipients:
@@ -44,7 +55,7 @@ def collect(cursor,now=None):
             local=moment.astimezone(ZoneInfo(zone));at=settings.get('local_time') or time(18)
             cutoff=datetime.combine(local.date(),at,ZoneInfo(zone))
             if local<cutoff:continue
-            cursor.execute("SELECT MAX((payload_json->>'cutoff')::timestamptz) cutoff FROM journey_actions WHERE business_id=%s AND user_id=%s AND entity_type='work_digest' AND payload_json ? 'cutoff'",(business,user))
+            cursor.execute("SELECT MAX((payload_json->>'cutoff')::timestamptz) cutoff FROM journey_actions WHERE business_id=%s AND user_id=%s AND entity_type='work_digest' AND jsonb_exists(payload_json,'cutoff')",(business,user))
             previous=_row(cursor,cursor.fetchone()).get('cutoff') or cutoff-timedelta(days=1)
             cursor.execute('SELECT COUNT(*) n FROM business_work_journal WHERE business_id=%s AND NOT is_voided AND created_at<=%s AND (%s IS NULL OR created_at>%s)',(business,cutoff,previous,previous))
             count=_row(cursor,cursor.fetchone())['n']

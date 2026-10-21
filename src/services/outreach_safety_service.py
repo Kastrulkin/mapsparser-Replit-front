@@ -1608,6 +1608,11 @@ def persist_preflight_result(cursor: Any, queue_id: str, result: dict[str, Any])
 
 def block_queue_item_after_preflight(cursor: Any, queue_id: str, result: dict[str, Any]) -> None:
     reason_code = str(result.get("reason_code") or "preflight_failed")
+    if reason_code == 'ai_rules_permission_busy':
+        cursor.execute("""UPDATE outreachsendqueue SET delivery_status='retry',next_retry_at=NOW()+INTERVAL '30 seconds',
+            attempts=GREATEST(COALESCE(attempts,0)-1,0),error_text=%s,preflight_reason=%s,updated_at=NOW()
+            WHERE id=%s AND delivery_status='sending'""", (reason_code,reason_code,queue_id))
+        return
     terminal = reason_code in {
         "recipient_replied",
         "suppressed_contact",

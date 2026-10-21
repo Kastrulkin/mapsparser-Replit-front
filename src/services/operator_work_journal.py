@@ -7,7 +7,29 @@ from services import work_journal, work_recommendations
 from services.operator_conversations import _row
 
 
+def opens_journal(text):
+    return bool(re.fullmatch(r'\s*(?:/journal|(?:в\s+)?журнал|запиши\s+в\s+журнал)\s*:?\s*',str(text or ''),re.I))
+
+
+def literal_note(text):
+    match=re.fullmatch(r'\s*(?:(?:запиши|записать)\s+в\s+(?:рабочий\s+)?журнал|(?:в\s+)?журнал)(?:\s*[:—-]\s*|\s+)(.+)',str(text or ''),re.I|re.S)
+    return match[1].strip() if match else None
+
+
+def save_literal(cursor,business,user,channel,message,quote,request_id,message_id=None):
+    try:
+        entry=work_journal.save_note(cursor,business,user,channel,message_id,request_id,message,{'quote':quote,'outcome':'note'})
+    except ValueError:
+        return result(str(sys.exception()),'clarification_required')
+    href='/dashboard/work-journal?business_id='+business+'&entry='+entry['id']
+    return {'status':'completed','capability':'work.journal','chat_response':'Запись сохранена. Руководитель увидит её в журнале: '+quote,
+        'journal_entries':[entry],'external_writes_performed':False,'credit_charged':False,
+        'result_ref':{'entity_id':entry['id'],'href':href,'label':'Открыть запись'},
+        'ui_actions':[{'action':'open_journal','label':label,'href':href+'&mode='+mode} for label,mode in [('Исправить запись','edit'),('Отменить запись','void')]]}
+
+
 def matches(text):
+    if literal_note(text) is not None:return True
     if re.search(r'\bпост(?:а|ы|ов|е|у)?\b|контент|публикац',text,re.I) and not re.search(r'журнал|клиент.*(?:отказ|недоволь)|жалоб|плохо встрет',text,re.I):return False
     return bool(re.search(r'пожелани|комментар.{0,30}(?:руководител|администратор)|жалоб|недоволь|плохо встрет|предлагаю|есть идея|на разбор|разбор.{0,20}журнал|рабоч.{0,10}журнал|заметк|наблюден|запомни|запиши|зафиксир|сегодня.{0,50}(законч|спрашива|приш|опозда|сломал)|клиент.{0,60}(отказ|предлож|интерес|дорого)|что предлож|план предлож|правил.{0,30}(рекомен|допрод)|(?:не |сначала |теперь )предлага|допродаж|рекомендац|привяж.{0,40}(мастер|сотрудник)|назнач.{0,40}(мастер|визит)',text,re.I))
 
@@ -145,7 +167,7 @@ def tools(cursor,business_id,user_id,channel,message,message_id,request_key,save
     if work_review.enabled(business_id):
         entries.extend(work_review.tools(cursor,business_id,user_id,channel,request_key))
     for entry in entries:
-        entry['capability']='work.policy' if entry.get('approval_required') else 'work.journal'
+        entry.setdefault('capability','work.policy' if entry.get('approval_required') else 'work.journal')
         entry.setdefault('risk_class','read_only')
         for handler_key in ('execute','prepare_approval'):
             if handler_key in entry:

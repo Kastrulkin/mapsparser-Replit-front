@@ -19,7 +19,8 @@ def workday(journal,monkeypatch):
     c.execute("UPDATE users SET name=id,telegram_id='123' WHERE id='u'")
     c.execute("ALTER TABLE businesses ADD COLUMN owner_id TEXT DEFAULT 'u'")
     c.execute('''CREATE TABLE journey_actions(id UUID PRIMARY KEY,business_id TEXT,user_id TEXT,flow_type TEXT,
-        entity_type TEXT,entity_id TEXT,action_type TEXT,title TEXT,description TEXT,cta_label TEXT,cta_target_json JSONB,payload_json JSONB,dedupe_key TEXT UNIQUE,due_at TIMESTAMPTZ)''')
+        entity_type TEXT,entity_id TEXT,action_type TEXT,title TEXT,description TEXT,cta_label TEXT,cta_target_json JSONB,payload_json JSONB,dedupe_key TEXT,due_at TIMESTAMPTZ,status TEXT DEFAULT 'ready')''')
+    c.execute("CREATE UNIQUE INDEX uq_journey_actions_active_dedupe ON journey_actions(dedupe_key) WHERE status IN ('ready','in_progress','waiting','blocked')")
     c.execute('''CREATE TABLE journey_action_notification_deliveries(dedupe_key TEXT PRIMARY KEY,action_id UUID,
         action_version INTEGER,user_id TEXT,telegram_id TEXT,message_text TEXT,reply_markup_json JSONB,sent_at TIMESTAMPTZ)''')
     from alembic import op

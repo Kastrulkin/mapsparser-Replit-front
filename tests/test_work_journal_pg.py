@@ -11,6 +11,7 @@ from services import work_journal, work_recommendations, operator_core, operator
 @pytest.fixture
 def journal(daily,monkeypatch):
     conn,c=daily
+    c.execute('ALTER TABLE businesses ADD COLUMN city TEXT')
     c.execute('ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE')
     c.execute('ALTER TABLE users ADD COLUMN is_superadmin BOOLEAN DEFAULT FALSE')
     c.execute('ALTER TABLE userservices ADD COLUMN price TEXT')

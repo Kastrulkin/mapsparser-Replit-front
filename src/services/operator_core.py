@@ -69,6 +69,8 @@ def operator_subscription_block(access, capability):
         'agents': 'agents', 'crm': 'progress', 'network': 'progress',
         'appointments': 'management', 'settings': 'operator', 'team': 'operator', 'support': 'operator',
     }.get(prefix, 'management')
+    if capability in {'work.journal', 'work.policy', 'work.schedule', 'work.owner_action', 'work.day_brief', 'work.colleague', 'work.review_inbox', 'work.review_decision', 'work.create_action', 'work.action_results', 'work.complete_action'}:
+        required = 'team_work' if 'team_work' in set(access.get('capabilities') or []) else 'management'
     if capability in {'operator.help', 'operator.product_explain'}:
         required = 'operator'
     decision = capability_access_payload(access, required)
@@ -2282,6 +2284,18 @@ def route_operator_message(
     subscription_access: dict | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     clean_message = str(message or "").strip()
+    from services import work_journal, operator_work_journal
+    literal=operator_work_journal.literal_note(clean_message)
+    journal_composer=(action_payload or {}).get('input_context')=='work_journal' and not (action_payload or {}).get('work_entry_id')
+    plain_composer=journal_composer and not re.match(r'\s*(?:исправ|отмен|удал|покаж|найди|найти|созда|подготов|разбер|измени|опубли|размест|отправ|разошл|вышли|передай|проведи|напомни|подтверд|не\s+(?:сохраняй|записывай|отправляй|надо)|стоп|если|например|допустим|что\b|как\b|почему\b)',clean_message,re.I) and not clean_message.endswith('?')
+    if work_journal.enabled(business_id) and (literal is not None or plain_composer):
+        message_id=next((item.get('id') for item in reversed(conversation_history or []) if item.get('role')=='user'),None)
+        request_key=str((action_payload or {}).get('request_id') or message_id or uuid.uuid4())
+        return standardize_operator_result(operator_work_journal.save_literal(cursor,business_id,user_id,channel,clean_message,literal or clean_message,request_key,message_id),'work.journal'),{}
+    if work_journal.enabled(business_id) and operator_work_journal.opens_journal(clean_message):
+        work_journal.scope(cursor,business_id,user_id)
+        from services.operator_work_handoff import mobile_work_url
+        return standardize_operator_result({'status':'completed','chat_response':'Журнал — наблюдения и пожелания сотрудников. Напишите или надиктуйте «В журнал: у входа грязные окна, нужен мойщик». Запись появится у руководителя; поиск исполнителей и отправка сообщений сами не запускаются.','work_return_url':mobile_work_url(business_id,platform='max' if channel.startswith('max') else 'telegram',screen='work_journal'),'external_writes_performed':False},'work.journal'),{}
     from services import operator_day_brief
     daily = operator_day_brief.route(cursor, business=business_id, user=user_id, message=clean_message, channel=channel,
         pending=pending_context, conversation_id=conversation_id)
@@ -2530,7 +2544,7 @@ def route_operator_message(
     if pending.get('capability') == 'settings.input':
         pending = {}
     from services import work_journal, operator_work_journal
-    if tool_planner is None and work_journal.enabled(business_id):
+    if tool_planner is None and work_journal.enabled(business_id) and operator_work_journal.literal_note(clean_message) is None and (action_payload or {}).get('input_context')!='work_journal':
         ban=operator_work_journal.ban_request(cursor,business_id,user_id,channel,clean_message,action_orchestrator)
         if ban is not None:
             next_pending={'capability':'work.journal','source_message':clean_message,'stage':'clarification'} if ban.get('status')=='clarification_required' else {}
@@ -3082,7 +3096,24 @@ def confirm_pending_operator_action(
         return result, False
     if capability in {'partnerships.continue_outreach', 'partnerships.send_review'}:
         from services.outreach_continuation import confirm_task_start
-        result = standardize_operator_result(confirm_task_start(cursor, business_id=business_id, user_id=user_id, envelope=envelope, actor_context=actor_context), capability)
+        if envelope.get('source_work_journal'):
+            from services import work_journal_partnerships
+            cursor.execute('SAVEPOINT journal_search_confirmation')
+            try:
+                work_journal_partnerships.validate_confirmation(cursor,business_id,user_id,envelope)
+                result=standardize_operator_result(confirm_task_start(cursor,business_id=business_id,user_id=user_id,envelope=envelope,actor_context=actor_context),capability)
+                if result.get('status')=='completed':
+                    result['journal_action_id']=work_journal_partnerships.link_search(cursor,business_id,user_id,envelope,result,action_id)
+                else:cursor.execute('ROLLBACK TO SAVEPOINT journal_search_confirmation')
+                cursor.execute('RELEASE SAVEPOINT journal_search_confirmation')
+            except (ValueError,PermissionError):
+                import sys
+                message=str(sys.exception())
+                cursor.execute('ROLLBACK TO SAVEPOINT journal_search_confirmation')
+                cursor.execute('RELEASE SAVEPOINT journal_search_confirmation')
+                return {'status':'blocked','capability':capability,'chat_response':message,'external_writes_performed':False},False
+        else:
+            result = standardize_operator_result(confirm_task_start(cursor, business_id=business_id, user_id=user_id, envelope=envelope, actor_context=actor_context), capability)
         if result.get('status') == 'completed':
             finish_operator_action(cursor, action_id=action_id, result=result)
         return result, False

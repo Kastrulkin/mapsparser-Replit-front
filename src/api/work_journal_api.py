@@ -18,6 +18,13 @@ def actor():
     return user
 
 
+def journal_channel(data):
+    channel=data.get('channel') or 'web'
+    if not isinstance(channel,str) or channel not in {'web','telegram','telegram_mini_app','max_bot','max_mini_app'}:
+        raise ValueError('Неизвестный канал журнала.')
+    return channel
+
+
 def dispatch(handler):
     db=DatabaseManager()
     try:
@@ -44,7 +51,7 @@ def journal():
     def handle(cursor,business,user,data):
         if request.method=='POST':
             text=data.get('text') or ''
-            row=work_journal.save_note(cursor,business,user,'web',None,data.get('request_id'),text,{**data,'quote':text})
+            row=work_journal.save_note(cursor,business,user,journal_channel(data),None,data.get('request_id'),text,{**data,'quote':text})
             return {'status':'completed','entry':row}
         if not work_journal.installed(cursor):
             from services.operator_audio import authorize_actor
@@ -53,7 +60,9 @@ def journal():
         current=work_journal.scope(cursor,business,user)
         rows=work_journal.list_entries(cursor,business,user,request.args.get('query',''),request.args.get('date'))
         for row in rows:row['can_edit']=current['role']=='owner' or row['user_id']==user
-        response={'enabled':work_journal.enabled(business),'items':rows,'role':current['role'],'policy':work_recommendations.policy(cursor,business)}
+        response={'enabled':work_journal.enabled(business) and current['can_write'],'can_decide':current['can_write'],'items':rows,'role':current['role'],'policy':work_recommendations.policy(cursor,business)}
+        cursor.execute('SELECT city FROM businesses WHERE id=%s',(business,))
+        response['business_city']=_row(cursor,cursor.fetchone()).get('city') or ''
         response['review_enabled']=work_review.enabled(business)
         response['can_review']=response['review_enabled'] and work_review.can_review(cursor,business,user)
         if response['can_review']:
@@ -68,7 +77,7 @@ def journal():
 
 @work_journal_bp.route('/api/work-journal/<entry_id>',methods=['PATCH'])
 def edit(entry_id):
-    return dispatch(lambda c,b,u,d:{'status':'completed','entry':work_journal.save_note(c,b,u,'web',None,d.get('request_id'),d.get('text') or '',{**d,'id':entry_id,'quote':d.get('text') or ''})})
+    return dispatch(lambda c,b,u,d:{'status':'completed','entry':work_journal.save_note(c,b,u,journal_channel(d),None,d.get('request_id'),d.get('text') or '',{**d,'id':entry_id,'quote':d.get('text') or ''})})
 
 
 @work_journal_bp.route('/api/work-journal/<entry_id>/history',methods=['GET'])
@@ -117,3 +126,24 @@ def complete_review_action(entry_id):
 @work_journal_bp.route('/api/work-journal/digest-settings',methods=['GET','POST'])
 def review_digest_settings():
     return dispatch(lambda c,b,u,d:work_review.digest_settings(c,b,u,d if request.method=='POST' else None))
+
+
+@work_journal_bp.route('/api/work-journal/<entry_id>/service-search/preview',methods=['POST'])
+def service_search_preview(entry_id):
+    def handle(c,b,u,d):
+        from services import work_journal_partnerships
+        from services.operator_conversations import get_or_create_operator_conversation,create_pending_operator_action
+        result=work_journal_partnerships.prepare(c,b,u,entry_id,d)
+        if result.get('status')!='approval_required':return result
+        conversation=get_or_create_operator_conversation(c,business_id=b,user_id=u,channel=journal_channel(d),transport_key='journal-search:'+str(d['request_id']))
+        fingerprint=work_journal.digest([entry_id,d])
+        previous=(conversation.get('input_context_json') or {}).get('journal_search_hash')
+        if previous and previous!=fingerprint:raise ValueError('Идентификатор запроса уже использован для других условий поиска.')
+        import json
+        c.execute("UPDATE operatorconversations SET status='handoff_prepared',input_context_json=%s::jsonb WHERE id=%s",(json.dumps({'journal_search_hash':fingerprint}),conversation['id']))
+        action=create_pending_operator_action(c,conversation_id=str(conversation['id']),business_id=b,user_id=u,capability='partnerships.continue_outreach',envelope=result['approval']['envelope'])
+        c.execute("UPDATE operatoractions SET expires_at=COALESCE(expires_at,NOW()+INTERVAL '30 minutes') WHERE id=%s",(action['id'],))
+        status='pending' if action['status'] in {'pending','pending_approval'} else action['status']
+        result['approval'].update(action_id=str(action['id']),status=status)
+        return result
+    return dispatch(handle)

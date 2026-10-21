@@ -38,6 +38,7 @@ def db(monkeypatch):
     spec.loader.exec_module(module)
     module.upgrade()
     cur.execute('ALTER TABLE operator_async_jobs ADD COLUMN lease_token TEXT')
+    cur.execute("CREATE TABLE agent_action_ledger(id TEXT PRIMARY KEY,business_id TEXT,action_type TEXT,capability TEXT,risk_level TEXT,input_summary TEXT,status TEXT,metadata_json JSONB,created_at TIMESTAMPTZ DEFAULT NOW())")
     conn.commit()
     try:
         yield conn,cur
@@ -119,7 +120,7 @@ def test_actual_write_roles_and_disabled_actor(db):
 def test_recovery_keeps_budgets_and_terminal_chat_rerun(db):
     _,cur=db
     task=outreach_continuation.create_task(cur,business_id='b',user_id='u',config=config())
-    cur.execute("UPDATE operator_async_jobs SET result_json=result_json || %s WHERE id=%s", (Json({'llm_calls':2,'draft_attempts':1,'qualifications':{'w':{'status':'checking'}},'campaign_results':{'w2':{'status':'preparing'}}}),task['id']))
+    cur.execute("UPDATE operator_async_jobs SET result_json=result_json || %s WHERE id=%s", (Json({'llm_calls':2,'draft_attempts':1,'qualifications':{'w':{'status':'failed'}},'campaign_results':{'w2':{'status':'failed'}}}),task['id']))
     reset=outreach_continuation.control_task(cur,task_id=task['id'],business_id='b',user_id='u',action='retry_failed',revision=task['revision'])
     assert reset['state']['llm_calls']==2 and reset['state']['draft_attempts']==1
     assert reset['state']['qualifications']=={} and reset['state']['campaign_results']=={}
@@ -146,11 +147,19 @@ def execution(db, monkeypatch):
     monkeypatch.setenv('LLM_ROUTER_ENABLED','true')
     monkeypatch.setenv('LLM_DEEPSEEK_BUSINESS_IDS','b')
     monkeypatch.setenv('DEEPSEEK_API_KEY','disposable-test-no-provider-calls')
+    from services import outreach_web_search, outreach_credit_billing
+    monkeypatch.setattr(outreach_web_search,'configured',lambda *args:True)
+    # Provider/model steps are stubbed in this worker-state fixture; credit
+    # reservation semantics are checked separately against the credit journal.
+    monkeypatch.setattr(outreach_credit_billing,'reserve_step',lambda cursor,row,**kwargs:{'status':'reserved','reservation_id':'hold:'+kwargs['key']})
+    monkeypatch.setattr(outreach_credit_billing,'charge_step',lambda cursor,row,**kwargs:{'status':'charged','charge_credits':kwargs['credits']})
+    cur.execute("CREATE TABLE lead_contact_points(id TEXT DEFAULT 'contact',lead_id TEXT,contact_type TEXT,verification_status TEXT,stale_after TIMESTAMPTZ,value TEXT DEFAULT 'qa@example.com',source_url TEXT DEFAULT 'https://agency.example/contact',observed_at TIMESTAMPTZ DEFAULT NOW())")
     cur.execute('CREATE TABLE prospectingleads(id TEXT PRIMARY KEY, business_id TEXT, website TEXT, search_payload_json JSONB)')
     cur.execute('CREATE TABLE lead_workstreams(id TEXT PRIMARY KEY,lead_id TEXT,client_business_id TEXT,status TEXT)')
     cur.execute('CREATE TABLE lead_workstream_research(id TEXT PRIMARY KEY,workstream_id TEXT,evidence_json JSONB,signals_json JSONB,message_readiness_json JSONB,researched_at TIMESTAMPTZ DEFAULT NOW())')
     cur.execute('CREATE TABLE lead_enrichment_jobs(id TEXT,workstream_id TEXT,status TEXT,created_at TIMESTAMPTZ DEFAULT NOW())')
-    cur.execute('CREATE TABLE outreach_campaigns(id TEXT PRIMARY KEY,workstream_id TEXT,status TEXT,created_at TIMESTAMPTZ DEFAULT NOW())')
+    cur.execute("CREATE TABLE outreach_campaigns(id TEXT PRIMARY KEY,workstream_id TEXT,business_id TEXT DEFAULT 'b',policy_json JSONB DEFAULT '{}',status TEXT,created_at TIMESTAMPTZ DEFAULT NOW())")
+    cur.execute("CREATE TABLE outreach_campaign_touches(campaign_id TEXT,quality_gate_json JSONB)")
     conn.commit()
     def tick():
         cur.execute("UPDATE operator_async_jobs SET next_attempt_at=NOW() WHERE status='queued'")
@@ -174,6 +183,7 @@ def test_worker_search_qualify_draft_and_no_dispatch(execution,monkeypatch):
         cursor.execute("INSERT INTO lead_workstreams VALUES ('ws','lead','b','new')")
         cursor.execute("INSERT INTO lead_workstream_research(id,workstream_id,signals_json) VALUES ('research','ws','[]')")
         cursor.execute("INSERT INTO lead_enrichment_jobs(id,workstream_id,status) VALUES ('e','ws','completed')")
+        cursor.execute("INSERT INTO lead_contact_points(lead_id,contact_type,verification_status) VALUES ('lead','email','confirmed_source')")
         return 'lead',True
     monkeypatch.setattr(partner_discovery,'_insert_partnership_lead_if_new',insert)
     monkeypatch.setattr(partner_discovery,'_ensure_imported_partnership_workstream',lambda *a,**k:'ws')
@@ -185,6 +195,7 @@ def test_worker_search_qualify_draft_and_no_dispatch(execution,monkeypatch):
         cursor.execute("INSERT INTO outreach_campaigns(id,workstream_id,status) VALUES ('campaign','ws','draft')")
         return {'id':'campaign'}
     monkeypatch.setattr(outreach_campaign_service,'persist_preview',persist)
+    monkeypatch.setattr('services.partner_search_drafts.project_campaign_draft',lambda *args,**kwargs:{'draft_id':'draft','quality_passed':True})
     for _ in range(5):
         assert tick()['status']=='progress_saved'
     current=outreach_continuation.list_tasks(cur,business_id='b',user_id='u')[0]
@@ -269,3 +280,50 @@ def test_contract_survives_overwritten_search_metadata(execution):
     assert contract['qualification']['status']=='qualified'
     cur.execute("UPDATE prospectingleads SET business_id='b2' WHERE id='l'")
     assert outreach_continuation.load_workstream_contract(cur,'w') is None
+
+
+@pytest.mark.parametrize('cities', [['Delhi'],['Delhi','Mumbai','Pune','Kolkata']])
+def test_hundred_target_continues_after_duplicates_rejections_and_no_contact(execution, monkeypatch, cities):
+    conn, cur, tick = execution
+    from api.prospecting import partner_discovery
+    from services import outreach_public_evidence
+    task = outreach_continuation.create_task(cur, business_id='b', user_id='u', config={**config(),
+        'target_count': 100, 'mode': 'find_only', 'max_search_calls': 4,
+        'queries': [{'query': 'travel', 'city': city} for city in cities]})
+    outreach_continuation.control_task(cur, task_id=task['id'], business_id='b', user_id='u', action='start', revision=task['revision'])
+    monkeypatch.setattr(outreach_continuation, '_start_search', lambda config, index: {'id': str(index), 'dataset_id': str(index),'requested_limit':outreach_continuation.search_window_size(config,index),'query_index':index%len(cities)})
+    # Later batches overlap by five, exercising the import dedupe fence.
+    monkeypatch.setattr(outreach_continuation, '_poll_search', lambda run, limit: [
+        {'name': str(number), 'source_url': f'https://map.example/{number}', 'website': f'https://agency.example/{number}'}
+        for number in range(0 if len(cities)==1 else int(run['id'])*45, (0 if len(cities)==1 else int(run['id'])*45)+limit)])
+    def insert(cursor, **kw):
+        number = kw['name']
+        cursor.execute('INSERT INTO prospectingleads VALUES(%s,%s,%s,%s) ON CONFLICT DO NOTHING RETURNING id', (number,'b',kw['website'],Json({})))
+        if not cursor.fetchone():
+            return number, False
+        cursor.execute("INSERT INTO lead_workstreams VALUES(%s,%s,'b','new')", (number,number))
+        cursor.execute("INSERT INTO lead_workstream_research(id,workstream_id,signals_json) VALUES(%s,%s,'[]')", (number,number))
+        cursor.execute("INSERT INTO lead_enrichment_jobs(id,workstream_id,status) VALUES(%s,%s,'completed')", (number,number))
+        if int(number) % 7:
+            cursor.execute("INSERT INTO lead_contact_points(lead_id,contact_type,verification_status,stale_after) VALUES(%s,'email','confirmed_source',NULL)", (number,))
+        return number, True
+    monkeypatch.setattr(partner_discovery, '_insert_partnership_lead_if_new', insert)
+    monkeypatch.setattr(partner_discovery, '_ensure_imported_partnership_workstream', lambda cursor, **kw: kw['lead_id'])
+    monkeypatch.setattr(outreach_public_evidence, 'collect_candidate_evidence', lambda website, terms: [{'id': website.rsplit('/',1)[-1], 'fact': 'Public agency offer for Phuket', 'source_url': website}])
+    def qualify(config, evidence, **kwargs):
+        return {'status': 'qualified' if int(evidence[0]['id']) % 4 else 'needs_evidence', 'evidence': evidence[0]}
+    monkeypatch.setattr(outreach_continuation, 'qualify_audience', qualify)
+    for _ in range(400):
+        tick()
+        cur.execute('SELECT * FROM operator_async_jobs WHERE id=%s', (task['id'],))
+        result = dict(cur.fetchone())
+        if result['status'] != 'queued':
+            break
+    report = outreach_continuation.preparation_report(result['payload_json'], result['result_json'])
+    assert result['status'] == 'completed', result['stage']
+    assert report['eligible'] == 100 and report['shortfall'] == 0
+    assert result['result_json']['llm_calls'] > 20
+    assert report['imported'] < report['found'] and report['duplicates'] > 0
+    assert report['excluded'] > 0
+    cur.execute('SELECT COUNT(*) n FROM outreach_campaigns')
+    assert cur.fetchone()['n'] == 0

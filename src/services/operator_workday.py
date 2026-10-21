@@ -10,7 +10,8 @@ from services import work_journal, work_recommendations
 
 
 def enabled(business_id):
-    return business_id in {v.strip() for v in os.getenv('OPERATOR_WORKDAY_BUSINESS_IDS', '').split(',') if v.strip()}
+    from services import team_work_access
+    return team_work_access.enabled(business_id, 'OPERATOR_WORKDAY_BUSINESS_IDS')
 
 
 def authorize(cursor, business_id, user_id, owner=False):

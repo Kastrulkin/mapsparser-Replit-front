@@ -89,3 +89,19 @@ it('a conflicting edit keeps local text until the owner explicitly loads the sav
   fireEvent.click(screen.getByRole('button', { name: 'Загрузить сохранённую версию' }));
   await waitFor(() => expect(screen.getByLabelText('Фокус дня')).toHaveValue('Правка из бота'));
 });
+
+it('keeps the focus and recipient after an internal failure without exposing database internals',async()=>{
+  vi.stubGlobal('fetch',vi.fn(async (_input:string,init?:RequestInit)=>init?.method==='POST'
+    ? new Response(JSON.stringify({error:'SQL private_internal_table constraint'}),{status:500})
+    : new Response(JSON.stringify(overview),{status:200})));
+  render(<DayBriefing businessId="business" channel="max_mini_app" headers={headers}/>);
+  await screen.findByText('Анна');
+  fireEvent.change(screen.getByLabelText('Фокус дня'),{target:{value:'Проверить окна'}});
+  fireEvent.click(screen.getByLabelText('Анна'));
+  fireEvent.click(screen.getByRole('button',{name:'Проверить перед передачей'}));
+  const error=await screen.findByRole('alert');
+  expect(error).toHaveTextContent('Данные остались в форме');
+  expect(error).not.toHaveTextContent('private_internal_table');
+  expect(screen.getByLabelText('Фокус дня')).toHaveValue('Проверить окна');
+  expect(screen.getByLabelText('Анна')).toBeChecked();
+});

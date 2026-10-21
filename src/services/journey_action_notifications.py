@@ -62,7 +62,8 @@ def _tasks_enabled(preferences: Any, business_id: str) -> bool:
 
 def collect_due_journey_action_notifications(conn: Any) -> list[dict[str, Any]]:
     general_notifications = journey_enabled("JOURNEY_NOTIFICATIONS_ENABLED")
-    if not general_notifications and not os.getenv('OPERATOR_WORK_REVIEW_BUSINESS_IDS', '').strip():
+    from services.team_work_access import rolled_out
+    if not general_notifications and not rolled_out() and not os.getenv('OPERATOR_WORK_REVIEW_BUSINESS_IDS', '').strip() and not os.getenv('OPERATOR_WORKDAY_BUSINESS_IDS','').strip():
         return []
     cursor = conn.cursor()
     from services import work_review_notifications

@@ -7,7 +7,8 @@ from services.operator_conversations import _row
 
 
 def input_context(cursor, business_id, user_id, conversation_id, payload):
-    operator_workday.authorize(cursor,business_id,user_id)
+    from services import work_journal
+    work_journal.scope(cursor,business_id,user_id)
     cursor.execute('SELECT input_context_json FROM operatorconversations WHERE id=%s AND business_id=%s AND user_id=%s',
                    (conversation_id,business_id,user_id))
     context=_row(cursor,cursor.fetchone()).get('input_context_json') or {}

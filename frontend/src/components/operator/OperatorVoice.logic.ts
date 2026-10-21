@@ -1,3 +1,4 @@
+import { teamWorkJson } from '@/lib/teamWorkRequest';
 import { newAuth } from '@/lib/auth_new';
 import { browserCookieAuthEnabled, browserCookieValue } from '@/lib/browserSessionFetch';
 
@@ -12,8 +13,7 @@ export const voiceHeaders = (): Record<string, string> => {
 };
 
 export async function jsonRequest(url: string, options: RequestInit) {
-  const response = await fetch(url, options);
-  const body = await response.json();
+  const { response, body } = await teamWorkJson(url, options);
   if (!response.ok) throw new Error(body.error || 'Не удалось обработать аудио');
   return body;
 }

@@ -58,7 +58,8 @@ def authorize_actor(cursor, user_id, business_id, check_subscription=True, *, re
 def enabled(kind, business_id):
     flag = 'OPERATOR_VOICE_INPUT_ENABLED' if kind == 'transcription' else 'OPERATOR_VOICE_OUTPUT_ENABLED'
     pilots = {value.strip() for value in os.getenv('OPERATOR_VOICE_BUSINESS_IDS', '').split(',') if value.strip()}
-    return os.getenv(flag, '').lower() in {'1', 'true'} and business_id in pilots
+    from services.team_work_access import rolled_out
+    return os.getenv(flag, '').lower() in {'1', 'true'} and (rolled_out() or business_id in pilots)
 
 
 def audio_root():

@@ -25,7 +25,7 @@ def team(workday, monkeypatch):
     c.execute("CREATE TABLE max_identities(user_id TEXT,max_id TEXT,revoked_at TIMESTAMPTZ,notifications_enabled BOOLEAN DEFAULT TRUE)")
     c.execute("INSERT INTO max_identities(user_id,max_id) VALUES('master','987'),('u','owner-max')")
     c.execute("UPDATE users SET name=id,telegram_id='tg-' || id")
-    c.execute("ALTER TABLE journey_actions ADD COLUMN status TEXT DEFAULT 'ready', ADD COLUMN version INT DEFAULT 1, ADD COLUMN created_at TIMESTAMPTZ DEFAULT NOW(),ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW(),ADD COLUMN completed_at TIMESTAMPTZ, ADD COLUMN priority INT DEFAULT 50")
+    c.execute("ALTER TABLE journey_actions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ready', ADD COLUMN version INT DEFAULT 1, ADD COLUMN created_at TIMESTAMPTZ DEFAULT NOW(),ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW(),ADD COLUMN completed_at TIMESTAMPTZ, ADD COLUMN priority INT DEFAULT 50")
     monkeypatch.setenv('OPERATOR_DAY_BRIEF_DELIVERY_ENABLED', 'false')
     monkeypatch.setenv('MAX_BOT_USERNAME', 'fixture_bot')
     conn.commit()
@@ -338,3 +338,32 @@ def test_spoken_focus_does_not_require_dictating_colon(team, utterance):
     current = operator_day_brief.draft(c, 'b', 'u', day=result.get('date') or operator_day_brief.work_journal.local_day(c, 'b'))
     assert current['focus'].casefold() == 'внимательно встречаем клиентов.'
     c.execute('SELECT COUNT(*) n FROM journey_actions'); assert c.fetchone()['n'] == 0
+
+
+def test_replayed_brief_keeps_completed_task_with_production_partial_index(team):
+    _,c=team
+    current=save(c)
+    envelope=operator_day_brief.preview(c,business='b',user='u',identifier=current['id'],version=1)
+    result=operator_day_brief.apply(c,business='b',user='u',envelope=envelope)
+    row=operator_day_brief.assignments(c,'b','master')[0]
+    task=row['payload_json']['tasks'][0]
+    operator_day_brief.complete_task(c,business='b',user='master',action_id=str(row['id']),task_id=task['id'],version=row['version'],done=True)
+    assert operator_day_brief.apply(c,business='b',user='u',envelope=envelope)['action_ids']==result['action_ids']
+    c.execute('SELECT id,status FROM journey_actions');rows=c.fetchall()
+    assert len(rows)==1 and rows[0]['status']=='completed'
+    assert operator_day_brief.assignments(c,'b','master')[0]['payload_json']['tasks'][0]['done']
+
+
+def test_delivery_status_is_scoped_metadata_and_does_not_claim_sent_without_receipt(team,monkeypatch):
+    _,c=team
+    monkeypatch.setenv('OPERATOR_DAY_BRIEF_DELIVERY_ENABLED','true')
+    current=save(c)
+    operator_day_brief.apply(c,business='b',user='u',envelope=operator_day_brief.preview(c,business='b',user='u',identifier=current['id'],version=1))
+    employee=operator_day_brief.overview(c,business='b',user='master')
+    assert {item['state'] for item in employee['deliveries']}=={'queued'}
+    assert all(set(item)=={'action_id','platform','state'} for item in employee['deliveries'])
+    assert operator_day_brief.overview(c,business='b',user='admin')['deliveries']==[]
+    c.execute("UPDATE operator_async_jobs SET payload_json=jsonb_set(payload_json,'{briefing_delivery,state}','\"sent\"'::jsonb)")
+    assert {item['state'] for item in operator_day_brief.overview(c,business='b',user='master')['deliveries']}=={'unknown'}
+    c.execute("UPDATE operator_async_jobs SET payload_json=jsonb_set(payload_json,'{briefing_delivery,provider_message_id}','\"receipt\"'::jsonb)")
+    assert {item['state'] for item in operator_day_brief.overview(c,business='b',user='master')['deliveries']}=={'sent'}

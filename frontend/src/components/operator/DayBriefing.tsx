@@ -1,3 +1,4 @@
+import { teamWorkJson } from '@/lib/teamWorkRequest';
 import { miniAppLaunchParams } from '@/lib/miniAppPlatform';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -10,8 +11,11 @@ type Target = { user_id: string; platforms: string[]; tasks: Task[] };
 type Draft = { id: string; focus: string; date: string; version: number; status: string; recipients: Target[] };
 type Assignment = { id: string; user_id: string; status: string; version: number; payload_json: { date: string; focus: string; tasks: Task[]; tips: { main_service: string; service: string; wording: string }[]; note: string } };
 type Overview = { date: string; user_id: string; can_manage: boolean; can_complete: boolean; delivery_enabled: boolean; draft?: Draft | null;
+  deliveries?: { action_id: string; platform: string; state: string }[];
   members: { id: string; name: string; platforms: string[] }[]; assignments: Assignment[] };
 type Preview = { approval: { action_id: string }; day_brief_preview: { delivery_enabled: boolean; messages: { user_id: string; name: string; platforms: string[]; text: string }[] } };
+
+const deliveryLabels: Record<string,string> = {sent:'Отправлено',queued:'В очереди',failed:'Не отправлено',stopped:'Доставка остановлена',unknown:'Результат доставки неизвестен; повторная отправка остановлена'};
 
 export function DayBriefing({ businessId, headers, channel }: { businessId: string; headers: () => Record<string, string>; channel: string }) {
   const launch = miniAppLaunchParams();
@@ -38,13 +42,13 @@ export function DayBriefing({ businessId, headers, channel }: { businessId: stri
     const signal = lifetime.current.signal;
     const expectedScope = businessId + ':' + channel + ':' + itemId;
     if (scope.current !== expectedScope) throw new DOMException('Context changed', 'AbortError');
-    const response = await fetch('/api/operator/' + path, { signal, method: body === undefined ? 'GET' : 'POST',
+    const { response, body: value } = await teamWorkJson('/api/operator/' + path, { signal, method: body === undefined ? 'GET' : 'POST',
       headers: { ...currentHeaders.current(), 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
-    const value = await response.json(); signal.throwIfAborted();
+    signal.throwIfAborted();
     if (scope.current !== expectedScope) throw new DOMException('Context changed', 'AbortError');
     if (!response.ok) {
       if ([401, 403].includes(response.status)) { setData(null); setSaved(null); setTargets([]); setFocus(''); setVoice(null); setPreview(null); }
-      throw new Error(value.error || 'Не удалось открыть планёрку. Повторите.');
+      throw new Error(response.status >= 500 ? (value.message || 'Не удалось выполнить действие. Проверьте соединение и повторите попытку.') : (value.error || value.message || 'Не удалось открыть планёрку. Повторите.'));
     }
     return value;
   }
@@ -76,10 +80,11 @@ export function DayBriefing({ businessId, headers, channel }: { businessId: stri
     setSaved(result.draft); setTargets(result.draft.recipients); setDirty(false); setVoice(null);
     return result.draft;
   }
+  const recipientsReady = targets.length > 0 && targets.every(target => target.platforms.length > 0 && target.tasks.some(task => task.text.trim()));
   function updateTarget(id: string, transform: (target: Target) => Target) { edited(); setTargets(values => values.map(row => row.user_id === id ? transform(row) : row)); }
 
   return <section className="space-y-4" aria-label="Планёрка дня">
-    <div><h2 className="text-xl font-semibold">Планёрка дня</h2><p className="text-sm text-muted-foreground">Фокус владельца, задачи команды и подсказки для уместных допродаж.</p></div>
+    <div><h2 className="text-xl font-semibold">{!data ? 'Планёрка дня' : data.can_manage === false ? 'Мои задачи дня' : 'Фокус и задачи на день'}</h2><p className="text-sm text-muted-foreground">{!data ? 'Загружаем ваши задачи.' : data.can_manage === false ? 'Прочитайте свои поручения и подсказки. Отмечайте задачи по мере выполнения.' : 'Напишите или надиктуйте фокус. Затем выберите сотрудников и проверьте поручения.'}</p></div>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {error && data?.can_manage && <details className="text-sm"><summary className="cursor-pointer py-2">Если планёрка изменена в другом окне</summary><p className="text-muted-foreground">Можно загрузить сохранённую версию. Это заменит фокус и задачи в форме; сначала скопируйте несохранённые правки, если они нужны.</p><Button variant="outline" disabled={busy} onClick={() => void perform(async () => { await reload(true); setPreview(null); setVoice(null); requestId.current = crypto.randomUUID(); setNotice('Загружена сохранённая версия планёрки.'); })}>Загрузить сохранённую версию</Button></details>}
     {!data && <Button variant="outline" disabled={busy || !error} onClick={() => void perform(() => reload(true))}>{error ? 'Повторить загрузку' : 'Загрузка планёрки…'}</Button>}
@@ -87,9 +92,10 @@ export function DayBriefing({ businessId, headers, channel }: { businessId: stri
     {data && <>
       <p className="text-sm text-muted-foreground">{data.date} · {saved?.status === 'assigned' && !dirty ? 'Задачи переданы в кабинеты' : data.can_manage ? 'Черновик до подтверждения' : 'Мои задачи'}</p>
       {data.can_manage && <>
-        <label className="block space-y-2"><span className="font-medium">1. На чём команда сосредоточится сегодня?</span>
+        <details className="text-sm text-muted-foreground"><summary className="cursor-pointer py-2">Пример фокуса дня</summary><p>«Сегодня внимательно встречаем новых клиентов. Анна проверяет витрину, администратор предлагает подходящий уход после окрашивания». Пишите обычными словами — специальные команды не нужны.</p></details>
+        <label className="block space-y-2"><span className="font-medium">1. Фокус дня</span>
           <Textarea aria-label="Фокус дня" disabled={busy} maxLength={1500} value={focus} onChange={event => { edited(); setFocus(event.target.value); }} placeholder="Например: внимательно встречаем новых клиентов и предлагаем подходящий уход после окрашивания." /></label>
-        <OperatorVoiceInput businessId={businessId} channel={channel} headers={headers} disabled={busy} directSubmit={false} submitLabel="Вставить в фокус дня" draftLabel="Распознанный фокус"
+        <OperatorVoiceInput contextKey="day_brief" businessId={businessId} channel={channel} headers={headers} disabled={busy} directSubmit={false} submitLabel="Вставить в фокус дня" draftLabel="Распознанный фокус"
           onSubmit={async (value, source) => { edited(); setFocus(value); setVoice({ ...source, text: value }); }} />
         <p className="text-sm text-muted-foreground">Распознанный текст можно поправить. Запись и сохранение черновика ничего не отправляют.</p>
         <fieldset disabled={busy} className="space-y-3"><legend className="mb-2 font-medium">2. Кому и какие задачи передать?</legend>
@@ -107,8 +113,9 @@ export function DayBriefing({ businessId, headers, channel }: { businessId: stri
             </div>;
           })}
         </fieldset>
+        {targets.length > 0 && !recipientsReady && <p role="status" className="text-sm text-muted-foreground">Для каждого выбранного сотрудника выберите канал и добавьте хотя бы одну задачу.</p>}
         {!data.delivery_enabled && <p className="text-sm text-muted-foreground">Уведомления в мессенджеры пока выключены. После подтверждения задачи появятся в кабинетах сотрудников.</p>}
-        <div className="flex flex-wrap gap-2">{!preview && <Button disabled={busy || !focus.trim() || !targets.length} onClick={() => void perform(async () => {
+        <div className="flex flex-wrap gap-2">{!preview && <Button disabled={busy || !focus.trim() || !recipientsReady} onClick={() => void perform(async () => {
           const value = await save(); setPreview(await request<Preview>('day-brief/preview', { business_id: businessId, record_id: value.id, version: value.version }));
         })}>Проверить перед передачей</Button>}<Button variant="outline" disabled={busy || !focus.trim()} onClick={() => void perform(async () => { await save(); setNotice('Черновик сохранён. Сотрудникам ничего не передано.'); })}>Сохранить черновик</Button></div>
         {saved && <WorkDiscussion businessId={businessId} itemId={saved.id} updatedAt={String(saved.version)} itemType="day_brief" disabled={dirty || busy} />}
@@ -127,6 +134,7 @@ export function DayBriefing({ businessId, headers, channel }: { businessId: stri
         {!data.assignments.length && <p className="text-sm text-muted-foreground">Подтверждённых задач пока нет. Они появятся после проверки владельцем.</p>}
         {data.assignments.map(action => <div key={action.id} className="space-y-2 border-b pb-3"><p className="font-medium">{data.members.find(member => member.id === action.user_id)?.name || 'Мои задачи'} · {action.payload_json.date}</p><p className="text-sm">Фокус: {action.payload_json.focus}</p>
           {action.payload_json.tasks.map(task => <label key={task.id} className="flex min-h-11 items-center gap-3"><input type="checkbox" checked={pendingCompletion?.action === action.id && pendingCompletion.task === task.id ? pendingCompletion.done : Boolean(task.done)} disabled={busy || !data.can_complete || action.user_id !== data.user_id} onChange={event => { const done = event.target.checked; const expected = scope.current; setPendingCompletion({ action: action.id, task: task.id, done }); void perform(async () => { try { await request('day-brief/task', { business_id: businessId, action_id: action.id, task_id: task.id, version: action.version, done }); await reload(); } finally { if (scope.current === expected) setPendingCompletion(null); } }); }} /><span className="min-w-0 break-words">{task.text}</span></label>)}
+          {data.deliveries?.filter(delivery=>delivery.action_id===action.id).map(delivery=><p key={delivery.platform} className="text-sm">{delivery.platform==='max'?'MAX':'Telegram'}: {(deliveryLabels[delivery.state] || 'Проверьте доставку')}</p>)}
           {action.payload_json.tips.map((tip, index) => <p key={index} className="text-sm">{tip.main_service} → {tip.service}: {tip.wording}</p>)}<p className="text-sm text-muted-foreground">{action.payload_json.note}</p>
         </div>)}
         <Button variant="outline" disabled={busy} onClick={() => void perform(() => reload())}>Обновить задачи</Button>

@@ -54,7 +54,7 @@ def enqueue(cursor,business,user,envelope,action_id):
     cursor.execute('''INSERT INTO journey_actions(id,business_id,user_id,flow_type,entity_type,entity_id,action_type,title,description,
         cta_label,cta_target_json,payload_json,dedupe_key,due_at)
         VALUES (%s,%s,%s,'work_journal','operator_colleague',%s,'send_colleague','Сообщение по планёрке',%s,
-        'Открыть планёрку','{}'::jsonb,%s::jsonb,%s,NOW()) ON CONFLICT(dedupe_key) DO NOTHING''',
+        'Открыть планёрку','{}'::jsonb,%s::jsonb,%s,NOW()) ON CONFLICT(id) DO NOTHING''',
         (identifier,business,selected['recipient_user_id'],action_id,envelope['message'],json.dumps(envelope),key))
     cursor.execute('''INSERT INTO journey_action_notification_deliveries(dedupe_key,action_id,action_version,user_id,telegram_id,message_text,reply_markup_json,dispatch_state)
         VALUES (%s,%s,1,%s,%s,%s,'{}'::jsonb,'queued') ON CONFLICT(dedupe_key) DO NOTHING''',

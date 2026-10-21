@@ -195,9 +195,9 @@ def create_pending_operator_action(
         """
         INSERT INTO operatoractions (
             id, conversation_id, business_id, user_id, capability,
-            idempotency_key, envelope_json
+            idempotency_key, envelope_json, expires_at
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
+        VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, CASE WHEN %s THEN NOW() + INTERVAL '15 minutes' ELSE NULL END)
         ON CONFLICT (business_id, idempotency_key)
         DO UPDATE SET updated_at = NOW()
         RETURNING *
@@ -210,6 +210,7 @@ def create_pending_operator_action(
             capability,
             idempotency_key,
             json.dumps(envelope, ensure_ascii=False, default=str),
+            capability == "outreach.ai_rules",
         ),
     )
     return _row(cursor, cursor.fetchone())

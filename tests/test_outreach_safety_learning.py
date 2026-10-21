@@ -750,9 +750,11 @@ def test_reply_runtime_delegates_atomic_campaign_stop_to_bounded_service():
 
 def test_worker_finalizes_no_reply_only_after_reply_sync_and_before_dispatch():
     worker = Path("src/worker.py").read_text(encoding="utf-8")
-    function_start = worker.index("def _dispatch_outreach_queue_if_due()")
-    function_end = worker.index("\ndef _run_card_automation_if_due()", function_start)
+    function_start = worker.index("def _dispatch_outreach_queue_cycle()")
+    function_end = worker.index("\nfrom services.outreach_dispatch_loop", function_start)
     block = worker[function_start:function_end]
+    assert "SerializedDispatchLoop(_dispatch_outreach_queue_cycle)" in worker
+    assert "return _OUTREACH_SEND_LOOP.tick()" in worker
 
     assert block.index("_sync_outreach_replies_if_due") < block.index("finalize_no_reply_campaigns")
     assert block.index("finalize_no_reply_campaigns") < block.index("dispatch_due_outreach_queue")
@@ -940,9 +942,11 @@ def test_lead_drawer_exposes_manual_touch_actions_for_needs_attention():
 
 def test_worker_dispatch_is_limited_to_versioned_campaign_cohort():
     worker = Path("src/worker.py").read_text(encoding="utf-8")
-    function_start = worker.index("def _dispatch_outreach_queue_if_due()")
-    function_end = worker.index("\ndef _run_card_automation_if_due()", function_start)
+    function_start = worker.index("def _dispatch_outreach_queue_cycle()")
+    function_end = worker.index("\nfrom services.outreach_dispatch_loop", function_start)
     block = worker[function_start:function_end]
+    assert "SerializedDispatchLoop(_dispatch_outreach_queue_cycle)" in worker
+    assert "return _OUTREACH_SEND_LOOP.tick()" in worker
     dispatcher = Path("src/services/outreach_dispatch_service.py").read_text(encoding="utf-8")
 
     assert "OUTREACH_DISPATCH_BUSINESS_IDS" in block

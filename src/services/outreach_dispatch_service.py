@@ -6,6 +6,8 @@ the large admin route module without changing behavior.
 """
 from __future__ import annotations
 
+import os
+
 from datetime import datetime
 from typing import Any
 
@@ -18,22 +20,75 @@ from services.outreach_safety_service import (
 )
 
 
+def _preflight_and_dispatch(p, item, *, author_reply_sync_started_at=None):
+    """Native preflight plus permission/lifecycle fence across the provider call."""
+    conn = p.get_db_connection()
+    held = []
+    try:
+        cur = conn.cursor()
+        queue_id = str(item.get("id") or "")
+        preflight = run_dispatch_preflight(cur, queue_id, author_reply_sync_started_at=author_reply_sync_started_at)
+        if preflight.get("allowed"):
+            try:
+                item = bind_preflight_dispatch_item(item, preflight)
+            except ValueError as exc:
+                preflight = {**preflight, "allowed": False, "reason_code": str(exc)}
+        checked = preflight.get("item") or {}
+        policy = checked.get("policy_json") or {}
+        if preflight.get("allowed") and policy.get("approval_mode") == "ai_rules":
+            from services.outreach_ai_authorization import load, AuthorizationBusy
+            try:
+                grant = load(cur, policy.get("ai_authorization_id"))
+                if not grant:
+                    preflight = {**preflight, "allowed": False, "reason_code": "ai_rules_authorization_revoked_or_changed"}
+                else:
+                    rules = grant["rules"]
+                    process = rules["process"]
+                    keys = [f"ai-outreach:{rules['sender_account_id']}:{process['type']}:{process['id']}"]
+                    if process["type"] == "automation":
+                        keys.append(f"agent-pause-fence:{process['id']}")
+                    for key in keys:
+                        cur.execute("SELECT pg_try_advisory_lock(hashtext(%s)) AS acquired", (key,))
+                        if not (cur.fetchone() or {}).get("acquired"):
+                            raise AuthorizationBusy("ai_rules_permission_busy")
+                        held.append(key)
+                    # Explicit final read under BOTH fences. The previous load
+                    # also held process row locks, but do not rely on that detail
+                    # for admission of an external action.
+                    current = load(cur, policy.get("ai_authorization_id"), require_running=True)
+                    if not current or str(current['id']) != str(grant['id']):
+                        preflight = {**preflight, "allowed": False, "reason_code": "ai_rules_authorization_revoked_or_changed"}
+            except AuthorizationBusy:
+                preflight = {**preflight, "allowed": False, "reason_code": "ai_rules_permission_busy", "retryable": True}
+        persist_preflight_result(cur, queue_id, preflight)
+        if not preflight.get("allowed"):
+            block_queue_item_after_preflight(cur, queue_id, preflight)
+        # Persist the existing dispatch attempt before network I/O. Session
+        # fences survive this commit but are ALWAYS released below, also on error.
+        conn.commit()
+        result = p._dispatch_outreach_queue_item(item) if preflight.get("allowed") else None
+        return item, preflight, result
+    finally:
+        try:
+            conn.rollback()
+            if held:
+                cur = conn.cursor()
+                for key in reversed(held):
+                    cur.execute("SELECT pg_advisory_unlock(hashtext(%s))", (key,))
+        finally:
+            conn.close()
+
+
 def bind_preflight_dispatch_item(item: dict[str, Any], preflight: dict[str, Any]) -> dict[str, Any]:
-    """Use freshly validated campaign bytes/recipient, never the claim snapshot."""
+    """Use only freshly validated bytes/recipient for template-authorized sends."""
     checked = preflight.get("item") or {}
     approval_mode = (checked.get("policy_json") or {}).get("approval_mode")
+    if approval_mode not in {"author_template", "riderra_template"}:
+        return item
     payload = preflight.get("validated_dispatch_payload")
-    template_mode = approval_mode in {"author_template", "riderra_template"}
-    error_prefix = approval_mode if template_mode else "campaign"
     if (not isinstance(payload, dict) or payload.get("id") != str(item.get("id") or "")
-            or not payload.get("approved_text")):
-        raise ValueError(f"{error_prefix}_dispatch_payload_missing")
-    if template_mode:
-        if not payload.get("email"):
-            raise ValueError(f"{error_prefix}_dispatch_payload_missing")
-    elif (payload.get("channel") not in {"email", "telegram", "vk"}
-            or not payload.get("contact_value")):
-        raise ValueError("campaign_dispatch_payload_missing")
+            or not payload.get("approved_text") or not payload.get("email")):
+        raise ValueError(f"{approval_mode}_dispatch_payload_missing")
     return {**item, **payload}
 
 
@@ -45,6 +100,7 @@ def dispatch_due_outreach_queue(
     campaign_only: bool = False,
     allowed_business_ids: list[str] | None = None,
     allow_platform: bool = False,
+    allowed_platform_campaign_ids: list[str] | None = None,
     max_daily_outreach_batch: int | None = None,
     blocked_sender_ids: list[str] | None = None,
     author_reply_sync_started_at: datetime | None = None,
@@ -59,12 +115,13 @@ def dispatch_due_outreach_queue(
         for item in (allowed_business_ids or [])
         if str(item or "").strip()
     })
+    platform_campaign_ids = sorted({str(item).strip() for item in (allowed_platform_campaign_ids or []) if str(item).strip()})
     blocked_senders = sorted({
         str(item or "").strip()
         for item in (blocked_sender_ids or [])
         if str(item or "").strip()
     })
-    if campaign_only and not allow_platform and not cohort_business_ids:
+    if campaign_only and not allow_platform and not platform_campaign_ids and not cohort_business_ids:
         return {
             "success": True,
             "batch_id": batch_id,
@@ -111,8 +168,8 @@ def dispatch_due_outreach_queue(
         supervised_daily_cap = max(
             1,
             min(
-                int(max_daily_outreach_batch or p.MAX_DAILY_OUTREACH_BATCH),
-                200,
+                int(max_daily_outreach_batch or os.getenv("OUTREACH_B2B_DAILY_LIMIT") or p.MAX_DAILY_OUTREACH_BATCH),
+                300,
             ),
         )
         legacy_remaining = max(0, supervised_daily_cap - sent_today)
@@ -159,6 +216,14 @@ def dispatch_due_outreach_queue(
                       FROM outreachsendqueue previous
                       WHERE previous.lead_id = q.lead_id
                         AND previous.id <> q.id
+                        -- Picking may defer to the protected final preflight only
+                        -- for a declared failed-route replacement. Final preflight
+                        -- revalidates the live closed grant and exact bounce proof.
+                        AND previous.id::text <> COALESCE(CASE
+                          WHEN candidate_campaign.business_id='edbd961a-273f-4f15-836e-33aacc0aa0e3'
+                           AND candidate_campaign.policy_json->>'approval_mode'='riderra_template'
+                          THEN candidate_campaign.policy_json->'riderra_template_record'->'bounce_recovery'->>'queue_id'
+                          ELSE NULL END,'')
                         AND previous.sent_at > NOW() - INTERVAL '12 hours'
                         AND previous.delivery_status IN ('sent', 'delivered')
                   )
@@ -203,7 +268,7 @@ def dispatch_due_outreach_queue(
                         OR
                         (author_workstream.workstream_type = 'client_partnership'
                          AND author_campaign.business_id = 'edbd961a-273f-4f15-836e-33aacc0aa0e3'
-                         AND author_campaign.policy_json->>'approval_mode' = 'riderra_template')
+                         AND author_campaign.policy_json->>'approval_mode' IN ('riderra_template','ai_rules'))
                       )
                 )
             """
@@ -212,6 +277,10 @@ def dispatch_due_outreach_queue(
             cohort_clauses: list[str] = []
             if allow_platform:
                 cohort_clauses.append("campaign.scope_type = 'platform'")
+            if not allow_platform and platform_campaign_ids:
+                placeholders = ",".join(["%s"] * len(platform_campaign_ids))
+                cohort_clauses.append(f"(campaign.scope_type = 'platform' AND campaign.id IN ({placeholders}))")
+                params.extend(platform_campaign_ids)
             if cohort_business_ids:
                 placeholders = ",".join(["%s"] * len(cohort_business_ids))
                 cohort_clauses.append(
@@ -369,42 +438,15 @@ def dispatch_due_outreach_queue(
             queue_id = str(item.get("id") or "")
             lead_id = str(item.get("lead_id") or "")
             attempt_no = int(item.get("attempts") or 1)
-            preflight_conn = p.get_db_connection()
-            try:
-                preflight_cur = preflight_conn.cursor()
-                preflight = run_dispatch_preflight(
-                    preflight_cur,
-                    queue_id,
-                    author_reply_sync_started_at=author_reply_sync_started_at,
-                )
-                if preflight.get("allowed"):
-                    try:
-                        item = bind_preflight_dispatch_item(item, preflight)
-                    except ValueError as exc:
-                        preflight = {**preflight, "allowed": False, "reason_code": str(exc)}
-                persist_preflight_result(preflight_cur, queue_id, preflight)
-                if not preflight.get("allowed"):
-                    block_queue_item_after_preflight(preflight_cur, queue_id, preflight)
-                preflight_conn.commit()
-            except Exception:
-                preflight_conn.rollback()
-                raise
-            finally:
-                preflight_conn.close()
+            item, preflight, dispatch_result = _preflight_and_dispatch(
+                p, item, author_reply_sync_started_at=author_reply_sync_started_at)
             if not preflight.get("allowed"):
-                summary["blocked"] += 1
-                summary["results"].append(
-                    {
-                        "queue_id": queue_id,
-                        "lead_id": lead_id,
-                        "channel": item.get("channel"),
-                        "attempt_no": attempt_no,
-                        "delivery_status": "blocked",
-                        "reason_code": preflight.get("reason_code"),
-                    }
-                )
+                summary["retry" if preflight.get("retryable") else "blocked"] += 1
+                summary["results"].append({"queue_id": queue_id, "lead_id": lead_id,
+                    "channel": item.get("channel"), "attempt_no": attempt_no,
+                    "delivery_status": "retry" if preflight.get("retryable") else "blocked",
+                    "reason_code": preflight.get("reason_code")})
                 continue
-            dispatch_result = p._dispatch_outreach_queue_item(item)
             delivery_status = str(dispatch_result.get("delivery_status") or p.QUEUE_STATUS_FAILED).strip().lower()
             provider_message_id = dispatch_result.get("provider_message_id")
             provider_name = dispatch_result.get("provider_name")
