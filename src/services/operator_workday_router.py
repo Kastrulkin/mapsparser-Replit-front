@@ -22,6 +22,11 @@ def input_context(cursor, business_id, user_id, conversation_id, payload):
     attachments=[operator_attachments.public(operator_attachments.load(cursor,business_id,user_id,identifier,conversation_id))
                  for identifier in context.get('attachment_ids',[])]
     selected=payload.get('selected_object')
+    if isinstance(selected,dict) and selected.get('type')=='partner':
+        # Partner scope/version are checked by process_chat and its dedicated route.
+        # A previous schedule selection must not take over the partner request.
+        context.pop('selected_object',None)
+        selected=None
     if selected is not None:
         if not isinstance(selected,dict) or selected.get('type') not in {'content_item','schedule'}:
             raise ValueError('Неизвестный выбранный объект.')

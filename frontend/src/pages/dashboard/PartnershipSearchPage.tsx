@@ -23,6 +23,7 @@ import { ProspectingIntakePanel } from '@/components/prospecting/ProspectingWork
 import {
 	approvePartnershipBatch,
 	approvePartnershipDraft,
+  savePartnershipDraft,
 	bulkDeletePartnershipLeads,
 	bulkEnrichPartnershipContacts,
 	bulkMatchPartnershipLeads,
@@ -1944,6 +1945,21 @@ export const PartnershipSearchPage: React.FC = () => {
     );
   };
 
+  const saveDraft = async (draftId: string, text: string) => {
+    if (!currentBusinessId) return;
+    const businessId = currentBusinessId;
+    const digest = drafts.find(draft => draft.id === draftId)?.review_digest;
+    if (!digest) { setError('Обновите список перед сохранением.'); return; }
+    try {
+      setLoading(true); setError(null);
+      await savePartnershipDraft(businessId, draftId, text, digest);
+      if (currentBusinessRef.current !== businessId) return;
+      setMessage('Черновик сохранён. Отправка не разрешена.');
+      await loadDrafts();
+    } catch (failure: unknown) { if (currentBusinessRef.current === businessId) setError(errorMessage(failure) || 'Не удалось сохранить черновик'); }
+    finally { if (currentBusinessRef.current === businessId) setLoading(false); }
+  };
+
   const approveDraft = async (draftId: string, text: string) => {
     if (!currentBusinessId) return;
     const digest = drafts.find((draft) => draft.id === draftId)?.review_digest;
@@ -2849,6 +2865,7 @@ export const PartnershipSearchPage: React.FC = () => {
                 prev.map((item) => (item.id === draftId ? { ...item, approved_text: value } : item))
               )
             }
+            onSaveDraft={(draftId, text) => void saveDraft(draftId, text)}
             onApproveDraft={(draftId, text) => void approveDraft(draftId, text)}
           />
           ) : null}

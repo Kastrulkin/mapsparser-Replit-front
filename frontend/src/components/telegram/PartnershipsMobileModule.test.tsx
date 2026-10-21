@@ -202,3 +202,24 @@ describe('PartnershipsMobileModule destructive actions', () => {
     expect(screen.getByText('Письмо отправлено вручную. Фактический текст сохранён в Gmail.')).toBeInTheDocument();
   });
 });
+
+
+describe('Draft-only saving', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('saves edits without approving or dispatching a letter', async () => {
+    const calls: string[] = [];
+    const bodies: unknown[] = [];
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input); calls.push(url);
+      if (url.endsWith('/save')) { bodies.push(JSON.parse(String(init?.body))); return response({ success: true }); }
+      if (url.startsWith('/api/partnership/drafts?')) return response({ drafts: [{ id: 'draft-1', lead_id: 'lead-1', lead_name: 'Клиника', status: 'generated', generated_text: 'Проверенное предложение', review_digest: 'review-v1' }] });
+      return response({ items: [], batches: [], ready_drafts: [], reactions: [] });
+    }));
+    const user = userEvent.setup();
+    render(<PartnershipsMobileModule scope={{ kind: 'business', id: 'business-1' }} />);
+    await user.click(await screen.findByRole('button', { name: 'Письма' }));
+    await user.click(await screen.findByRole('button', { name: 'Сохранить черновик без отправки' }));
+    expect(bodies).toEqual([{ business_id: 'business-1', edited_text: 'Проверенное предложение', expected_review_digest: 'review-v1' }]);
+    expect(calls.some(url => url.includes('/approve') || url.includes('/confirm'))).toBe(false);
+  });
+});

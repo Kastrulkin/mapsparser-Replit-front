@@ -1142,6 +1142,7 @@ def _select_best_contact(cursor, workstream: dict[str, Any]) -> dict[str, Any] |
         SELECT * FROM lead_contact_points
         WHERE lead_id = %s
           AND contact_type <> 'website'
+          AND (contact_type <> 'email' OR LOWER(SPLIT_PART(value,'@',1)) !~ '(^|[._+-])(jur|yur|legal|privacy|dpo|abuse|noreply|no-reply|unsubscribe)([._+-]|$)')
           AND verification_status <> 'invalid'
           AND (stale_after IS NULL OR stale_after > NOW())
         ORDER BY
@@ -1581,6 +1582,30 @@ def build_native_research_payload(
             published_at=radar_signal.get("message_date"),
             source_type="telegram_public",
         )
+
+    # Preserve sourced facts supplied with a manually prepared letter. These are
+    # evidence, not approval or automatic confirmation of audience requirements.
+    imported_facts = artifact.get("public_research_facts") or []
+    for fact in imported_facts[:20]:
+        if not isinstance(fact, dict):
+            continue
+        add_signal("website_excerpt", str(fact.get("fact") or ""),
+                   "Публичный факт из сохранённого исследования для проверки соответствия партнёрского предложения.",
+                   url=str(fact.get("source_url") or ""), published_at=fact.get("observed_at"),
+                   source_type="saved_public_research", confidence=0.8,
+                   metadata={"imported_by": artifact.get("imported_by"), "basis": fact.get("basis")})
+
+    website_research = lead.get("openclaw_website_research") or (lead.get("enrich_payload_json") or {}).get("openclaw_website_research") or {}
+    from services.openclaw_website_research import publication_facts
+    for fact in publication_facts(website_research):
+        if not isinstance(fact, dict):
+            continue
+        add_signal("website_excerpt", str(fact.get("fact") or ""),
+                   "Публичный фрагмент сайта для проверки соответствия и персонализации; не является автоматическим подтверждением требований.",
+                   url=str(fact.get("source_url") or ""), published_at=fact.get("observed_at"),
+                   source_type="official_website", confidence=0.8,
+                   metadata={"untrusted": True, "provider": "openclaw.web_fetch"})
+    limitations.extend(str(gap.get("reason") or "read_failed") for gap in website_research.get("gaps", []))
 
     usable_signals = [item for item in signals if item.get("usable_for_outreach")]
 
@@ -2199,6 +2224,9 @@ def _draft_provider_unavailable_state(
     error: Exception,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     error_message = str(error)[:1000]
+    budget_limited = str(getattr(error, "code", "")) in {"gigachat_budget_exceeded", "deepseek_budget_exceeded"}
+    next_step = ("Достигнут лимит AI. Повторите подготовку после обновления лимита; данные партнёра сохранены."
+                 if budget_limited else "Повторить подготовку черновика после восстановления провайдера")
     quality = {
         "passed": False,
         "failures": ["Генератор черновика временно недоступен"],
@@ -2208,10 +2236,10 @@ def _draft_provider_unavailable_state(
         **readiness,
         "code": "needs_evidence",
         "label": "Контакт и источник сохранены; черновик не подготовлен",
-        "missing": ["Повторить подготовку черновика после восстановления провайдера"],
+        "missing": [next_step],
         "missing_items": [{
-            "code": "draft_provider_unavailable",
-            "label": "Повторить подготовку черновика после восстановления провайдера",
+            "code": "ai_budget_exhausted" if budget_limited else "draft_provider_unavailable",
+            "label": next_step,
         }],
     }
     return quality, updated_readiness
@@ -2223,6 +2251,8 @@ def _is_terminal_draft_provider_error(error: Exception) -> bool:
         and not bool(getattr(error, "retryable", True))
         and str(getattr(error, "code", "") or "") in {
             "gigachat_payment_required",
+            "gigachat_budget_exceeded",
+            "deepseek_budget_exceeded",
             "gigachat_auth_rejected",
             "gigachat_request_rejected",
             "gigachat_invalid_response",
@@ -2389,6 +2419,8 @@ def evaluate_first_message(text: str, brief: dict[str, Any]) -> dict[str, Any]:
     if not str(brief.get("result") or "").strip():
         failures.append("Не указан один конкретный результат")
     message = str(text or "")
+    if re.search(r'page title:|public contact/company|main page content:|публичный фрагмент сайта|не является автоматическим подтверждением',message,re.I):
+        failures.append("В письмо попало служебное описание источника")
     signal = str(brief.get("signal") or "").strip(" .")
     pain = str(brief.get("pain") or "").strip(" .")
     lead_name = str(brief.get("lead_name") or "").strip()
@@ -2524,7 +2556,8 @@ def prepare_first_message(
             candidate.get("founder_proof"), 18
         )
         compact_bridge = _compact_approved_excerpt(
-            candidate.get("relevance_to_offer") or candidate.get("bridge"), 18
+            (brief.get("result") if workstream.get("workstream_type") == "client_partnership"
+             else candidate.get("relevance_to_offer") or candidate.get("bridge")), 18
         )
         candidate["bridge"] = compact_bridge
         candidate["relevance_to_offer"] = compact_bridge
@@ -2624,6 +2657,8 @@ def enqueue_enrichment_job(
     workstream_id: str,
     force: bool = False,
     allow_paid_enrichment: bool = False,
+    requested_by_user_id: str = "",
+    prepare_draft: bool = True,
 ) -> dict[str, Any]:
     cursor.execute(
         "SELECT pg_advisory_xact_lock(hashtext(%s))",
@@ -2639,6 +2674,10 @@ def enqueue_enrichment_job(
         (workstream_id,),
     )
     latest = cursor.fetchone()
+    actor = str(requested_by_user_id or "").strip()
+    if not actor:
+        return {**dict(latest or {}), "reused": True, "skipped": True,
+                "reason": "manual_request_required", "workstream_id": workstream_id}
     if latest and str(latest.get("status") if isinstance(latest, dict) else latest[2]) in ACTIVE_JOB_STATUSES:
         payload = dict(latest)
         if allow_paid_enrichment and not bool(payload.get("allow_paid_enrichment")):
@@ -2663,11 +2702,13 @@ def enqueue_enrichment_job(
         """
         INSERT INTO lead_enrichment_jobs (
             id, workstream_id, status, current_phase, attempt_count,
-            max_attempts, next_attempt_at, allow_paid_enrichment, created_at, updated_at
-        ) VALUES (%s, %s, 'queued', 'collecting', 0, 2, NOW(), %s, NOW(), NOW())
+            max_attempts, next_attempt_at, allow_paid_enrichment, result_json, created_at, updated_at
+        ) VALUES (%s, %s, 'queued', 'collecting', 0, 2, NOW(), %s, %s, NOW(), NOW())
         RETURNING *
         """,
-        (job_id, workstream_id, allow_paid_enrichment),
+        (job_id, workstream_id, allow_paid_enrichment, Json({'generation_request': {
+            'source': 'user_request', 'actor_user_id': actor, 'prepare_draft': prepare_draft,
+            'requested_at': datetime.now(timezone.utc).isoformat(), 'workstream_id': workstream_id}})),
     )
     payload = dict(cursor.fetchone())
     payload["reused"] = False
@@ -2680,29 +2721,40 @@ def sync_parsed_lead_contacts(cursor, lead: dict[str, Any]) -> dict[str, int]:
         return {"contacts_saved": 0, "jobs_queued": 0}
     contacts = exclude_public_channel_contacts(cursor, lead_id, legacy_contact_candidates(lead))
     contacts_saved = upsert_contact_points(cursor, lead_id, contacts)
-    cursor.execute("SELECT id FROM lead_workstreams WHERE lead_id = %s", (lead_id,))
-    workstream_rows = cursor.fetchall() or []
-    jobs_queued = 0
-    for row in workstream_rows:
-        workstream_id = row.get("id") if isinstance(row, dict) else row[0]
-        job = enqueue_enrichment_job(cursor, str(workstream_id), force=True)
-        if not job.get("reused"):
-            jobs_queued += 1
-    return {"contacts_saved": contacts_saved, "jobs_queued": jobs_queued}
+    return {"contacts_saved": contacts_saved, "jobs_queued": 0}
 
 
-def claim_next_enrichment_job(cursor) -> dict[str, Any] | None:
+def claim_next_enrichment_job(cursor, *, reviewed_sources_only: bool = False) -> dict[str, Any] | None:
     cursor.execute(
         """
         SELECT job.id
         FROM lead_enrichment_jobs job
         WHERE job.status IN ('queued', 'retry_wait')
           AND job.next_attempt_at <= NOW()
-        ORDER BY CASE WHEN job.status = 'retry_wait' THEN 0 ELSE 1 END,
+          AND job.result_json->'generation_request'->>'source' = 'user_request'
+          AND COALESCE(job.result_json->'generation_request'->>'actor_user_id','') <> ''
+          AND (NOT %s OR EXISTS (
+              SELECT 1 FROM operator_async_jobs parent
+              WHERE parent.kind='outreach_continue' AND parent.status IN ('queued','running')
+                AND (parent.result_json->'source_research_job_ids' @> jsonb_build_array(job.id::text)
+                     OR (parent.payload_json->'source_urls' IS NULL
+                         AND parent.result_json->'workstream_ids' @> jsonb_build_array(job.workstream_id::text)
+                         AND job.created_at>=parent.created_at))))
+          AND NOT EXISTS (
+              SELECT 1 FROM operator_async_jobs parent
+              WHERE parent.kind='outreach_continue'
+                AND parent.result_json->'source_research_job_ids' @> jsonb_build_array(job.id::text)
+                AND parent.status NOT IN ('queued','running'))
+        ORDER BY CASE WHEN EXISTS (
+              SELECT 1 FROM operator_async_jobs parent
+              WHERE parent.kind='outreach_continue' AND parent.status IN ('queued','running')
+                AND parent.result_json->'source_research_job_ids' @> jsonb_build_array(job.id::text))
+              THEN 0 ELSE 1 END,
+                 CASE WHEN job.status = 'retry_wait' THEN 0 ELSE 1 END,
                  job.next_attempt_at ASC, job.created_at ASC
         FOR UPDATE SKIP LOCKED
         LIMIT 1
-        """
+        """, (reviewed_sources_only,)
     )
     row = cursor.fetchone()
     if not row:
@@ -2850,6 +2902,7 @@ def _sync_legacy_best_contact(cursor, lead_id: str) -> None:
             """
             SELECT value FROM lead_contact_points
             WHERE lead_id = %s AND contact_type = %s AND verification_status <> 'invalid'
+              AND (contact_type <> 'email' OR LOWER(SPLIT_PART(value,'@',1)) !~ '(^|[._+-])(jur|yur|legal|privacy|dpo|abuse|noreply|no-reply|unsubscribe)([._+-]|$)')
             ORDER BY
               CASE verification_status WHEN 'verified' THEN 0 WHEN 'confirmed_source' THEN 1 ELSE 2 END,
               confidence DESC, updated_at DESC
@@ -2869,6 +2922,25 @@ def _sync_legacy_best_contact(cursor, lead_id: str) -> None:
     )
 
 
+def _manual_preparation(function):
+    from functools import wraps
+    from services.ai_spend_budget import request_scope
+
+    @wraps(function)
+    def execute(cursor, job):
+        authorization = (job.get('result_json') or {}).get('generation_request') or {}
+        actor = str(authorization.get('actor_user_id') or '').strip()
+        if (authorization.get('source') != 'user_request' or not actor
+                or authorization.get('workstream_id') != str(job.get('workstream_id') or '')):
+            raise PersonalizationGenerationError('manual_request_required',
+                'Переподготовка обращений разрешена только по вашей команде.', retryable=False)
+        with request_scope(operation_id=str(job['id']), user_id=actor,
+                           task_key='outreach_personalization'):
+            return function(cursor, job)
+    return execute
+
+
+@_manual_preparation
 def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
     cursor.execute(
         """
@@ -2924,9 +2996,55 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
     cursor.execute("UPDATE lead_enrichment_jobs SET status = 'collecting', current_phase = 'collecting', updated_at = NOW() WHERE id = %s", (job.get("id"),))
     contacts = legacy_contact_candidates(lead)
     eligible_website = None if _lead_website_identity_mismatched(lead) else lead.get("website")
-    website_contacts, website_crm_observations, warnings = collect_public_website_intelligence(
-        eligible_website
-    )
+    from services import openclaw_website_research
+    if workstream.get("workstream_type") == "client_partnership" and eligible_website and openclaw_website_research.enabled():
+        cursor.execute("""SELECT payload_json FROM operator_async_jobs WHERE kind='outreach_continue' AND business_id=%s
+            AND ((payload_json->'source_urls' IS NOT NULL AND result_json->'source_research_job_ids' @> jsonb_build_array(%s::text))
+                 OR (payload_json->'source_urls' IS NULL AND result_json->'lead_ids' @> jsonb_build_array(%s::text)))
+            ORDER BY (payload_json->'source_urls' IS NOT NULL) DESC, created_at DESC LIMIT 1""",
+                       (workstream.get("client_business_id"), str(job["id"]), str(lead["id"])))
+        task_row = cursor.fetchone()
+        config = (dict(task_row).get("payload_json") or {}) if task_row else {}
+        # Reusing a company must retain the exact reviewed starting page.
+        from urllib.parse import urlsplit
+        reviewed_urls = [url for url in config.get("source_urls", [])
+                         if openclaw_website_research.same_website(url, str(eligible_website))]
+        research_url = reviewed_urls[0] if reviewed_urls else str(eligible_website)
+        # Re-read known public sources within the same five-page allowance.
+        # Reading-mode extraction can omit navigation, not the stored source URLs.
+        known_sources = list(dict.fromkeys(reviewed_urls[1:]))
+        cursor.execute("""SELECT source_url FROM lead_contact_points WHERE lead_id=%s
+            AND verification_status IN ('verified','confirmed_source')
+            AND (stale_after IS NULL OR stale_after>NOW()) AND source_url IS NOT NULL""", (lead["id"],))
+        for contact_source in cursor.fetchall():
+            source = str(contact_source.get("source_url") or "").split('#', 1)[0]
+            if source and source != research_url and openclaw_website_research.same_website(source, research_url) and source not in known_sources:
+                known_sources.append(source)
+        cursor.execute("""SELECT signals_json, evidence_json FROM lead_workstream_research
+            WHERE workstream_id=%s ORDER BY researched_at DESC LIMIT 5""", (workstream["id"],))
+        for prior_research in cursor.fetchall():
+            for field in ("signals_json", "evidence_json"):
+                for evidence in prior_research.get(field) or []:
+                    if not isinstance(evidence, dict):
+                        continue
+                    source = str(evidence.get("source_url") or "").split('#', 1)[0]
+                    if source and source != research_url and openclaw_website_research.same_website(source, research_url) and source not in known_sources:
+                        known_sources.append(source)
+        website_research = openclaw_website_research.research_website(
+            business_id=str(workstream["client_business_id"]), job_id=str(job["id"]),
+            url=research_url, requirements=config.get("requirements") or [], known_source_urls=known_sources[:4])
+        website_contacts = []
+        for page in website_research["pages"]:
+            # Readable text is escaped before reuse of the existing contact parser.
+            from html import escape
+            website_contacts.extend(extract_contacts_from_html(escape(str(page.get("content_text") or "")), page["final_url"]))
+        website_crm_observations = []
+        warnings = [str(gap.get("reason") or "read_failed") for gap in website_research.get("gaps", [])]
+        lead["openclaw_website_research"] = website_research
+        cursor.execute("UPDATE prospectingleads SET enrich_payload_json=COALESCE(enrich_payload_json,'{}'::jsonb) || %s::jsonb WHERE id=%s",
+                       (Json({"openclaw_website_research": website_research}), lead["id"]))
+    else:
+        website_contacts, website_crm_observations, warnings = collect_public_website_intelligence(eligible_website)
     lead["public_crm_observations"] = website_crm_observations
     contacts.extend(website_contacts)
     contacts = exclude_public_channel_contacts(cursor, str(lead["id"]), contacts)
@@ -2941,7 +3059,7 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
             cursor,
             lead,
             workstream,
-            bool(job.get("allow_paid_enrichment")),
+            bool(job.get("allow_paid_enrichment")) and not bool(lead.get("openclaw_website_research")),
         )
         upsert_contact_points(cursor, str(lead["id"]), hunter_contacts)
         best_contact = _select_best_contact(cursor, workstream)
@@ -2959,6 +3077,16 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
 
     cursor.execute("UPDATE lead_enrichment_jobs SET status = 'researching', current_phase = 'researching', updated_at = NOW() WHERE id = %s", (job.get("id"),))
     research = upsert_native_research(cursor, lead, workstream)
+    authorization = (job.get('result_json') or {}).get('generation_request') or {}
+    if authorization.get('prepare_draft') is not True:
+        # A contact lookup cannot create or replace an outreach draft.
+        result = {'lead_id': str(lead['id']), 'workstream_id': str(workstream['id']),
+                  'contacts_collected': len(contacts), 'mode': 'contact_research',
+                  'draft_prepared': False, 'external_dispatch_performed': False}
+        cursor.execute("""UPDATE lead_enrichment_jobs SET status='ready',current_phase='ready',
+            completed_at=NOW(),result_json=COALESCE(result_json,'{}'::jsonb) || %s,
+            updated_at=NOW() WHERE id=%s RETURNING *""", (Json(result),job['id']))
+        return dict(cursor.fetchone())
     sender = (
         _load_platform_sender_profile(cursor)
         if workstream.get("sender_mode") in {
@@ -3132,7 +3260,8 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
         UPDATE lead_enrichment_jobs
         SET status = %s, current_phase = %s, completed_at = NOW(),
             hunter_requests_used = hunter_requests_used + %s,
-            message_brief_json = %s, readiness_json = %s, result_json = %s,
+            message_brief_json = %s, readiness_json = %s,
+            result_json = COALESCE(result_json, '{}'::jsonb) || %s,
             updated_at = NOW()
         WHERE id = %s
         RETURNING *

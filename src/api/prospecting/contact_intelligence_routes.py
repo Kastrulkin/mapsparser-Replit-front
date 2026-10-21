@@ -640,6 +640,7 @@ def admin_start_contact_intelligence(lead_id: str):
             workstream_id,
             force=bool(data.get("force")),
             allow_paid_enrichment=bool(data.get("allow_paid_enrichment")),
+            requested_by_user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
         )
         conn.commit()
         return jsonify({"success": True, "job": _serialize_job(job), "reused": bool(job.get("reused"))}), 202
@@ -902,6 +903,8 @@ def partnership_contact_intelligence(lead_id: str):
                 workstream_id,
                 force=bool(data.get("force")),
                 allow_paid_enrichment=bool(data.get("allow_paid_enrichment")),
+                prepare_draft=bool(data.get("prepare_draft")),
+                requested_by_user_id=str(context.get("user", {}).get("user_id") or context.get("user", {}).get("id") or ""),
             )
             conn.commit()
             return jsonify({"success": True, "job": _serialize_job(job), "reused": bool(job.get("reused"))}), 202

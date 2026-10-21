@@ -330,3 +330,9 @@ export const exportPartnershipData = (businessId: string, format: string) =>
   request(`/partnership/export?business_id=${encodeURIComponent(businessId)}&format=${format}&limit=50`, {
     method: 'GET',
   });
+
+export const savePartnershipDraft = (businessId: string, draftId: string, editedText: string, expectedReviewDigest: string) =>
+  request(`/partnership/drafts/${draftId}/save`, {
+    method: 'POST',
+    body: JSON.stringify({ business_id: businessId, edited_text: editedText, expected_review_digest: expectedReviewDigest }),
+  });

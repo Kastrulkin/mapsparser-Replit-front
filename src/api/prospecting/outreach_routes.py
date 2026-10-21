@@ -1523,7 +1523,7 @@ def partnership_enrich_lead_contacts(lead_id):
                 expected_type="client_partnership",
                 client_business_id=business_id,
             )
-            job = enqueue_enrichment_job(cur, str(workstream.get("id")), force=bool(data.get("force")))
+            job = enqueue_enrichment_job(cur, str(workstream.get("id")), force=bool(data.get("force")), prepare_draft=False, requested_by_user_id=str(user_data.get("user_id") or user_data.get("id") or ""))
             conn.commit()
             return jsonify(
                 {
@@ -1602,6 +1602,7 @@ def partnership_bulk_enrich_contacts():
                     cur,
                     str(workstream.get("id")),
                     allow_paid_enrichment=bool(data.get("allow_paid_enrichment")),
+                    prepare_draft=False, requested_by_user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
                 )
                 jobs.append(
                     {
@@ -1971,6 +1972,33 @@ def partnership_list_drafts():
     except Exception as e:
         print(f"Error listing partnership drafts: {e}")
         return jsonify({"error": str(e)}), 500
+
+@admin_prospecting_bp.route("/api/partnership/drafts/<string:draft_id>/save", methods=["POST"])
+def partnership_save_draft(draft_id):
+    user_data,error=_require_auth()
+    if error:return error
+    data=request.get_json(silent=True) or {}
+    business_id=str(data.get('business_id') or '').strip()
+    if not business_id:return jsonify({'error':'Выберите бизнес.'}),400
+    conn=get_db_connection()
+    try:
+        from services.partnership_draft_edits import save_draft
+        result=save_draft(conn.cursor(),business_id=business_id,
+            user_id=str(user_data.get('user_id') or user_data.get('id') or ''),draft_id=draft_id,
+            text=data.get('edited_text'),expected_digest=data.get('expected_review_digest'))
+        conn.commit()
+        return jsonify({'success':True,'draft':result,'message':'Черновик сохранён. Отправка не разрешена.'})
+    except PermissionError as failure:
+        conn.rollback()
+        return jsonify({'error':str(failure)}),403
+    except ValueError as failure:
+        conn.rollback()
+        return jsonify({'error':str(failure)}),409
+    except Exception:
+        conn.rollback()
+        return jsonify({'error':'Не удалось сохранить черновик. Повторите попытку.'}),500
+    finally:conn.close()
+
 
 @admin_prospecting_bp.route("/api/partnership/drafts/<string:draft_id>/approve", methods=["POST"])
 def partnership_approve_draft(draft_id):

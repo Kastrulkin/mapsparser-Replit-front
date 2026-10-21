@@ -66,6 +66,7 @@ type DraftsSectionProps = {
   onToggleDraft: (id: string, checked: boolean) => void;
   onDraftTextChange: (id: string, value: string) => void;
   onApproveDraft: (id: string, text: string) => void;
+  onSaveDraft?: (id: string, text: string) => void;
 };
 
 type QueueSectionProps = {
@@ -163,6 +164,7 @@ export function PartnershipDraftsSection({
   onToggleDraft,
   onDraftTextChange,
   onApproveDraft,
+  onSaveDraft,
 }: DraftsSectionProps) {
   const approvedCount = drafts.filter((draft) => String(draft.status || '').toLowerCase() === 'approved').length;
   const waitingApprovalCount = drafts.length - approvedCount;
@@ -282,6 +284,7 @@ export function PartnershipDraftsSection({
                           </>
                         )}
                       </Button>
+                      {onSaveDraft && !['approved','sent','delivered'].includes(draft.status || '') && <Button size="sm" variant="outline" disabled={loading || !draftText.trim()} onClick={() => onSaveDraft(draft.id, draftText)}>Сохранить черновик</Button>}
                       <Button size="sm" onClick={() => onApproveDraft(draft.id, draftText)} disabled={loading || searchDraftNeedsReview}>
                         Утвердить для отправки
                       </Button>

@@ -1,6 +1,7 @@
 """Transport to installed OpenClaw research; persistence belongs to LocalOS."""
 from __future__ import annotations
 import os
+import re
 from pathlib import Path
 from dotenv import load_dotenv
 from urllib.parse import urlsplit, urlunsplit
@@ -56,3 +57,27 @@ def research_website(*, business_id: str, job_id: str, url: str, requirements: l
     except (requests.RequestException, ValueError, TypeError, KeyError):
         # No secret-bearing response body, upstream URL or token in error logs.
         raise WebsiteResearchUnavailable('Не удалось исследовать сайт через OpenClaw. Проверьте подключение или укажите другой публичный источник.') from None
+
+
+def publication_facts(research: dict) -> list[dict]:
+    """Project stored public page text; transport labels are never copy evidence."""
+    facts=[]
+    seen=set()
+    for page in research.get('pages') or []:
+        source=str(page.get('final_url') or '')
+        text=str(page.get('content_text') or '')
+        if 'Main page content:' in text:
+            text=text.split('Main page content:',1)[1]
+        for paragraph in text.splitlines():
+            if paragraph.lstrip().startswith(('#','[','http',':')):continue
+            paragraph=re.sub(r'\[([^\]]+)\]\([^)]*\)',r'\1',paragraph)
+            paragraph=re.sub(r'\s+',' ',paragraph).strip()
+            for sentence in re.split(r'(?<=[.!?])\s+',paragraph):
+                if not 7<=len(sentence.split())<=65 or not sentence.endswith(('.', '!', '?')):continue
+                if re.search(r'page title|public contact|main page content|публичный фрагмент|крупнейш|лучш|лидер',sentence,re.I):continue
+                if sentence in seen or not source:continue
+                seen.add(sentence)
+                facts.append({'fact':'На сайте компании сказано: «'+sentence.rstrip('.!?')+'».','source_url':source,'observed_at':page.get('fetched_at'),
+                              'evidence_type':'page_excerpt','untrusted':True})
+                if len(facts)>=20:return facts
+    return facts

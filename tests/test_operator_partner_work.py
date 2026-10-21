@@ -17,12 +17,12 @@ class Cursor:
     def execute(self, query, params=()):
         self.query = query; self.calls.append((query, params))
     def fetchone(self): return self.lead
-    def fetchall(self): return self.drafts
+    def fetchall(self): return ([self.lead] if self.lead else []) if 'JOIN lead_workstreams' in self.query else self.drafts
 
 
 def lead():
     return {'id': LEAD, 'business_id': BUSINESS, 'name': 'Детская студия', 'selected_channel': 'email',
-            'status': 'new', 'email': 'public@example.test', 'updated_at': datetime(2026, 10, 17, tzinfo=timezone.utc)}
+            'workstream_id': 'workstream', 'workstream_status': 'new', 'workstream_updated_at': None, 'status': 'new', 'email': 'public@example.test', 'updated_at': datetime(2026, 10, 17, tzinfo=timezone.utc)}
 
 
 @pytest.fixture
@@ -34,12 +34,13 @@ def allowed(monkeypatch):
     monkeypatch.setattr(operator_audio, 'authorize_actor', authorize)
 
 
-def test_selection_uses_business_and_intent_and_does_not_copy_contacts(allowed):
+def test_selection_uses_business_workstream_and_does_not_copy_contacts(allowed):
     cursor = Cursor(lead())
     selected = operator_partner_work.partner_selection(cursor, user_id=USER, business_id=BUSINESS, item_id=LEAD,
         expected_updated_at='2026-10-17T00:00:00.000Z')
     assert cursor.calls[0][1] == (LEAD, BUSINESS)
-    assert "intent='partnership_outreach'" in cursor.calls[0][0]
+    assert "ws.client_business_id=%s" in cursor.calls[0][0]
+    assert "ws.workstream_type='client_partnership'" in cursor.calls[0][0]
     assert selected['name'] == 'Детская студия'
     assert 'email' not in selected
     before = selected['version']
@@ -110,7 +111,7 @@ def test_queue_preserves_actor_on_deployed_queue_contract(allowed, monkeypatch):
     cursor.connection = object()
     monkeypatch.setattr(lead_workstream_service, 'resolve_workstream', lambda *args, **kwargs: {'id': 'workstream'})
     captured = {}
-    def enqueue(cursor, workstream_id, *, allow_paid_enrichment=False, requested_by_user_id=''):
+    def enqueue(cursor, workstream_id, *, force=False, allow_paid_enrichment=False, requested_by_user_id=''):
         captured.update(actor=requested_by_user_id, paid=allow_paid_enrichment, workstream=workstream_id)
         return {'id': 'job', 'status': 'queued'}
     monkeypatch.setattr(contact_intelligence_service, 'enqueue_enrichment_job', enqueue)

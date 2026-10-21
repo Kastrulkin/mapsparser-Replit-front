@@ -3045,7 +3045,8 @@ def confirm_pending_operator_action(
     if capability == 'partnerships.selected_draft':
         from services import operator_partner_work
         result = standardize_operator_result(operator_partner_work.apply(cursor, user_id=user_id, business_id=business_id, envelope=envelope), capability)
-        if result.get('status') == 'completed':
+        # Confirming queue insertion completes this approval, not the letter.
+        if result.get('status') in {'completed', 'queued', 'clarification_required'}:
             finish_operator_action(cursor, action_id=action_id, result=result)
         return result, False
     if capability == 'communications.control_email':

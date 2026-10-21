@@ -1219,6 +1219,11 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                         className="mt-3 min-h-40 w-full resize-none rounded-[16px] bg-black/20 p-3 text-xs leading-5 ring-1 ring-inset ring-white/[0.06]"
                       />
                     )}
+                    {!historicalRecord && draft.status !== 'approved' && <button
+                      disabled={Boolean(busy) || !text.trim()}
+                      onClick={() => void action(`save-draft:${draft.id}`, `/api/partnership/drafts/${draft.id}/save`, { edited_text: text, expected_review_digest: draft.review_digest })}
+                      className="mt-3 min-h-11 w-full rounded-[13px] bg-white/10 text-xs disabled:opacity-40"
+                    >Сохранить черновик без отправки</button>}
                     <div className="mt-3 grid grid-cols-[44px_1fr] gap-2">
                       <button
                         aria-label="Удалить черновик"

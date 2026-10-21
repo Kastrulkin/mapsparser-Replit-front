@@ -23,13 +23,15 @@ def partner(pg, monkeypatch):
     c.execute('CREATE TABLE max_identities(user_id TEXT,max_id TEXT,revoked_at TIMESTAMPTZ)')
     c.execute("INSERT INTO max_identities VALUES('u','123',NULL)")
     lead_table(c)
+    c.execute("CREATE TABLE lead_workstreams(id TEXT PRIMARY KEY,lead_id TEXT,client_business_id TEXT,workstream_type TEXT,status TEXT,selected_channel TEXT,updated_at TIMESTAMPTZ DEFAULT NOW())")
     lead_id = str(uuid.uuid4())
+    c.execute("INSERT INTO lead_workstreams VALUES('workstream',%s,'b','client_partnership','new','email',NOW())",(lead_id,))
     c.execute("INSERT INTO prospectingleads(id,business_id,intent,name,status,selected_channel,email) VALUES(%s,'b','partnership_outreach','Детская студия','new','email','public@example.test')", (lead_id,))
-    c.execute('''CREATE TABLE outreachmessagedrafts(id TEXT PRIMARY KEY,lead_id TEXT,channel TEXT,status TEXT,
+    c.execute('''CREATE TABLE outreachmessagedrafts(id TEXT PRIMARY KEY,lead_id TEXT,workstream_id TEXT DEFAULT 'workstream',channel TEXT,status TEXT,
         generated_text TEXT,edited_text TEXT,approved_text TEXT,created_at TIMESTAMPTZ DEFAULT NOW(),updated_at TIMESTAMPTZ DEFAULT NOW())''')
     c.execute("INSERT INTO outreachmessagedrafts(id,lead_id,channel,status,generated_text) VALUES('draft',%s,'email','draft','Проверенный черновик предложения.')", (lead_id,))
     c.execute('''CREATE TABLE lead_enrichment_jobs(id TEXT PRIMARY KEY,workstream_id TEXT,status TEXT,current_phase TEXT,
-        attempt_count INT,max_attempts INT,next_attempt_at TIMESTAMPTZ,allow_paid_enrichment BOOLEAN,created_at TIMESTAMPTZ,updated_at TIMESTAMPTZ)''')
+        attempt_count INT,max_attempts INT,next_attempt_at TIMESTAMPTZ,allow_paid_enrichment BOOLEAN,result_json JSONB,created_at TIMESTAMPTZ,updated_at TIMESTAMPTZ)''')
     def authorize(cursor, user_id, business_id, **kwargs):
         if user_id != 'u' or business_id != 'b': raise PermissionError('Denied')
         return {'role': 'business_owner'}, {'capabilities': ['operator', 'partnerships']}
@@ -70,7 +72,7 @@ def test_read_prepare_confirm_once_and_resume_exact_partner(partner, channel, vo
     c.execute('SELECT COUNT(*) n FROM lead_enrichment_jobs'); assert c.fetchone()['n'] == 0
     action_id = preview['approval']['action_id']; conn.commit()
     result, replay = operator_core.confirm_pending_operator_action(c, action_id=action_id, business_id='b', user_id='u', subscription_access={'capabilities': ['partnerships']})
-    assert result['status'] == 'completed' and replay is False
+    assert result['status'] == 'queued' and replay is False
     conn.commit()
     result, replay = operator_core.confirm_pending_operator_action(c, action_id=action_id, business_id='b', user_id='u', subscription_access={'capabilities': ['partnerships']})
     assert replay is True
@@ -97,6 +99,8 @@ def test_max_bot_start_returns_to_partner_not_content(dialogues, monkeypatch):
     conn = dialogues[0]; c = conn.cursor(); lead_table(c)
     lead_id = str(uuid.uuid4())
     c.execute("INSERT INTO prospectingleads(id,business_id,intent,name,status) VALUES(%s,'b1','partnership_outreach','Студия','new')", (lead_id,))
+    c.execute("CREATE TABLE lead_workstreams(id TEXT PRIMARY KEY,lead_id TEXT,client_business_id TEXT,workstream_type TEXT,status TEXT,selected_channel TEXT,updated_at TIMESTAMPTZ DEFAULT NOW())")
+    c.execute("INSERT INTO lead_workstreams VALUES('workstream',%s,'b1','client_partnership','new','email',NOW())",(lead_id,))
     c.execute('''CREATE TABLE operatorconversations(id TEXT PRIMARY KEY,business_id TEXT,user_id TEXT,channel TEXT,
         transport_key TEXT,status TEXT DEFAULT 'active',pending_context JSONB DEFAULT '{}',input_context_json JSONB DEFAULT '{}',updated_at TIMESTAMPTZ DEFAULT NOW())''')
     monkeypatch.setenv('MAX_BOT_USERNAME', 'fixture_bot')
@@ -119,7 +123,7 @@ def test_separate_messenger_approvals_reuse_existing_preparation(partner):
         conn.commit()
         result, replay = operator_core.confirm_pending_operator_action(c, action_id=preview['approval']['action_id'],
             business_id='b', user_id='u', subscription_access={'capabilities': ['partnerships']})
-        assert result['status'] == 'completed' and replay is False
+        assert result['status'] == 'queued' and replay is False
         conn.commit()
     c.execute('SELECT COUNT(*) n FROM lead_enrichment_jobs')
     assert c.fetchone()['n'] == 1

@@ -832,6 +832,8 @@ def _assemble_policy_bound_text(
             opening = f'{salutation} {sender_opening} Есть ещё один формат для "{recipient}".'
         else:
             opening = f'{salutation} {sender_opening} Коротко продолжим про сотрудничество с "{recipient}".'
+    elif partnership_motion and index == 0:
+        opening = f'{salutation} Пишем от «{sender_business or sender_identity}» с предложением для «{recipient}».'
     elif partnership_motion and angle == "signal":
         opening = f'{salutation} Я {sender_identity}. Пишу с идеей для двух соседних проектов - нас и "{recipient}".'
     elif partnership_motion:
