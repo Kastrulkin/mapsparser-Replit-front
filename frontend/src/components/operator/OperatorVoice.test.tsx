@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { OperatorVoiceInput, OperatorSpeech } from './OperatorVoice';
@@ -135,4 +135,47 @@ it('rechecks the queued transcription instead of uploading the recording twice',
  expect(mock.mock.calls.filter(([url])=>String(url).includes('/transcriptions'))).toHaveLength(1);
  expect(mock.mock.calls.filter(([url])=>String(url).includes('/retry'))).toHaveLength(1);
  expect(submit).not.toHaveBeenCalled();
+});
+
+it.each([false,true])('clears a recording on business switch after cancellation=%s',async cancelFirst=>{
+ sessionStorage.clear();
+ vi.stubGlobal('URL',Object.assign(URL,{createObjectURL:vi.fn(()=>'blob:scope'),revokeObjectURL:vi.fn()}));
+ class Recording {
+  static isTypeSupported(){return true;}
+  state='inactive';mimeType='audio/webm';ondataavailable:((event:{data:Blob})=>void)|null=null;onstop:(()=>void)|null=null;
+  start(){this.state='recording';}
+  stop(){this.state='inactive';setTimeout(()=>{this.ondataavailable?.({data:new Blob(['scope recording'])});this.onstop?.();},0);}
+ }
+ vi.stubGlobal('MediaRecorder',Recording);
+ const stop=vi.fn();vi.stubGlobal('navigator',{mediaDevices:{getUserMedia:vi.fn(async()=>({getTracks:()=>[{stop}]}))}});
+ const mock=vi.fn(()=>reply({input_enabled:true}));vi.stubGlobal('fetch',mock);
+ const submit=vi.fn(async()=>{});const user=userEvent.setup();
+ const view=render(<OperatorVoiceInput businessId="first" channel="telegram_mini_app" directSubmit={false} onSubmit={submit} headers={headers}/>);
+ await user.click(await screen.findByRole('button',{name:'Записать голосом'}));
+ if(cancelFirst){await user.click(screen.getByRole('button',{name:'Отменить запись'}));await user.click(screen.getByRole('button',{name:'Записать голосом'}));}
+ view.rerender(<OperatorVoiceInput businessId="other" channel="telegram_mini_app" directSubmit={false} onSubmit={submit} headers={headers}/>);
+ await waitFor(()=>expect(screen.queryByRole('button',{name:'Остановить запись'})).not.toBeInTheDocument());
+ await screen.findByRole('button',{name:'Записать голосом'});
+ expect(screen.queryByRole('button',{name:'Распознать запись'})).not.toBeInTheDocument();
+ expect(stop).toHaveBeenCalled();expect(submit).not.toHaveBeenCalled();
+ expect(mock.mock.calls.every(([input])=>String(input).includes('/config'))).toBe(true);
+});
+
+it('does not let a delayed cancelled recorder stop a newer recording',async()=>{
+ sessionStorage.clear();const callbacks:(()=>void)[]=[];
+ class Recording {
+  static isTypeSupported(){return true;}
+  state='inactive';mimeType='audio/webm';ondataavailable:((event:{data:Blob})=>void)|null=null;onstop:(()=>void)|null=null;
+  start(){this.state='recording';}
+  stop(){this.state='inactive';callbacks.push(()=>{this.ondataavailable?.({data:new Blob(['old'])});this.onstop?.();});}
+ }
+ vi.stubGlobal('MediaRecorder',Recording);const first=vi.fn();const second=vi.fn();
+ vi.stubGlobal('navigator',{mediaDevices:{getUserMedia:vi.fn().mockResolvedValueOnce({getTracks:()=>[{stop:first}]}).mockResolvedValueOnce({getTracks:()=>[{stop:second}]})}});
+ vi.stubGlobal('fetch',vi.fn(()=>reply({input_enabled:true})));
+ const user=userEvent.setup();render(<OperatorVoiceInput businessId="recording" channel="telegram_mini_app" directSubmit={false} onSubmit={vi.fn()} headers={headers}/>);
+ await user.click(await screen.findByRole('button',{name:'Записать голосом'}));await user.click(screen.getByRole('button',{name:'Отменить запись'}));
+ await user.click(screen.getByRole('button',{name:'Записать голосом'}));
+ await act(async()=>{callbacks.splice(0).forEach(callback=>callback());});
+ expect(first).toHaveBeenCalled();expect(second).not.toHaveBeenCalled();
+ expect(screen.getByRole('button',{name:'Остановить запись'})).toBeInTheDocument();
 });

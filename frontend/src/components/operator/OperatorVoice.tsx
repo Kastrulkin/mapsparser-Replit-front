@@ -50,10 +50,10 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
   const clearStream = () => { stream.current?.getTracks().forEach((track) => track.stop()); stream.current = null; };
   useEffect(() => {
     const controller = new AbortController(); lifetime.current = controller;
-    setAvailable(false); setClip(null); setSource(null); setText(''); setQueuedJob(null); setError(''); setBusy(false); uploadRequest.current='';
+    setAvailable(false); setRecording(false); setSeconds(0); setClip(null); setSource(null); setText(''); setQueuedJob(null); setError(''); setBusy(false); uploadRequest.current=''; asset.current='';
     void jsonRequest(`/api/operator/audio/config?business_id=${encodeURIComponent(businessId)}`, { headers: headers(), signal: controller.signal })
       .then((config) => setAvailable(Boolean(config.input_enabled))).catch(() => setAvailable(false));
-    return () => { controller.abort(); if (recorder.current?.state === 'recording') recorder.current.stop(); clearStream(); };
+    return () => { controller.abort(); lifetime.current.abort(); if (recorder.current?.state === 'recording') recorder.current.stop(); clearStream(); };
   }, [businessId, channel, contextKey, headers]);
   useEffect(() => {
     const signal=lifetime.current.signal;
@@ -103,9 +103,9 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
       const mimeType = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus'].find((mime) => MediaRecorder.isTypeSupported(mime));
       const next = mimeType ? new MediaRecorder(media, { mimeType }) : new MediaRecorder(media);
       const chunks: Blob[] = []; next.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
-      next.onstop = () => { clearStream(); if (!signal.aborted) { setClip(new Blob(chunks, { type: next.mimeType })); setRecording(false); } };
-      next.onerror = () => { clearStream(); setRecording(false); setError('Запись прервалась. Попробуйте ещё раз.'); };
-      recorder.current = next; setSeconds(0); setSource(null); setClip(null); next.start(); setRecording(true);
+      next.onstop = () => { if (signal.aborted) return; clearStream(); setClip(new Blob(chunks, { type: next.mimeType })); setRecording(false); };
+      next.onerror = () => { if (signal.aborted) return; clearStream(); setRecording(false); setError('Запись прервалась. Попробуйте ещё раз.'); };
+      recorder.current = next; setSeconds(0); setSource(null); setText(''); setClip(null); next.start(); setRecording(true);
     } catch (failure) {
       clearStream();
       const name = failure && typeof failure === 'object' && 'name' in failure ? failure.name : '';
