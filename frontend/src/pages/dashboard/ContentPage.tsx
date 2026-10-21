@@ -37,7 +37,7 @@ import { AudienceInsights } from '@/components/AudienceInsights';
 import { PublicationReconciliation } from '@/components/content-plan/PublicationReconciliation';
 import { ContentPersonalization } from '@/components/content-plan/ContentPersonalization';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -1012,7 +1012,7 @@ function ContentWorkspace() {
       : rawItems;
     const plan = rawPlan ? { ...rawPlan, items: visibleItems } : null;
     setCurrentPlan(plan);
-    if (requestedContentTarget.focus === 'story_facts' && requestedContentTarget.itemId) {
+    if (requestedContentTarget.itemId) {
       const requestedItem = visibleItems.find((item) => item.id === requestedContentTarget.itemId);
       if (requestedItem) {
         setSelectedItemId(requestedItem.id);
@@ -2388,7 +2388,7 @@ function ContentWorkspace() {
             >
               <div className="min-w-0">
                 <div className="break-words text-sm font-semibold text-slate-950 [overflow-wrap:anywhere]">{item.theme || item.goal || calendarCopy.publication}</div>
-                <div className="mt-1 text-sm text-slate-500">{formatDate(item.scheduled_for, language)} · {resolveItemSelectedChannels(item, posts, currentPlan).length} {calendarCopy.channels}</div>
+                <div className="mt-1 text-sm text-slate-500">{formatDate(item.scheduled_for, language)} · {language === 'ru' ? `Каналы: ${resolveItemSelectedChannels(item, posts, currentPlan).length}` : `${resolveItemSelectedChannels(item, posts, currentPlan).length} ${calendarCopy.channels}`}</div>
               </div>
               <div className="flex min-w-0 max-w-full flex-wrap gap-2 sm:justify-end">
                 <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-full px-3 py-1 text-center text-xs font-semibold ring-1 [overflow-wrap:anywhere]', getStatusClassName(calendarState.status))}>
@@ -2981,6 +2981,7 @@ function ContentWorkspace() {
                     value={draftEdits[item.id] ?? item.draft_text ?? ''}
                     onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraftEdits((prev) => ({ ...prev, [item.id]: event.target.value }))}
                     className="min-h-[260px] rounded-2xl border-slate-200 text-base leading-7"
+                    aria-label="Текст публикации"
                     placeholder="Текст публикации"
                   />
                   {generationAlternatives.length > 1 ? (
@@ -3052,7 +3053,7 @@ function ContentWorkspace() {
                     ) : null}
                     {selectedPhoto?.original_url ? (
                       <div className="mt-4 grid gap-4 sm:grid-cols-[140px_1fr]">
-                        <AuthenticatedImage src={photoImageSrc(selectedPhoto)} alt="Подобранное фото" className="h-32 w-full rounded-2xl object-cover shadow-sm ring-1 ring-black/10" />
+                        <PublicationPhotoPreview key={`${currentBusinessId}:${item.id}:${selectedPhoto.id}`} src={photoImageSrc(selectedPhoto)} />
                         <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
                           <div className="font-semibold text-slate-900">Почему подходит</div>
                           <div className="mt-1 leading-6">{selectedPhoto.why || mediaRecommendation?.message || 'Фото подходит по задаче публикации.'}</div>
@@ -3756,6 +3757,26 @@ function ContentWorkspace() {
 export function ContentPage() {
   const { demoMode } = useOutletContext<DashboardOutletContext>();
   return demoMode ? <DemoContentPlanPage /> : <ContentWorkspace />;
+}
+
+function PublicationPhotoPreview({ src }: { src: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger type="button" className="w-full text-left" aria-label="Увеличить фото публикации">
+        <AuthenticatedImage src={src} alt="Подобранное фото" className="h-32 w-full rounded-2xl object-cover shadow-sm ring-1 ring-black/10" />
+        <span className="mt-2 block text-sm underline">Увеличить фото</span>
+      </DialogTrigger>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Фото публикации</DialogTitle>
+          <DialogDescription>Проверьте детали снимка. Закрытие вернёт вас к тексту публикации.</DialogDescription>
+        </DialogHeader>
+        <AuthenticatedImage src={src} alt="Фото публикации крупно" className="max-h-[75vh] w-full rounded-2xl object-contain" />
+        <DialogFooter><button type="button" className="min-h-11 rounded-xl px-4" onClick={() => setOpen(false)}>Закрыть фото</button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function AuthenticatedImage({ src, alt, className }: { src: string; alt: string; className?: string }) {

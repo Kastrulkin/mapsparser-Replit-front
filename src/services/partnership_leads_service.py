@@ -346,6 +346,9 @@ def partnership_list_leads():
                     'selected_channel', 'contact_guard', 'next_best_action',
                 ):
                     payload.pop(private_key, None)
+            if request.args.get("view") == "mobile":
+                payload.pop("search_payload_json", None)
+                payload.pop("enrich_payload_json", None)
             items.append(payload)
         attach_conn = get_db_connection()
         try:

@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -81,4 +82,31 @@ describe('ContentPage story-facts deep link', () => {
     expect(screen.getByText('Что именно произошло во время визита?')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Сохранить и подготовить текст' })).toBeInTheDocument();
   });
+  it('enlarges the selected photo and returns to the unsaved publication text', async () => {
+    const originalRequest = vi.mocked(newAuth.makeRequest).getMockImplementation();
+    const photoPlan = { ...storyPlan, items: [{ ...storyPlan.items[0], draft_text: 'Исходный текст.', metadata_json: { generation_source: 'manual' } }] };
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/content-plans?')) return { plans: [photoPlan] };
+      if (path === '/content-plans/plan-1') return { plan: photoPlan };
+      if (path.startsWith('/media-intelligence/posts/')) return { recommendation: { status: 'ready', selected_asset: { id: 'photo-1', original_url: 'https://example.test/reference.jpg', why: 'Фото выбранного изделия' }, alternatives: [] } };
+      return originalRequest?.(path);
+    });
+    render(
+      <MemoryRouter initialEntries={['/dashboard/content?plan_id=plan-1&item_id=item-1']}>
+        <LanguageProvider><Routes><Route element={<ContextRoute />}><Route path="/dashboard/content" element={<ContentPage />} /></Route></Routes></LanguageProvider>
+      </MemoryRouter>,
+    );
+    const user = userEvent.setup();
+    const text = await screen.findByRole('textbox', { name: 'Текст публикации' });
+    await user.clear(text);
+    await user.type(text, 'Несохранённый текст для проверки фото');
+    await user.click(await screen.findByRole('button', { name: 'Увеличить фото публикации' }));
+    expect(await screen.findByRole('dialog', { name: 'Фото публикации', exact: true })).toBeVisible();
+    expect(screen.getByRole('img', { name: 'Фото публикации крупно' })).toHaveAttribute('src', 'https://example.test/reference.jpg');
+    await user.click(screen.getByRole('button', { name: 'Закрыть фото', exact: true }));
+    expect(screen.queryByRole('dialog', { name: 'Фото публикации', exact: true })).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Текст публикации' })).toHaveValue('Несохранённый текст для проверки фото');
+    expect(screen.getByRole('button', { name: 'Увеличить фото публикации' })).toHaveFocus();
+  });
+
 });

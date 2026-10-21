@@ -313,6 +313,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
       const params = new URLSearchParams({
         business_id: businessId,
         limit: "200",
+        view: "mobile",
       });
       if (filters.query.trim()) params.set("q", filters.query.trim());
       if (filters.stage !== "all") params.set("pipeline_status", filters.stage);
