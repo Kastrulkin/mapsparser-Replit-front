@@ -60,6 +60,41 @@ def read_context(cursor, business_id, user_id, arguments):
             'saved_notes':notes[-5:], 'external_writes_performed':False}
 
 
+def selected_read_input(message):
+    return bool(re.fullmatch(
+        r'\s*(?:покажи(?:те)?|прочитай(?:те)?|открой(?:те)?|выведи(?:те)?)\s+'
+        r'(?:(?:мне|полный|весь|этот|выбранный|сохранённый|текущий)\s+)*'
+        r'(?:пост|публикацию|текст(?:\s+(?:(?:этого|выбранного|сохранённого|текущего)\s+)?(?:поста|публикации))?)'
+        r'(?:\s+полностью)?[.!?]*\s*', str(message or ''), re.I))
+
+
+def read_selected_item(cursor, business_id, user_id, selected):
+    _, access = authorize_actor(cursor, user_id, business_id)
+    from subscription_manager import capability_access_payload
+    if not capability_access_payload(access, 'social_content').get('allowed'):
+        raise PermissionError('Контент недоступен на текущем тарифе этого бизнеса.')
+    item_id = str(selected.get('item_id') or '')
+    uuid.UUID(item_id)
+    rows = _items(cursor, business_id, item_id=item_id)
+    if len(rows) != 1 or str(rows[0]['id']) != item_id:
+        raise PermissionError('Пост недоступен в выбранном бизнесе.')
+    row = rows[0]
+    if row.get('plan_status') == 'archived':
+        raise ValueError('План архивирован. Откройте пост из действующего плана.')
+    current = {'item_id': item_id, 'plan_id': str(row['plan_id']), 'version': _version(row)}
+    body = str(row.get('draft_text') or '').strip()
+    day = row.get('scheduled_for')
+    day_label = day.strftime('%d.%m.%Y') if isinstance(day, (date, datetime)) else str(day or 'не указана')
+    lines = [str(row.get('theme') or 'Публикация'), 'Дата: ' + day_label]
+    if selected.get('version') and selected['version'] != current['version']:
+        lines.append('Показываю актуальную сохранённую версию.')
+    lines.extend(['', body or 'Текст ещё не сохранён. В мини-приложении можно открыть тему и подготовить черновик.', '',
+                  'Просмотр не меняет текст и ничего не публикует.'])
+    return _result('\n'.join(lines), selected_item=current, external_calls_performed=False, credit_charged=False,
+        result_ref={'href': '/dashboard/content?business_id=' + str(business_id) + '&plan_id=' + current['plan_id'] + '&item_id=' + item_id,
+                    'entity_type': 'content_item', 'entity_id': item_id, 'label': 'Открыть выбранный пост'})
+
+
 def _change(cursor,row,theme,brief,user_id,focus=None):
     metadata=dict(row.get('metadata_json') or {})
     history=list(metadata.get('operator_edit_history') or [])

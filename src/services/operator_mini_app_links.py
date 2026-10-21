@@ -27,6 +27,9 @@ def result_mini_app_url(result, *, public_base=None, mini_app_base=None):
         params['screen'] = query['tab'][0]
     business=(query.get('business_id') or [result.get('business_id') or (result.get('task') or {}).get('business_id')])[-1]
     if business:params.update(scope_type='business',scope_id=str(business))
+    item = (query.get('item_id') or [''])[-1]
+    if target.path == '/dashboard/content' and item:
+        params.update(item_type='content_item',item_id=item)
     for old,new in [('search_task_id','filter_search_task_id'),('section','filter_section'),('draft_id','filter_draft_id')]:
         value=(query.get(old) or [None])[-1]
         if value:params[new]=value

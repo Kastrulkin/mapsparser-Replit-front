@@ -2654,6 +2654,13 @@ def route_operator_message(
     editorial_pending = pending.get('capability') in {'content.editorial.clarification','content.editorial.selected'}
     if editorial_pending and (clean_message.strip().lower() in {'отмена','отмени','не надо','стоп','cancel','/cancel'} or re.match(r'не (?:надо|нужно|меняй|изменяй|сохраняй|продолжай)\b',clean_message.strip().lower())):
         return standardize_operator_result({'status':'cancelled','chat_response':'Правка отменена.'},'content.item.edit'), {}
+    if pending.get('selected_item'):
+        from services.operator_editorial import selected_read_input, read_selected_item
+        if selected_read_input(clean_message):
+            blocked = operator_subscription_block(subscription_access, 'content.read')
+            if blocked: return blocked, pending
+            result = read_selected_item(cursor, business_id, user_id, pending['selected_item'])
+            return standardize_operator_result(result, 'content.read'), {'capability': 'content.editorial.selected', 'selected_item': result['selected_item']}
     if editorial_input(clean_message) or editorial_pending:
         blocked = operator_subscription_block(subscription_access, 'content.item.edit')
         if blocked:
