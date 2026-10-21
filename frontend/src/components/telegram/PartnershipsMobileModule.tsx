@@ -63,6 +63,7 @@ type Lead = {
   catalog_shortlisted?: boolean;
 };
 type Draft = {
+  has_local_edits?: boolean;
   id: string;
   lead_id: string;
   lead_name?: string;
@@ -197,6 +198,9 @@ const dateLabel = (value?: string) => {
         minute: "2-digit",
       });
 };
+const channelLabels: Record<string, string> = { email: 'Эл. почта', telegram: 'Telegram', max: 'MAX', vk: 'VK', whatsapp: 'WhatsApp', manual: 'Канал нужно выбрать' };
+const draftStatusLabels: Record<string, string> = { generated: 'Черновик', draft: 'Черновик', edited: 'Отредактирован', rejected: 'Нужны правки', approved: 'Утверждено', sent: 'Отправлено', delivered: 'Доставлено', failed: 'Ошибка отправки' };
+
 const pipelineLabel = (value?: string) =>
   ({
     unprocessed: "Новый",
@@ -415,7 +419,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
           ? JSON.stringify({ business_id: businessId, ...payload })
           : undefined,
       });
-      setMessage("Готово. Данные обновлены.");
+      setMessage(key.startsWith("save-draft:") ? "Черновик сохранён. Отправка не разрешена." : "Готово. Данные обновлены.");
       await load(true);
     } catch (requestError) {
       setError(
@@ -762,7 +766,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
           <label className="relative min-w-0 flex-1"><Search className="absolute left-3 top-3.5 h-4 w-4 text-zinc-600" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Название, город или категория" className="min-h-11 w-full rounded-[14px] bg-white/[0.04] pl-9 pr-3 text-xs ring-1 ring-inset ring-white/[0.07]" /></label>
           <button type="submit" aria-label="Найти" className="btn-iridescent grid h-11 w-11 place-items-center rounded-[14px]"><Search className="h-4 w-4" /></button>
         </form>
-        {error ? <div className="rounded-[16px] bg-rose-500/10 p-3 text-xs leading-5 text-rose-200">{error}</div> : null}
+        {error ? <div role="alert" className="rounded-[16px] bg-rose-500/10 p-3 text-xs leading-5 text-rose-200">{error}</div> : null}
         <div className="space-y-2">
           {leads.map((lead) => <article key={lead.id} className="rounded-[20px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><b className="block truncate text-sm">{lead.name || "Компания"}</b><small className="mt-1 block truncate text-zinc-600">{[lead.category, lead.city].filter(Boolean).join(" · ") || lead.address || "Данные уточняются"}</small></div><span className="shrink-0 rounded-full bg-white/[0.05] px-2 py-1 text-[9px] text-zinc-400">★ {lead.rating || "—"}</span></div><div className="mt-3 flex items-center justify-between gap-3"><small className="text-zinc-600">{lead.reviews_count || 0} отзывов</small><button type="button" disabled={busy === `${lead.id}:catalog-shortlist`} onClick={() => void toggleCatalogShortlist(lead)} className="min-h-10 rounded-[13px] bg-white/[0.06] px-3 text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.08] active:scale-[0.96] disabled:opacity-50">{lead.catalog_shortlisted ? "В shortlist" : "Добавить"}</button></div></article>)}
         </div>
@@ -792,12 +796,12 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
         </div>
       </div>
       {error ? (
-        <div className="rounded-[16px] bg-rose-500/10 p-3 text-xs leading-5 text-rose-200">
+        <div role="alert" className="rounded-[16px] bg-rose-500/10 p-3 text-xs leading-5 text-rose-200">
           {error}
         </div>
       ) : null}
       {message ? (
-        <div className="rounded-[16px] bg-emerald-500/10 p-3 text-xs text-emerald-200">
+        <div role="status" className="rounded-[16px] bg-emerald-500/10 p-3 text-xs text-emerald-200">
           {message}
         </div>
       ) : null}
@@ -1135,7 +1139,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                         <span>★ {lead.rating || "—"}</span>
                         <span>{lead.reviews_count || 0} отзывов</span>
                         <span>
-                          {lead.selected_channel || "канал не выбран"}
+                          {channelLabels[lead.selected_channel || ""] || "Канал нужно выбрать"}
                         </span>
                       </div>
                     </button>
@@ -1156,7 +1160,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
           {drafts.length ? (
             <>
               {drafts.map((draft) => {
-                const storedText =
+                const storedText = draft.has_local_edits ? (draft.approved_text ?? "") :
                   draft.approved_text ||
                   draft.edited_text ||
                   draft.generated_text ||
@@ -1192,8 +1196,8 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                           {draft.lead_name || "Партнёр"}
                         </b>
                         <small className="text-zinc-600">
-                          {draft.channel || "Канал не выбран"} ·{" "}
-                          {draft.status || "черновик"}
+                          {channelLabels[draft.channel || ""] || "Канал нужно выбрать"} ·{" "}
+                          {draftStatusLabels[draft.status || ""] || "Проверьте статус"}
                         </small>
                       </div>
                     </div>
@@ -1206,12 +1210,13 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                       </div>
                     ) : (
                       <textarea
+                        aria-label={`Текст письма: ${draft.lead_name || "Партнёр"}`}
                         value={text}
                         onChange={(event) =>
                           setDrafts((current) =>
                             current.map((item) =>
                               item.id === draft.id
-                                ? { ...item, approved_text: event.target.value }
+                                ? { ...item, approved_text: event.target.value, has_local_edits: true }
                                 : item,
                             ),
                           )
@@ -1723,6 +1728,7 @@ const LeadSheet = ({
                 }
               />
             </div>
+            {lead.email && /(^|[._+-])(jur|yur|legal|privacy|dpo|abuse|noreply|no-reply|unsubscribe)([._+-]|$)/i.test(lead.email.split('@')[0]) ? <p role="note" className="mt-3 rounded-[14px] bg-amber-400/10 p-3 text-xs leading-5 text-amber-200">Похоже на служебный или юридический адрес. Перед отправкой найдите контакт для сотрудничества и проверьте получателя.</p> : null}
             {lead.match_summary_json ? (
               <div className="mt-3 rounded-[18px] bg-orange-500/[0.07] p-4 ring-1 ring-inset ring-orange-400/15">
                 <small className="font-semibold text-orange-300">

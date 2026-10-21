@@ -118,3 +118,14 @@ def test_queue_preserves_actor_on_deployed_queue_contract(allowed, monkeypatch):
     result = operator_partner_work.queue_first_note(cursor, user_id=USER, business_id=BUSINESS, lead_id=LEAD)
     assert result['id'] == 'job'
     assert captured == {'actor': USER, 'paid': False, 'workstream': 'workstream'}
+
+
+def test_partner_read_uses_human_channel_and_draft_status_labels(allowed):
+    cursor = Cursor(lead(), [{'id': 'draft', 'generated_text': 'Точный текст', 'status': 'generated', 'channel': 'email'}])
+    cursor.lead['selected_channel'] = 'manual'
+    cursor.lead['status'] = 'imported'
+    selection = operator_partner_work.partner_selection(cursor, user_id=USER, business_id=BUSINESS, item_id=LEAD)
+    result, _ = operator_partner_work.route(cursor, user_id=USER, business_id=BUSINESS, message='Покажи письмо', selected=selection)
+    text = result['chat_response']
+    assert 'Канал нужно выбрать' in text and 'Добавлен' in text and 'Эл. почта · Черновик' in text
+    assert not any(marker in text for marker in ['generated', 'imported', 'manual'])

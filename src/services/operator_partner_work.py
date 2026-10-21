@@ -9,6 +9,10 @@ from email.utils import parsedate_to_datetime
 
 from services.operator_conversations import _row
 
+CHANNEL_LABELS = {'email': 'Эл. почта', 'telegram': 'Telegram', 'max': 'MAX', 'vk': 'VK', 'whatsapp': 'WhatsApp', 'manual': 'Канал нужно выбрать'}
+PARTNER_STATUS_LABELS = {'new': 'Новый', 'imported': 'Добавлен', 'draft_ready': 'Письмо подготовлено', 'contacted': 'Связались', 'replied': 'Ответил', 'converted': 'Стали партнёрами'}
+DRAFT_STATUS_LABELS = {'draft': 'Черновик', 'generated': 'Черновик', 'edited': 'Отредактирован', 'approved': 'Утверждено', 'sent': 'Отправлено', 'delivered': 'Доставлено', 'rejected': 'Нужны правки', 'failed': 'Ошибка отправки'}
+
 
 def partner_selection(cursor, *, user_id, business_id, item_id, expected_updated_at=None):
     from services.operator_audio import authorize_actor
@@ -95,10 +99,10 @@ def route(cursor, *, user_id, business_id, message, selected, conversation_id=No
         WHERE lead_id=%s AND workstream_id=%s
         ORDER BY updated_at DESC NULLS LAST,created_at DESC LIMIT 3""", (current['item_id'],current['workstream_id']))
     drafts = [_row(cursor, row) for row in cursor.fetchall()]
-    parts = [f"Партнёр: {current['name']}. Канал: {current['channel']}. Статус: {current['status'] or 'в работе'}."]
+    parts = [f"Партнёр: {current['name']}. Канал: {CHANNEL_LABELS.get(current['channel'], 'Нужно выбрать')}. Статус: {PARTNER_STATUS_LABELS.get(current['status'], 'В работе')}."]
     for draft in drafts:
         body = str(draft.get('approved_text') or draft.get('edited_text') or draft.get('generated_text') or '')
-        parts.append(f"Письмо · {draft.get('channel') or 'manual'} · {draft.get('status') or 'черновик'}\n{body}")
+        parts.append(f"Письмо · {CHANNEL_LABELS.get(draft.get('channel'), 'Канал нужно выбрать')} · {DRAFT_STATUS_LABELS.get(draft.get('status'), 'Проверьте статус')}\n{body}")
     if not drafts:
         parts.append('Писем пока нет. Напишите или надиктуйте «Подготовь первое письмо».')
     parts.append('Карточка партнёра открывается кнопкой возврата. Просмотр и обсуждение не отправляют письма.')
