@@ -163,3 +163,20 @@ it('reuses the request identity after a lost response instead of creating a dupl
  expect(identifiers).toHaveLength(2);expect(identifiers[0]).toBe(identifiers[1]);
  expect(screen.getAllByRole('button',{name:'Исправить'})).toHaveLength(1);
 });
+
+it('shows the author beside a visible journal entry',async()=>{
+ vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL)=>String(input).includes('/audio/')?reply({input_enabled:false}):reply({enabled:true,role:'owner',items:[{...note,author_name:'Тестовый сотрудник'}]})));
+ render(<WorkJournal businessId="b" headers={headers}/>, { wrapper: MemoryRouter });
+ expect(await screen.findByText(/Автор: Тестовый сотрудник/)).toBeVisible();
+});
+
+it('explains an empty filtered journal and restores entries when filters are reset',async()=>{
+ vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL)=>String(input).includes('/audio/')?reply({input_enabled:false}):reply({enabled:true,items:String(input).includes('query=')?[]:[note]})));
+ const user=userEvent.setup();render(<WorkJournal businessId="b" headers={headers}/>, { wrapper: MemoryRouter });
+ await screen.findAllByText('Клиент отказался');
+ await user.type(screen.getByRole('textbox',{name:'Поиск',exact:true}),'нет-совпадений');
+ expect(await screen.findByText('По этим условиям записей нет. Измените поиск или дату.')).toBeVisible();
+ await user.click(screen.getByRole('button',{name:'Сбросить фильтры'}));
+ expect(await screen.findAllByText('Клиент отказался')).not.toHaveLength(0);
+ expect(screen.getByRole('textbox',{name:'Поиск',exact:true})).toHaveValue('');
+});

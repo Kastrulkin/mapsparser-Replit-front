@@ -146,7 +146,7 @@ def list_entries(cursor,business_id,user_id,query='',target_date=None):
         zone=settings(cursor,business_id).get('timezone')
         if not zone:raise ValueError('Для фильтра по местному дню сохраните часовой пояс бизнеса.')
         clause=' AND (j.occurred_at AT TIME ZONE %s)::date=%s';params.extend([zone,day])
-    cursor.execute('SELECT j.* FROM business_work_journal j WHERE business_id=%s'+access+" AND COALESCE(facts_json->>'quote',original_text) ILIKE %s"+clause+' ORDER BY occurred_at DESC,id DESC LIMIT 100',tuple(params))
+    cursor.execute('SELECT j.*, (SELECT u.name FROM users u WHERE u.id=j.user_id) AS author_name FROM business_work_journal j WHERE business_id=%s'+access+" AND COALESCE(facts_json->>'quote',original_text) ILIKE %s"+clause+' ORDER BY occurred_at DESC,id DESC LIMIT 100',tuple(params))
     rows=[_row(cursor,row) for row in cursor.fetchall()]
     return [work_review.sanitize(row,reviewer) for row in rows] if review_enabled else rows
 

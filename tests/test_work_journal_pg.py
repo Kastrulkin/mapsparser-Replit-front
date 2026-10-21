@@ -12,6 +12,7 @@ from services import work_journal, work_recommendations, operator_core, operator
 def journal(daily,monkeypatch):
     conn,c=daily
     c.execute('ALTER TABLE businesses ADD COLUMN city TEXT')
+    c.execute('ALTER TABLE users ADD COLUMN name TEXT')
     c.execute('ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE')
     c.execute('ALTER TABLE users ADD COLUMN is_superadmin BOOLEAN DEFAULT FALSE')
     c.execute('ALTER TABLE userservices ADD COLUMN price TEXT')
@@ -338,3 +339,13 @@ def test_supported_rule_predicates_only(journal):
         work_recommendations.prepare_policy(c,'b','u',{'changes':[rule(skin_condition='sensitive')]})
     with pytest.raises(ValueError,match='срок'):
         work_recommendations.prepare_policy(c,'b','u',{'changes':[rule(permanent=False)]})
+
+
+def test_visible_journal_entries_include_the_author_name(journal):
+    _,c=journal
+    c.execute("UPDATE users SET name='Тестовый сотрудник' WHERE id='master'")
+    entry=note(c)
+    visible=work_journal.list_entries(c,'b','u')
+    assert visible[0]['id']==entry['id']
+    assert visible[0]['author_name']=='Тестовый сотрудник'
+    assert work_journal.list_entries(c,'b','viewer')==[]
