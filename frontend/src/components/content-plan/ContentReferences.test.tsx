@@ -82,3 +82,33 @@ describe('content references', () => {
     expect(request.mock.calls.every((call) => !call[1])).toBe(true);
   });
 });
+
+it.each(['web','telegram','max'])('reviews an unfinished reference before closing in %s',async surface=>{
+ const close=vi.fn();request.mockResolvedValue(catalogue);
+ const headers=()=>({'X-LocalOS-Session':'qa-session'});
+ if(surface!=='web')vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify(catalogue),{status:200})));
+ render(<ContentReferences businessId="qa-business" open onOpenChange={close} headers={surface==='web'?undefined:headers}/>);
+ await screen.findByLabelText('Название компании или примера');
+ fireEvent.change(screen.getByLabelText('Название компании или примера'),{target:{value:'Незавершённый ориентир'}});
+ fireEvent.change(screen.getByLabelText('Публичная ссылка'),{target:{value:'https://example.invalid/source'}});
+ fireEvent.click(screen.getByRole('button',{name:'Закрыть ориентиры'}));
+ expect(close).not.toHaveBeenCalled();
+ await screen.findByRole('alertdialog');
+ fireEvent.click(screen.getByRole('button',{name:'Продолжить заполнение'}));
+ expect(screen.getByLabelText('Публичная ссылка')).toHaveValue('https://example.invalid/source');
+ fireEvent.click(screen.getByRole('button',{name:'Закрыть ориентиры'}));
+ fireEvent.click(await screen.findByRole('button',{name:'Не сохранять и закрыть'}));
+ expect(close).toHaveBeenCalledExactlyOnceWith(false);
+});
+it('closes a clean reference form directly after successful add',async()=>{
+ request.mockResolvedValue(catalogue);const close=vi.fn();
+ render(<ContentReferences businessId="qa-business" open onOpenChange={close}/>);
+ await screen.findByLabelText('Название компании или примера');
+ fireEvent.change(screen.getByLabelText('Название компании или примера'),{target:{value:'Мой пример'}});
+ fireEvent.change(screen.getByLabelText('Публичная ссылка'),{target:{value:'https://example.invalid/source'}});
+ fireEvent.change(screen.getByLabelText('Что взять из примера'),{target:{value:'Показать детали на крупном плане'}});
+ fireEvent.click(screen.getByRole('button',{name:'Добавить ориентир'}));
+ await screen.findByText('Сохранено. Изменения применяются к подготовке новых текстов.');
+ fireEvent.click(screen.getByRole('button',{name:'Закрыть ориентиры'}));expect(close).toHaveBeenCalledExactlyOnceWith(false);
+ expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+});

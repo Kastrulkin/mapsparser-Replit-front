@@ -23,6 +23,7 @@ describe('source approaches before planning', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Фабрика', exact: true }));
     expect(screen.getByText('«Test the sample first»')).toBeVisible();
     expect(screen.getByText('Как пишет источник')).toBeVisible();
+    expect(screen.getByText('Изучено 20.10.2026')).toBeVisible();
     expect(screen.getByText('Предлагаем показать собственную проверку образца.')).toBeVisible();
     expect(screen.getByText(/Детали уточним/)).toBeVisible();
     expect(screen.getByText(/Какие этапы подтверждены/)).toBeVisible();

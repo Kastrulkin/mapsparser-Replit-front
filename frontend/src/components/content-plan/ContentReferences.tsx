@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { contentRequest, ContentAccessError } from './contentRequest';
 import { ContentReferenceAnalysis, type EditorialReference } from './ContentReferenceAnalysis';
 
@@ -16,8 +17,8 @@ type Catalogue = {
   can_manage: boolean; can_moderate: boolean; pending: Reference[];
 };
 
-export function ContentReferences({ businessId, open, onOpenChange, language = 'ru', headers }: {
-  businessId: string; open: boolean; onOpenChange: (open: boolean) => void; language?: string; headers?: () => HeadersInit;
+export function ContentReferences({ businessId, open, onOpenChange, language = 'ru', headers, returnFocusId }: {
+  businessId: string; open: boolean; onOpenChange: (open: boolean) => void; language?: string; headers?: () => HeadersInit; returnFocusId?: string;
 }) {
   const ru = language === 'ru';
   const [data, setData] = useState<Catalogue | null>(null);
@@ -25,6 +26,7 @@ export function ContentReferences({ businessId, open, onOpenChange, language = '
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [confirmClose, setConfirmClose] = useState(false);
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [technique, setTechnique] = useState('');
@@ -38,7 +40,7 @@ export function ContentReferences({ businessId, open, onOpenChange, language = '
 
   useEffect(() => {
     const current = ++generation.current;
-    setData(null); setError(''); setMessage(''); setBusy(false);
+    setData(null); setError(''); setMessage(''); setBusy(false); setConfirmClose(false);
     setTitle(''); setUrl(''); setTechnique(''); setShare(false); setNotes({});
     requestId.current = crypto.randomUUID();
     if (!open || !businessId) return;
@@ -63,6 +65,7 @@ export function ContentReferences({ businessId, open, onOpenChange, language = '
       if (current !== generation.current) return;
       setData(result);
       setMessage(ru ? 'Сохранено. Изменения применяются к подготовке новых текстов.' : 'Saved. Changes apply to newly prepared copy.');
+      if ((payload.action === 'moderate_approve' || payload.action === 'moderate_reject') && typeof payload.id === 'string') setNotes(current => Object.fromEntries(Object.entries(current).filter(([id]) => id !== payload.id)));
       if (payload.action === 'add') {
         setTitle(''); setUrl(''); setTechnique(''); setShare(false);
         requestId.current = crypto.randomUUID();
@@ -88,9 +91,10 @@ export function ContentReferences({ businessId, open, onOpenChange, language = '
     </a>
   ) : null;
 
-  return <Sheet open={open} onOpenChange={(value) => { if (!busy) onOpenChange(value); }}>
+  const dirty = Boolean(title.trim() || url.trim() || technique.trim() || share || Object.values(notes).some(note => note.trim()));
+  return <><Sheet open={open} onOpenChange={(value) => { if (busy) return; if (!value && dirty) setConfirmClose(true); else onOpenChange(value); }}>
     <SheetContent data-content-reference-scroll closeLabel={ru ? 'Закрыть ориентиры' : 'Close references'} className={`flex w-full flex-col gap-0 overflow-y-auto text-foreground sm:max-w-2xl ${headers ? 'dark' : ''}`} onCloseAutoFocus={(event) => {
-      event.preventDefault(); (document.getElementById('content-references-button') || document.getElementById('content-settings-button'))?.focus();
+      event.preventDefault(); ((returnFocusId ? document.getElementById(returnFocusId) : null) || document.getElementById('content-references-button') || document.getElementById('content-settings-button'))?.focus();
     }}>
       <SheetHeader>
         <SheetTitle className="pr-8 leading-snug">{ru ? 'Источники и подходы' : 'Sources and approaches'}</SheetTitle>
@@ -132,5 +136,12 @@ export function ContentReferences({ businessId, open, onOpenChange, language = '
         </details>}
       </div>}
     </SheetContent>
-  </Sheet>;
+  </Sheet>
+    <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}>
+      <AlertDialogContent className={headers ? 'dark text-foreground' : undefined}>
+        <AlertDialogHeader><AlertDialogTitle>{ru ? 'Закрыть без сохранения?' : 'Close without saving?'}</AlertDialogTitle><AlertDialogDescription>{ru ? 'Ссылка и заметки ещё не сохранены. Можно продолжить заполнение или закрыть окно без этих изменений.' : 'Your reference and notes have not been saved. Continue editing or discard them.'}</AlertDialogDescription></AlertDialogHeader>
+        <AlertDialogFooter><AlertDialogCancel>{ru ? 'Продолжить заполнение' : 'Continue editing'}</AlertDialogCancel><AlertDialogAction onClick={() => { setConfirmClose(false); onOpenChange(false); }}>{ru ? 'Не сохранять и закрыть' : 'Discard and close'}</AlertDialogAction></AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>;
 }

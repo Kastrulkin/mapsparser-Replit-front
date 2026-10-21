@@ -35,6 +35,7 @@ import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 
 import { AudienceInsights } from '@/components/AudienceInsights';
 import { PublicationReconciliation } from '@/components/content-plan/PublicationReconciliation';
+import { ContentReferences } from '@/components/content-plan/ContentReferences';
 import { ContentPersonalization } from '@/components/content-plan/ContentPersonalization';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -871,6 +872,7 @@ function ContentWorkspace() {
   const [generationDetails, setGenerationDetails] = useState<Record<string, GenerationDetails>>({});
   const [briefAnswers, setBriefAnswers] = useState<Record<string, Record<string, string>>>({});
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   const [publicationChannels, setPublicationChannels] = useState<Record<string, boolean>>(() => buildChannelSelection());
   const [publicationChannelsTouched, setPublicationChannelsTouched] = useState(false);
   const [platformTextEdits, setPlatformTextEdits] = useState<Record<string, string>>({});
@@ -3587,6 +3589,7 @@ function ContentWorkspace() {
     <div className="mx-auto max-w-[1500px] space-y-6 px-4 py-6">
       {renderPlanModal()}
       {renderDeletePlanDialog()}
+      <ContentReferences key={`sources:${currentBusinessId}`} businessId={currentBusinessId} open={sourcesOpen} onOpenChange={setSourcesOpen} language={language} returnFocusId="content-sources-entry" />
       <ContentPersonalization key={currentBusinessId} businessId={currentBusinessId} open={voiceOpen} onOpenChange={setVoiceOpen} />
       {renderDrawer()}
 
@@ -3599,6 +3602,7 @@ function ContentWorkspace() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button id="content-sources-entry" type="button" variant="outline" onClick={() => setSourcesOpen(true)}>{language === 'ru' ? 'Источники и подходы' : 'Sources and approaches'}</Button>
           <Button id="content-settings-button" type="button" variant="outline" onClick={() => { void openVoiceSettings(); }} className="min-h-12 rounded-2xl bg-white px-4 active:scale-[0.96] transition-transform">
             <Star className="mr-2 h-4 w-4" />{contentControls.configureContent}
           </Button>

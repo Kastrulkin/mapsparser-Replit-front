@@ -22,6 +22,7 @@ export function ContentSourceEvidence({ report, referenceId, ru }: { report: Sou
   if (!evidence) return <p className="mt-3 text-sm text-muted-foreground">{ru ? 'Разбор этого источника ещё не добавлен.' : 'No dated research saved for this source.'}</p>;
   const proposal = report.purpose === 'pre_plan_source_research';
   return <div className="space-y-4 text-sm leading-6">
+    <p className="text-xs text-muted-foreground"><time dateTime={evidence.checked_at}>{ru ? 'Изучено' : 'Reviewed'} {researchDate(evidence.checked_at)}</time></p>
     <div>
       <h5 className="font-semibold">{ru ? 'Как пишет источник' : 'How the source presents it'}</h5>
       <p className="mt-2">{evidence.observation}</p>
