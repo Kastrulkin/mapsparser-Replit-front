@@ -15,7 +15,7 @@ from services.operator_conversations import get_or_create_operator_conversation
 @pytest.fixture
 def workday(journal,monkeypatch):
     conn,c=journal
-    c.execute('ALTER TABLE users ADD COLUMN name TEXT, ADD COLUMN telegram_id TEXT')
+    c.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS name TEXT, ADD COLUMN telegram_id TEXT')
     c.execute("UPDATE users SET name=id,telegram_id='123' WHERE id='u'")
     c.execute("ALTER TABLE businesses ADD COLUMN owner_id TEXT DEFAULT 'u'")
     c.execute('''CREATE TABLE journey_actions(id UUID PRIMARY KEY,business_id TEXT,user_id TEXT,flow_type TEXT,
