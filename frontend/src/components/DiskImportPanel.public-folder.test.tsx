@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { DiskImportPanel } from './DiskImportPanel';
+vi.mock('@/i18n/LanguageContext.logic', () => ({ useLanguage: () => ({ language: 'ru' }) }));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 it('prepares a public Yandex folder for the selected business without sending or enabling it', async () => {
   const fetcher = vi.fn((_url: RequestInfo | URL, options?: RequestInit) => Promise.resolve(new Response(JSON.stringify(options?.method === 'POST' ? {} : { enabled: true, can_configure: true, sources: [] }))));

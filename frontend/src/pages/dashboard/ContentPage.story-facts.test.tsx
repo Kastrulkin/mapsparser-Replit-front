@@ -109,4 +109,18 @@ describe('ContentPage story-facts deep link', () => {
     expect(screen.getByRole('button', { name: 'Увеличить фото публикации' })).toHaveFocus();
   });
 
+  it('requires a deliberate choice before discarding publication edits', async () => {
+    render(<MemoryRouter initialEntries={['/dashboard/content?plan_id=plan-1&item_id=item-1']}><LanguageProvider><Routes><Route element={<ContextRoute />}><Route path="/dashboard/content" element={<ContentPage />} /></Route></Routes></LanguageProvider></MemoryRouter>);
+    const user = userEvent.setup();
+    await user.type(await screen.findByRole('textbox', { name: 'Текст публикации' }), 'Несохранённый текст');
+    await user.click(screen.getByRole('button', { name: 'Закрыть', exact: true }));
+    expect(await screen.findByRole('alertdialog', { name: 'Закрыть без сохранения?' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Продолжить редактирование' }));
+    expect(screen.getByRole('textbox', { name: 'Текст публикации' })).toHaveValue('Несохранённый текст');
+    await user.click(screen.getByRole('button', { name: 'Закрыть', exact: true }));
+    await user.click(screen.getByRole('button', { name: 'Не сохранять и закрыть' }));
+    expect(screen.queryByRole('dialog', { name: 'Публикация' })).not.toBeInTheDocument();
+    expect(vi.mocked(newAuth.makeRequest).mock.calls.some(([, options]) => options?.method && options.method !== 'GET')).toBe(false);
+  });
+
 });

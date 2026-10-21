@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import type { ReactNode } from 'react';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { LanguageContext, type Language } from '@/i18n/LanguageContext.logic';
@@ -92,4 +92,23 @@ it('clears uploaded service-account key after saving', async () => {
   Object.defineProperty(file, 'text', { value: async () => '{}' });
   await userEvent.upload(input, file); await userEvent.click(screen.getByRole('button', { name: 'Сохранить служебный аккаунт' }));
   await screen.findByText(/Ключ сохранён зашифрованным/); expect(input).toHaveValue('');
+});
+
+it('shows a readable error and retries an incomplete video listing', async () => {
+  let broken = true;
+  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify(broken ? {} : { videos: [], selected: [], item_version: '' }), { status: 200 }))));
+  render(withLanguage(<ExternalDriveVideos businessId="b" itemId="item" />));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось выполнить действие');
+  expect(screen.getByRole('alert')).not.toHaveTextContent('Cannot read');
+  broken = false;
+  await userEvent.click(screen.getByRole('button', { name: 'Обновить список видео' }));
+  await screen.findByText('Пока нет видео. Добавьте MP4, MOV или WebM в подключённую папку.');
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+it('hides the optional video section when the server reports the feature unavailable', async () => {
+  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify({ error: 'not_found' }), { status: 404 }))));
+  await act(async () => { render(withLanguage(<ExternalDriveVideos businessId="b" itemId="item" />)); });
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.queryByText('Видео с Диска')).not.toBeInTheDocument();
 });

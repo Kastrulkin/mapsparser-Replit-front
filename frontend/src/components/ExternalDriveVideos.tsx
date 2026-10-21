@@ -20,7 +20,11 @@ export function ExternalDriveVideos({ businessId, itemId, onChanged }: { busines
   useEffect(() => {
     const controller = new AbortController(); setData(null); setError(''); setSelected([]);
     void diskRequest(`/videos?business_id=${encodeURIComponent(businessId)}${itemId ? `&item_id=${encodeURIComponent(itemId)}` : ''}`, undefined, controller.signal)
-      .then(body => { setData(body); setSelected(body.selected.map((video: Video) => video.id)); })
+      .then(body => {
+        if (body?.enabled === false) return;
+        if (!Array.isArray(body?.videos) || !Array.isArray(body?.selected)) throw new Error(copy.actionFailed);
+        setData(body); setSelected(body.selected.map((video: Video) => video.id));
+      })
       .catch(caught => { if (!controller.signal.aborted && caught.message !== 'Нет доступа к импорту') setError(caught.message); });
     return () => controller.abort();
   }, [businessId, itemId, refreshKey]);
@@ -32,7 +36,7 @@ export function ExternalDriveVideos({ businessId, itemId, onChanged }: { busines
     <p className="text-sm text-muted-foreground">{copy.videoDescription}</p>
     {error && <p role="alert" className="text-destructive">{diskImportMessage(error, language)}</p>}
     {data?.warnings?.map(warning => <p key={warning} role="status" className="text-sm text-destructive">{diskImportMessage(warning, language)}</p>)}
-    {!videos.length && <p className="text-sm">{copy.noVideos}</p>}
+    {!error && !videos.length && <p className="text-sm">{copy.noVideos}</p>}
     {videos.map(video => <div key={video.id} className="space-y-1 border-t pt-2">
       {itemId ? <label className="flex items-start gap-2"><input type="checkbox" checked={selected.includes(video.id)} disabled={busy || (!video.available && !selected.includes(video.id))} onChange={event => setSelected(ids => event.target.checked ? [...ids, video.id] : ids.filter(id => id !== video.id))} /><span className="break-all">{video.name}</span></label> : <p className="break-all">{video.name}</p>}
       <p className="text-sm text-muted-foreground">{video.mime_type}{video.size_bytes ? ` · ${(video.size_bytes / 1024 / 1024).toFixed(1)} ${copy.mb}` : ''}{video.duration_ms ? ` · ${Math.round(video.duration_ms / 1000)} ${copy.sec}` : ''}</p>

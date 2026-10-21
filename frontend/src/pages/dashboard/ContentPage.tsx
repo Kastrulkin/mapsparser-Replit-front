@@ -38,6 +38,7 @@ import { PublicationReconciliation } from '@/components/content-plan/Publication
 import { ContentPersonalization } from '@/components/content-plan/ContentPersonalization';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -858,6 +859,7 @@ function ContentWorkspace() {
   });
   const [selectedItemId, setSelectedItemId] = useState('');
   const [photoPickerOpen, setPhotoPickerOpen] = useState(false);
+  const [discardPublicationOpen, setDiscardPublicationOpen] = useState(false);
   const [draggedItemId, setDraggedItemId] = useState('');
   const [dropTargetDate, setDropTargetDate] = useState('');
   const [manualContentConfirmed, setManualContentConfirmed] = useState<Record<string, boolean>>({});
@@ -1088,6 +1090,7 @@ function ContentWorkspace() {
 
   useEffect(() => {
     setChannelDetailsOpen(false);
+    setDiscardPublicationOpen(false);
     setEditingPlatformPostId('');
   }, [selectedItemId]);
 
@@ -2879,7 +2882,7 @@ function ContentWorkspace() {
       </Dialog>
     );
     return (
-      <Sheet open={Boolean(item)} onOpenChange={(open) => { if (!open) { setSelectedItemId(''); setPhotoPickerOpen(false); } }}>
+      <Sheet open={Boolean(item)} onOpenChange={(open) => { if (!open) { if (hasUnsavedItemChanges) { setDiscardPublicationOpen(true); return; } setSelectedItemId(''); setPhotoPickerOpen(false); } }}>
         <SheetContent
           className="w-full overflow-y-auto sm:max-w-4xl"
           closeLabel={calendarCopy.close}
@@ -3552,6 +3555,18 @@ function ContentWorkspace() {
             </div>
           ) : null}
           {photoPicker}
+          <AlertDialog open={discardPublicationOpen} onOpenChange={setDiscardPublicationOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Закрыть без сохранения?</AlertDialogTitle>
+                <AlertDialogDescription>Изменения публикации ещё не сохранены. Можно вернуться к редактированию или закрыть пост без этих правок.</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Продолжить редактирование</AlertDialogCancel>
+                <AlertDialogAction onClick={() => { setDiscardPublicationOpen(false); setSelectedItemId(''); setPhotoPickerOpen(false); }}>Не сохранять и закрыть</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </SheetContent>
       </Sheet>
     );
