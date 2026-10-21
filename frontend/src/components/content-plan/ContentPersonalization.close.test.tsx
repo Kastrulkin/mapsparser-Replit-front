@@ -1,0 +1,43 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { ContentPersonalization } from './ContentPersonalization';
+const { request } = vi.hoisted(() => ({ request: vi.fn() }));
+vi.mock('@/lib/auth_new', () => ({ newAuth: { makeRequest: request } }));
+const profile = { version: 1, summary: 'Спокойно', preferences: { business_description: 'Тестовая компания' }, examples: [] };
+beforeEach(() => { request.mockReset(); request.mockResolvedValue({ profile }); });
+afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState({}, '', '/'); });
+it.each(['web', 'telegram', 'max'])('keeps %s profile changes until explicit discard', async platform => {
+  window.history.replaceState({}, '', platform === 'web' ? '/' : `/${platform}/control`);
+  if (platform !== 'web') vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ profile }), { status: 200 })));
+  const close = vi.fn();
+  render(<ContentPersonalization businessId="qa-business" open onOpenChange={close} headers={platform === 'web' ? undefined : () => ({ Authorization: 'Bearer qa-session' })} />);
+  await screen.findByLabelText('История основателя');
+  fireEvent.change(screen.getByLabelText('История основателя'), { target: { value: 'Незавершённый рассказ' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Закрыть', exact: true }));
+  expect(close).not.toHaveBeenCalled();
+  await screen.findByRole('alertdialog');
+  fireEvent.click(screen.getByRole('button', { name: 'Продолжить заполнение' }));
+  expect(screen.getByLabelText('История основателя')).toHaveValue('Незавершённый рассказ');
+  fireEvent.click(screen.getByRole('button', { name: 'Закрыть', exact: true }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Не сохранять и закрыть' }));
+  expect(close).toHaveBeenCalledExactlyOnceWith(false);
+  expect(request.mock.calls.every(call => !call[1]?.method)).toBe(true);
+});
+it('reviews dirty fields before leaving for general business knowledge', async () => {
+  const close = vi.fn(), knowledge = vi.fn();
+  render(<ContentPersonalization businessId="qa-business" open onOpenChange={close} onOpenKnowledge={knowledge} />);
+  await screen.findByLabelText('История основателя');
+  fireEvent.change(screen.getByLabelText('Что важно знать о бизнесе'), { target: { value: 'Новые сведения' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Общие сведения и документы о бизнесе' }));
+  expect(knowledge).not.toHaveBeenCalled();
+  fireEvent.click(await screen.findByRole('button', { name: 'Продолжить заполнение' }));
+  expect(screen.getByLabelText('Что важно знать о бизнесе')).toHaveValue('Новые сведения');
+});
+it('closes unchanged fields without confirmation', async () => {
+  const close = vi.fn();
+  render(<ContentPersonalization businessId="qa-business" open onOpenChange={close} />);
+  await screen.findByLabelText('История основателя');
+  fireEvent.click(screen.getByRole('button', { name: 'Закрыть', exact: true }));
+  expect(close).toHaveBeenCalledExactlyOnceWith(false);
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+});

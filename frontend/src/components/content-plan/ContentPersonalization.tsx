@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ContentReferences } from './ContentReferences';
 import { contentRequest, ContentAccessError } from './contentRequest';
 
@@ -28,16 +29,19 @@ export function ContentPersonalization({ businessId, open, onOpenChange, headers
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
+  const [pendingClose, setPendingClose] = useState<'close' | 'knowledge' | null>(null);
+  const [savedFields, setSavedFields] = useState({ business: '', audience: '', tone: '' });
   const generation = useRef(0);
   const endpoint = '/content-voice?business_id=' + encodeURIComponent(businessId);
   useEffect(() => {
     const version = ++generation.current;
     setProfile(null); setBusiness(''); setAudience(''); setTone(''); setStory(''); setExample('');
-    setError(''); setSaved(''); setStep(0); setReferences(false); setBusy(false);
+    setError(''); setSaved(''); setStep(0); setReferences(false); setBusy(false); setPendingClose(null);
     if (!open || !businessId) return;
     setBusy(true);
     void contentRequest<{ profile: Profile }>(endpoint, undefined, headers).then(({ profile: loaded }) => {
       if (generation.current !== version) return;
+      setSavedFields({ business: loaded.preferences?.business_description || '', audience: loaded.preferences?.audience_description || '', tone: loaded.preferences?.tone_instruction || loaded.summary || '' });
       setProfile(loaded); setBusiness(loaded.preferences?.business_description || '');
       setAudience(loaded.preferences?.audience_description || ''); setTone(loaded.preferences?.tone_instruction || loaded.summary || '');
     }).catch(reason => { if (generation.current === version) setError(reason instanceof Error ? reason.message : 'Не удалось загрузить настройки.'); })
@@ -56,7 +60,7 @@ export function ContentPersonalization({ businessId, open, onOpenChange, headers
           ...(story.trim() ? { founder_story: story.trim() } : {}), confirm: true }),
       }, headers);
       if (generation.current !== version) return;
-      setProfile(result.profile); setStory('');
+      setProfile(result.profile); setStory(''); setSavedFields({ business, audience, tone });
       setSaved('Сохранено для будущих текстов. Готовые посты не изменены.');
     } catch (reason) {
       if (generation.current === version) {
@@ -77,17 +81,26 @@ export function ContentPersonalization({ businessId, open, onOpenChange, headers
     } catch (reason) { if (generation.current === version) setError(reason instanceof Error ? reason.message : 'Не удалось сохранить пример.'); }
     finally { if (generation.current === version) setBusy(false); }
   };
-  const knowledge = () => {
+  const dirty = Boolean(profile && (business !== savedFields.business || audience !== savedFields.audience || tone !== savedFields.tone || story.trim() || example.trim()));
+  const finishClose = (destination: 'close' | 'knowledge') => {
+    setPendingClose(null);
     onOpenChange(false);
-    if (onOpenKnowledge) onOpenKnowledge();
-    else window.location.assign('/dashboard/profile?section=knowledge&business_id=' + encodeURIComponent(businessId));
+    if (destination === 'knowledge') {
+      if (onOpenKnowledge) onOpenKnowledge();
+      else window.location.assign('/dashboard/profile?section=knowledge&business_id=' + encodeURIComponent(businessId));
+    }
+  };
+  const requestClose = (destination: 'close' | 'knowledge') => {
+    if (busy) return;
+    if (dirty) setPendingClose(destination);
+    else finishClose(destination);
   };
   return <>
-    <Dialog open={open && !references} onOpenChange={value => { if (!busy) onOpenChange(value); }}>
+    <Dialog open={open && !references} onOpenChange={value => { if (!value) requestClose('close'); }}>
       <DialogContent className={`flex max-h-[90dvh] flex-col overflow-hidden text-foreground sm:max-w-xl ${headers ? 'dark' : ''}`}>
         <DialogHeader><DialogTitle>Настроить контент</DialogTitle><DialogDescription>Три коротких шага, чтобы тексты были похожи на вас и понятны вашим клиентам.</DialogDescription></DialogHeader>
         <Button id="content-references-button" variant="outline" disabled={busy} onClick={() => setReferences(true)}>Источники и подходы</Button>
-        <Button variant="ghost" className="h-auto min-h-11 whitespace-normal" disabled={busy} onClick={knowledge}>Общие сведения и документы о бизнесе</Button>
+        <Button variant="ghost" className="h-auto min-h-11 whitespace-normal" disabled={busy} onClick={() => requestClose('knowledge')}>Общие сведения и документы о бизнесе</Button>
         <nav aria-label="Шаги настройки контента" className="grid grid-cols-3 gap-2">{steps.map((label, index) => <Button key={label} className="h-auto min-h-11 min-w-0 whitespace-normal px-2 text-xs" variant={step === index ? 'default' : 'outline'} aria-current={step === index ? 'step' : undefined} disabled={busy} onClick={() => setStep(index)}>{label}</Button>)}</nav>
         {busy && !profile && <p role="status">Загружаем настройки…</p>}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -110,11 +123,17 @@ export function ContentPersonalization({ businessId, open, onOpenChange, headers
           </>}
         </div>}
         <DialogFooter className="shrink-0 border-t pt-3">
-          {step > 0 ? <Button variant="outline" disabled={busy} onClick={() => setStep(step - 1)}>Назад</Button> : <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>Закрыть</Button>}
+          {step > 0 ? <Button variant="outline" disabled={busy} onClick={() => setStep(step - 1)}>Назад</Button> : <Button variant="outline" disabled={busy} onClick={() => requestClose('close')}>Закрыть</Button>}
           {step < 2 ? <Button disabled={busy} onClick={() => setStep(step + 1)}>Дальше</Button> : <Button disabled={busy || !profile} onClick={() => void save()}>{busy ? 'Сохраняем…' : 'Сохранить'}</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <AlertDialog open={pendingClose !== null} onOpenChange={value => { if (!value) setPendingClose(null); }}>
+      <AlertDialogContent className={headers ? 'dark text-foreground' : undefined}>
+        <AlertDialogHeader><AlertDialogTitle>Закрыть без сохранения?</AlertDialogTitle><AlertDialogDescription>Сведения о компании, основателе и стиле ещё не сохранены. Можно вернуться к заполнению или закрыть форму без этих изменений.</AlertDialogDescription></AlertDialogHeader>
+        <AlertDialogFooter><AlertDialogCancel>Продолжить заполнение</AlertDialogCancel><AlertDialogAction onClick={() => { if (pendingClose) finishClose(pendingClose); }}>Не сохранять и закрыть</AlertDialogAction></AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     <ContentReferences businessId={businessId} open={open && references} onOpenChange={setReferences} headers={headers} />
   </>;
 }
