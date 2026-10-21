@@ -257,7 +257,7 @@ def test_services_read_result_is_formatted_as_numbered_telegram_list() -> None:
 
     assert "1. Маникюр — 1500 ₽" in text
     assert "2. Педикюр — цена не указана" in text
-    assert "Открыть услуги: https://localos.pro/dashboard/card?tab=services" in text
+    assert "Открыть услуги — кнопка мини-приложения ниже." in text
     assert "Внешних публикаций нет" not in text
 
 

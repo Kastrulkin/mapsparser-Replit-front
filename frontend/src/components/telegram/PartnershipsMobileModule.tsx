@@ -1,3 +1,6 @@
+import { partnershipMiniLaunch } from "@/lib/partnershipMiniLaunch";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { WorkDiscussion } from './WorkDiscussion';
 import { miniAppChannel, miniAppPath, miniAppLaunchParams } from "@/lib/miniAppPlatform";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -62,6 +65,7 @@ type Lead = {
   sales_room_status?: string;
   catalog_shortlisted?: boolean;
 };
+type LetterPreparation = { leadId: string; status: string; draftId?: string; failed?: boolean; limitReached?: boolean };
 type Draft = {
   recipient_value?: string | null;
   recipient_source_url?: string | null;
@@ -76,6 +80,11 @@ type Draft = {
   approved_text?: string;
   updated_at?: string;
   review_digest?: string;
+  learning_note_json?: {
+    recipient?: string | null;
+    manual_delivery_only?: boolean;
+    contact_research?: { state?: string; note?: string; sources?: string[] };
+  };
 };
 type QueueItem = {
   id: string;
@@ -178,14 +187,23 @@ const headers = () => ({
   "Content-Type": "application/json",
   Authorization: `Bearer ${window.sessionStorage.getItem("localos_mini_session") || ""}`,
 });
+class PartnershipRequestError extends Error {
+  constructor(message: string, public status: number) { super(message); }
+}
 const request = async <T,>(path: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(path, {
     ...init,
     headers: { ...headers(), ...(init?.headers || {}) },
+  }).catch(failure => {
+    if (failure instanceof TypeError) throw new PartnershipRequestError('Нет связи с LocalOS. Проверьте подключение и повторите действие.', 0);
+    throw failure;
   });
-  const data: T & { error?: string; success?: boolean } = await response.json();
+  if (response.status >= 500) throw new PartnershipRequestError('LocalOS не смог подтвердить результат. Проверьте сохранённые данные перед повтором.', response.status);
+  const data: T & { error?: string; success?: boolean } = await response.json().catch(() => {
+    throw new PartnershipRequestError('Не удалось прочитать ответ LocalOS. Проверьте результат перед повтором.', response.status);
+  });
   if (!response.ok || data.success === false || data.error)
-    throw new Error(data.error || "Не удалось выполнить действие");
+    throw new PartnershipRequestError(data.error || "Не удалось выполнить действие", response.status);
   return data;
 };
 const dateLabel = (value?: string) => {
@@ -219,6 +237,7 @@ const pipelineLabel = (value?: string) =>
     suppressed: "Не писать",
     needs_attention: "Нужна проверка",
     needs_contact: "Нужен контакт",
+    ready_for_outreach: "Готов к письму",
   })[String(value || "").toLowerCase()] ||
   value ||
   "Новый";
@@ -254,9 +273,9 @@ const Metric = ({
 );
 const Empty = ({ title, text }: { title: string; text: string }) => (
   <div className="rounded-[22px] bg-white/[0.035] p-6 text-center ring-1 ring-inset ring-white/[0.07]">
-    <Users className="mx-auto h-6 w-6 text-zinc-700" />
+    <Users className="mx-auto h-6 w-6 text-zinc-400" />
     <b className="mt-3 block text-sm">{title}</b>
-    <p className="mt-1 text-pretty text-xs leading-5 text-zinc-600">{text}</p>
+    <p className="mt-1 text-pretty text-xs leading-5 text-zinc-400">{text}</p>
   </div>
 );
 
@@ -265,7 +284,10 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
   const requestedLeadId = focusItemId || (miniAppLaunchParams().get("item_type") === "partner"
     ? miniAppLaunchParams().get("item_id") || ""
     : "");
-  const [tab, setTab] = useState<PartnershipTab>("overview");
+  const launchParams = miniAppLaunchParams();
+  const launch = partnershipMiniLaunch('?' + launchParams.toString(), businessId);
+  const [tab, setTab] = useState<PartnershipTab>(launch.tab);
+  useEffect(() => { if (miniAppLaunchParams().has("filter_section")) setTab(partnershipMiniLaunch('?' + miniAppLaunchParams().toString(), businessId).tab); }, [businessId]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -279,6 +301,8 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [preparation, setPreparation] = useState<LetterPreparation | null>(null);
+  const [draftLeadId, setDraftLeadId] = useState("");
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("all");
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -303,10 +327,17 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
   const [totalCandidates, setTotalCandidates] = useState(0);
   const loadVersion = useRef(0);
   const appliedFocus = useRef('');
+  const currentBusiness = useRef(businessId); currentBusiness.current = businessId;
+  const [accessDenied, setAccessDenied] = useState(false);
+  const clearPrivateData = () => { setLeads([]); setDrafts([]); setBatches([]); setReadyDrafts([]); setReactions([]); setSelectedLead(null); setSelectedLeads([]); setSelectedDrafts([]); setConfirmBatch(null); setDeletePreview(null); setPendingDeleteIds([]); setPendingDeleteDraftId(''); setFunnel({}); setOutcomes({}); setSourceQuality({}); setBlockers({}); setTotalCandidates(0); setPreparation(null); setDraftLeadId(""); };
+  const handleFailure = (failure: unknown, fallback: string) => {
+    if (failure instanceof PartnershipRequestError && [401,403].includes(failure.status)) { clearPrivateData(); setAccessDenied(true); }
+    setError(failure instanceof Error ? failure.message : fallback);
+  };
 
   const load = async (silent = false, filters = { query, stage }) => {
+    if (!businessId || currentBusiness.current !== businessId) return;
     const current = ++loadVersion.current;
-    if (!businessId) return;
     if (!silent) setLoading(true);
     setError("");
     try {
@@ -323,8 +354,9 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
         access?: PartnershipAccess;
         preview?: PartnershipPreview;
       }>(`/api/partnership/leads?${params.toString()}`);
-      if (current !== loadVersion.current) return;
+      if (current !== loadVersion.current || currentBusiness.current !== businessId) return;
       const nextLeads = leadData.items || [];
+      setAccessDenied(false);
       setLeads(nextLeads);
       setAccess(leadData.access || { allowed: true });
       setTotalCandidates(Number(leadData.count || nextLeads.length));
@@ -345,7 +377,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
         blockerData,
       ] = await Promise.all([
         request<{ drafts?: Draft[] }>(
-          `/api/partnership/drafts?business_id=${encodeURIComponent(businessId)}`,
+          `/api/partnership/drafts?business_id=${encodeURIComponent(businessId)}${launch.groupId ? `&search_task_id=${encodeURIComponent(launch.groupId)}` : ""}`,
         ),
         request<{
           batches?: Batch[];
@@ -367,8 +399,8 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
           `/api/partnership/blockers-summary?business_id=${encodeURIComponent(businessId)}&window_days=30`,
         ),
       ]);
-      if (current !== loadVersion.current) return;
-      setDrafts(draftData.drafts || []);
+      if (current !== loadVersion.current || currentBusiness.current !== businessId) return;
+      setDrafts((draftData.drafts || []).filter((draft) => !launch.draftId || draft.id === launch.draftId));
       setBatches(batchData.batches || []);
       setReadyDrafts(batchData.ready_drafts || []);
       setReactions(batchData.reactions || []);
@@ -389,22 +421,31 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
             null,
         );
     } catch (requestError) {
-      if (current !== loadVersion.current) return;
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Не удалось загрузить партнёрства.",
-      );
+      if (current !== loadVersion.current || currentBusiness.current !== businessId) return;
+      handleFailure(requestError, "Не удалось загрузить партнёрства.");
     } finally {
       if (current === loadVersion.current) setLoading(false);
     }
   };
   useEffect(() => {
-    setSelectedLead(null);
-    setSelectedLeads([]);
-    void load();
+    clearPrivateData(); setAccessDenied(false); setQuery(""); setStage("all");
+    void load(false, {query:"",stage:"all"});
     return () => { loadVersion.current += 1; };
   }, [businessId, requestedLeadId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const checkPreparation = async (lead: Lead) => {
+    if (!lead.active_workstream_id) { setPreparation({ leadId: lead.id, status: 'unknown' }); return; }
+    try {
+      const params = new URLSearchParams({ business_id: businessId, workstream_id: lead.active_workstream_id });
+      const value = await request<{ job?: { status?: string; error?: string }; first_message?: { id?: string } }>(`/api/partnership/leads/${lead.id}/contact-intelligence?${params}`);
+      if (currentBusiness.current !== businessId) return;
+      setPreparation({ leadId: lead.id, status: value.job?.status || 'unknown', draftId: value.first_message?.id, failed: Boolean(value.job?.error), limitReached: /лимит|budget|quota/i.test(value.job?.error || '') });
+      if (value.first_message?.id) await load(true);
+    } catch (failure) {
+      if (currentBusiness.current === businessId) handleFailure(failure, 'Не удалось проверить готовность письма.');
+    }
+  };
+  const openLeadLetters = (lead: Lead) => { setDraftLeadId(lead.id); setSelectedDrafts([]); setSelectedLead(null); setTab('drafts'); };
 
   const action = async (
     key: string,
@@ -416,22 +457,23 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
     setError("");
     setMessage("");
     try {
-      await request(path, {
+      const result = await request<{ accepted?: boolean; job?: { status?: string }; message?: string }>(path, {
         method,
         body: payload
           ? JSON.stringify({ business_id: businessId, ...payload })
           : undefined,
       });
-      setMessage(key.startsWith("save-draft:") ? "Черновик сохранён. Отправка не разрешена." : "Готово. Данные обновлены.");
+      if (currentBusiness.current !== businessId) return;
+      setMessage(result.accepted ? 'Запрос принят. Проверьте готовность в карточке партнёра. Никому ничего не отправлено.' : key.startsWith("save-draft:") ? "Черновик сохранён. Отправка не разрешена." : "Готово. Данные обновлены.");
       await load(true);
+      if (result.accepted && key.endsWith(':draft-offer')) {
+        const lead = leads.find(item => key === `${item.id}:draft-offer`);
+        if (lead) await checkPreparation(lead);
+      }
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Не удалось выполнить действие.",
-      );
+      if (currentBusiness.current === businessId) handleFailure(requestError, "Не удалось выполнить действие.");
     } finally {
-      setBusy("");
+      if (currentBusiness.current === businessId) setBusy("");
     }
   };
   const runLeadAction = (
@@ -727,6 +769,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
     }
   };
 
+  const visibleDrafts = draftLeadId ? drafts.filter(draft => draft.lead_id === draftLeadId) : drafts;
   const counts = useMemo(
     () => ({
       leads: leads.length,
@@ -750,6 +793,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
     next = { text: `Соберите пакет из ${counts.ready} писем`, tab: "send" };
   else next = { text: "Посмотрите ответы и результат", tab: "analytics" };
 
+  if (accessDenied) return <div className="space-y-3"><p role="alert" className="text-sm text-rose-200">{error || 'Доступ к этому бизнесу недоступен.'}</p><p className="text-sm text-zinc-400">Выберите доступный бизнес. Если сессия истекла, откройте LocalOS заново из бота.</p><button type="button" disabled={loading} onClick={() => void load()} className="min-h-11 rounded-[14px] bg-white/[0.05] px-4 text-sm disabled:opacity-50">Повторить проверку доступа</button></div>;
   if (scope?.kind === 'network') return <PartnershipResults scope={scope} mobile openWork={id => { if (id) openBusiness?.(id); else setError('Выберите карточку партнёра, чтобы открыть работу по его точке.'); }} />;
   if (!businessId)
     return (
@@ -785,13 +829,14 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
   ];
   return (
     <div className="space-y-4">
-      <div className="-mx-1 overflow-x-auto px-1 pb-1">
-        <div className="flex min-w-max gap-1 rounded-[16px] bg-white/[0.035] p-1 ring-1 ring-inset ring-white/[0.06]">
+      <div className="pb-1">
+        <div role="navigation" aria-label="Разделы партнёрств" className="grid grid-cols-[1fr_1.4fr_1fr_1.2fr_1fr] gap-1 rounded-[16px] bg-white/[0.035] p-1 ring-1 ring-inset ring-white/[0.06]">
           {tabs.map(([key, label]) => (
             <button
               key={key}
-              onClick={() => setTab(key)}
-              className={`min-h-11 rounded-[13px] px-4 text-xs font-semibold transition-[background-color,color,transform] active:scale-[0.96] ${tab === key ? "bg-zinc-700 text-white" : "text-zinc-600"}`}
+              onClick={() => { setTab(key); setDraftLeadId(""); }}
+              aria-current={tab === key ? "page" : undefined}
+              className={`min-h-11 min-w-0 rounded-[13px] px-0.5 text-[11px] font-semibold sm:text-xs transition-[background-color,color,transform] active:scale-[0.96] ${tab === key ? "bg-zinc-700 text-white" : "text-zinc-400"}`}
             >
               {label}
             </button>
@@ -929,7 +974,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
               Добавить
             </button>
           </div>
-          <p role="status" className="text-xs text-zinc-400">Найдено: {totalCandidates}. Откройте компанию, чтобы посмотреть письма и ответы.</p>
+          <p role="status" className="text-xs text-zinc-400">Найдено: {totalCandidates}. {totalCandidates ? "Откройте компанию, чтобы посмотреть письма и ответы." : query.trim() || stage !== "all" ? "Измените условия поиска или сбросьте фильтры." : "Начните с поиска компаний или добавьте готовый список."}</p>
           <AnimatePresence initial={false}>
             {showIntake ? (
               <motion.section
@@ -940,7 +985,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                 className="overflow-hidden"
               >
                 <div className="space-y-3 rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]">
-                  <b className="text-sm">Найти рядом</b>
+                  <b className="text-sm">Найти компании на картах</b><p className="text-xs leading-5 text-zinc-400">Это отдельный поиск в Google и Яндекс.Картах. Поиск в Яндексе использует платный сбор данных; расходы зависят от объёма. Найденные компании появятся в списке, сообщения им не отправляются.</p>
                   <form onSubmit={geoSearch} className="grid grid-cols-2 gap-2">
                     <input
                       value={geo.city}
@@ -950,6 +995,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                           city: event.target.value,
                         }))
                       }
+                      aria-label="Город для поиска на картах"
                       placeholder="Город"
                       className="min-h-11 rounded-[13px] bg-black/20 px-3 text-xs ring-1 ring-inset ring-white/[0.06]"
                     />
@@ -961,6 +1007,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                           category: event.target.value,
                         }))
                       }
+                      aria-label="Категория компаний"
                       placeholder="Категория"
                       className="min-h-11 rounded-[13px] bg-black/20 px-3 text-xs ring-1 ring-inset ring-white/[0.06]"
                     />
@@ -972,6 +1019,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                           query: event.target.value,
                         }))
                       }
+                      aria-label="Запрос для поиска на картах"
                       placeholder="Что искать"
                       className="col-span-2 min-h-11 rounded-[13px] bg-black/20 px-3 text-xs ring-1 ring-inset ring-white/[0.06]"
                     />
@@ -1151,18 +1199,19 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
               })}
             </div>
           ) : (
-            <Empty
-              title="Кандидатов пока нет"
-              text="Найдите компании рядом, добавьте ссылки или импортируйте подготовленный список."
-            />
+            <div className="space-y-2"><Empty
+              title={query.trim() || stage !== "all" ? "По этим условиям никого не нашли" : "Кандидатов пока нет"}
+              text={query.trim() || stage !== "all" ? "Попробуйте другое название или этап. Остальные кандидаты остались в списке." : "Найдите компании рядом, добавьте ссылки или импортируйте подготовленный список."}
+            />{(query.trim() || stage !== "all") && <button type="button" className="min-h-11 w-full rounded-[14px] bg-white/[0.05] px-3 text-sm text-zinc-200 ring-1 ring-inset ring-white/[0.07]" onClick={() => { setQuery(""); setStage("all"); void load(false, {query:"",stage:"all"}); }}>Сбросить фильтры</button>}</div>
           )}
         </div>
       ) : null}
       {!loading && tab === "drafts" ? (
         <div className="space-y-3">
-          {drafts.length ? (
+          {draftLeadId && <div className="space-y-2"><h2 className="font-semibold">Письма выбранного партнёра</h2><button type="button" onClick={() => setDraftLeadId('')} className="min-h-11 rounded-xl border px-3 text-sm">Все письма</button></div>}
+          {visibleDrafts.length ? (
             <>
-              {drafts.map((draft) => {
+              {visibleDrafts.map((draft) => {
                 const storedText = draft.has_local_edits ? (draft.approved_text ?? "") :
                   draft.approved_text ||
                   draft.edited_text ||
@@ -1171,6 +1220,9 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                 const historicalRecord = isHistoricalReconciliationMarker(storedText);
                 const text = historicalRecord ? "" : storedText;
                 const checked = selectedDrafts.includes(draft.id);
+                const sourceReview = draft.learning_note_json;
+                const contactResearch = sourceReview?.contact_research;
+                const contactBlocked = Boolean(contactResearch && contactResearch.state !== "review_ready");
                 return (
                   <article
                     key={draft.id}
@@ -1178,7 +1230,8 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                   >
                     <div className="flex items-start gap-3">
                       <button
-                        disabled={historicalRecord}
+                        disabled={historicalRecord || contactBlocked}
+                        aria-label={`Выбрать письмо: ${draft.lead_name || "Партнёр"}`}
                         onClick={() =>
                           setSelectedDrafts((current) =>
                             checked
@@ -1204,7 +1257,20 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                         </small>
                       </div>
                     </div>
-                    {!historicalRecord ? (
+                    {contactResearch ? (
+                      <div className="mt-3 space-y-2 break-words text-xs leading-5 text-zinc-400">
+                        <p>{contactBlocked ? "Нужен контакт или уточнение компании" : "Контакт найден · проверьте текст"}</p>
+                        <p>Кому: {sourceReview?.recipient || "адресат переписки не найден"}</p>
+                        {sourceReview?.manual_delivery_only && draft.channel === "vk" ? <p>VK — только ручная отправка.</p> : null}
+                        <details>
+                          <summary className="cursor-pointer">Контакт и источники</summary>
+                          <p className="mt-2">{contactResearch.note}</p>
+                          {(contactResearch.sources || []).map((source) => (
+                            <a key={source} href={source} target="_blank" rel="noopener noreferrer" className="mt-1 block underline">{source}</a>
+                          ))}
+                        </details>
+                      </div>
+                    ) : !historicalRecord ? (
                       <div className="mt-3 space-y-2 break-words text-xs leading-5 text-zinc-400">
                         <p>Кому: {draft.recipient_value || "Перед отправкой проверьте адресата"}</p>
                         {draft.recipient_source_url ? <a href={draft.recipient_source_url} target="_blank" rel="noopener noreferrer" className="block underline">Источник контакта</a> : null}
@@ -1254,7 +1320,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                         </div>
                       ) : (
                         <button
-                          disabled={!text.trim() || busy === `draft:${draft.id}`}
+                          disabled={contactBlocked || !text.trim() || busy === `draft:${draft.id}`}
                           onClick={() => void approveDraft(draft)}
                           className="btn-iridescent min-h-11 rounded-[13px] text-xs disabled:opacity-40"
                         >
@@ -1491,11 +1557,11 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
               ))}
             </div>
           </section>
-          {(blockers.blockers || []).length ? (
+          {(blockers.blockers || []).some(item => Number(item.count) > 0) ? (
             <section className="rounded-[22px] bg-amber-500/[0.07] p-4 ring-1 ring-inset ring-amber-400/15">
               <b className="text-sm text-amber-200">Что мешает движению</b>
               <div className="mt-3 space-y-2">
-                {(blockers.blockers || []).map((item) => (
+                {(blockers.blockers || []).filter(item => Number(item.count) > 0).map((item) => (
                   <div
                     key={item.key || item.label}
                     className="flex gap-3 text-xs"
@@ -1530,6 +1596,11 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
         {selectedLead ? (
           <LeadSheet
             lead={selectedLead}
+            notice={message} error={error}
+            preparation={preparation?.leadId === selectedLead.id ? preparation : null}
+            refreshPreparation={() => void checkPreparation(selectedLead)}
+            hasDraft={drafts.some(draft => draft.lead_id === selectedLead.id)}
+            openLetters={() => openLeadLetters(selectedLead)}
             busy={busy}
             close={() => setSelectedLead(null)}
             update={updateLead}
@@ -1560,6 +1631,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
 };
 
 const LeadSheet = ({
+  notice, error, preparation, refreshPreparation, hasDraft, openLetters,
   businessId,
   discuss,
   lead,
@@ -1569,6 +1641,8 @@ const LeadSheet = ({
   run,
   operate,
 }: {
+  notice: string; error: string; preparation: LetterPreparation | null;
+  refreshPreparation: () => void; hasDraft: boolean; openLetters: () => void;
   businessId: string;
   discuss?: (lead: Lead) => void;
   lead: Lead;
@@ -1585,7 +1659,7 @@ const LeadSheet = ({
   ) => Promise<void>;
 }) => {
   const [editing, setEditing] = useState(false);
-  const [values, setValues] = useState({
+  const initialValues = {
     name: lead.name || "",
     city: lead.city || "",
     category: lead.category || "",
@@ -1597,7 +1671,11 @@ const LeadSheet = ({
     whatsapp_url: lead.whatsapp_url || "",
     selected_channel: lead.selected_channel || "email",
     pipeline_status: lead.pipeline_status || "unprocessed",
-  });
+  };
+  const [values, setValues] = useState(initialValues);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const hasChanges = JSON.stringify(values) !== JSON.stringify(initialValues);
+  const requestClose = () => { if (hasChanges) setDiscardOpen(true); else close(); };
   const step = !lead.parse_status
     ? ["parse", "Собрать данные"]
     : !lead.audit_ready
@@ -1606,40 +1684,29 @@ const LeadSheet = ({
         ? ["match", "Найти совместный сценарий"]
         : ["draft-offer", "Подготовить предложение"];
   return (
-    <motion.div
-      className="fixed inset-0 z-50 flex items-end bg-black/70 backdrop-blur-sm"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      onClick={close}
-    >
-      <motion.section
-        onClick={(event) => event.stopPropagation()}
-        className="max-h-[92vh] w-full overflow-y-auto rounded-t-[28px] bg-zinc-950 p-4 pb-[calc(24px+env(safe-area-inset-bottom))] ring-1 ring-inset ring-white/[0.1]"
-        initial={{ y: 32 }}
-        animate={{ y: 0 }}
-        exit={{ y: 24 }}
-        transition={spring}
-      >
+    <Sheet open onOpenChange={open => { if (!open) requestClose(); }}>
+      <SheetContent side="bottom" closeLabel="Закрыть карточку партнёра" className="dark max-h-[92vh] w-full overflow-y-auto rounded-t-[28px] bg-zinc-950 p-4 pb-[calc(24px+env(safe-area-inset-bottom))] text-zinc-100 ring-1 ring-inset ring-white/[0.1] [&>button:last-child]:h-11 [&>button:last-child]:w-11">
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/15" />
         <div className="flex items-start gap-3">
           <button
-            onClick={close}
+            aria-label="Вернуться к списку партнёров"
+            onClick={requestClose}
             className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-white/[0.05]"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-semibold text-balance">
+            <SheetTitle className="text-lg font-semibold text-balance">
               {lead.name || "Компания"}
-            </h2>
-            <p className="mt-1 text-xs text-zinc-600">
-              {[lead.category, lead.city].filter(Boolean).join(" · ")}
-            </p>
+            </SheetTitle>
+            <SheetDescription className="mt-1 text-xs text-zinc-400">
+              {[lead.category, lead.city].filter(Boolean).join(" · ") || "Проверьте сведения и выберите следующий шаг."}
+            </SheetDescription>
           </div>
           <button
+            aria-label={editing ? "Закрыть редактирование партнёра" : "Редактировать партнёра"}
             onClick={() => setEditing((value) => !value)}
-            className="grid h-11 w-11 place-items-center rounded-[14px] bg-white/[0.05]"
+            className="mr-12 grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-white/[0.05]"
           >
             <Pencil className="h-4 w-4" />
           </button>
@@ -1761,6 +1828,10 @@ const LeadSheet = ({
                 ) : null}
               </div>
             ) : null}
+            {(notice || error || preparation) && <section className="mt-4 space-y-2 rounded-xl border p-3" aria-label="Подготовка письма">
+              {error ? <p role="alert" className="text-sm text-rose-200">{error}</p> : <p role="status" className="text-sm leading-6">{preparation ? preparation.limitReached ? 'Лимит генерации исчерпан. Сохранённые письма можно открыть и отредактировать. Для нового письма дождитесь восстановления лимита.' : preparation.failed ? 'Новое письмо не подготовлено. Проверьте сохранённый черновик или обратитесь к владельцу LocalOS перед повтором.' : preparation.status === 'ready' ? 'Сохранённое письмо доступно. Проверьте текст и получателя перед отправкой.' : preparation.status === 'needs_contact' ? 'Нужен проверенный контакт для сотрудничества. Письмо пока не готово.' : preparation.status === 'needs_evidence' ? 'Для письма не хватает подтверждённых сведений о партнёре.' : preparation.status === 'failed' ? 'Не удалось подготовить письмо. Повторная генерация автоматически не запускается.' : preparation.status === 'suppressed' ? 'Подготовка остановлена. Проверьте статус партнёра перед продолжением.' : preparation.status === 'unknown' ? 'Статус подготовки пока неизвестен. Нажмите «Проверить готовность письма».' : 'Письмо готовится. Никому ничего не отправлено.' : notice}</p>}
+              {preparation && <button type="button" disabled={Boolean(busy)} onClick={refreshPreparation} className="min-h-11 rounded-xl border px-3 text-sm disabled:opacity-50">Проверить готовность письма</button>}
+            </section>}
             <div className="mt-4">
               <WorkDiscussion businessId={businessId} itemId={lead.id} updatedAt={lead.updated_at} itemType="partner"
                 disabled={editing || Boolean(busy)} onDiscuss={discuss ? () => discuss(lead) : undefined} />
@@ -1798,10 +1869,10 @@ const LeadSheet = ({
               </button>
               <button
                 disabled={busy !== ""}
-                onClick={() => void run(lead, "draft-offer")}
+                onClick={() => hasDraft ? openLetters() : void run(lead, "draft-offer")}
                 className="min-h-11 rounded-[13px] bg-white/[0.05] text-xs ring-1 ring-inset ring-white/[0.07]"
               >
-                Новое письмо
+                {hasDraft ? 'Открыть письмо' : 'Подготовить письмо'}
               </button>
             </div>
             <div className="mt-3 space-y-2 rounded-[18px] bg-white/[0.025] p-3 ring-1 ring-inset ring-white/[0.06]">
@@ -1847,8 +1918,9 @@ const LeadSheet = ({
             </div>
           </>
         )}
-      </motion.section>
-    </motion.div>
+        <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Закрыть без сохранения?</AlertDialogTitle><AlertDialogDescription>Изменения карточки ещё не сохранены. Можно вернуться к редактированию или закрыть карточку без этих правок.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Продолжить редактирование</AlertDialogCancel><AlertDialogAction onClick={close}>Не сохранять и закрыть</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      </SheetContent>
+    </Sheet>
   );
 };
 

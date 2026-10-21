@@ -129,3 +129,25 @@ def test_partner_read_uses_human_channel_and_draft_status_labels(allowed):
     text = result['chat_response']
     assert 'Канал нужно выбрать' in text and 'Добавлен' in text and 'Эл. почта · Черновик' in text
     assert not any(marker in text for marker in ['generated', 'imported', 'manual'])
+
+
+def test_shows_only_latest_partner_letter_and_never_raw_older_variants(allowed):
+    cursor = Cursor(lead(), [{'id': 'new', 'edited_text': 'Последняя проверенная правка', 'channel': 'email', 'status': 'draft'},
+                             {'id': 'old', 'generated_text': 'Старый вариант', 'channel': 'email', 'status': 'draft'}])
+    selected = operator_partner_work.partner_selection(cursor, user_id=USER, business_id=BUSINESS, item_id=LEAD)
+    result, _ = operator_partner_work.route(cursor, user_id=USER, business_id=BUSINESS, message='Покажи письмо', selected=selected)
+    assert len(result['drafts']) == 1
+    assert 'Последняя проверенная правка' in result['chat_response']
+    assert 'Старый вариант' not in result['chat_response']
+    assert result['external_writes_performed'] is False
+
+
+def test_bot_shows_recipient_source_and_legal_address_warning(allowed):
+    cursor = Cursor(lead(), [{'id':'draft','channel':'email','status':'draft','edited_text':'Тестовое письмо',
+        'recipient_value':'legal@example.invalid','recipient_source_url':'https://example.invalid/contacts'}])
+    selected = operator_partner_work.partner_selection(cursor,user_id=USER,business_id=BUSINESS,item_id=LEAD)
+    result,_ = operator_partner_work.route(cursor,user_id=USER,business_id=BUSINESS,message='Покажи письмо',selected=selected)
+    assert 'Кому: legal@example.invalid' in result['chat_response']
+    assert 'Источник контакта: https://example.invalid/contacts' in result['chat_response']
+    assert 'служебный или юридический адрес' in result['chat_response']
+    assert any('cp.lead_id=d.lead_id' in query for query,_ in cursor.calls)

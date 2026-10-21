@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { miniAppLabel, miniAppPlatform, openMiniAppLink } from '@/lib/miniAppPlatform';
+import { closeMiniAppForBotHandoff, miniAppLabel, miniAppPlatform, openMiniAppLink } from '@/lib/miniAppPlatform';
 import { mobileJsonHeaders, readMobileJson } from '@/lib/mobileDataClient';
 
 export function WorkDiscussion({ businessId, itemId, updatedAt, onDiscuss, disabled, itemType = 'content_item' }: {
@@ -8,12 +8,13 @@ export function WorkDiscussion({ businessId, itemId, updatedAt, onDiscuss, disab
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [handoffNotice, setHandoffNotice] = useState('');
   const requestId = useRef(crypto.randomUUID());
   const active = useRef(true);
   useEffect(() => { active.current = true; requestId.current = crypto.randomUUID(); return () => { active.current = false; }; }, [businessId, itemId, updatedAt, itemType]);
   const openBot = async () => {
     if (busy || disabled) return;
-    setBusy(true); setError('');
+    setBusy(true); setError(''); setHandoffNotice('');
     try {
       const result = await fetch('/api/operator/work-handoff', { method: 'POST', headers: mobileJsonHeaders(),
         body: JSON.stringify({ business_id: businessId, item_id: itemId, item_type: itemType, updated_at: updatedAt, platform: miniAppPlatform(), request_id: requestId.current }),
@@ -22,6 +23,7 @@ export function WorkDiscussion({ businessId, itemId, updatedAt, onDiscuss, disab
       const url = new URL(result.url);
       if (url.protocol !== 'https:' || url.hostname !== (miniAppPlatform() === 'max' ? 'max.ru' : 't.me')) throw new Error('Не удалось открыть бота.');
       openMiniAppLink(result.url);
+      if (!closeMiniAppForBotHandoff()) setHandoffNotice('Переход в бота выполнен. Если чат не виден, сверните мини-приложение.');
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось открыть бота. Повторите.'); }
     finally { setBusy(false); }
   };
@@ -31,6 +33,7 @@ export function WorkDiscussion({ businessId, itemId, updatedAt, onDiscuss, disab
       <Button variant="ghost" disabled={disabled || busy} onClick={() => void openBot()}>{busy ? 'Открываем…' : `Продолжить в боте ${miniAppLabel()}`}</Button>
     </div>
     {disabled && <p className="text-sm text-muted-foreground">Сохраните правки или закройте редактор перед переходом.</p>}
+    {handoffNotice && <p role="status" className="text-sm text-muted-foreground">{handoffNotice}</p>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
   </div>;
 }

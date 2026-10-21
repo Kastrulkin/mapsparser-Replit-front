@@ -503,7 +503,7 @@ def route_operator_chat_for_telegram(
 
 
 def _format_operator_chat_result_for_telegram(result: dict[str, Any]) -> str:
-    if result.get("intent") == "bulk_review_replies_generate" or result.get("drafts"):
+    if result.get("intent") == "bulk_review_replies_generate":
         return format_bulk_review_reply_result_for_telegram(result)
 
     lines = [str(result.get("chat_response") or "Команда обработана.")]
@@ -546,10 +546,16 @@ def _format_operator_chat_result_for_telegram(result: dict[str, Any]) -> str:
     result_href = str(result_ref.get("href") or "").strip()
     if result_href:
         absolute_href = result_href if result_href.startswith("http") else _base_web_url() + result_href
-        lines.extend(["", str(result_ref.get("label") or "Открыть результат") + ": " + absolute_href])
+        from services.operator_mini_app_links import result_mini_app_url
+        if result_mini_app_url(result):
+            lines.extend(["", str(result_ref.get("label") or "Открыть результат") + " — кнопка мини-приложения ниже."])
+        else:
+            lines.extend(["", str(result_ref.get("label") or "Открыть результат") + ": " + absolute_href])
     if result.get("manual_publication_only") or generated_text or reply_text:
         lines.extend(["", "Внешних публикаций нет. Ответы, новости и посты нужно копировать и публиковать вручную."])
-    lines.extend(["", "Открыть Operator в кабинете: " + _base_web_url() + "/dashboard/operator"])
+    from services.operator_mini_app_links import result_mini_app_url
+    if not result_mini_app_url(result):
+        lines.extend(["", "Открыть чат с LocalOS: " + _base_web_url() + "/dashboard/operator"])
     return "\n".join(line for line in lines if line is not None)
 
 

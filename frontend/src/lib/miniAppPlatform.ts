@@ -98,6 +98,12 @@ export const openMiniAppLink = (url: string) => {
   window.open(url, '_blank', 'noopener,noreferrer');
 };
 
+/** Only close after a deliberate, authorized handoff to the bot. */
+export const closeMiniAppForBotHandoff = (): boolean => {
+  if (miniAppPlatform() !== 'telegram' || !window.Telegram?.WebApp?.close) return false;
+  try { window.Telegram.WebApp.close(); return true; } catch { return false; }
+};
+
 export const loadMiniAppSdk = () => new Promise<void>((resolve) => {
   if (miniWebApp()) { resolve(); return; }
   const url = miniAppSdkUrl();

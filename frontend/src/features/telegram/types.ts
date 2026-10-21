@@ -159,6 +159,7 @@ export type ModuleData = { items?: ModuleItem[]; counts?: { total?: number }; as
 export type Tab = 'today' | 'tasks' | 'feed' | 'reviews' | 'progress' | 'operator' | 'more' | 'menu';
 
 export type TelegramWebApp = {
+  close?: () => void;
   downloadFile?: (params: { url: string; file_name: string }) => void;
   isVersionAtLeast?: (version: string) => boolean;
   initData?: string;

@@ -95,14 +95,23 @@ def route(cursor, *, user_id, business_id, message, selected, conversation_id=No
             'chat_response': f"Партнёр: {current['name']}. Проверим контакт и подготовим первое письмо в существующем процессе LocalOS. Работа использует действующие лимиты и бюджет. Платное обогащение выключено. Отправку письма нужно будет согласовать отдельно.",
             'approval': {'status': 'pending', 'envelope': {'capability': 'partnerships.selected_draft', 'business_id': business_id,
                 'payload': {'lead_id': current['item_id'], 'version': current['version']}}}}, pending
-    cursor.execute("""SELECT id,channel,status,generated_text,edited_text,approved_text FROM outreachmessagedrafts
-        WHERE lead_id=%s AND workstream_id=%s
-        ORDER BY updated_at DESC NULLS LAST,created_at DESC LIMIT 3""", (current['item_id'],current['workstream_id']))
-    drafts = [_row(cursor, row) for row in cursor.fetchall()]
+    cursor.execute("""SELECT d.id,d.channel,d.status,d.generated_text,d.edited_text,d.approved_text,
+        COALESCE(cp.value,d.learning_note_json->>'recipient') AS recipient_value,cp.source_url AS recipient_source_url
+        FROM outreachmessagedrafts d LEFT JOIN lead_contact_points cp ON cp.id=d.contact_point_id AND cp.lead_id=d.lead_id
+        WHERE d.lead_id=%s AND d.workstream_id=%s
+        ORDER BY d.updated_at DESC NULLS LAST,d.created_at DESC LIMIT 1""", (current['item_id'],current['workstream_id']))
+    drafts = [_row(cursor, row) for row in cursor.fetchall()][:1]
     parts = [f"Партнёр: {current['name']}. Канал: {CHANNEL_LABELS.get(current['channel'], 'Нужно выбрать')}. Статус: {PARTNER_STATUS_LABELS.get(current['status'], 'В работе')}."]
     for draft in drafts:
         body = str(draft.get('approved_text') or draft.get('edited_text') or draft.get('generated_text') or '')
-        parts.append(f"Письмо · {CHANNEL_LABELS.get(draft.get('channel'), 'Канал нужно выбрать')} · {DRAFT_STATUS_LABELS.get(draft.get('status'), 'Проверьте статус')}\n{body}")
+        recipient = str(draft.get('recipient_value') or '').strip()
+        source = str(draft.get('recipient_source_url') or '').strip()
+        contact_lines = ['Кому: ' + (recipient or 'перед отправкой уточните получателя')]
+        if source.startswith(('https://', 'http://')):
+            contact_lines.append('Источник контакта: ' + source)
+        if draft.get('channel') == 'email' and re.search(r'(^|[._+-])(jur|yur|legal|privacy|dpo|abuse|noreply|no-reply|unsubscribe)([._+-]|$)', recipient.split('@')[0], re.I):
+            contact_lines.append('Похоже на служебный или юридический адрес. Перед отправкой найдите контакт для сотрудничества и проверьте получателя.')
+        parts.append(f"Последнее сохранённое письмо · {CHANNEL_LABELS.get(draft.get('channel'), 'Канал нужно выбрать')} · {DRAFT_STATUS_LABELS.get(draft.get('status'), 'Проверьте статус')}\n" + '\n'.join(contact_lines) + '\n\n' + body)
     if not drafts:
         parts.append('Писем пока нет. Напишите или надиктуйте «Подготовь первое письмо».')
     parts.append('Карточка партнёра открывается кнопкой возврата. Просмотр и обсуждение не отправляют письма.')
