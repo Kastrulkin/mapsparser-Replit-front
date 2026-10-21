@@ -73,3 +73,18 @@ it('explains a provider limit without claiming a new letter is ready',async()=>{
  await user.click(screen.getByRole('button',{name:'Подготовить письмо',exact:true}));
  expect(await screen.findByRole('status')).toHaveTextContent('Лимит генерации исчерпан');
 });
+it('protects letter edits and review controls while a save response is pending',async()=>{
+ const {user}=setup(true);const original=window.fetch;let finish:(value:Response)=>void=()=>{};
+ vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>String(input).endsWith('/save')?new Promise<Response>(resolve=>{finish=resolve}):original(input,init)));
+ await user.click(await screen.findByRole('button',{name:'Письма',exact:true}));
+ const field=await screen.findByRole('textbox',{name:'Текст письма: QA Партнёр'});
+ await user.clear(field);await user.type(field,'Проверяемая версия');
+ await user.click(screen.getByRole('button',{name:'Сохранить черновик без отправки'}));
+ expect(field).toBeDisabled();
+ expect(screen.getByRole('button',{name:'Утвердить письмо'})).toBeDisabled();
+ expect(screen.getByRole('button',{name:'Удалить черновик'})).toBeDisabled();
+ expect(screen.getByRole('button',{name:'Сохраняем…',exact:true})).toBeDisabled();
+ await user.type(field,' это нельзя потерять');expect(field).toHaveValue('Проверяемая версия');
+ finish(new Response(JSON.stringify({success:true}),{status:200}));
+ await screen.findByText('Черновик сохранён. Отправка не разрешена.');
+});

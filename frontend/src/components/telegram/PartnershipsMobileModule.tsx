@@ -1287,6 +1287,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                     ) : (
                       <textarea
                         aria-label={`Текст письма: ${draft.lead_name || "Партнёр"}`}
+                        disabled={Boolean(busy)}
                         value={text}
                         onChange={(event) =>
                           setDrafts((current) =>
@@ -1304,11 +1305,11 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                       disabled={Boolean(busy) || !text.trim()}
                       onClick={() => void action(`save-draft:${draft.id}`, `/api/partnership/drafts/${draft.id}/save`, { edited_text: text, expected_review_digest: draft.review_digest })}
                       className="mt-3 min-h-11 w-full rounded-[13px] bg-white/10 text-xs disabled:opacity-40"
-                    >Сохранить черновик без отправки</button>}
+                    >{busy === `save-draft:${draft.id}` ? "Сохраняем…" : "Сохранить черновик без отправки"}</button>}
                     <div className="mt-3 grid grid-cols-[44px_1fr] gap-2">
                       <button
                         aria-label="Удалить черновик"
-                        disabled={busy === `delete-draft:${draft.id}`}
+                        disabled={Boolean(busy)}
                         onClick={() => void prepareDraftDelete(draft.id)}
                         className="grid h-11 w-11 place-items-center rounded-[13px] bg-rose-500/10 text-rose-300"
                       >
@@ -1320,7 +1321,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                         </div>
                       ) : (
                         <button
-                          disabled={contactBlocked || !text.trim() || busy === `draft:${draft.id}`}
+                          disabled={contactBlocked || !text.trim() || Boolean(busy)}
                           onClick={() => void approveDraft(draft)}
                           className="btn-iridescent min-h-11 rounded-[13px] text-xs disabled:opacity-40"
                         >
