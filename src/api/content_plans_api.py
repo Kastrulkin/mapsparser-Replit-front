@@ -9,6 +9,7 @@ from services.content_plan_export import fingerprint, render_export
 
 from auth_system import verify_session
 from core.auth_helpers import verify_business_access
+from core.api_errors import internal_error_response
 from database_manager import DatabaseManager
 from subscription_manager import get_capability_access
 from services.content_plan_service import (
@@ -311,8 +312,8 @@ def content_plan_item_update(item_id: str):
         return jsonify({"success": False, "error": str(exc), "code": "content_item_stale"}), 409
     except ValueError as exc:
         return jsonify({"success": False, "error": str(exc)}), 404
-    except Exception as exc:
-        return jsonify({"success": False, "error": str(exc)}), 500
+    except Exception:
+        return internal_error_response("Не удалось подтвердить сохранение публикации. Проверьте результат перед повтором.")
 
 
 @content_plans_bp.route("/items/<item_id>", methods=["DELETE"])
