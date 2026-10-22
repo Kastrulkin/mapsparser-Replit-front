@@ -24,6 +24,7 @@ describe('PartnershipsMobileModule destructive actions', () => {
     }));
     const user = userEvent.setup();
     const view = render(<PartnershipsMobileModule scope={{ kind: 'business', id: 'business-1' }} />);
+    await user.click(await screen.findByRole('button', { name: 'Изменить подборку' }));
     await user.click(await screen.findByRole('button', { name: 'Кандидаты' }));
     await user.selectOptions(await screen.findByLabelText('Статус работы с партнёром'), 'replied');
     expect(calls.some(url => url.includes('pipeline_status=replied'))).toBe(true);
@@ -35,10 +36,11 @@ describe('PartnershipsMobileModule destructive actions', () => {
       return response({ drafts: [], batches: [], items: [], counts: { partners: 0, launched: 0, preparing: 0, needs_decision: 0 } });
     }));
     view.rerender(<PartnershipsMobileModule scope={{ kind: 'business', id: 'business-2' }} />);
-    expect(await screen.findByRole('button', { name: /Новый результат/ })).toBeVisible();
+    await user.click(await screen.findByRole('button', { name: 'Вся подборка' }));
+    expect(await screen.findByText('Новый результат')).toBeVisible();
     await act(async () => { resolveOld?.(new Response(JSON.stringify({ items: [{ id: 'old', name: 'Устаревший результат' }] }), { status: 200 })); });
     expect(screen.queryByText('Устаревший результат')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Новый результат/ })).toBeVisible();
+    expect(screen.getByText('Новый результат')).toBeVisible();
   });
 
   it('shows the complete safe catalog and shortlist without loading private workflow data', async () => {
@@ -92,6 +94,7 @@ describe('PartnershipsMobileModule destructive actions', () => {
     const user = userEvent.setup();
 
     render(<PartnershipsMobileModule scope={{ kind: 'business', id: 'business-1' }} />);
+    await user.click(await screen.findByRole('button', { name: 'Изменить подборку' }));
     await user.click(await screen.findByRole('button', { name: 'Кандидаты' }));
     await user.click(await screen.findByRole('button', { name: /Партнёр один/ }));
     await user.click(screen.getByRole('button', { name: 'Удалить кандидата' }));
@@ -113,6 +116,7 @@ describe('PartnershipsMobileModule destructive actions', () => {
     const user = userEvent.setup();
 
     render(<PartnershipsMobileModule scope={{ kind: 'business', id: 'business-1' }} />);
+    await user.click(await screen.findByRole('button', { name: 'Изменить подборку' }));
     await user.click(await screen.findByRole('button', { name: 'Кандидаты' }));
     await user.click(await screen.findByRole('button', { name: /Партнёр один/ }));
     await user.click(screen.getByRole('button', { name: 'Открыть цифровую комнату' }));
@@ -139,6 +143,7 @@ describe('PartnershipsMobileModule destructive actions', () => {
     const user = userEvent.setup();
 
     render(<PartnershipsMobileModule scope={{ kind: 'business', id: 'business-1' }} />);
+    await user.click(await screen.findByRole('button', { name: 'Новая подборка' }));
     await user.click(await screen.findByRole('button', { name: 'Письма' }));
     await user.click(await screen.findByRole('button', { name: 'Удалить черновик' }));
 
@@ -165,6 +170,7 @@ describe('PartnershipsMobileModule destructive actions', () => {
     const user = userEvent.setup();
 
     render(<PartnershipsMobileModule scope={{ kind: 'business', id: 'business-1' }} />);
+    await user.click(await screen.findByRole('button', { name: 'Новая подборка' }));
     await user.click(await screen.findByRole('button', { name: 'Отправка' }));
 
     expect(await screen.findByText(/Пакет от/)).toBeInTheDocument();
@@ -196,6 +202,7 @@ describe('PartnershipsMobileModule destructive actions', () => {
     const user = userEvent.setup();
 
     render(<PartnershipsMobileModule scope={{ kind: 'business', id: 'business-1' }} />);
+    await user.click(await screen.findByRole('button', { name: 'Новая подборка' }));
     await user.click(await screen.findByRole('button', { name: 'Письма' }));
 
     expect(screen.queryByDisplayValue(historicalMarker)).not.toBeInTheDocument();
@@ -217,6 +224,7 @@ describe('Draft-only saving', () => {
     }));
     const user = userEvent.setup();
     render(<PartnershipsMobileModule scope={{ kind: 'business', id: 'business-1' }} />);
+    await user.click(await screen.findByRole('button', { name: 'Новая подборка' }));
     await user.click(await screen.findByRole('button', { name: 'Письма' }));
     await user.click(await screen.findByRole('button', { name: 'Сохранить черновик без отправки' }));
     expect(bodies).toEqual([{ business_id: 'business-1', edited_text: 'Проверенное предложение', expected_review_digest: 'review-v1' }]);
@@ -235,6 +243,7 @@ describe('Partnership recipient review', () => {
     }));
     const user = userEvent.setup();
     render(<PartnershipsMobileModule scope={{ kind: 'business', id: 'business-1' }} />);
+    await user.click(await screen.findByRole('button', { name: 'Новая подборка' }));
     await user.click(await screen.findByRole('button', { name: 'Письма', exact: true }));
     expect(await screen.findByText('Кому: jur@example.test')).toBeVisible();
     expect(screen.getByRole('link', { name: 'Источник контакта' })).toHaveAttribute('href', 'https://example.test/contacts');

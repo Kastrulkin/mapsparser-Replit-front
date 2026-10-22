@@ -1,3 +1,4 @@
+import { PartnershipResultView } from './PartnershipResultView';
 import { partnershipMiniLaunch } from "@/lib/partnershipMiniLaunch";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -35,6 +36,12 @@ type Scope = {
 };
 type Lead = {
   id: string;
+  created_at?: string;
+  source?: string;
+  source_kind?: string;
+  pilot_cohort?: string;
+  search_payload_json?: Record<string, unknown>;
+  last_contact_at?: string;
   name?: string;
   address?: string;
   city?: string;
@@ -288,6 +295,9 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
   const launch = partnershipMiniLaunch('?' + launchParams.toString(), businessId);
   const [tab, setTab] = useState<PartnershipTab>(launch.tab);
   useEffect(() => { if (miniAppLaunchParams().has("filter_section")) setTab(partnershipMiniLaunch('?' + miniAppLaunchParams().toString(), businessId).tab); }, [businessId]);
+  const [management, setManagement] = useState(launch.tab === 'send');
+  const [resultLeads, setResultLeads] = useState<Lead[]>([]);
+  const [loadedBusiness, setLoadedBusiness] = useState('');
   const [leads, setLeads] = useState<Lead[]>([]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -329,7 +339,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
   const appliedFocus = useRef('');
   const currentBusiness = useRef(businessId); currentBusiness.current = businessId;
   const [accessDenied, setAccessDenied] = useState(false);
-  const clearPrivateData = () => { setLeads([]); setDrafts([]); setBatches([]); setReadyDrafts([]); setReactions([]); setSelectedLead(null); setSelectedLeads([]); setSelectedDrafts([]); setConfirmBatch(null); setDeletePreview(null); setPendingDeleteIds([]); setPendingDeleteDraftId(''); setFunnel({}); setOutcomes({}); setSourceQuality({}); setBlockers({}); setTotalCandidates(0); setPreparation(null); setDraftLeadId(""); };
+  const clearPrivateData = () => { setLeads([]); setResultLeads([]); setLoadedBusiness(''); setDrafts([]); setBatches([]); setReadyDrafts([]); setReactions([]); setSelectedLead(null); setSelectedLeads([]); setSelectedDrafts([]); setConfirmBatch(null); setDeletePreview(null); setPendingDeleteIds([]); setPendingDeleteDraftId(''); setFunnel({}); setOutcomes({}); setSourceQuality({}); setBlockers({}); setTotalCandidates(0); setPreparation(null); setDraftLeadId(""); };
   const handleFailure = (failure: unknown, fallback: string) => {
     if (failure instanceof PartnershipRequestError && [401,403].includes(failure.status)) { clearPrivateData(); setAccessDenied(true); }
     setError(failure instanceof Error ? failure.message : fallback);
@@ -343,7 +353,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
     try {
       const params = new URLSearchParams({
         business_id: businessId,
-        limit: "200",
+        limit: "500",
         view: "mobile",
       });
       if (filters.query.trim()) params.set("q", filters.query.trim());
@@ -355,7 +365,18 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
         preview?: PartnershipPreview;
       }>(`/api/partnership/leads?${params.toString()}`);
       if (current !== loadVersion.current || currentBusiness.current !== businessId) return;
-      const nextLeads = leadData.items || [];
+      const nextLeads = [...(leadData.items || [])];
+      if (!leadData.preview?.limited && leadData.access?.allowed !== false) {
+        while (nextLeads.length < Number(leadData.count || 0)) {
+          params.set('offset', String(nextLeads.length));
+          const page = await request<{ items?: Lead[] }>(`/api/partnership/leads?${params.toString()}`);
+          if (current !== loadVersion.current || currentBusiness.current !== businessId) return;
+          if (!page.items?.length) break;
+          nextLeads.push(...page.items);
+        }
+      }
+      if (!filters.query.trim() && filters.stage === 'all') setResultLeads(nextLeads);
+      setLoadedBusiness(businessId);
       setAccessDenied(false);
       setLeads(nextLeads);
       setAccess(leadData.access || { allowed: true });
@@ -428,7 +449,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
     }
   };
   useEffect(() => {
-    clearPrivateData(); setAccessDenied(false); setQuery(""); setStage("all");
+    clearPrivateData(); setManagement(launch.tab === 'send'); setAccessDenied(false); setQuery(""); setStage("all");
     void load(false, {query:"",stage:"all"});
     return () => { loadVersion.current += 1; };
   }, [businessId, requestedLeadId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -820,6 +841,8 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
         <a href={`/dashboard/profile?focus=subscription&return_to=${encodeURIComponent(`${miniAppPath()}?screen=partnerships`)}#subscription`} className="btn-iridescent flex min-h-12 w-full items-center justify-center rounded-[15px] px-4 text-center text-sm">Подготовить сообщения — тариф «Привлечение»</a>
       </div>
     );
+  if (loadedBusiness !== businessId) return <p role="status">Загружаем сохранённые результаты…</p>;
+  if (!management && !accessDenied) return <div className="space-y-3">{error && <p role="alert">{error}</p>}<PartnershipResultView key={businessId} businessId={businessId} focusLeadId={requestedLeadId || drafts.find(draft => draft.id === launch.draftId)?.lead_id} leads={resultLeads} letters={drafts} refresh={() => void load(false, { query: '', stage: 'all' })} edit={(leadId, partner) => { setManagement(true); setDraftLeadId(partner ? '' : leadId || ''); setTab(leadId && !partner ? 'drafts' : 'leads'); setSelectedLead(partner ? resultLeads.find(lead => lead.id === leadId) || null : null); }} launch={() => { setManagement(true); setTab('leads'); setShowIntake(true); }} /></div>;
   const tabs: Array<[PartnershipTab, string]> = [
     ["overview", "Обзор"],
     ["leads", "Кандидаты"],
@@ -829,6 +852,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
   ];
   return (
     <div className="space-y-4">
+      <button type="button" className="min-h-11 text-sm underline" disabled={busy !== '' || drafts.some(draft => draft.has_local_edits)} onClick={() => { setManagement(false); setSelectedLead(null); setDraftLeadId(''); }}>Вернуться к готовому результату</button>
       <div className="pb-1">
         <div role="navigation" aria-label="Разделы партнёрств" className="grid grid-cols-[1fr_1.4fr_1fr_1.2fr_1fr] gap-1 rounded-[16px] bg-white/[0.035] p-1 ring-1 ring-inset ring-white/[0.06]">
           {tabs.map(([key, label]) => (

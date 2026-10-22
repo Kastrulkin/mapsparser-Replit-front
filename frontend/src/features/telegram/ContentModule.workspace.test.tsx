@@ -7,6 +7,7 @@ const props={items:[item],busy:'',generate:vi.fn(),reload:vi.fn(),update:vi.fn()
 it('keeps unsaved text and its original version after a concurrent update and save rejection', async () => {
   const update=vi.fn().mockRejectedValue(new Error('Пост уже изменился'));
   const view=render(<ContentModule {...props} update={update} />);
+  fireEvent.click(screen.getByRole('button',{name:'Изменить план'}));
   fireEvent.click(screen.getByRole('button',{name:'Редактировать текст'}));
   fireEvent.change(screen.getByRole('textbox',{name:'Текст публикации'}),{target:{value:'Моя незавершённая правка'}});
   view.rerender(<ContentModule {...props} items={[{...item,draft_text:'Новая версия из веба',version:'version-2'}]} update={update} />);
@@ -27,6 +28,7 @@ it('keeps a linked plan post editable during rerenders and background refresh', 
   HTMLElement.prototype.scrollIntoView = vi.fn();
   const focused = {...item, plan_id: 'plan-1'};
   const view = render(<Suspense fallback={null}><ContentModule {...props} items={[focused]} focusItemId={item.id} /></Suspense>);
+  fireEvent.click(screen.getByRole('button',{name:'Изменить план'}));
   await screen.findByRole('button', {name:'Редактировать текст'});
   fireEvent.click(screen.getByRole('button', {name:'Редактировать текст'}));
   fireEvent.change(screen.getByRole('textbox', {name:'Текст публикации'}), {target:{value:'Незавершённая правка по ссылке'}});
@@ -38,11 +40,12 @@ it('reports an open editor and prevents the top action from discarding its text'
   const onEditingChange = vi.fn();
   const planned = { ...item, plan_id: 'qa-plan', plan_title: 'План QA' };
   const view = render(<Suspense fallback={null}><ContentModule {...props} items={[planned]} onEditingChange={onEditingChange} /></Suspense>);
+  fireEvent.click(screen.getByRole('button',{name:'Изменить план'}));
   fireEvent.click(await screen.findByRole('button', { name: 'Редактировать текст' }));
   fireEvent.change(screen.getByRole('textbox', { name: 'Текст публикации' }), { target: { value: 'Не терять эту правку' } });
   expect(onEditingChange).toHaveBeenLastCalledWith(true);
-  const topAction = screen.getByRole('button', { name: 'Вернуться к редактированию' });
-  expect(topAction).toBeEnabled();
+  const topAction = screen.getByRole('button', { name: 'Завершить редактирование' });
+  expect(topAction).toBeDisabled();
   fireEvent.click(topAction);
   expect(screen.getByRole('textbox', { name: 'Текст публикации' })).toHaveValue('Не терять эту правку');
   fireEvent.click(screen.getByRole('button', { name: 'Отменить правки' }));
@@ -51,15 +54,24 @@ it('reports an open editor and prevents the top action from discarding its text'
   expect(onEditingChange).toHaveBeenLastCalledWith(false);
 });
 
+it('shows saved posts for reading before exposing generation or editors', () => {
+  render(<ContentModule {...props} />);
+  expect(screen.getByText('Реальный текст для проверки')).toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Редактировать текст'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Создать текст'})).not.toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Изменить план'})).toBeInTheDocument();
+  expect(props.generate).not.toHaveBeenCalled();
+});
+
 afterEach(()=>vi.unstubAllGlobals());
 it.each(['telegram','max'])('opens dated source analysis directly in %s without opening profile or generating a plan',async surface=>{
  window.history.replaceState({},'',`/${surface}/control`);
- const mock=vi.fn(async()=>new Response(JSON.stringify({industry_label:'Тестовый анализ',items:[],pending:[],can_manage:true,can_moderate:false,settings_version:1}),{status:200}));vi.stubGlobal('fetch',mock);
+ const mock=vi.fn(async(input: RequestInfo | URL)=>new Response(JSON.stringify(String(input).includes('/content-plans?') ? {plans:[]} : {industry_label:'Тестовый анализ',items:[],pending:[],can_manage:true,can_moderate:false,settings_version:1}),{status:200}));vi.stubGlobal('fetch',mock);
  render(<ContentModule {...props} scope={{kind:'business',id:'qa-business'}}/>);
  fireEvent.click(screen.getByRole('button',{name:'Источники и подходы',exact:true}));
  await screen.findByRole('heading',{name:'Источники и подходы',exact:true});
  expect(screen.queryByRole('heading',{name:'Настроить контент'})).not.toBeInTheDocument();
  await screen.findByText('Тестовый анализ');
- expect(mock.mock.calls.every(([input])=>String(input).includes('/content-voice/references?'))).toBe(true);
+ expect(mock.mock.calls.every(([input])=>String(input).includes('/content-voice/references?') || String(input).includes('/content-plans?'))).toBe(true);
  window.history.replaceState({},'','/');
 });

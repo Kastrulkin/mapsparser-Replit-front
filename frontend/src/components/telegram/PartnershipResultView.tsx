@@ -1,0 +1,36 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { partnerResultGroups, resultDate, wasContacted, type ResultLead, type ResultLetter } from '@/lib/mobileWorkResults';
+
+const letterChannels: Record<string, string> = { email: 'Эл. почта', telegram: 'Telegram', vk: 'ВКонтакте', whatsapp: 'WhatsApp', max: 'MAX', manual: 'Канал не выбран' };
+
+export function PartnershipResultView({ businessId, leads, letters, edit, launch, refresh, focusLeadId }: { businessId: string; focusLeadId?: string; leads: ResultLead[]; letters: ResultLetter[]; edit: (leadId?: string, partner?: boolean) => void; launch: () => void; refresh: () => void }) {
+  const groups = useMemo(() => partnerResultGroups(leads, letters), [leads, letters]);
+  const storageKey = `localos:partner-result:${businessId}`;
+  const [working, setWorking] = useState(() => { try { return localStorage.getItem(storageKey) || ''; } catch { return ''; } });
+  const [browsing, setBrowsing] = useState('');
+  const [history, setHistory] = useState(false);
+  const [all, setAll] = useState(false);
+  const [limit, setLimit] = useState(25);
+  useEffect(() => { setBrowsing(''); setHistory(false); setAll(false); setLimit(25); }, [businessId]);
+  const current = groups.find(group => group.id === working) || groups.find(group => group.id !== 'letters-only' && group.letters.length > 0) || groups[0];
+  const group = groups.find(item => item.id === browsing) || groups.find(item => item.leads.some(lead => lead.id === focusLeadId)) || current;
+  const scrolledFocus = useRef('');
+  useEffect(() => { if (!focusLeadId || scrolledFocus.current === `${businessId}:${focusLeadId}` || !group?.leads.some(lead => lead.id === focusLeadId)) return; scrolledFocus.current = `${businessId}:${focusLeadId}`; document.getElementById(`partner-result-${focusLeadId}`)?.scrollIntoView({ block: 'center' }); }, [businessId, focusLeadId, group]);
+  const visible = (group?.leads || []).filter(lead => all || !wasContacted(lead));
+  const choose = (id: string) => { setBrowsing(id); setHistory(false); setAll(false); setLimit(25); };
+  const pin = () => { if (!group) return; setWorking(group.id); try { localStorage.setItem(storageKey, group.id); } catch { /* Selection still works for this visit. */ } };
+  return <section aria-label="Подборка партнёров" className="space-y-4">
+    <header className="rounded-2xl bg-white/[0.04] p-4 ring-1 ring-white/[0.07]">
+      <h2 className="font-semibold">{group?.id !== current?.id ? 'Подборка из истории' : 'Актуальная подборка партнёров'}</h2>
+      {group ? <><p className="mt-2 text-sm text-zinc-300">{group.title} · {resultDate(group.createdAt)}</p><p className="mt-2 text-sm text-zinc-400">Компаний: {group.leads.length} · Сохранённых писем: {group.letters.length}</p><p className="mt-2 text-xs text-zinc-400">Читайте готовые письма ниже. Просмотр ничего не отправляет.</p></> : <p className="mt-2 text-sm text-zinc-400">Здесь появятся найденные компании и подготовленные письма. Начните с новой подборки.</p>}
+      <div className="mt-3 flex flex-wrap gap-2"><Button variant="outline" onClick={() => setHistory(!history)} aria-expanded={history}>История подборок</Button>{group && <Button variant="outline" onClick={() => edit()}>Изменить подборку</Button>}<Button variant="outline" onClick={launch}>Новая подборка</Button><Button variant="ghost" onClick={refresh}>Обновить данные</Button></div>
+      {group?.id !== current?.id && <div className="mt-3 flex flex-wrap gap-2"><Button onClick={pin}>Открывать здесь по умолчанию</Button><Button variant="outline" onClick={() => choose(current?.id || '')}>Вернуться к актуальной</Button></div>}
+    </header>
+    {history ? <section aria-label="История подборок" className="space-y-2"><p className="text-xs text-zinc-400">Поиски сгруппированы по запуску; прежние импорты — по источнику и дате. Все данные сохранены.</p>{groups.map(item => <Button key={item.id} variant="outline" className="h-auto min-h-12 w-full justify-start whitespace-normal text-left" onClick={() => choose(item.id)}>{item.title} · {resultDate(item.createdAt)} · компаний: {item.leads.length} · писем: {item.letters.length}{item.id === current?.id ? ' · текущая' : ''}</Button>)}</section> : null}
+    {group && <><div className="flex flex-wrap gap-2" aria-label="История общения"><Button variant={!all ? 'default' : 'outline'} aria-pressed={!all} onClick={() => { setAll(false); setLimit(25); }}>Ещё не писали</Button><Button variant={all ? 'default' : 'outline'} aria-pressed={all} onClick={() => { setAll(true); setLimit(25); }}>Вся подборка</Button></div><p role="status" className="text-sm text-zinc-400">Показано: {visible.length}. «Ещё не писали» учитывает сохранённую историю общения в LocalOS.</p>{visible.slice(0, limit).map(lead => {
+      const drafts = group.letters.filter(letter => letter.lead_id === lead.id);
+      return <article id={`partner-result-${lead.id}`} key={lead.id} className="space-y-3 rounded-2xl bg-white/[0.04] p-4 ring-1 ring-white/[0.07]"><h3 className="font-semibold">{lead.name || 'Компания'}</h3><p className="text-sm text-zinc-400">{lead.address || lead.city || 'Адрес не указан'} · {wasContacted(lead) ? 'Есть история общения' : 'Нет сохранённой истории общения'}</p>{drafts.length ? drafts.map(letter => <details open={focusLeadId === lead.id ? true : undefined} key={letter.id} className="rounded-xl border border-white/10 p-3"><summary className="min-h-11 cursor-pointer text-sm font-medium">Прочитать письмо · {letterChannels[letter.channel || ''] || 'Канал не выбран'} · {letter.status === 'approved' ? 'Утверждено' : 'Черновик'}</summary><p className="mt-2 break-words text-xs text-zinc-400">Кому: {letter.recipient_value || letter.learning_note_json?.recipient || 'Адресат не выбран'}</p>{letter.recipient_source_url && /^https?:\/\//i.test(letter.recipient_source_url) && <a className="text-xs underline" href={letter.recipient_source_url} target="_blank" rel="noopener noreferrer">Источник контакта</a>}{/^(?:jur|legal|privacy|dpo|abuse)@/i.test(letter.recipient_value || letter.learning_note_json?.recipient || '') && <p className="mt-2 text-xs text-amber-200">Похоже на служебный или юридический адрес. Перед отправкой найдите контакт для сотрудничества и проверьте получателя.</p>}{letter.channel === 'vk' && <p className="mt-2 text-xs text-zinc-400">VK — только ручная отправка.</p>}<p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-zinc-200">{letter.edited_text || letter.approved_text || letter.generated_text || 'Текст ещё не сохранён.'}</p><Button variant="outline" className="mt-3" onClick={() => edit(lead.id)}>Редактировать письмо</Button></details>) : <p className="text-sm text-zinc-400">Письмо ещё не подготовлено. Откройте изменение партнёра, чтобы подготовить его.</p>}<Button variant="ghost" onClick={() => edit(lead.id, true)}>Изменить партнёра</Button></article>;
+    })}{visible.length === 0 && <p className="text-sm text-zinc-400">В этой подборке нет компаний без сохранённой истории общения. Откройте «Вся подборка».</p>}{visible.length > limit && <Button variant="outline" onClick={() => setLimit(limit + 25)}>Показать ещё</Button>}</>}
+  </section>;
+}
