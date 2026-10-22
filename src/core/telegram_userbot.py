@@ -9,10 +9,12 @@ try:
     from telethon import TelegramClient
     from telethon.errors import SessionPasswordNeededError
     from telethon.sessions import StringSession
+    from telethon.tl.functions.contacts import ResolvePhoneRequest
 except Exception:
     TelegramClient = None
     SessionPasswordNeededError = None
     StringSession = None
+    ResolvePhoneRequest = None
 try:
     from telethon.network.connection.tcpmtproxy import (
         ConnectionTcpMTProxyAbridged,
@@ -367,7 +369,8 @@ async def _send_message_async(auth_data: dict[str, Any], recipient: str, message
                 "recipient": normalized,
                 **route_info,
             }
-        sent_message = await asyncio.wait_for(client.send_message(normalized, message), timeout=REQUEST_TIMEOUT_SEC)
+        target = await _telegram_request_target(client, auth_data, raw_recipient)
+        sent_message = await asyncio.wait_for(client.send_message(target, message), timeout=REQUEST_TIMEOUT_SEC)
         return {
             "status": "sent",
             "recipient": normalized,
@@ -412,7 +415,8 @@ async def _fetch_recent_replies_async(
         if not await client.is_user_authorized():
             return {"status": "not_authorized", "recipient": normalized, "replies": []}
 
-        messages = await asyncio.wait_for(client.get_messages(normalized, limit=safe_limit), timeout=REQUEST_TIMEOUT_SEC)
+        target = await _telegram_request_target(client, auth_data, raw_recipient)
+        messages = await asyncio.wait_for(client.get_messages(target, limit=safe_limit), timeout=REQUEST_TIMEOUT_SEC)
         replies: list[dict[str, Any]] = []
         for message in reversed(messages):
             if bool(getattr(message, "out", False)):
@@ -471,8 +475,51 @@ def _normalize_entity_reference(value: str):
             if parts and parts[0].lower() == "s":
                 parts = parts[1:]
             if parts:
-                candidate = f"@{parts[0].lstrip('@')}"
+                candidate = parts[0] if parts[0].startswith('+') and parts[0][1:].isdigit() else f"@{parts[0].lstrip('@')}"
     return _normalize_telegram_peer(candidate)
+
+
+async def _wait_phone_resolution_slot(auth_data: dict[str, Any]) -> None:
+    """Share Telegram's phone lookup limit across app and worker processes."""
+    import hashlib
+    storage = os.getenv("RATE_LIMIT_STORAGE_URI", "")
+    if not storage.startswith(("redis://", "rediss://")):
+        raise ValueError("Проверка номера Telegram временно недоступна: нет общего ограничителя запросов.")
+    identity = str(auth_data.get("session_string") or auth_data.get("phone") or "")
+    if not identity:
+        raise ValueError("Не определён Telegram-отправитель для проверки номера.")
+    try:
+        import redis
+        backend = redis.Redis.from_url(storage, socket_connect_timeout=1, socket_timeout=1)
+    except Exception as error:
+        raise ValueError("Проверка номера Telegram временно недоступна. Повторите позже.") from error
+    key = "localos:telegram:resolve-phone:" + hashlib.sha256(identity.encode()).hexdigest()
+    try:
+        for attempt in range(4):
+            if await asyncio.to_thread(backend.set, key, "1", nx=True, px=3100):
+                return
+            if attempt < 3:
+                await asyncio.sleep(1.1)
+    except Exception as error:
+        raise ValueError("Не удалось безопасно ограничить частоту проверки номера Telegram. Повторите позже.") from error
+    finally:
+        backend.close()
+    raise ValueError("Проверка другого номера Telegram ещё выполняется. Повторите позже.")
+
+
+async def _telegram_request_target(client: Any, auth_data: dict[str, Any], reference: str):
+    normalized = _normalize_entity_reference(reference)
+    if not isinstance(normalized, str) or not normalized.startswith("+") or not normalized[1:].isdigit():
+        return normalized
+    if ResolvePhoneRequest is None:
+        raise RuntimeError("telethon is not installed")
+    await _wait_phone_resolution_slot(auth_data)
+    resolved = await asyncio.wait_for(client(ResolvePhoneRequest(phone=normalized)), timeout=REQUEST_TIMEOUT_SEC)
+    peer_id = getattr(getattr(resolved, "peer", None), "user_id", None)
+    entity = next((user for user in resolved.users if getattr(user, "id", None) == peer_id), None)
+    if entity is None or not classify_telegram_entity(entity).get("recipient_eligible"):
+        raise ValueError("Получатель Telegram по этому номеру недоступен. Нужен другой публичный контакт.")
+    return entity
 
 
 def classify_telegram_entity(entity: Any) -> dict[str, Any]:
@@ -551,7 +598,8 @@ async def _inspect_telegram_entity_async(auth_data: dict[str, Any], reference: s
                 "reference": raw_reference,
                 **route_info,
             }
-        entity = await asyncio.wait_for(client.get_entity(normalized), timeout=REQUEST_TIMEOUT_SEC)
+        target = await _telegram_request_target(client, auth_data, raw_reference)
+        entity = await asyncio.wait_for(client.get_entity(target), timeout=REQUEST_TIMEOUT_SEC)
         return {
             "status": "ok",
             "reference": raw_reference,
@@ -587,8 +635,9 @@ async def _fetch_recent_messages_async(
         if not await client.is_user_authorized():
             return {"status": "not_authorized", "peer": raw_peer, "messages": [], **route_info}
 
+        target = await _telegram_request_target(client, auth_data, raw_peer)
         messages = await asyncio.wait_for(
-            client.get_messages(normalized, limit=safe_limit, min_id=max(0, min_message_id)),
+            client.get_messages(target, limit=safe_limit, min_id=max(0, min_message_id)),
             timeout=REQUEST_TIMEOUT_SEC,
         )
         result_messages: list[dict[str, Any]] = []
@@ -697,9 +746,10 @@ async def _fetch_message_page_async(
     try:
         if not await client.is_user_authorized():
             return {"status": "not_authorized", "peer": raw_peer, "messages": []}
+        target = await _telegram_request_target(client, auth_data, raw_peer)
         messages = await asyncio.wait_for(
             client.get_messages(
-                normalized,
+                target,
                 limit=max(1, min(int(limit or 100), 100)),
                 offset_id=max(0, offset_id),
                 offset_date=offset_date,
