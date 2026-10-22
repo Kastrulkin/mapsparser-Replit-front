@@ -115,3 +115,29 @@ def test_telegram_never_accepts_rewritten_body():
     from services.partnership_prepared_campaigns import bind_exact_copy
     with pytest.raises(ValueError,match='Текст'):
         bind_exact_copy({'text':'Новое письмо','subject':''},{'text':'Готовое письмо'},'telegram')
+
+
+def test_cold_guard_honors_scoped_manual_hold_before_copy_review(monkeypatch):
+    from services import outreach_safety_service,outreach_campaign_service
+    monkeypatch.setattr(outreach_safety_service,'load_partnership_repeat_contact_guard',lambda *a,**k:{'blocked':False})
+    contexts=[]
+    def suppression(cursor,context):
+        contexts.append(context)
+        return {'suppressed':True,'reason_code':'manual_dnc'}
+    monkeypatch.setattr(outreach_campaign_service,'_suppression_status',suppression)
+    class Cursor:
+        def execute(self,*a):pass
+        def fetchone(self):return None
+    with pytest.raises(ValueError,match='исключена из отправки'):
+        cold_guard(Cursor(),{'id':'lead','business_id':'this-business','company_id':'company'},'workstream','@recipient')
+    assert contexts==[{'lead_id':'lead','workstream_type':'client_partnership','client_business_id':'this-business'}]
+
+
+def test_cold_guard_fails_closed_without_business_scope(monkeypatch):
+    from services import outreach_safety_service
+    monkeypatch.setattr(outreach_safety_service,'load_partnership_repeat_contact_guard',lambda *a,**k:{'blocked':False})
+    class Cursor:
+        def execute(self,*a):pass
+        def fetchone(self):return None
+    with pytest.raises(ValueError,match='Не определён бизнес'):
+        cold_guard(Cursor(),{'id':'lead'},'workstream','@recipient')

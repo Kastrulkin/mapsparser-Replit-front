@@ -52,6 +52,11 @@ def cold_guard(cursor,lead,workstream_id,contact):
         AND (l.last_contact_at IS NOT NULL OR EXISTS(SELECT 1 FROM lead_workstreams w WHERE w.lead_id=l.id AND w.last_contact_at IS NOT NULL)
           OR EXISTS(SELECT 1 FROM outreachsendqueue q WHERE q.lead_id=l.id)) LIMIT 1''',(lead.get('company_id'),normalized(contact),normalized(contact)))
     if cursor.fetchone():raise ValueError('Найдены прежние касания или очередь по компании/контакту. Первое обращение заблокировано.')
+    from services.outreach_campaign_service import _suppression_status
+    business_id=lead.get('business_id')
+    if not business_id:raise ValueError('Не определён бизнес для проверки исключений из отправки.')
+    suppression=_suppression_status(cursor,{'lead_id':str(lead['id']),'workstream_type':'client_partnership','client_business_id':business_id})
+    if suppression.get('suppressed'):raise ValueError('Компания исключена из отправки. Откройте карточку и проверьте причину в разделе «Исключения из контактов».')
 
 
 def prepare(cursor,*,business_id,user,item):
@@ -115,7 +120,7 @@ def review_copy(cursor,*,business_id,user,campaign_id,digest):
     if not c:raise ValueError('Цепочка недоступна для проверки или уже изменилась.')
     touches=load_touches(cursor,campaign_id)
     if copy_digest(touches)!=digest:raise ValueError('Текст или получатель изменился. Откройте касания заново.')
-    cold_guard(cursor,{'id':c['lead_id'],'company_id':c.get('company_id')},str(c['workstream_id']),str(touches[0].get('recipient') or ''))
+    cold_guard(cursor,{'id':c['lead_id'],'company_id':c.get('company_id'),'business_id':business_id},str(c['workstream_id']),str(touches[0].get('recipient') or ''))
     reviewed=[]
     for touch in touches:
         gate=dict(touch.get('quality_gate_json') or {})
@@ -144,7 +149,7 @@ def list_prepared(cursor,*,business_id,user_id):
     for row in rows:
         touches=load_touches(cursor,row['id']);row['review_digest']=copy_digest(touches)
         row['touches']=[{k:t.get(k) for k in ['id','sequence_index','channel','subject','generated_text','recipient','contact_source','sender_name','sender_identity','scheduled_at','status']} for t in touches]
-        try:cold_guard(cursor,{'id':row['lead_id'],'company_id':row.get('company_id')},str(row['workstream_id']),str(touches[0].get('recipient') or '') if touches else '')
+        try:cold_guard(cursor,{'id':row['lead_id'],'company_id':row.get('company_id'),'business_id':business_id},str(row['workstream_id']),str(touches[0].get('recipient') or '') if touches else '')
         except ValueError as e:row['hold_reason']=str(e)
         row['needs_review']=bool((row.get('policy_json') or {}).get('human_copy_review_required'))
     return rows
