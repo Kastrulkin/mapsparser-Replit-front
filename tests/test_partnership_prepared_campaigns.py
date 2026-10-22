@@ -58,6 +58,7 @@ def test_human_copy_review_never_waives_noncopy_errors(monkeypatch,reason):
     touches=[{'id':'touch','recipient':'@company','sequence_index':0,'generated_text':'Текст','quality_gate_json':{'passed':False,'reason_codes':[reason]}}]
     monkeypatch.setattr(prepared,'load_touches',lambda *a:touches)
     monkeypatch.setattr(prepared,'cold_guard',lambda *a:None)
+    monkeypatch.setattr(prepared,'check_source_freshness',lambda *a:None)
     class Cursor:
         def execute(self,*a):pass
         def fetchone(self):return {'lead_id':'lead','workstream_id':'work','company_id':'company'}
@@ -141,3 +142,23 @@ def test_cold_guard_fails_closed_without_business_scope(monkeypatch):
         def fetchone(self):return None
     with pytest.raises(ValueError,match='Не определён бизнес'):
         cold_guard(Cursor(),{'id':'lead'},'workstream','@recipient')
+
+
+@pytest.mark.parametrize('saved,current', [('old','new'), ('','new'), ('old','')])
+def test_updated_or_missing_source_requires_new_preview(monkeypatch,saved,current):
+    from services import partnership_prepared_campaigns as prepared,outreach_safety_service
+    monkeypatch.setattr(outreach_safety_service,'research_source_fact_fingerprint',lambda value:current)
+    class Cursor:
+        def execute(self,*args):pass
+        def fetchone(self):return {'report_hash':'latest'}
+    with pytest.raises(ValueError,match='Сведения о компании обновились'):
+        prepared.check_source_freshness(Cursor(),'work',[{'message_brief_json':{'source_fact_fingerprint':saved}}])
+
+
+def test_current_source_allows_review(monkeypatch):
+    from services import partnership_prepared_campaigns as prepared,outreach_safety_service
+    monkeypatch.setattr(outreach_safety_service,'research_source_fact_fingerprint',lambda value:'same')
+    class Cursor:
+        def execute(self,*args):pass
+        def fetchone(self):return {'report_hash':'latest'}
+    prepared.check_source_freshness(Cursor(),'work',[{'message_brief_json':{'source_fact_fingerprint':'same'}}])

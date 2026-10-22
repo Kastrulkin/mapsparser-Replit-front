@@ -108,6 +108,15 @@ def prepare(cursor,*,business_id,user,item):
     return {**campaign,'touch_count':len(touches),'readiness':'needs_manual_review'}
 
 
+
+def check_source_freshness(cursor,workstream_id,touches):
+    from services.outreach_safety_service import research_source_fact_fingerprint
+    cursor.execute("SELECT evidence_json,signals_json,report_hash FROM lead_workstream_research WHERE workstream_id=%s ORDER BY researched_at DESC,created_at DESC LIMIT 1",(workstream_id,))
+    current=research_source_fact_fingerprint(_row(cursor,cursor.fetchone()))
+    if not current or not touches or any(str((t.get('message_brief_json') or {}).get('source_fact_fingerprint') or '')!=current for t in touches):
+        raise ValueError('Сведения о компании обновились после подготовки писем. Сохраните касания заново по актуальным сведениям; прежние тексты останутся в истории.')
+
+
 def review_copy(cursor,*,business_id,user,campaign_id,digest):
     from services.operator_audio import authorize_actor
     from services.outreach_campaign_service import apply_draft_campaign_review
@@ -121,6 +130,7 @@ def review_copy(cursor,*,business_id,user,campaign_id,digest):
     touches=load_touches(cursor,campaign_id)
     if copy_digest(touches)!=digest:raise ValueError('Текст или получатель изменился. Откройте касания заново.')
     cold_guard(cursor,{'id':c['lead_id'],'company_id':c.get('company_id'),'business_id':business_id},str(c['workstream_id']),str(touches[0].get('recipient') or ''))
+    check_source_freshness(cursor,str(c['workstream_id']),touches)
     reviewed=[]
     for touch in touches:
         gate=dict(touch.get('quality_gate_json') or {})
@@ -149,7 +159,9 @@ def list_prepared(cursor,*,business_id,user_id):
     for row in rows:
         touches=load_touches(cursor,row['id']);row['review_digest']=copy_digest(touches)
         row['touches']=[{k:t.get(k) for k in ['id','sequence_index','channel','subject','generated_text','recipient','contact_source','sender_name','sender_identity','scheduled_at','status']} for t in touches]
-        try:cold_guard(cursor,{'id':row['lead_id'],'company_id':row.get('company_id'),'business_id':business_id},str(row['workstream_id']),str(touches[0].get('recipient') or '') if touches else '')
+        try:
+            cold_guard(cursor,{'id':row['lead_id'],'company_id':row.get('company_id'),'business_id':business_id},str(row['workstream_id']),str(touches[0].get('recipient') or '') if touches else '')
+            if row['status']=='draft':check_source_freshness(cursor,str(row['workstream_id']),touches)
         except ValueError as e:row['hold_reason']=str(e)
         row['needs_review']=bool((row.get('policy_json') or {}).get('human_copy_review_required'))
     return rows
