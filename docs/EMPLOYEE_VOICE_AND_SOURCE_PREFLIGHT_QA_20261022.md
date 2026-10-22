@@ -1,0 +1,11 @@
+# Employee voice feedback, journal receipt and source preflight
+
+A live ordinary-member pass confirmed sign-in, own journal entry creation/correction/cancellation and completion of a QA-only task after refresh. The task was a clearly labelled internal fixture for the temporary member, not an owner-to-messenger delivery. No real staff or partner messages were sent. Cleanup disabled the temporary account, revoked membership and sessions, cancelled the synthetic task, retained the voided journal audit and removed credential files.
+
+Two UX defects were reproduced: a pending microphone permission request gave no progress/cancel feedback, and journal cancellation retained the previous saved-entry receipt. Shared voice input now shows microphone startup, offers cancellation, limits unanswered device requests to 15 seconds, and releases a late stream after cancellation/timeout. Journal correction/cancellation replaces the stale receipt with the current result.
+
+A separately authorized live generator/reviewer run retained both intermediate responses and stayed inside its exact three-call / 10,000-token budget. Final letter quality correctly rejected source metadata copied from an older saved research candidate. Preparation now rejects metadata headings and bare URL fragments before calling AI; it does not weaken the final quality gate or invent a replacement fact. This is a fail-fast safety fix, not a claim that fresh end-to-end AI letter generation has passed. Existing client drafts are preserved.
+
+Validation: microphone/journal regressions failed three cases before changes. Final voice, journal and briefing suites passed on production-based and common sources (37 cases each); frontend build passed. Four focused source-preflight regressions failed before the guard and passed afterwards; seven common-source preflight/adjacent preparation cases passed. Partial production deployment completed with exact source/index guards, HTTP 200 and live-container source verification. A native production-process check rejected all four bad source strings with zero provider calls. Real Telegram showed the readable microphone-denied recovery path; physical speech capture remains unaccepted.
+
+Private test reports, generated letter contents, customer research and credentials are excluded from this package. No schema changes or schedule changes.

@@ -2522,6 +2522,12 @@ def prepare_first_message(
     if ai_enabled:
         candidate = dict(personalization_candidate or {})
         candidate["language"] = str(lead.get("preferred_language") or "ru")
+        observed_fact = str(candidate.get("observed_fact") or "").strip()
+        if re.search(r"page\s+title\s*:|public\s+contact/company|main\s+page\s+content\s*:", observed_fact, re.I) or re.fullmatch(r"(?:https?://|://|www\.)\S+", observed_fact, re.I):
+            raise MessageQualityError(
+                "missing_personalization_evidence",
+                "В исследовании сохранена служебная строка вместо факта о партнёре. Нужен содержательный факт с сайта; обновите исследование перед подготовкой письма.",
+            )
         if not candidate.get("observed_fact") or not (
             candidate.get("source_url") or (brief.get("source_urls") or [None])[0]
         ):

@@ -18,12 +18,29 @@ async function waitJob(jobId: string, businessId: string, headers: HeadersProvid
   throw new Error('Обработка занимает больше времени. Результат доступен в заданиях.');
 }
 
+function microphoneStream(signal: AbortSignal): Promise<MediaStream> {
+  return new Promise((resolve, reject) => {
+    let waiting = true;
+    const finish = () => { waiting = false; window.clearTimeout(timer); signal.removeEventListener('abort', abort); };
+    const fail = (error: unknown) => { if (waiting) { finish(); reject(error); } };
+    const abort = () => fail(new DOMException('Recording cancelled', 'AbortError'));
+    const timer = window.setTimeout(() => fail(new Error('Микрофон не ответил. Проверьте разрешение в приложении или браузере, повторите запись или загрузите аудиофайл.')), 15000);
+    signal.addEventListener('abort', abort, { once: true });
+    if (signal.aborted) { abort(); return; }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(media => {
+      if (!waiting || signal.aborted) { media.getTracks().forEach(track => track.stop()); return; }
+      finish(); resolve(media);
+    }, fail);
+  });
+}
+
 export function OperatorVoiceInput({ businessId, channel, conversationId, disabled, directSubmit = true, onSubmit, headers = voiceHeaders, compact = false, submitLabel = 'Повторить отправку', draftLabel = 'Команда', contextKey }: {
   contextKey?: string; businessId: string; channel: string; conversationId?: string | null; disabled?: boolean; directSubmit?: boolean; compact?: boolean;
   onSubmit: (text: string, source: VoiceSubmission) => Promise<void>; headers?: HeadersProvider; submitLabel?: string; draftLabel?: string;
 }) {
   const [available, setAvailable] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [clip, setClip] = useState<Blob | null>(null);
   const [queuedJob, setQueuedJob] = useState<{job_id: string; asset_id: string; conversation_id: string} | null>(null);
@@ -50,7 +67,7 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
   const clearStream = () => { stream.current?.getTracks().forEach((track) => track.stop()); stream.current = null; };
   useEffect(() => {
     const controller = new AbortController(); lifetime.current = controller;
-    setAvailable(false); setRecording(false); setSeconds(0); setClip(null); setSource(null); setText(''); setQueuedJob(null); setError(''); setBusy(false); uploadRequest.current=''; asset.current='';
+    setAvailable(false); setStarting(false); setRecording(false); setSeconds(0); setClip(null); setSource(null); setText(''); setQueuedJob(null); setError(''); setBusy(false); uploadRequest.current=''; asset.current='';
     void jsonRequest(`/api/operator/audio/config?business_id=${encodeURIComponent(businessId)}`, { headers: headers(), signal: controller.signal })
       .then((config) => setAvailable(Boolean(config.input_enabled))).catch(() => setAvailable(false));
     return () => { controller.abort(); lifetime.current.abort(); if (recorder.current?.state === 'recording') recorder.current.stop(); clearStream(); };
@@ -89,15 +106,15 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
     lifetime.current.abort(); lifetime.current = new AbortController();
     if (asset.current) void jsonRequest(`/api/operator/audio/${asset.current}/cancel`, { method: 'POST', headers: headers() }).catch(() => undefined);
     sessionStorage.removeItem(pendingKey);
-    asset.current = ''; setQueuedJob(null); uploadRequest.current=''; setClip(null); setSource(null); setText(''); setError(''); setBusy(false); setRecording(false);
+    asset.current = ''; setQueuedJob(null); uploadRequest.current=''; setClip(null); setSource(null); setText(''); setError(''); setBusy(false); setStarting(false); setRecording(false);
   };
   const start = async () => {
-    setError(''); const signal = lifetime.current.signal;
+    setError(''); setStarting(true); const signal = lifetime.current.signal;
     try {
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') throw new Error('Микрофон недоступен. Загрузите аудиофайл или напишите текст.');
       await requestMiniAppMicrophone();
       signal.throwIfAborted();
-      const media = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const media = await microphoneStream(signal);
       if (signal.aborted) { media.getTracks().forEach((track) => track.stop()); return; }
       stream.current = media;
       const mimeType = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus'].find((mime) => MediaRecorder.isTypeSupported(mime));
@@ -107,6 +124,7 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
       next.onerror = () => { if (signal.aborted) return; clearStream(); setRecording(false); setError('Запись прервалась. Попробуйте ещё раз.'); };
       recorder.current = next; setSeconds(0); setSource(null); setText(''); setClip(null); next.start(); setRecording(true);
     } catch (failure) {
+      if (signal.aborted) return;
       clearStream();
       const name = failure && typeof failure === 'object' && 'name' in failure ? failure.name : '';
       if (typeof name === 'string' && ['NotAllowedError', 'PermissionDeniedError', 'SecurityError'].includes(name)) {
@@ -118,7 +136,7 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
       } else {
         setError(failure instanceof Error && /[а-яё]/i.test(failure.message) ? failure.message : 'Не удалось включить микрофон. Загрузите аудиофайл или напишите текст.');
       }
-    }
+    } finally { if (!signal.aborted) setStarting(false); }
   };
   const transcribe = async () => {
     if ((!clip && !queuedJob) || busy) return;
@@ -158,18 +176,19 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
   if (!available) return null;
   return <div className="space-y-2" aria-label="Голосовая команда">
     {!clip && !source && !queuedJob && <div className="flex flex-wrap items-center gap-2">
-      <Button type="button" variant="ghost" size={compact && !recording ? "icon" : "default"} aria-label={recording ? "Остановить запись" : "Записать голосом"} title="Записать голосом" disabled={disabled || busy} onClick={() => recording ? recorder.current?.stop() : void start()}>
-        {recording ? <Square className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}{recording ? `Остановить · ${seconds} с` : compact ? null : 'Записать голосом'}
+      <Button type="button" variant="ghost" size={compact && !recording ? "icon" : "default"} aria-label={starting ? "Включаем микрофон" : recording ? "Остановить запись" : "Записать голосом"} title="Записать голосом" disabled={disabled || busy || starting} onClick={() => recording ? recorder.current?.stop() : void start()}>
+        {recording ? <Square className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}{recording ? `Остановить · ${seconds} с` : starting ? 'Включаем микрофон…' : compact ? null : 'Записать голосом'}
       </Button>
-      <Button type="button" variant="ghost" className={compact ? "px-2" : undefined} disabled={disabled || busy || recording} onClick={() => fileInput.current?.click()}>Загрузить аудио</Button>
-      <input ref={fileInput} className="sr-only" aria-label="Загрузить аудио" type="file" accept="audio/*,.webm,.m4a" disabled={disabled || busy || recording} onChange={(event) => { setSource(null); setClip(event.target.files?.[0] || null); }} />
+      <Button type="button" variant="ghost" className={compact ? "px-2" : undefined} disabled={disabled || busy || starting || recording} onClick={() => fileInput.current?.click()}>Загрузить аудио</Button>
+      <input ref={fileInput} className="sr-only" aria-label="Загрузить аудио" type="file" accept="audio/*,.webm,.m4a" disabled={disabled || busy || starting || recording} onChange={(event) => { setSource(null); setClip(event.target.files?.[0] || null); }} />
     </div>}
     {clipUrl && <audio controls src={clipUrl} preload="metadata" />}
     {(clip || queuedJob) && !source && <Button type="button" disabled={busy || disabled} onClick={() => void transcribe()}>{busy ? 'Распознаю…' : queuedJob ? 'Проверить распознавание' : 'Распознать запись'}</Button>}
     {text && !source && <p role="status" className="text-sm">Распознано: {text}</p>}
     {source && <div className="space-y-2"><label className="block text-sm">{busy ? 'Распознано' : draftLabel}<textarea disabled={busy} className="block w-full rounded-md border bg-background p-2 text-foreground" value={text} onChange={(event) => setText(event.target.value)} /></label>
       {!busy && <Button type="button" disabled={disabled || !text.trim()} onClick={async () => { setBusy(true); try { await onSubmit(text, source); sessionStorage.removeItem(pendingKey); setSource(null); setClip(null); setQueuedJob(null); uploadRequest.current=''; asset.current = ''; } catch { setError('Не удалось отправить. Повторите с тем же текстом.'); } finally { setBusy(false); } }}>{submitLabel}</Button>}</div>}
-    {(clip || recording || busy || source || queuedJob) && !(busy && source) && <Button type="button" variant="ghost" className="!bg-transparent !text-muted-foreground hover:!bg-muted" onClick={cancel}>Отменить запись</Button>}
+    {starting && <p role="status" className="text-sm">Разрешите доступ к микрофону в приложении или браузере. Запись ещё не началась.</p>}
+    {(clip || starting || recording || busy || source || queuedJob) && !(busy && source) && <Button type="button" variant="ghost" className="!bg-transparent !text-muted-foreground hover:!bg-muted" onClick={cancel}>Отменить запись</Button>}
     {error && <p role="alert" className="text-sm">{error}</p>}
     {(!compact || recording || clip || busy || source) && <p className="text-xs text-muted-foreground">Запись до 2 минут. Перед отправкой можно проверить распознанный текст.</p>}
   </div>;

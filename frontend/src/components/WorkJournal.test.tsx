@@ -21,7 +21,7 @@ it('saves text through Operator and cancels with a version and unique request',a
  render(<WorkJournal businessId="b" headers={headers}/>, { wrapper: MemoryRouter });
  await user.type(await screen.findByLabelText('Что вы заметили?'),'Клиент отказался');await user.click(screen.getByRole('button',{name:'Отправить наблюдение'}));
  await screen.findByText('Записал отказ');await user.click(await screen.findByRole('button',{name:'Отменить запись'}));
- await waitFor(()=>expect(cancelled).toBe(true));expect(mock.mock.calls.filter(([,i])=>i?.method==='PATCH')).toHaveLength(1);
+ await waitFor(()=>expect(cancelled).toBe(true));await screen.findByText('Запись отменена. Она останется в истории.');expect(screen.queryByText('Записал отказ')).not.toBeInTheDocument();expect(mock.mock.calls.filter(([,i])=>i?.method==='PATCH')).toHaveLength(1);
 });
 it('ignores delayed journal data after business changes',async()=>{
  let resolveOld:(value:Response)=>void=()=>{};

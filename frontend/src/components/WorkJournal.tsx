@@ -93,7 +93,7 @@ export function WorkJournal({ businessId, headers = defaultHeaders, embedded = f
   const change = async (entry: Entry, voided: boolean) => {
     const business = businessId;
     await request(`/work-journal/${entry.id}`, { method: 'PATCH', body: JSON.stringify({ business_id: business, version: entry.version, void: voided, text: voided ? '' : correction, channel:headers === defaultHeaders ? 'web' : miniAppChannel(), request_id: crypto.randomUUID() }) });
-    if (scope.current === business) { setEditing(null); await load(); }
+    if (scope.current === business) { setEditing(null); setAnswer({ status: 'completed', chat_response: voided ? 'Запись отменена. Она останется в истории.' : 'Исправление сохранено.' }); await load(); }
   };
   const decision = async (approve: boolean) => {
     const business = businessId; const id = answer?.approval?.action_id; if (!id) return;

@@ -179,3 +179,28 @@ it('does not let a delayed cancelled recorder stop a newer recording',async()=>{
  expect(first).toHaveBeenCalled();expect(second).not.toHaveBeenCalled();
  expect(screen.getByRole('button',{name:'Остановить запись'})).toBeInTheDocument();
 });
+
+it('shows and cancels a pending microphone request, releasing a late stream',async()=>{
+ sessionStorage.clear();let release:(value:unknown)=>void=()=>{};
+ vi.stubGlobal('fetch',vi.fn(()=>reply({input_enabled:true})));vi.stubGlobal('MediaRecorder',vi.fn());
+ vi.stubGlobal('navigator',{mediaDevices:{getUserMedia:vi.fn(()=>new Promise(resolve=>{release=resolve}))}});
+ const user=userEvent.setup();render(<OperatorVoiceInput businessId="pending-mic" channel="telegram_mini_app" onSubmit={vi.fn()} headers={headers}/>);
+ await user.click(await screen.findByRole('button',{name:'Записать голосом'}));
+ expect(screen.getByRole('button',{name:'Включаем микрофон'})).toBeDisabled();
+ await user.click(screen.getByRole('button',{name:'Отменить запись'}));
+ const stop=vi.fn();await act(async()=>{release({getTracks:()=>[{stop}]});});
+ expect(stop).toHaveBeenCalled();expect(screen.getByRole('button',{name:'Записать голосом'})).toBeEnabled();
+ expect(screen.queryByRole('button',{name:'Распознать запись'})).not.toBeInTheDocument();
+});
+it('bounds an unanswered microphone request and allows retry',async()=>{
+ sessionStorage.clear();vi.useFakeTimers({shouldAdvanceTime:true});
+ try{
+ vi.stubGlobal('fetch',vi.fn(()=>reply({input_enabled:true})));vi.stubGlobal('MediaRecorder',vi.fn());
+ vi.stubGlobal('navigator',{mediaDevices:{getUserMedia:vi.fn(()=>new Promise(()=>{}))}});
+ const user=userEvent.setup({advanceTimers:vi.advanceTimersByTime});render(<OperatorVoiceInput businessId="timeout-mic" channel="telegram_mini_app" onSubmit={vi.fn()} headers={headers}/>);
+ await user.click(await screen.findByRole('button',{name:'Записать голосом'}));
+ await act(async()=>{vi.advanceTimersByTime(15000);});
+ expect(screen.getByRole('alert')).toHaveTextContent('Микрофон не ответил');
+ expect(screen.getByRole('button',{name:'Записать голосом'})).toBeEnabled();
+ }finally{vi.useRealTimers();}
+});
