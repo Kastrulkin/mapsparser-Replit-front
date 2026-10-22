@@ -4089,6 +4089,7 @@ def build_preview(
     generate_ai: bool | None = None,
     manual_reviewer_role: str | None = None,
     manual_review_context: str | None = None,
+    preserve_manual_text: bool = False,
 ) -> dict[str, Any]:
     context = _apply_sender_mode(_load_context(cursor, workstream_id), sender_mode)
     continuation = None
@@ -4725,7 +4726,7 @@ def build_preview(
             override = override_by_index[index]
             touch["text"] = (
                 override["exact_text"]
-                if author_lane
+                if author_lane or preserve_manual_text
                 else _format_channel_outreach_message(
                     override["text"],
                     channel=_text(touch.get("channel")),
@@ -4734,7 +4735,7 @@ def build_preview(
             )
             if touch["channel"] == "email" and override["subject"]:
                 touch["subject"] = (
-                    override["exact_subject"] if author_lane else override["subject"]
+                    override["exact_subject"] if author_lane or preserve_manual_text else override["subject"]
                 )
             touch["generation_source"] = "manual_product_correction"
             touch["generation_prompt_version"] = PROMPT_VERSION
