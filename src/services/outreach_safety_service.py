@@ -1008,7 +1008,7 @@ def run_dispatch_preflight(
         for touch in current_touches
     ):
         return {"allowed": False, "reason_code": "generation_contract_outdated", "item": item}
-    if is_localos_author_lane(item):
+    if is_localos_author_lane(item) or (item.get("policy_json") or {}).get("human_copy_hash"):
         # Local import avoids a module cycle while keeping preview, approval,
         # and dispatch on the same creator-campaign bridge resolver.
         from services.outreach_campaign_service import (

@@ -146,8 +146,8 @@ def test_cold_guard_fails_closed_without_business_scope(monkeypatch):
 
 @pytest.mark.parametrize('saved,current', [('old','new'), ('','new'), ('old','')])
 def test_updated_or_missing_source_requires_new_preview(monkeypatch,saved,current):
-    from services import partnership_prepared_campaigns as prepared,outreach_safety_service
-    monkeypatch.setattr(outreach_safety_service,'research_source_fact_fingerprint',lambda value:current)
+    from services import partnership_prepared_campaigns as prepared,outreach_campaign_service
+    monkeypatch.setattr(outreach_campaign_service,'current_outreach_source_fact_fingerprint',lambda *args:current)
     class Cursor:
         def execute(self,*args):pass
         def fetchone(self):return {'report_hash':'latest'}
@@ -156,8 +156,8 @@ def test_updated_or_missing_source_requires_new_preview(monkeypatch,saved,curren
 
 
 def test_current_source_allows_review(monkeypatch):
-    from services import partnership_prepared_campaigns as prepared,outreach_safety_service
-    monkeypatch.setattr(outreach_safety_service,'research_source_fact_fingerprint',lambda value:'same')
+    from services import partnership_prepared_campaigns as prepared,outreach_campaign_service
+    monkeypatch.setattr(outreach_campaign_service,'current_outreach_source_fact_fingerprint',lambda *args:'same')
     class Cursor:
         def execute(self,*args):pass
         def fetchone(self):return {'report_hash':'latest'}

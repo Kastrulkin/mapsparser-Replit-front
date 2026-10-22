@@ -5377,7 +5377,7 @@ def approve_campaign(
         for touch in approval_touches
     ):
         raise ValueError("Campaign generation is outdated; create a new preview")
-    if is_localos_author_lane(campaign):
+    if is_localos_author_lane(campaign) or (campaign.get("policy_json") or {}).get("human_copy_hash"):
         current_source_fingerprint = current_outreach_source_fact_fingerprint(
             cursor,
             _text(campaign.get("workstream_id")),

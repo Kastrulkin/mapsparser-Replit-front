@@ -110,9 +110,8 @@ def prepare(cursor,*,business_id,user,item):
 
 
 def check_source_freshness(cursor,workstream_id,touches):
-    from services.outreach_safety_service import research_source_fact_fingerprint
-    cursor.execute("SELECT evidence_json,signals_json,report_hash FROM lead_workstream_research WHERE workstream_id=%s ORDER BY researched_at DESC,created_at DESC LIMIT 1",(workstream_id,))
-    current=research_source_fact_fingerprint(_row(cursor,cursor.fetchone()))
+    from services.outreach_campaign_service import current_outreach_source_fact_fingerprint
+    current=current_outreach_source_fact_fingerprint(cursor,workstream_id,'localos_for_partner')
     if not current or not touches or any(str((t.get('message_brief_json') or {}).get('source_fact_fingerprint') or '')!=current for t in touches):
         raise ValueError('Сведения о компании обновились после подготовки писем. Сохраните касания заново по актуальным сведениям; прежние тексты останутся в истории.')
 
