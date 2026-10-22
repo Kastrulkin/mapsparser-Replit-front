@@ -75,3 +75,17 @@ it.each(['telegram','max'])('opens dated source analysis directly in %s without 
  expect(mock.mock.calls.every(([input])=>String(input).includes('/content-voice/references?') || String(input).includes('/content-plans?'))).toBe(true);
  window.history.replaceState({},'','/');
 });
+
+it('returns from a linked historical post to the current plan', async () => {
+ const oldPost = {...item,plan_id:'old-plan',plan_title:'Старый план',draft_text:'Пост старого плана'};
+ const latestPost = {...item,id:'latest-post',plan_id:'current-plan',plan_title:'Актуальный план',draft_text:'Пост текущего плана'};
+ const plans = [{id:'old-plan',title:'Старый план',created_at:'2025-01-01',items_count:1,ready_count:1},{id:'current-plan',title:'Актуальный план',created_at:'2026-10-22',items_count:1,ready_count:1}];
+ vi.stubGlobal('fetch',vi.fn(async(input:RequestInfo | URL)=>{
+  const url=String(input);
+  return new Response(JSON.stringify(url.includes('/content-plans?') ? {plans} : {plan:{...plans[url.endsWith('old-plan') ? 0 : 1],items:[url.endsWith('old-plan') ? oldPost : latestPost]}}),{status:200});
+ }));
+ render(<ContentModule {...props} items={[oldPost]} scope={{kind:'business',id:'meliora'}} focusItemId={item.id} />);
+ fireEvent.click(await screen.findByRole('button',{name:'Вернуться к текущему плану'}));
+ expect(await screen.findByText('Пост текущего плана')).toBeVisible();
+ expect(screen.queryByRole('button',{name:'Вернуться к текущему плану'})).not.toBeInTheDocument();
+});

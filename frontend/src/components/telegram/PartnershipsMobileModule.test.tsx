@@ -250,3 +250,30 @@ describe('Partnership recipient review', () => {
     expect(screen.getByRole('note')).toHaveTextContent('служебный или юридический');
   });
 });
+
+it.each([
+ {approved_text:'Утверждённый сохранённый текст',edited_text:'Прежняя правка',generated_text:'Исходный текст'},
+ {edited_text:'Сохранённая редакция',generated_text:'Исходный текст'},
+ {generated_text:'Первоначальное письмо'},
+])('cancels local letter edits and unlocks return without saving: %j',async saved => {
+ const calls:string[]=[];
+ vi.stubGlobal('fetch',vi.fn((input:RequestInfo | URL,init?:RequestInit)=>{
+  const url=String(input);if(init?.method && init.method!=='GET')calls.push(url);
+  if(url.includes('/leads?'))return response({items:[{id:'lead-cancel',name:'Партнёр отмены',created_at:'2026-10-22'}]});
+  return response({drafts:[{id:'draft-cancel',lead_id:'lead-cancel',lead_name:'Партнёр отмены',status:'draft',...saved}],items:[],batches:[],counts:{}});
+ }));
+ const user=userEvent.setup();render(<PartnershipsMobileModule scope={{kind:'business',id:'business-cancel'}}/>);
+ await user.click(await screen.findByRole('button',{name:'Изменить подборку'}));
+ await user.click(screen.getByRole('button',{name:'Письма',exact:true}));
+ const field=await screen.findByRole('textbox',{name:'Текст письма: Партнёр отмены'});
+ const original=saved.approved_text || saved.edited_text || saved.generated_text;
+ await user.clear(field);await user.type(field,'Нежелательная правка');
+ expect(screen.getByRole('button',{name:'Вернуться к готовому результату'})).toBeDisabled();
+ await user.click(screen.getByRole('button',{name:'Отменить правки'}));
+ expect(field).toHaveValue(original);
+ expect(screen.getByRole('button',{name:'Вернуться к готовому результату'})).toBeEnabled();
+ await user.click(screen.getByRole('button',{name:'Вернуться к готовому результату'}));
+ expect(screen.getByRole('heading',{name:'Актуальная подборка партнёров'})).toBeVisible();
+ expect(calls).toEqual([]);
+ vi.unstubAllGlobals();
+});

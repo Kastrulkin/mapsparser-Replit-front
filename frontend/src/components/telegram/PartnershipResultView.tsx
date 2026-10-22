@@ -12,11 +12,24 @@ export function PartnershipResultView({ businessId, leads, letters, edit, launch
   const [history, setHistory] = useState(false);
   const [all, setAll] = useState(false);
   const [limit, setLimit] = useState(25);
-  useEffect(() => { setBrowsing(''); setHistory(false); setAll(false); setLimit(25); }, [businessId]);
+  useEffect(() => { setBrowsing(''); setHistory(false); setAll(false); setLimit(25); try { setWorking(localStorage.getItem(storageKey) || ''); } catch { setWorking(''); } }, [businessId, storageKey]);
   const current = groups.find(group => group.id === working) || groups.find(group => group.id !== 'letters-only' && group.letters.length > 0) || groups[0];
   const group = groups.find(item => item.id === browsing) || groups.find(item => item.leads.some(lead => lead.id === focusLeadId)) || current;
   const scrolledFocus = useRef('');
-  useEffect(() => { if (!focusLeadId || scrolledFocus.current === `${businessId}:${focusLeadId}` || !group?.leads.some(lead => lead.id === focusLeadId)) return; scrolledFocus.current = `${businessId}:${focusLeadId}`; document.getElementById(`partner-result-${focusLeadId}`)?.scrollIntoView({ block: 'center' }); }, [businessId, focusLeadId, group]);
+  useEffect(() => {
+    if (!focusLeadId || !group) return;
+    const index = group.leads.findIndex(lead => lead.id === focusLeadId);
+    if (index < 0) return;
+    setAll(true);
+    setLimit(Math.max(25, index + 1));
+  }, [businessId, focusLeadId, group]);
+  useEffect(() => {
+    if (!focusLeadId || scrolledFocus.current === `${businessId}:${focusLeadId}`) return;
+    const target = document.getElementById(`partner-result-${focusLeadId}`);
+    if (!target) return;
+    target.scrollIntoView?.({ block: 'center' });
+    scrolledFocus.current = `${businessId}:${focusLeadId}`;
+  }, [businessId, focusLeadId, group, all, limit]);
   const visible = (group?.leads || []).filter(lead => all || !wasContacted(lead));
   const choose = (id: string) => { setBrowsing(id); setHistory(false); setAll(false); setLimit(25); };
   const pin = () => { if (!group) return; setWorking(group.id); try { localStorage.setItem(storageKey, group.id); } catch { /* Selection still works for this visit. */ } };

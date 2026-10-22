@@ -18,3 +18,9 @@ Status: available in the shared Telegram/MAX interface. Telegram browser accepta
 Live Telegram pass: current imported group and saved letter; older group and return; current saved content plan, older plan and return; explicit editing entry/exit; cancelled new-plan setup. No new generation, approval, delivery or client content update was performed.
 
 Partial frontend deployment uses source and index guards, retains prior assets, and verifies the running container index. No migration, schedule change or service restart is required. Private screenshots and client material are excluded from this document and Git publication.
+
+## Follow-up client-role checks
+
+41 focused frontend cases now cover linked contacted partners, links beyond the first page, per-business browser defaults, return from a linked historical post to the current plan, and cancellation of local letter edits. Cancelling restores the saved text without a request and unlocks return to the result.
+
+Ordinary manager sessions were checked against live production APIs on the shared components in the browser for both surface variants. Each account had access to one business; foreign-business module, lead and plan requests were rejected. Reading current results, browsing history, editing and cancelling succeeded. The local test entry blocks writes, generation and delivery; it does not emulate signed messenger authentication. Native Telegram/MAX client bootstrap and live saves are not established by these checks. Temporary QA accounts and sessions were revoked after testing; private reports and screenshots remain outside Git.

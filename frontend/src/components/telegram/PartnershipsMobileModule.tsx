@@ -77,6 +77,7 @@ type Draft = {
   recipient_value?: string | null;
   recipient_source_url?: string | null;
   has_local_edits?: boolean;
+  approved_text_before_edit?: string;
   id: string;
   lead_id: string;
   lead_name?: string;
@@ -1317,7 +1318,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                           setDrafts((current) =>
                             current.map((item) =>
                               item.id === draft.id
-                                ? { ...item, approved_text: event.target.value, has_local_edits: true }
+                                ? { ...item, approved_text_before_edit: item.has_local_edits ? item.approved_text_before_edit : item.approved_text, approved_text: event.target.value, has_local_edits: true }
                                 : item,
                             ),
                           )
@@ -1330,6 +1331,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
                       onClick={() => void action(`save-draft:${draft.id}`, `/api/partnership/drafts/${draft.id}/save`, { edited_text: text, expected_review_digest: draft.review_digest })}
                       className="mt-3 min-h-11 w-full rounded-[13px] bg-white/10 text-xs disabled:opacity-40"
                     >{busy === `save-draft:${draft.id}` ? "Сохраняем…" : "Сохранить черновик без отправки"}</button>}
+                    {draft.has_local_edits && <div className="mt-3 space-y-2"><p role="status" className="text-xs text-zinc-400">Есть несохранённые правки. Сохраните их или отмените, чтобы вернуться к подборке.</p><button type="button" disabled={Boolean(busy)} onClick={() => setDrafts(current => current.map(item => item.id === draft.id ? { ...item, approved_text: item.approved_text_before_edit, approved_text_before_edit: undefined, has_local_edits: false } : item))} className="min-h-11 w-full rounded-[13px] border text-xs disabled:opacity-40">Отменить правки</button></div>}
                     <div className="mt-3 grid grid-cols-[44px_1fr] gap-2">
                       <button
                         aria-label="Удалить черновик"
