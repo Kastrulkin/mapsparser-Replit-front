@@ -41,6 +41,8 @@ def work_selection(cursor, *, item_type='content_item', **kwargs):
     if item_type == 'day_brief':
         from services import operator_day_brief
         operator_day_brief.authorize(cursor, kwargs['business_id'], kwargs['user_id'], owner=True)
+        if not str(kwargs.get('item_id') or '').strip():
+            raise ValueError('Сначала сохраните черновик планёрки, затем продолжите в боте.')
         value = operator_day_brief.draft(cursor, kwargs['business_id'], kwargs['user_id'], identifier=kwargs['item_id'])
         if not value:
             raise PermissionError('Планёрка недоступна.')

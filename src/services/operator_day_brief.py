@@ -383,7 +383,7 @@ def overview(cursor, *, business, user, day=None, item_id=None):
     people = members(cursor, business) if owner else []
     rows = assignments(cursor, business, user, owner=owner, day=day)
     return {'date': day, 'user_id': user, 'can_complete': actor['role'] != 'viewer', 'can_manage': owner, 'delivery_enabled': delivery_enabled(),
-        'draft': draft(cursor, business, user, day=day) if owner else None,
+        'draft': (draft(cursor, business, user, day=day) or None) if owner else None,
         'members': [{'id': str(row['id']), 'name': row['name'],
             'platforms': [p for p, connected in [('telegram', row.get('telegram_id')), ('max', row.get('max_id') and row.get('notifications_enabled'))] if connected]} for row in people],
         'assignments': rows, 'deliveries':delivery_states(cursor,business,rows)}
