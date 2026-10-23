@@ -1,5 +1,6 @@
 from flask import Flask
 from api import partnership_leads_api
+from services import partnership_source_collections
 
 
 class Cursor:
@@ -30,6 +31,7 @@ def setup(monkeypatch):
     monkeypatch.setattr(partnership_leads_api, 'resolve_control_scope', lambda *args, **kwargs: {'kind': 'network', 'business_ids': ['b1', 'b2']})
     monkeypatch.setattr(partnership_leads_api, 'verify_business_access', lambda *args: (True, 'owner'))
     monkeypatch.setattr(partnership_leads_api.service, '_partnership_write_access', lambda *args: None)
+    monkeypatch.setattr(partnership_source_collections, 'collection_summaries', lambda cursor, locations: [])
     return app.test_client()
 
 
@@ -63,3 +65,26 @@ def test_foreign_workstream_cannot_be_updated(monkeypatch):
         raise PermissionError()
     monkeypatch.setattr(partnership_leads_api, 'save_agreement', denied)
     assert browser.post('/api/partnership/results/foreign', json={'scope_id': 'b1', 'command': 'confirm', 'revision': 0}).status_code == 403
+
+
+def test_collection_summaries_follow_resolved_locations_not_requested_ids(monkeypatch):
+    browser = setup(monkeypatch)
+    monkeypatch.setattr(partnership_leads_api, 'read_results', lambda *args: [])
+    calls = []
+    def summaries(cursor, *, locations):
+        calls.extend(locations)
+        return [{'id':'group','business_id':'b1','business_address':'Первая улица','company_count':50,'touch_count':200}]
+    monkeypatch.setattr(partnership_source_collections, 'collection_summaries', summaries)
+    response = browser.get('/api/partnership/results?scope_type=network&scope_id=n1&business_ids=foreign')
+    assert response.status_code == 200
+    assert calls == [{'id':'b1','name':'Точка'}]
+    assert response.json['collections'][0]['touch_count'] == 200
+
+
+def test_denied_point_never_queries_or_exposes_collection_summaries(monkeypatch):
+    browser = setup(monkeypatch)
+    monkeypatch.setattr(partnership_leads_api, 'verify_business_access', lambda *args: (False, None))
+    def no_read(*args, **kwargs):
+        raise AssertionError('Collections require existing location permissions')
+    monkeypatch.setattr(partnership_source_collections, 'collection_summaries', no_read)
+    assert browser.get('/api/partnership/results?scope_type=network&scope_id=n1').status_code == 403

@@ -46,9 +46,11 @@ def partnership_results(workstream_id=None):
             current_app.logger.info('partnership_agreement_action workstream_id=%s command=%s revision=%s', workstream_id, payload.get('command'), data.get('revision'))
             return jsonify(success=True, agreement=data)
         items = read_results(cursor, ids)
-        cursor.execute('SELECT id, name FROM businesses WHERE id=ANY(%s) ORDER BY name, id', (list(ids),))
-        locations = [dict(row) if hasattr(row, 'keys') else {'id': row[0], 'name': row[1]} for row in cursor.fetchall()]
-        return jsonify(success=True, scope=scope, items=items, locations=locations, counts=result_counts(items))
+        cursor.execute('SELECT id, name, address FROM businesses WHERE id=ANY(%s) ORDER BY address, name, id', (list(ids),))
+        locations = [dict(row) if hasattr(row, 'keys') else {'id': row[0], 'name': row[1], 'address': row[2]} for row in cursor.fetchall()]
+        from services.partnership_source_collections import collection_summaries
+        collections = collection_summaries(cursor, locations=locations)
+        return jsonify(success=True, scope=scope, items=items, locations=locations, collections=collections, counts=result_counts(items))
     except PermissionError:
         db.conn.rollback()
         return jsonify(error='Партнёр недоступен'), 403

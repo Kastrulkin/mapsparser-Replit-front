@@ -587,7 +587,7 @@ export const PartnershipSearchPage: React.FC = () => {
     setSearchTasks((current) => [...tasks, ...current.filter((task) => task.id === requestedSearchTaskId && !tasks.some((item) => item.id === task.id))]);
   }, [requestedSearchTaskId]);
   useEffect(() => {
-    if (!requestedSearchTaskId || !currentBusinessId) return;
+    if (controlScope?.kind === 'network' || !requestedSearchTaskId || !currentBusinessId) return;
     let active = true;
     void resolveSearchTask(requestedSearchTaskId, currentBusinessId, businesses.map((business) => business.id),
       (businessId) => newAuth.makeRequest(`/partnership/continuations/${encodeURIComponent(requestedSearchTaskId)}?business_id=${encodeURIComponent(businessId)}`, { method: 'GET' }))
@@ -607,7 +607,7 @@ export const PartnershipSearchPage: React.FC = () => {
         setSearchTasks((current) => [task, ...current.filter((item) => item.id !== task.id)]);
       });
     return () => { active = false; };
-  }, [requestedSearchTaskId, currentBusinessId, businesses, onBusinessChange, setSearchParams]);
+  }, [requestedSearchTaskId, currentBusinessId, businesses, onBusinessChange, setSearchParams, controlScope?.kind]);
   const [preferredSourceFilter, setPreferredSourceFilter] = useState<{ source_kind?: string; source_provider?: string } | null>(null);
   const [bulkStage, setBulkStage] = useState('');
   const [bulkChannel, setBulkChannel] = useState('');
@@ -1087,13 +1087,14 @@ export const PartnershipSearchPage: React.FC = () => {
   };
 
   useEffect(() => {
+    if (controlScope?.kind === 'network') return;
     if (!partnershipAccess.allowed) {
       void loadLeads();
       return;
     }
     void refreshOperationalData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentBusinessId, stage, pilotCohort, selectedSearchGroup, companyFilter]);
+  }, [currentBusinessId, stage, pilotCohort, selectedSearchGroup, companyFilter, controlScope?.kind]);
 
   useEffect(() => {
     if (workspaceView !== 'analytics') return;

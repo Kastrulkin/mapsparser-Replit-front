@@ -46,3 +46,24 @@ def saved_collection_response(cursor, *, business_id, viewer_id, task_id=None):
         return collection_view(cursor, rows[0], viewer_id=viewer_id), 200
     return {'enabled': False, 'read_only_collections': True,
             'items': [collection_view(cursor, row, viewer_id=viewer_id) for row in rows]}, 200
+
+
+def collection_summaries(cursor, *, locations):
+    """Caller supplies only locations already checked for business/tariff access."""
+    items = []
+    for location in locations:
+        for row in load_collections(cursor, business_id=str(location['id'])):
+            state = collection_state(cursor, row)
+            campaign_ids = [entry['campaign_id'] for entry in state['campaign_results'].values()]
+            touch_count = 0
+            if campaign_ids:
+                cursor.execute('SELECT COUNT(*) AS count FROM outreach_campaign_touches WHERE campaign_id IN (' + ','.join(['%s'] * len(campaign_ids)) + ')', tuple(campaign_ids))
+                touch_count = cursor.fetchone()['count']
+            items.append({
+                'id': str(row['id']), 'business_id': str(location['id']),
+                'business_name': location['name'], 'business_address': location.get('address') or '',
+                'created_at': row.get('created_at'),
+                'company_count': len(set(state.get('lead_ids') or [])),
+                'touch_count': touch_count, 'prepared_count': len(campaign_ids),
+            })
+    return items

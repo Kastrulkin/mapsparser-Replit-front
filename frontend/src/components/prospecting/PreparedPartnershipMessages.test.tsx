@@ -26,3 +26,14 @@ it('does not overlap background refresh requests',async()=>{vi.useFakeTimers();l
 it('keeps the company list clear while loading the letters count',async()=>{request.mockResolvedValue({items:[entry]});const count=vi.fn();const view=render(<MemoryRouter><PreparedPartnershipMessages businessId="one" showMessages={false} onCountChange={count}/></MemoryRouter>);await waitFor(()=>expect(count).toHaveBeenCalledWith(1));expect(screen.queryByText('Здравствуйте! Готовый текст владельца.')).toBeNull();view.rerender(<MemoryRouter><PreparedPartnershipMessages businessId="one" showMessages onCountChange={count}/></MemoryRouter>);expect(await screen.findByText('Здравствуйте! Готовый текст владельца.')).toBeVisible();expect(request).toHaveBeenCalledTimes(1);});
 
 it('closes the review dialog when returning to the company list',async()=>{request.mockResolvedValue({items:[entry]});const view=render(<MemoryRouter><PreparedPartnershipMessages businessId="one" showMessages/></MemoryRouter>);await userEvent.click(await screen.findByRole('button',{name:'Посмотреть все касания (1)'}));expect(screen.getByRole('dialog')).toBeVisible();view.rerender(<MemoryRouter><PreparedPartnershipMessages businessId="one" showMessages={false}/></MemoryRouter>);expect(screen.queryByRole('dialog')).toBeNull();view.rerender(<MemoryRouter><PreparedPartnershipMessages businessId="one" showMessages/></MemoryRouter>);expect(screen.queryByRole('dialog')).toBeNull();});
+
+it('reads miniapp messages using its own session instead of web authentication',async()=>{
+ sessionStorage.setItem('localos_mini_session','test-mini-session');
+ const fetchMock=vi.fn().mockResolvedValue({ok:true,json:async()=>({items:[entry]})});vi.stubGlobal('fetch',fetchMock);
+ try {render(<MemoryRouter><PreparedPartnershipMessages businessId="one" searchTaskId="chosen" mobile/></MemoryRouter>);
+ expect(await screen.findByText('Здравствуйте! Готовый текст владельца.')).toBeVisible();
+ expect(fetchMock).toHaveBeenCalledWith('/api/partnership/prepared-messages?business_id=one&search_task_id=chosen',{headers:{Authorization:'Bearer test-mini-session','Content-Type':'application/json'}});
+ expect(request).not.toHaveBeenCalled();
+ }finally{vi.unstubAllGlobals();sessionStorage.clear();}
+});
+it('does not claim there are no letters when loading failed',async()=>{request.mockRejectedValue(new Error('Сессия истекла'));render(<MemoryRouter><PreparedPartnershipMessages businessId="one"/></MemoryRouter>);expect(await screen.findByRole('alert')).toHaveTextContent('Сессия истекла');expect(screen.queryByText(/Готовых обращений пока нет/)).toBeNull();});

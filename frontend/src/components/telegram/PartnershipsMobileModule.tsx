@@ -1,3 +1,4 @@
+import { PartnershipCollections } from '@/components/prospecting/PartnershipCollections';
 import { PreparedPartnershipMessages } from '@/components/prospecting/PreparedPartnershipMessages';
 import { PartnershipResultView } from './PartnershipResultView';
 import { partnershipMiniLaunch } from "@/lib/partnershipMiniLaunch";
@@ -844,7 +845,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onD
       </div>
     );
   if (loadedBusiness !== businessId) return <p role="status">Загружаем сохранённые результаты…</p>;
-  if (!management && !accessDenied) return <div className="space-y-3"><PreparedPartnershipMessages key={businessId} businessId={businessId} />{error && <p role="alert">{error}</p>}<PartnershipResultView key={businessId} businessId={businessId} focusLeadId={requestedLeadId || drafts.find(draft => draft.id === launch.draftId)?.lead_id} leads={resultLeads} letters={drafts} refresh={() => void load(false, { query: '', stage: 'all' })} edit={(leadId, partner) => { setManagement(true); setDraftLeadId(partner ? '' : leadId || ''); setTab(leadId && !partner ? 'drafts' : 'leads'); setSelectedLead(partner ? resultLeads.find(lead => lead.id === leadId) || null : null); }} launch={() => { setManagement(true); setTab('leads'); setShowIntake(true); }} /></div>;
+  if (!management && !accessDenied) return <div className="space-y-3"><PartnershipCollections key={businessId} businessId={businessId} mobile><PreparedPartnershipMessages key={businessId} businessId={businessId} mobile />{error && <p role="alert">{error}</p>}<PartnershipResultView key={businessId} businessId={businessId} focusLeadId={requestedLeadId || drafts.find(draft => draft.id === launch.draftId)?.lead_id} leads={resultLeads} letters={drafts} refresh={() => void load(false, { query: '', stage: 'all' })} edit={(leadId, partner) => { setManagement(true); setDraftLeadId(partner ? '' : leadId || ''); setTab(leadId && !partner ? 'drafts' : 'leads'); setSelectedLead(partner ? resultLeads.find(lead => lead.id === leadId) || null : null); }} launch={() => { setManagement(true); setTab('leads'); setShowIntake(true); }} /></PartnershipCollections></div>;
   const tabs: Array<[PartnershipTab, string]> = [
     ["overview", "Обзор"],
     ["leads", "Кандидаты"],
