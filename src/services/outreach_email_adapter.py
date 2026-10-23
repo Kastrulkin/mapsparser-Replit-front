@@ -1360,42 +1360,46 @@ def fetch_mailbox_messages(
             raise EmailAdapterError("email_imap_search_failed", "IMAP search failed", retryable=True)
         raw_ids = data[0].split() if data and data[0] else []
         messages: list[dict[str, Any]] = []
-        for raw_uid in raw_ids[-safe_limit:]:
-            status, fetched = client.uid("fetch", raw_uid, "(RFC822)")
-            if _text(status).upper() != "OK" or not fetched:
-                continue
-            raw_message = next(
-                (item[1] for item in fetched if isinstance(item, tuple) and len(item) > 1 and isinstance(item[1], bytes)),
-                None,
+        deadline_at = time.monotonic() + DEFAULT_COMPLETE_SYNC_TOTAL_TIMEOUT_SECONDS
+        if len(set(raw_ids)) != len(raw_ids) or any(not uid.isdigit() or int(uid) < 1 for uid in raw_ids):
+            raise EmailAdapterError("email_imap_uid_invalid", "IMAP search returned invalid or duplicate UIDs")
+        selected_uids = sorted(raw_ids, key=int)[-safe_limit:]
+        high_watermark_uid = max((int(value) for value in selected_uids), default=0)
+        for uid_batch in _imap_uid_batches(selected_uids, COMPLETE_SYNC_BODY_BATCH_SIZE):
+            records = _imap_fetch_uid_batch(
+                client, uid_batch, "(UID BODY.PEEK[])",
+                high_watermark_uid=high_watermark_uid,
+                deadline_at=deadline_at, operation_timeout=timeout,
             )
-            if not raw_message:
-                continue
-            message = BytesParser(policy=policy.default).parsebytes(raw_message)
-            occurred_at = _message_datetime(message.get("Date"))
-            if occurred_at and occurred_at < sync_since - timedelta(days=1):
-                continue
-            from_addresses = [normalize_email(address) for _name, address in getaddresses(message.get_all("From", []))]
-            to_addresses = [normalize_email(address) for _name, address in getaddresses(message.get_all("To", []))]
-            uid = raw_uid.decode("ascii", errors="ignore") if isinstance(raw_uid, bytes) else _text(raw_uid)
-            references = " ".join(message.get_all("References", []))
-            event_prefix = f"email:{sender_account.get('id')}"
-            messages.append({
-                "provider_event_id": (
-                    f"{event_prefix}:{uid}" if mailbox == "inbox" else f"{event_prefix}:sent:{uid}"
-                )[:255],
-                "mailbox_uid": uid,
-                "mailbox": mailbox,
-                "message_id": _text(message.get("Message-ID"))[:255] or None,
-                "in_reply_to": _text(message.get("In-Reply-To"))[:1000] or None,
-                "references": references[:4000] or None,
-                "from_email": next((address for address in from_addresses if address), "") or None,
-                "to_emails": [address for address in to_addresses if address],
-                "subject": _text(message.get("Subject"))[:500],
-                "body": _message_body(message),
-                "auto_submitted": _text(message.get("Auto-Submitted"))[:100],
-                "precedence": _text(message.get("Precedence"))[:100],
-                "occurred_at": occurred_at or datetime.now(timezone.utc),
-            })
+            for raw_uid in uid_batch:
+                uid_key = raw_uid.decode("ascii", errors="strict") if isinstance(raw_uid, bytes) else _text(raw_uid)
+                raw_message = records[uid_key][1]
+                message = BytesParser(policy=policy.default).parsebytes(raw_message)
+                occurred_at = _message_datetime(message.get("Date"))
+                if occurred_at and occurred_at < sync_since - timedelta(days=1):
+                    continue
+                from_addresses = [normalize_email(address) for _name, address in getaddresses(message.get_all("From", []))]
+                to_addresses = [normalize_email(address) for _name, address in getaddresses(message.get_all("To", []))]
+                uid = raw_uid.decode("ascii", errors="ignore") if isinstance(raw_uid, bytes) else _text(raw_uid)
+                references = " ".join(message.get_all("References", []))
+                event_prefix = f"email:{sender_account.get('id')}"
+                messages.append({
+                    "provider_event_id": (
+                        f"{event_prefix}:{uid}" if mailbox == "inbox" else f"{event_prefix}:sent:{uid}"
+                    )[:255],
+                    "mailbox_uid": uid,
+                    "mailbox": mailbox,
+                    "message_id": _text(message.get("Message-ID"))[:255] or None,
+                    "in_reply_to": _text(message.get("In-Reply-To"))[:1000] or None,
+                    "references": references[:4000] or None,
+                    "from_email": next((address for address in from_addresses if address), "") or None,
+                    "to_emails": [address for address in to_addresses if address],
+                    "subject": _text(message.get("Subject"))[:500],
+                    "body": _message_body(message),
+                    "auto_submitted": _text(message.get("Auto-Submitted"))[:100],
+                    "precedence": _text(message.get("Precedence"))[:100],
+                    "occurred_at": occurred_at or datetime.now(timezone.utc),
+                })
         return messages
     except Exception as exc:
         raise classify_email_exception(exc) from exc

@@ -201,3 +201,32 @@ def test_complete_window_total_deadline_fails_closed_before_body_fetch(monkeypat
     assert error.retryable is True
     assert client.body_calls == []
     assert client.status_calls == 0
+
+
+def test_legacy_reader_batches_same_latest_messages_without_marking_them_read(monkeypatch):
+    from services import outreach_email_adapter
+    class Legacy(_BatchImap):
+        def select(self,folder,readonly=False):
+            assert folder=='INBOX' and readonly
+            return 'OK',[b'45']
+    client=Legacy(range(1,46),recipient_uids=range(1,46))
+    monkeypatch.setattr(outreach_email_adapter,'load_mailbox_config',lambda sender:{'imap_folder':'INBOX'})
+    monkeypatch.setattr(outreach_email_adapter,'_imap_connection',lambda config,timeout:client)
+    result=outreach_email_adapter.fetch_mailbox_messages(_sender(),mailbox='inbox',since_at=NOW-timedelta(days=1),limit=23)
+    assert [len(batch) for batch in client.body_calls]==[20,3]
+    assert [row['mailbox_uid'] for row in result]==[str(i) for i in range(23,46)]
+    assert client.header_calls==[]
+
+
+def test_legacy_reader_refuses_partial_batch_instead_of_recording_false_success(monkeypatch):
+    from services import outreach_email_adapter
+    class Missing(_BatchImap):
+        def select(self,folder,readonly=False):return 'OK',[b'3']
+        def uid(self,command,message_set,*criteria):
+            status,data=super().uid(command,message_set,*criteria)
+            return (status,data[:-1]) if command=='fetch' else (status,data)
+    client=Missing(range(1,4),recipient_uids=range(1,4))
+    monkeypatch.setattr(outreach_email_adapter,'load_mailbox_config',lambda sender:{'imap_folder':'INBOX'})
+    monkeypatch.setattr(outreach_email_adapter,'_imap_connection',lambda config,timeout:client)
+    error=_capture_email_error(lambda:outreach_email_adapter.fetch_mailbox_messages(_sender(),mailbox='inbox',since_at=NOW-timedelta(days=1)))
+    assert error.code=='email_imap_fetch_failed'
