@@ -709,6 +709,7 @@ def _compute_partnership_match_result(
     business_id: str,
     lead_id: str,
     audit_json: dict[str, Any],
+    allow_external: bool = True,
 ) -> dict[str, Any]:
     own_services = _collect_business_service_names(cur, business_id)
     partner_services = _extract_partner_service_names_from_snapshot(audit_json)
@@ -900,7 +901,7 @@ def _compute_partnership_match_result(
         ],
     }
 
-    if _is_partnership_openclaw_enabled():
+    if allow_external and _is_partnership_openclaw_enabled():
         openclaw_result = _call_partnership_openclaw_capability(
             "partners.match_services",
             tenant_id=business_id,
@@ -2167,3 +2168,42 @@ def partnership_delete_draft(draft_id):
     except Exception as e:
         print(f"Error deleting partnership draft: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route('/api/partnership/prepared-messages',methods=['GET','POST'])
+def partnership_prepared_messages():
+    user,error=_require_auth()
+    if error:return error
+    data=(request.get_json(silent=True) or {}) if request.method=='POST' else request.args
+    if request.method=='POST' and not isinstance(data,dict):return jsonify(error='Нужен объект запроса.'),400
+    business_id=str(data.get('business_id') or '').strip()
+    if not business_id:return jsonify(error='Выберите бизнес.'),400
+    from core.auth_helpers import session_allows_business
+    if not session_allows_business(user,business_id):return jsonify(error='Нет доступа к бизнесу в этой сессии.'),403
+    conn=get_db_connection()
+    try:
+        from services import partnership_prepared_campaigns as prepared
+        cur=conn.cursor(cursor_factory=RealDictCursor)
+        if request.method=='GET' and data.get('job_id'):
+            return jsonify(job=prepared.preparation_status(cur,business_id=business_id,user_id=str(user.get('user_id') or user.get('id')),job_id=str(data['job_id'])))
+        if request.method=='GET':
+            return jsonify(items=prepared.list_prepared(cur,business_id=business_id,user_id=str(user.get('user_id') or user.get('id'))),jobs=prepared.list_preparation_jobs(cur,business_id=business_id,user_id=str(user.get('user_id') or user.get('id'))))
+        if data.get('action')=='review':
+            result=prepared.review_copy(cur,business_id=business_id,user=user,campaign_id=str(data.get('campaign_id') or ''),digest=str(data.get('review_digest') or ''))
+        else:
+            if data.get('save') is not True:return jsonify(error='Подтвердите сохранение черновиков.'),400
+            job=prepared.enqueue_preparation(cur,business_id=business_id,user=user,item=data.get('item'))
+            conn.commit()
+            return jsonify(success=True,job=job,messages_sent=0),202
+        if data.get('save') is True:conn.commit()
+        else:conn.rollback()
+        return jsonify(success=True,result=result,messages_sent=0)
+    except PermissionError as error:
+        conn.rollback();return jsonify(error=str(error)),403
+    except ValueError as error:
+        conn.rollback();return jsonify(error=str(error)),409
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception('Prepared partnership copy could not be saved')
+        conn.rollback();return jsonify(error='Не удалось сохранить касания. Данные не подтверждены; повторите проверку.'),500
+    finally:conn.close()

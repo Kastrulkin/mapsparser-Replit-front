@@ -151,3 +151,39 @@ def test_bot_shows_recipient_source_and_legal_address_warning(allowed):
     assert 'Источник контакта: https://example.invalid/contacts' in result['chat_response']
     assert 'служебный или юридический адрес' in result['chat_response']
     assert any('cp.lead_id=d.lead_id' in query for query,_ in cursor.calls)
+
+
+def test_negated_send_is_not_an_order_to_send(allowed, monkeypatch):
+    from services import partnership_prepared_copy
+    monkeypatch.setattr(partnership_prepared_copy, 'save_human_draft', lambda *a, **kw: {'id':'saved','status':'generated','channel':'email'})
+    cursor=Cursor(lead()); selected=operator_partner_work.partner_selection(cursor,user_id=USER,business_id=BUSINESS,item_id=LEAD)
+    result,_=operator_partner_work.route(cursor,user_id=USER,business_id=BUSINESS,
+        message='Сохрани готовое письмо для email public@example.test. Не генерируй и ничего не отправляй.\n\nЗдравствуйте!\n\nПредлагаем обсудить партнёрство.',selected=selected)
+    assert result['saved_draft']['id']=='saved'
+    assert result['status']=='completed'
+    assert 'сохранён' in result['chat_response'].lower()
+    assert 'Откройте письмо в карточке' not in result['chat_response']
+
+
+def test_negated_send_does_not_swallow_prepare(allowed):
+    cursor=Cursor(lead());selected=operator_partner_work.partner_selection(cursor,user_id=USER,business_id=BUSINESS,item_id=LEAD)
+    result,_=operator_partner_work.route(cursor,user_id=USER,business_id=BUSINESS,message='Подготовь первое письмо. Не отправляй.',selected=selected)
+    assert result['status']=='approval_required'
+
+
+def test_save_without_body_is_clarification_not_completion(allowed):
+    cursor=Cursor(lead());selected=operator_partner_work.partner_selection(cursor,user_id=USER,business_id=BUSINESS,item_id=LEAD)
+    result,_=operator_partner_work.route(cursor,user_id=USER,business_id=BUSINESS,message='Сохрани письмо, но не отправляй',selected=selected)
+    assert result['status']=='clarification_required'
+
+
+def test_dictated_ready_copy_does_not_require_blank_lines(allowed,monkeypatch):
+    from services import partnership_prepared_copy
+    seen={}
+    def save(*args,**kwargs):
+        seen.update(kwargs);return {'id':'saved','status':'generated','channel':'email'}
+    monkeypatch.setattr(partnership_prepared_copy,'save_human_draft',save)
+    c=Cursor(lead());selected=operator_partner_work.partner_selection(c,user_id=USER,business_id=BUSINESS,item_id=LEAD)
+    result,_=operator_partner_work.route(c,user_id=USER,business_id=BUSINESS,message='Сохрани письмо, не отправляй. Текст: Здравствуйте! Предлагаем партнёрство.',selected=selected)
+    assert result['saved_draft']['id']=='saved'
+    assert seen['text']=='Здравствуйте! Предлагаем партнёрство.'

@@ -78,7 +78,10 @@ def queue_first_note(cursor, *, user_id, business_id, lead_id, workstream_id=Non
 
 def route(cursor, *, user_id, business_id, message, selected, conversation_id=None):
     current = partner_selection(cursor, user_id=user_id, business_id=business_id, item_id=selected.get('item_id'))
-    text = str(message or '').strip().lower()
+    original = str(message or '').strip()
+    text = original.lower()
+    instruction = original.split('\n\n',1)[0]
+    intent = re.sub(r'\bне\s+(?:отправ\w*|разошл\w*|рассыл\w*|напомина\w*)', '', instruction.lower())
     if current['version'] != selected.get('version') and re.search(r'подготов|напиши|составь|создай|новое письмо|отправ|разошл', text):
         raise ValueError('Карточка партнёра изменилась. Откройте её заново перед продолжением.')
     base = {'capability': 'partnerships.read', 'status': 'completed', 'external_writes_performed': False,
@@ -88,7 +91,25 @@ def route(cursor, *, user_id, business_id, message, selected, conversation_id=No
             cursor.execute("UPDATE operatoractions SET status='rejected',updated_at=NOW() WHERE business_id=%s AND user_id=%s AND conversation_id=%s AND capability='partnerships.selected_draft' AND status IN ('pending','pending_approval')", (business_id, user_id, conversation_id))
         return {**base, 'status': 'cancelled', 'chat_response': 'Обсуждение партнёра закрыто.'}, {}
     pending = {'capability': 'partnerships.selected', 'selected_partner': current}
-    if re.search(r'отправ|разошл|напомни', text):
+    if re.search(r'сохран\w*|сохрани', instruction, re.I) and re.search(r'письм|черновик', instruction, re.I):
+        body = original.split('\n\n',1)[1] if '\n\n' in original else ''
+        if not body:
+            quoted = re.search(r'(?:следующий\s+текст|текст\s+письма|текст)\s*:\s*(.+)',original,re.I|re.S)
+            if quoted:body=quoted.group(1)
+            else:
+                greeting=re.search(r'\b(?:Здравствуйте|Добрый день|Добрый вечер)\b',original,re.I)
+                if greeting:body=original[greeting.start():]
+        if not body.strip():
+            return {**base, 'status':'clarification_required', 'chat_response':'Пришлите готовый текст после пустой строки. Сохраню только черновик, без отправки.'}, pending
+        from services.partnership_prepared_copy import save_human_draft
+        email = re.search(r'[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}', instruction, re.I)
+        telegram = re.search(r'(?:https://t.me/|(?<![\w.])@)([A-Za-z][A-Za-z0-9_]{3,31})', instruction) if not email else None
+        saved = save_human_draft(cursor,user_id=user_id,business_id=business_id,lead_id=current['item_id'],text=body,
+            channel='email' if email else 'telegram' if telegram else None,recipient=email.group(0) if email else '@'+telegram.group(1) if telegram else None)
+        if saved.get('status') == 'approved':
+            return {**base,'status':'clarification_required','saved_draft':saved,'chat_response':'Этот текст уже утверждён в карточке. Новая отправка не создавалась; проверьте сохранённый статус.'}, pending
+        return {**base,'capability':'partnerships.selected_draft','saved_draft':saved,'chat_response':f"Черновик для {current['name']} сохранён. Откройте карточку, чтобы проверить текст и получателя. Письмо не утверждено и не отправлено."}, pending
+    if re.search(r'отправ|разошл|напомни', intent):
         return {**base, 'chat_response': 'Откройте письмо в карточке партнёра: проверьте полный текст, контакт и канал, затем отдельно подтвердите отправку.'}, pending
     if re.search(r'подготов|напиши|составь|создай|новое письмо', text):
         return {**base, 'capability': 'partnerships.selected_draft', 'status': 'approval_required',

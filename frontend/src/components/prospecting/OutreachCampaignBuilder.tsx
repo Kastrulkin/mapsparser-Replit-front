@@ -729,7 +729,7 @@ export function OutreachCampaignBuilder({
         ? 'Сначала исправьте сообщения с замечаниями'
         : campaignNeedsChannelSetup
           ? 'Сначала настройте каналы и отправителя'
-          : 'Утвердить цепочку и перейти к отправке';
+          : 'Подтвердить и запланировать отправку';
   const pilotAlreadySent = (selectedCampaign?.touches || []).some((touch) => (
     ['manual_sent', 'sent', 'delivered'].includes(String(touch.status || ''))
   ));
@@ -1204,7 +1204,7 @@ export function OutreachCampaignBuilder({
       ) : null}
       {selectedCampaign?.status === 'draft' ? (
         <p className="text-pretty text-center text-xs leading-5 text-slate-500">
-          После нажатия статус изменится с «Черновик» на «Утверждена». Сообщение ещё не отправится: первое касание запускается отдельно после проверки готовности.
+          После подтверждения сообщения встанут в очередь на указанные даты и могут отправиться автоматически. Сначала проверьте даты, тексты и получателей.
         </p>
       ) : null}
 

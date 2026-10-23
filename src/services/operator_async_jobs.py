@@ -16,7 +16,7 @@ RETRYABLE_JOB_KINDS = {
     "content_draft_generate",
     "finance_document_recognize",
     "finance_crm_sync",
-    "diagnostics_retry",
+    "diagnostics_retry", "partner_copy_prepare",
 }
 CANCELLABLE_JOB_KINDS = {
     "audio_transcription", "audio_speech", "voice_receive", "voice_execute",
@@ -493,7 +493,11 @@ def process_next_operator_async_job(*, background: bool = False, background_only
         if kind == "outreach_continue":
             from services.outreach_continuation import process_job
             return {"id": job_id, "kind": kind, **process_job(claimed)}
-        if kind in {"voice_receive", "voice_execute"}:
+        if kind == "partner_copy_prepare":
+            from services.partnership_prepared_campaigns import process_preparation_job
+            result = process_preparation_job(claimed)
+            status, stage, progress = "completed", "Касания сохранены без отправки", 100
+        elif kind in {"voice_receive", "voice_execute"}:
             from services.operator_voice_queue import process_job
             result = process_job(claimed)
             status, stage, progress = "completed", "Обработка завершена", 100

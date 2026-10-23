@@ -1,3 +1,4 @@
+import { PreparedPartnershipMessages } from '@/components/prospecting/PreparedPartnershipMessages';
 import { OutreachMessageQueue } from '@/components/prospecting/OutreachMessageQueue';
 import { OutreachContinuation } from '@/components/prospecting/OutreachContinuation';
 import { buildCandidateSearchGroups, resolveSearchTask, taskLabel, type SearchTaskGroup } from '@/components/prospecting/partnershipSearchGroups';
@@ -54,7 +55,6 @@ import {
 	recordPartnershipReaction,
 	runPartnershipGeoSearch,
 	runPartnershipLeadAction,
-	startPartnershipContactIntelligence,
 	updatePartnershipQueueDelivery,
 } from '@/components/prospecting/partnershipApi';
 import {
@@ -532,6 +532,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const showDemoPartner = searchParams.get('demo') === 'romashka';
   const requestedLeadId = searchParams.get('lead');
+  const openedRequestedLead = useRef<string | null>(null);
   const requestedFocus = searchParams.get('focus');
   const requestedSection = searchParams.get('section');
   const requestedSearchTaskId = searchParams.get('search_task_id');
@@ -915,18 +916,20 @@ export const PartnershipSearchPage: React.FC = () => {
 
   useEffect(() => {
     if (!requestedLeadId || !items.length) return;
+    const entryKey = `${currentBusinessId}:${requestedLeadId}`;
+    if (openedRequestedLead.current === entryKey) return;
     const requestedLead = items.find((item) => item.id === requestedLeadId);
     if (!requestedLead) return;
-    setWorkspaceView('pipeline');
+    openedRequestedLead.current = entryKey;
+    setWorkspaceView('raw');
     setLeadBucket('active');
     setLeadView('all');
     setStage('all');
-    setQuery(String(requestedLead.name || ''));
-    setSelectedLeadId(null);
+    setSelectedLeadId(requestedLead.id);
     if (requestedFocus === 'match') {
       setMessage(`Открыта подготовка предложения для ${requestedLead.name || 'этой компании'}. Выполните выделенный следующий шаг — результат появится прямо в карточке.`);
     }
-  }, [items, requestedFocus, requestedLeadId]);
+  }, [items, currentBusinessId, requestedFocus, requestedLeadId]);
 
   const loadRalphLoop = async () => {
     if (!currentBusinessId) return;
@@ -1306,26 +1309,10 @@ export const PartnershipSearchPage: React.FC = () => {
 
   const handleSenderProfileChanged = (state: { confirmed: boolean; ready: boolean }) => {
     if (!currentBusinessId || !selectedLead) return;
-    if (!state.confirmed || !state.ready) {
-      setMessage('Черновик профиля сохранён. Заполните оставшиеся пункты и подтвердите факты — LocalOS сразу повторит проверку выбранного лида.');
-      void refreshOperationalData();
-      return;
-    }
-    const leadId = selectedLead.id;
-    const workstreamId = String(selectedLead.active_workstream_id || selectedLead.workstream_id || '').trim();
-    void runPartnershipAction('Профиль сохранён, но не удалось обновить выбранного лида', async () => {
-      const matchPayload = await runPartnershipLeadAction(currentBusinessId, leadId, 'match');
-      setMatchData(matchPayload.result || null);
-      if (workstreamId) {
-        await startPartnershipContactIntelligence(currentBusinessId, leadId, workstreamId);
-      }
-      setMessage(
-        workstreamId
-          ? 'Факты подтверждены. LocalOS заново проверил совместимость и обновляет персонализацию выбранного лида.'
-          : 'Факты подтверждены. LocalOS заново проверил совместимость; для персонализации нужно создать рабочий поток лида.',
-      );
-      await refreshAllPartnershipData();
-    });
+    setMessage(state.confirmed && state.ready
+      ? 'Профиль подтверждён. Для нового черновика запустите подготовку письма отдельно.'
+      : 'Черновик профиля сохранён. Заполните недостающие сведения и подтвердите факты.');
+    void refreshOperationalData();
   };
 
   const enrichContacts = async (leadId: string) => {
@@ -2420,6 +2407,8 @@ export const PartnershipSearchPage: React.FC = () => {
         visibleReactionsCount={visibleReactions.length}
         onWorkspaceChange={(value) => changeWorkspace(value)}
       />
+
+      {currentBusinessId && !searchParams.get('campaign_id') && <PreparedPartnershipMessages key={currentBusinessId} businessId={currentBusinessId} onCountChange={setCanonicalLetterCount} />}
 
       {(searchTaskOptions.length > 0 || candidateSearchGroups.groups.length > 0) && <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3">
         <label className="text-sm font-medium text-slate-700">Группа компаний

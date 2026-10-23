@@ -285,3 +285,22 @@ def test_changed_hashed_body_requires_new_campaign_approval(monkeypatch):
     result = outreach_safety_service.run_dispatch_preflight(GenericCampaignPreflightCursor(current, [touch]), "queue-1")
     assert result["allowed"] is False
     assert result["reason_code"] == "approval_version_changed"
+
+
+@pytest.mark.parametrize('current_facts,allowed',[('source-fingerprint-A',True),('changed-after-review',False)])
+def test_prepared_copy_dispatch_uses_same_merged_sources_as_preview(monkeypatch,current_facts,allowed):
+    from services import outreach_campaign_service
+    _allow_unrelated_generic_preflight_gates(monkeypatch)
+    campaign,current,touch=_generic_campaign_fixture()
+    policy={**campaign['policy_json'],'human_copy_hash':'prepared-copy'}
+    campaign['policy_json']=policy;current['policy_json']=policy
+    current['approved_snapshot_hash']=outreach_safety_service.approval_snapshot_hash(campaign,[touch])
+    calls=[]
+    def resolve(cursor,workstream_id,sender_mode):
+        calls.append(workstream_id)
+        return current_facts
+    monkeypatch.setattr(outreach_campaign_service,'current_outreach_source_fact_fingerprint',resolve)
+    result=outreach_safety_service.run_dispatch_preflight(GenericCampaignPreflightCursor(current,[touch]),'queue-1')
+    assert calls==['workstream-1']
+    assert result['allowed'] is allowed
+    if not allowed:assert result['reason_code']=='source_facts_changed'
