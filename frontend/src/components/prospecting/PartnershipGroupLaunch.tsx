@@ -14,7 +14,7 @@ const inputValue = (value: string) => {
   const parts = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(value));
   return parts.replace(' ', 'T');
 };
-export function PartnershipGroupLaunch({ businessId, collectionId, mobile = false }: { businessId: string; collectionId: string; mobile?: boolean }) {
+export function PartnershipGroupLaunch({ businessId, collectionId, mobile = false, onLaunched }: { businessId: string; collectionId: string; mobile?: boolean; onLaunched?: () => void }) {
   const [opened, setOpened] = useState(false), [preview, setPreview] = useState<Preview | null>(null), [schedule, setSchedule] = useState<Schedule | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [confirmation, setConfirmation] = useState(false);
   const [reviewed, setReviewed] = useState(false), [confirmed, setConfirmed] = useState(false), [receipt, setReceipt] = useState<Response['launch']>(undefined);
@@ -36,7 +36,7 @@ export function PartnershipGroupLaunch({ businessId, collectionId, mobile = fals
   const approve = async () => {
     if (!preview || !reviewed || !confirmed || busy || !preview.runtime_ready) return;
     const version = epoch.current; setBusy(true); setError('');
-    try { const result: Response = await request({ action: 'confirm', schedule, digest: preview.digest, reviewed, confirmed }); if (epoch.current !== version) return; if (!result.launch) throw new Error('Статус не подтверждён. Обновите группу перед повтором.'); setReceipt(result.launch); setConfirmation(false); }
+    try { const result: Response = await request({ action: 'confirm', schedule, digest: preview.digest, reviewed, confirmed }); if (epoch.current !== version) return; if (!result.launch) throw new Error('Статус не подтверждён. Обновите группу перед повтором.'); setReceipt(result.launch); setConfirmation(false); onLaunched?.(); }
     catch (issue) { if (epoch.current === version) { setError(issue instanceof Error ? issue.message : 'Подтверждение не завершено. Обновите группу перед повтором.'); setConfirmation(false); setReviewed(false); setConfirmed(false); setPreview(null); } }
     finally { if (epoch.current === version) setBusy(false); }
   };

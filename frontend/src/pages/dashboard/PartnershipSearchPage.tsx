@@ -564,6 +564,9 @@ export const PartnershipSearchPage: React.FC = () => {
   const [leadTotalCount, setLeadTotalCount] = useState(0);
   const [searchTasks, setSearchTasks] = useState<SearchTaskGroup[]>([]);
   const [canonicalLetterCount, setCanonicalLetterCount] = useState(0);
+  const [canonicalSendCount, setCanonicalSendCount] = useState<number | undefined>(undefined);
+  const [sendRefreshVersion, setSendRefreshVersion] = useState(0);
+  const handleGroupLaunched = useCallback(() => setSendRefreshVersion(value => value + 1), []);
   const [selectedSearchGroup, setSelectedSearchGroup] = useState(requestedSearchTaskId ? `task:${requestedSearchTaskId}` : 'all');
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
@@ -739,7 +742,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const searchTaskOptions = useMemo(() => searchTasks.map((task) => ({
     id: `task:${task.id}`, label: taskLabel(task), count: task.report?.imported || 0,
   })), [searchTasks]);
-  useEffect(() => { setCanonicalLetterCount(0); }, [currentBusinessId, selectedSearchGroup]);
+  useEffect(() => { setCanonicalLetterCount(0); setCanonicalSendCount(undefined); }, [currentBusinessId, selectedSearchGroup]);
   const selectedTask = searchTasks.find((task) => selectedSearchGroup === `task:${task.id}`);
   const selectedTaskLeadIds = selectedSearchGroup.startsWith('task:') ? new Set(selectedTask?.state?.lead_ids || []) : null;
   const legacyDrafts = unscopedDrafts.filter((draft) => !draft.learning_note_json?.campaign_id);
@@ -2363,7 +2366,7 @@ export const PartnershipSearchPage: React.FC = () => {
           rawLeadCount={rawLeadCount}
           pipelineLeadCount={pipelineLeadCount}
           visibleDraftsCount={visibleDrafts.length + canonicalLetterCount}
-          visibleBatchesCount={visibleBatches.length}
+          sendCount={canonicalSendCount} visibleBatchesCount={visibleBatches.length}
           visibleReactionsCount={visibleReactions.length}
           onWorkspaceChange={(value) => changeWorkspace(value)}
         />
@@ -2405,7 +2408,7 @@ export const PartnershipSearchPage: React.FC = () => {
         rawLeadCount={rawLeadCount}
         pipelineLeadCount={pipelineLeadCount}
         visibleDraftsCount={visibleDrafts.length + canonicalLetterCount}
-        visibleBatchesCount={visibleBatches.length}
+        sendCount={canonicalSendCount} visibleBatchesCount={visibleBatches.length}
         visibleReactionsCount={visibleReactions.length}
         onWorkspaceChange={(value) => changeWorkspace(value)}
       />
@@ -2433,13 +2436,13 @@ export const PartnershipSearchPage: React.FC = () => {
         rawLeadCount={rawLeadCount}
         pipelineLeadCount={pipelineLeadCount}
         visibleDraftsCount={visibleDrafts.length + canonicalLetterCount}
-        visibleBatchesCount={visibleBatches.length}
+        sendCount={canonicalSendCount} visibleBatchesCount={visibleBatches.length}
         visibleReactionsCount={visibleReactions.length}
         onWorkspaceChange={(value) => changeWorkspace(value)}
       />
 
 
-      {currentBusinessId && workspaceView === 'queue' && selectedSearchGroup.startsWith('task:') && <PartnershipGroupLaunch businessId={currentBusinessId} collectionId={selectedSearchGroup.slice(5)} />}
+      {currentBusinessId && workspaceView === 'queue' && selectedSearchGroup.startsWith('task:') && <PartnershipGroupLaunch businessId={currentBusinessId} collectionId={selectedSearchGroup.slice(5)} onLaunched={handleGroupLaunched} />}
       {currentBusinessId && !searchParams.get('campaign_id') && <PreparedPartnershipMessages key={`${currentBusinessId}:${selectedSearchGroup}`} businessId={currentBusinessId} showMessages={workspaceView === 'drafts'} searchTaskId={selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : undefined} onCountChange={setCanonicalLetterCount} />}
 
 
@@ -2836,8 +2839,8 @@ export const PartnershipSearchPage: React.FC = () => {
 
           {(workspaceView === 'drafts' || workspaceView === 'queue') ? (
           <>
-          <OutreachMessageQueue key={`${currentBusinessId}:${selectedSearchGroup}:${workspaceView}:${searchParams.get('campaign_id') || ''}`}
-            onCountChange={setCanonicalLetterCount} searchTaskId={selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : null} businessId={currentBusinessId || undefined} scope="client_partnership" query="" channel="" status=""
+          <OutreachMessageQueue key={`${currentBusinessId}:${selectedSearchGroup}:${workspaceView}:${searchParams.get('campaign_id') || ''}:${sendRefreshVersion}`}
+            onCountChange={workspaceView === 'queue' ? setCanonicalSendCount : setCanonicalLetterCount} searchTaskId={selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : null} businessId={currentBusinessId || undefined} scope="client_partnership" query="" channel="" status=""
             campaignId={searchParams.get('campaign_id')} presentation={workspaceView === 'drafts' ? 'letters' : 'send'}
             onChannelChange={() => {}} onStatusChange={() => {}} onOpenLead={(id) => setSelectedLeadId(id)} />
           {searchParams.get('campaign_id') && <Button variant="outline" onClick={() => { const next = new URLSearchParams(searchParams); next.delete('campaign_id'); setSearchParams(next); }}>Показать все письма</Button>}

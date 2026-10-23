@@ -74,3 +74,11 @@ it('defaults to first messages and invalidates review when scope changes',async(
  await userEvent.click(screen.getByLabelText('Только первые обращения. Повторные касания останутся черновиками.'));
  expect(screen.queryByRole('button',{name:'Перейти к итоговой проверке'})).toBeNull();
 });
+it('refreshes the parent queue exactly once after a confirmed launch',async()=>{
+ const launched=vi.fn();render(<PartnershipGroupLaunch businessId="business" collectionId="group" onLaunched={launched}/>);await open();
+ expect(launched).not.toHaveBeenCalled();await userEvent.click(screen.getByRole('button',{name:'Перейти к итоговой проверке'}));
+ for(const box of screen.getAllByRole('checkbox'))await userEvent.click(box);
+ mocks.request.mockResolvedValueOnce({launch:{batch_id:'batch',company_count:50,touch_count:50}});
+ await userEvent.click(screen.getByRole('button',{name:'Подтвердить и поставить в очередь'}));
+ await waitFor(()=>expect(launched).toHaveBeenCalledTimes(1));
+});

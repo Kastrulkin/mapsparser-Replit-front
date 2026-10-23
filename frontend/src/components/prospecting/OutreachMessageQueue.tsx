@@ -236,6 +236,13 @@ export function OutreachMessageQueue({
     return () => { requestVersion.current += 1; window.clearTimeout(timer); };
   }, [loadMessages, query]);
 
+  const hasPendingSends = ['scheduled', 'queued', 'sending', 'retry'].some(value => Number(summary[value] || 0) > 0);
+  useEffect(() => {
+    if (presentation !== 'send' || !hasPendingSends || loading) return;
+    const timer = window.setInterval(() => { if (!document.hidden) void loadMessages(); }, 15000);
+    return () => window.clearInterval(timer);
+  }, [presentation, hasPendingSends, loading, loadMessages]);
+
   const visibleCount = useMemo(() => items.length, [items]);
 
   return (

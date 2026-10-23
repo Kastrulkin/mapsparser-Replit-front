@@ -6,20 +6,20 @@ import { getPartnershipWorkspaceCopy } from '@/i18n/partnershipWorkspaceCopy';
 type PartnershipWorkspaceOverviewProps = {
   workspaceView: string; currentBusinessId?: string | null;
   rawLeadCount: number; pipelineLeadCount: number; visibleDraftsCount: number;
-  visibleBatchesCount: number; visibleReactionsCount: number;
+  visibleBatchesCount: number; visibleReactionsCount: number; sendCount?: number;
   onWorkspaceChange: (value: string) => void;
   part?: 'header' | 'navigation' | 'both';
 };
 
 export function PartnershipWorkspaceOverview({ workspaceView, rawLeadCount, pipelineLeadCount,
-  visibleDraftsCount, visibleBatchesCount, visibleReactionsCount, onWorkspaceChange,
+  visibleDraftsCount, visibleBatchesCount, visibleReactionsCount, sendCount, onWorkspaceChange,
   part = 'both' }: PartnershipWorkspaceOverviewProps) {
   const { language } = useLanguage();
   const copy = getPartnershipWorkspaceCopy(language);
   const stages = [
     { value: 'raw', label: language === 'ru' ? 'Компании' : 'Companies', count: rawLeadCount + pipelineLeadCount, Icon: Building2 },
     { value: 'drafts', label: copy.drafts, count: visibleDraftsCount, Icon: Mail },
-    { value: 'queue', label: copy.sending, count: visibleBatchesCount, Icon: Send },
+    { value: 'queue', label: copy.sending, count: sendCount ?? visibleBatchesCount, Icon: Send },
     { value: 'sent', label: copy.replies, count: visibleReactionsCount, Icon: MessageSquare },
   ];
   return <>

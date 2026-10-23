@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { newAuth } from '../../lib/auth_new';
 import { OutreachMessageQueue } from './OutreachMessageQueue';
 
@@ -80,4 +80,18 @@ describe('OutreachMessageQueue', () => {
     expect(openLead).toHaveBeenCalledWith('lead-1', 'workstream-1');
     await waitFor(() => expect(newAuth.makeRequest).toHaveBeenCalledOnce());
   });
+});
+
+afterEach(()=>{vi.useRealTimers();vi.restoreAllMocks();});
+it('refreshes active sends, then stops polling after the last terminal outcome',async()=>{
+ vi.useFakeTimers();vi.spyOn(document,'hidden','get').mockReturnValue(false);
+ vi.mocked(newAuth.makeRequest).mockReset();
+ vi.mocked(newAuth.makeRequest).mockResolvedValueOnce({items:[],summary:{all:1,queued:1}}).mockResolvedValue({items:[],summary:{all:1,sent:1}});
+ render(<OutreachMessageQueue presentation="send" query="" scope="client_partnership" businessId="business" channel="" status="" onChannelChange={()=>{}} onStatusChange={()=>{}} onOpenLead={()=>{}}/>);
+ await act(async()=>{await vi.advanceTimersByTimeAsync(0);});
+ expect(newAuth.makeRequest).toHaveBeenCalledTimes(1);
+ await act(async()=>{await vi.advanceTimersByTimeAsync(15000);});
+ expect(newAuth.makeRequest).toHaveBeenCalledTimes(2);
+ await act(async()=>{await vi.advanceTimersByTimeAsync(30000);});
+ expect(newAuth.makeRequest).toHaveBeenCalledTimes(2);
 });
