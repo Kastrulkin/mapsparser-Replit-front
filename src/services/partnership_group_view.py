@@ -10,7 +10,7 @@ class GroupNotFound(ValueError):
 
 def load_group_scope(cursor, business_id: str, task_id: str) -> dict[str, Any]:
     cursor.execute("""SELECT id, result_json, payload_json FROM operator_async_jobs
-        WHERE id::text=%s AND business_id=%s AND kind='outreach_continue'""", (task_id, business_id))
+        WHERE id::text=%s AND business_id=%s AND (kind='outreach_continue' OR (kind='partnership_source_collection' AND status='completed'))""", (task_id, business_id))
     found = cursor.fetchone()
     if not found:
         raise GroupNotFound("search_task_not_found")
@@ -120,6 +120,8 @@ def presentation(task, *, draft_job=None, available_credits=None):
     elif running:
         action = {"kind": "control", "action": "pause", "label": "Приостановить поиск" if phase == "companies" else "Приостановить подготовку писем" if phase == "letters" else "Приостановить работу"}
     reason = BLOCKERS.get(blocker, "Работа остановилась. Посмотрите подробности.") if blocker else None
+    if state.get('template_draft_receipts') and blocker == 'draft_quality_review_required':
+        reason = 'Письмо собрано по сохранённому шаблону. Просмотрите текст перед отправкой.'
     if status == "completed" and phase == "companies" and report.get("shortfall"):
         reason = f"Подходящих компаний: {report.get('eligible', 0)} из {config.get('target_count', 0)}. Доступные источники или согласованные ограничения исчерпаны."
     if drafts.get('status') == 'failed':

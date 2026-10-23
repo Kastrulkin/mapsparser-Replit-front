@@ -439,7 +439,7 @@ def create_task(cursor: Any, *, business_id: str, user_id: str, config: dict[str
 
 
 def list_tasks(cursor: Any, *, business_id: str, user_id: str) -> list[dict[str, Any]]:
-    cursor.execute("""SELECT * FROM operator_async_jobs WHERE kind=%s AND business_id=%s
+    cursor.execute("""SELECT * FROM operator_async_jobs WHERE (kind=%s OR (kind='partnership_source_collection' AND status='completed')) AND business_id=%s
         ORDER BY created_at DESC LIMIT 50""", (KIND, business_id))
     return [view(dict(row)) for row in cursor.fetchall()]
 
