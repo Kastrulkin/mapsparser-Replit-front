@@ -45,8 +45,9 @@ def test_telegram_ui_passes_explicit_scope_through_connection_and_permissions():
     assert "Сообщения от вашего имени" in component
     assert "sender_scope=" in admin_registry
     assert "senderScope={senderScope}" in settings_page
-    assert "Telegram для продаж LocalOS" in integrations_page
-    assert "не будет доступен партнёрским кампаниям" in integrations_page
+    assert "Telegram-аккаунт LocalOS" in integrations_page
+    assert "подтверждённые сообщения от лица выбранного бизнеса" in integrations_page
+    assert "не будет доступен партнёрским кампаниям" not in integrations_page
     assert "Вернуться к выбранному лиду" in integrations_page
     assert "От имени бизнеса через LocalOS" in admin_registry
     assert "sender_mode: senderMode" in admin_registry
@@ -58,6 +59,9 @@ class _ScopeAccountCursor:
         self.rows = rows
 
     def execute(self, _query, _params=None):
+        return None
+
+    def fetchone(self):
         return None
 
     def fetchall(self):
@@ -151,3 +155,15 @@ def test_platform_preflight_accepts_exact_connected_platform_binding(monkeypatch
 
     assert allowed is True
     assert reason == "ready"
+
+
+def test_platform_status_follows_global_binding_not_selected_client(monkeypatch):
+    class Global:
+        def execute(self,query,params=None):
+            self.query=query;self.params=params
+        def fetchone(self):return {'external_account_id':'global-credential'}
+    cursor=Global()
+    monkeypatch.setattr('api.telegram_research_api.load_userbot_account',lambda cursor,**kwargs:{'account_id':kwargs['account_id']})
+    assert _account_for_scope(cursor,'unrelated-selected-point','platform')['account_id']=='global-credential'
+    assert "s.scope_type='platform'" in cursor.query and 's.business_id IS NULL' in cursor.query
+    assert 'account.business_id = %s' not in cursor.query

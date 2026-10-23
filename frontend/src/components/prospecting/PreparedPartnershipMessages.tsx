@@ -1,3 +1,4 @@
+import { PartnershipGroupLaunch } from './PartnershipGroupLaunch';
 import { mobileJsonHeaders, readMobileJson } from '@/lib/mobileDataClient';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -64,6 +65,7 @@ export function PreparedPartnershipMessages({ businessId,searchTaskId,showMessag
   };
   if(!showMessages)return null;
   return <section aria-label="Готовые касания партнёрам" className="space-y-4 rounded-2xl border border-border bg-card p-4 text-card-foreground">
+    {searchTaskId && <PartnershipGroupLaunch businessId={businessId} collectionId={searchTaskId} mobile={mobile} />}
     <header><h2 className="text-xl font-semibold">Первые обращения новым партнёрам</h2><p className="mt-2 text-sm text-muted-foreground">Проверьте получателя и готовые сообщения. Подтверждение текста ничего не отправляет. Любой ответ остановит дальнейшие касания.</p></header>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}{notice && <p role="status" className="text-sm">{notice}</p>}
     {!searchTaskId && groups.length>1 && <label className="block text-sm">Подборка<select aria-label="Подборка готовых касаний" value={activeGroup} onChange={event=>{setGroup(event.target.value);setSelected(null);setChecked(false);}} className="mt-2 min-h-11 w-full rounded-md border bg-background p-2">{groups.map(name=><option key={name}>{name}</option>)}</select></label>}

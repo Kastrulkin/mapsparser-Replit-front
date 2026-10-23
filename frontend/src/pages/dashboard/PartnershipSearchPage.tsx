@@ -1,3 +1,4 @@
+import { PartnershipGroupLaunch } from '@/components/prospecting/PartnershipGroupLaunch';
 import { PreparedPartnershipMessages } from '@/components/prospecting/PreparedPartnershipMessages';
 import { OutreachMessageQueue } from '@/components/prospecting/OutreachMessageQueue';
 import { OutreachContinuation } from '@/components/prospecting/OutreachContinuation';
@@ -2438,6 +2439,7 @@ export const PartnershipSearchPage: React.FC = () => {
       />
 
 
+      {currentBusinessId && workspaceView === 'queue' && selectedSearchGroup.startsWith('task:') && <PartnershipGroupLaunch businessId={currentBusinessId} collectionId={selectedSearchGroup.slice(5)} />}
       {currentBusinessId && !searchParams.get('campaign_id') && <PreparedPartnershipMessages key={`${currentBusinessId}:${selectedSearchGroup}`} businessId={currentBusinessId} showMessages={workspaceView === 'drafts'} searchTaskId={selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : undefined} onCountChange={setCanonicalLetterCount} />}
 
 
@@ -2862,7 +2864,7 @@ export const PartnershipSearchPage: React.FC = () => {
           />
           ) : null}
 
-          {workspaceView === 'queue' && !searchParams.get('campaign_id') ? (
+          {workspaceView === 'queue' && !searchParams.get('campaign_id') && !selectedSearchGroup.startsWith('task:') ? (
           <PartnershipQueueSection
             batches={visibleBatches}
             selectedQueueIds={selectedQueueIds}

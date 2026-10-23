@@ -124,6 +124,18 @@ def _account_for_scope(
     carry the requested scope inside the encrypted auth payload until a binding
     can be created.
     """
+    if scope_type == "platform":
+        # Platform binding is global. The selected client is not the credential owner.
+        # Callers enforce superadmin scope before reaching this read.
+        cursor.execute("""SELECT s.external_account_id FROM outreach_sender_accounts s
+            JOIN externalbusinessaccounts a ON a.id=s.external_account_id
+            WHERE s.scope_type='platform' AND s.business_id IS NULL AND s.channel='telegram'
+              AND s.status='connected' AND a.source='telegram_app' AND a.is_active=TRUE
+            ORDER BY s.updated_at DESC LIMIT 1""")
+        bound = cursor.fetchone()
+        if bound:
+            account_id = bound['external_account_id'] if hasattr(bound, 'keys') else bound[0]
+            return load_userbot_account(cursor, account_id=str(account_id))
     binding_business_id = business_id if scope_type == "business" else None
     cursor.execute(
         """

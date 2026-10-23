@@ -1632,6 +1632,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
 
   const summaryFirstTouch = outreachCalendarTouches[0] || null;
   const summaryFirstTouchMoment = formatOutreachMoment(summaryFirstTouch?.scheduled_at);
+  const summarySenderId = sequenceSenders[0] || savedOutreachCampaign?.touches?.find(touch => touch.sequence_index === 0)?.sender_account_id;
+  const summarySender = senderAccounts.find(account => account.id === summarySenderId);
+  const summarySenderLabel = summarySender ? outreachSenderDisplayLabel(summarySender) : 'Отправитель не выбран';
+  const summarySenderReady = outreachSenderReady(summarySender);
   const summaryStatus = campaignSetupDirty
     ? 'Есть несохранённые настройки'
     : savedOutreachCampaign?.status === 'approved' && pilotReplyReceived
@@ -3275,9 +3279,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     <div className="min-w-0">
                       <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">Отправитель</div>
                       <div className="mt-1 truncate text-sm font-semibold text-slate-950">
-                        {senderAccountsLoading ? 'Проверяем…' : connectedEmailSender?.sender_identity || 'Email не подключён'}
+                        {senderAccountsLoading ? 'Проверяем…' : summarySenderLabel}
                       </div>
-                      {connectedEmailSender?.display_name ? <div className="mt-0.5 truncate text-xs text-slate-500">{connectedEmailSender.display_name}</div> : null}
+                      <div className="mt-0.5 text-xs text-slate-500">Отправитель первого касания</div>
                     </div>
                     <div className="min-w-0">
                       <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">Первый шаг</div>
@@ -4512,10 +4516,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 key={`sender-${selectedWorkstream.id || 'legacy'}-${selectedSenderScope}`}
                 id="sender-settings"
                 title="Отправитель и подключения"
-                description={connectedEmailSender?.sender_identity
-                  ? `${connectedEmailSender.sender_identity} · ${connectedEmailReady ? 'готов к отправке' : 'нужно проверить разрешение'}`
-                  : `${selectedSenderLabel} · email не подключён`}
-                status={connectedEmailReady ? 'Готово' : 'Нужно действие'}
+                description={`${summarySenderLabel} · ${summarySenderReady ? 'готов к отправке' : 'нужно проверить разрешение'}`}
+                status={summarySenderReady ? 'Готово' : 'Нужно действие'}
               >
               <div className="rounded-md bg-slate-50 p-4">
                 <div className="flex items-center justify-between gap-3">
@@ -4523,7 +4525,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     <div className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Отправитель</div>
                     <div className="mt-1 font-semibold text-slate-950">{selectedSenderLabel}</div>
                     <div className="mt-1 text-sm font-medium text-slate-700">
-                      {senderAccountsLoading ? 'Проверяем email…' : connectedEmailSender?.sender_identity || 'Email пока не подключён'}
+                      {senderAccountsLoading ? 'Проверяем отправителя…' : summarySenderLabel}
                     </div>
                   </div>
                   <Badge variant="outline" className={readyChannelCount > 0

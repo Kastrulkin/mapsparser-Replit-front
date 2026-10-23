@@ -237,3 +237,45 @@ def partnership_continuations(task_id=None):
         return jsonify({'error': str(exc)}), 409
     finally:
         conn.close()
+
+
+@partnership_leads_bp.route('/api/partnership/collections/<collection_id>/launch', methods=['POST'])
+def partnership_collection_launch(collection_id):
+    user, error = _require_auth()
+    if error:
+        return error
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or payload.get('action') not in {'preview', 'confirm'}:
+        return jsonify(error='Нужна проверка или явное подтверждение группы.'), 400
+    business_id = payload.get('business_id')
+    if not isinstance(business_id, str) or not business_id:
+        return jsonify(error='Выберите точку.'), 400
+    db = DatabaseManager()
+    try:
+        from services import partnership_group_launch
+        cursor = db.conn.cursor()
+        if payload['action'] == 'preview':
+            result = partnership_group_launch.build_preview(cursor, user=user, business_id=business_id,
+                collection_id=collection_id, options=payload.get('schedule'))
+            db.conn.rollback()  # Preview cannot leave even incidental database writes.
+            return jsonify(success=True, preview=result)
+        result = partnership_group_launch.confirm_launch(cursor, user=user, business_id=business_id,
+            collection_id=collection_id, options=payload.get('schedule'), digest=payload.get('digest'),
+            reviewed=payload.get('reviewed'), confirmed=payload.get('confirmed'))
+        db.conn.commit()
+        return jsonify(success=True, launch=result)
+    except PermissionError:
+        db.conn.rollback()
+        return jsonify(error='Недостаточно прав для запуска этой подборки.'), 403
+    except LookupError:
+        db.conn.rollback()
+        return jsonify(error='Подборка недоступна или не найдена.'), 404
+    except ValueError as error:
+        db.conn.rollback()
+        return jsonify(error=str(error)), 409
+    except Exception:
+        db.conn.rollback()
+        current_app.logger.exception('partnership_collection_launch_failed')
+        return jsonify(error='Проверка группы не завершена. Ничего не подтверждено; обновите экран перед повтором.'), 500
+    finally:
+        db.close()
