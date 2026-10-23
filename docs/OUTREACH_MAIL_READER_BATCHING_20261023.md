@@ -15,3 +15,19 @@ Validation: 26 focused batching and receipt tests pass, including sparse complet
 windows, missing/duplicate UIDs and preservation of the legacy latest-message
 selection. A separate worker-scope fixture fails without DATABASE_URL on both the
 unchanged baseline and this change; it is not counted as passing.
+
+## Prior inbound without a current sent-touch match
+
+A complete scoped read can find an earlier inbound from an exact authorized
+recipient before the current touch was sent. It is not evidence of a reply to
+the new touch. The reader now durably records such incoming events and pauses
+only their exact recipient-linked campaigns for review. It does not mark a
+message sent, fabricate a current reply, or discard the incoming event.
+
+Unknown peers, missing durable context, and persistence failures still reject
+the complete-sync receipt. Replay uses the existing provider-event unique key.
+No mail credentials, recipient lists, or client message bodies are in this change.
+
+Validation: 31 focused tests pass across strict IMAP batching, complete reply
+receipts, and exact-recipient prior-inbound quarantine. Production sending
+continues to depend on a successful complete mailbox read.

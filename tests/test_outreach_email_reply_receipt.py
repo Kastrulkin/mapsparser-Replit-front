@@ -1130,3 +1130,18 @@ def test_mixed_sender_rejects_recipient_shared_by_author_and_sales_before_provid
     assert result["sender_results"][0]["error_code"] == "email_reply_sync_recipient_scope_overlap"
     assert fetch_calls == []
     assert [event["event_type"] for event in events] == ["reply_sync_failed"]
+
+
+def test_durably_quarantined_prior_inbound_does_not_block_other_recipients(monkeypatch):
+    from services import outreach_email_reply_service
+    message={'provider_event_id':'email:sender-1:all:1','message_id':'<old@example.net>',
+      'from_email':'author@example.net','body':'Earlier conversation','occurred_at':NOW}
+    calls,connections,events=_install_sync_fakes(monkeypatch,messages=[message])
+    quarantined=[]
+    def save(sender,reply,scope):
+        quarantined.append((sender,reply,scope));return True
+    monkeypatch.setattr(outreach_email_reply_service,'_quarantine_unmatched_scoped_message',save)
+    result=sync_email_replies(sender_account_id='sender-1')
+    assert quarantined and result['success'] and result['imported']==1
+    assert events[0]['event_type']=='reply_sync_succeeded'
+    assert events[0]['payload']['complete'] is True

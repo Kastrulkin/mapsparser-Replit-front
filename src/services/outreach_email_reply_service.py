@@ -297,6 +297,78 @@ def _match_queue_item(reply: dict[str, Any], candidates: list[dict[str, Any]]) -
     return None
 
 
+def _quarantine_unmatched_scoped_message(sender, reply, scope_candidates):
+    """Persist prior inbound by exact authorized recipient; never fake a send/reply."""
+    peers = {normalize_email(reply.get('from_email'))}
+    peers.update(normalize_email(value) for value in reply.get('dsn_recipient_emails') or [])
+    peers.discard('')
+    queue_ids = sorted({str(item['id']) for item in scope_candidates
+                        if item.get('id') and normalize_email(item.get('recipient_value')) in peers})
+    if not queue_ids or not reply.get('provider_event_id'):
+        return False
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""SELECT q.id, q.lead_id, q.workstream_id,
+            t.id AS touch_id,t.campaign_id
+            FROM outreachsendqueue q JOIN outreach_campaign_touches t ON t.id=q.campaign_touch_id
+            WHERE q.id=ANY(%s) AND q.sender_account_id=%s
+            AND q.channel='email' FOR UPDATE OF q""", (queue_ids,str(sender['id'])))
+        rows = [dict(row) for row in cursor.fetchall()]
+        if not rows or any(not all(row.get(key) for key in ['id','lead_id','workstream_id','touch_id','campaign_id']) for row in rows):
+            conn.rollback()
+            return False
+        row = rows[0]
+        classification = classify_inbound_event({'classification':reply.get('dsn_classification'),
+            'subject':reply.get('subject'),'body':reply.get('body'),
+            'auto_submitted':reply.get('auto_submitted'),'precedence':reply.get('precedence')})
+        campaigns = sorted({str(item['campaign_id']) for item in rows})
+        campaign_slots = ','.join(['%s'] * len(campaigns))
+        workstreams = sorted({str(item['workstream_id']) for item in rows})
+        workstream_slots = ','.join(['%s'] * len(workstreams))
+        payload = {key:reply.get(key) for key in ['message_id','from_email','subject','mailbox_uid','dsn_recipient_emails']}
+        payload.update(body=str(reply.get('body') or '')[:10000],
+            association='exact_recipient_history_requires_review',reply_to_current_touch=False,
+            affected_campaign_ids=campaigns)
+        cursor.execute("""INSERT INTO outreach_inbound_events(
+            id,campaign_id,touch_id,lead_id,workstream_id,sender_account_id,
+            channel,provider_event_id,event_type,classification,is_human,stops_campaign,
+            confidence,raw_payload_json,classified_by,occurred_at,created_at)
+            VALUES(%s,%s,%s,%s,%s,%s,'email',%s,'provider_event',%s,%s,TRUE,%s,%s,
+            'system',%s,NOW()) ON CONFLICT DO NOTHING RETURNING id""",
+            (str(uuid.uuid4()),row['campaign_id'],row['touch_id'],row['lead_id'],row['workstream_id'],
+             str(sender['id']),reply['provider_event_id'],classification['classification'],
+             classification['is_human'],classification['confidence'],Json(payload),reply.get('occurred_at')))
+        stored = cursor.fetchone()
+        if not stored:
+            cursor.execute("""SELECT id FROM outreach_inbound_events WHERE sender_account_id=%s
+                AND channel='email' AND provider_event_id=%s""",(str(sender['id']),reply['provider_event_id']))
+            if not cursor.fetchone():
+                conn.rollback()
+                return False
+        cursor.execute(f"""UPDATE outreach_campaigns SET status='paused',
+            stop_reason='prior_inbound_requires_review',needs_attention_reason='prior_inbound_requires_review',
+            updated_at=NOW() WHERE id IN ({campaign_slots}) AND status IN ('approved','active')""",tuple(campaigns))
+        cursor.execute(f"""UPDATE outreach_campaign_touches SET status='paused',
+            preflight_reason='prior_inbound_requires_review',updated_at=NOW()
+            WHERE campaign_id IN ({campaign_slots}) AND status IN ('approved','scheduled','queued')""",tuple(campaigns))
+        cursor.execute(f"""UPDATE outreachsendqueue SET delivery_status='paused',
+            preflight_reason='prior_inbound_requires_review',error_text='prior_inbound_requires_review',updated_at=NOW()
+            WHERE campaign_touch_id IN(SELECT id FROM outreach_campaign_touches WHERE campaign_id IN ({campaign_slots}))
+            AND delivery_status IN ('queued','retry')""",tuple(campaigns))
+        cursor.execute(f"""UPDATE lead_workstreams SET lifecycle_status='needs_attention',
+            status_reason='prior_inbound_requires_review',next_step='Разобрать прежнее входящее до возобновления отправки',
+            state_changed_at=NOW(),updated_at=NOW() WHERE id IN ({workstream_slots})""",tuple(workstreams))
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise EmailAdapterError('email_reply_unmatched_scoped_message',
+            'Prior inbound could not be durably associated and quarantined')
+    finally:
+        conn.close()
+
+
 def _sync_known_email_threads(
     sender: dict[str, Any],
     *,
@@ -838,6 +910,10 @@ def sync_email_replies(
                     continue
                 queue_item = _match_queue_item(reply, candidates)
                 if not queue_item:
+                    if _quarantine_unmatched_scoped_message(sender, reply, scope_candidates):
+                        summary["imported"] += 1
+                        sender_imported += 1
+                        continue
                     summary["unmatched"] += 1
                     sender_unmatched += 1
                     continue
@@ -922,6 +998,9 @@ def sync_email_replies(
                         continue
                     queue_item = _match_queue_item(reply, non_author_candidates)
                     if not queue_item:
+                        if _quarantine_unmatched_scoped_message(sender, reply, non_author_candidates):
+                            non_author_imported += 1
+                            continue
                         summary["unmatched"] += 1
                         non_author_unmatched += 1
                         continue
