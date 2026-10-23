@@ -162,3 +162,23 @@ def test_current_source_allows_review(monkeypatch):
         def execute(self,*args):pass
         def fetchone(self):return {'report_hash':'latest'}
     prepared.check_source_freshness(Cursor(),'work',[{'message_brief_json':{'source_fact_fingerprint':'same'}}])
+
+
+def test_group_preparation_jobs_filter_members_before_limit():
+    from services.partnership_prepared_campaigns import list_preparation_jobs
+    class Cursor:
+        def execute(self,query,params):self.query=query;self.params=params
+        def fetchall(self):return []
+    c=Cursor();assert list_preparation_jobs(c,business_id='business',user_id='user',lead_ids=['chosen'])==[]
+    assert "payload_json->'item'->>'lead_id' IN (%s)" in c.query
+    assert c.params==('user','business','chosen')
+
+
+def test_empty_group_cannot_load_all_saved_letters(monkeypatch):
+    from services import partnership_prepared_campaigns,operator_audio
+    import subscription_manager
+    monkeypatch.setattr(operator_audio,'authorize_actor',lambda *a,**k:({},{}))
+    monkeypatch.setattr(subscription_manager,'capability_access_payload',lambda *a,**k:{'allowed':True})
+    class Cursor:
+        def execute(self,*a):raise AssertionError('An empty group must never query all campaigns')
+    assert partnership_prepared_campaigns.list_prepared(Cursor(),business_id='business',user_id='user',lead_ids=[])==[]

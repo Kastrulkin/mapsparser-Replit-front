@@ -2187,7 +2187,15 @@ def partnership_prepared_messages():
         if request.method=='GET' and data.get('job_id'):
             return jsonify(job=prepared.preparation_status(cur,business_id=business_id,user_id=str(user.get('user_id') or user.get('id')),job_id=str(data['job_id'])))
         if request.method=='GET':
-            return jsonify(items=prepared.list_prepared(cur,business_id=business_id,user_id=str(user.get('user_id') or user.get('id'))),jobs=prepared.list_preparation_jobs(cur,business_id=business_id,user_id=str(user.get('user_id') or user.get('id'))))
+            lead_ids = None
+            if data.get('search_task_id'):
+                from services.partnership_group_view import load_group_scope, GroupNotFound
+                try:
+                    group = load_group_scope(cur, business_id, str(data['search_task_id']))
+                except GroupNotFound:
+                    return jsonify(error='search_task_not_found'),404
+                lead_ids = group['lead_ids']
+            return jsonify(items=prepared.list_prepared(cur,business_id=business_id,user_id=str(user.get('user_id') or user.get('id')),lead_ids=lead_ids),jobs=prepared.list_preparation_jobs(cur,business_id=business_id,user_id=str(user.get('user_id') or user.get('id')),lead_ids=lead_ids))
         if data.get('action')=='review':
             result=prepared.review_copy(cur,business_id=business_id,user=user,campaign_id=str(data.get('campaign_id') or ''),digest=str(data.get('review_digest') or ''))
         else:

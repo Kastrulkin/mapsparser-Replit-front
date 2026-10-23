@@ -147,12 +147,14 @@ def copy_digest(touches):
     return hashlib.sha256(json.dumps([{k:str(t.get(k) or '') for k in ['id','channel','contact_point_id','recipient','contact_source','sender_account_id','sender_identity','subject','generated_text','updated_at']} for t in touches],sort_keys=True,ensure_ascii=False).encode()).hexdigest()
 
 
-def list_prepared(cursor,*,business_id,user_id):
+def list_prepared(cursor,*,business_id,user_id,lead_ids=None):
     from services.operator_audio import authorize_actor
     from subscription_manager import capability_access_payload
     _,access=authorize_actor(cursor,user_id,business_id,check_subscription=False)
     if not capability_access_payload(access,'partnerships').get('allowed'):raise PermissionError('Нет доступа к партнёрствам.')
-    cursor.execute("SELECT DISTINCT ON(c.workstream_id) c.id,c.lead_id,c.workstream_id,c.status,c.policy_json,c.created_at,l.name,l.address,l.company_id FROM outreach_campaigns c JOIN prospectingleads l ON l.id=c.lead_id WHERE c.business_id=%s AND c.scope_type='business' AND c.policy_json->>'human_copy_hash' IS NOT NULL ORDER BY c.workstream_id,c.version DESC",(business_id,))
+    if lead_ids is not None and not lead_ids:return []
+    member_clause = ' AND l.id IN (' + ','.join(['%s'] * len(lead_ids)) + ')' if lead_ids is not None else ''
+    cursor.execute("SELECT DISTINCT ON(c.workstream_id) c.id,c.lead_id,c.workstream_id,c.status,c.policy_json,c.created_at,l.name,l.address,l.company_id FROM outreach_campaigns c JOIN prospectingleads l ON l.id=c.lead_id WHERE c.business_id=%s AND c.scope_type='business' AND c.policy_json->>'human_copy_hash' IS NOT NULL" + member_clause + " ORDER BY c.workstream_id,c.version DESC",(business_id, *(lead_ids or [])))
     rows=[_row(cursor,r) for r in cursor.fetchall()]
     rows.sort(key=lambda row:str(row.get('created_at') or ''),reverse=True)
     for row in rows:
@@ -242,8 +244,10 @@ def process_preparation_job(job):
     finally:db.close()
 
 
-def list_preparation_jobs(cursor,*,business_id,user_id):
-    cursor.execute("SELECT id,status,stage,error_text FROM operator_async_jobs WHERE user_id=%s AND business_id=%s AND kind='partner_copy_prepare' AND status IN ('queued','running') ORDER BY created_at DESC LIMIT 50",(user_id,business_id))
+def list_preparation_jobs(cursor,*,business_id,user_id,lead_ids=None):
+    if lead_ids is not None and not lead_ids:return []
+    member_clause = " AND payload_json->'item'->>'lead_id' IN (" + ','.join(['%s'] * len(lead_ids)) + ')' if lead_ids is not None else ''
+    cursor.execute("SELECT id,status,stage,error_text FROM operator_async_jobs WHERE user_id=%s AND business_id=%s AND kind='partner_copy_prepare' AND status IN ('queued','running')" + member_clause + " ORDER BY created_at DESC LIMIT 50",(user_id,business_id, *(lead_ids or [])))
     return [_row(cursor,row) for row in cursor.fetchall()]
 
 

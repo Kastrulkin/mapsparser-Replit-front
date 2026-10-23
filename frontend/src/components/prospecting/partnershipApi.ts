@@ -67,11 +67,11 @@ export const loadPartnershipRalphLoop = (businessId: string, pilotCohort: string
   return request(`/partnership/ralph-loop-summary?${params.toString()}`, { method: 'GET' });
 };
 
-export const loadPartnershipDrafts = (businessId: string, _searchTaskId?: string) =>
-  request(`/partnership/drafts?business_id=${encodeURIComponent(businessId)}`, { method: 'GET' });
+export const loadPartnershipDrafts = (businessId: string, searchTaskId?: string) =>
+  request(`/partnership/drafts?business_id=${encodeURIComponent(businessId)}${searchTaskId ? `&search_task_id=${encodeURIComponent(searchTaskId)}` : ''}`, { method: 'GET' });
 
-export const loadPartnershipBatches = (businessId: string, _searchTaskId?: string) =>
-  request(`/partnership/send-batches?business_id=${encodeURIComponent(businessId)}`, { method: 'GET' });
+export const loadPartnershipBatches = (businessId: string, searchTaskId?: string) =>
+  request(`/partnership/send-batches?business_id=${encodeURIComponent(businessId)}${searchTaskId ? `&search_task_id=${encodeURIComponent(searchTaskId)}` : ''}`, { method: 'GET' });
 
 export const loadPartnershipLearningMetrics = () =>
   request('/admin/ai/learning-metrics?intent=partnership_outreach', { method: 'GET' });

@@ -9,9 +9,7 @@ def load_collections(cursor, *, business_id, task_id=None):
     return [dict(row) for row in cursor.fetchall()]
 
 
-def collection_view(cursor, row, *, viewer_id):
-    from services.outreach_continuation import view, delivery_report
-    from services.partnership_group_view import enrich_group
+def collection_state(cursor, row):
     state = dict(row.get('result_json') or {})
     lead_ids = list(dict.fromkeys(str(value) for value in state.get('lead_ids') or []))
     state['campaign_results'] = {}
@@ -25,6 +23,13 @@ def collection_view(cursor, row, *, viewer_id):
             'campaign_id': str(item['id']), 'lead_id': str(item['lead_id']),
             'status': 'needs_manual_review', 'manual_review_required': True,
         } for item in cursor.fetchall()}
+    return state
+
+
+def collection_view(cursor, row, *, viewer_id):
+    from services.outreach_continuation import view, delivery_report
+    from services.partnership_group_view import enrich_group
+    state = collection_state(cursor, row)
     result = view({**row, 'result_json': state})
     result['read_only_collection'] = True
     result['report'].update(delivery_report(cursor, result))

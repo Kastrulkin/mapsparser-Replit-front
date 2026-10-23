@@ -9,12 +9,15 @@ class GroupNotFound(ValueError):
 
 
 def load_group_scope(cursor, business_id: str, task_id: str) -> dict[str, Any]:
-    cursor.execute("""SELECT id, result_json, payload_json FROM operator_async_jobs
+    cursor.execute("""SELECT id, result_json, payload_json, kind FROM operator_async_jobs
         WHERE id::text=%s AND business_id=%s AND (kind='outreach_continue' OR (kind='partnership_source_collection' AND status='completed'))""", (task_id, business_id))
     found = cursor.fetchone()
     if not found:
         raise GroupNotFound("search_task_not_found")
-    row = dict(found) if hasattr(found, "keys") else dict(zip(("id", "result_json", "payload_json"), found))
+    row = dict(found) if hasattr(found, "keys") else dict(zip(("id", "result_json", "payload_json", "kind"), found))
+    if row.get('kind') == 'partnership_source_collection':
+        from services.partnership_source_collections import collection_state
+        row['result_json'] = collection_state(cursor, {**row, 'business_id': business_id})
     row["lead_ids"] = list(dict.fromkeys(str(value) for value in (row.get("result_json") or {}).get("lead_ids") or []))
     return row
 

@@ -9,21 +9,23 @@ type Prepared = { id: string; lead_id: string; name: string; address?: string; s
 const statusLabels: Record<string,string> = {approved:'утверждено',active:'в работе',paused:'на паузе',completed:'завершено',cancelled:'отменено'};
 const channelName: Record<string,string> = { telegram: 'Telegram', email: 'Электронная почта' };
 
-export function PreparedPartnershipMessages({ businessId,onCountChange }: { businessId: string; onCountChange?: (count: number)=>void }) {
+export function PreparedPartnershipMessages({ businessId,searchTaskId,showMessages=true,onCountChange }: { businessId: string; searchTaskId?: string; showMessages?: boolean; onCountChange?: (count: number)=>void }) {
   const [items,setItems]=useState<Prepared[]>([]),[error,setError]=useState(''),[notice,setNotice]=useState(''),[loading,setLoading]=useState(false),[busy,setBusy]=useState(''),[selected,setSelected]=useState<Prepared|null>(null),[checked,setChecked]=useState(false),[group,setGroup]=useState(''),[fileItems,setFileItems]=useState<unknown[]>([]),[fileName,setFileName]=useState('');
   const [pendingJobs,setPendingJobs]=useState(0);
+  const inFlightEpoch=useRef<number|null>(null);
   const mounted=useRef(true),scope=useRef(businessId),epoch=useRef(0);if(scope.current!==businessId){scope.current=businessId;epoch.current++;}
   const load=async (keepError=false) => {
-    if(!mounted.current)return;const current=businessId,version=epoch.current;setLoading(true);
-    try { const result=await newAuth.makeRequest(`/partnership/prepared-messages?business_id=${encodeURIComponent(current)}`);if(!mounted.current || scope.current!==current || epoch.current!==version)return;setItems(result.items || []);onCountChange?.((result.items || []).reduce((total:number,item:Prepared)=>total+item.touches.length,0));setPendingJobs((result.jobs || []).length);if(!keepError)setError(''); }
+    if(!mounted.current || inFlightEpoch.current===epoch.current)return;const current=businessId,version=epoch.current;inFlightEpoch.current=version;setLoading(true);
+    try { const result=await newAuth.makeRequest(`/partnership/prepared-messages?business_id=${encodeURIComponent(current)}${searchTaskId ? `&search_task_id=${encodeURIComponent(searchTaskId)}` : ''}`);if(!mounted.current || scope.current!==current || epoch.current!==version)return;setItems(result.items || []);onCountChange?.((result.items || []).reduce((total:number,item:Prepared)=>total+(item.hold_reason ? 0 : item.touches.length),0));setPendingJobs((result.jobs || []).length);if(!keepError)setError(''); }
     catch(issue) {if(scope.current===current && epoch.current===version)setError(issue instanceof Error?issue.message:'Не удалось загрузить касания. Повторите проверку.');}
-    finally {if(scope.current===current && epoch.current===version)setLoading(false);}
+    finally {if(inFlightEpoch.current===version)inFlightEpoch.current=null;if(scope.current===current && epoch.current===version)setLoading(false);}
   };
-  useEffect(()=>{mounted.current=true;setItems([]);setPendingJobs(0);setSelected(null);setChecked(false);setError('');setNotice('');setGroup('');setFileItems([]);setFileName('');void load();return()=>{mounted.current=false;epoch.current++;};},[businessId]);
-  useEffect(()=>{if(!pendingJobs)return;const timer=setInterval(()=>void load(true),5000);return()=>clearInterval(timer);},[businessId,pendingJobs]);
+  useEffect(()=>{mounted.current=true;setItems([]);setPendingJobs(0);setSelected(null);setChecked(false);setError('');setNotice('');setGroup('');setFileItems([]);setFileName('');void load();return()=>{mounted.current=false;epoch.current++;};},[businessId,searchTaskId]);
+  useEffect(()=>{if(!pendingJobs)return;const timer=setInterval(()=>void load(true),5000);return()=>clearInterval(timer);},[businessId,searchTaskId,pendingJobs]);
+  useEffect(()=>{if(!showMessages){setSelected(null);setChecked(false);}},[showMessages]);
   const groups=Array.from(new Set(items.map(item=>item.policy_json.prepared_group || 'Подготовленные письма')));
   const activeGroup=group || groups[0];
-  const visible=items.filter(item=>(item.policy_json.prepared_group || 'Подготовленные письма')===activeGroup);
+  const visible=searchTaskId ? items.filter(item=>!item.hold_reason) : items.filter(item=>(item.policy_json.prepared_group || 'Подготовленные письма')===activeGroup);
   const confirm=async () => {
     if(!selected || !checked)return;const current=businessId;setBusy(selected.id);setError('');
     try {await newAuth.makeRequest('/partnership/prepared-messages',{method:'POST',body:JSON.stringify({business_id:current,action:'review',campaign_id:selected.id,review_digest:selected.review_digest,save:true})});if(!mounted.current || scope.current!==current)return;setSelected(null);setChecked(false);setNotice('Тексты подтверждены. Отправка ещё не разрешена: выберите время и подтвердите её отдельно.');await load();}
@@ -58,11 +60,12 @@ export function PreparedPartnershipMessages({ businessId,onCountChange }: { busi
     catch(issue) {if(scope.current===current){setError(issue instanceof Error?issue.message:'Сохранение остановлено. Проверьте уже сохранённые касания.');await load(true);}}
     finally {if(scope.current===current)setBusy('');}
   };
+  if(!showMessages)return null;
   return <section aria-label="Готовые касания партнёрам" className="space-y-4 rounded-2xl border border-border bg-card p-4 text-card-foreground">
     <header><h2 className="text-xl font-semibold">Первые обращения новым партнёрам</h2><p className="mt-2 text-sm text-muted-foreground">Проверьте получателя и готовые сообщения. Подтверждение текста ничего не отправляет. Любой ответ остановит дальнейшие касания.</p></header>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}{notice && <p role="status" className="text-sm">{notice}</p>}
-    {groups.length>1 && <label className="block text-sm">Подборка<select aria-label="Подборка готовых касаний" value={activeGroup} onChange={event=>{setGroup(event.target.value);setSelected(null);setChecked(false);}} className="mt-2 min-h-11 w-full rounded-md border bg-background p-2">{groups.map(name=><option key={name}>{name}</option>)}</select></label>}
-    {activeGroup && <p className="font-medium">{activeGroup} · компаний: {visible.length}</p>}
+    {!searchTaskId && groups.length>1 && <label className="block text-sm">Подборка<select aria-label="Подборка готовых касаний" value={activeGroup} onChange={event=>{setGroup(event.target.value);setSelected(null);setChecked(false);}} className="mt-2 min-h-11 w-full rounded-md border bg-background p-2">{groups.map(name=><option key={name}>{name}</option>)}</select></label>}
+    {activeGroup && <p className="font-medium">{searchTaskId ? 'Выбранная подборка' : activeGroup} · компаний: {visible.length}</p>}
     {pendingJobs>0 && <p role="status" className="text-sm">Проверяем переписку и сохраняем касания. Можно закрыть страницу: результат останется здесь. Заданий: {pendingJobs}.</p>}
     {loading && items.length===0 && <p role="status">Загружаем сохранённые сообщения…</p>}
     {visible.map(item=><article key={item.id} className="space-y-3 rounded-xl border border-border p-4"><h3 className="font-semibold">{item.name}</h3><p className="text-sm text-muted-foreground">{item.address}</p><p className="text-sm">{channelName[item.touches[0]?.channel] || 'Канал нужно проверить'} · {item.touches[0]?.recipient || 'Получатель не выбран'}</p><p className="text-sm text-muted-foreground">Отправитель: {[item.touches[0]?.sender_name,item.touches[0]?.sender_identity].filter(Boolean).join(' · ') || 'Не выбран'}</p>{item.touches[0]?.contact_source && <a className="block break-words text-sm underline" href={item.touches[0].contact_source} target="_blank" rel="noopener noreferrer">Источник сведений</a>}<p className="text-sm">{item.hold_reason || (item.status!=='draft'?'Состояние: '+(statusLabels[item.status] || 'проверьте историю'):item.needs_review?'Готово к вашему просмотру':'Тексты проверены. Отправка ожидает отдельного подтверждения.')}</p><p className="whitespace-pre-wrap break-words text-sm leading-6">{item.touches[0]?.generated_text}</p><Button type="button" variant="outline" onClick={()=>{setSelected(item);setChecked(false);setError('');}}>Посмотреть все касания ({item.touches.length})</Button>{!item.needs_review && !item.hold_reason && <Button asChild><Link to={`/dashboard/partnerships?business_id=${encodeURIComponent(businessId)}&section=letters&campaign_id=${encodeURIComponent(item.id)}&lead=${encodeURIComponent(item.lead_id)}&item_id=${encodeURIComponent(item.lead_id)}`}>Перейти к отправке</Link></Button>}</article>)}

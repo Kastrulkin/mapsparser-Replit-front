@@ -2408,7 +2408,6 @@ export const PartnershipSearchPage: React.FC = () => {
         onWorkspaceChange={(value) => changeWorkspace(value)}
       />
 
-      {currentBusinessId && !searchParams.get('campaign_id') && <PreparedPartnershipMessages key={currentBusinessId} businessId={currentBusinessId} onCountChange={setCanonicalLetterCount} />}
 
       {(searchTaskOptions.length > 0 || candidateSearchGroups.groups.length > 0) && <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3">
         <label className="text-sm font-medium text-slate-700">Группа компаний
@@ -2436,6 +2435,9 @@ export const PartnershipSearchPage: React.FC = () => {
         visibleReactionsCount={visibleReactions.length}
         onWorkspaceChange={(value) => changeWorkspace(value)}
       />
+
+
+      {currentBusinessId && !searchParams.get('campaign_id') && <PreparedPartnershipMessages key={`${currentBusinessId}:${selectedSearchGroup}`} businessId={currentBusinessId} showMessages={workspaceView === 'drafts'} searchTaskId={selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : undefined} onCountChange={setCanonicalLetterCount} />}
 
 
       {!currentBusinessId ? (
