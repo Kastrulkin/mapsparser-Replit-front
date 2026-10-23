@@ -31,3 +31,16 @@ No mail credentials, recipient lists, or client message bodies are in this chang
 Validation: 31 focused tests pass across strict IMAP batching, complete reply
 receipts, and exact-recipient prior-inbound quarantine. Production sending
 continues to depend on a successful complete mailbox read.
+
+## Gmail sent-label UID parsing
+
+Gmail returns UID SEARCH matches as bytes. Passing Python's bytes representation
+into UID STORE produced a BAD command after the mail had already been sent.
+Decode ASCII UID tokens and require exactly one positive numeric UID before
+changing its label. Label repair never calls the send adapter again.
+
+Five regression cases cover byte UIDs, invalid tokens, zero, non-ASCII and
+ambiguous matches. Thirty focused adapter/label tests pass. The pre-existing
+worker source-layout assertion (`test_worker_syncs_telegram_and_email_before_dispatch`)
+is separate: it fails because the worker now uses a different synchronization
+boundary, unrelated to this adapter change.

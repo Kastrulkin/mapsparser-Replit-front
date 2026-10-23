@@ -512,7 +512,13 @@ def _apply_gmail_sent_label(
             status, result = client.uid("search", None, "X-GM-RAW", f'"rfc822msgid:{message_id}"')
             if _text(status).upper() != "OK":
                 raise EmailAdapterError("email_sent_label_unavailable", "Gmail sent message lookup failed")
-            matched = _text(result[0] if result else "").split()
+            raw_matches = result[0] if result else b""
+            try:
+                matched = (raw_matches.decode("ascii") if isinstance(raw_matches, bytes) else _text(raw_matches)).split()
+            except UnicodeError:
+                raise EmailAdapterError("email_sent_label_message_invalid", "Gmail returned an invalid sent-message UID") from None
+            if any(not uid.isdigit() or int(uid) < 1 for uid in matched):
+                raise EmailAdapterError("email_sent_label_message_invalid", "Gmail returned an invalid sent-message UID")
             if matched:
                 break
             time.sleep(0.25)
