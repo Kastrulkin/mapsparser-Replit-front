@@ -67,3 +67,10 @@ it('a failed confirmation clears its decision and cannot be silently retried',as
  expect(await screen.findByRole('alert')).toHaveTextContent('Тексты изменились');
  expect(screen.queryByRole('dialog')).toBeNull();expect(screen.queryByRole('button',{name:'Перейти к итоговой проверке'})).toBeNull();
 });
+it('defaults to first messages and invalidates review when scope changes',async()=>{
+ render(<PartnershipGroupLaunch businessId="business" collectionId="group"/>);
+ expect(screen.getByLabelText('Только первые обращения. Повторные касания останутся черновиками.')).toBeChecked();await open();
+ expect(JSON.parse(mocks.request.mock.calls[0][1].body).schedule.first_touch_only).toBe(true);
+ await userEvent.click(screen.getByLabelText('Только первые обращения. Повторные касания останутся черновиками.'));
+ expect(screen.queryByRole('button',{name:'Перейти к итоговой проверке'})).toBeNull();
+});

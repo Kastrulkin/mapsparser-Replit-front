@@ -30,3 +30,9 @@ channel order, working windows, stale versions, permissions, partial failure,
 idempotency and explicit confirmation. Live acceptance stops at the final review:
 no live approval, enrollment, delivery or provider-generation call is performed.
 Private recipient lists, copy, screenshots and provider account data are excluded.
+
+First-message-only mode is selected by default in the shared screen. Its preview
+and digest include that scope. The native approval function queues only sequence
+index zero and leaves all later touches in draft; the full-chain approval remains
+an explicit alternative. Regression checks cover both the preview count and the
+native approval SQL/queue inserts, not only the displayed label.

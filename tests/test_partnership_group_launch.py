@@ -153,3 +153,24 @@ def test_confirmation_reuses_native_copy_review_and_approval_in_one_batch(monkey
     assert native[1][2]['reviewed_batch_id']==native[3][2]['reviewed_batch_id']==result['batch_id']
     assert result['messages_sent']==0
     assert 'approved' in c.calls[-2][0]
+
+
+def test_first_only_preview_keeps_other_saved_touches_draft(preview_setup):
+    rows,_=preview_setup
+    result=launch.build_preview(Cursor(),user={'user_id':'owner'},business_id='business',collection_id='group',options={**OPTIONS,'first_touch_only':True},now=NOW)
+    assert result['touch_count']==2
+    assert all(len(row['touches'])==1 for row in result['items'])
+    assert all(len(row['touches'])==4 and all(t['status']=='draft' for t in row['touches']) for row in rows)
+    assert result['schedule']['first_touch_only'] is True
+
+
+def test_first_only_can_request_fresh_default_schedule(preview_setup):
+    result=launch.build_preview(Cursor(),user={'user_id':'owner'},business_id='business',collection_id='group',options={'first_touch_only':True},now=NOW)
+    assert result['touch_count']==2 and result['valid_until']
+
+
+def test_first_only_changes_digest(preview_setup):
+    common=dict(user={'user_id':'owner'},business_id='business',collection_id='group',now=NOW)
+    full=launch.build_preview(Cursor(),options=OPTIONS,**common)
+    first=launch.build_preview(Cursor(),options={**OPTIONS,'first_touch_only':True},**common)
+    assert full['digest']!=first['digest']

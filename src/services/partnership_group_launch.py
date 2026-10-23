@@ -191,7 +191,15 @@ def build_preview(cursor, *, user, business_id, collection_id, options, now=None
                 raise ValueError('Отправитель не соответствует бизнесу и режиму обращения.')
             touch['sender_label'] = sender['label']
     now = now or datetime.now(timezone.utc)
-    options = options if options is not None else default_schedule(items, now)
+    if options is not None and not isinstance(options, dict):
+        raise ValueError('Проверьте расписание.')
+    first_only = (options or {}).get('first_touch_only', False)
+    if not isinstance(first_only, bool):
+        raise ValueError('Выберите первые обращения или всю цепочку.')
+    if first_only:
+        items = [{**item, 'touches': item['touches'][:1]} for item in items]
+    if options is None or set(options) <= {'first_touch_only'}:
+        options = {**default_schedule(items, now), **(options or {})}
     scheduled, counts = schedule_items(items, options, now)
     enabled = (os.getenv('OUTREACH_DISPATCH_ENABLED') or '').lower() in {'true','1','yes','on'}
     cohort = {value.strip() for value in (os.getenv('OUTREACH_DISPATCH_BUSINESS_IDS') or '').split(',') if value.strip()}
@@ -247,7 +255,7 @@ def confirm_launch(cursor, *, user, business_id, collection_id, options, digest,
             cursor.execute("UPDATE outreach_campaign_touches SET scheduled_at=%s,updated_at=NOW() WHERE id=%s AND campaign_id=%s AND status='draft'",(touch['scheduled_at'],touch['id'],campaign_id))
             if cursor.rowcount != 1:
                 raise ValueError('Касание изменилось во время подтверждения. Ничего не запущено.')
-        approve_campaign(cursor, campaign_id, user_id=str(user['user_id']), reviewed_batch_id=batch_id)
+        approve_campaign(cursor, campaign_id, user_id=str(user['user_id']), reviewed_batch_id=batch_id, first_touch_only=(options or {}).get('first_touch_only', False))
     cursor.execute("UPDATE outreachsendbatches SET status='approved',approved_by=%s,updated_at=NOW() WHERE id=%s AND status='draft'", (str(user['user_id']),batch_id))
     receipt = {'digest':digest,'batch_id':batch_id,'company_count':preview['company_count'],'touch_count':preview['touch_count'],
         'counts':preview['counts'],'schedule':options,'approved_by':str(user['user_id']),'approved_at':datetime.now(timezone.utc).isoformat(),'status':'scheduled'}

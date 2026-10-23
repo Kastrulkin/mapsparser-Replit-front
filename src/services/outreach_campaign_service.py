@@ -5261,6 +5261,7 @@ def approve_campaign(
     template_authorization: dict[str, Any] | None = None,
     riderra_template_authorization: dict[str, Any] | None = None,
     reviewed_batch_id: str | None = None,
+    first_touch_only: bool = False,
     ai_authorization: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not user_id and not template_authorization and not riderra_template_authorization and not ai_authorization:
@@ -5447,8 +5448,8 @@ def approve_campaign(
     )
     result = _dict(cursor.fetchone())
     cursor.execute(
-        "UPDATE outreach_campaign_touches SET status = 'approved', approved_text = generated_text, updated_at = NOW() WHERE campaign_id = %s",
-        (campaign_id,),
+        "UPDATE outreach_campaign_touches SET status = 'approved', approved_text = generated_text, updated_at = NOW() WHERE campaign_id = %s AND (%s = FALSE OR sequence_index = 0)",
+        (campaign_id, first_touch_only),
     )
     batch_id = reviewed_batch_id or str(uuid.uuid4())
     if reviewed_batch_id:
@@ -5473,6 +5474,8 @@ def approve_campaign(
     )
     for row in cursor.fetchall():
         touch = _dict(row)
+        if first_touch_only and int(touch.get("sequence_index") or 0) != 0:
+            continue
         if touch.get("channel") in MANUAL_CHANNELS:
             cursor.execute(
                 "UPDATE outreach_campaign_touches SET status = 'awaiting_manual_send', manual_due_at = NOW() + INTERVAL '48 hours', updated_at = NOW() WHERE id = %s",
@@ -5523,6 +5526,7 @@ def approve_campaign(
         actor_id=user_id,
         payload={
             "version": int(result.get("version") or 0), "batch_id": batch_id,
+            "first_touch_only": first_touch_only,
             "approval_mode": (
                 "ai_rules" if ai_authorization else
                 "author_template" if template_authorization else
