@@ -30,7 +30,7 @@ def main():
         if len(secret) < 32:
             parser.error('Set MAX_WEBHOOK_SECRET to a random value of at least 32 characters')
         from services.mobile_bot_menu import max_command_menu
-        transport.call('PATCH', '/me', body={'commands': max_command_menu()})
+        transport.call('PATCH', '/me/commands', body={'commands': max_command_menu()})
         transport.call('POST', '/subscriptions', body={'url': 'https://localos.pro/api/max/webhook',
             'update_types': ['message_created', 'message_callback', 'bot_started', 'bot_stopped', 'bot_added', 'bot_removed'],
             'secret': secret})
