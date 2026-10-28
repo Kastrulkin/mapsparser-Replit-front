@@ -37,6 +37,8 @@ def dialogues(max_pg, monkeypatch):
         def __init__(self): self.conn = connect()
         def close(self): self.conn.close()
     monkeypatch.setattr(database_manager, 'DatabaseManager', Database)
+    from services import operator_telegram_voice
+    monkeypatch.setattr(operator_telegram_voice, 'DatabaseManager', Database)
     monkeypatch.setattr(host, 'get_db_connection', connect)
     selection = {'scope': None}
     monkeypatch.setattr(max_owner_dialogues, 'resolve_control_scope', lambda *args, **kwargs: selection['scope'])
@@ -159,7 +161,7 @@ def test_cancel_clears_max_form_but_preserves_telegram_form(dialogues):
     host.user_states.telegram_states['123'] = {'state': 'telegram-form'}
     receive(dialogues, '/reply_review')
     reply = receive(dialogues, '/cancel')
-    assert 'отменена' in reply['text']
+    assert 'отменены' in reply['text']
     cursor = dialogues[0].cursor()
     cursor.execute("SELECT state_json FROM max_dialogue_states WHERE max_id='123'")
     assert cursor.fetchone()['state_json']['state'] == 'idle'
@@ -267,3 +269,13 @@ def test_administrator_recalibration_keeps_review_before_execution(dialogues, mo
     assert 'Правила обновлены' in applied['text'] and calls == ['run']
     receive(dialogues, callback=confirm)
     assert calls == ['run']
+
+
+def test_cancel_failure_does_not_claim_pending_actions_were_rejected(dialogues,monkeypatch):
+    from services import operator_telegram_voice
+    bind(dialogues)
+    def failed_transaction(operation):
+        raise RuntimeError('Synthetic database outage')
+    monkeypatch.setattr(operator_telegram_voice,'transaction',failed_transaction)
+    reply=receive(dialogues,'/cancel')
+    assert 'не все действия удалось отклонить' in reply['text']

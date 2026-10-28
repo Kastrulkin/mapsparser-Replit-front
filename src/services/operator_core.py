@@ -135,7 +135,7 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability('settings.profile', 'Настройки бизнеса', 'approval_required', 'owner_profile_write', 'separate_confirmation', '/dashboard/profile', ('Измени адрес бизнеса', 'Проставь часовые пояса'), 'business.settings.apply_operator'),
     OperatorCapability('team.read', 'Пользователи бизнеса', 'available', 'read_only', 'none', '/dashboard/profile', ('Покажи пользователей бизнеса',)),
     OperatorCapability('team.manage', 'Добавление сотрудников и роли', 'approval_required', 'access_change', 'separate_confirmation', '/dashboard/profile', ('Добавь Анну администратором',), 'business.team.apply_operator'),
-    OperatorCapability("finance.daily.write", "Дневные итоги и финансовые операции", "approval_required", "financial", "separate_confirmation", "/dashboard/finance", ("Сегодня 10 продаж, 2 допа, выручка 350 евро",), "finance.daily.apply_operator"),
+    OperatorCapability("finance.daily.write", "Финансовые итоги и операции", "approval_required", "financial", "separate_confirmation", "/dashboard/finance", ("Сегодня 10 продаж, 2 допа, выручка 350 евро",), "finance.daily.apply_operator"),
     OperatorCapability("finance.manage", "Финансы и импорты", "request_only", "financial", "separate_confirmation", "/dashboard/finance", ("Добавь расход", "Покажи финансовый итог"), "finance.transaction.create"),
     OperatorCapability("finance.read", "Финансовая сводка", "available", "read_only", "none", "/dashboard/finance", ("Покажи выручку и расходы за 30 дней",)),
     OperatorCapability("finance.prepare_transaction", "Подготовка финансовой операции", "approval_required", "financial_write_request", "separate_confirmation", "/dashboard/finance", ("Добавь расход 5000 на рекламу",), "finance.transaction.apply_operator"),
@@ -2388,16 +2388,42 @@ def route_operator_message(
         result = operator_business_requests.route(cursor, business_id=business_id, user_id=user_id, message=clean_message)
         return standardize_operator_result(result, capability), {}
     from services.operator_finance_daily import finance_input, period_input
-    if finance_input(clean_message) and period_input(clean_message) and not re.search(r'покажи|сколько|сравни', clean_message, re.I):
+    period_message = clean_message
+    period_pending = pending_context or {}
+    if period_pending.get('capability') in {'finance.period.clarification','finance.period.input'} and clean_message.casefold().strip() in {'отмена','отмени','стоп','не надо','/cancel'}:
+        for action in pending_approvals or []:
+            if action.get('capability')=='finance.daily.write':
+                reject_pending_operator_action(cursor,action_id=str(action['id']),business_id=business_id,user_id=user_id,action_orchestrator=action_orchestrator)
+        return standardize_operator_result({'status':'cancelled','chat_response':'Ввод показателей за период отменён. Подтверждённые данные сохранены.'},'finance.daily.write'), {}
+    if period_pending.get('capability')=='finance.period.input' and period_pending.get('draft'):
+        from services.operator_context import PlannerContext
+        domains=PlannerContext(clean_message).domains
+        correction=bool(re.match(r'\s*(?:нет\b|исправ|вернее|точнее|поменя|валют|период)',clean_message,re.I))
+        financial_followup=(finance_input(clean_message) and not period_input(clean_message)) or correction or bool(re.fullmatch(r'\s*(?:рубл\w*|евро|RUB|EUR|USD)\s*[.!]?\s*',clean_message,re.I))
+        if financial_followup and not domains.intersection({'work','content','partnerships','integrations'}):
+            from services import finance_period
+            return finance_period.route(cursor,business_id=business_id,user_id=user_id,message=clean_message,channel=channel,message_ref=conversation_id,
+                subscription_access=subscription_access,orchestrator=action_orchestrator,previous_draft=period_pending['draft'])
+    if period_pending.get('capability') == 'finance.period.clarification':
+        from services.operator_context import PlannerContext
+        domains = PlannerContext(clean_message).domains
+        if not domains.intersection({'work', 'content', 'partnerships', 'integrations'}) and (finance_input(clean_message) or period_input(clean_message) or re.search(r'руб|евро|RUB|EUR|USD|\d{4}-\d{2}-\d{2}', clean_message, re.I)):
+            period_message = str(period_pending.get('source_message') or '') + '\nУточнение: ' + clean_message
+    if finance_input(clean_message) and period_input(clean_message) and re.search(r'покажи|сколько|сравни', clean_message, re.I):
         blocked = operator_subscription_block(subscription_access, 'finance.read')
-        if blocked:
-            return blocked, {}
-        return standardize_operator_result({
-            'status': 'clarification_required',
-            'chat_response': 'Это показатели за период. Их нельзя записать как выручку одного дня. Откройте ввод показателей, укажите начало и конец периода и проверьте данные перед сохранением. Сейчас показатели не сохранены.',
-            'result_ref': {'href': '/dashboard/finance?business_id=' + business_id, 'label': 'Внести показатели за период'},
-            'external_writes_performed': False,
-        }, 'finance.read'), {}
+        if blocked: return blocked, {}
+        from services import finance_period, finance_daily, operator_finance_daily
+        try:
+            finance_daily.authorize(cursor,business_id,user_id)
+            start,end=finance_period.dates(clean_message,finance_daily.settings(cursor,business_id).get('timezone'))
+            return standardize_operator_result(operator_finance_daily.read(cursor,business_id,user_id,{'start':start,'end':end}),'finance.read'), {}
+        except (ValueError,PermissionError):
+            import sys
+            return standardize_operator_result(operator_finance_daily.observation(str(sys.exception()),'clarification_required'),'finance.read'), {}
+    if finance_input(period_message) and period_input(period_message) and not re.search(r'покажи|сколько|сравни', clean_message, re.I):
+        from services import finance_period
+        return finance_period.route(cursor, business_id=business_id, user_id=user_id, message=period_message,
+            channel=channel, message_ref=conversation_id, subscription_access=subscription_access, orchestrator=action_orchestrator)
     from services import operator_day_brief
     daily = operator_day_brief.route(cursor, business=business_id, user=user_id, message=clean_message, channel=channel,
         pending=pending_context, conversation_id=conversation_id)

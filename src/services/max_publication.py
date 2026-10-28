@@ -8,9 +8,14 @@ from services.max_tls import max_ssl_context
 from services.max_transport import MaxTransport, MaxTransportError
 
 
-def max_publish_enabled():
+def max_publish_enabled(chat_id=None):
     from services.max_webapp_auth import max_enabled
-    return max_enabled() and os.getenv('MAX_PUBLISH_ENABLED', 'false').lower() in {'true', '1', 'yes', 'on'}
+    if not max_enabled():
+        return False
+    if os.getenv('MAX_PUBLISH_ENABLED', 'false').lower() in {'true', '1', 'yes', 'on'}:
+        return True
+    allowed = {value.strip() for value in os.getenv('MAX_PUBLISH_CHAT_IDS', '').split(',') if value.strip()}
+    return bool(allowed) if chat_id is None else str(chat_id) in allowed
 
 
 def probe_channel(transport, chat_id):
@@ -64,6 +69,8 @@ def publish_max_post(cursor, post, snapshot):
     account, binding = frozen_external_account(cursor, post, snapshot, 'max')
     if not account or account.get('source') != 'max_bot':
         return approval_binding_drift_result('max_connection_changed')
+    if not max_publish_enabled(account.get('external_id')):
+        return {'status': 'needs_manual_publish', 'last_error': 'Публикация в этот канал MAX пока не включена.', 'publish_outcome': 'not_attempted'}
     auth = _account_auth_data(account)
     if not auth.get('bot_token'):
         return approval_binding_drift_result('max_credentials_missing')

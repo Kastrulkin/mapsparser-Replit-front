@@ -104,6 +104,7 @@ def verify_business_access(cursor, business_id: str, user_data: dict) -> tuple[b
     if (has_access and has_request_context() and request.method in {'POST','PUT','PATCH','DELETE'}
             and owner_id != user_id and not user_data.get('is_superadmin') and not owns_network
             and request.path != '/api/operator/chat'
+            and request.endpoint != 'finance_api.preview_finance_import'
             and not request.path.startswith(('/api/operator/actions/', '/api/work-journal'))):
         cursor.execute("""SELECT role FROM business_members WHERE business_id=%s AND user_id=%s AND status='active'
             UNION ALL SELECT nm.role FROM network_members nm JOIN businesses b ON b.network_id=nm.network_id

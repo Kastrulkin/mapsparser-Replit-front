@@ -308,3 +308,23 @@ def reject_operator_action(cursor: Any, *, action_id: str, result: dict[str, Any
         """,
         (result_text, result_json, action_id, action_id),
     )
+
+
+def cancel_owner_input(cursor, *, business_id, user_id, channel):
+    """Cancel only this owner's unconfirmed input in the selected messenger."""
+    cursor.execute("SELECT to_regclass('operatorconversations') present")
+    if not _row(cursor,cursor.fetchone()).get('present'):
+        return True
+    conversation=find_latest_operator_conversation(cursor,business_id=business_id,user_id=user_id,channel=channel)
+    if not conversation:
+        return True
+    from services.operator_core import reject_pending_operator_action
+    actions=list_pending_operator_actions(cursor,conversation_id=conversation['id'],business_id=business_id,user_id=user_id,limit=50)
+    complete=True
+    for action in actions:
+        result,_=reject_pending_operator_action(cursor,action_id=str(action['id']),business_id=business_id,user_id=user_id)
+        complete=complete and result.get('status')=='rejected'
+    if len(actions) == 50:
+        complete = complete and not list_pending_operator_actions(cursor, conversation_id=conversation['id'], business_id=business_id, user_id=user_id, limit=1)
+    set_operator_pending_context(cursor,conversation['id'],{})
+    return complete

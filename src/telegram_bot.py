@@ -5394,6 +5394,12 @@ async def show_settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE,
     await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
 async def handle_operator_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from services.operator_audio import is_audio_document
+    media = update.message.document
+    if media and is_audio_document(media.file_name, media.mime_type):
+        from services.operator_telegram_voice import receive_voice
+        await receive_voice(update, context, sys.modules[__name__])
+        return
     from services.operator_telegram_inputs import receive
     if not await receive(update,context,sys.modules[__name__]):
         await update.message.reply_text('Выберите доступный бизнес в LocalOS. Приём файлов в чате с LocalOS доступен в рабочем пилоте.')
@@ -6072,7 +6078,19 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_states[str(update.effective_user.id)] = {'state': 'idle'}
-    await update.message.reply_text("❌ Операция отменена")
+    business = _control_scope_business_context(str(update.effective_user.id))
+    complete = True
+    if business:
+        import asyncio
+        from services.operator_telegram_voice import transaction
+        from services.operator_conversations import cancel_owner_input
+        try:
+            complete = await asyncio.to_thread(transaction, lambda cursor: cancel_owner_input(cursor,
+                business_id=business['business_id'], user_id=business['user_id'], channel=owner_bot_channel()))
+        except Exception:
+            logger.exception('Failed to cancel pending owner input')
+            complete = False
+    await update.message.reply_text('Текущий ввод и неподтверждённые действия в этом чате отменены. Сохранённые результаты остались в истории.' if complete else 'Ввод закрыт, но не все действия удалось отклонить. Проверьте подтверждения в LocalOS. Сохранённые результаты остались в истории.')
 
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -6165,7 +6183,7 @@ def _run_bot_once():
         application.add_handler(CommandHandler("support_export", support_export_command))
         application.add_handler(CommandHandler("recovery_report", recovery_report_command))
         application.add_handler(CallbackQueryHandler(button_callback))
-        application.add_handler(MessageHandler(filters.VOICE, handle_voice))
+        application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
         application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         application.add_handler(MessageHandler(filters.Document.ALL, handle_operator_document))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))

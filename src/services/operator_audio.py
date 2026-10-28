@@ -20,6 +20,10 @@ MAX_BYTES = 10 * 1024 * 1024
 MAX_SECONDS = 120
 
 
+def is_audio_document(name=None, mime_type=None):
+    return str(mime_type or '').lower().startswith('audio/') or Path(str(name or '')).suffix.lower() in {'.wav','.ogg','.oga','.mp3','.m4a','.webm','.opus','.flac'}
+
+
 def authorize_actor(cursor, user_id, business_id, check_subscription=True, *, require_write=False):
     cursor.execute('SELECT id, is_active, is_superadmin FROM users WHERE id=%s', (user_id,))
     user = _row(cursor, cursor.fetchone())

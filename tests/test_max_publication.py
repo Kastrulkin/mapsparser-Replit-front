@@ -78,3 +78,19 @@ def test_revoked_rights_before_send_never_posts(publishing, monkeypatch):
     result = max_publication.publish_max_post(None, {'platform_text': 'Approved'}, {})
     assert result['publish_outcome'] == 'not_attempted'
     assert not transport.calls
+
+
+@pytest.mark.parametrize('channel,allowed',[('-123',True),('-456',False)])
+def test_limited_rollout_only_allows_exact_channel(monkeypatch,channel,allowed):
+    monkeypatch.setenv('MAX_ENABLED','true')
+    monkeypatch.setenv('MAX_PUBLISH_ENABLED','false')
+    monkeypatch.setenv('MAX_PUBLISH_CHAT_IDS','-123')
+    assert max_publication.max_publish_enabled(channel) is allowed
+
+
+def test_limited_rollout_rejects_other_target_before_provider(publishing,monkeypatch):
+    transport,_,_=publishing
+    monkeypatch.setenv('MAX_PUBLISH_ENABLED','false')
+    monkeypatch.setenv('MAX_PUBLISH_CHAT_IDS','-456')
+    result=max_publication.publish_max_post(None,{'platform_text':'Approved'}, {})
+    assert result['publish_outcome']=='not_attempted' and not transport.calls

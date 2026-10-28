@@ -26,3 +26,18 @@ it('ignores a late result from the previous business', async () => {
   resolveOld(report);
   await waitFor(() => expect(screen.queryByText('350')).not.toBeInTheDocument());
 });
+it('shows a reported month separately from daily totals and exposes its history', async () => {
+  request.mockResolvedValue({...report,reported_period_totals:[{id:'period',period_start:'2026-09-01',period_end:'2026-09-30',currency:'EUR',version:1,values_json:{revenue:'50000',checks:'200'}}]});
+  render(<MemoryRouter><FinanceDailyPanel businessId="b" onActive={vi.fn()}/></MemoryRouter>);
+  expect(await screen.findByText('2026-09-01 — 2026-09-30 · EUR')).toBeVisible();
+  expect(screen.getByText(/Они не распределены по дням/)).toBeVisible();
+  expect(screen.getByRole('button',{name:'История итога за период'})).toBeInTheDocument();
+  expect(screen.getByText('330')).toBeVisible();
+});
+it('keeps saved period totals visible after input is disabled', async () => {
+  request.mockResolvedValue({enabled:false,settings:{currency:'EUR'},days:[],currencies:{},reported_period_totals:[{id:'period',period_start:'2026-09-01',period_end:'2026-09-30',currency:'EUR',version:1,values_json:{revenue:'50000'}}]});
+  const active=vi.fn();
+  render(<MemoryRouter><FinanceDailyPanel businessId="b" onActive={active}/></MemoryRouter>);
+  expect(await screen.findByRole('region',{name:'Финансовые итоги'})).toBeInTheDocument();
+  expect(active).toHaveBeenCalledWith(true);
+});

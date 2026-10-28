@@ -150,8 +150,8 @@ def test_viewer_demotion_after_claim_never_reaches_provider_and_keeps_reconcilia
     assert any("pg_advisory_unlock" in query for query in _RoleDatabaseManager.instances[0].cursor_value.executed)
 
 
-def test_editor_access_is_readmitted_and_keeps_existing_provider_finalization_path(monkeypatch):
-    _current, adapter_calls, finalizer_calls = _configure_provider_phase(monkeypatch, "editor")
+def test_manager_access_is_readmitted_and_keeps_existing_provider_finalization_path(monkeypatch):
+    _current, adapter_calls, finalizer_calls = _configure_provider_phase(monkeypatch, "manager")
 
     result = social_post_service.publish_social_post("user-1", "post-1")
 
@@ -159,3 +159,10 @@ def test_editor_access_is_readmitted_and_keeps_existing_provider_finalization_pa
     assert [post["id"] for post in adapter_calls] == ["post-1"]
     assert len(finalizer_calls) == 1
     assert finalizer_calls[0][0:3] == ("user-1", "post-1", "attempt-1")
+
+
+def test_unknown_legacy_editor_role_is_not_elevated(monkeypatch):
+    _current, adapter_calls, finalizer_calls = _configure_provider_phase(monkeypatch, "editor")
+    with pytest.raises(PermissionError):
+        social_post_service.publish_social_post("user-1", "post-1")
+    assert adapter_calls == [] and finalizer_calls == []

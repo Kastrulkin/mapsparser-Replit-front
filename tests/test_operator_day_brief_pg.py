@@ -388,3 +388,12 @@ def test_selected_brief_does_not_capture_crm_or_partner_request(team):
     pending = {'selected_day_brief': {'id': current['id']}}
     for message in ['Хочу подключить CRM DIKIDI', 'Покажи действующих партнёров', 'Выручка за неделю 120000 рублей']:
         assert operator_day_brief.route(c, business='b', user='u', channel='max_bot', pending=pending, message=message) is None
+
+
+def test_explicit_voice_no_save_does_not_create_brief(team):
+    _,c=team
+    from services import operator_day_brief
+    result,_=operator_day_brief.route(c,business='b',user='u',message='Фокус дня: внимательно встречаем новых клиентов. Пока не сохраняй.',channel='max_bot')
+    assert 'Черновик не сохранён' in result['chat_response']
+    c.execute("SELECT COUNT(*) n FROM operatorconversations WHERE transport_key LIKE 'day-brief:%'")
+    assert c.fetchone()['n']==0

@@ -13,7 +13,8 @@ def finance_input(message):
 
 
 def period_input(message):
-    return bool(re.search(r'недел|месяц|месячн|\b\d{1,2}\s*[–—-]\s*\d{1,2}\s+(?:январ|феврал|март|апрел|ма[йяе]|июн|июл|август|сентябр|октябр|ноябр|декабр)|\d{4}-\d{2}-\d{2}\s*(?:по|–|—|до)\s*\d{4}-\d{2}-\d{2}', message, re.I))
+    months=r'январ|феврал|март|апрел|ма[йяе]|июн|июл|август|сентябр|октябр|ноябр|декабр'
+    return bool(re.search(r'недел|месяц|месячн|\d{1,2}\s*[–—-]\s*\d{1,2}\s+(?:'+months+r')|за\s+(?:'+months+r')\w*\s+\d{4}|с\s+\d{1,2}\s+по\s+\d{1,2}\s+(?:'+months+r')', message, re.I)) or len(re.findall(r'\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}\.\d{1,2}\.\d{4}\b',message)) >= 2
 
 
 def aggregate_input(message):
@@ -62,6 +63,12 @@ def read(cursor,business_id,user_id,args):
         labels={'revenue':'Выручка до возвратов','refunds':'Возвраты','net_revenue':'После возвратов','checks':'Чеки','upsell_checks':'Чеки с допом','average_check':'Средний чек','upsell_share':'Доля чеков с допом, %','expenses':'Расходы'}
         lines.append(currency+': '+ '; '.join(label+': '+(str(values.get(key)) if values.get(key) is not None else 'неизвестно') for key,label in labels.items()))
     if not report['days']:lines.append('За этот период дневных данных нет.')
+    for total in report.get('reported_period_totals') or []:
+        if total.get('is_voided'): continue
+        labels={'revenue':'Выручка до возвратов','refunds':'Возвраты','expenses':'Расходы','checks':'Чеки','upsell_checks':'Чеки с допродажей'}
+        lines.append('Сохранённый общий итог: '+total['period_start']+' — '+total['period_end']+' · '+total['currency']+'. '+
+            '; '.join(label+': '+str(total['values_json'].get(key)) for key,label in labels.items() if total['values_json'].get(key) is not None))
+        lines.append('Итог за период не распределён по дням и не прибавляется к дневным данным. При другом диапазоне дат не пересчитывается пропорционально.')
     if any(day['reconciliation_status']=='needs_review' for day in report['days']):lines.append('Есть расхождения с детализацией. Подтверждённый итог сохранён; суммы не сложены повторно.')
     if report['period_aggregates']:lines.append('Есть агрегаты за несколько дней: они не распределены по дням и требуют сверки.')
     return observation('\n'.join(lines),financial_daily=report)

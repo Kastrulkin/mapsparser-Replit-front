@@ -39,8 +39,10 @@ async def receive_voice(update, context, host):
     if host.user_states.get(telegram_id,{}).get('state','idle') not in {'','idle'}:
         await update.message.reply_text('Сейчас ожидается ответ в открытой форме. Завершите её или нажмите /cancel, затем отправьте голосовое.')
         return
-    voice=update.message.voice
-    if voice.duration>120 or (voice.file_size or 0)>MAX_BYTES:
+    voice=update.message.voice or getattr(update.message,'audio',None) or getattr(update.message,'document',None)
+    if not voice:
+        return
+    if (getattr(voice,'duration',0) or 0)>120 or (voice.file_size or 0)>MAX_BYTES:
         await update.message.reply_text('Запись должна быть не длиннее 2 минут и не больше 10 МБ.')
         return
     try:
@@ -213,6 +215,8 @@ async def delivery_loop(application, host):
                     WHERE asset.channel='telegram' AND asset.metadata_json->>'delivery'='pending'
                     AND asset.expires_at>NOW() AND job.status IN ('completed','failed','cancelled') ORDER BY asset.created_at, asset.id LIMIT 10""")
                 return [_row(cursor,row) for row in cursor.fetchall()]
+            from services.outreach_chat_results import deliver
+            await deliver(application, host, transaction)
             await deliver_voice_progress(application)
             await deliver_plan_previews(application,host)
             assets=await asyncio.to_thread(transaction,pending)

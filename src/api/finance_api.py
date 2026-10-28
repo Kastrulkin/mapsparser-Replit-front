@@ -3079,8 +3079,14 @@ def get_daily_finance():
             latest=cursor.fetchone()
             start=latest['latest_date'] if latest else None
             end=start
-        if not start:return jsonify({'enabled':enabled(business_id),'settings':context,'days':[],'currencies':{}})
-        return jsonify({'enabled':enabled(business_id),**read_period(cursor,business_id,start,end)})
+        if not start:
+            from services.finance_period import recent
+            return jsonify({'enabled':enabled(business_id),'settings':context,'days':[],'currencies':{},'reported_period_totals':recent(cursor,business_id)})
+        report=read_period(cursor,business_id,start,end)
+        if not request.args.get('start') and not request.args.get('end'):
+            from services.finance_period import recent
+            report['reported_period_totals']=recent(cursor,business_id)
+        return jsonify({'enabled':enabled(business_id),**report})
     except ValueError:
         return jsonify({'error':'Укажите корректный период.'}),400
     finally:db.close()

@@ -19,6 +19,13 @@ def download_input(url):
     return fetched.body, fetched.headers.get('content-type', '').split(';')[0]
 
 
+def is_audio_attachment(attachment):
+    from services.operator_audio import is_audio_document
+    details = attachment.get('payload') or {}
+    return attachment.get('type') == 'audio' or attachment.get('type') == 'file' and is_audio_document(
+        attachment.get('filename') or details.get('filename'), attachment.get('mime_type') or details.get('mime_type'))
+
+
 def receive_inputs(cursor, attachments, *, user_id, business_id, max_id, event_key):
     from services.operator_audio import create_transcription
     from services import operator_attachments
@@ -32,7 +39,7 @@ def receive_inputs(cursor, attachments, *, user_id, business_id, max_id, event_k
             raise ValueError('Пришлите фото, голосовую запись, PDF, XLSX или CSV')
         content, mime = download_input((attachment.get('payload') or {}).get('url'))
         key = f'max:{event_key}:{index}'
-        if kind == 'audio':
+        if is_audio_attachment(attachment):
             if len(attachments) != 1:
                 raise ValueError('Голосовое сообщение нужно отправить отдельно')
             create_transcription(cursor, content=content, user_id=user_id, business_id=business_id,

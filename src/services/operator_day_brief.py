@@ -454,6 +454,10 @@ def route(cursor, *, business, user, message, channel, pending=None, conversatio
     current = draft(cursor, business, user, identifier=selected.get('id') or selected['item_id']) if selected.get('id') or selected.get('item_id') else draft(cursor, business, user, day=work_journal.local_day(cursor, business))
     people = members(cursor, business)
     focus_text, requested_day = focus_request(clean)
+    if focus_text and re.search(r'не\s+сохраня(?:й|ю|ть)|без\s+сохранения', clean, re.I):
+        from services.operator_work_handoff import mobile_work_url
+        return {'status':'completed','capability':'work.day_brief','chat_response':'Распознанный фокус: '+focus_text+'\nЧерновик не сохранён. Сотрудникам ничего не передано.',
+                'work_return_url':mobile_work_url(business,platform=platform,screen='work_journal',item_type='day_brief')}, pending
     if focus_text:
         target_day = current.get('date')
         if requested_day:

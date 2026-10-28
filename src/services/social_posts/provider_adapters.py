@@ -1313,7 +1313,7 @@ def _build_channel_readiness(cursor: Any, business_id: str) -> list[dict[str, An
     from services.max_publication import max_publish_enabled
     max_account = _find_active_external_account(cursor, business_id, ("max_bot",)) if max_publish_enabled() else {}
     max_auth = _external_account_auth_data(max_account)
-    max_ready = bool(max_publish_enabled() and max_account and max_auth.get('bot_token') and max_auth.get('bot_id') and max_account.get('external_id'))
+    max_ready = bool(max_publish_enabled(max_account.get('external_id')) and max_account and max_auth.get('bot_token') and max_auth.get('bot_id') and max_account.get('external_id'))
     browser_ready = openclaw_browser_available()
     yandex_target = _map_publish_target(cursor, business_id, "yandex_maps")
     two_gis_target = _map_publish_target(cursor, business_id, "two_gis")
