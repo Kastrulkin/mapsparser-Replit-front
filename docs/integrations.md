@@ -4,7 +4,7 @@
 
 ### Trello
 
-Status: `beta / local implementation; production rollout pending`
+Status: `beta / deployed read-only pilot; OAuth configuration pending`
 
 Owner-only OAuth 2.0 read pilot: select boards, manually load cards and view saved
 snapshots. No Trello object writes, webhook registration or automatic background
