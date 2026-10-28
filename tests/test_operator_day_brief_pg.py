@@ -367,3 +367,24 @@ def test_delivery_status_is_scoped_metadata_and_does_not_claim_sent_without_rece
     assert {item['state'] for item in operator_day_brief.overview(c,business='b',user='master')['deliveries']}=={'unknown'}
     c.execute("UPDATE operator_async_jobs SET payload_json=jsonb_set(payload_json,'{briefing_delivery,provider_message_id}','\"receipt\"'::jsonb)")
     assert {item['state'] for item in operator_day_brief.overview(c,business='b',user='master')['deliveries']}=={'sent'}
+
+@pytest.mark.parametrize('channel', ['telegram', 'max_bot'])
+def test_tomorrow_focus_prepares_without_schedule_or_delivery(team, channel):
+    conn, c = team
+    result, pending = operator_day_brief.route(c, business='b', user='u', channel=channel,
+        message='Планёрка на завтра: фокус — внимательная консультация. Подготовь предварительный вариант, сотрудникам ничего не отправляй.')
+    current = operator_day_brief.draft(c, 'b', 'u', identifier=pending['selected_day_brief']['id'])
+    assert current['date'] == '2026-10-18'
+    assert current['focus'] == 'внимательная консультация'
+    assert not current['recipients']
+    assert 'внимательная консультация' in result['chat_response']
+    c.execute('SELECT COUNT(*) n FROM journey_actions'); assert c.fetchone()['n'] == 0
+    c.execute('SELECT COUNT(*) n FROM operator_async_jobs'); assert c.fetchone()['n'] == 0
+
+
+def test_selected_brief_does_not_capture_crm_or_partner_request(team):
+    conn, c = team
+    current = save(c)
+    pending = {'selected_day_brief': {'id': current['id']}}
+    for message in ['Хочу подключить CRM DIKIDI', 'Покажи действующих партнёров', 'Выручка за неделю 120000 рублей']:
+        assert operator_day_brief.route(c, business='b', user='u', channel='max_bot', pending=pending, message=message) is None

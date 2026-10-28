@@ -145,7 +145,9 @@ def test_operator_tool_catalog_routes_neighbor_to_cached_competitors():
     assert result["tool_calls"] == 1
 
 
-def test_operator_tool_catalog_can_explain_feature_without_model_invention():
+def test_operator_tool_catalog_can_explain_feature_without_model_invention(monkeypatch):
+    from services import business_knowledge
+    monkeypatch.setattr(business_knowledge, 'installed', lambda cursor: False)
     result, pending = route_operator_message(
         object(),
         business_id="business-1",

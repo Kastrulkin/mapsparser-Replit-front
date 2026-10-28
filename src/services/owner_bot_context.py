@@ -83,7 +83,7 @@ def owner_bot_request_payload(original):
     context = current_owner_bot.get()
     if context is None:
         return original
-    return {'request_id': 'max:' + context.event_key, **getattr(context, 'input_payload', {})}
+    return {**(original or {}), 'request_id': 'max:' + context.event_key, **getattr(context, 'input_payload', {})}
 
 
 def update_business_setting(cursor, *, user_id, business_id, setting, text):

@@ -7878,6 +7878,7 @@ def _agent_work_cycle():
 
 
 _AGENT_WORK_LOOP = SerializedDispatchLoop(_agent_work_cycle, interval=2)
+_MAX_WORK_LOOP = SerializedDispatchLoop(_process_max_event_if_due, interval=2)
 
 
 if __name__ == "__main__":
@@ -7888,6 +7889,7 @@ if __name__ == "__main__":
     if _worker_role_enabled("operator"):
         from services.disk_import_worker import start
         start()
+        _MAX_WORK_LOOP.start()
     print("Worker запущен. Проверка очереди каждые 5 минут...")
     while True:
         try:
@@ -7929,7 +7931,7 @@ if __name__ == "__main__":
             if _worker_role_enabled("operator"):
                 if _env_bool("OPENCLAW_WEBSITE_RESEARCH_ENABLED", False) and not _worker_role_enabled("maintenance"):
                     _process_contact_intelligence_if_due(reviewed_sources_only=True)
-                _process_max_event_if_due()
+                _MAX_WORK_LOOP.tick()
                 _process_operator_async_job_if_due()
         except Exception as e:
             print(f"❌ Критическая ошибка worker loop: {e}", flush=True)

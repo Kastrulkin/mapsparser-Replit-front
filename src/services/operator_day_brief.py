@@ -3,7 +3,7 @@ import json
 import os
 import re
 import uuid
-from datetime import datetime, time, date
+from datetime import datetime, time, date, timedelta
 from zoneinfo import ZoneInfo
 from services.operator_conversations import _row, get_or_create_operator_conversation, append_operator_message
 from services import operator_workday, work_journal, work_recommendations
@@ -389,13 +389,39 @@ def overview(cursor, *, business, user, day=None, item_id=None):
         'assignments': rows, 'deliveries':delivery_states(cursor,business,rows)}
 
 
+def focus_request(message):
+    """Extract an owner's stated focus, never infer tasks or recipients."""
+    clean = str(message or '').strip()
+    prefix = re.match(r'^фокус(?:\s+дня|\s+на\s+день)\b\s*[:—-]?\s*', clean, re.I)
+    brief = re.match(r'^(?:подготовь\s+)?план[её]рк[ау](?:\s+на\s+(завтра|сегодня|\d{4}-\d{2}-\d{2}))?\s*[:—-]\s*(?:фокус\s*[:—-]\s*)?', clean, re.I)
+    match = prefix or brief
+    if not match:
+        return '', None
+    focus = clean[match.end():].lstrip(' \t\r\n:.,—-')
+    focus = re.split(r'[.!\n]\s*(?:(?:пока\s+)?не\s+(?:публикуй|отправляй)|подготовь\s+(?:предварительный|черновик)|сотрудникам\s+ничего)', focus, maxsplit=1, flags=re.I)[0]
+    return focus.strip(), brief.group(1).lower() if brief and brief.group(1) else None
+
+
+def relevant_request(message, active=False):
+    clean = str(message or '')
+    if re.search(r'фокус\s+(?:дня|на день)|план[её]рк|мои задачи дня|статус задач|подготовь передачу задач', clean, re.I):
+        return True
+    if not active:
+        return False
+    if re.match(r'Сотрудники(?:\s+(?:MAX|Telegram))?\s*:|Задача для\s+\d+\s*:', clean, re.I):
+        return True
+    from services.operator_context import PlannerContext
+    domains = PlannerContext(clean).domains
+    return not domains or ('work' in domains and not domains.intersection({'finance', 'content', 'partnerships', 'integrations'}))
+
+
 def route(cursor, *, business, user, message, channel, pending=None, conversation_id=None):
     if not operator_workday.enabled(business):
         return None
     pending = pending or {}
     clean = str(message or '').strip()
     active = pending.get('selected_day_brief') or pending.get('day_brief_employee') or pending.get('day_brief_members')
-    if not active and not re.search(r'фокус дня|фокус на день|план[её]рка дня|мои задачи дня|статус задач|подготовь передачу задач', clean, re.I):
+    if not relevant_request(clean, active=bool(active)):
         return None
     platform = 'max' if channel.startswith('max') else 'telegram'
     actor = authorize(cursor, business, user)
@@ -426,11 +452,15 @@ def route(cursor, *, business, user, message, channel, pending=None, conversatio
     selected = pending.get('selected_day_brief') or {}
     current = draft(cursor, business, user, identifier=selected.get('id') or selected['item_id']) if selected.get('id') or selected.get('item_id') else draft(cursor, business, user, day=work_journal.local_day(cursor, business))
     people = members(cursor, business)
-    focus_prefix = re.match(r'^фокус(?:\s+дня|\s+на\s+день)\b', clean, re.I)
-    focus_text = clean[focus_prefix.end():].lstrip(' \t\r\n:.,—-') if focus_prefix else ''
+    focus_text, requested_day = focus_request(clean)
     if focus_text:
+        target_day = current.get('date')
+        if requested_day:
+            today = work_journal.local_day(cursor, business)
+            target_day = (date.fromisoformat(today) + timedelta(days=1)).isoformat() if requested_day == 'завтра' else today if requested_day == 'сегодня' else requested_day
+            current = draft(cursor, business, user, day=target_day)
         current = save(cursor, business=business, user=user, channel=channel, payload={'focus': focus_text,
-            'date': current.get('date'), 'recipients': current.get('recipients', []), 'version': current.get('version', 0), 'request_id': str(uuid.uuid4())})
+            'date': target_day, 'recipients': current.get('recipients', []), 'version': current.get('version', 0), 'request_id': str(uuid.uuid4())})
     if re.search(r'статус задач', clean, re.I):
         rows = assignments(cursor, business, user, owner=True, day=current.get('date') or work_journal.local_day(cursor, business))
         lines = ['Выполнение задач команды:']

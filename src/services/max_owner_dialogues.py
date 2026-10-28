@@ -41,6 +41,23 @@ def platform_url(value, *, web_app=False):
     query = dict(parse_qsl(parsed.query))
     if parsed.netloc in {'localos.pro', 'www.localos.pro'} or not parsed.netloc:
         path = parsed.path.replace('/telegram/control', '/max/control')
+        screens = {'operator': 'operator', 'partnerships': 'partnerships', 'content': 'content',
+            'work-journal': 'work_journal', 'finance': 'finance', 'progress': 'progress',
+            'today': 'today', 'settings': 'settings', 'card': 'cards', 'reviews': 'reviews'}
+        route = path.removeprefix('/dashboard/').split('/')[0]
+        if route in screens and path.startswith('/dashboard/'):
+            query['screen'] = screens[route]
+            if route == 'finance' and query.get('section') == 'import':
+                query['screen'] = 'finance_import'
+            business = query.pop('business_id', None)
+            context = current_owner_bot.get()
+            if not business and context and context.actor:
+                scope = resolve_control_scope(context.cursor, user_id=str(context.actor['id']), platform='max') or {}
+                if scope.get('id'):
+                    query.update(scope_type=scope['kind'], scope_id=str(scope['id']))
+            elif business:
+                query.update(scope_type='business', scope_id=business)
+            path = '/max/control'
         if path.startswith('/max/control') and os.getenv('MAX_BOT_USERNAME'):
             nav = {key: item for key, item in query.items() if key in {'screen', 'scope_type', 'scope_id', 'item_type', 'item_id'}}
             start = 'nav_' + base64.urlsafe_b64encode(json.dumps(nav, separators=(',', ':')).encode()).decode().rstrip('=')

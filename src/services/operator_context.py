@@ -4,7 +4,9 @@ from services.llm.policy import EMAIL_PATTERN
 
 DOMAINS = {
     'content': r'\bпост(?:а|ы|ов|е|у|ом)?\b|контент|публикац|новост',
-    'finance': r'выруч|расход|доход|чек|финанс|продаж|возврат',
+    'finance': r'выруч|расход|доход|чек|финанс|продаж|возврат|показател|визит|загрузк',
+    'partnerships': r'партн[её]р|аутрич|лид|договор[её]нност',
+    'integrations': r'\bcrm\b|\bсрм\b|yclients|dikidi|подключ.{0,30}систем',
     'services': r'услуг|прайс|цен[ауы]|wordstat|вордстат|поисков.{0,15}запрос|seo|сео',
     'seo': r'wordstat|вордстат|поисков.{0,15}запрос|seo|сео',
     'reviews': r'отзыв|рейтинг',
@@ -15,7 +17,8 @@ DOMAINS = {
 
 class PlannerContext:
     def __init__(self, message):
-        self.domains = {name for name, pattern in DOMAINS.items() if re.search(pattern, message, re.I)}
+        intent = re.sub(r'(?:сотрудник\w*|коллег\w*)\s+ничего\s+не\s+отправляй', '', message, flags=re.I)
+        self.domains = {name for name, pattern in DOMAINS.items() if re.search(pattern, intent, re.I)}
         self.references = {}
         self.reverse = {}
 

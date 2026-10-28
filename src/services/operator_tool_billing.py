@@ -62,6 +62,7 @@ def run_paid_operator_tool_loop(
     pending_approvals: Any = None,
     business_timezone: str | None = "Europe/Moscow",
     planner=None,
+    input_context: dict | None = None,
 ) -> dict[str, Any]:
     preflight = build_paid_action_preflight(
         cursor,
@@ -135,6 +136,7 @@ def run_paid_operator_tool_loop(
             pending_approvals=pending_approvals,
             tools=tools,
             business_timezone=business_timezone,
+            **({'input_context': input_context} if input_context is not None else {}),
         )
     except Exception:
         release = finalize_reserved_action_credits(

@@ -56,6 +56,18 @@ def postgres_container():
     PostgreSQL через testcontainers. Один раз на модуль.
     Skip только если Docker реально недоступен (docker.from_env().ping()).
     """
+    local_dsn = os.getenv('LOCALOS_TEST_POSTGRES_DSN', '')
+    if local_dsn:
+        from urllib.parse import urlsplit
+        from types import SimpleNamespace
+        parsed = urlsplit(local_dsn)
+        if parsed.hostname not in {'127.0.0.1', 'localhost'} or not parsed.path.startswith('/localos_max_qa_'):
+            pytest.fail('LOCALOS_TEST_POSTGRES_DSN must point to a disposable loopback localos_max_qa_ database')
+        import psycopg2
+        connection = psycopg2.connect(local_dsn)
+        connection.close()
+        yield SimpleNamespace(get_connection_url=lambda: local_dsn)
+        return
     if not _docker_available():
         pytest.skip("Docker daemon unavailable (docker.from_env().ping() failed)")
     try:

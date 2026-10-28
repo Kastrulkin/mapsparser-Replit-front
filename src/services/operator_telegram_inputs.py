@@ -37,7 +37,16 @@ async def receive(update,context,host):
             c.execute('UPDATE operatorconversations SET input_context_json=%s::jsonb WHERE id=%s',(json.dumps(selected),item['conversation_id']))
             return item
         item=await asyncio.to_thread(transaction,save)
-        await update.message.reply_text('Файл «'+item['original_name']+'» сохранён в LocalOS. Напишите или наговорите, что с ним сделать: пост, расписание или финансовые итоги.')
+        caption = str(update.message.caption or '').strip()
+        if caption:
+            selected_business = {**business, 'operator_payload': {
+                'conversation_id': item['conversation_id'],
+                'request_id': f'{owner_bot_channel()}:{update.effective_chat.id}:{update.message.message_id}:caption',
+            }}
+            response = await asyncio.to_thread(host.build_operator_chat_payload, selected_business, caption)
+            await update.message.reply_text(response['text'], reply_markup=host._build_operator_result_markup(response['result']))
+        else:
+            await update.message.reply_text('Файл «'+item['original_name']+'» сохранён в LocalOS. Напишите или наговорите, что с ним сделать: пост, расписание или финансовые итоги.')
     except (ValueError,PermissionError):
         await update.message.reply_text('Не удалось принять файл. Проверьте доступ, формат и размер; поддерживаются фото, PDF, XLSX и CSV до 10 МБ.')
     return True

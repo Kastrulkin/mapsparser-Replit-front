@@ -2296,6 +2296,27 @@ def route_operator_message(
         work_journal.scope(cursor,business_id,user_id)
         from services.operator_work_handoff import mobile_work_url
         return standardize_operator_result({'status':'completed','chat_response':'Журнал — наблюдения и пожелания сотрудников. Напишите или надиктуйте «В журнал: у входа грязные окна, нужен мойщик». Запись появится у руководителя; поиск исполнителей и отправка сообщений сами не запускаются.','work_return_url':mobile_work_url(business_id,platform='max' if channel.startswith('max') else 'telegram',screen='work_journal'),'external_writes_performed':False},'work.journal'),{}
+
+    from services import operator_business_requests
+    request_kind = operator_business_requests.request_kind(clean_message)
+    if request_kind:
+        capability = 'partnerships.read' if request_kind == 'partners' else 'crm.stats'
+        blocked = operator_subscription_block(subscription_access, capability)
+        if blocked:
+            return blocked, {}
+        result = operator_business_requests.route(cursor, business_id=business_id, user_id=user_id, message=clean_message)
+        return standardize_operator_result(result, capability), {}
+    from services.operator_finance_daily import finance_input, period_input
+    if finance_input(clean_message) and period_input(clean_message) and not re.search(r'покажи|сколько|сравни', clean_message, re.I):
+        blocked = operator_subscription_block(subscription_access, 'finance.read')
+        if blocked:
+            return blocked, {}
+        return standardize_operator_result({
+            'status': 'clarification_required',
+            'chat_response': 'Это показатели за период. Их нельзя записать как выручку одного дня. Откройте ввод показателей, укажите начало и конец периода и проверьте данные перед сохранением. Сейчас показатели не сохранены.',
+            'result_ref': {'href': '/dashboard/finance?business_id=' + business_id, 'label': 'Внести показатели за период'},
+            'external_writes_performed': False,
+        }, 'finance.read'), {}
     from services import operator_day_brief
     daily = operator_day_brief.route(cursor, business=business_id, user=user_id, message=clean_message, channel=channel,
         pending=pending_context, conversation_id=conversation_id)
