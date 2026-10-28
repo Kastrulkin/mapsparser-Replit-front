@@ -75,8 +75,8 @@ def save(cursor, *, business, user, payload, channel='web'):
         if any(row['user_id'] == uid for row in clean):
             raise ValueError('Сотрудник выбран дважды.')
         platforms = target.get('platforms', [])
-        if not isinstance(platforms, list) or not platforms or any(not isinstance(p, str) or p not in {'telegram', 'max'} for p in platforms) or len(set(platforms)) != len(platforms):
-            raise ValueError('Выберите Telegram, MAX или оба мессенджера.')
+        if not isinstance(platforms, list) or any(not isinstance(p, str) or p not in {'telegram', 'max'} for p in platforms) or len(set(platforms)) != len(platforms):
+            raise ValueError('Выберите уведомления Telegram/MAX или оставьте только кабинет LocalOS.')
         tasks = target.get('tasks', [])
         if not isinstance(tasks, list) or not 1 <= len(tasks) <= 10:
             raise ValueError('Укажите от 1 до 10 задач сотруднику.')
@@ -191,9 +191,11 @@ def public_preview(payload):
 def prepare(cursor, *, business, user, identifier, version):
     payload = preview(cursor, business=business, user=user, identifier=identifier, version=version)
     lines = ['Бизнес: ' + payload['business_name'], 'Проверьте задачи и подсказки каждому сотруднику.']
-    lines.append('После подтверждения появятся в их кабинетах.' + (' Уведомления будут поставлены в очередь.' if payload['delivery_enabled'] else ' Доставка в мессенджеры пока выключена.'))
+    notifications = payload['delivery_enabled'] and any(row['bindings'] for row in payload['messages'])
+    lines.append('После подтверждения появятся в их кабинетах.' + (' Выбранные уведомления будут поставлены в очередь.' if notifications else ' Уведомлений в мессенджеры не будет.'))
     for row in payload['messages']:
-        lines.extend(['\nПолучатель: ' + row['name'] + ' · ' + ', '.join(row['bindings']), row['text']])
+        destination = 'Кабинет LocalOS' + ('; уведомления: ' + ', '.join(row['bindings']) if row['bindings'] else '; без уведомлений')
+        lines.extend(['\nПолучатель: ' + row['name'] + ' · ' + destination, row['text']])
     return {'status': 'approval_required', 'capability': 'work.day_brief', 'chat_response': '\n\n'.join(lines),
         'day_brief_preview': public_preview(payload), 'approval': {'envelope': payload}}
 
@@ -228,7 +230,8 @@ def apply(cursor, *, business, user, envelope):
                     idempotency_key='day-brief:' + identifier + ':' + platform, stage='Уведомление о задачах', max_attempts=1)
     value.update(status='assigned')
     cursor.execute('UPDATE operatorconversations SET input_context_json=%s::jsonb WHERE id=%s', (json.dumps({'day_brief': {k: v for k, v in value.items() if k != 'id'}}, ensure_ascii=False), value['id']))
-    return {'status': 'completed', 'capability': 'work.day_brief', 'chat_response': 'Задачи доступны сотрудникам в кабинетах. ' + ('Уведомления в очереди; доставка ещё не подтверждена.' if fresh['delivery_enabled'] else 'Уведомления в мессенджеры выключены.'), 'action_ids': actions, 'external_writes_performed': False}
+    notifications = fresh['delivery_enabled'] and any(row['bindings'] for row in fresh['messages'])
+    return {'status': 'completed', 'capability': 'work.day_brief', 'chat_response': 'Задачи доступны сотрудникам в кабинетах. ' + ('Уведомления в очереди; доставка ещё не подтверждена.' if notifications else 'Уведомлений в мессенджеры нет.'), 'action_ids': actions, 'external_writes_performed': False}
 
 
 def assignments(cursor, business, user, owner=False, day=None):
@@ -409,7 +412,7 @@ def relevant_request(message, active=False):
         return True
     if not active:
         return False
-    if re.match(r'Сотрудники(?:\s+(?:MAX|Telegram))?\s*:|Задача для\s+\d+\s*:', clean, re.I):
+    if re.match(r'Сотрудники(?:\s+(?:MAX|Telegram|кабинет))?\s*:|Задача для\s+\d+\s*:', clean, re.I):
         return True
     from services.operator_context import PlannerContext
     domains = PlannerContext(clean).domains
@@ -479,7 +482,7 @@ def route(cursor, *, business, user, message, channel, pending=None, conversatio
         from services.operator_work_handoff import mobile_work_url
         return {'status': 'completed', 'capability': 'work.day_brief', 'chat_response': '\n\n'.join(lines) if rows else 'Подтверждённых задач пока нет.',
             'work_return_url': mobile_work_url(business, current.get('id'), platform, 'work_journal', 'day_brief')}, pending
-    chosen = re.fullmatch(r'Сотрудники(?:\s+(MAX|Telegram))?\s*:\s*([\d,\s]+)', clean, re.I)
+    chosen = re.fullmatch(r'Сотрудники(?:\s+(MAX|Telegram|кабинет))?\s*:\s*([\d,\s]+)', clean, re.I)
     if chosen:
         if not current:
             raise ValueError('Сначала надиктуйте «Фокус дня: …».')
@@ -492,7 +495,7 @@ def route(cursor, *, business, user, message, channel, pending=None, conversatio
                 raise ValueError('Проверьте номера сотрудников.')
             ids.append(previous_people[int(n) - 1])
         destination = chosen[1].lower() if chosen[1] else platform
-        targets = [{'user_id': uid, 'platforms': [destination], 'tasks': next((r['tasks'] for r in current['recipients'] if r['user_id'] == uid), [{'text': current['focus']}])} for uid in ids]
+        targets = [{'user_id': uid, 'platforms': [] if destination == 'кабинет' else [destination], 'tasks': next((r['tasks'] for r in current['recipients'] if r['user_id'] == uid), [{'text': current['focus']}])} for uid in ids]
         current = save(cursor, business=business, user=user, channel=channel, payload={**current, 'recipients': targets, 'request_id': str(uuid.uuid4())})
     task = re.fullmatch(r'Задача для\s+(\d+)\s*:\s*(.+)', clean, re.I | re.S)
     if task:
@@ -522,7 +525,7 @@ def route(cursor, *, business, user, message, channel, pending=None, conversatio
             lines.append(person['name'] + ': ' + '; '.join(t['text'] for t in target['tasks']))
     lines.append('Сотрудники:')
     lines.extend(str(i + 1) + '. ' + str(person['name']) for i, person in enumerate(people))
-    lines.append('«Сотрудники: 1, 2» — выбрать; «Сотрудники MAX: 1» — через MAX. «Задача для 1: …» — добавить задачу. «Подготовь передачу задач» — проверить перед подтверждением.')
+    lines.append('«Сотрудники: 1, 2» — выбрать с уведомлением в этом мессенджере; «Сотрудники MAX: 1» — через MAX; «Сотрудники кабинет: 1» — только в кабинете LocalOS, без уведомлений. «Задача для 1: …» — добавить задачу. «Подготовь передачу задач» — проверить перед подтверждением.')
     from services.operator_work_handoff import mobile_work_url
     result = {'status': 'completed', 'capability': 'work.day_brief', 'chat_response': '\n\n'.join(lines),
         'work_return_url': mobile_work_url(business, current.get('id'), platform, 'work_journal', 'day_brief')}

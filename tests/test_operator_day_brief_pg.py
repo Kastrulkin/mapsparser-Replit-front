@@ -39,6 +39,53 @@ def save(c, current=None, recipients=None, focus='Внимательно вст�
         'focus': focus, 'recipients': targets, 'request_id': str(uuid.uuid4())})
 
 
+def test_cabinet_only_employee_completes_task_and_writes_journal_without_delivery(team, monkeypatch):
+    conn, c = team
+    monkeypatch.setenv('OPERATOR_DAY_BRIEF_DELIVERY_ENABLED', 'true')
+    c.execute("UPDATE users SET telegram_id=NULL WHERE id='master'")
+    c.execute("DELETE FROM max_identities WHERE user_id='master'")
+    current = save(c, recipients=[{'user_id': 'master', 'platforms': [], 'tasks': [{'text': 'Проверить тестовое окно.'}]}])
+    prepared = operator_day_brief.prepare(c, business='b', user='u', identifier=current['id'], version=current['version'])
+    assert prepared['day_brief_preview']['messages'][0]['platforms'] == []
+    assert 'Уведомления будут поставлены' not in prepared['chat_response']
+    envelope = prepared['approval']['envelope']
+    result = operator_day_brief.apply(c, business='b', user='u', envelope=envelope)
+    repeated = operator_day_brief.apply(c, business='b', user='u', envelope=envelope)
+    assert result['action_ids'] == repeated['action_ids']
+    assert 'в очереди' not in result['chat_response']
+    c.execute('SELECT COUNT(*) n FROM operator_async_jobs'); assert c.fetchone()['n'] == 0
+    employee = operator_day_brief.overview(c, business='b', user='master')
+    assert not employee['can_manage'] and employee['draft'] is None
+    action = employee['assignments'][0]
+    task = action['payload_json']['tasks'][0]
+    operator_day_brief.complete_task(c, business='b', user='master', action_id=str(action['id']), task_id=task['id'], version=action['version'], done=True)
+    assert operator_day_brief.assignments(c, 'b', 'master')[0]['payload_json']['tasks'][0]['done']
+    quote = 'QA: проверил тестовое окно. Уборка не требуется.'
+    entry = operator_day_brief.work_journal.save_note(c, 'b', 'master', 'web', None, 'qa-completed-note', quote, {'quote': quote})
+    assert entry['user_id'] == 'master' and entry['facts_json']['quote'] == quote
+    c.execute('SELECT COUNT(*) n FROM operator_async_jobs'); assert c.fetchone()['n'] == 0
+
+
+@pytest.mark.parametrize('channel', ['telegram', 'max_bot'])
+def test_bot_can_explicitly_assign_cabinet_only_tasks(team, channel):
+    conn, c = team
+    _, context = operator_day_brief.route(c, business='b', user='u', channel=channel, message='Фокус дня: QA проверка окна.')
+    index = context['day_brief_members'].index('master') + 1
+    _, context = operator_day_brief.route(c, business='b', user='u', channel=channel, message='Сотрудники кабинет: ' + str(index), pending=context)
+    record = operator_day_brief.draft(c, 'b', 'u', identifier=context['selected_day_brief']['id'])
+    assert record['recipients'][0]['platforms'] == []
+    prepared, _ = operator_day_brief.route(c, business='b', user='u', channel=channel, message='Подготовь передачу задач', pending=context)
+    assert prepared['day_brief_preview']['messages'][0]['platforms'] == []
+
+
+def test_explicit_disconnected_messenger_still_requires_connection(team):
+    conn, c = team
+    c.execute("UPDATE users SET telegram_id=NULL WHERE id='master'")
+    current = save(c)
+    with pytest.raises(ValueError, match='подключите выбранный мессенджер'):
+        operator_day_brief.prepare(c, business='b', user='u', identifier=current['id'], version=current['version'])
+
+
 def test_save_preview_no_assign_or_send_and_employee_cannot_read_owner_draft(team):
     conn, c = team
     assert operator_day_brief.overview(c, business='b', user='master', day='2026-10-17')['draft'] is None

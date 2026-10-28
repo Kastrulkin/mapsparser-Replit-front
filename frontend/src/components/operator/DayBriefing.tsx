@@ -80,7 +80,7 @@ export function DayBriefing({ businessId, headers, channel }: { businessId: stri
     setSaved(result.draft); setTargets(result.draft.recipients); setDirty(false); setVoice(null);
     return result.draft;
   }
-  const recipientsReady = targets.length > 0 && targets.every(target => target.platforms.length > 0 && target.tasks.some(task => task.text.trim()));
+  const recipientsReady = targets.length > 0 && targets.every(target => target.tasks.some(task => task.text.trim()));
   function updateTarget(id: string, transform: (target: Target) => Target) { edited(); setTargets(values => values.map(row => row.user_id === id ? transform(row) : row)); }
 
   return <section className="space-y-4" aria-label="Планёрка дня">
@@ -99,21 +99,22 @@ export function DayBriefing({ businessId, headers, channel }: { businessId: stri
           onSubmit={async (value, source) => { edited(); setFocus(value); setVoice({ ...source, text: value }); }} />
         <p className="text-sm text-muted-foreground">Распознанный текст можно поправить. Запись и сохранение черновика ничего не отправляют.</p>
         <fieldset disabled={busy} className="space-y-3"><legend className="mb-2 font-medium">2. Кому и какие задачи передать?</legend>
-          {!data.members.length && <p className="text-sm text-muted-foreground">Сначала добавьте сотрудников в разделе «Бизнес и команда» и подключите их мессенджеры.</p>}
+          {!data.members.length && <p className="text-sm text-muted-foreground">Сначала добавьте сотрудников в разделе «Бизнес и команда».</p>}
           {data.members.map(member => {
             const target = targets.find(row => row.user_id === member.id);
             return <div key={member.id} className="space-y-2 border-b pb-3">
-              <label className="flex min-h-11 items-center gap-3"><input type="checkbox" checked={Boolean(target)} disabled={!member.platforms.length}
-                onChange={event => { edited(); setTargets(rows => event.target.checked ? [...rows, { user_id: member.id, platforms: [member.platforms[0]], tasks: [{ text: focus }] }] : rows.filter(row => row.user_id !== member.id)); }} />{member.name}</label>
-              {!member.platforms.length && <p className="text-sm text-muted-foreground">Мессенджер ещё не подключён.</p>}
+              <label className="flex min-h-11 items-center gap-3"><input type="checkbox" checked={Boolean(target)}
+                onChange={event => { edited(); setTargets(rows => event.target.checked ? [...rows, { user_id: member.id, platforms: member.platforms.slice(0,1), tasks: [{ text: focus }] }] : rows.filter(row => row.user_id !== member.id)); }} />{member.name}</label>
+              {!member.platforms.length && <p className="text-sm text-muted-foreground">Задачи появятся в кабинете LocalOS. Для уведомлений сотрудник может подключить Telegram или MAX.</p>}
               {target && <>
+                <p className="text-sm text-muted-foreground">Кабинет LocalOS{target.platforms.length ? ' · также уведомить:' : ' · без уведомлений в мессенджеры'}</p>
                 <div className="flex flex-wrap gap-3">{member.platforms.map(platform => <label key={platform} className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={target.platforms.includes(platform)} onChange={event => updateTarget(member.id, row => ({ ...row, platforms: event.target.checked ? [...row.platforms, platform] : row.platforms.filter(p => p !== platform) }))} />{platform === 'max' ? 'MAX' : 'Telegram'}</label>)}</div>
                 <label className="block text-sm">Задачи для {member.name}, каждая с новой строки<Textarea value={target.tasks.map(task => task.text).join('\n')} onChange={event => updateTarget(member.id, row => ({ ...row, tasks: event.target.value.split('\n').map(value => ({ text: value })) }))} /></label>
               </>}
             </div>;
           })}
         </fieldset>
-        {targets.length > 0 && !recipientsReady && <p role="status" className="text-sm text-muted-foreground">Для каждого выбранного сотрудника выберите канал и добавьте хотя бы одну задачу.</p>}
+        {targets.length > 0 && !recipientsReady && <p role="status" className="text-sm text-muted-foreground">Добавьте хотя бы одну задачу каждому выбранному сотруднику.</p>}
         {!data.delivery_enabled && <p className="text-sm text-muted-foreground">Уведомления в мессенджеры пока выключены. После подтверждения задачи появятся в кабинетах сотрудников.</p>}
         <div className="flex flex-wrap gap-2">{!preview && <Button disabled={busy || !focus.trim() || !recipientsReady} onClick={() => void perform(async () => {
           const value = await save(); setPreview(await request<Preview>('day-brief/preview', { business_id: businessId, record_id: value.id, version: value.version }));
@@ -121,8 +122,8 @@ export function DayBriefing({ businessId, headers, channel }: { businessId: stri
         {saved && <WorkDiscussion businessId={businessId} itemId={saved.id} updatedAt={String(saved.version)} itemType="day_brief" disabled={dirty || busy} />}
         {preview && <div className="space-y-4 border-t pt-4" aria-label="Проверка планёрки" role="region" ref={previewFocus} tabIndex={-1}>
           <h3 className="font-semibold">3. Проверьте точный текст и получателей</h3>
-          {preview.day_brief_preview.messages.map(message => <div key={message.user_id}><p className="font-medium">{message.name} · {message.platforms.map(p => p === 'max' ? 'MAX' : 'Telegram').join(', ')}</p><p className="whitespace-pre-wrap break-words text-sm">{message.text}</p></div>)}
-          <p className="text-sm">{preview.day_brief_preview.delivery_enabled ? 'Уведомления будут поставлены в очередь. Статус очереди не подтверждает доставку.' : 'Задачи появятся в кабинетах. Уведомления выключены.'}</p>
+          {preview.day_brief_preview.messages.map(message => <div key={message.user_id}><p className="font-medium">{message.name} · Кабинет LocalOS{message.platforms.length ? ' · уведомления: ' + message.platforms.map(p => p === 'max' ? 'MAX' : 'Telegram').join(', ') : ' · без уведомлений'}</p><p className="whitespace-pre-wrap break-words text-sm">{message.text}</p></div>)}
+          <p className="text-sm">{preview.day_brief_preview.delivery_enabled && preview.day_brief_preview.messages.some(message => message.platforms.length) ? 'Выбранные уведомления будут поставлены в очередь. Статус очереди не подтверждает доставку.' : 'Задачи появятся в кабинетах. Уведомлений в мессенджеры не будет.'}</p>
           <div className="flex flex-wrap gap-2"><Button disabled={busy || dirty} onClick={() => void perform(async () => {
             const result = await request<{ operator_result?: { chat_response?: string; status?: string }; chat_response?: string }>('actions/' + preview.approval.action_id + '/confirm', { business_id: businessId });
             if (result.operator_result?.status && result.operator_result.status !== 'completed') throw new Error(result.operator_result.chat_response || 'Передача не подтверждена. Обновите планёрку.');

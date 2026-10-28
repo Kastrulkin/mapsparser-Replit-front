@@ -22,6 +22,30 @@ beforeEach(() => {
 });
 
 describe('DayBriefing', () => {
+  it.each(['telegram_mini_app','max_mini_app'])('%s: assigns cabinet-only work to a member without a messenger after review',async channel=>{
+    const original=vi.mocked(fetch).getMockImplementation();
+    vi.mocked(fetch).mockImplementation(async(input,init)=>{
+      if (!init?.method || init.method==='GET') return new Response(JSON.stringify({...overview,delivery_enabled:true,members:[{id:'employee',name:'Анна',platforms:[]}]}));
+      if(String(input).endsWith('/preview')) {
+        calls.push({path:String(input),body:JSON.parse(String(init.body))});
+        return new Response(JSON.stringify({approval:{action_id:'approval'},day_brief_preview:{delivery_enabled:true,messages:[{user_id:'employee',name:'Анна',platforms:[],text:'Проверить тестовое окно'}]}}));
+      }
+      return original!(input,init);
+    });
+    render(<DayBriefing businessId="business" channel={channel} headers={headers}/>);
+    const member=await screen.findByRole('checkbox',{name:'Анна'});
+    expect(member).toBeEnabled();
+    fireEvent.change(screen.getByLabelText('Фокус дня'),{target:{value:'Проверить тестовое окно'}});
+    fireEvent.click(member);
+    fireEvent.click(screen.getByRole('button',{name:'Проверить перед передачей'}));
+    await screen.findByRole('button',{name:'Подтвердить передачу задач'});
+    expect(calls.find(call=>call.path.endsWith('/day-brief'))?.body.recipients).toEqual([{user_id:'employee',platforms:[],tasks:[{text:'Проверить тестовое окно'}]}]);
+    expect(screen.getByRole('region',{name:'Проверка планёрки'})).toHaveTextContent('Кабинет LocalOS');
+    expect(screen.getByRole('region',{name:'Проверка планёрки'})).not.toHaveTextContent('Уведомления будут поставлены');
+    expect(calls.some(call=>call.path.endsWith('/confirm'))).toBe(false);
+    fireEvent.click(screen.getByRole('button',{name:'Подтвердить передачу задач'}));
+    await waitFor(()=>expect(calls.filter(call=>call.path.endsWith('/confirm'))).toHaveLength(1));
+  });
   for (const channel of ['telegram_mini_app', 'max_mini_app']) it(channel + ': voice draft requires recipient review and explicit approval', async () => {
     render(<DayBriefing businessId="business" channel={channel} headers={headers} />);
     await screen.findByText('Анна');
