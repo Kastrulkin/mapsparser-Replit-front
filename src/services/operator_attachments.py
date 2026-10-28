@@ -37,6 +37,21 @@ def public(item):
     return {key:item.get(key) for key in ('id','conversation_id','original_name','mime_type','purpose','photo_asset_id')}
 
 
+
+def image_identity(content, name):
+    from PIL import Image
+    image = Image.open(io.BytesIO(content))
+    if image.width * image.height > 40000000:
+        raise ValueError('Слишком большое разрешение изображения.')
+    formats = {'JPEG': ('.jpg', 'image/jpeg'), 'PNG': ('.png', 'image/png'), 'WEBP': ('.webp', 'image/webp')}
+    identity = formats.get(image.format)
+    if not identity:
+        raise ValueError('Поддерживаются JPG, PNG и WebP.')
+    image.verify()
+    extension, mime = identity
+    return str(Path(name).with_suffix(extension)), mime
+
+
 def receive(cursor, *, business_id, user_id, channel, content, name, mime_type, request_key, conversation_id=None):
     authorize(cursor, business_id, user_id)
     if channel not in {'web','telegram','telegram_mini_app','max_bot','max_mini_app'} or not request_key or len(request_key)>200:
@@ -45,12 +60,8 @@ def receive(cursor, *, business_id, user_id, channel, content, name, mime_type, 
     if extension not in EXTENSIONS or not content or len(content)>MAX_BYTES:
         raise ValueError('Поддерживаются фото, PDF, XLSX и CSV размером до 10 МБ.')
     if extension in {'.jpg','.jpeg','.png','.webp'}:
-        from PIL import Image
-        image = Image.open(io.BytesIO(content))
-        if image.width * image.height > 40000000:
-            raise ValueError('Слишком большое разрешение изображения.')
-        mime_type=Image.MIME.get(image.format,mime_type)
-        image.verify()
+        name, mime_type = image_identity(content, name)
+        extension = Path(name).suffix.lower()
     if extension == '.pdf' and not content.startswith(b'%PDF-'):
         raise ValueError('Содержимое не является PDF.')
     if extension == '.xlsx':
@@ -169,8 +180,10 @@ def classify(cursor,business_id,user_id,attachment_id,purpose,conversation_id):
     text=item.get('extracted_text') or ''
     if purpose=='content' and not photo_id:
         from services.media_intelligence import create_uploaded_photo_asset
-        photo=create_uploaded_photo_asset(cursor,business_id=business_id,user_id=user_id,content=file_bytes(item),
-              original_name=item['original_name'],mime_type=item['mime_type'],metadata={'source':'operator','attachment_id':item['id']})
+        content = file_bytes(item)
+        photo_name, photo_mime = image_identity(content, item['original_name'])
+        photo=create_uploaded_photo_asset(cursor,business_id=business_id,user_id=user_id,content=content,
+              original_name=photo_name,mime_type=photo_mime,metadata={'source':'operator','attachment_id':item['id']})
         photo_id=photo['id']
         from services import yandex_disk
         yandex_disk.queue(cursor,business_id,user_id,photo_id)

@@ -27,7 +27,7 @@ export const resolveMobileRoute = (
   const allowed = new Set(navigation.filter((item) => item.status !== 'hidden').map((item) => item.key));
   const requested = target?.screen || 'today';
   const screen = requested === 'analytics' ? 'finance' : requested;
-  const canOpen = allowed.has(screen);
+  const canOpen = allowed.has(screen === 'finance_import' ? 'finance' : screen);
   const safeScreen = canOpen ? screen : 'today';
   let tab: MobileRoute['tab'] = 'today';
   if (safeScreen === 'tasks' || safeScreen === 'feed' || safeScreen === 'reviews' || safeScreen === 'progress' || safeScreen === 'operator') tab = safeScreen;

@@ -929,7 +929,9 @@ def _operator_tool_catalog(
         arguments=arguments,
         user_id=user_id,
     )
+    from services.operator_knowledge_search import knowledge_search_tool
     tools = [
+        knowledge_search_tool(cursor, business_id, user_id),
         query_tool,
         {
             "name": "business.get_profile",
@@ -1470,6 +1472,20 @@ def _operator_tool_catalog(
             },
             "risk_class": "draft_only", "approval_required": False, "deterministic_response": True,
             "execute": lambda arguments: __import__("services.outreach_continuation", fromlist=["operator_task"]).operator_task(
+                cursor, business_id=business_id, user_id=user_id, arguments=group_arguments(arguments), actor_context=actor_context),
+        },
+        {
+            "name": "partnerships.prepare_template_draft",
+            "capability": "partnerships.prepare_search_drafts",
+            "title": "Письмо по готовому шаблону",
+            "description": "Предпочитай готовые шаблоны вместо новой генерации. list показывает варианты, preview собирает полный текст из сохранённых фактов, save сохраняет только черновик. Сборка бесплатна, без модели, поиска и отправки. Шаблон, бизнес, направление, публичный контакт и актуальные цены проверяет сервер. При нехватке данных уточни их, не запускай платную генерацию или исследование автоматически. Для бесплатного управления пользователь может написать: Покажи письмо по шаблону Пхукет для задачи ID; Сохрани письмо по шаблону Пхукет для задачи ID.",
+            "input_schema": {"type": "object", "additionalProperties": False, "properties": {
+                "operation": {"type": "string", "enum": ["list", "preview", "save"]},
+                "template": {"type": "string", "enum": ["phuket", "la", "localos"]},
+                "task_id": {"type": "string"}, "workstream_id": {"type": "string", "description": "Карточка LocalOS из существующего CRM, только для администратора платформы"}, "revision": {"type": "string"},
+                "variant": {"type": "string", "enum": ["A", "B"]}}, "required": ["operation"]},
+            "risk_class": "draft_only", "approval_required": False, "deterministic_response": True,
+            "execute": lambda arguments: __import__("services.outreach_saved_templates", fromlist=["execute"]).execute(
                 cursor, business_id=business_id, user_id=user_id, arguments=group_arguments(arguments), actor_context=actor_context),
         },
         {
@@ -2067,6 +2083,43 @@ def _content_read_request(message):
             and any(word in lowered for word in ('пост', 'контент план', 'публикаци', 'новост')))
 
 
+def _content_package_summary(cursor, business_id, items, *, include_text=False):
+    """Read saved versions and the same effective photo selection as handoff."""
+    from services.content_publish_notifications import _selected_photos
+    from services.operator_content_publication import PLATFORM_LABELS
+    ids = [str(item['id']) for item in items if item.get('id')]
+    if not ids:
+        return []
+    cursor.execute('''SELECT * FROM social_posts
+        WHERE business_id=%s AND content_plan_item_id=ANY(%s)
+        ORDER BY content_plan_item_id,platform,id''', (business_id, ids))
+    grouped = {}
+    for post in _rows_from_cursor(cursor):
+        photos = _selected_photos(cursor, post)
+        grouped.setdefault(str(post['content_plan_item_id']), []).append({
+            'platform': post['platform'],
+            'label': PLATFORM_LABELS.get(post['platform'], post['platform']),
+            'status': post.get('status'),
+            'has_text': bool(str(post.get('platform_text') or post.get('base_text') or '').strip()),
+            'photo_asset_ids': [str(photo['id']) for photo in photos],
+            'text': str(post.get('platform_text') or post.get('base_text') or '').strip(),
+        })
+    lines = ['Комплектность сохранённых версий (не оценка качества фото):']
+    for item in items:
+        versions = grouped.get(str(item.get('id')), [])
+        item['channel_versions'] = versions
+        lines.append(str(item.get('title') or item.get('theme') or item.get('id')) + ':')
+        if not versions:
+            lines.append('— Версии площадок не подготовлены.')
+        for version in versions:
+            lines.append('— ' + version['label'] + ': текст ' + ('есть' if version['has_text'] else 'отсутствует')
+                         + ', фото ' + ('выбрано' if version['photo_asset_ids'] else 'не выбрано')
+                         + ', статус ' + str(version['status'] or 'не задан') + '.')
+            if include_text and version['text'] and version['text'] != str(item.get('draft_text') or '').strip():
+                lines.append(version['text'])
+    return lines
+
+
 def _read_requested_content(cursor, business_id, message):
     from services.operator_query import render_operator_query
     lowered = message.lower()
@@ -2109,7 +2162,8 @@ def _read_requested_content(cursor, business_id, message):
             items = items[:requested_count]
         result['items'] = items
         result['count'] = len(items)
-        result['chat_response'] = (('Следующий материал в сохранённом контент-плане:\n\n' if requested_next else 'Предстоящие материалы сохранённого контент-плана:\n\n')+
+        heading = ('Следующий материал в сохранённом контент-плане:\n\n' if requested_next else 'Предстоящие материалы сохранённого контент-плана:\n\n') if zone or explicit_date else 'Материалы сохранённого контент-плана (без отбора по будущим датам):\n\n'
+        result['chat_response'] = (heading+
             render_operator_query(result['query'], items, len(items)) if items else
             'В сохранённом контент-плане не нашёл неопубликованного материала по указанным условиям.')
         if not items:
@@ -2131,9 +2185,13 @@ def _read_requested_content(cursor, business_id, message):
                     if any(item.get('status') not in {'published', 'cancelled', 'archived'} for item in saved['items']):
                         result['chat_response'] += ' Есть материалы с прошедшими датами или без даты, не отмеченные опубликованными.'
                     result['chat_response'] += ' Можно подготовить следующий план, сохранив старый.'
-        if not zone:
+        if not zone and not explicit_date:
             result['chat_response'] += '\n\nПорядок — по датам в плане, без отсечения прошедших дней: часовой пояс бизнеса не задан.'
         result['chat_response'] += '\n\nДата в плане не подтверждает постановку на автопубликацию или публикацию во внешнем канале.'
+    if re.search(r'верси\w*|комплект\w*|выбранн\w*\s+фото|фото\s+(?:есть|выбран)', lowered):
+        package = _content_package_summary(cursor, business_id, result.get('items') or [], include_text=full_text_requested)
+        if package:
+            result['chat_response'] += '\n\n' + '\n'.join(package)
     return result
 
 
@@ -2292,6 +2350,29 @@ def route_operator_message(
         message_id=next((item.get('id') for item in reversed(conversation_history or []) if item.get('role')=='user'),None)
         request_key=str((action_payload or {}).get('request_id') or message_id or uuid.uuid4())
         return standardize_operator_result(operator_work_journal.save_literal(cursor,business_id,user_id,channel,clean_message,literal or clean_message,request_key,message_id),'work.journal'),{}
+    from services.operator_partner_source_review import request_for as imported_partner_request, execute as review_imported_partner
+    source_request = imported_partner_request(clean_message)
+    if source_request:
+        outcome = review_imported_partner(cursor, business_id=business_id, user_id=user_id,
+            arguments=source_request, actor_context=actor_context)
+        return standardize_operator_result(outcome, 'partnerships.read'), {}
+    from services.outreach_saved_templates import request as saved_template_request, execute as execute_saved_template
+    template_request = saved_template_request(clean_message)
+    if template_request:
+        blocked = operator_subscription_block(subscription_access, 'partnerships.prepare_search_drafts')
+        if blocked:
+            return blocked, {}
+        template_request['task_id'] = template_request.get('task_id') or str((action_payload or {}).get('search_task_id') or '')
+        if template_request.get('operation') == 'save':
+            prior = next((item.get('result_json') or {} for item in reversed(conversation_history or [])
+                if item.get('role') in {'operator', 'assistant'} and isinstance(item.get('result_json'), dict)
+                and item['result_json'].get('template_revision')), {})
+            if prior.get('template') == template_request.get('template') and ((template_request.get('workstream_id') and prior.get('workstream_id') == template_request['workstream_id']) or (not template_request.get('workstream_id') and str(prior.get('search_task_id') or '') == template_request.get('task_id'))):
+                template_request['revision'] = prior['template_revision']
+        outcome = execute_saved_template(cursor, business_id=business_id, user_id=user_id,
+            arguments=template_request, actor_context=actor_context)
+        return standardize_operator_result(outcome, 'partnerships.prepare_search_drafts'), {}
+    from services import work_journal, operator_work_journal
     if work_journal.enabled(business_id) and operator_work_journal.opens_journal(clean_message):
         work_journal.scope(cursor,business_id,user_id)
         from services.operator_work_handoff import mobile_work_url
@@ -2445,6 +2526,10 @@ def route_operator_message(
         return setup
     selected_search_task = None
     selected_id = str((action_payload or {}).get('search_task_id') or '').strip()
+    from services.operator_outreach_followup import resolve as resolve_outreach_followup
+    outreach_followup = resolve_outreach_followup(clean_message, conversation_history)
+    if outreach_followup and not selected_id:
+        selected_id = outreach_followup['task_id']
     from services.operator_outreach_read_request import letter_request
     requested_letters = letter_request(clean_message)
     if requested_letters:
@@ -2466,7 +2551,7 @@ def route_operator_message(
         enrich_group(cursor, selected_search_task, viewer_id=user_id)
         if pending.get('task_id') and str(pending['task_id']) != selected_id:
             pending = {}
-        command = clean_message.strip().rstrip('.!').casefold()
+        command = outreach_followup['command'] if outreach_followup else clean_message.strip().rstrip('.!').casefold()
         operation = {'покажи этот поиск': 'status', 'покажи поиск': 'status', 'покажи отправку': 'review_send', 'подготовь просмотр отправки': 'review_send', 'пауза': 'pause', 'приостанови': 'pause', 'останови': 'stop', 'останови поиск': 'stop', 'продолжи': 'resume', 'продолжи поиск': 'resume', 'повтори проверку сайтов': 'retry_failed', 'повтори исследование': 'retry_failed', 'повтори подготовку писем': 'retry_failed'}.get(command)
         if requested_letters:
             operation = 'letters'
@@ -2671,6 +2756,14 @@ def route_operator_message(
             outcome['capability']='services.google.add'
         next_context = {'capability':'services.creation.clarification','source_message':source_message} if outcome.get('status')=='clarification_required' else {}
         return standardize_operator_result(outcome,str(outcome.get('capability') or 'services.create')), next_context
+    from services.operator_work_handoff import read_selected_content
+    selected_read = read_selected_content(cursor, business_id=business_id, user_id=user_id,
+        message=clean_message, selection=pending.get('selected_item'))
+    if selected_read is not None:
+        blocked = operator_subscription_block(subscription_access, 'content.history')
+        if blocked:
+            return blocked, pending
+        return standardize_operator_result(selected_read, 'content.history'), pending
     from services.operator_editorial import editorial_input, editorial_tools
     editorial_pending = pending.get('capability') in {'content.editorial.clarification','content.editorial.selected'}
     if editorial_pending and (clean_message.strip().lower() in {'отмена','отмени','не надо','стоп','cancel','/cancel'} or re.match(r'не (?:надо|нужно|меняй|изменяй|сохраняй|продолжай)\b',clean_message.strip().lower())):

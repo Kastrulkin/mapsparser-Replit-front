@@ -3,6 +3,7 @@ import json
 import os
 import re
 import uuid
+from core.telegram_network import build_requests_proxy_kwargs
 from datetime import datetime, time, date, timedelta
 from zoneinfo import ZoneInfo
 from services.operator_conversations import _row, get_or_create_operator_conversation, append_operator_message
@@ -322,7 +323,7 @@ def process_job(job):
             else:
                 response = operator_colleagues.requests.post('https://api.telegram.org/bot' + os.environ['TELEGRAM_BOT_TOKEN'] + '/sendMessage',
                     json={'chat_id': str(binding), 'text': value['text'], 'reply_markup': markup}, timeout=(10, 30),
-                    **operator_colleagues.build_requests_proxy_kwargs())
+                    **build_requests_proxy_kwargs())
                 body = response.json()
                 if response.status_code != 200 or not body.get('ok'):
                     value['state'] = 'unknown' if response.status_code >= 500 or response.status_code in {408, 409} else 'failed'

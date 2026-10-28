@@ -21,7 +21,7 @@ def test_employee_email_survives_provider_redaction_without_disclosure():
 def test_domain_words_and_lossless_request_local_references():
     tools=[{'name':'content.read'},{'name':'finance.read'},{'name':'work.context'}]
     assert PlannerContext('Сопоставь данные').tools(tools)==tools
-    assert PlannerContext('Измени пост').tools(tools)==tools[:1]
+    assert PlannerContext('Измени пост').tools(tools)==tools
     context=PlannerContext('Измени план')
     raw={'id':'abbd961a-273f-4f15-836e-33aacc0aa0e3','versions':['a'*64]}
     encoded=context.encode(raw)

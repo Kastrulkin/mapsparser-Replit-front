@@ -118,7 +118,9 @@ def prepare_bot_response(cursor, payload, event_key):
     actor = load_localos_user_for_max(cursor, max_id)
     attachments = body.get('attachments') or []
     from services.max_owner_dialogues import prepare_owner_dialogue
-    if not attachments or len(attachments) == 1 and attachments[0].get('type') in {'image', 'file'}:
+    # Callback events include the original bot message's keyboard/media. Those
+    # attachments are not new user input and must not bypass token validation.
+    if callback or not attachments or len(attachments) == 1 and attachments[0].get('type') in {'image', 'file'}:
         dialogue = prepare_owner_dialogue(cursor, payload, event_key, max_id)
         if dialogue is not NotImplemented:
             return dialogue

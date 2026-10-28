@@ -33,6 +33,8 @@ def _is_technical_planner_failure(result: dict[str, Any]) -> bool:
         "invalid_response",
         "invalid_json",
         "schema_invalid",
+        "social_post_generation_failed",
+        "tool_execution_failed",
     }
     technical_suffixes = (
         "_empty_response",
@@ -60,9 +62,9 @@ def run_paid_operator_tool_loop(
     conversation_history: Any = None,
     actor_context: Any = None,
     pending_approvals: Any = None,
+    input_context: Any = None,
     business_timezone: str | None = "Europe/Moscow",
     planner=None,
-    input_context: dict | None = None,
 ) -> dict[str, Any]:
     preflight = build_paid_action_preflight(
         cursor,
@@ -123,6 +125,9 @@ def run_paid_operator_tool_loop(
             "external_writes_performed": False,
         }
 
+    savepoint_active = callable(getattr(cursor, "execute", None))
+    if savepoint_active:
+        cursor.execute("SAVEPOINT operator_tool_plan")
     try:
         planner_options={"planner":planner} if planner is not None else {}
         result = run_operator_tool_loop(
@@ -134,11 +139,16 @@ def run_paid_operator_tool_loop(
             conversation_history=conversation_history,
             actor_context=actor_context,
             pending_approvals=pending_approvals,
+            input_context=input_context,
             tools=tools,
             business_timezone=business_timezone,
-            **({'input_context': input_context} if input_context is not None else {}),
         )
+        if savepoint_active:
+            cursor.execute("RELEASE SAVEPOINT operator_tool_plan")
     except Exception:
+        if savepoint_active:
+            cursor.execute("ROLLBACK TO SAVEPOINT operator_tool_plan")
+            cursor.execute("RELEASE SAVEPOINT operator_tool_plan")
         release = finalize_reserved_action_credits(
             cursor,
             reservation_id=str(reservation.get("reservation_id") or ""),

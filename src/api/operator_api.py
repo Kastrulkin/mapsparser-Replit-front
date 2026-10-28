@@ -308,7 +308,7 @@ def _mobile_navigation(
         {"key": "tasks", "label": "В работе", "group": "primary", "status": "available", "available_actions": ["open"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["task", "job", "approval"], "version": 3},
         {"key": "feed", "label": "Лента", "group": "primary", "status": "available", "available_actions": ["open_message"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["feed"], "version": 1},
         {"key": "reviews", "label": "Отзывы", "group": "more", "status": "available", "available_actions": ["generate_reply", "edit_draft", "mark_manual_published"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["review", "review_draft"], "version": 3},
-        {"key": "operator", "label": "Управление через чат", "group": "primary", "status": "available", "available_actions": ["send_message", "open_result"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["operator_message", "operator_result"], "version": 2},
+        {"key": "operator", "label": "Чат с LocalOS", "group": "primary", "status": "available", "available_actions": ["send_message", "open_result"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["operator_message", "operator_result"], "version": 2},
         {"key": "progress", "label": "Прогресс", "group": "primary", "status": "hidden" if kind == "platform" else "available", "reason": "Выберите бизнес или сеть" if kind == "platform" else "", "available_actions": ["open_next_step"], "supported_scopes": ["business", "network"], "deep_link_targets": ["progress", "growth_step"], "version": 3},
         {"key": "cards", "label": "Карточки", "group": "more", "status": "available", "available_actions": ["schedule_update", "refresh"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["card", "parse_job", "integration_error"], "version": 2},
         {"key": "content", "label": "Контент", "group": "more", "status": "available", "available_actions": ["plan_generate", "item_update", "draft_generate"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["content_plan", "content_item", "post"], "version": 2},
@@ -329,7 +329,7 @@ def _mobile_navigation(
             items.append({"key": "companies", "label": "Компании", "group": "more", "status": "available", "available_actions": ["search", "open_profile", "add_to_work"], "supported_scopes": ["platform"], "deep_link_targets": ["company"], "version": 2})
         items.append({"key": "diagnostics", "label": "Диагностика", "group": "more", "status": "available", "reason": "", "available_actions": ["retry_one"], "supported_scopes": ["platform"], "deep_link_targets": ["diagnostic_job", "integration_error"], "version": 2})
     if kind == 'business':
-        items.append({'key':'work_journal','label':'Рабочий журнал','group':'more','status':'available','supported_scopes':['business'],'available_actions':['open'],'version':1})
+        items.append({'key':'work_journal','label':'Планёрка и журнал','group':'more','status':'available','supported_scopes':['business'],'available_actions':['open'],'version':1})
     if kind in {'business','network'}:
         items.append({'key':'business_knowledge','label':'Знания о бизнесе','group':'more','status':'available','supported_scopes':['business','network'],'available_actions':['open'],'version':1})
     if enforce_capabilities:
@@ -1664,7 +1664,7 @@ def operator_chat():
         logger.exception("Operator chat failed error_id=%s business_id=%s", error_id, business_id)
         return jsonify({
             "success": False,
-            "error": "Оператор временно недоступен. Повторите запрос или сообщите код ошибки поддержке.",
+            "error": "Чат с LocalOS временно недоступен. Повторите запрос или сообщите код ошибки поддержке.",
             "error_code": "operator_chat_failed",
             "error_id": error_id,
         }), 500
@@ -4734,3 +4734,30 @@ register_business_management_routes(operator_bp)
 
 from api.operator_day_brief_api import register_day_brief_routes
 register_day_brief_routes(operator_bp)
+
+
+@operator_bp.route('/mobile/content/drafts/<draft_id>', methods=['GET'])
+def operator_mobile_saved_post_draft(draft_id):
+    user_data=require_auth_from_request()
+    if not user_data:return jsonify({'success':False,'error':'Требуется авторизация'}),401
+    db=DatabaseManager()
+    try:
+        cursor=db.conn.cursor()
+        scope=_resolve_mobile_scope(cursor,user_data)
+        cursor.execute('SELECT id,business_id,generated_text,approved,created_at,updated_at FROM usernews WHERE id=%s',(draft_id,))
+        row=cursor.fetchone()
+        if not row:return jsonify({'success':False,'error':'Черновик не найден'}),404
+        item=dict(row)
+        if not scope or not _mobile_scope_allows_business(scope,str(item['business_id'])):
+            return jsonify({'success':False,'error':'Черновик недоступен'}),403
+        access=_scope_capability_access(cursor,scope,'social_content',bool(user_data.get('is_superadmin')))
+        if not access.get('allowed'):return _mobile_payment_required_response(access)
+        cursor.execute("SELECT result_json->'photo_asset_ids' photos FROM operatormessages WHERE business_id=%s AND result_json#>>'{social_post_draft,id}'=%s ORDER BY created_at DESC LIMIT 1",(item['business_id'],draft_id))
+        linked=cursor.fetchone()
+        identifiers=(dict(linked).get('photos') if linked else []) or []
+        photos=[]
+        if isinstance(identifiers,list) and identifiers:
+            cursor.execute('SELECT id FROM photo_assets WHERE business_id=%s AND id=ANY(%s)',(item['business_id'],identifiers[:10]))
+            photos=[{'asset_id':str(dict(photo)['id']),'name':'Фото к посту'} for photo in cursor.fetchall()]
+        return jsonify({'success':True,'draft':{'id':str(item['id']),'business_id':str(item['business_id']),'text':item['generated_text'],'status':'draft','photos':photos,'created_at':item['created_at'],'updated_at':item['updated_at']}})
+    finally:db.close()

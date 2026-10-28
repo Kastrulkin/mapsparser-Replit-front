@@ -1,4 +1,4 @@
-from services.owner_bot_context import owner_bot_channel
+from services.owner_bot_context import owner_bot_channel, owner_bot_request_payload, current_owner_bot
 """Telegram attachments enter the same conversation as voice and text."""
 import asyncio
 import json
@@ -25,8 +25,10 @@ async def receive(update,context,host):
             item=operator_attachments.receive(c,business_id=business['business_id'],user_id=business['user_id'],channel=owner_bot_channel(),
                 content=content,name=getattr(media,'file_name',None) or 'photo.jpg',mime_type=getattr(media,'mime_type',None) or 'image/jpeg',
                 request_key=f'{owner_bot_channel()}:{update.effective_chat.id}:{update.message.message_id}')
-            c.execute('SELECT input_context_json FROM operatorconversations WHERE id=%s FOR UPDATE',(item['conversation_id'],))
-            selected=_row(c,c.fetchone()).get('input_context_json') or {}
+            c.execute('SELECT input_context_json,pending_context FROM operatorconversations WHERE id=%s FOR UPDATE',(item['conversation_id'],))
+            conversation = _row(c,c.fetchone())
+            selected=conversation.get('input_context_json') or {}
+            financial = (conversation.get('pending_context') or {}).get('capability') == 'finance.daily.input'
             ids=list(dict.fromkeys((selected.get('attachment_ids') or [])+[item['id']]))
             if len(ids)>10:raise ValueError('Завершите текущий материал: допускается до 10 файлов.')
             selected['attachment_ids']=ids
@@ -35,16 +37,22 @@ async def receive(update,context,host):
                 notes[item['id']]=update.message.caption[:4000]
                 selected['attachment_notes']=notes
             c.execute('UPDATE operatorconversations SET input_context_json=%s::jsonb WHERE id=%s',(json.dumps(selected),item['conversation_id']))
-            return item
+            return {**item, 'finance_input': financial}
         item=await asyncio.to_thread(transaction,save)
-        caption = str(update.message.caption or '').strip()
-        if caption:
-            selected_business = {**business, 'operator_payload': {
-                'conversation_id': item['conversation_id'],
-                'request_id': f'{owner_bot_channel()}:{update.effective_chat.id}:{update.message.message_id}:caption',
-            }}
-            response = await asyncio.to_thread(host.build_operator_chat_payload, selected_business, caption)
-            await update.message.reply_text(response['text'], reply_markup=host._build_operator_result_markup(response['result']))
+        if update.message.caption or item.get('finance_input'):
+            # Same approved text/voice route; uploading a photo never applies facts.
+            command = update.message.caption or 'Разбери финансовые итоги на фото за указанный день. Покажи показатели для проверки перед сохранением.'
+            business_context = {**business, 'operator_payload': {**owner_bot_request_payload({
+                'request_id': f"photo-caption:{owner_bot_channel()}:{update.effective_chat.id}:{update.message.message_id}",
+                }), 'conversation_id': item['conversation_id']}}
+            prepared = await asyncio.to_thread(host.build_operator_chat_payload, business_context, command)
+            owner_context = current_owner_bot.get()
+            if owner_context is not None:
+                owner_context.request_audit_ids.append(prepared['result'].get('request_audit_id'))
+            await update.message.reply_text(prepared['text'], reply_markup=host._build_operator_result_markup(prepared['result']))
+            if owner_context is None and prepared['result'].get('request_audit_id'):
+                from services.operator_request_history import mark_delivery
+                await asyncio.to_thread(mark_delivery, prepared['result']['request_audit_id'], 'delivered')
         else:
             await update.message.reply_text('Файл «'+item['original_name']+'» сохранён в LocalOS. Напишите или наговорите, что с ним сделать: пост, расписание или финансовые итоги.')
     except (ValueError,PermissionError):

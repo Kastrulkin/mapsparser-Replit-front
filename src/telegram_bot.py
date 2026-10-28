@@ -614,6 +614,8 @@ def _telegram_capability_news_generate(envelope: dict, user_data: dict) -> dict:
         },
     )
 
+    from services.content_factual_safety import PROCEDURE_FACT_CONTRACT, validate_procedure_claims
+    prompt += '\n' + PROCEDURE_FACT_CONTRACT
     result_text = analyze_text_with_gigachat(
         prompt,
         task_type="news_generation",
@@ -621,6 +623,7 @@ def _telegram_capability_news_generate(envelope: dict, user_data: dict) -> dict:
         user_id=str(user_data.get("user_id") or ""),
     )
     generated_text = _normalize_news_text(result_text if isinstance(result_text, str) else str(result_text))
+    generated_text = validate_procedure_claims(generated_text, [raw_info])
     if not generated_text:
         raise ValueError("Пустой результат генерации")
 
@@ -632,6 +635,7 @@ def _telegram_capability_news_generate(envelope: dict, user_data: dict) -> dict:
         from services.operator_social_post_generation import _default_social_post_generator
         generated_text = enforce(cursor, tenant_id, str(user_data.get('user_id') or ''), generated_text,
             _default_social_post_generator, raw_info)
+        generated_text = validate_procedure_claims(generated_text, [raw_info])
         assert_schema_columns(cursor, "usernews", (
             "id", "user_id", "business_id", "service_id", "source_text", "generated_text", "approved", "created_at",
         ))
@@ -2095,7 +2099,7 @@ def _build_operator_result_markup(result: dict[str, Any]) -> InlineKeyboardMarku
     rows = []
     work_return = str(result.get('work_return_url') or '')
     if work_return.startswith(('https://localos.pro/telegram/control?', 'https://localos.pro/max/control?')):
-        rows.append([InlineKeyboardButton('Открыть планёрку' if 'item_type=day_brief' in work_return else 'Вернуться к партнёру' if result.get('selected_partner') else 'Вернуться к посту', web_app=WebAppInfo(url=work_return))])
+        rows.append([InlineKeyboardButton('Открыть планёрку' if result.get('capability') == 'work.day_brief' or 'item_type=day_brief' in work_return else 'Вернуться к партнёру' if result.get('selected_partner') else 'Вернуться к посту', web_app=WebAppInfo(url=work_return))])
     result_ref = result.get("result_ref") if isinstance(result.get("result_ref"), dict) else {}
     href = str(result_ref.get("href") or "").strip()
     if href:
@@ -3756,11 +3760,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if not scope or str(scope.get('id')) != work['business_id']:
                         raise PermissionError('Нет доступа к выбранному бизнесу.')
                     user_states[user_id] = {'state': 'idle'}
+                    financial = work.get('item_type') == 'finance_input'
                     daily = work.get('item_type') == 'day_brief'
                     partner = work.get('item_type') == 'partner'
                     message = 'Открыта планёрка дня. Надиктуйте «Фокус дня: …» или «Подготовь передачу задач». Передача требует отдельного подтверждения.' if daily else 'Открыто обсуждение выбранного партнёра. Напишите или надиктуйте «Покажи письмо» или «Подготовь первое письмо».' if partner else 'Открыто обсуждение выбранного поста. Напишите или надиктуйте, что изменить. Сам переход ничего не меняет.'
+                    if financial:
+                        message = 'Внесите показатели за один день: напишите сообщение, отправьте голосовое или фото отчёта. Например: «Вчера выручка 50 000 рублей, 20 чеков, 4 чека с допродажей, возвраты 1 000 рублей». Укажите свою дату и суммы. К фото добавьте: «Разбери финансовые итоги за указанный день». Я покажу бизнес, дату, валюту и показатели. Проверьте их: сохранение произойдёт только после отдельного подтверждения. Неизвестные значения можно не указывать.'
                     await _reply_effective_message(update, f"LocalOS · {scope.get('name') or 'Бизнес'}\n\n{message}",
-                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('Открыть планёрку' if daily else 'Вернуться к партнёру' if partner else 'Вернуться к посту', web_app=WebAppInfo(url=work['return_url']))]]))
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('Показатели бизнеса' if financial else 'Открыть планёрку' if daily else 'Вернуться к партнёру' if partner else 'Вернуться к посту', web_app=WebAppInfo(url=work['return_url']))]]))
                 except (ValueError, PermissionError, TypeError):
                     connection.rollback()
                     await _reply_effective_message(update, str(sys.exception()))
@@ -5389,7 +5396,7 @@ async def show_settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE,
 async def handle_operator_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from services.operator_telegram_inputs import receive
     if not await receive(update,context,sys.modules[__name__]):
-        await update.message.reply_text('Выберите доступный бизнес в LocalOS. Приём файлов Оператором доступен в рабочем пилоте.')
+        await update.message.reply_text('Выберите доступный бизнес в LocalOS. Приём файлов в чате с LocalOS доступен в рабочем пилоте.')
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):

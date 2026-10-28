@@ -213,7 +213,7 @@ def _subscription_upgrade_prompt(info: dict[str, Any], access: dict[str, Any]) -
         )
 
     if tier in {"concierge", "elite", "promo"} and status in {"active", "trialing"}:
-        return "Сейчас у вас верхний уровень доступа. Следующий шаг — выбрать один сценарий в Операторе и настроить его с ручным подтверждением."
+        return "Сейчас у вас верхний уровень доступа. Следующий шаг — выбрать одну задачу в чате с LocalOS и настроить его с ручным подтверждением."
 
     if not access.get("automation_access"):
         return "Рекомендация: активировать тариф «Управление», чтобы вернуть бизнес-автоматизацию."
@@ -373,7 +373,7 @@ def _format_operator_refresh_jobs_text(refresh_jobs: dict[str, Any]) -> str:
             "Следующий шаг:",
             "• если есть отзывы без ответа — напишите «подготовь ответы на отзывы»;",
             "• публикация в карты остаётся ручной: LocalOS готовит черновики, пользователь копирует и вставляет сам.",
-            "Открыть Operator в кабинете: " + _base_web_url() + "/dashboard/operator",
+            "Открыть чат с LocalOS: " + _base_web_url() + "/dashboard/operator",
         ]
     )
     return "\n".join(lines)
@@ -507,6 +507,12 @@ def _format_operator_chat_result_for_telegram(result: dict[str, Any]) -> str:
         return format_bulk_review_reply_result_for_telegram(result)
 
     lines = [str(result.get("chat_response") or "Команда обработана.")]
+    if result.get('status') == 'completed' and result.get('social_post_text') and result.get('social_post_draft'):
+        lines = ['Черновик поста сохранён.', '', str(result['social_post_text'])]
+        if 'photo_asset_ids' in result:
+            lines.extend(['', 'Фотографий: '+str(len(result.get('photo_asset_ids') or []))+'.'])
+        lines.extend(['', 'Всего списано кредитов: '+str(int(result.get('charged_credits') or 0))+'.'])
+
     ai_router = result.get("ai_router") if isinstance(result.get("ai_router"), dict) else {}
     if ai_router.get("credit_charged"):
         lines.extend(["", f"AI-разбор команды: -{int(ai_router.get('charged_credits') or 1)} кредит."])
@@ -527,7 +533,7 @@ def _format_operator_chat_result_for_telegram(result: dict[str, Any]) -> str:
             generated_text = str(candidate.get("generated_text") or "").strip()
             if generated_text:
                 break
-    if generated_text and generated_text != reply_text:
+    if generated_text and generated_text != reply_text and generated_text not in "\n".join(lines):
         lines.extend(["", "Черновик:", generated_text])
     services = result.get("services") if isinstance(result.get("services"), list) else []
     if services:
@@ -554,7 +560,8 @@ def _format_operator_chat_result_for_telegram(result: dict[str, Any]) -> str:
     if result.get("manual_publication_only") or generated_text or reply_text:
         lines.extend(["", "Внешних публикаций нет. Ответы, новости и посты нужно копировать и публиковать вручную."])
     from services.operator_mini_app_links import result_mini_app_url
-    if not result_mini_app_url(result):
+    work_return = str(result.get("work_return_url") or "")
+    if not result_mini_app_url(result) and not work_return.startswith(("https://localos.pro/telegram/control?", "https://localos.pro/max/control?")):
         lines.extend(["", "Открыть чат с LocalOS: " + _base_web_url() + "/dashboard/operator"])
     return "\n".join(line for line in lines if line is not None)
 
@@ -656,7 +663,7 @@ def build_operator_chat_result(business_ctx: dict[str, Any], message_text: Any) 
         return {
             "status": "blocked",
             "capability": "operator.help",
-            "chat_response": "Оператор временно недоступен. Повторите запрос или сообщите код ошибки поддержке.",
+            "chat_response": "Чат с LocalOS временно недоступен. Повторите запрос или сообщите код ошибки поддержке.",
             "error_code": "operator_chat_failed",
             "error_id": error_id,
             "blocked_reasons": ["operator_chat_failed"],

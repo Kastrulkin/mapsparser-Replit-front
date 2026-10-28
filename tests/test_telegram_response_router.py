@@ -56,3 +56,18 @@ def test_tariff_detail_text_mentions_monthly_price_and_cabinet():
     text = tariff_detail_text("starter").lower()
     assert "₽/мес" in text
     assert "кабинет" in text
+
+
+def test_today_in_specific_tasks_does_not_open_home_summary():
+    for message in (
+        'Теперь покажи планёрку Органики на сегодня: фокус дня и задачи. Ничего сотрудникам не отправляй и не создавай новую планёрку.',
+        'Создай пост на сегодня',
+        'За сегодня выручка 50000 рублей, 20 чеков',
+        'Покажи партнёров на сегодня',
+    ):
+        assert classify_client_intent(message) != 'today'
+
+
+def test_standalone_today_still_opens_home_summary():
+    for message in ('Сегодня', 'На сегодня?', 'Что делать сегодня?', 'Что требует моего внимания сегодня?'):
+        assert classify_client_intent(message) == 'today'

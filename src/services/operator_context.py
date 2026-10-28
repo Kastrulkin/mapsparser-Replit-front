@@ -3,10 +3,10 @@ import re
 from services.llm.policy import EMAIL_PATTERN
 
 DOMAINS = {
+    'partnerships': r'аутрич|outreach|партн[её]р|турагент|туроператор|кандидат|\bлид(?:ы|ов|а|ам)?\b|\bписьм|email|договор[её]нност',
     'content': r'\bпост(?:а|ы|ов|е|у|ом)?\b|контент|публикац|новост',
     'finance': r'выруч|расход|доход|чек|финанс|продаж|возврат|показател|визит|загрузк',
-    'partnerships': r'партн[её]р|аутрич|лид|договор[её]нност',
-    'integrations': r'\bcrm\b|\bсрм\b|yclients|dikidi|подключ.{0,30}систем',
+        'integrations': r'\bcrm\b|\bсрм\b|yclients|dikidi|подключ.{0,30}систем',
     'services': r'услуг|прайс|цен[ауы]|wordstat|вордстат|поисков.{0,15}запрос|seo|сео',
     'seo': r'wordstat|вордстат|поисков.{0,15}запрос|seo|сео',
     'reviews': r'отзыв|рейтинг',
@@ -23,10 +23,11 @@ class PlannerContext:
         self.reverse = {}
 
     def tools(self, tools):
-        if not self.domains:
-            return tools
-        selected = [tool for tool in tools if tool['name'].split('.')[0] in self.domains or tool['name'].startswith(('operator.', 'settings.', 'localos.'))]
-        return selected or tools
+        # Keep every tool and its complete input contract. Output schemas and
+        # duplicated execution metadata stay on the server, where validation runs.
+        fields = {'name', 'description', 'input_schema', 'risk_class', 'approval_required'}
+        return [{key: value for key, value in tool.items() if key in fields}
+                for tool in tools]
 
     def encode(self, value):
         if isinstance(value, dict):
@@ -52,7 +53,8 @@ class PlannerContext:
     def decode(self, value):
         if isinstance(value, dict): return {key: self.decode(item) for key, item in value.items()}
         if isinstance(value, list): return [self.decode(item) for item in value]
-        if isinstance(value, str): return self.references.get(value, value)
+        if isinstance(value, str):
+            return re.sub(r'@ref\d+\b', lambda match: self.references.get(match.group(0), match.group(0)), value)
         return value
 
     def history(self, history):

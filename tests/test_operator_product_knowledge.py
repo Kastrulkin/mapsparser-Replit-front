@@ -131,7 +131,7 @@ def test_operator_tool_catalog_routes_neighbor_to_cached_competitors():
         user_id="user-1",
         message="Посмотри, как дела у соседа",
         channel="web",
-        tool_planner=lambda _state: {
+        tool_planner=lambda _state: {"action": "final", "message": "Данные получены."} if _state["step"] > 1 else {
             "action": "tool_call",
             "tool": "competitors.list",
             "arguments": {},
@@ -154,7 +154,7 @@ def test_operator_tool_catalog_can_explain_feature_without_model_invention(monke
         user_id="user-1",
         message="Хочу сведения о возможностях Telegram-радара",
         channel="web",
-        tool_planner=lambda _state: {
+        tool_planner=lambda _state: {"action": "final", "message": "Данные получены."} if _state["step"] > 1 else {
             "action": "tool_call",
             "tool": "product.explain_feature",
             "arguments": {"feature_key": "telegram_radar"},

@@ -19,11 +19,12 @@ def period_input(message):
 def aggregate_input(message):
     months=r'январ\w*|феврал\w*|март\w*|апрел\w*|ма[йяе]|июн\w*|июл\w*|август\w*|сентябр\w*|октябр\w*|ноябр\w*|декабр\w*'
     period=bool(re.search(r'месячн\w*|итог\w*\s+(?:за\s+)?(?:месяц|'+months+r')\b|(?:за|в)\s+(?:(?:прошл\w*|текущ\w*|этот|весь)\s+)?(?:месяц|'+months+r')\b|по дням данных нет',message,re.I))
+    period = period or bool(re.search(r"недел\w*|за\s+\d+\s+дн", message, re.I)) or len(set(re.findall(r"\b\d{4}-\d{2}-\d{2}\b", message))) > 1
     return period and (bool(re.search(r'запиш|запис|сохрани|внеси',message,re.I)) or not re.search(r'покажи|сколько|какая|какой|\?',message,re.I))
 
 
 def aggregate_result():
-    return observation('Это итог за месяц, а не за один день. Дневная запись не создана. Месячные данные внесите через импорт в разделе «Финансы» с исходным периодом: LocalOS сохранит агрегат для сверки и не распределит его по дням.','blocked')
+    return observation('Это общий итог за период, а не за один день. Дневная запись не создана. Пришлите показатели по одному дню отдельными сообщениями, например «За 2026-10-19 выручка 50 000 рублей, 20 чеков». Общий итог за неделю или месяц можно загрузить файлом с исходным периодом; он не будет распределён по дням.','blocked')
 
 
 def observation(text,status='completed',**extra):
@@ -69,11 +70,13 @@ def read(cursor,business_id,user_id,args):
 def tools(cursor,business_id,user_id,message,channel,message_ref,orchestrator=None,previous_draft=None):
     def prepare(arguments):
         if aggregate_input(message):return aggregate_result()
-        if re.search(r'\bне\s+(?:сохраня|вноси|записыва|добавля)',message,re.I) or re.match(r'\s*(?:если|например|допустим)',message,re.I):
+        if re.search(r'\bне\s+(?:сохраня|вноси|записыва)',message,re.I) or (re.search(r'\bне\s+добавля',message,re.I) and arguments.get('kind')!='daily') or re.match(r'\s*(?:если|например|допустим)',message,re.I):
             return observation('Финансовые данные не записаны. Для записи дайте явную команду.','clarification_required')
         try:
             from services.operator_finance_amounts import verify_currency, verify_revenue
             arguments=verify_revenue(message, verify_currency(message, arguments))
+            if arguments.get('kind')=='transaction' and arguments.get('mode')=='void':
+                arguments.pop('currency',None)
             if previous_draft and arguments.get('date') in {None,'','today','сегодня'} and previous_draft.get('date'):
                 arguments['date']=previous_draft['date']
             envelope=finance_daily.prepare(cursor,business_id,user_id,arguments,channel,message_ref)

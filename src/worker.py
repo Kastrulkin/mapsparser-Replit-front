@@ -1644,11 +1644,14 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
         from services.outreach_yougile_sync_service import process_yougile_outbox
 
         reply_sync_limit = max(1, min(int(os.getenv("OUTREACH_REPLY_SYNC_BATCH_SIZE", "50")), 200))
+        print("[OUTREACH_REPLY_SYNC_STAGE] telegram_start", flush=True)
         telegram_reply_sync = _sync_telegram_app_replies(limit=reply_sync_limit)
+        print("[OUTREACH_REPLY_SYNC_STAGE] telegram_done vk_start", flush=True)
         vk_reply_sync = sync_vk_replies(
             sender_limit=max(1, min(int(os.getenv("OUTREACH_VK_SYNC_SENDER_LIMIT", "25")), 200)),
             per_conversation_limit=max(1, min(int(os.getenv("OUTREACH_VK_SYNC_MESSAGE_LIMIT", "50")), 200)),
         )
+        print("[OUTREACH_REPLY_SYNC_STAGE] vk_done email_start", flush=True)
         # Keep the email receipt closest to dispatch. Telegram/VK sync can take
         # several minutes, while email preflight deliberately accepts only a
         # very fresh complete-mailbox receipt.
@@ -1657,7 +1660,7 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
         pending_sender_db = DatabaseManager()
         try:
             with pending_sender_db.conn.cursor() as pending_sender_cursor:
-                pending_sender_cursor.execute("""SELECT DISTINCT q.sender_account_id
+                pending_sender_cursor.execute("""SELECT q.sender_account_id
                     FROM outreachsendqueue q
                     JOIN outreachsendbatches b ON b.id=q.batch_id
                     JOIN outreach_campaign_touches t ON t.id=q.campaign_touch_id
@@ -1665,15 +1668,24 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
                     WHERE q.channel='email' AND q.delivery_status IN ('queued','retry','sending')
                       AND c.status IN ('active','approved')
                       AND b.status IN ('ready','approved','sending','queued')
-                      AND q.sender_account_id IS NOT NULL""")
+                      AND q.sender_account_id IS NOT NULL
+                      AND (q.delivery_status='sending' OR (
+                        COALESCE(q.scheduled_at,q.created_at)<=NOW()
+                        AND (q.next_retry_at IS NULL OR q.next_retry_at<=NOW())))
+                    GROUP BY q.sender_account_id
+                    ORDER BY MIN(COALESCE(q.scheduled_at,q.created_at)),q.sender_account_id""")
                 pending_sender_ids = [str(row['sender_account_id']) for row in pending_sender_cursor.fetchall()]
         finally:
             pending_sender_db.close()
+        from services.outreach_dispatch_loop import email_sync_sender_scope
+        selected_email_sender_id, deferred_email_sender_ids = email_sync_sender_scope(pending_sender_ids)
+        print(f"[OUTREACH_EMAIL_SYNC_OWNER] sender={selected_email_sender_id} deferred={len(deferred_email_sender_ids)}", flush=True)
         email_reply_sync = sync_email_replies(
-            sender_account_id=pending_sender_ids[0] if len(pending_sender_ids) == 1 else None,
+            sender_account_id=selected_email_sender_id,
             sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_SENDER_LIMIT", "25")), 200)),
             per_sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_MESSAGE_LIMIT", "100")), 500)),
         )
+        print("[OUTREACH_REPLY_SYNC_STAGE] email_done", flush=True)
         yougile_sync = (
             process_yougile_outbox(
                 limit=max(1, min(int(os.getenv("OUTREACH_YOUGILE_SYNC_BATCH_SIZE", "20")), 100)),
@@ -1710,7 +1722,7 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
         _OUTREACH_REPLY_SYNC_STATE = {
             "healthy": reply_sync_failed <= 0 and not failure_scope["has_unscoped_failures"],
             "global_block": bool(fail_closed and failure_scope["has_unscoped_failures"]),
-            "blocked_sender_ids": failure_scope["blocked_sender_ids"] if fail_closed else [],
+            "blocked_sender_ids": sorted(set(deferred_email_sender_ids + (failure_scope["blocked_sender_ids"] if fail_closed else []))),
             "cycle_started_at": cycle_started_at,
         }
         return dict(_OUTREACH_REPLY_SYNC_STATE)
@@ -1775,8 +1787,14 @@ def _prepare_riderra_systematic_outreach_if_due() -> None:
 
 
 def _dispatch_outreach_queue_cycle() -> None:
+    if not _worker_role_enabled("dispatcher"):
+        return
     global _LAST_OUTREACH_DISPATCH_AT
+    if _WORKER_SHUTDOWN.is_set():
+        return
     reply_sync_ready = _sync_outreach_replies_if_due()
+    if _WORKER_SHUTDOWN.is_set():
+        return
     if not _env_bool("OUTREACH_DISPATCH_ENABLED", False):
         return
     if reply_sync_ready.get("global_block"):
@@ -1834,7 +1852,7 @@ def _dispatch_outreach_queue_cycle() -> None:
                         JOIN outreach_campaigns c ON c.id=t.campaign_id
                         WHERE q.delivery_status IN ('queued','retry')
                           AND c.business_id='edbd961a-273f-4f15-836e-33aacc0aa0e3'
-                          AND t.message_brief_json->'riderra_template_record'->>'template_id' IN ('riderra_buyer_finland_short_prices_v1','riderra_buyer_vancouver_short_prices_v1')
+                          AND t.message_brief_json->'riderra_template_record'->>'template_id' IN ('riderra_buyer_finland_short_prices_v1','riderra_buyer_vancouver_short_prices_v1','riderra_buyer_la_short_ab_v1','riderra_buyer_london_short_prices_v1')
                     ) AS pending""")
                     if (finland_cursor.fetchone() or {}).get("pending"):
                         batch_size = min(batch_size, 5)
@@ -1865,9 +1883,19 @@ def _dispatch_outreach_queue_cycle() -> None:
 
 from services.outreach_dispatch_loop import SerializedDispatchLoop
 _OUTREACH_SEND_LOOP = SerializedDispatchLoop(_dispatch_outreach_queue_cycle)
+_WORKER_SHUTDOWN = threading.Event()
+
+
+def _request_worker_shutdown(signum, frame):
+    print("[OUTREACH_SHUTDOWN] stop requested; draining active cycle", flush=True)
+    _WORKER_SHUTDOWN.set()
+    _OUTREACH_SEND_LOOP.request_stop()
+
 
 
 def _dispatch_outreach_queue_if_due():
+    if not _worker_role_enabled("dispatcher"):
+        return False
     return _OUTREACH_SEND_LOOP.tick()
 
 
@@ -4973,9 +5001,21 @@ except ModuleNotFoundError:
 from gigachat_analyzer import analyze_business_data
 
 
+def _process_map_initial_audit_task(queue_dict):
+    from services.map_card_initial_audit import execute_task
+    execute_task(queue_dict, {
+        'yandex': lambda url: _parse_yandex_card_with_playwright_fallback(
+            url, keep_open_on_captcha=False, timeout_sec=90,
+            force_subprocess=True, headless=True),
+        '2gis': lambda url: _parse_2gis_card_with_playwright_fallback(
+            url, timeout_sec=90, headless=True),
+    })
+
+
 def _special_queue_handlers() -> Dict[str, Any]:
     """Return handlers for queue tasks that bypass map-card parsing."""
     return {
+        "map_card_initial_audit": _process_map_initial_audit_task,
         "reviews_delta": _process_yandex_reviews_delta_task,
         "reviews_full": _process_yandex_reviews_delta_task,
         "sync_yandex_business": _process_sync_yandex_business_task,
@@ -7882,6 +7922,8 @@ _MAX_WORK_LOOP = SerializedDispatchLoop(_process_max_event_if_due, interval=2)
 
 
 if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, _request_worker_shutdown)
+    signal.signal(signal.SIGINT, _request_worker_shutdown)
     if _worker_role_enabled("dispatcher"):
         _OUTREACH_SEND_LOOP.start()
     if _worker_role_enabled("agent"):
@@ -7891,13 +7933,15 @@ if __name__ == "__main__":
         start()
         _MAX_WORK_LOOP.start()
     print("Worker запущен. Проверка очереди каждые 5 минут...")
-    while True:
+    while not _WORKER_SHUTDOWN.is_set():
         try:
             if _worker_role_enabled("parser"):
                 process_queue()
             if _worker_role_enabled("dispatcher"):
                 _prepare_riderra_systematic_outreach_if_due()
                 _dispatch_outreach_queue_if_due()
+                if _WORKER_SHUTDOWN.is_set():
+                    break
                 _run_card_automation_if_due()
                 _run_founder_content_if_due()
                 _dispatch_social_posts_if_due()
@@ -7939,7 +7983,10 @@ if __name__ == "__main__":
             sys.stdout.flush()
 
         try:
-            time.sleep(10)  # 10 секунд
+            _WORKER_SHUTDOWN.wait(10)  # Wake immediately on a stop request
         except Exception as e:
              # Если sleep прерван сигналом или ошибкой, просто логируем и продолжаем
              print(f"⚠️ Sleep interrupted: {e}", flush=True)
+
+    _OUTREACH_SEND_LOOP.stop()
+    print("[OUTREACH_SHUTDOWN] active cycle drained; exit", flush=True)

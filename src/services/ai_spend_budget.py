@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 _SCOPE = ContextVar('ai_spend_scope', default={})
 DEFAULT_LIMITS = {'daily_tokens': 100000, 'monthly_tokens': 300000,
-                  'daily_calls': 20, 'monthly_calls': 100,
+                  'daily_calls': 60, 'monthly_calls': 300,
                   'operation_tokens': 80000, 'operation_calls': 4,
                   'request_tokens': 60000}
 DEEPSEEK_LIMITS = {'daily_tokens': 1000000, 'monthly_tokens': 3000000,

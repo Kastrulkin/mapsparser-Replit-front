@@ -38,6 +38,12 @@ def content_selection(cursor, *, user_id, business_id, item_id, expected_updated
 def work_selection(cursor, *, item_type='content_item', **kwargs):
     if item_type == 'content_item':
         return content_selection(cursor, **kwargs)
+    if item_type == 'finance_input':
+        from services import finance_daily
+        finance_daily.authorize(cursor, kwargs['business_id'], kwargs['user_id'], write=True)
+        if str(kwargs['item_id']) != str(kwargs['business_id']):
+            raise PermissionError('Выберите показатели текущего бизнеса.')
+        return {'item_id': str(kwargs['business_id']), 'version': 'finance-input-v1', 'kind': 'finance_input'}
     if item_type == 'day_brief':
         from services import operator_day_brief
         operator_day_brief.authorize(cursor, kwargs['business_id'], kwargs['user_id'], owner=True)
@@ -59,6 +65,8 @@ def mobile_work_url(business_id, item_id=None, platform='telegram', screen='cont
     params = {'screen': screen, 'scope_type': 'business', 'scope_id': str(business_id)}
     if item_id:
         params.update(item_type=item_type, item_id=str(item_id))
+    elif screen == 'work_journal' and item_type == 'day_brief':
+        params['item_type'] = 'day_brief'  # Open the briefing tab even before the first draft exists.
     return 'https://localos.pro/' + platform + '/control?' + urlencode(params)
 
 
@@ -67,8 +75,8 @@ def prepare_handoff(cursor, *, user_id, business_id, platform, item_id, request_
         raise ValueError('Неизвестная платформа.')
     uuid.UUID(str(request_id))
     selection = work_selection(cursor, item_type=item_type, user_id=user_id, business_id=business_id, item_id=item_id, expected_updated_at=updated_at)
-    selected_key = {'partner': 'selected_partner', 'day_brief': 'selected_day_brief'}.get(item_type, 'selected_item')
-    screen = {'partner': 'partnerships', 'day_brief': 'work_journal'}.get(item_type, 'content')
+    selected_key = {'partner': 'selected_partner', 'day_brief': 'selected_day_brief', 'finance_input': 'selected_finance'}.get(item_type, 'selected_item')
+    screen = {'partner': 'partnerships', 'day_brief': 'work_journal', 'finance_input': 'finance_import'}.get(item_type, 'content')
     if platform == 'telegram':
         cursor.execute('SELECT telegram_id FROM users WHERE id=%s AND is_active=TRUE', (user_id,))
         binding = _row(cursor, cursor.fetchone()).get('telegram_id')
@@ -89,7 +97,7 @@ def prepare_handoff(cursor, *, user_id, business_id, platform, item_id, request_
     if isinstance(current, str):
         current = json.loads(current)
     other_key = 'selected_item' if item_type == 'partner' else 'selected_partner'
-    if any(current.get(key) for key in ('selected_item', 'selected_partner', 'selected_day_brief') if key != selected_key):
+    if any(current.get(key) for key in ('selected_item', 'selected_partner', 'selected_day_brief', 'selected_finance') if key != selected_key):
         raise ValueError('Этот переход уже используется для другого обсуждения.')
     if current.get(selected_key) and current[selected_key]['item_id'] != selection['item_id']:
         raise ValueError('Этот переход уже создан для другого партнёра.' if item_type == 'partner' else 'Этот переход уже создан для другого поста.')
@@ -100,14 +108,16 @@ def prepare_handoff(cursor, *, user_id, business_id, platform, item_id, request_
         stored = json.loads(stored)
     if stored.get('work_handoff') and stored['work_handoff'] != selection:
         raise ValueError('Этот переход устарел. Откройте актуальную карточку партнёра заново.' if item_type == 'partner' else 'Этот переход устарел. Откройте актуальный пост заново.')
-    pending = {'capability': {'partner': 'partnerships.selected', 'day_brief': 'work.day_brief'}.get(item_type, 'content.editorial.selected'), selected_key: selection}
-    set_operator_pending_context(cursor, str(conversation['id']), pending)
+    pending = {'capability': {'partner': 'partnerships.selected', 'day_brief': 'work.day_brief', 'finance_input': 'finance.daily.input'}.get(item_type, 'content.editorial.selected'), selected_key: selection}
+    # A repeated link request must not reset a financial preview or clarification.
+    if item_type != 'finance_input' or not stored.get('work_handoff'):
+        set_operator_pending_context(cursor, str(conversation['id']), pending)
     if not stored.get('work_handoff'):
         # Preparing a link cannot steal the bot's currently active discussion.
         cursor.execute("UPDATE operatorconversations SET status='handoff_prepared',input_context_json=%s::jsonb WHERE id=%s AND user_id=%s",
             (json.dumps({'work_handoff': selection}), str(conversation['id']), user_id))
     return {'url': base + name + '?start=work_' + uuid.UUID(str(conversation['id'])).hex,
-            'return_url': mobile_work_url(business_id, item_id, platform, screen, item_type), selected_key: selection}
+            'return_url': mobile_work_url(business_id, None if item_type == 'finance_input' else item_id, platform, screen, item_type), selected_key: selection}
 
 
 def resume_handoff(cursor, *, user_id, token, platform):
@@ -123,13 +133,33 @@ def resume_handoff(cursor, *, user_id, token, platform):
     pending = conversation.get('pending_context') or {}
     if isinstance(pending, str):
         pending = json.loads(pending)
-    item_type = 'day_brief' if pending.get('selected_day_brief') else 'partner' if pending.get('selected_partner') else 'content_item'
-    selected = pending.get('selected_day_brief') or pending.get('selected_partner') or pending.get('selected_item') or {}
+    stored = conversation.get('input_context_json') or {}
+    if isinstance(stored, str):
+        stored = json.loads(stored)
+    finance_selection = (stored.get('work_handoff') or {}) if (stored.get('work_handoff') or {}).get('kind') == 'finance_input' else pending.get('selected_finance')
+    item_type = 'finance_input' if finance_selection else 'day_brief' if pending.get('selected_day_brief') else 'partner' if pending.get('selected_partner') else 'content_item'
+    selected = finance_selection or pending.get('selected_day_brief') or pending.get('selected_partner') or pending.get('selected_item') or {}
     selection = work_selection(cursor, item_type=item_type, user_id=user_id, business_id=str(conversation['business_id']), item_id=selected.get('item_id'))
     # Reopening an old link must not silently approve a stale content version.
     if selected.get('version') != selection['version']:
         raise ValueError('Карточка партнёра изменилась. Откройте её в мини-приложении и начните обсуждение заново.' if item_type == 'partner' else 'Пост изменился. Откройте его в мини-приложении и начните обсуждение заново.')
     cursor.execute("UPDATE operatorconversations SET status='active',updated_at=NOW() WHERE id=%s AND user_id=%s", (identifier, user_id))
     return {'business_id': str(conversation['business_id']), 'conversation_id': identifier,
-            'item_type': item_type, 'return_url': mobile_work_url(conversation['business_id'], selection['item_id'], platform,
-                {'partner': 'partnerships', 'day_brief': 'work_journal'}.get(item_type, 'content'), item_type)}
+            'item_type': item_type, 'return_url': mobile_work_url(conversation['business_id'], None if item_type == 'finance_input' else selection['item_id'], platform,
+                {'partner': 'partnerships', 'day_brief': 'work_journal', 'finance_input': 'finance_import'}.get(item_type, 'content'), item_type)}
+
+
+def read_selected_content(cursor, *, business_id, user_id, message, selection):
+    """Read the explicitly selected saved post without asking a model to find it."""
+    import re
+    if not isinstance(selection, dict) or not selection.get('item_id'):
+        return None
+    if not re.fullmatch(r'\s*(?:пожалуйста[,\s]*)?(?:покажи|покажите|прочитай|прочитайте)\s+(?:мне\s+)?(?:полный\s+)?(?:текст\s+(?:этого|выбранного)\s+поста|(?:этот|выбранный)\s+пост)(?:\s+целиком)?[.!?]?\s*', str(message), re.I):
+        return None
+    current = content_selection(cursor, user_id=user_id, business_id=business_id, item_id=selection['item_id'])
+    from services import operator_editorial
+    row = operator_editorial._items(cursor, business_id, item_id=current['item_id'])[0]
+    text = str(row.get('draft_text') or '').strip()
+    return {'status': 'completed', 'chat_response': text or 'У выбранного поста пока нет текста. Откройте пост и подготовьте черновик.',
+            'selected_item': current, 'external_writes_performed': False,
+            'result_ref': {'href': '/dashboard/content', 'label': 'Открыть контент', 'entity_type': 'content'}}

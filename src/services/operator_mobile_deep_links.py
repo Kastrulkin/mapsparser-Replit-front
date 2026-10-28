@@ -4,6 +4,7 @@ from typing import Any
 
 
 ITEM_SPECS = {
+    "news_draft": ("content", "usernews", "business_id"),
     "review": ("reviews", "externalbusinessreviews", "business_id"),
     "review_draft": ("reviews", "reviewreplydrafts", "business_id"),
     "content_plan": ("content", "contentplans", "business_id"),
@@ -150,10 +151,15 @@ def resolve_mobile_deep_link(
     requested_screen = str(screen or "today").strip().lower()
     if requested_screen == "analytics":
         requested_screen = "finance"
+    if requested_screen == "finance_import" and "finance" in manifest:
+        manifest["finance_import"] = manifest["finance"]
     resolved_screen = requested_screen if requested_screen in manifest else "today"
     fallback_reason = "screen_unavailable" if resolved_screen != requested_screen else ""
     clean_type = str(item_type or "").strip().lower()
     clean_id = str(item_id or "").strip()
+    if clean_type == "day_brief" and not clean_id and resolved_screen == "work_journal":
+        return {"screen": resolved_screen, "item_type": "day_brief", "item_id": None,
+                "filters": filters or {}, "fallback_applied": False, "fallback_reason": None}
     if not clean_type or not clean_id:
         return {
             "screen": resolved_screen,

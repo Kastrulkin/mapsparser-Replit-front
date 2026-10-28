@@ -33,3 +33,9 @@ describe('resolveMobileRoute', () => {
     expect(resolveMobileRoute({ screen: 'feed' }, navigation)).toMatchObject({ tab: 'feed', module: '' });
   });
 });
+
+
+it('opens financial input using finance access without hiding the requested form', () => {
+  expect(resolveMobileRoute({screen:'finance_import'}, navigation)).toMatchObject({tab:'more',module:'finance_import'});
+  expect(resolveMobileRoute({screen:'finance_import'}, [{key:'finance',status:'hidden'}])).toMatchObject({tab:'today',module:''});
+});

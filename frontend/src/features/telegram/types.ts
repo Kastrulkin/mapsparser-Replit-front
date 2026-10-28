@@ -180,7 +180,9 @@ export type ReviewsProps = {
 };
 
 export type ModuleScreenProps = {
+  focusNewsDraftId?: string;
   onContentEditingChange?: (editing: boolean) => void;
+  journalInitialView?: 'journal' | 'day_brief';
   module: string; focusItemId?: string; scope?: MobileScope; access?: NavigationItem; data: ModuleData; loading: boolean; progressData?: ProgressPayload | null; progressLoading: boolean; saving: boolean; actionBusy: string;
   saveNotifications: (preferences: NotificationPreferences) => Promise<void>;
   updateService: (item: ModuleItem, values: { name: string; description: string; price: string; category: string }) => Promise<void>;

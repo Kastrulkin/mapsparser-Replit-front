@@ -89,3 +89,14 @@ def test_hidden_screen_falls_back_to_today():
 
     assert result["screen"] == "today"
     assert result["fallback_reason"] == "screen_unavailable"
+
+
+def test_finance_input_screen_uses_finance_permission():
+    result = resolve_mobile_deep_link(DeepLinkCursor(), scope={'kind':'business','business_ids':['b']},
+        navigation=navigation(), screen='finance_import', item_type='', item_id='')
+    assert result['screen'] == 'finance_import'
+    assert not result['fallback_applied']
+    hidden = [dict(item, status='hidden') if item['key']=='finance' else item for item in navigation()]
+    result = resolve_mobile_deep_link(DeepLinkCursor(), scope={'kind':'business','business_ids':['b']},
+        navigation=hidden, screen='finance_import', item_type='', item_id='')
+    assert result['screen'] == 'today'

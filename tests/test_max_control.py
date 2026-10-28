@@ -182,3 +182,19 @@ def test_durable_inbox_redacts_link_code_and_ignores_supplied_internal_hash(clie
     assert code not in json.dumps(saved)
     assert saved['_localos_link_hash'] == hashlib.sha256(code.encode()).hexdigest()
     assert saved['message']['body']['text'] == '/link [redacted]'
+
+
+@pytest.mark.parametrize('attachments', [[], [{'type': 'inline_keyboard', 'payload': {'buttons': []}}], [{'type': 'image'}, {'type': 'inline_keyboard'}]])
+def test_native_callback_with_original_message_keyboard_reaches_guarded_dialogue(monkeypatch, attachments):
+    from services import max_bot, max_owner_dialogues
+    monkeypatch.setattr(max_bot, 'load_localos_user_for_max', lambda *args: {'id': 'u1'})
+    expected = {'user_id': '123', 'text': 'Отклонено'}
+    seen = []
+    def dialogue(cursor, payload, event_key, max_id):
+        seen.append((payload['callback']['payload'], max_id))
+        return expected
+    monkeypatch.setattr(max_owner_dialogues, 'prepare_owner_dialogue', dialogue)
+    payload = {'update_type': 'message_callback', 'callback': {'payload': 'd:synthetic-token', 'user': {'user_id': 123}},
+        'message': {'recipient': {'chat_type': 'dialog'}, 'body': {'text': 'Проверка показателей', 'attachments': attachments}}}
+    assert max_bot.prepare_bot_response(Cursor(), payload, 'qa-callback') == expected
+    assert seen == [('d:synthetic-token', '123')]

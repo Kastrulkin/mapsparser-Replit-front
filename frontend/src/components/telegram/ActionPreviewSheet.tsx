@@ -6,7 +6,7 @@ export type MobileActionPreview = {
   action_id?: string;
   capability?: string;
   target_businesses?: Array<{ id?: string; name?: string }>;
-  objects?: Array<{ id?: string; author_name?: string; business_name?: string }>;
+  objects?: Array<{ id?: string; author_name?: string; business_name?: string; theme?: string }>;
   changes?: Array<{ object_id?: string; operation?: string; label?: string; items_count?: number; interval_hours?: number }>;
   estimated_credits?: number;
   external_effects?: boolean;
@@ -35,6 +35,8 @@ export default function ActionPreviewSheet({ preview, busy, confirmLabel = 'По
         </div>
         <div className="mt-5 space-y-2">
           {preview.objects?.length ? <div className="flex min-h-11 items-center gap-2 rounded-[15px] bg-white/[0.04] px-3 ring-1 ring-inset ring-white/[0.06]"><Check className="h-4 w-4 shrink-0 text-emerald-300" /><span className="text-xs text-zinc-400">Объектов: <b className="tabular-nums text-zinc-200">{preview.objects.length}</b></span></div> : null}
+          {preview.capability === 'content.item.delete' && preview.objects?.map(item => item.theme ? <p key={item.id} className="break-words text-sm font-semibold text-zinc-200">Удалить пост «{item.theme}»</p> : null)}
+          {preview.capability === 'content.item.delete' && <p className="text-xs text-zinc-400">Удаление без восстановления. Фотографии останутся в медиатеке.</p>}
           {preview.target_businesses?.map((business) => <div key={business.id} className="flex min-h-11 items-center gap-2 rounded-[15px] bg-white/[0.04] px-3 ring-1 ring-inset ring-white/[0.06]"><MapPin className="h-4 w-4 shrink-0 text-primary" /><span className="min-w-0 flex-1 truncate text-xs font-medium">{business.name || 'Выбранная точка'}</span></div>)}
           {preview.changes?.map((change, index) => <div key={change.object_id || `${change.operation}-${index}`} className="flex min-h-11 items-center gap-2 px-3 text-xs text-zinc-400"><Check className="h-4 w-4 shrink-0 text-emerald-300" /><span className="text-pretty">{change.label || 'Подготовленное изменение'}{change.items_count ? <> · <span className="tabular-nums">{ruCountLabel(change.items_count, 'публикация', 'публикации', 'публикаций')}</span></> : null}{change.interval_hours ? <> · каждые <span className="tabular-nums">{change.interval_hours}</span> ч.</> : null}</span></div>)}
         </div>
