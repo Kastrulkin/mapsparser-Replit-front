@@ -12,9 +12,9 @@ DEFAULT_LIMITS = {'daily_tokens': 100000, 'monthly_tokens': 300000,
                   'daily_calls': 20, 'monthly_calls': 100,
                   'operation_tokens': 80000, 'operation_calls': 4,
                   'request_tokens': 60000}
-DEEPSEEK_LIMITS = {'daily_tokens': 300000, 'monthly_tokens': 1000000,
-                   'daily_calls': 20, 'monthly_calls': 100,
-                   'operation_tokens': 200000, 'operation_calls': 4,
+DEEPSEEK_LIMITS = {'daily_tokens': 1000000, 'monthly_tokens': 3000000,
+                   'daily_calls': 60, 'monthly_calls': 300,
+                   'operation_tokens': 400000, 'operation_calls': 8,
                    'request_tokens': 150000}
 
 
