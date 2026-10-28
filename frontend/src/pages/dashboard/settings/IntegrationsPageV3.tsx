@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 
 import FinanceCrmPanel from '@/components/FinanceCrmPanel';
+import { TrelloConnectionPanel } from '@/components/TrelloConnectionPanel';
 import TelegramConnection from '@/components/TelegramConnection';
 import { TelegramBotCredentials } from '@/components/TelegramBotCredentials';
 import { TelegramResearchSetup } from '@/components/TelegramResearchSetup';
@@ -74,6 +75,7 @@ type IntegrationsPageV3Props = {
 };
 
 type RegistryLoadState = {
+  trelloStatus?: { connected?: boolean; needs_reauthorization?: boolean } | null;
   telegramOwnerLinked?: boolean | null;
   telegramPublishStatus?: {
     configured?: boolean | null;
@@ -299,7 +301,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
       setLoadError(null);
       const headers = authHeaders();
       try {
-        const [ownerStatus, telegramStatus, readiness, accounts, crmProviders, outreachSenders] = await Promise.all([
+        const [ownerStatus, telegramStatus, readiness, accounts, crmProviders, outreachSenders, trelloStatus] = await Promise.all([
           fetchJson(`/api/telegram/bind/status?business_id=${encodeURIComponent(currentBusinessId)}`, { headers }),
           fetchJson(`/api/business/telegram-bot/status?business_id=${encodeURIComponent(currentBusinessId)}`, { headers }),
           fetchJson(`/api/business/${encodeURIComponent(currentBusinessId)}/social-posts/channel-readiness`, { headers }),
@@ -308,11 +310,13 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
           fetchJson(senderScope === 'platform'
             ? '/api/outreach/sender-accounts?scope_type=platform'
             : `/api/outreach/sender-accounts?scope_type=business&business_id=${encodeURIComponent(currentBusinessId)}`, { headers }),
+          fetchJson(`/api/business/${encodeURIComponent(currentBusinessId)}/trello/status`, { headers }).catch(() => null),
         ]);
 
         if (cancelled) return;
 
         setLoadState({
+          trelloStatus: trelloStatus?.response.ok ? trelloStatus.data : null,
           telegramOwnerLinked: ownerStatus.response.ok ? Boolean(ownerStatus.data.is_linked) : false,
           telegramPublishStatus: telegramStatus.response.ok && telegramStatus.data.success ? {
             configured: Boolean(telegramStatus.data.configured),
@@ -342,6 +346,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
   }, [currentBusinessId, refreshKey, senderScope]);
 
   const services = useMemo(() => mapIntegrationsState({
+    trelloStatus: loadState.trelloStatus,
     business: currentBusiness || null,
     telegramOwnerLinked: loadState.telegramOwnerLinked,
     telegramPublishStatus: loadState.telegramPublishStatus,
@@ -743,6 +748,11 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
       );
     }
 
+    if (service.id === 'trello') {
+      return currentBusinessId ? <TrelloConnectionPanel key={currentBusinessId} businessId={currentBusinessId} onChanged={refresh} />
+        : <p className="text-sm text-muted-foreground">Сначала выберите бизнес.</p>;
+    }
+
     if (service.id === 'whatsapp') {
       return (
         <>
@@ -1080,7 +1090,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
   };
 
   const renderSafety = (service: ServiceConnection) => {
-    const readOnly = service.id === 'google_sheets';
+    const readOnly = service.id === 'google_sheets' || service.id === 'trello';
     const manual = service.status === 'manual' || ['yandex_maps', '2gis'].includes(service.id);
     const crm = ['yclients', 'altegio'].includes(service.id);
     return (
@@ -1091,7 +1101,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
         </div>
         <div className="space-y-3 text-sm leading-6">
           <SafetyRow allowed title="Подключение и проверка" description="Можно менять доступы и читать состояние без внешней отправки." />
-          {readOnly ? <SafetyRow allowed title="Чтение данных" description="Доступ используется для чтения таблиц; наружу ничего не публикуется." /> : null}
+          {readOnly ? <SafetyRow allowed title="Чтение данных" description={service.id === 'trello' ? 'Доступ используется только для чтения выбранных досок и карточек.' : 'Доступ используется для чтения таблиц; наружу ничего не публикуется.'} /> : null}
           {manual ? <SafetyRow title="Внешнее изменение" description="LocalOS готовит материал, а финальное действие выполняет человек в сервисе." /> : null}
           {crm ? <SafetyRow title="Импорт в финансы" description="Сначала показывается предварительный просмотр; применение требует подтверждения." /> : null}
           {!readOnly && !manual && !crm ? <SafetyRow title="Публикация или отправка" description="Перед внешним действием обязательны предпросмотр и подтверждение человека." /> : null}

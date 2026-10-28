@@ -2,6 +2,16 @@
 
 ## Current Integrations
 
+### Trello
+
+Status: `beta / local implementation; production rollout pending`
+
+Owner-only OAuth 2.0 read pilot: select boards, manually load cards and view saved
+snapshots. No Trello object writes, webhook registration or automatic background
+sync. Disabled by default. Real OAuth acceptance requires a configured test app.
+
+Implementation, routes, limits and acceptance gates: [Trello read-only pilot](TRELLO_READ_ONLY.md).
+
 ### Google Business Profile
 
 Status: `beta / Google Basic API Access approved`

@@ -49,6 +49,7 @@ export type OutreachSenderAccountSummary = {
 };
 
 export type IntegrationsRegistryRawState = {
+  trelloStatus?: { connected?: boolean; needs_reauthorization?: boolean } | null;
   business?: SettingsHubBusiness | null;
   telegramOwnerLinked?: boolean | null;
   telegramPublishStatus?: {
@@ -162,6 +163,15 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
   const altegioProvider = crmProviders.find((provider) => provider.provider === 'altegio') || null;
 
   return [
+    {
+      id: 'trello', name: 'Trello', tag: 'Задачи',
+      description: 'Чтение выбранных досок, карточек и сроков. Обновление по кнопке.',
+      connectionType: 'oauth',
+      status: rawState.trelloStatus?.needs_reauthorization ? 'action_required' : rawState.trelloStatus?.connected ? 'connected' : 'not_connected',
+      nextAction: rawState.trelloStatus?.connected ? 'Выберите доску и загрузите карточки.' : 'Подключите Trello для чтения.',
+      primaryAction: { label: rawState.trelloStatus?.connected ? 'Открыть' : 'Подключить', type: 'drawer', target: 'trello' },
+      hasLogs: false, hasHelp: true,
+    },
     {
       id: 'telegram',
       name: 'Telegram',

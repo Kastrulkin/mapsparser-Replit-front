@@ -118,6 +118,7 @@ from api.media_intelligence_api import media_intelligence_bp
 from api.finance_api import finance_bp
 from api.dashboard_feedback_api import dashboard_feedback_bp
 from api.external_accounts_api import external_accounts_bp
+from api.trello_api import trello_bp
 from api.parsing_admin_api import parsing_admin_bp
 from api.admin_prospecting import (
     admin_prospecting_bp,
@@ -325,6 +326,7 @@ app.register_blueprint(media_intelligence_bp)
 app.register_blueprint(finance_bp)
 app.register_blueprint(dashboard_feedback_bp)
 app.register_blueprint(external_accounts_bp)
+app.register_blueprint(trello_bp)
 app.register_blueprint(parsing_admin_bp)
 app.register_blueprint(partnership_leads_bp)
 app.register_blueprint(admin_prospecting_bp)
