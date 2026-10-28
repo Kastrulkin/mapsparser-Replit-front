@@ -9,6 +9,21 @@ const headers=()=>({Authorization:'Bearer test'});
 const reply=(value:unknown)=>Promise.resolve(new Response(JSON.stringify(value),{status:200}));
 const note={id:'note',version:1,user_id:'u',can_edit:true,channel:'web',occurred_at:'2026-09-12T10:00:00Z',original_text:'Клиент отказался',is_voided:false,facts_json:{quote:'Клиент отказался'}};
 afterEach(()=>{cleanup();vi.unstubAllGlobals();});
+it('formats journal history in the same local language and time as the entry',async()=>{
+ const user=userEvent.setup();
+ const timestamp='Wed, 28 Oct 2026 21:20:42 GMT';
+ vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL)=>{
+  const path=String(input);
+  if(path.includes('/audio/config'))return reply({input_enabled:false});
+  if(path.includes('/history'))return reply({items:[{created_at:timestamp,after_json:{...note,facts_json:{quote:'Первоначальное наблюдение'}}}]});
+  return reply({enabled:true,role:'member',items:[note]});
+ }));
+ render(<WorkJournal businessId="b" headers={headers}/>,{wrapper:MemoryRouter});
+ await user.click(await screen.findByRole('button',{name:'История'}));
+ const history=await screen.findByText(/Первоначальное наблюдение/);
+ expect(history).toHaveTextContent(new Date(timestamp).toLocaleString('ru'));
+ expect(history).not.toHaveTextContent('GMT');
+});
 it('saves text through Operator and cancels with a version and unique request',async()=>{
  const user=userEvent.setup();let saved=false;let cancelled=false;
  const mock=vi.fn((input:RequestInfo|URL,init?:RequestInit)=>{
