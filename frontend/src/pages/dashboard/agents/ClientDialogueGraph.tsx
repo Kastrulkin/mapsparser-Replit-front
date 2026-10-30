@@ -7,19 +7,20 @@ type StateNode={id:string;label:string;x:number;y:number;reachable:boolean};
 type Transition={id:string;source:string;target:string;label:string};
 type Visit={id:string;from:string;to:string;at:string};
 type Snapshot={graph:{nodes:StateNode[];edges:Transition[];note:string;rules?:Array<{id:string;label:string;target:string}>};current_state:string|null;is_agent_paused?:boolean;history:Visit[];history_note:string};
-export function ClientDialogueGraph({businessId,conversationId}:{businessId:string;conversationId?:string|null}) {
+const defaultHeaders=():Record<string,string>=>{const token=newAuth.getToken();return token?{Authorization:'Bearer '+token}:{};};
+export function ClientDialogueGraph({businessId,conversationId,headers=defaultHeaders}:{businessId:string;conversationId?:string|null;headers?:()=>Record<string,string>}) {
  const [snapshot,setSnapshot]=useState<Snapshot|null>(null);const [error,setError]=useState('');const [focus,setFocus]=useState('');const [overview,setOverview]=useState(false);
  const revision=useRef(0);
  useEffect(()=>{
   const version=++revision.current;let active=true;setSnapshot(null);setError('');setFocus('');setOverview(false);
   const load=async()=>{try{
-   const token=newAuth.getToken();const response=await fetch('/api/business/'+businessId+'/client-dialogue-graph'+(conversationId?'?conversation_id='+encodeURIComponent(conversationId):''),{headers:token?{Authorization:'Bearer '+token}:{}});
+   const response=await fetch('/api/business/'+businessId+'/client-dialogue-graph'+(conversationId?'?conversation_id='+encodeURIComponent(conversationId):''),{headers:headers()});
    const result=await response.json();if(!response.ok)throw new Error(result.error || 'Не удалось загрузить схему');
    if(!Array.isArray(result.graph?.nodes)||!Array.isArray(result.graph?.edges))throw new Error('Схема временно недоступна. Обновите страницу.');
    if(active&&revision.current===version){setSnapshot(result);setError('');}
   }catch(reason){if(active&&revision.current===version)setError(reason instanceof Error?reason.message:'Не удалось загрузить схему');}};
   void load();const timer=setInterval(()=>void load(),15000);return()=>{active=false;clearInterval(timer);};
- },[businessId,conversationId]);
+ },[businessId,conversationId,headers]);
  if(error)return <p role="alert" className="text-destructive">{error}</p>;
  if(!snapshot)return <p role="status">Загружаем состояния диалога…</p>;
  const name=(id:string)=>snapshot.graph.nodes.find(node=>node.id===id)?.label || id;

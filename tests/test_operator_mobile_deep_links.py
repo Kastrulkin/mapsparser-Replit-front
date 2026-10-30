@@ -8,7 +8,7 @@ class DeepLinkCursor:
 
     def execute(self, query, params=()):
         normalized = " ".join(query.lower().split())
-        if "from externalbusinessreviews" in normalized:
+        if "from externalbusinessreviews" in normalized or "from aiagentconversations" in normalized:
             item_id = str(params[0])
             self.current = [item for item in self.rows if str(item.get("id")) == item_id]
         else:
@@ -89,3 +89,12 @@ def test_hidden_screen_falls_back_to_today():
 
     assert result["screen"] == "today"
     assert result["fallback_reason"] == "screen_unavailable"
+
+
+def test_client_conversation_link_resolves_only_in_business_scope():
+    nav=[{"key":"today","status":"available"},{"key":"client_handoffs","status":"available"}]
+    cursor=DeepLinkCursor([{"id":"dialogue","business_id":"ras"}])
+    for business,expected in [("ras","client_handoffs"),("foreign","today")]:
+        result=resolve_mobile_deep_link(cursor,scope={"kind":"business","id":business,"business_ids":[business]},navigation=nav,screen="client_handoffs",item_type="client_conversation",item_id="dialogue")
+        assert result["screen"]==expected
+        assert result["item_id"]==("dialogue" if business=="ras" else None)

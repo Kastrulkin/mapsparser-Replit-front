@@ -348,6 +348,8 @@ def _mobile_navigation(
             items.append({"key": "companies", "label": "Компании", "group": "more", "status": "available", "available_actions": ["search", "open_profile", "add_to_work"], "supported_scopes": ["platform"], "deep_link_targets": ["company"], "version": 2})
         items.append({"key": "diagnostics", "label": "Диагностика", "group": "more", "status": "available", "reason": "", "available_actions": ["retry_one"], "supported_scopes": ["platform"], "deep_link_targets": ["diagnostic_job", "integration_error"], "version": 2})
     if kind == 'business':
+        items.append({'key':'client_handoffs','label':'Сообщения клиентов','group':'more','status':'available','supported_scopes':['business'],'available_actions':['open'],'deep_link_targets':['client_conversation'],'version':1})
+    if kind == 'business':
         items.append({'key':'work_journal','label':'Рабочий журнал','group':'more','status':'available','supported_scopes':['business'],'available_actions':['open'],'version':1})
     if enforce_capabilities:
         for item in items:

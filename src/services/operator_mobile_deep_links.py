@@ -4,6 +4,7 @@ from typing import Any
 
 
 ITEM_SPECS = {
+    "client_conversation": ("client_handoffs", "aiagentconversations", "business_id"),
     "review": ("reviews", "externalbusinessreviews", "business_id"),
     "review_draft": ("reviews", "reviewreplydrafts", "business_id"),
     "content_plan": ("content", "contentplans", "business_id"),

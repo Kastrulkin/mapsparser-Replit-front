@@ -40,8 +40,10 @@ def test_self_only_sent_receipt_and_deduplication(setup):
     assert result['recipient_user_id']=='me'
     assert send.call_args.args[0]=='12345'
     assert send.call_args.kwargs['include_outcome'] is True
-    url=send.call_args.args[2]['inline_keyboard'][0][0]['url']
-    assert 'business_id=business' in url and 'conversation_id=c' in url and 'view=handoffs' in url
+    button=send.call_args.args[2]['inline_keyboard'][0][0]
+    assert 'url' not in button
+    url=button['web_app']['url']
+    assert '/telegram/control?' in url and 'scope_id=business' in url and 'item_id=c' in url and 'screen=client_handoffs' in url and 'item_type=client_conversation' in url
     assert 'test' not in url
     assert notifications.notify_self('business','c',user)['duplicate_prevented'] is True
     assert send.call_count==1

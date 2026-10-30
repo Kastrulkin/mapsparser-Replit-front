@@ -61,3 +61,14 @@ describe('handoff notification link',()=>{
   expect(requests.some(path=>path.includes('/messages'))).toBe(false);
  });
 });
+
+it('uses the provided mini-app session for conversations and actions',async()=>{
+ const headers=()=>({Authorization:'Bearer mini-session'});
+ const fetcher=vi.fn(async(_input,options)=>{
+  expect(options.headers.Authorization).toBe('Bearer mini-session');
+  return Response.json({conversations:[{id:'mini',client_phone:'test-handoff:mini',current_state:'waiting_for_staff'}],messages:[]});
+ });
+ vi.stubGlobal('fetch',fetcher);
+ render(<ClientHandoffInbox businessId="ras" initialConversationId="mini" headers={headers}/>);
+ expect(await screen.findByRole('button',{name:'Взять диалог'})).toBeInTheDocument();
+});

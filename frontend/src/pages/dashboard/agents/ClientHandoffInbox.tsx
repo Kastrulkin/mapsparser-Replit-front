@@ -13,7 +13,9 @@ function notificationLabel(content:string) {
  try { const receipt=JSON.parse(content); return receipt.status==='sent'?'Тестовое уведомление отправлено в Telegram. Прочтение не подтверждено.':receipt.status==='failed'?'Тестовое уведомление не отправлено. Можно повторить проверку.':'Статус тестового уведомления проверяется. Повторная отправка заблокирована во избежание дубля.'; } catch { return 'Не удалось прочитать статус тестового уведомления.'; }
 }
 
-export function ClientHandoffInbox({businessId,initialConversationId=null}:{businessId:string;initialConversationId?:string|null}) {
+const defaultHeaders=():Record<string,string>=>{const token=newAuth.getToken();return token?{Authorization:'Bearer '+token}:{};};
+
+export function ClientHandoffInbox({businessId,initialConversationId=null,headers=defaultHeaders}:{businessId:string;initialConversationId?:string|null;headers?:()=>Record<string,string>}) {
   const [items,setItems]=useState<Conversation[]>([]);
   const [selected,setSelected]=useState<string|null>(null);
   const [messages,setMessages]=useState<Message[]>([]);
@@ -26,8 +28,7 @@ export function ClientHandoffInbox({businessId,initialConversationId=null}:{busi
   const selection=useRef(selected);selection.current=selected;
   const current=items.find(item=>item.id===selected);
   const request=async(path:string,body?:object) => {
-    const token=newAuth.getToken();
-    const response=await fetch('/api/'+path,{method:body?'POST':'GET',headers:{...(token?{Authorization:'Bearer '+token}:{}),'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+    const response=await fetch('/api/'+path,{method:body?'POST':'GET',headers:{...headers(),'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
     const result=await response.json();
     if(!response.ok) throw new Error(result.error || 'Не удалось выполнить действие.');
     return result;
@@ -60,7 +61,7 @@ export function ClientHandoffInbox({businessId,initialConversationId=null}:{busi
     return ()=>{scope.active=false;clearInterval(timer);};
     // Each business owns a separate mounted inbox.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[businessId,initialConversationId]);
+  },[businessId,initialConversationId,headers]);
   useEffect(()=>{setMessages([]);setReply('');if(selected)void loadMessages(selected).catch(reason=>{if(lifetime.current.active)setError(String(reason.message || reason));});},[selected]);
   const action=async(kind:string) => {
     const scope=lifetime.current;
@@ -88,7 +89,7 @@ export function ClientHandoffInbox({businessId,initialConversationId=null}:{busi
     <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
       <div className="space-y-2">{items.length===0?<p>Обращений пока нет. Новый запрос на помощь появится здесь.</p>:items.map(item=><Button key={item.id} className="h-auto w-full justify-start whitespace-normal text-left" variant={selected===item.id?'default':'outline'} onClick={()=>{selection.current=item.id;setSelected(item.id);setError('');}}><span>{item.client_name || item.client_phone}<br/>{labels[item.current_state]}</span></Button>)}</div>
       <div className="space-y-3 rounded-lg border p-4">{current?<>
-        <ClientDialogueGraph key={businessId+current.id+current.current_state} businessId={businessId} conversationId={current.id}/>
+        <ClientDialogueGraph key={businessId+current.id+current.current_state} businessId={businessId} conversationId={current.id} headers={headers}/>
         <h3 className="font-semibold">{current.client_name || current.client_phone}</h3><p role="status">{labels[current.current_state]}. Автоответы приостановлены.</p>
         {current.current_state==='waiting_for_staff'&&<div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={()=>void action('accept')}>Взять диалог</Button>{current.client_phone.startsWith('test-handoff:')&&<Button variant="outline" disabled={busy} onClick={()=>void action('notify')}>Уведомить меня в Telegram (тест)</Button>}</div>}
         <div className="space-y-2">{messages.filter(message=>message.message_type!=='dialogue_state').map(message=><div key={message.id} className="rounded-md bg-muted p-3"><span className="text-xs text-muted-foreground">{(events[message.message_type]||message.message_type==='handoff_notification')?'Событие':message.sender==='client'?'Клиент':message.sender==='operator'?'Сотрудник':'Агент'}</span><p className="whitespace-pre-wrap">{message.message_type==='handoff_notification'?notificationLabel(message.content):(events[message.message_type] || message.content)}</p></div>)}</div>

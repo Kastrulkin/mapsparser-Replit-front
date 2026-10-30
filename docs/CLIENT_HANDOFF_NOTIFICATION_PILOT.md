@@ -37,3 +37,15 @@ POST `/api/business/<business_id>/client-handoffs/<conversation_id>/notify-self-
 - Повторный вызов проверен с заблокированным sender: duplicate_prevented, без второго внешнего сообщения. Чужой business_id для того же conversation_id отвергнут.
 - PostgreSQL: одна запись handoff_notification со статусом sent и одна handoff_accept, оба enabled=false. Тест оставлен в human_active на паузе для осмотра пользователем. Внешний клиентский канал и CRM не включались.
 - Каноническая запись теста/доставки находится в aiagentmessages этого обращения. Это внутренний self-test, не продажная коммуникация: deal, задача YouGile и follow-up не создавались.
+
+## Исправление перехода в миниапп
+
+Пользователь подтвердил получение сообщения 1437, но отметил, что прежняя обычная URL-кнопка открыла сайт. Это пользовательское подтверждение получения, а не предположение по Bot API.
+
+Исправлено: новые уведомления используют inline_keyboard.web_app с адресом `/telegram/control?screen=client_handoffs&scope_type=business&scope_id=…&item_type=client_conversation&item_id=…`. В уже доставленном сообщении 1437 заменена только клавиатура через editMessageReplyMarkup; Telegram вернул тот же Web App URL. Нового сообщения и повторного уведомления нет. В receipt добавлены button_kind=web_app и device_receipt_evidence=user_confirmed.
+
+В стандартную навигацию миниаппа для бизнеса добавлен экран «Сообщения клиентов». Общий resolver проверяет client_conversation в aiagentconversations и принадлежность бизнесу. Переиспользованы ClientHandoffInbox и ClientDialogueGraph с передаваемой mobileAuthHeaders, полученной штатным миниапп-bootstrap. Browser session и miniapp session не смешиваются; схемы аутентификации и полномочия не меняются. Входящие данные, граф и принятие используют прежние API и проверки operations.write.
+
+24 серверных и 22 UI-теста, TypeScript и production build успешны. Проверен реальный conversation_id в правильном и чужом scope. Через UI Telegram найдено ранее полученное тестовое сообщение; после замены у кнопки виден значок Web App. Автоматизация не смогла нажать координатную кнопку Telegram (noWindowsAvailable); запуск миниаппа на устройстве пользователя пока ожидает проверки. Сигнатуры initData не подделывались.
+
+Дополнительную проверку через чтение токена действующей miniapp-сессии из production-базы отклонила автоматическая проверка безопасности. Она не выполнялась и не обходилась. Безопасная проверка привязки объекта и receipt без доступа к сессиям прошла. Автоответы и рассылка сотрудникам остаются выключенными.

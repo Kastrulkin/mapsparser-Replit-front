@@ -17,6 +17,13 @@ def dialogue_url(business_id, conversation_id):
         'scope_type':'business','conversation_id':conversation_id})
 
 
+def mini_app_url(business_id, conversation_id):
+    return 'https://localos.pro/telegram/control?' + urlencode({'screen':'client_handoffs','scope_type':'business','scope_id':business_id,'item_type':'client_conversation','item_id':conversation_id})
+
+def notification_markup(business_id, conversation_id):
+    return {'inline_keyboard':[[{'text':'Открыть диалог LocalOS','web_app':{'url':mini_app_url(business_id,conversation_id)}}]]}
+
+
 def notify_self(business_id, conversation_id, user):
     db=DatabaseManager()
     try:
@@ -43,13 +50,13 @@ def notify_self(business_id, conversation_id, user):
         business=cursor.fetchone()
         identifier=str(uuid.uuid4());url=dialogue_url(business_id,conversation_id)
         receipt={'actor':user['user_id'],'recipient_user_id':user['user_id'],'channel':'telegram',
-                 'status':'sending','test_only':True,'url':url,'message_id':None}
+                 'status':'sending','test_only':True,'url':url,'mini_app_url':mini_app_url(business_id,conversation_id),'message_id':None}
         cursor.execute("INSERT INTO aiagentmessages(id,conversation_id,message_type,content,sender) VALUES(%s,%s,'handoff_notification',%s,'operator')",(identifier,conversation_id,json.dumps(receipt,ensure_ascii=False)))
         db.conn.commit()
         # No customer transcript, phone or health information leaves LocalOS.
         text=f"Тест LocalOS — {business['name']}\nВнутренний тестовый диалог ожидает принятия.\nОткройте обращение и нажмите «Взять диалог». Это проверка для вас; сотрудникам уведомление не отправлялось. Автоответы выключены."
         result=send_telegram_message_result(str(recipient['telegram_id']),text,
-            {'inline_keyboard':[[{'text':'Открыть диалог LocalOS','url':url}]]},include_outcome=True)
+            notification_markup(business_id,conversation_id),include_outcome=True)
         outcome=result.get('publish_outcome')
         receipt.update(status='sent' if outcome=='confirmed' and result.get('message_id') else ('failed' if outcome in {'rejected','not_attempted'} else 'unknown'),
                        message_id=result.get('message_id') or None,reason_code=result.get('reason_code') or '',
