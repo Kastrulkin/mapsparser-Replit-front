@@ -22,3 +22,15 @@ describe('client communication workspace', () => {
     expect(screen.getByRole('status')).toBeTruthy();
   });
 });
+
+it('keeps configuration out of the focused handoff screen',()=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>Response.json({conversations:[]})));
+ render(<MemoryRouter initialEntries={['/?section=clients&view=handoffs']}><Routes><Route element={<Outlet context={{currentBusinessId:'one',currentBusiness:{id:'one'}}}/>}><Route index element={<ClientCommunicationWorkspace/>}/></Route></Routes></MemoryRouter>);
+ expect(screen.getByRole('heading',{name:'Сообщения клиентов'})).toBeVisible();
+ expect(screen.queryByText(/Настройте ответы и правила работы/)).not.toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Поведение и включение'})).not.toBeVisible();
+ fireEvent.click(screen.getByText('Другие разделы общения'));
+ expect(screen.getByRole('button',{name:'Поведение и включение'})).toBeVisible();
+ fireEvent.click(screen.getByRole('button',{name:'Поведение и включение'}));
+ expect(screen.getByText('settings:one')).toBeVisible();
+});

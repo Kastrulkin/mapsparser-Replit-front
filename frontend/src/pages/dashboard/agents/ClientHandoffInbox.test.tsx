@@ -19,6 +19,7 @@ describe('staff handoff inbox',()=>{
    return Response.json({conversations:exists?[{id:'c',client_phone:'test-handoff:c',client_name:'Проверка передачи',current_state:state}]:[]});
   }));
   render(<ClientHandoffInbox businessId="organika"/>);
+  fireEvent.click(screen.getByText('Проверка без клиента'));
   fireEvent.click(screen.getByRole('button',{name:'Проверить передачу без клиента'}));
   fireEvent.click(await screen.findByRole('button',{name:'Взять диалог'}));
   await screen.findByLabelText('Ответ в тестовый диалог');
@@ -46,10 +47,13 @@ describe('handoff notification link',()=>{
    return Response.json({conversations:[{id:'target',client_phone:'test-handoff:target',client_name:'Linked test',current_state:'waiting_for_staff'}]});
   }));
   render(<ClientHandoffInbox businessId="ras" initialConversationId="target"/>);
+  await screen.findByRole('button',{name:'Взять диалог'});
+  fireEvent.click(screen.getByText('Проверка без клиента'));
   const button=await screen.findByRole('button',{name:'Уведомить меня в Telegram (тест)'});
   expect(requests.some(path=>path.endsWith('/notify-self-test'))).toBe(false);
   fireEvent.click(button);
-  expect(await screen.findByText('Тестовое уведомление отправлено в Telegram. Прочтение не подтверждено.')).toBeInTheDocument();
+  fireEvent.click(screen.getByText('История действий'));
+  expect(await screen.findByText('Тестовое уведомление отправлено в Telegram. Прочтение не подтверждено.')).toBeVisible();
   expect(requests).toContain('/api/business/ras/client-handoffs/target/notify-self-test');
   expect(screen.queryByText(/private-user/)).not.toBeInTheDocument();
  });
@@ -71,4 +75,29 @@ it('uses the provided mini-app session for conversations and actions',async()=>{
  vi.stubGlobal('fetch',fetcher);
  render(<ClientHandoffInbox businessId="ras" initialConversationId="mini" headers={headers}/>);
  expect(await screen.findByRole('button',{name:'Взять диалог'})).toBeInTheDocument();
+});
+
+
+it('keeps the linked conversation focused and returns to the list without polling reopening it',async()=>{
+ const paths:string[]=[];
+ vi.stubGlobal('fetch',vi.fn(async(input)=>{
+  const path=String(input);paths.push(path);
+  if(path.includes('/client-dialogue-graph'))return Response.json({graph:{nodes:[],edges:[]},history:[],current_state:'waiting_for_staff'});
+  if(path.includes('/messages'))return Response.json({messages:[{id:'m',sender:'client',message_type:'text',content:'Хочу первую стрижку'},{id:'e',sender:'operator',message_type:'handoff_requested',content:'{}'}]});
+  return Response.json({conversations:[{id:'focus',client_phone:'test-handoff:focus',client_name:'Мой диалог',current_state:'waiting_for_staff'}]});
+ }));
+ render(<ClientHandoffInbox businessId="ras" initialConversationId="focus"/>);
+ expect(await screen.findByText('Хочу первую стрижку')).toBeVisible();
+ fireEvent.click(screen.getByRole('button',{name:'Обновить'}));
+ expect(screen.getByText('Хочу первую стрижку')).toBeVisible();
+ expect(screen.getByRole('button',{name:'Взять диалог'})).toBeVisible();
+ expect(screen.getByRole('button',{name:'Уведомить меня в Telegram (тест)'})).not.toBeVisible();
+ expect(paths.some(path=>path.includes('/client-dialogue-graph'))).toBe(false);
+ fireEvent.click(screen.getByText('Этапы диалога и граф'));
+ await waitFor(()=>expect(paths.some(path=>path.includes('/client-dialogue-graph'))).toBe(true));
+ fireEvent.click(screen.getByRole('button',{name:'Все обращения'}));
+ expect(await screen.findByRole('heading',{name:'Обращения сотрудникам'})).toHaveFocus();
+ fireEvent.click(screen.getByRole('button',{name:'Обновить'}));
+ await waitFor(()=>expect(screen.queryByRole('button',{name:'Взять диалог'})).not.toBeInTheDocument());
+ expect(screen.getByRole('button',{name:/Мой диалог/})).toBeVisible();
 });

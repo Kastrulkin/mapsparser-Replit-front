@@ -18,13 +18,7 @@ export const ClientCommunicationWorkspace = () => {
     next.set('view', value);
     setParams(next);
   };
-  return <section className="space-y-4" aria-label="Общение с клиентами">
-    <header>
-      <h1 className="text-2xl font-semibold">Общение с клиентами</h1>
-      <p className="text-muted-foreground">Настройте ответы и правила работы, проверьте агента в тестовом разговоре, затем управляйте клиентскими диалогами.</p>
-      <p className="mt-2 text-sm text-muted-foreground">Агент отвечает по ходу разговора и учитывает его историю. Подключение CRM и доступность записи проверяются отдельно.</p>
-    </header>
-    <nav aria-label="Управление общением" className="flex flex-wrap gap-2">
+  const navigation = <nav aria-label="Управление общением" className="flex flex-wrap gap-2">
       {[
         { value: 'settings', label: 'Поведение и включение' },
         { value: 'test', label: 'Проверка ответов' },
@@ -32,7 +26,15 @@ export const ClientCommunicationWorkspace = () => {
         { value: 'handoffs', label: 'Сотруднику' },
         { value: 'states', label: 'Состояния' },
       ].map(item => <Button key={item.value} variant={view === item.value ? 'default' : 'outline'} aria-pressed={view === item.value} onClick={() => selectView(item.value)}>{item.label}</Button>)}
-    </nav>
+    </nav>;
+  return <section className="space-y-4" aria-label="Общение с клиентами">
+    <header>
+      <h1 className="text-2xl font-semibold">{view === 'handoffs' ? 'Сообщения клиентов' : 'Общение с клиентами'}</h1>
+      {view !== 'handoffs' && <><p className="text-muted-foreground">Настройте ответы и правила работы, проверьте агента в тестовом разговоре, затем управляйте клиентскими диалогами.</p>
+      <p className="mt-2 text-sm text-muted-foreground">Агент отвечает по ходу разговора и учитывает его историю. Подключение CRM и доступность записи проверяются отдельно.</p></>}
+    </header>
+    {view !== 'handoffs' && navigation}
     {view === 'states' ? <ClientDialogueGraph key={currentBusinessId} businessId={currentBusinessId}/> : view === 'handoffs' ? <ClientHandoffInbox key={currentBusinessId} businessId={currentBusinessId} initialConversationId={params.get('conversation_id')} /> : view === 'test' ? <EmployeeChatTest key={currentBusinessId} /> : view === 'conversations' ? <ChatsPage key={currentBusinessId} /> : <AIAgentSettings key={currentBusinessId} businessId={currentBusinessId} business={currentBusiness} onSaved={(config) => updateBusiness(currentBusinessId, { ai_agents_config: config })} />}
+    {view === 'handoffs' && <details className="border-t pt-3"><summary className="cursor-pointer text-sm text-muted-foreground">Другие разделы общения</summary><div className="mt-3">{navigation}</div></details>}
   </section>;
 };
