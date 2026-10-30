@@ -5,6 +5,7 @@ from typing import Any
 
 ITEM_SPECS = {
     "client_conversation": ("client_handoffs", "aiagentconversations", "business_id"),
+    "news_draft": ("content", "usernews", "business_id"),
     "review": ("reviews", "externalbusinessreviews", "business_id"),
     "review_draft": ("reviews", "reviewreplydrafts", "business_id"),
     "content_plan": ("content", "contentplans", "business_id"),
@@ -145,15 +146,21 @@ def resolve_mobile_deep_link(
     item_type: str,
     item_id: str,
     filters: dict[str, Any] | None = None,
+    user_id: str | None = None,
 ) -> dict[str, Any]:
     manifest = _screen_manifest(navigation)
     requested_screen = str(screen or "today").strip().lower()
     if requested_screen == "analytics":
         requested_screen = "finance"
+    if requested_screen == "finance_import" and "finance" in manifest:
+        manifest["finance_import"] = manifest["finance"]
     resolved_screen = requested_screen if requested_screen in manifest else "today"
     fallback_reason = "screen_unavailable" if resolved_screen != requested_screen else ""
     clean_type = str(item_type or "").strip().lower()
     clean_id = str(item_id or "").strip()
+    if clean_type == "day_brief" and not clean_id and resolved_screen == "work_journal":
+        return {"screen": resolved_screen, "item_type": "day_brief", "item_id": None,
+                "filters": filters or {}, "fallback_applied": False, "fallback_reason": None}
     if not clean_type or not clean_id:
         return {
             "screen": resolved_screen,
@@ -163,6 +170,24 @@ def resolve_mobile_deep_link(
             "fallback_applied": bool(fallback_reason),
             "fallback_reason": fallback_reason or None,
         }
+
+    if clean_type == "day_brief":
+        import uuid
+        try:
+            uuid.UUID(clean_id)
+        except ValueError:
+            user_id = None
+        item = {}
+        if user_id and 'work_journal' in manifest:
+            cursor.execute("""SELECT business_id FROM operatorconversations
+                WHERE id=%s AND user_id=%s AND transport_key LIKE 'day-brief:%%'
+                UNION ALL SELECT business_id FROM journey_actions
+                WHERE id::text=%s AND user_id=%s AND entity_type='operator_colleague' AND action_type='day_brief' LIMIT 1""",
+                (clean_id, user_id, clean_id, user_id))
+            item = _row(cursor, cursor.fetchone())
+        if item and _business_allowed(scope, str(item['business_id'])):
+            return {'screen': 'work_journal', 'item_type': clean_type, 'item_id': clean_id, 'filters': filters or {}, 'fallback_applied': False, 'fallback_reason': None}
+        return {'screen': 'today', 'item_type': None, 'item_id': None, 'filters': {}, 'fallback_applied': True, 'fallback_reason': 'object_forbidden'}
 
     if clean_type == "company":
         company_screen = "companies" if scope.get("kind") == "platform" else "company"

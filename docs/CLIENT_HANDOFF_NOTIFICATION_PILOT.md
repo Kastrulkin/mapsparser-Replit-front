@@ -49,3 +49,11 @@ POST `/api/business/<business_id>/client-handoffs/<conversation_id>/notify-self-
 24 серверных и 22 UI-теста, TypeScript и production build успешны. Проверен реальный conversation_id в правильном и чужом scope. Через UI Telegram найдено ранее полученное тестовое сообщение; после замены у кнопки виден значок Web App. Автоматизация не смогла нажать координатную кнопку Telegram (noWindowsAvailable); запуск миниаппа на устройстве пользователя пока ожидает проверки. Сигнатуры initData не подделывались.
 
 Дополнительную проверку через чтение токена действующей miniapp-сессии из production-базы отклонила автоматическая проверка безопасности. Она не выполнялась и не обходилась. Безопасная проверка привязки объекта и receipt без доступа к сессиям прошла. Автоответы и рассылка сотрудникам остаются выключенными.
+
+## Повторная проверка запуска и исправление bootstrap
+
+После ответа пользователя «по-прежнему сайт или ошибка» штатная синяя кнопка LocalOS в Telegram Desktop открыта через UI. Получено настоящее окно «Mini App: LocalOS» с сообщением «Не удалось открыть LocalOS — Внутренняя ошибка сервера».
+
+Журнал зафиксировал POST /api/operator/telegram/bootstrap → 500, TypeError: resolve_mobile_deep_link() got an unexpected keyword argument 'user_id'. Причина — при предыдущей выкладке resolver взят из более старого рабочего файла, а operator_api сохранён из production и передавал user_id. Восстановлен resolver из `/tmp/before-ras-miniapp/src/services/operator_mobile_deep_links.py`, оставлена новая запись client_conversation. Сохранены прежние news_draft, finance_import и day_brief, в том числе проверка владельца day_brief. Схема и аутентификация не менялись.
+
+Добавлен падавший регрессионный тест вызова с user_id и проверки сохранения прежних startup aliases. 26 профильных backend-тестов passed. Выложен только resolver, перезапущен app; live-файл проверяется внутри контейнера. Повторное открытие окна запрошено у пользователя. Ошибка bootstrap воспроизведена на реальном Telegram; успешный повторный запуск пока не подтверждён. Для проверки не читались session tokens и не подделывались initData.

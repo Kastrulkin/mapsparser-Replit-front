@@ -98,3 +98,16 @@ def test_client_conversation_link_resolves_only_in_business_scope():
         result=resolve_mobile_deep_link(cursor,scope={"kind":"business","id":business,"business_ids":[business]},navigation=nav,screen="client_handoffs",item_type="client_conversation",item_id="dialogue")
         assert result["screen"]==expected
         assert result["item_id"]==("dialogue" if business=="ras" else None)
+
+
+def test_bootstrap_caller_can_pass_authenticated_user_id():
+    result=resolve_mobile_deep_link(DeepLinkCursor(),scope={'kind':'business','id':'ras','business_ids':['ras']},navigation=[{'key':'today','status':'available'}],screen='today',item_type='',item_id='',user_id='me')
+    assert result['screen']=='today'
+
+
+def test_existing_production_startup_aliases_are_preserved():
+    nav=[{'key':'today','status':'available'},{'key':'finance','status':'available'},{'key':'work_journal','status':'available'}]
+    scope={'kind':'business','id':'ras','business_ids':['ras']}
+    assert resolve_mobile_deep_link(DeepLinkCursor(),scope=scope,navigation=nav,screen='finance_import',item_type='',item_id='',user_id='me')['screen']=='finance_import'
+    result=resolve_mobile_deep_link(DeepLinkCursor(),scope=scope,navigation=nav,screen='work_journal',item_type='day_brief',item_id='',user_id='me')
+    assert result['screen']=='work_journal' and result['item_type']=='day_brief'
