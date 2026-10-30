@@ -31,7 +31,12 @@ def notify_self(business_id, conversation_id, user):
         require_permission(cursor,business_id,user,'operations.write')
         cursor.execute('SELECT client_phone,current_state FROM aiagentconversations WHERE id=%s AND business_id=%s FOR UPDATE',(conversation_id,business_id))
         conversation=cursor.fetchone()
-        if not conversation or not str(conversation['client_phone']).startswith('test-handoff:'):
+        from services.ras_client_pilot import is_pilot, identity, ACTOR
+        pilot=bool(conversation and is_pilot(business_id,conversation['client_phone']))
+        if pilot:
+            if user['user_id']!=ACTOR:raise PermissionError('Уведомление разрешено только тестовому аккаунту.')
+            identity(cursor)
+        if not conversation or not (str(conversation['client_phone']).startswith('test-handoff:') or pilot):
             raise ValueError('Тестовое уведомление доступно только во внутреннем тестовом диалоге.')
         if conversation['current_state']!='waiting_for_staff':
             raise ValueError('Диалог уже принят или не ожидает сотрудника.')
@@ -55,6 +60,8 @@ def notify_self(business_id, conversation_id, user):
         db.conn.commit()
         # No customer transcript, phone or health information leaves LocalOS.
         text=f"Тест LocalOS — {business['name']}\nВнутренний тестовый диалог ожидает принятия.\nОткройте обращение и нажмите «Взять диалог». Это проверка для вас; сотрудникам уведомление не отправлялось. Автоответы выключены."
+        if pilot:
+            text=f'Расчёска · Личный тест клиентского канала\nВаше обращение ожидает сотрудника. Откройте диалог и примите его. Уведомление отправлено только вам. Автоответы выключены.'
         result=send_telegram_message_result(str(recipient['telegram_id']),text,
             notification_markup(business_id,conversation_id),include_outcome=True)
         outcome=result.get('publish_outcome')

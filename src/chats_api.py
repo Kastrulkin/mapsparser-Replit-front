@@ -776,6 +776,15 @@ def operate_client_handoff(business_id,conversation_id):
     db=DatabaseManager()
     try:
         from services.client_chat_handoff import operate
+        data=request.get_json() or {}
+        if data.get('action')=='reply':
+            cursor=db.conn.cursor()
+            cursor.execute('SELECT client_phone FROM aiagentconversations WHERE id=%s AND business_id=%s',(conversation_id,business_id))
+            candidate=cursor.fetchone()
+            from services.ras_client_pilot import is_pilot, reply
+            if candidate and is_pilot(business_id,candidate['client_phone']):
+                db.conn.rollback()
+                return jsonify({'success':True,**reply(business_id,conversation_id,user,str(data.get('message') or '').strip())})
         cursor=db.conn.cursor()
         data=request.get_json() or {}
         action=data.get('action')

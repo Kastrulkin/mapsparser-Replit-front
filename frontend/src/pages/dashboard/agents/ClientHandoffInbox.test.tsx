@@ -101,3 +101,21 @@ it('keeps the linked conversation focused and returns to the list without pollin
  await waitFor(()=>expect(screen.queryByRole('button',{name:'Взять диалог'})).not.toBeInTheDocument());
  expect(screen.getByRole('button',{name:/Мой диалог/})).toBeVisible();
 });
+
+it('requires an explicit send for the personal Telegram pilot and keeps text after uncertain delivery',async()=>{
+ const writes:string[]=[];
+ vi.stubGlobal('fetch',vi.fn(async(input,options)=>{
+  const path=String(input);
+  if(options?.method==='POST') {writes.push(options.body);return Response.json({error:'Доставка не подтверждена. Проверьте Telegram; автоматического повтора нет.'},{status:409});}
+  if(path.includes('/messages'))return Response.json({messages:[]});
+  return Response.json({conversations:[{id:'pilot',client_phone:'tg-ras-pilot:private',client_name:'Личный тест',current_state:'human_active'}]});
+ }));
+ render(<ClientHandoffInbox businessId="ras" initialConversationId="pilot"/>);
+ const input=await screen.findByRole('textbox',{name:'Ответ клиенту в Telegram'});
+ expect(writes).toHaveLength(0);
+ fireEvent.change(input,{target:{value:'Ручной ответ'}});
+ fireEvent.click(screen.getByRole('button',{name:'Отправить клиенту в Telegram'}));
+ expect(await screen.findByRole('alert')).toHaveTextContent('Доставка не подтверждена');
+ expect(input).toHaveValue('Ручной ответ');
+ expect(writes).toHaveLength(1);
+});

@@ -5606,6 +5606,9 @@ def _telegram_agent_message_decision(update: Update) -> dict[str, Any]:
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик текстовых сообщений"""
+    from services.ras_client_pilot import handle
+    if await handle(update, context):
+        return
     user_id = str(update.effective_user.id)
     text = update.message.text
     from services.operator_telegram_voice import correction
@@ -6372,6 +6375,9 @@ def _run_bot_once():
         application.add_handler(CommandHandler("industry_patterns_recalibrate", industry_patterns_recalibrate_command))
         application.add_handler(CommandHandler("industry_patterns_impact", industry_patterns_impact_command))
         application.add_handler(CommandHandler("help", help_command))
+        from services import ras_client_pilot
+        application.add_handler(CommandHandler("ras_client", ras_client_pilot.start))
+        application.add_handler(CommandHandler("ras_exit", ras_client_pilot.exit_mode))
         application.add_handler(CommandHandler("cancel", cancel_command))
         application.add_handler(CommandHandler("businesses", businesses_command))
         application.add_handler(CommandHandler("use_business", use_business_command))

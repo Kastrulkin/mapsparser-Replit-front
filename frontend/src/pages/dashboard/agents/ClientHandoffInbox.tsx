@@ -109,10 +109,10 @@ export function ClientHandoffInbox({businessId,initialConversationId=null,header
         </div>)}
       </div>
       {current.current_state==='human_active'&&<div className="space-y-3 border-t pt-4">
-        {current.client_phone.startsWith('test-handoff:')?<>
-          <label className="text-sm font-medium" htmlFor="staff-test-reply">Ответ в тестовый диалог</label>
+        {(current.client_phone.startsWith('test-handoff:')||current.client_phone.startsWith('tg-ras-pilot:'))?<>
+          <label className="text-sm font-medium" htmlFor="staff-test-reply">{current.client_phone.startsWith('tg-ras-pilot:')?'Ответ клиенту в Telegram':'Ответ в тестовый диалог'}</label>
           <Textarea id="staff-test-reply" value={reply} onChange={event=>setReply(event.target.value)} maxLength={4000}/>
-          <Button className="w-full sm:w-auto" disabled={busy||!reply.trim()} onClick={()=>void action('reply')}>Добавить тестовый ответ</Button>
+          <Button className="w-full sm:w-auto" disabled={busy||!reply.trim()} onClick={()=>void action('reply')}>{current.client_phone.startsWith('tg-ras-pilot:')?'Отправить клиенту в Telegram':'Добавить тестовый ответ'}</Button>
         </>:<p className="text-sm text-muted-foreground">Отправка клиенту станет доступна после подключения и проверки клиентского канала.</p>}
         <Button className="w-full sm:w-auto" variant="outline" disabled={busy} onClick={()=>void action('close')}>Завершить диалог без включения агента</Button>
       </div>}
