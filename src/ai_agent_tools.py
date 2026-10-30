@@ -11,102 +11,12 @@ import requests
 import os
 
 def notify_operator(business_id: str, message: str, conversation_id: str = None, client_phone: str = None, client_name: str = None) -> dict:
-    """
-    Уведомить оператора о необходимости его участия в диалоге
-    
-    Args:
-        business_id: ID бизнеса
-        message: Сообщение для оператора (например, "Требуется помощь с заказом", "Новый заказ от клиента")
-        conversation_id: ID разговора (опционально)
-        client_phone: Телефон клиента (опционально)
-        client_name: Имя клиента (опционально)
-    
-    Returns:
-        dict с результатом выполнения
-    """
-    try:
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        
-        # Получаем информацию о бизнесе и владельце
-        cursor.execute("""
-            SELECT owner_id, name, phone, email, telegram_bot_token
-            FROM Businesses
-            WHERE id = %s
-        """, (business_id,))
-        business_row = cursor.fetchone()
-        
-        if not business_row:
-            db.close()
-            return {'success': False, 'error': 'Бизнес не найден'}
-        
-        owner_id = business_row[0]
-        business_name = business_row[1] or 'Бизнес'
-        business_phone = business_row[2]
-        business_email = business_row[3]
-        telegram_bot_token = business_row[4]
-        
-        # Получаем информацию о владельце (email, telegram_id)
-        cursor.execute("""
-            SELECT email, telegram_id
-            FROM Users
-            WHERE id = %s
-        """, (owner_id,))
-        user_row = cursor.fetchone()
-        
-        notification_text = f"🔔 Требуется ваше участие\n\n"
-        notification_text += f"{message}\n\n"
-        if client_name:
-            notification_text += f"Клиент: {client_name}\n"
-        if client_phone:
-            notification_text += f"Телефон: {client_phone}\n"
-        notification_text += f"Бизнес: {business_name}"
-        
-        # Отправляем уведомление через Telegram бота (если подключен)
-        if telegram_bot_token:
-            try:
-                # Используем токен бизнеса для отправки сообщения владельцу
-                # TODO: Реализовать отправку через пользовательский бот
-                pass
-            except Exception as e:
-                print(f"⚠️ Ошибка отправки Telegram уведомления: {e}")
-        
-        # Сохраняем уведомление в БД для истории
-        notification_id = str(uuid.uuid4())
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS OperatorNotifications (
-                id TEXT PRIMARY KEY,
-                business_id TEXT NOT NULL,
-                conversation_id TEXT,
-                client_phone TEXT,
-                client_name TEXT,
-                message TEXT NOT NULL,
-                status TEXT DEFAULT 'pending',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
-            )
-        """)
-        
-        cursor.execute("""
-            INSERT INTO OperatorNotifications 
-            (id, business_id, conversation_id, client_phone, client_name, message, status)
-            VALUES (%s, %s, %s, %s, %s, %s, 'pending')
-        """, (notification_id, business_id, conversation_id, client_phone, client_name, notification_text))
-        
-        db.conn.commit()
-        db.close()
-        
-        return {
-            'success': True,
-            'notification_id': notification_id,
-            'message': 'Оператор уведомлён'
-        }
-        
-    except Exception as e:
-        print(f"❌ Ошибка уведомления оператора: {e}")
-        import traceback
-        traceback.print_exc()
-        return {'success': False, 'error': str(e)}
+    """Place an existing dialogue in the real LocalOS staff inbox and pause AI."""
+    if not conversation_id:
+        return {'success': False, 'error': 'Для передачи нужен существующий диалог.'}
+    from services.client_chat_handoff import request_handoff
+    return request_handoff(business_id, conversation_id, message)
+
 
 def create_booking(business_id: str, client_phone: str, client_name: str, service_id: str = None, 
                    service_name: str = None, booking_date: str = None, booking_time: str = None,

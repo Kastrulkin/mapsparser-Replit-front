@@ -28,6 +28,15 @@ def _row_get(row, key, idx=0, default=None):
     except Exception:
         return default
 
+
+def _client_chat_access(cursor, business_id, user):
+    from services.business_permissions import require_permission
+    try:
+        require_permission(cursor,business_id,user,'operations.write')
+        return True
+    except PermissionError:
+        return False
+
 def require_auth():
     """Проверка авторизации"""
     auth_header = request.headers.get('Authorization')
@@ -132,7 +141,7 @@ def get_business_ai_agents(business_id):
             return jsonify({"error": "Бизнес не найден"}), 404
         
         owner_id = _row_get(business, 'owner_id', 0)
-        if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+        if not _client_chat_access(cursor, business_id, user_data):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
         
@@ -287,7 +296,7 @@ def get_business_conversations(business_id):
             return jsonify({"error": "Бизнес не найден"}), 404
         
         owner_id = _row_get(business, 'owner_id', 0)
-        if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+        if not _client_chat_access(cursor, business_id, user_data):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
         
@@ -375,7 +384,7 @@ def get_conversation_messages(conversation_id):
             return jsonify({"error": "Чат не найден"}), 404
         
         conv_owner_id = _row_get(conv, 'owner_id', 1)
-        if conv_owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+        if not _client_chat_access(cursor, _row_get(conv, 'business_id', 0), user_data):
             db.close()
             return jsonify({"error": "Нет доступа к этому чату"}), 403
         
@@ -441,6 +450,11 @@ def send_operator_message(conversation_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому чату"}), 403
         
+        cursor.execute('SELECT current_state FROM aiagentconversations WHERE id=%s',(conversation_id,))
+        handoff_row=cursor.fetchone()
+        if handoff_row and _row_get(handoff_row,'current_state',0) in {'waiting_for_staff','human_active','closing'}:
+            db.close()
+            return jsonify({'error':'Используйте ответ в принятом сотрудником диалоге.'}),409
         # Сохраняем сообщение
         import uuid
         message_id = str(uuid.uuid4())
@@ -530,10 +544,15 @@ def toggle_agent(conversation_id):
             return jsonify({"error": "Чат не найден"}), 404
         
         conv_owner_id = _row_get(conv, 'owner_id', 1)
-        if conv_owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+        if not _client_chat_access(cursor, _row_get(conv, 'business_id', 0), user_data):
             db.close()
             return jsonify({"error": "Нет доступа к этому чату"}), 403
         
+        cursor.execute('SELECT current_state FROM aiagentconversations WHERE id=%s',(conversation_id,))
+        status_row=cursor.fetchone()
+        if not pause and status_row and _row_get(status_row,'current_state',0) in {'waiting_for_staff','human_active','closing'}:
+            db.close()
+            return jsonify({'error':'Переданный диалог завершается сотрудником; автоответы остаются на паузе.'}),409
         # Обновляем статус агента
         cursor.execute("""
             UPDATE AIAgentConversations
@@ -785,7 +804,8 @@ def test_business_ai_agent(business_id, agent_id):
         }
         
         agent_config.update(effective_config)
-        default_state = 'greeting'
+        from services.client_dialogue_state import preview_state
+        default_state = preview_state(conversation_history, message)
         
         # Строим промпт
         prompt = build_prompt(
@@ -804,13 +824,19 @@ def test_business_ai_agent(business_id, agent_id):
         
         task_type = 'ai_agent_marketing' if _row_get(agent_row, 'type', 1) == 'marketing' else 'ai_agent_booking'
         
-        response_text, usage_info = client.analyze_text(
-            prompt=prompt,
-            task_type=task_type,
-            functions=None,
-            business_id=business_id,
-            user_id=user_data['user_id']
-        )
+        from services.client_chat_sandbox import action_preview, guard_response
+        preview_response = action_preview(message)
+        if preview_response:
+            response_text, usage_info = preview_response, {}
+        else:
+            response_text, usage_info = client.analyze_text(
+                prompt=prompt,
+                task_type=task_type,
+                functions=None,
+                business_id=business_id,
+                user_id=user_data['user_id']
+            )
+        response_text = guard_response(response_text)
         
         if not response_text:
             response_text = "Извините, произошла ошибка при генерации ответа."
@@ -837,3 +863,62 @@ def test_business_ai_agent(business_id, agent_id):
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+@chats_bp.route('/api/business/<business_id>/client-handoff-test', methods=['POST'])
+def create_client_handoff_test(business_id):
+    """Explicit internal test: creates a staff queue item, never a provider send."""
+    user=require_auth()
+    if not user:return jsonify({'error':'Требуется авторизация'}),401
+    db=DatabaseManager()
+    try:
+        from services.business_permissions import require_permission
+        from services.client_chat_handoff import enqueue
+        import uuid
+        cursor=db.conn.cursor()
+        require_permission(cursor,business_id,user,'operations.write')
+        identifier=str(uuid.uuid4())
+        cursor.execute('''INSERT INTO aiagentconversations(id,business_id,client_phone,client_name,current_state,conversation_history,is_agent_paused)
+            VALUES(%s,%s,%s,%s,'greeting','[]',0)''',
+            (identifier,business_id,'test-handoff:'+identifier,'Проверка передачи сотруднику'))
+        cursor.execute("INSERT INTO aiagentmessages(id,conversation_id,message_type,content,sender) VALUES(%s,%s,'text',%s,'client')",
+            (str(uuid.uuid4()),identifier,'Тест LocalOS: прошу подключить сотрудника. Это внутренний тест, внешнего клиента нет.'))
+        enqueue(cursor,business_id,identifier,'Внутренняя проверка передачи, без внешних отправок')
+        db.conn.commit()
+        return jsonify({'success':True,'conversation_id':identifier,'state':'waiting_for_staff','external_dispatch_performed':False})
+    except PermissionError as error:
+        db.conn.rollback();return jsonify({'error':str(error)}),403
+    except Exception:
+        db.conn.rollback();return jsonify({'error':'Не удалось создать проверку передачи.'}),500
+    finally:db.close()
+
+
+@chats_bp.route('/api/business/<business_id>/client-handoffs/<conversation_id>', methods=['POST'])
+def operate_client_handoff(business_id,conversation_id):
+    user=require_auth()
+    if not user:return jsonify({'error':'Требуется авторизация'}),401
+    db=DatabaseManager()
+    try:
+        from services.client_chat_handoff import operate
+        cursor=db.conn.cursor()
+        data=request.get_json() or {}
+        action=data.get('action')
+        result=operate(cursor,business_id,conversation_id,user,action)
+        if action=='reply':
+            message=str(data.get('message') or '').strip()
+            if not message or len(message)>4000:raise ValueError('Введите сообщение до 4000 символов.')
+            cursor.execute('SELECT client_phone FROM aiagentconversations WHERE id=%s AND business_id=%s',(conversation_id,business_id))
+            row=cursor.fetchone()
+            if not row or not row['client_phone'].startswith('test-handoff:'):
+                raise ValueError('Для ответа реальному клиенту сначала подключите и проверьте клиентский канал. Сообщение не отправлено.')
+            import uuid
+            cursor.execute("INSERT INTO aiagentmessages(id,conversation_id,message_type,content,sender) VALUES(%s,%s,'text',%s,'operator')",(str(uuid.uuid4()),conversation_id,message))
+            result.update(external_dispatch_performed=False,delivery='local_test')
+        db.conn.commit()
+        return jsonify({'success':True,**result})
+    except PermissionError as error:
+        db.conn.rollback();return jsonify({'error':str(error)}),403
+    except ValueError as error:
+        db.conn.rollback();return jsonify({'error':str(error)}),409
+    except Exception:
+        db.conn.rollback();return jsonify({'error':'Не удалось изменить состояние передачи.'}),500
+    finally:db.close()

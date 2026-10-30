@@ -156,10 +156,9 @@ def get_agent_config(business_id: str, selected_agent_id=None) -> dict:
         cursor.execute("""
             SELECT workflow, task, identity, speech_style, restrictions_json
             FROM AIAgents
-            WHERE type = %s AND """ + agents_active_predicate + """
-            ORDER BY created_at DESC
+            WHERE type = %s AND id = %s AND """ + agents_active_predicate + """
             LIMIT 1
-        """, (agent_type,))
+        """, (agent_type, agent_type + '_agent_default'))
         agent_row = cursor.fetchone()
         
         if agent_row:
@@ -244,18 +243,11 @@ def get_business_services(business_id: str) -> list:
                 rows = _fetch_rows(include_all=True)
             services = []
             for row in rows:
-                # Парсим price из строки или числа
+                # UserServices prices are stored in major currency units, as in services_api.
                 price_value = _row_get(row, 'price', 2)
-                if isinstance(price_value, str):
-                    try:
-                        price_value = float(price_value) / 100 if price_value else None
-                    except:
-                        price_value = None
-                elif price_value:
-                    price_value = price_value / 100
-                else:
+                if price_value == '':
                     price_value = None
-                
+
                 services.append({
                     'id': _row_get(row, 'id', 0),
                     'name': _row_get(row, 'name', 1),
@@ -269,18 +261,11 @@ def get_business_services(business_id: str) -> list:
                 rows = _fetch_rows(include_all=True)
             services = []
             for row in rows:
-                # Парсим price из строки или числа
+                # UserServices prices are stored in major currency units, as in services_api.
                 price_value = _row_get(row, 'price', 2)
-                if isinstance(price_value, str):
-                    try:
-                        price_value = float(price_value) / 100 if price_value else None
-                    except:
-                        price_value = None
-                elif price_value:
-                    price_value = price_value / 100
-                else:
+                if price_value == '':
                     price_value = None
-                
+
                 services.append({
                     'id': _row_get(row, 'id', 0),
                     'name': _row_get(row, 'name', 1),
@@ -345,6 +330,7 @@ def get_or_create_conversation(business_id: str, client_phone: str, client_name:
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
+        cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))', ('client-dialogue:'+business_id+':'+client_phone,))
         
         # Ищем существующий разговор
         cursor.execute("""
@@ -403,9 +389,11 @@ def update_conversation_state(conversation_id: str, new_state: str):
         cursor.execute("""
             UPDATE AIAgentConversations
             SET current_state = %s, updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
+            WHERE id = %s AND is_agent_paused = 0
         """, (new_state, conversation_id))
+        updated = cursor.rowcount == 1
         db.conn.commit()
+        return updated
     finally:
         db.close()
 
@@ -415,6 +403,7 @@ def build_prompt(business_info: dict, services: list, current_state: str, messag
     # Строим промпт
     prompt = ""
     
+    prompt += f'Текущий этап диалога: {current_state}.\n\n'
     # Identity (личность агента)
     identity = agent_config.get('identity', '')
     if identity:
@@ -488,12 +477,10 @@ def build_prompt(business_info: dict, services: list, current_state: str, messag
     else:
         # Доступные tools (всегда добавляем список доступных tools)
         prompt += f"##### **Доступные инструменты (tools):**\n"
-        prompt += "- notify_operator: Уведомить оператора о необходимости его участия. Используй, когда нужна помощь человека.\n"
-        prompt += "- create_booking: Создать бронирование/заказ. Параметры: service_id, service_name, booking_date, booking_time, notes.\n"
-        prompt += "- send_message: Отправить сообщение клиенту через WhatsApp/Telegram. Параметры: message, channel (whatsapp/telegram).\n"
+        prompt += "- notify_operator: Сохранить обращение в очереди сотрудников LocalOS и приостановить автоответы. Это не подтверждение прочтения сотрудником и не отправка в мессенджер.\n"
+        prompt += "Запись, перенос, отмена и проверка расписания не подключены. Не предлагай подтвердить готовую запись. Направляй такие пожелания сотруднику через notify_operator.\n"
         prompt += "- get_client_info: Получить информацию о клиенте (история, бронирования).\n"
         prompt += "- get_services: Получить список услуг бизнеса.\n"
-        prompt += "- check_availability: Проверить доступное время для записи. Параметры: date (YYYY-MM-DD), service_duration (минуты).\n"
         prompt += "\n"
         prompt += "**Важно:** Если тебе нужно использовать tool, укажи это в ответе в формате:\n"
         prompt += "```json\n"
@@ -548,6 +535,8 @@ def process_message(business_id: str, client_phone: str, client_name: str, messa
         row = cursor.fetchone()
         db.close()
         
+        # Incoming messages must remain visible to staff even while AI is paused.
+        save_message(conversation_id, 'text', message, 'client')
         # Если агент остановлен, не обрабатываем сообщение
         if row and row[2] == 1:
             return {
@@ -564,9 +553,22 @@ def process_message(business_id: str, client_phone: str, client_name: str, messa
         conversation_history = json.loads(row[1]) if row and row[1] else []
         
         # Сохраняем сообщение клиента
-        save_message(conversation_id, 'text', message, 'client')
         conversation_history.append({'sender': 'client', 'content': message, 'timestamp': datetime.now().isoformat()})
         
+        from services.client_dialogue_state import next_state
+        target_state = next_state(current_state, message, conversation_history)
+        if target_state in {'waiting_for_staff','booking_request'}:
+            if target_state == 'booking_request':
+                update_conversation_state(conversation_id, target_state)
+            from services.client_chat_handoff import request_handoff
+            handoff = request_handoff(business_id, conversation_id, message)
+            response = 'Обращение сохранено в очереди сотрудников LocalOS. Автоматические ответы приостановлены. Сотрудник ещё не подтвердил принятие диалога.'
+            save_message(conversation_id, 'text', response, 'agent')
+            return {'success': True, 'response': response, 'conversation_id': conversation_id,
+                    'state': handoff['state'], 'handoff': handoff}
+        current_state = target_state
+        if not update_conversation_state(conversation_id, current_state):
+            return {'success':False,'agent_paused':True,'conversation_id':conversation_id}
         # Строим промпт
         prompt = build_prompt(business_info, services, current_state, message, conversation_history, agent_config)
         
@@ -587,7 +589,8 @@ def process_message(business_id: str, client_phone: str, client_name: str, messa
             from ai_agent_tools import execute_tool
             
             client = get_gigachat_client()
-            functions = get_ai_agent_functions()
+            functions = [tool for tool in get_ai_agent_functions()
+                         if tool.get('name') in {'notify_operator','get_services','get_client_info'}]
             
             # Получаем user_id из business_info
             user_id = business_info.get('owner_id')
@@ -633,9 +636,24 @@ def process_message(business_id: str, client_phone: str, client_name: str, messa
                     
                     print(f"🔧 Вызов функции: {function_name} с параметрами: {function_args}")
                     
+                    pause_db = DatabaseManager()
+                    try:
+                        pause_cursor = pause_db.conn.cursor()
+                        pause_cursor.execute('SELECT is_agent_paused FROM aiagentconversations WHERE id=%s',(conversation_id,))
+                        paused = pause_cursor.fetchone()
+                        if paused and _row_get(paused,'is_agent_paused',0):
+                            return {'success':False,'agent_paused':True,'conversation_id':conversation_id}
+                    finally:
+                        pause_db.close()
+                    if function_name not in {'notify_operator','get_services','get_client_info'}:
+                        from services.client_chat_handoff import request_handoff
+                        handoff = request_handoff(business_id, conversation_id, 'Запрошено действие, требующее сотрудника: '+str(function_name))
+                        return {'success':True,'response':'Это действие требует сотрудника. Обращение сохранено в очереди LocalOS, автоответы приостановлены.','conversation_id':conversation_id,'state':handoff['state'],'handoff':handoff}
                     if function_name == 'get_services':
                         from services.client_service_context import service_context
                         tool_result = {'success': True, 'service_context': service_context(services, message, conversation_history), 'partial_catalog': True}
+                    elif function_name == 'get_client_info':
+                        tool_result = execute_tool(tool_name=function_name,business_id=business_id,client_phone=client_phone)
                     else:
                         # Выполняем функцию
                         tool_result = execute_tool(
@@ -647,6 +665,10 @@ def process_message(business_id: str, client_phone: str, client_name: str, messa
                             **function_args
                         )
                     
+                    if function_name == 'notify_operator' and tool_result.get('success'):
+                        response = 'Обращение сохранено в очереди сотрудников LocalOS. Автоматические ответы приостановлены; сотрудник ещё не принял диалог.'
+                        save_message(conversation_id, 'text', response, 'agent')
+                        return {'success':True,'response':response,'conversation_id':conversation_id,'state':tool_result['state'],'handoff':tool_result}
                     tools_executed.append({
                         'tool': function_name,
                         'params': function_args,
@@ -690,6 +712,15 @@ def process_message(business_id: str, client_phone: str, client_name: str, messa
                 traceback.print_exc()
                 break
         
+        db = DatabaseManager()
+        try:
+            cursor = db.conn.cursor()
+            cursor.execute('SELECT is_agent_paused FROM aiagentconversations WHERE id=%s',(conversation_id,))
+            latest = cursor.fetchone()
+            if latest and _row_get(latest,'is_agent_paused',0):
+                return {'success':False,'agent_paused':True,'conversation_id':conversation_id}
+        finally:
+            db.close()
         # Очищаем лишние пробелы и переносы строк
         import re
         final_response_text = re.sub(r'\n\s*\n\s*\n', '\n\n', final_response_text).strip()
@@ -739,4 +770,5 @@ def process_message(business_id: str, client_phone: str, client_name: str, messa
 
 def determine_next_state(current_state: str, client_message: str, agent_response: str, agent_config: dict) -> str:
     """Legacy AIAgents.workflow no longer drives runtime state transitions."""
-    return current_state
+    from services.client_dialogue_state import next_state
+    return next_state(current_state, client_message)

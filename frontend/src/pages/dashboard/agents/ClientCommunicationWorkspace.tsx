@@ -1,3 +1,4 @@
+import { ClientHandoffInbox } from './ClientHandoffInbox';
 import { AIAgentSettings } from '@/components/AIAgentSettings';
 import { Button } from '@/components/ui/button';
 import type { DashboardOutletContext } from '@/types/business';
@@ -27,8 +28,9 @@ export const ClientCommunicationWorkspace = () => {
         { value: 'settings', label: 'Поведение и включение' },
         { value: 'test', label: 'Проверка ответов' },
         { value: 'conversations', label: 'Диалоги' },
+        { value: 'handoffs', label: 'Сотруднику' },
       ].map(item => <Button key={item.value} variant={view === item.value ? 'default' : 'outline'} aria-pressed={view === item.value} onClick={() => selectView(item.value)}>{item.label}</Button>)}
     </nav>
-    {view === 'test' ? <EmployeeChatTest key={currentBusinessId} /> : view === 'conversations' ? <ChatsPage key={currentBusinessId} /> : <AIAgentSettings key={currentBusinessId} businessId={currentBusinessId} business={currentBusiness} onSaved={(config) => updateBusiness(currentBusinessId, { ai_agents_config: config })} />}
+    {view === 'handoffs' ? <ClientHandoffInbox key={currentBusinessId} businessId={currentBusinessId} /> : view === 'test' ? <EmployeeChatTest key={currentBusinessId} /> : view === 'conversations' ? <ChatsPage key={currentBusinessId} /> : <AIAgentSettings key={currentBusinessId} businessId={currentBusinessId} business={currentBusiness} onSaved={(config) => updateBusiness(currentBusinessId, { ai_agents_config: config })} />}
   </section>;
 };

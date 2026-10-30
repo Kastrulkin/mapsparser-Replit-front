@@ -433,8 +433,8 @@ export const AIAgentSettings = ({ businessId, business, onSaved }: AIAgentSettin
                   </div>
                 </div>
 
-                {/* Expandable Configuration */}
-                {config.enabled && (
+                {/* Draft settings remain editable while automatic replies are disabled. */}
+                {(
                   <>
                     <button
                       onClick={() => toggleExpand(key)}
