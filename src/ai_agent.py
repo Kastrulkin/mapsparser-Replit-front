@@ -545,7 +545,7 @@ def process_message(business_id: str, client_phone: str, client_name: str, messa
         if row and row[2] == 1:
             return {
                 'success': False,
-                'response': 'Агент временно остановлен. Оператор свяжется с вами в ближайшее время.',
+                'response': 'Автоматические ответы приостановлены. Сообщение сохранено в диалоге для сотрудника. Срок ответа пока не подтверждён.',
                 'conversation_id': conversation_id,
                 'state': row[0] if row else 'greeting',
                 'agent_paused': True

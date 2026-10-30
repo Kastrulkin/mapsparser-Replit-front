@@ -29,3 +29,7 @@ def test_graph_includes_every_runtime_rule_and_staff_branch():
     assert any(edge['source']=='waiting_for_staff' and edge['target']=='human_active' for edge in graph['edges'])
     assert any(edge['source']=='human_active' and edge['target']=='closing' for edge in graph['edges'])
     assert next(node for node in graph['nodes'] if node['id']=='needs_attention')['reachable'] is False
+
+def test_parent_booking_intent_reaches_booking_request():
+    for message in ('Хочу записать ребёнка на первую стрижку завтра в 15:00', 'Можно записаться на стрижку?', 'Хочу перенести запись на завтра', 'Нужно отменить запись'):
+        assert next_state('service_selection', message) == 'booking_request'
