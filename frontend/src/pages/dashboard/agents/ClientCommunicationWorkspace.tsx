@@ -33,6 +33,6 @@ export const ClientCommunicationWorkspace = () => {
         { value: 'states', label: 'Состояния' },
       ].map(item => <Button key={item.value} variant={view === item.value ? 'default' : 'outline'} aria-pressed={view === item.value} onClick={() => selectView(item.value)}>{item.label}</Button>)}
     </nav>
-    {view === 'states' ? <ClientDialogueGraph key={currentBusinessId} businessId={currentBusinessId}/> : view === 'handoffs' ? <ClientHandoffInbox key={currentBusinessId} businessId={currentBusinessId} /> : view === 'test' ? <EmployeeChatTest key={currentBusinessId} /> : view === 'conversations' ? <ChatsPage key={currentBusinessId} /> : <AIAgentSettings key={currentBusinessId} businessId={currentBusinessId} business={currentBusiness} onSaved={(config) => updateBusiness(currentBusinessId, { ai_agents_config: config })} />}
+    {view === 'states' ? <ClientDialogueGraph key={currentBusinessId} businessId={currentBusinessId}/> : view === 'handoffs' ? <ClientHandoffInbox key={currentBusinessId} businessId={currentBusinessId} initialConversationId={params.get('conversation_id')} /> : view === 'test' ? <EmployeeChatTest key={currentBusinessId} /> : view === 'conversations' ? <ChatsPage key={currentBusinessId} /> : <AIAgentSettings key={currentBusinessId} businessId={currentBusinessId} business={currentBusiness} onSaved={(config) => updateBusiness(currentBusinessId, { ai_agents_config: config })} />}
   </section>;
 };

@@ -35,3 +35,29 @@ describe('staff handoff inbox',()=>{
   expect(await screen.findByRole('alert')).toHaveTextContent('Нет доступа');
  });
 });
+
+describe('handoff notification link',()=>{
+ it('opens exactly the linked conversation and sends only an explicit self test',async()=>{
+  const requests:string[]=[];let sent=false;
+  vi.stubGlobal('fetch',vi.fn(async(input)=>{
+   const path=String(input);requests.push(path);
+   if(path.endsWith('/notify-self-test')){sent=true;return Response.json({notification:{status:'sent'}});}
+   if(path.includes('/messages'))return Response.json({messages:sent?[{id:'event',sender:'operator',message_type:'handoff_notification',content:JSON.stringify({status:'sent',actor:'private-user'})}]:[]});
+   return Response.json({conversations:[{id:'target',client_phone:'test-handoff:target',client_name:'Linked test',current_state:'waiting_for_staff'}]});
+  }));
+  render(<ClientHandoffInbox businessId="ras" initialConversationId="target"/>);
+  const button=await screen.findByRole('button',{name:'Уведомить меня в Telegram (тест)'});
+  expect(requests.some(path=>path.endsWith('/notify-self-test'))).toBe(false);
+  fireEvent.click(button);
+  expect(await screen.findByText('Тестовое уведомление отправлено в Telegram. Прочтение не подтверждено.')).toBeInTheDocument();
+  expect(requests).toContain('/api/business/ras/client-handoffs/target/notify-self-test');
+  expect(screen.queryByText(/private-user/)).not.toBeInTheDocument();
+ });
+ it('does not load a foreign conversation from a link',async()=>{
+  const requests:string[]=[];
+  vi.stubGlobal('fetch',vi.fn(async(input)=>{requests.push(String(input));return Response.json({conversations:[]});}));
+  render(<ClientHandoffInbox businessId="ras" initialConversationId="foreign"/>);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Обращение из ссылки недоступно');
+  expect(requests.some(path=>path.includes('/messages'))).toBe(false);
+ });
+});

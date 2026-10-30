@@ -828,3 +828,19 @@ def client_dialogue_graph(business_id):
                     history.append({'id':event['id'],'from':payload['from'],'to':payload['to'],'at':event['created_at'].isoformat()})
         return jsonify({'success':True,'graph':graph,'current_state':current,'is_agent_paused':paused,'history':history,'history_note':('Показаны последние 500 переходов. ' if truncated else '')+'Показаны только записанные переходы. Старые отсутствующие этапы не восстанавливаются по догадкам.'})
     finally:db.close()
+
+
+@chats_bp.route('/api/business/<business_id>/client-handoffs/<conversation_id>/notify-self-test', methods=['POST'])
+def notify_client_handoff_self_test(business_id, conversation_id):
+    user=require_auth()
+    if not user:return jsonify({'error':'Требуется авторизация'}),401
+    from services.client_handoff_notifications import notify_self
+    try:
+        receipt=notify_self(business_id,conversation_id,user)
+        return jsonify({'success':True,'notification':receipt})
+    except PermissionError:
+        return jsonify({'error':'Нет доступа к уведомлению этого бизнеса.'}),403
+    except ValueError as error:
+        return jsonify({'error':str(error)}),400
+    except Exception:
+        return jsonify({'error':'Не удалось проверить результат отправки. Повторная отправка автоматически не выполняется.'}),500

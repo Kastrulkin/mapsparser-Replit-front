@@ -9,7 +9,11 @@ type Message = { id: string; content: string; sender: string; message_type: stri
 const labels: Record<string,string> = { waiting_for_staff:'Ожидает сотрудника', human_active:'Сотрудник подключился', closing:'Завершён' };
 const events: Record<string,string> = { handoff_requested:'Обращение добавлено в очередь сотрудников.',handoff_accept:'Сотрудник принял диалог.',handoff_close:'Сотрудник завершил диалог.',handoff_reply:'Сотрудник подготовил ответ.' };
 
-export function ClientHandoffInbox({businessId}:{businessId:string}) {
+function notificationLabel(content:string) {
+ try { const receipt=JSON.parse(content); return receipt.status==='sent'?'Тестовое уведомление отправлено в Telegram. Прочтение не подтверждено.':receipt.status==='failed'?'Тестовое уведомление не отправлено. Можно повторить проверку.':'Статус тестового уведомления проверяется. Повторная отправка заблокирована во избежание дубля.'; } catch { return 'Не удалось прочитать статус тестового уведомления.'; }
+}
+
+export function ClientHandoffInbox({businessId,initialConversationId=null}:{businessId:string;initialConversationId?:string|null}) {
   const [items,setItems]=useState<Conversation[]>([]);
   const [selected,setSelected]=useState<string|null>(null);
   const [messages,setMessages]=useState<Message[]>([]);
@@ -33,7 +37,14 @@ export function ClientHandoffInbox({businessId}:{businessId:string}) {
     const revision=++listRevision.current;
     try {
       const result=await request('business/'+businessId+'/conversations?agent_id=all');
-      if(scope.active&&revision===listRevision.current)setItems((result.conversations || []).filter((item:Conversation)=>labels[item.current_state]));
+      if(scope.active&&revision===listRevision.current) {
+      const rows=(result.conversations || []).filter((item:Conversation)=>labels[item.current_state]);
+      setItems(rows);
+      if(initialConversationId&&!selection.current) {
+        if(rows.some((item:Conversation)=>item.id===initialConversationId)){selection.current=initialConversationId;setSelected(initialConversationId);}
+        else setError('Обращение из ссылки недоступно в выбранном бизнесе.');
+      }
+     }
     } catch(reason) {if(scope.active)setError(reason instanceof Error?reason.message:'Не удалось загрузить очередь.');}
   };
   const loadMessages=async(id:string) => {
@@ -49,7 +60,7 @@ export function ClientHandoffInbox({businessId}:{businessId:string}) {
     return ()=>{scope.active=false;clearInterval(timer);};
     // Each business owns a separate mounted inbox.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[businessId]);
+  },[businessId,initialConversationId]);
   useEffect(()=>{setMessages([]);setReply('');if(selected)void loadMessages(selected).catch(reason=>{if(lifetime.current.active)setError(String(reason.message || reason));});},[selected]);
   const action=async(kind:string) => {
     const scope=lifetime.current;
@@ -58,6 +69,9 @@ export function ClientHandoffInbox({businessId}:{businessId:string}) {
       if(kind==='test') {
         const result=await request('business/'+businessId+'/client-handoff-test',{});
         if(scope.active){selection.current=result.conversation_id;setSelected(result.conversation_id);}
+      } else if(kind==='notify'&&selected) {
+        await request('business/'+businessId+'/client-handoffs/'+selected+'/notify-self-test',{});
+        if(scope.active)await loadMessages(selected);
       } else if(selected) {
         await request('business/'+businessId+'/client-handoffs/'+selected,{action:kind,...(kind==='reply'?{message:reply}:{})});
         if(scope.active){setReply('');await loadMessages(selected);}
@@ -76,8 +90,8 @@ export function ClientHandoffInbox({businessId}:{businessId:string}) {
       <div className="space-y-3 rounded-lg border p-4">{current?<>
         <ClientDialogueGraph key={businessId+current.id+current.current_state} businessId={businessId} conversationId={current.id}/>
         <h3 className="font-semibold">{current.client_name || current.client_phone}</h3><p role="status">{labels[current.current_state]}. Автоответы приостановлены.</p>
-        {current.current_state==='waiting_for_staff'&&<Button disabled={busy} onClick={()=>void action('accept')}>Взять диалог</Button>}
-        <div className="space-y-2">{messages.filter(message=>message.message_type!=='dialogue_state').map(message=><div key={message.id} className="rounded-md bg-muted p-3"><span className="text-xs text-muted-foreground">{events[message.message_type]?'Событие':message.sender==='client'?'Клиент':message.sender==='operator'?'Сотрудник':'Агент'}</span><p className="whitespace-pre-wrap">{events[message.message_type] || message.content}</p></div>)}</div>
+        {current.current_state==='waiting_for_staff'&&<div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={()=>void action('accept')}>Взять диалог</Button>{current.client_phone.startsWith('test-handoff:')&&<Button variant="outline" disabled={busy} onClick={()=>void action('notify')}>Уведомить меня в Telegram (тест)</Button>}</div>}
+        <div className="space-y-2">{messages.filter(message=>message.message_type!=='dialogue_state').map(message=><div key={message.id} className="rounded-md bg-muted p-3"><span className="text-xs text-muted-foreground">{(events[message.message_type]||message.message_type==='handoff_notification')?'Событие':message.sender==='client'?'Клиент':message.sender==='operator'?'Сотрудник':'Агент'}</span><p className="whitespace-pre-wrap">{message.message_type==='handoff_notification'?notificationLabel(message.content):(events[message.message_type] || message.content)}</p></div>)}</div>
         {current.current_state==='human_active'&&<>
           {current.client_phone.startsWith('test-handoff:')?<><label htmlFor="staff-test-reply">Ответ в тестовый диалог</label><Textarea id="staff-test-reply" value={reply} onChange={event=>setReply(event.target.value)} maxLength={4000}/><Button disabled={busy||!reply.trim()} onClick={()=>void action('reply')}>Добавить тестовый ответ</Button></>:<p>Для отправки ответа клиенту нужен подключённый и проверенный клиентский канал. Пока сообщение можно обработать вручную.</p>}
           <Button variant="outline" disabled={busy} onClick={()=>void action('close')}>Завершить диалог без включения агента</Button>
