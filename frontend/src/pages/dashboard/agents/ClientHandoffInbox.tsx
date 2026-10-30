@@ -15,7 +15,7 @@ function notificationLabel(content:string) {
 
 const defaultHeaders=():Record<string,string>=>{const token=newAuth.getToken();return token?{Authorization:'Bearer '+token}:{};};
 
-export function ClientHandoffInbox({businessId,initialConversationId=null,headers=defaultHeaders}:{businessId:string;initialConversationId?:string|null;headers?:()=>Record<string,string>}) {
+export function ClientHandoffInbox({businessId,initialConversationId=null,reopenRevision=0,headers=defaultHeaders}:{businessId:string;initialConversationId?:string|null;reopenRevision?:number;headers?:()=>Record<string,string>}) {
   const [items,setItems]=useState<Conversation[]>([]);
   const [selected,setSelected]=useState<string|null>(null);
   const [messages,setMessages]=useState<Message[]>([]);
@@ -87,6 +87,15 @@ export function ClientHandoffInbox({businessId,initialConversationId=null,header
     } catch(reason) {if(scope.active)setError(reason instanceof Error?reason.message:'Не удалось выполнить действие.');}
     finally{if(scope.active)setBusy(false);}
   };
+  useEffect(()=>{
+    if(!reopenRevision||!initialConversationId)return;
+    // Recheck the current business list. Keeping the same selection preserves an unsent reply.
+    followedLink.current=false;
+    if(selection.current!==initialConversationId){selection.current=null;setSelected(null);}
+    void load();
+    // Reopening is an explicit navigation; polling never invokes this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[reopenRevision]);
   const visibleMessages=messages.filter(message=>message.message_type==='text');
   const auditMessages=messages.filter(message=>Boolean(events[message.message_type])||message.message_type==='handoff_notification');
   const refresh=()=>{setError('');void load();if(selected)void loadMessages(selected).catch(()=>setError('Не удалось обновить переписку. Попробуйте ещё раз.'));};

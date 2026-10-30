@@ -1,3 +1,4 @@
+import { useClientHandoffLaunch } from '@/features/telegram/useClientHandoffLaunch';
 import { ClientHandoffInbox } from '@/pages/dashboard/agents/ClientHandoffInbox';
 import localOsLogo from '@/assets/images/logo.png';
 import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
@@ -39,7 +40,7 @@ import {
 	TrendingUp,
 	WandSparkles, X
 } from 'lucide-react';
-import { FormEvent, Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { FormEvent, Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 const BusinessInputSettings = lazy(() => import('@/components/operator/BusinessInputSettings').then((module) => ({ default: module.BusinessInputSettings })));
 const ContentRules = lazy(() => import('@/components/operator/ContentRules').then((module) => ({ default: module.ContentRules })));
@@ -130,6 +131,11 @@ export const TelegramControlWorkspace = () => {
   const networkLocationSearchVersion = useRef(0);
 
   const scope = bootstrap?.selected_scope || bootstrap?.summary?.scope;
+  const { isDirectClientLaunch, reopenRevision } = useClientHandoffLaunch(bootstrap, scope, () => {
+    setPicker(false); setPickerNetwork(null);
+    setTab('more'); setModule('client_handoffs');
+    setDeepLinkItemId(bootstrap?.resolved_deep_link?.item_id || '');
+  });
   const summary = workspace?.summary || bootstrap?.summary;
   const tasks = workspace?.items?.length ? workspace.items : summary?.attention_items || [];
   const hasActiveTasks = tasks.some((item) => item.status === 'in_progress');
@@ -350,11 +356,11 @@ export const TelegramControlWorkspace = () => {
   useEffect(() => {
     const back = webApp()?.BackButton;
     if (!back) return;
-    const goBack = () => { if (module) setModule(''); else if (pickerNetwork) setPickerNetwork(null); else if (picker) setPicker(false); else setTab('today'); };
+    const goBack = () => { if (pickerNetwork) setPickerNetwork(null); else if (picker) setPicker(false); else if (module === 'client_handoffs' && isDirectClientLaunch && webApp()?.close) webApp()?.close?.(); else if (module) setModule(''); else setTab('today'); };
     if (showOnboarding) back.hide();
     else if (module || picker || tab !== 'today') { back.show(); back.onClick(goBack); } else back.hide();
     return () => back.offClick(goBack);
-  }, [module, picker, pickerNetwork, showOnboarding, tab]);
+  }, [module, picker, pickerNetwork, showOnboarding, tab, isDirectClientLaunch]);
 
   const chooseScope = async (kind: string, id?: string | null) => {
     if (preview) { setPicker(false); setPickerNetwork(null); return true; }
@@ -552,7 +558,7 @@ export const TelegramControlWorkspace = () => {
     finally { setModuleActionBusy(''); }
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!bootstrap) return;
     const requestedScreen = bootstrap.resolved_deep_link?.screen === 'analytics' ? 'finance' : bootstrap.resolved_deep_link?.screen;
     const requestedEntry = bootstrap.navigation?.find((item) => item.key === requestedScreen);
@@ -773,7 +779,7 @@ export const TelegramControlWorkspace = () => {
             {!picker && tab === 'more' && !module ? <More navigation={visibleNavigation} onOpen={openMobileTarget} openProgress={() => openMobileTarget('progress')} onLocked={setPaywall} restartTour={() => setShowOnboarding(true)} /> : null}
             {!picker && tab === 'menu' ? <UtilityMenu navigation={visibleNavigation} onOpen={openMobileTarget} /> : null}
             {!picker && tab === 'more' && module === 'settings' && scope?.kind === 'business' && scope.id ? <><BusinessInputSettings key={scope.id} businessId={scope.id} headers={authOnlyHeaders} /><ContentRules key={`rules-${scope.id}`} businessId={scope.id} headers={authOnlyHeaders} /></> : null}
-            {!picker && tab === 'more' && module ? <ModuleScreen module={module} focusItemId={deepLinkItemId} scope={scope} access={bootstrap?.navigation?.find((item) => item.key === (module === 'finance_import' || module === 'analytics' ? 'finance' : module))} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={() => setModule('')} /> : null}
+            {!picker && tab === 'more' && module ? <ModuleScreen handoffReopenRevision={reopenRevision} module={module} focusItemId={deepLinkItemId} scope={scope} access={bootstrap?.navigation?.find((item) => item.key === (module === 'finance_import' || module === 'analytics' ? 'finance' : module))} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={() => { if (module === 'client_handoffs' && isDirectClientLaunch && webApp()?.close) webApp()?.close?.(); else setModule(''); }} /> : null}
           </motion.div>
         </AnimatePresence>
       </MobileShell>
@@ -919,10 +925,10 @@ const moduleNames: Record<string, [string, string]> = {
   community_sources: ['Источники Ленты', 'Публичные Telegram-каналы и открытые группы, из которых ЛокалОС собирает ленту и главные темы.'], influencers: ['Инфлюенсеры', 'Подходящие локальные авторы, предложение, сообщения, размещения и результат.'],
 };
 
-const ModuleScreen = ({ module, focusItemId, scope, access, data, loading, progressData, progressLoading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, reload, openTarget, track, trackProduct, openTasks, requestCrm, back }: ModuleScreenProps) => {
+const ModuleScreen = ({ handoffReopenRevision, module, focusItemId, scope, access, data, loading, progressData, progressLoading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, reload, openTarget, track, trackProduct, openTasks, requestCrm, back }: ModuleScreenProps) => {
   const content = moduleNames[module] || ['Раздел', 'Данные и доступные действия.'];
   return <Screen title={content[0]} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>
-    {module === 'client_handoffs' ? (scope?.kind==='business'?<ClientHandoffInbox key={scope.id+':'+focusItemId} businessId={scope.id} initialConversationId={focusItemId} headers={authOnlyHeaders}/>:<Empty icon={MessageCircle} title="Выберите бизнес" text="Обращения клиентов доступны для отдельной точки."/>) : module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'influencers' ? <InfluencersMobileModule scope={scope} focusItemId={focusItemId} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} openBusiness={id => openTarget('partnerships', { kind: 'business', id })} /> : access?.status === 'read_only' || data.status === 'payment_required' ? <LockedModulePreview item={access || data.access} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} trackProduct={trackProduct} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'work_journal' ? <WorkJournal embedded businessId={scope?.kind === 'business' ? scope.id : null} headers={authOnlyHeaders} /> : module === 'finance' || module === 'finance_import' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} requestCrm={requestCrm} initialSection={module === 'finance_import' ? 'import' : 'overview'} trackProduct={trackProduct} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
+    {module === 'client_handoffs' ? (scope?.kind==='business'?<ClientHandoffInbox key={scope.id+':'+focusItemId} businessId={scope.id} initialConversationId={focusItemId} reopenRevision={handoffReopenRevision} headers={authOnlyHeaders}/>:<Empty icon={MessageCircle} title="Выберите бизнес" text="Обращения клиентов доступны для отдельной точки."/>) : module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'influencers' ? <InfluencersMobileModule scope={scope} focusItemId={focusItemId} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} openBusiness={id => openTarget('partnerships', { kind: 'business', id })} /> : access?.status === 'read_only' || data.status === 'payment_required' ? <LockedModulePreview item={access || data.access} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} trackProduct={trackProduct} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'work_journal' ? <WorkJournal embedded businessId={scope?.kind === 'business' ? scope.id : null} headers={authOnlyHeaders} /> : module === 'finance' || module === 'finance_import' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} requestCrm={requestCrm} initialSection={module === 'finance_import' ? 'import' : 'overview'} trackProduct={trackProduct} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
   </Screen>;
 };
 

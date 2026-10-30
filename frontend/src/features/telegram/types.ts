@@ -158,6 +158,9 @@ export type ModuleData = { items?: ModuleItem[]; counts?: { total?: number }; as
 export type Tab = 'today' | 'tasks' | 'feed' | 'reviews' | 'progress' | 'operator' | 'more' | 'menu';
 
 export type TelegramWebApp = {
+  close?: () => void;
+  onEvent?: (event: 'activated' | 'deactivated', callback: () => void) => void;
+  offEvent?: (event: 'activated' | 'deactivated', callback: () => void) => void;
   downloadFile?: (params: { url: string; file_name: string }) => void;
   isVersionAtLeast?: (version: string) => boolean;
   initData?: string;
@@ -178,6 +181,7 @@ export type ReviewsProps = {
 };
 
 export type ModuleScreenProps = {
+  handoffReopenRevision?: number;
   module: string; focusItemId?: string; scope?: MobileScope; access?: NavigationItem; data: ModuleData; loading: boolean; progressData?: ProgressPayload | null; progressLoading: boolean; saving: boolean; actionBusy: string;
   saveNotifications: (preferences: NotificationPreferences) => Promise<void>;
   updateService: (item: ModuleItem, values: { name: string; description: string; price: string; category: string }) => Promise<void>;

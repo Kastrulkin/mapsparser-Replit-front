@@ -119,3 +119,16 @@ it('requires an explicit send for the personal Telegram pilot and keeps text aft
  expect(input).toHaveValue('Ручной ответ');
  expect(writes).toHaveLength(1);
 });
+
+it('reopens the notified conversation after returning to the list and preserves a pending reply on resume',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async(input)=>String(input).includes('/messages')?Response.json({messages:[]}):Response.json({conversations:[{id:'linked',client_phone:'tg-ras-pilot:private',client_name:'Уведомление',current_state:'human_active'}]})));
+ const view=render(<ClientHandoffInbox businessId="ras" initialConversationId="linked" reopenRevision={0}/>);
+ const input=await screen.findByRole('textbox',{name:'Ответ клиенту в Telegram'});
+ fireEvent.change(input,{target:{value:'Ещё не отправленный ответ'}});
+ view.rerender(<ClientHandoffInbox businessId="ras" initialConversationId="linked" reopenRevision={1}/>);
+ await waitFor(()=>expect(screen.getByRole('textbox')).toHaveValue('Ещё не отправленный ответ'));
+ fireEvent.click(screen.getByRole('button',{name:'Все обращения'}));
+ expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+ view.rerender(<ClientHandoffInbox businessId="ras" initialConversationId="linked" reopenRevision={2}/>);
+ expect(await screen.findByRole('textbox',{name:'Ответ клиенту в Telegram'})).toBeVisible();
+});
