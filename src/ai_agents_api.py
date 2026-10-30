@@ -439,9 +439,9 @@ def get_business_manageable_ai_agents(business_id: str):
             SELECT id, name, type, description, personality, workflow, task, identity, speech_style,
                    restrictions_json, variables_json, is_active, created_by, created_at, updated_at
             FROM AIAgents
-            WHERE COALESCE(is_active, 1) = 1
+            WHERE business_id = %s AND COALESCE(is_active, 1) = 1
             ORDER BY type, name
-            """
+            """, (business_id,)
         )
         rows = cursor.fetchall()
         user_id = str(user_data.get("user_id") or "")
@@ -517,8 +517,8 @@ def create_business_ai_agent(business_id: str):
             """
             INSERT INTO AIAgents
             (id, name, type, description, personality, workflow, task, identity, speech_style,
-             restrictions_json, variables_json, is_active, created_by)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s)
+             restrictions_json, variables_json, is_active, created_by, business_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s)
             """,
             (
                 agent_id,
@@ -533,6 +533,7 @@ def create_business_ai_agent(business_id: str):
                 json.dumps(restrictions, ensure_ascii=False),
                 json.dumps(variables, ensure_ascii=False),
                 user_data.get("user_id"),
+                business_id,
             ),
         )
         db.conn.commit()
@@ -561,7 +562,7 @@ def update_business_ai_agent(business_id: str, agent_id: str):
             return automation_error
 
         cursor = db.conn.cursor()
-        cursor.execute("SELECT created_by FROM AIAgents WHERE id = %s", (agent_id,))
+        cursor.execute("SELECT created_by FROM AIAgents WHERE id = %s AND business_id = %s", (agent_id, business_id))
         row = cursor.fetchone()
         if not row:
             db.close()
@@ -598,9 +599,9 @@ def update_business_ai_agent(business_id: str, agent_id: str):
             return jsonify({"success": True, "message": "Нет изменений"}), 200
 
         update_fields.append("updated_at = CURRENT_TIMESTAMP")
-        update_values.append(agent_id)
+        update_values.extend([agent_id, business_id])
         cursor.execute(
-            f"UPDATE AIAgents SET {', '.join(update_fields)} WHERE id = %s",
+            f"UPDATE AIAgents SET {', '.join(update_fields)} WHERE id = %s AND business_id = %s",
             tuple(update_values),
         )
         db.conn.commit()
@@ -629,7 +630,7 @@ def delete_business_ai_agent(business_id: str, agent_id: str):
             return automation_error
 
         cursor = db.conn.cursor()
-        cursor.execute("SELECT created_by FROM AIAgents WHERE id = %s", (agent_id,))
+        cursor.execute("SELECT created_by FROM AIAgents WHERE id = %s AND business_id = %s", (agent_id, business_id))
         row = cursor.fetchone()
         if not row:
             db.close()
@@ -639,7 +640,7 @@ def delete_business_ai_agent(business_id: str, agent_id: str):
             db.close()
             return jsonify({"error": "Можно удалять только собственных агентов"}), 403
 
-        cursor.execute("DELETE FROM AIAgents WHERE id = %s", (agent_id,))
+        cursor.execute("DELETE FROM AIAgents WHERE id = %s AND business_id = %s", (agent_id, business_id))
         db.conn.commit()
         db.close()
         return jsonify({"success": True, "message": "Агент удалён"}), 200

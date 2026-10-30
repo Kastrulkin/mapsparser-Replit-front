@@ -841,6 +841,14 @@ def update_business_profile():
             update_fields.append('telegram_chat_id = %s')
             update_values.append(str(data.get('telegram_chat_id') or '').strip() or None)
         
+        if 'ai_agent_id' in data or 'ai_agents_config' in data:
+            from services.client_agent_scope import validate_selection
+            try:
+                validate_selection(cursor, business_id, data)
+            except (ValueError, TypeError):
+                db.close()
+                return jsonify({"error": "Выберите агента этого бизнеса"}), 400
+
         # AI Agent settings
         if 'ai_agent_enabled' in data:
             update_fields.append('ai_agent_enabled = %s')

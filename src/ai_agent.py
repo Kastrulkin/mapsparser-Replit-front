@@ -111,7 +111,7 @@ def get_agent_config(business_id: str, selected_agent_id=None) -> dict:
         cursor.execute("SELECT to_jsonb(b)->>'ai_agents_config' config FROM businesses b WHERE id = %s", (business_id,))
         settings_row = cursor.fetchone()
         if selected_agent_id:
-            cursor.execute('SELECT type FROM aiagents WHERE id = %s', (selected_agent_id,))
+            cursor.execute('SELECT type FROM aiagents WHERE id = %s AND business_id = %s', (selected_agent_id, business_id))
             selected_row = cursor.fetchone()
             agent_type = _row_get(selected_row, 'type', 0) or agent_type
         saved = saved_client_settings(_row_get(settings_row, 'config', 0), agent_type, selected_agent_id)
@@ -130,8 +130,8 @@ def get_agent_config(business_id: str, selected_agent_id=None) -> dict:
             cursor.execute("""
                 SELECT workflow, task, identity, speech_style, restrictions_json
                 FROM AIAgents
-                WHERE id = %s AND """ + agents_active_predicate + """
-            """, (agent_id,))
+                WHERE id = %s AND business_id = %s AND """ + agents_active_predicate + """
+            """, (agent_id, business_id))
             agent_row = cursor.fetchone()
             
             if agent_row:

@@ -145,124 +145,14 @@ def get_business_ai_agents(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
         
-        # Получаем конфигурацию агентов (новый формат + fallback на legacy поля)
         cursor.execute("""
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_schema = current_schema() AND table_name = 'businesses'
-        """)
-        business_cols = {str(_row_get(r, 'column_name', 0, '') or '').lower() for r in (cursor.fetchall() or [])}
-        has_ai_agents_config = 'ai_agents_config' in business_cols
-        select_fields = [
-            ("ai_agents_config" if has_ai_agents_config else "NULL AS ai_agents_config"),
-            ("ai_agent_enabled" if "ai_agent_enabled" in business_cols else "NULL AS ai_agent_enabled"),
-            ("ai_agent_type" if "ai_agent_type" in business_cols else "NULL AS ai_agent_type"),
-            ("ai_agent_id" if "ai_agent_id" in business_cols else "NULL AS ai_agent_id"),
-        ]
-        cursor.execute(f"""
-            SELECT {", ".join(select_fields)}
-            FROM Businesses
-            WHERE id = %s
+            SELECT id, name, type, description FROM aiagents
+            WHERE business_id = %s AND COALESCE(is_active::text, '1') IN ('1','true','t')
+            ORDER BY type, name
         """, (business_id,))
-        business_data = cursor.fetchone()
-        
-        agents = []
-        
-        # Пытаемся загрузить из нового формата
-        ai_agents_config_raw = _row_get(business_data, 'ai_agents_config', 0)
-        added_agent_ids = set()
+        agents = [{key: _row_get(row, key, index) for index, key in enumerate(('id','name','type','description'))}
+                  for row in cursor.fetchall()]
 
-        def _append_agent_row(agent_row):
-            if not agent_row:
-                return
-            agent_id = _row_get(agent_row, 'id', 0)
-            if not agent_id or agent_id in added_agent_ids:
-                return
-            added_agent_ids.add(agent_id)
-            agents.append({
-                'id': agent_id,
-                'name': _row_get(agent_row, 'name', 1),
-                'type': _row_get(agent_row, 'type', 2),
-                'description': _row_get(agent_row, 'description', 3)
-            })
-
-        def _resolve_default_agent(agent_type_raw: str):
-            normalized = str(agent_type_raw or '').strip().lower()
-            if not normalized:
-                normalized = 'booking'
-            if 'book' in normalized or 'запис' in normalized:
-                normalized = 'booking'
-            elif 'mark' in normalized or 'маркет' in normalized:
-                normalized = 'marketing'
-            cursor.execute("""
-                SELECT id, name, type, description
-                FROM AIAgents
-                WHERE type = %s
-                  AND COALESCE(is_active::text, '1') IN ('1', 'true', 't')
-                ORDER BY id
-                LIMIT 1
-            """, (normalized,))
-            return cursor.fetchone()
-
-        if ai_agents_config_raw:
-            try:
-                agents_config = json.loads(ai_agents_config_raw) if isinstance(ai_agents_config_raw, str) else ai_agents_config_raw
-                if not isinstance(agents_config, dict):
-                    agents_config = {}
-                
-                # Для каждого включенного агента получаем его данные
-                for agent_key, config in agents_config.items():
-                    if isinstance(config, dict) and config.get('enabled'):
-                        # Определяем тип агента из ключа (booking_agent -> booking)
-                        agent_type = agent_key.replace('_agent', '')
-                        
-                        # Если указан конкретный agent_id, загружаем его
-                        if config.get('agent_id'):
-                            cursor.execute("""
-                                SELECT id, name, type, description
-                                FROM AIAgents
-                                WHERE id = %s
-                            """, (config['agent_id'],))
-                            _append_agent_row(cursor.fetchone())
-                        else:
-                            # Используем дефолтного агента для типа
-                            _append_agent_row(_resolve_default_agent(agent_type))
-            except (json.JSONDecodeError, TypeError) as e:
-                print(f"⚠️ Ошибка парсинга ai_agents_config: {e}")
-
-        # Legacy fallback (если новый формат не заполнен)
-        if not agents and _row_get(business_data, 'ai_agent_enabled', 1):
-            legacy_agent_id = _row_get(business_data, 'ai_agent_id', 3)
-            if legacy_agent_id:
-                cursor.execute("""
-                    SELECT id, name, type, description
-                    FROM AIAgents
-                    WHERE id = %s
-                """, (legacy_agent_id,))
-                _append_agent_row(cursor.fetchone())
-            else:
-                _append_agent_row(_resolve_default_agent(_row_get(business_data, 'ai_agent_type', 2) or 'booking'))
-
-        # Дополняем список активными агентами, чтобы новый пользовательский агент
-        # был доступен в чатах даже до явной привязки в ai_agents_config.
-        cursor.execute("""
-            SELECT id, name, type, description
-            FROM AIAgents
-            WHERE COALESCE(is_active::text, '1') IN ('1', 'true', 't')
-              AND (
-                    created_by = %s
-                    OR created_by IS NULL
-                    OR created_by = ''
-                    OR id IN ('booking_agent_default', 'marketing_agent_default')
-                  )
-            ORDER BY
-              CASE WHEN created_by = %s THEN 0 ELSE 1 END,
-              created_at DESC NULLS LAST,
-              id
-        """, (user_data['user_id'], user_data['user_id']))
-        for agent_row in cursor.fetchall() or []:
-            _append_agent_row(agent_row)
-        
         db.close()
         return jsonify({"success": True, "agents": agents})
         
@@ -733,24 +623,11 @@ def test_business_ai_agent(business_id, agent_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
         
-        # Проверяем, что агент принадлежит бизнесу или доступен (legacy-safe)
-        cursor.execute("""
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_schema = current_schema() AND table_name = 'businesses'
-        """)
-        business_cols = {str(_row_get(r, 'column_name', 0, '') or '').lower() for r in (cursor.fetchall() or [])}
-        ai_agent_id_expr = "ai_agent_id" if 'ai_agent_id' in business_cols else "NULL AS ai_agent_id"
-        cursor.execute(f"""
-            SELECT {ai_agent_id_expr} FROM Businesses WHERE id = %s
-        """, (business_id,))
-        business_agent = cursor.fetchone()
-        
-        business_agent_id = _row_get(business_agent, 'ai_agent_id', 0) if business_agent else None
-        if business_agent_id and business_agent_id != agent_id:
+        cursor.execute('SELECT id FROM aiagents WHERE id = %s AND business_id = %s', (agent_id, business_id))
+        if not cursor.fetchone():
             db.close()
-            return jsonify({"error": "Агент не принадлежит этому бизнесу"}), 403
-        
+            return jsonify({"error": "Агент не принадлежит этому бизнесу"}), 404
+
         data = request.get_json()
         message = data.get('message', '').strip()
         conversation_history = data.get('conversation_history', [])  # История для песочницы
