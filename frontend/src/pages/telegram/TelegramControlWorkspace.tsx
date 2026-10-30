@@ -74,7 +74,7 @@ export const TelegramControlWorkspace = () => {
   const initData = webApp()?.initData || '';
   const launchParams = new URLSearchParams(window.location.search);
   const rawJourneyParam = launchParams.get('journey_token') || launchParams.get('tgWebAppStartParam') || webApp()?.initDataUnsafe?.start_param || '';
-  const journeyToken = rawJourneyParam.startsWith('journey_') ? rawJourneyParam.slice(8) : /^[A-Za-z0-9_-]{32,}$/.test(rawJourneyParam) ? rawJourneyParam : '';
+  const journeyToken = rawJourneyParam.startsWith('connect_') ? '' : rawJourneyParam.startsWith('journey_') ? rawJourneyParam.slice(8) : /^[A-Za-z0-9_-]{32,}$/.test(rawJourneyParam) ? rawJourneyParam : '';
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(preview ? previewBootstrap : null);
   const [workspace, setWorkspace] = useState<Workspace | null>(preview ? { items: previewBootstrap.summary?.attention_items, summary: previewBootstrap.summary } : null);
   const [todayData, setTodayData] = useState<TodayPayload | null>(preview ? previewToday : null);
