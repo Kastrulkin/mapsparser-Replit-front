@@ -8,7 +8,7 @@ import { X } from 'lucide-react';
 
 export type OperatorPhoto = { asset_id: string; name?: string; category?: string };
 
-const PhotoPreview = ({ photo, index }: { photo: OperatorPhoto; index: number }) => {
+export const OperatorPhotoPreview = ({ photo, index = 0 }: { photo: OperatorPhoto; index?: number }) => {
   const [url, setUrl] = useState('');
   const [failed, setFailed] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -66,7 +66,7 @@ export const OperatorPhotoGallery = ({ photos }: { photos: OperatorPhoto[] }) =>
   <section aria-label="Варианты фотографий" className="space-y-3">
     <p className="text-sm text-slate-600">Посмотрите фото. Чтобы выбрать, напишите в чат его номер или название. Пока фото поста не меняется.</p>
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-      {photos.slice(start, start + pageSize).map((photo, index) => <PhotoPreview key={photo.asset_id} photo={photo} index={start + index} />)}
+      {photos.slice(start, start + pageSize).map((photo, index) => <OperatorPhotoPreview key={photo.asset_id} photo={photo} index={start + index} />)}
     </div>
     <div className="flex flex-wrap items-center gap-3">
       <span role="status" className="text-sm text-slate-600">Фото {start + 1}–{Math.min(start + pageSize, photos.length)} из {photos.length}</span>

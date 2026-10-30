@@ -206,8 +206,8 @@ const LegacySettingsPage = () => {
         description="Готовые и кастомные агенты теперь управляются из одного продуктового раздела."
       >
         <DashboardActionPanel
-          title="ИИ-агенты теперь на странице “Агенты”"
-          description="Там собраны агент для записи, маркетинговый агент, persona-настройки, кастомные workflow agents, подтверждения и история запусков."
+          title="Общение с клиентами — в разделе «Автоматизация»"
+          description="Настройте агента для записи и маркетингового агента, проверьте ответы и откройте клиентские диалоги."
           tone="sky"
           status={(
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
@@ -217,7 +217,7 @@ const LegacySettingsPage = () => {
           )}
           actions={(
             <Button type="button" asChild>
-              <Link to="/dashboard/agents">Открыть агентов</Link>
+              <Link to="/dashboard/agents?section=clients">Общение с клиентами</Link>
             </Button>
           )}
         />

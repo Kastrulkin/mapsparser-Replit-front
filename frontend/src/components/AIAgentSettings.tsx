@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react';
 import { AIAgentsManagement } from './AIAgentsManagement';
 
 interface AIAgentSettingsProps {
+  onSaved?: (config: string) => void;
   businessId: string | null;
   business: Partial<Pick<BusinessRecord, 'ai_agents_config' | 'ai_agent_enabled' | 'ai_agent_type' | 'ai_agent_restrictions' | 'ai_agent_id' | 'ai_agent_tone' | 'ai_agent_language' | 'subscription_access' | 'subscription_tier' | 'subscription_status' | 'subscription_ends_at'>> | null;
 }
@@ -43,7 +44,7 @@ const EMPTY_AGENT_FORM = {
   is_active: true,
 };
 
-export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) => {
+export const AIAgentSettings = ({ businessId, business, onSaved }: AIAgentSettingsProps) => {
   const { language: interfaceLanguage, t } = useLanguage();
   const automationAccess = getAutomationAccessForBusiness(business);
   const [agentsConfig, setAgentsConfig] = useState<Record<string, AgentConfig>>({});
@@ -335,6 +336,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
       const data = await response.json();
 
       if (response.ok) {
+        onSaved?.(JSON.stringify(agentsConfig));
         toast({ title: t.common.success, description: t.dashboard.settings.ai.saved });
       } else {
         toast({ title: t.common.error, description: data.error || t.common.error, variant: 'destructive' });

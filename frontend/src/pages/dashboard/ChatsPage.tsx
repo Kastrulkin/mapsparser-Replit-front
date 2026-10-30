@@ -50,7 +50,9 @@ interface SandboxMessage {
   };
 }
 
-export const ChatsPage: React.FC = () => {
+export const ChatsPage = () => <ChatsWorkspace />;
+export const EmployeeChatTest = () => <ChatsWorkspace testing />;
+const ChatsWorkspace = ({ testing = false }: { testing?: boolean }) => {
   const { currentBusinessId } = useOutletContext<{ currentBusinessId: string }>();
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
@@ -63,7 +65,7 @@ export const ChatsPage: React.FC = () => {
   const [sandboxMessages, setSandboxMessages] = useState<SandboxMessage[]>([]);
   const [sandboxInput, setSandboxInput] = useState('');
   const [sandboxLoading, setSandboxLoading] = useState(false);
-  const [workspaceMode, setWorkspaceMode] = useState<'dialogs' | 'agent' | 'outreach'>('dialogs');
+  const [workspaceMode, setWorkspaceMode] = useState<'dialogs' | 'agent' | 'outreach'>(testing ? 'agent' : 'dialogs');
   const isSandbox = workspaceMode === 'agent';
   const { toast } = useToast();
   const { language, t } = useLanguage();
