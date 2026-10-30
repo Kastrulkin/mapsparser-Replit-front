@@ -53,14 +53,42 @@ def media(workday,monkeypatch,tmp_path):
     return conn,c
 
 
-def photo(c):
+def photo(c, classify=True):
     buffer=io.BytesIO();Image.new('RGB',(16,16),'red').save(buffer,format='PNG')
     item=attachment(c,buffer.getvalue(),'photo.png','image/png')
+    if not classify:
+        return item
     result=operator_attachments.classify(c,'b','admin',item['id'],'content',item['conversation_id'])
     return {**item,'photo_asset_id':result['attachment']['photo_asset_id']}
 
 
-def test_story_uses_existing_media_channels_history_and_invalidates_approval(media):
+def test_story_exact_channel_copy_and_album_without_ai(media,monkeypatch):
+    from services import social_post_service
+    _,c=media
+    c.execute("""CREATE TABLE contentplans(id TEXT PRIMARY KEY,business_id TEXT,plan_status TEXT,period_start DATE,period_end DATE,
+        generated_plan_json JSONB,updated_at TIMESTAMPTZ DEFAULT NOW())""")
+    c.execute("""CREATE TABLE contentplanitems(id TEXT PRIMARY KEY,plan_id TEXT,business_id TEXT,theme TEXT,goal TEXT,scheduled_for DATE,
+        status TEXT,content_type TEXT,source_kind TEXT,draft_text TEXT,metadata_json JSONB,updated_at TIMESTAMPTZ DEFAULT NOW())""")
+    c.execute("""CREATE TABLE social_posts(id TEXT PRIMARY KEY,business_id TEXT,content_plan_id TEXT,content_plan_item_id TEXT,
+        platform TEXT,publish_mode TEXT,status TEXT,approved_at TIMESTAMPTZ,approval_id TEXT,automation_task_id TEXT,
+        base_text TEXT,platform_text TEXT,scheduled_for DATE,media_json JSONB DEFAULT '[]',metadata_json JSONB,
+        created_by TEXT,created_at TIMESTAMPTZ,updated_at TIMESTAMPTZ DEFAULT NOW(),UNIQUE(content_plan_item_id,platform))""")
+    c.execute("INSERT INTO contentplans VALUES ('p','b','generated','2026-09-01','2026-09-30','{\"selected_channels\":[\"yandex_maps\"]}',NOW())")
+    uploaded=photo(c,classify=False)
+    monkeypatch.setattr(social_post_service,'build_platform_variants',lambda *_a:pytest.fail('No paid generation'))
+    args={'plan_id':'p','theme':'Тест','draft_text':'Точный текст.','scheduled_for':'2026-09-15',
+          'attachment_ids':[uploaded['id']],'copy_text_to_channels':True}
+    saved=operator_story.save(c,'b','admin',args,uploaded['conversation_id'],'exact')
+    operator_story.save(c,'b','admin',args,uploaded['conversation_id'],'exact')
+    c.execute('SELECT * FROM social_posts');rows=c.fetchall()
+    assert len(rows)==1
+    assert rows[0]['platform_text']=='Точный текст.' and rows[0]['status']=='needs_review'
+    assert rows[0]['approval_id'] is None and len(rows[0]['media_json'])==1
+    c.execute('SELECT analysis_status FROM photo_assets');assert c.fetchone()['analysis_status']=='not_analyzed'
+
+
+@pytest.mark.parametrize('preclassified', [False, True])
+def test_story_uses_existing_media_channels_history_and_invalidates_approval(media, preclassified):
     _,c=media
     c.execute("""CREATE TABLE contentplans(id TEXT PRIMARY KEY,business_id TEXT,plan_status TEXT,period_start DATE,period_end DATE,
         generated_plan_json JSONB,updated_at TIMESTAMPTZ DEFAULT NOW())""")
@@ -69,15 +97,23 @@ def test_story_uses_existing_media_channels_history_and_invalidates_approval(med
     c.execute("""CREATE TABLE social_posts(id TEXT PRIMARY KEY,business_id TEXT,content_plan_item_id TEXT,status TEXT,approved_at TIMESTAMPTZ,
         approval_id TEXT,automation_task_id TEXT,updated_at TIMESTAMPTZ DEFAULT NOW(),base_text TEXT,platform_text TEXT,scheduled_for DATE,media_json JSONB DEFAULT '[]')""")
     c.execute("INSERT INTO contentplans VALUES ('p','b','generated','2026-09-01','2026-09-30','{\"selected_channels\":[\"vk\",\"telegram\"]}',NOW())")
-    item=photo(c)
+    item=photo(c, classify=preclassified)
     args={'plan_id':'p','theme':'Результат работы','draft_text':'Уход после окрашивания.','scheduled_for':'2026-09-15','attachment_ids':[item['id']]}
     saved=operator_story.save(c,'b','admin',args,item['conversation_id'],'create')
     repeat=operator_story.save(c,'b','admin',args,item['conversation_id'],'create')
     assert repeat['item_id']==saved['item_id']
     c.execute('SELECT * FROM contentplanitems WHERE id=%s',(saved['item_id'],));old=dict(c.fetchone())
     assert old['metadata_json']['selected_channels']==['vk','telegram']
+    c.execute('SELECT purpose,photo_asset_id FROM operator_attachments WHERE id=%s',(item['id'],))
+    uploaded=dict(c.fetchone())
+    assert uploaded['purpose']=='content' and uploaded['photo_asset_id']
+    c.execute('SELECT analysis_status FROM photo_assets WHERE id=%s',(uploaded['photo_asset_id'],))
+    assert c.fetchone()['analysis_status']=='not_analyzed'
     c.execute("INSERT INTO social_posts(id,business_id,content_plan_item_id,status,approved_at,approval_id,automation_task_id,updated_at) VALUES ('post','b',%s,'approved',NOW(),'approval','task',NOW())",(saved['item_id'],))
-    args.update(item_id=saved['item_id'],version=str(old['updated_at']),draft_text='Короткий рассказ.')
+    c.execute('ALTER TABLE contentplanitems ADD COLUMN usernews_id TEXT, ADD COLUMN source_ref TEXT, ADD COLUMN seo_keyword TEXT, ADD COLUMN service_id TEXT, ADD COLUMN transaction_id TEXT')
+    from services import operator_editorial
+    canonical=operator_editorial._items(c,'b','p',item_id=saved['item_id'])[0]
+    args.update(item_id=saved['item_id'],version=operator_editorial._version(canonical),draft_text='Короткий рассказ.')
     args.pop('scheduled_for')
     operator_story.save(c,'b','admin',args,item['conversation_id'],'edit')
     c.execute('SELECT * FROM contentplanitems WHERE id=%s',(saved['item_id'],));new=dict(c.fetchone())
@@ -233,7 +269,7 @@ def test_telegram_album_keeps_caption_and_same_conversation(workday,monkeypatch)
         async def download_as_bytearray(self):return bytearray(content)
     async def run():
         for index in [1,2]:
-            message=SimpleNamespace(document=SimpleNamespace(file_size=len(content),file_id=str(index),file_name='album.png',mime_type='application/octet-stream'),photo=[],caption='Результат окрашивания' if index==1 else None,message_id=index,reply_text=reply)
+            message=SimpleNamespace(document=SimpleNamespace(file_size=len(content),file_id=str(index),file_name='album.png',mime_type='application/octet-stream'),photo=[],caption='Результат окрашивания' if index==1 else None,message_id=index,media_group_id='album-1',reply_text=reply)
             update=SimpleNamespace(effective_chat=SimpleNamespace(type='private',id=123),effective_user=SimpleNamespace(is_bot=False,id=123),message=message)
             assert await operator_telegram_inputs.receive(update,SimpleNamespace(bot=Bot()),host)
     asyncio.run(run())

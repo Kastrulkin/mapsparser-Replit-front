@@ -1,7 +1,8 @@
+from services.owner_bot_context import owner_bot_channel, owner_bot_request_payload, current_owner_bot
 """Telegram attachments enter the same conversation as voice and text."""
 import asyncio
 import json
-from services import operator_workday, operator_attachments
+from services import operator_workday, operator_attachments, operator_photo_brief
 from services.operator_conversations import _row
 from services.operator_telegram_voice import transaction
 
@@ -20,12 +21,22 @@ async def receive(update,context,host):
         await asyncio.to_thread(transaction,check)
         file=await context.bot.get_file(media.file_id)
         content=bytes(await file.download_as_bytearray())
+        caption = update.message.caption or ''
+        group_key = getattr(update.message, 'media_group_id', None)
+        mime_type = getattr(media, 'mime_type', None) or 'image/jpeg'
+        name = getattr(media, 'file_name', None) or 'photo.jpg'
+        if not update.message.document:
+            name = {'image/png': 'photo.png', 'image/webp': 'photo.webp'}.get(mime_type, 'photo.jpg')
         def save(c):
-            item=operator_attachments.receive(c,business_id=business['business_id'],user_id=business['user_id'],channel='telegram',
-                content=content,name=getattr(media,'file_name',None) or 'photo.jpg',mime_type=getattr(media,'mime_type',None) or 'image/jpeg',
-                request_key=f'tg:{update.effective_chat.id}:{update.message.message_id}')
-            c.execute('SELECT input_context_json FROM operatorconversations WHERE id=%s FOR UPDATE',(item['conversation_id'],))
-            selected=_row(c,c.fetchone()).get('input_context_json') or {}
+            item=operator_attachments.receive(c,business_id=business['business_id'],user_id=business['user_id'],channel=owner_bot_channel(),
+                content=content,name=name,mime_type=mime_type,
+                request_key=f'{owner_bot_channel()}:{update.effective_chat.id}:{update.message.message_id}')
+            c.execute('SELECT input_context_json,pending_context FROM operatorconversations WHERE id=%s FOR UPDATE',(item['conversation_id'],))
+            conversation = _row(c,c.fetchone())
+            selected=conversation.get('input_context_json') or {}
+            financial = (conversation.get('pending_context') or {}).get('capability') == 'finance.daily.input'
+            if not financial and operator_photo_brief.register(c,item,caption=caption,group_key=group_key):
+                return {**item, 'photo_brief': True}
             ids=list(dict.fromkeys((selected.get('attachment_ids') or [])+[item['id']]))
             if len(ids)>10:raise ValueError('Завершите текущий материал: допускается до 10 файлов.')
             selected['attachment_ids']=ids
@@ -34,9 +45,27 @@ async def receive(update,context,host):
                 notes[item['id']]=update.message.caption[:4000]
                 selected['attachment_notes']=notes
             c.execute('UPDATE operatorconversations SET input_context_json=%s::jsonb WHERE id=%s',(json.dumps(selected),item['conversation_id']))
-            return item
+            return {**item, 'finance_input': financial}
         item=await asyncio.to_thread(transaction,save)
-        await update.message.reply_text('Файл «'+item['original_name']+'» сохранён в LocalOS. Напишите или наговорите, что с ним сделать: пост, расписание или финансовые итоги.')
+        if (caption and not group_key) or item.get('finance_input'):
+            # Same approved text/voice route; uploading a photo never applies facts.
+            command = update.message.caption or 'Разбери финансовые итоги на фото за указанный день. Покажи показатели для проверки перед сохранением.'
+            business_context = {**business, 'operator_payload': {**owner_bot_request_payload({
+                'request_id': f"photo-caption:{owner_bot_channel()}:{update.effective_chat.id}:{update.message.message_id}",
+                }), 'conversation_id': item['conversation_id']}}
+            if item.get('photo_brief'):
+                business_context['operator_payload']['photo_brief_ids'] = [item['id']]
+            prepared = await asyncio.to_thread(host.build_operator_chat_payload, business_context, command)
+            owner_context = current_owner_bot.get()
+            if owner_context is not None:
+                owner_context.request_audit_ids.append(prepared['result'].get('request_audit_id'))
+            await update.message.reply_text(prepared['text'], reply_markup=host._build_operator_result_markup(prepared['result']))
+            if owner_context is None and prepared['result'].get('request_audit_id'):
+                from services.operator_request_history import mark_delivery
+                await asyncio.to_thread(mark_delivery, prepared['result']['request_audit_id'], 'delivered')
+        else:
+            await update.message.reply_text(operator_photo_brief.NOTICE if item.get('photo_brief') else
+                'Файл сохранён в LocalOS. Напишите или наговорите, что с ним сделать: пост, расписание или финансовые итоги.')
     except (ValueError,PermissionError):
         await update.message.reply_text('Не удалось принять файл. Проверьте доступ, формат и размер; поддерживаются фото, PDF, XLSX и CSV до 10 МБ.')
     return True

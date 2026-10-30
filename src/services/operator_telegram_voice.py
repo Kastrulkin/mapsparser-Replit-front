@@ -3,7 +3,7 @@ import asyncio
 import json
 import logging
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
+from services.owner_bot_ui import InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
 from database_manager import DatabaseManager
 from services.operator_audio import (MAX_BYTES, create_transcription, create_speech, load_asset,
     private_path, authorize_actor, enabled)
@@ -39,8 +39,10 @@ async def receive_voice(update, context, host):
     if host.user_states.get(telegram_id,{}).get('state','idle') not in {'','idle'}:
         await update.message.reply_text('Сейчас ожидается ответ в открытой форме. Завершите её или нажмите /cancel, затем отправьте голосовое.')
         return
-    voice=update.message.voice
-    if voice.duration>120 or (voice.file_size or 0)>MAX_BYTES:
+    voice=update.message.voice or getattr(update.message,'audio',None) or getattr(update.message,'document',None)
+    if not voice:
+        return
+    if (getattr(voice,'duration',0) or 0)>120 or (voice.file_size or 0)>MAX_BYTES:
         await update.message.reply_text('Запись должна быть не длиннее 2 минут и не больше 10 МБ.')
         return
     try:
@@ -49,12 +51,16 @@ async def receive_voice(update, context, host):
             await update.message.reply_text('Голосовой ввод пока недоступен для этого бизнеса. Напишите команду текстом.')
             return
         from services.operator_async_jobs import create_operator_async_job
+        from services.operator_photo_brief import voice_snapshot
+        photo_ids = await asyncio.to_thread(transaction, lambda cursor:
+            voice_snapshot(cursor, business['business_id'], business['user_id'], 'telegram'))
         receipt = await asyncio.to_thread(transaction, lambda cursor: create_operator_async_job(cursor,
             user_id=business['user_id'], business_id=business['business_id'], action_id=None,
             kind='voice_receive', idempotency_key=f'tg:{update.effective_chat.id}:{update.message.message_id}',
             stage='Голосовое получено', payload={'file_id': voice.file_id, 'metadata': {
                 'chat_id': update.effective_chat.id, 'business_name': business['business_name'],
-                'delivery': 'pending', 'auto_submit': True, 'durable_execution': True}}))
+                'delivery': 'pending', 'auto_submit': True, 'durable_execution': True,
+                'photo_brief_ids': photo_ids}}))
         def acknowledged(cursor):
             cursor.execute('SELECT payload_json FROM operator_async_jobs WHERE id=%s',(receipt['id'],))
             return ((_row(cursor,cursor.fetchone()).get('payload_json') or {}).get('metadata') or {}).get('status_message_id')
@@ -213,6 +219,8 @@ async def delivery_loop(application, host):
                     WHERE asset.channel='telegram' AND asset.metadata_json->>'delivery'='pending'
                     AND asset.expires_at>NOW() AND job.status IN ('completed','failed','cancelled') ORDER BY asset.created_at, asset.id LIMIT 10""")
                 return [_row(cursor,row) for row in cursor.fetchall()]
+            from services.outreach_chat_results import deliver
+            await deliver(application, host, transaction)
             await deliver_voice_progress(application)
             await deliver_plan_previews(application,host)
             assets=await asyncio.to_thread(transaction,pending)

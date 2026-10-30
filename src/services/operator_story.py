@@ -37,7 +37,11 @@ def save(cursor,business,user,args,conversation_id,request_id):
         if not existing or existing['status'] not in operator_editorial.EDITABLE:
             raise ValueError('Выберите неопубликованный черновик.')
         if str(existing['updated_at'])!=args.get('version'):
-            raise ValueError('Черновик изменился. Прочитайте актуальную версию.')
+            if len(str(args.get('version') or ''))!=64:
+                raise ValueError('Черновик изменился. Прочитайте актуальную версию.')
+            canonical=operator_editorial._items(cursor,business,plan_id,item_id=item_id)
+            if not canonical or operator_editorial._version(canonical[0])!=args.get('version'):
+                raise ValueError('Черновик изменился. Прочитайте актуальную версию.')
         cursor.execute("SELECT status FROM social_posts WHERE content_plan_item_id=%s AND business_id=%s FOR UPDATE",(item_id,business))
         if any(_row(cursor,row)['status'] in {'publishing','published'} for row in cursor.fetchall()):raise ValueError('Материал уже публикуется или опубликован. Создайте отдельный черновик.')
     raw_date=args.get('scheduled_for') or existing.get('scheduled_for')
@@ -50,11 +54,22 @@ def save(cursor,business,user,args,conversation_id,request_id):
         attachments=[]
     if not isinstance(attachments,list) or len(attachments)>10:
         raise ValueError('Выберите до 10 фотографий.')
-    photos=[]
+    selected_attachments=[]
     for identifier in attachments:
         attachment=operator_attachments.load(cursor,business,user,identifier,conversation_id)
-        if attachment['purpose']!='content' or not attachment.get('photo_asset_id'):
+        if attachment['purpose']=='unknown' and attachment.get('mime_type') in {'image/jpeg','image/png','image/webp'}:
+            selected_attachments.append((identifier,attachment))
+        elif attachment['purpose']=='content' and attachment.get('photo_asset_id'):
+            selected_attachments.append((identifier,attachment))
+        else:
             raise ValueError('Сначала укажите, что выбранное фото предназначено для поста.')
+    photos=[]
+    for identifier,attachment in selected_attachments:
+        # Saving an explicitly selected photo in a post establishes its purpose.
+        # The content classification stores media only; it never runs OCR/vision.
+        if attachment['purpose']=='unknown':
+            operator_attachments.classify(cursor,business,user,identifier,'content',conversation_id)
+            attachment=operator_attachments.load(cursor,business,user,identifier,conversation_id)
         photos.append(attachment['photo_asset_id'])
     metadata=dict(existing.get('metadata_json') or {})
     if existing:
@@ -92,11 +107,40 @@ def save(cursor,business,user,args,conversation_id,request_id):
     cursor.execute('UPDATE contentplans SET updated_at=clock_timestamp() WHERE id=%s',(plan_id,))
     cursor.execute('UPDATE operatorconversations SET input_context_json=%s::jsonb WHERE id=%s AND user_id=%s AND business_id=%s',
         (json.dumps({'selected_object':{'type':'content_item','id':identifier}}),conversation_id,user,business))
+    if args.get('copy_text_to_channels') is True:
+        from services.social_post_service import _upsert_social_post, _existing_social_posts_for_item, CONTENT_PUBLICATION_PLATFORMS
+        channels=metadata.get('selected_channels') or []
+        if not channels or any(channel not in CONTENT_PUBLICATION_PLATFORMS for channel in channels):
+            raise ValueError('Выберите поддерживаемые площадки перед подготовкой комплекта.')
+        current=_existing_social_posts_for_item(cursor,identifier)
+        item={'id':identifier,'plan_id':plan_id,'business_id':business,'scheduled_for':scheduled,
+              'draft_text':text,'metadata_json':metadata}
+        for channel in channels:
+            # Existing channel copy is never replaced by this no-generation path.
+            if channel not in current:
+                _upsert_social_post(cursor,user,item,channel,text,
+                    {'text':text,'metadata':{'manually_edited':True,'variant_source':'user_supplied'}})
+        if photos:
+            cursor.execute("""UPDATE social_posts SET media_json=%s::jsonb,updated_at=NOW()
+                WHERE business_id=%s AND content_plan_item_id=%s AND status='needs_review'""",
+                (json.dumps([{'photo_asset_id':photo_id} for photo_id in photos]),business,identifier))
     return {'status':'completed','capability':'content.item.edit','chat_response':'Черновик сохранён в контент-плане. Проверьте текст, фотографии и выбранные каналы перед публикацией.',
-            'item_id':identifier,'result_ref':{'entity_id':identifier,'href':'/dashboard/content','label':'Открыть контент-план'},'draft_text':text}
+            'item_id':identifier,'result_ref':{'entity_id':identifier,'href':'/dashboard/content?business_id='+business+'&item_id='+identifier,'label':'Открыть контент-план'},'draft_text':text}
 
 
-def tools(cursor,business,user,conversation_id,request_id):
+def tools(cursor,business,user,conversation_id,request_id,photo_brief_ids=None):
+    def save_selected(arguments):
+        if photo_brief_ids is not None:
+            if arguments.get('item_id'):
+                raise ValueError('Для нового фото создаётся отдельный черновик.')
+            arguments = {**arguments, 'attachment_ids': list(photo_brief_ids), 'copy_text_to_channels': False}
+        result = save(cursor,business,user,arguments,conversation_id,request_id)
+        if photo_brief_ids is not None:
+            text = result['draft_text']
+            result['chat_response'] = ('Черновик поста:\n\n' + text[:2800]
+                + ('\n\nПолный текст сохранён в контент-плане.' if len(text) > 2800 else '')
+                + '\n\nФото прикреплено. Проверьте текст и площадки в контент-плане. Ничего не опубликовано.')
+        return result
     text={'type':'string'}
     return [
         {'name':'content.story_context','title':'Материалы контент-плана','capability':'content.item.edit','risk_class':'read_only',
@@ -104,6 +148,6 @@ def tools(cursor,business,user,conversation_id,request_id):
          'input_schema':{'type':'object','properties':{'plan_id':text,'item_id':text}},'execute':lambda a:context(cursor,business,user,a)},
         {'name':'content.save_story','title':'Сохранить материал в контент-план','capability':'content.item.edit','risk_class':'internal_draft_write',
          'description':'По явной просьбе создать или исправить пост сохрани текст в существующем плане. До этого story_context. Для правки нужны item_id и version=updated_at; дату сохраняй, если не просили изменить. Не выдумывай результаты процедур, не включай имена клиентов, внутреннюю выручку и расходы. Каналы сохраняет сервер. Фото только из явно выбранных attachment_ids назначения content. Это не публикация. Если канал не выбран, пользователь выберет его в контент-плане.',
-         'input_schema':{'type':'object','required':['plan_id','theme','draft_text'],'properties':{'plan_id':text,'item_id':text,'version':text,'theme':text,'draft_text':text,'scheduled_for':text,'attachment_ids':{'type':'array','items':text}}},
-         'execute':lambda a:save(cursor,business,user,a,conversation_id,request_id),'deterministic_response':True},
+         'input_schema':{'type':'object','required':['plan_id','theme','draft_text'],'properties':{'plan_id':text,'item_id':text,'version':text,'theme':text,'draft_text':text,'scheduled_for':text,'attachment_ids':{'type':'array','items':text},'copy_text_to_channels':{'type':'boolean','description':'Только по явной просьбе использовать готовый текст дословно для выбранных площадок без генерации. Создаёт недостающие версии на проверку, не утверждает и не публикует.'}}},
+         'execute':save_selected,'deterministic_response':True},
     ]

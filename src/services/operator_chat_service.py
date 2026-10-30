@@ -54,7 +54,7 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
     payload = payload or {}
     if not isinstance(message, str) or not message.strip() or len(message) > 10000 or len(str(payload.get("request_id") or "")) > 200:
         raise ValueError("Проверьте длину команды и идентификатор запроса")
-    if channel not in {"web", "telegram", "telegram_mini_app"}:
+    if channel not in {"web", "telegram", "telegram_mini_app", "max_bot", "max_mini_app"}:
         raise ValueError("Неизвестный канал")
     # Lock before resolving the active conversation, including first-message races.
     cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
@@ -78,11 +78,15 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
         digest = hashlib.sha256((digest + str(payload["input_context"])).encode()).hexdigest()
     if payload.get("work_entry_id") or payload.get("work_action_id"):
         digest=hashlib.sha256((digest+json.dumps([payload.get("work_entry_id"),payload.get("work_action_id")])).encode()).hexdigest()
+    if payload.get("work_ref"):
+        digest = hashlib.sha256((digest + str(payload["work_ref"])).encode()).hexdigest()
+    if payload.get("journey_action_id"):
+        digest = hashlib.sha256((digest + str(payload["journey_action_id"])).encode()).hexdigest()
     if payload.get("work_change_hash"):
         digest = hashlib.sha256((digest + str(payload["work_change_hash"])).encode()).hexdigest()
-    if any(key in payload for key in ('attachment_ids','selected_object','clear_input_context')):
+    if any(key in payload for key in ('attachment_ids','selected_object','clear_input_context','search_task_id','photo_brief_ids')):
         digest = hashlib.sha256((digest + json.dumps({key:payload.get(key) for key in
-            ('attachment_ids','selected_object','clear_input_context')},sort_keys=True,ensure_ascii=False)).encode()).hexdigest()
+            ('attachment_ids','selected_object','clear_input_context','search_task_id','photo_brief_ids')},sort_keys=True,ensure_ascii=False)).encode()).hexdigest()
     if request_id:
         cursor.execute("SELECT * FROM operator_chat_requests WHERE user_id=%s AND business_id=%s AND channel=%s AND request_id=%s FOR UPDATE",
                        (user_id, business_id, channel, request_id))
@@ -91,6 +95,12 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
             if previous.get("input_hash") != digest:
                 raise ValueError("Идентификатор запроса уже использован для другого текста")
             return {**previous.get("result_json", {}), "idempotent": True}
+    from services.operator_work_journal import literal_note, opens_journal
+    journal_mode=payload.get('input_context')=='work_journal' or literal_note(message) is not None or opens_journal(message)
+    if journal_mode:
+        payload=dict(payload)
+        payload['clear_input_context']=True
+        payload.pop('selected_object',None)
     transcript = payload.get("transcription_id")
     from services import operator_workday, operator_workday_router
     if operator_workday.enabled(business_id):
@@ -100,14 +110,40 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
     if transcript:
         from services.operator_audio import consume_transcription
         consume_transcription(cursor, transcript, user_id, business_id, conversation_id, message)
+    if operator_workday.enabled(business_id):
+        from services.operator_photo_brief import route_context
+        payload['_verified_input_context'] = route_context(cursor, business_id, user_id, conversation_id,
+            payload['_verified_input_context'], message, transcript, payload.get('photo_brief_ids'))
     user_message_id = append_operator_message(cursor, conversation_id=conversation_id, business_id=business_id,
                             user_id=user_id, role="user", content=message,
                             result={"input_type": "voice" if transcript else "text", "transcription_id": transcript, 'input_origin': input_origin})
+    pending_context = conversation_pending_context(conversation)
+    if journal_mode:pending_context={}
+    if payload.get('clear_input_context') and (pending_context.get('selected_item') or pending_context.get('selected_partner')):
+        pending_context = {}
+    if payload.get('selected_object') is not None:
+        selected = payload['selected_object']
+        if not isinstance(selected, dict):
+            raise ValueError('Проверьте выбранный объект.')
+        if selected.get('type') == 'content_item':
+            from services.operator_work_handoff import content_selection
+            selection = content_selection(cursor, user_id=user_id, business_id=business_id, item_id=selected.get('id'), expected_updated_at=selected.get('updated_at'))
+            if selected.get('version') and selected['version'] != selection['version']:
+                raise ValueError('Пост изменился. Откройте актуальную версию.')
+            pending_context = {'capability': 'content.editorial.selected', 'selected_item': selection}
+        elif selected.get('type') == 'partner':
+            from services.operator_partner_work import partner_selection
+            selection = partner_selection(cursor, user_id=user_id, business_id=business_id, item_id=selected.get('id'), expected_updated_at=selected.get('updated_at'))
+            if selected.get('version') and selected['version'] != selection['version']:
+                raise ValueError('Карточка партнёра изменилась. Откройте её заново.')
+            pending_context = {'capability': 'partnerships.selected', 'selected_partner': selection}
+        else:
+            raise ValueError('Этот тип обсуждения не поддерживается.')
     request_token = current_request_key.set(f"{conversation_id}:{request_id or user_message_id}")
     try:
         result, pending = router(
             cursor, business_id=business_id, user_id=user_id, channel=channel, message=message,
-            conversation_id=conversation_id, pending_context=conversation_pending_context(conversation),
+            conversation_id=conversation_id, pending_context=pending_context,
             conversation_history=list_operator_messages(cursor, conversation_id=conversation_id, business_id=business_id, limit=12),
             pending_approvals=list_pending_operator_actions(cursor, conversation_id=conversation_id, business_id=business_id, user_id=user_id),
             actor_context=actor_context, subscription_access=subscription_access,
@@ -117,7 +153,22 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
     finally:
         current_request_key.reset(request_token)
     from services.operator_followups import remember_selection
-    remember_selection(cursor, business_id, result)
+    remember_selection(cursor, business_id, result, history=list_operator_messages(cursor, conversation_id=conversation_id, business_id=business_id, limit=12))
+    selected_result = result.get('selected_item') or pending.get('selected_item') or pending_context.get('selected_item')
+    if selected_result and selected_result.get('item_id'):
+        from services.operator_work_handoff import mobile_work_url
+        platform = 'max' if channel in {'max_bot', 'max_mini_app'} else 'telegram'
+        result['work_return_url'] = mobile_work_url(business_id, selected_result['item_id'], platform)
+        result['selected_item'] = selected_result
+        if result.get('status') != 'cancelled':
+            pending = {**pending, 'capability': pending.get('capability') or 'content.editorial.selected', 'selected_item': selected_result}
+    partner = result.get('selected_partner') or pending.get('selected_partner') or pending_context.get('selected_partner')
+    if partner and partner.get('item_id') and result.get('status') != 'cancelled':
+        from services.operator_work_handoff import mobile_work_url
+        platform = 'max' if channel in {'max_bot', 'max_mini_app'} else 'telegram'
+        result['work_return_url'] = mobile_work_url(business_id, partner['item_id'], platform, 'partnerships', 'partner')
+        result['selected_partner'] = partner
+        pending = {**pending, 'selected_partner': partner}
     result["conversation_id"] = conversation_id
     result['user_message_id'] = user_message_id
     approval = result.get("approval") or {}
