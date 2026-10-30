@@ -73,7 +73,7 @@ def _legacy_workflow_context(workflow_raw) -> dict:
         "preview": text[:1000],
     }
 
-def get_agent_config(business_id: str) -> dict:
+def get_agent_config(business_id: str, selected_agent_id=None) -> dict:
     """Получить конфигурацию агента для бизнеса"""
     db = DatabaseManager()
     try:
@@ -107,6 +107,22 @@ def get_agent_config(business_id: str) -> dict:
         except Exception:
             business_restrictions = {}
         
+        from services.client_agent_settings import saved_client_settings
+        cursor.execute("SELECT to_jsonb(b)->>'ai_agents_config' config FROM businesses b WHERE id = %s", (business_id,))
+        settings_row = cursor.fetchone()
+        if selected_agent_id:
+            cursor.execute('SELECT type FROM aiagents WHERE id = %s', (selected_agent_id,))
+            selected_row = cursor.fetchone()
+            agent_type = _row_get(selected_row, 'type', 0) or agent_type
+        saved = saved_client_settings(_row_get(settings_row, 'config', 0), agent_type, selected_agent_id)
+        if saved:
+            agent_type = saved['agent_type']
+            agent_id = saved['agent_id']
+            tone = saved['tone']
+            language = saved['language']
+            business_restrictions = saved['restrictions']
+        if selected_agent_id:
+            agent_id = selected_agent_id
         agents_active_predicate = _active_predicate(cursor, "aiagents", "is_active")
 
         # Если указан конкретный агент, получаем его конфигурацию
@@ -131,6 +147,7 @@ def get_agent_config(business_id: str) -> dict:
                     'identity': agent_row[2] or '',
                     'speech_style': agent_row[3] or '',
                     'restrictions': merged_restrictions,
+                    'agent_type': agent_type,
                     'tone': tone,
                     'language': language
                 }
@@ -158,7 +175,8 @@ def get_agent_config(business_id: str) -> dict:
                 'identity': agent_row[2] or '',
                 'speech_style': agent_row[3] or '',
                 'restrictions': merged_restrictions,
-                'tone': tone,
+                'agent_type': agent_type,
+                    'tone': tone,
                 'language': language
             }
         
@@ -170,7 +188,8 @@ def get_agent_config(business_id: str) -> dict:
             'identity': '',
             'speech_style': '',
             'restrictions': business_restrictions,
-            'tone': tone,
+            'agent_type': agent_type,
+                    'tone': tone,
             'language': language
         }
     finally:
@@ -422,6 +441,8 @@ def build_prompt(business_info: dict, services: list, current_state: str, messag
         'zh': 'Chinese'
     }
     language_name = language_names.get(language, 'Russian')
+    tone = agent_config.get('tone', 'professional')
+    prompt += f'Язык ответа: {language_name}. Тон общения: {tone}.\n\n'
     
     if speech_style:
         # Заменяем упоминания языка в speech_style на выбранный язык
@@ -552,7 +573,7 @@ def process_message(business_id: str, client_phone: str, client_name: str, messa
         prompt = build_prompt(business_info, services, current_state, message, conversation_history, agent_config)
         
         # Определяем тип задачи для выбора модели GigaChat
-        agent_type = business_info.get('ai_agent_type', 'booking')
+        agent_type = agent_config.get('agent_type') or business_info.get('ai_agent_type', 'booking')
         if agent_type == 'marketing':
             task_type = 'ai_agent_marketing'
         elif agent_type == 'booking':

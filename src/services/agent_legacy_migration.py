@@ -151,6 +151,12 @@ def business_agent_enabled_for_channel(cursor, business_id: str) -> dict[str, An
             "legacy_field_status": "deprecated_not_runtime_truth",
         }
     settings = _load_business_ai_settings(cursor, business_id)
+    raw_config = settings.get('ai_agents_config')
+    if raw_config:
+        from services.client_agent_settings import saved_client_settings
+        enabled = saved_client_settings(raw_config) is not None
+        return {'enabled': enabled, 'source': 'businesses.ai_agents_config',
+                'legacy_field_status': 'deprecated_migration_source'}
     legacy_enabled = _truthy(settings.get("ai_agent_enabled"))
     return {
         "enabled": legacy_enabled,

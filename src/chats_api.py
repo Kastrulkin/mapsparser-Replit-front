@@ -1,3 +1,4 @@
+from services.gigachat_client import GigaChatProviderError
 #!/usr/bin/env python3
 """
 API endpoints для работы с чатами ИИ агента
@@ -741,17 +742,9 @@ def test_business_ai_agent(business_id, agent_id):
         if not dry_run:
             return jsonify({"error": "Песочница работает только в dry-run режиме (без реальной отправки)"}), 400
         
-        bridge_result = _call_openclaw_sandbox_bridge(
-            business_id=str(business_id or ""),
-            agent_id=str(agent_id or ""),
-            message=message,
-            conversation_history=conversation_history,
-            user_data=user_data,
-        )
-        if bridge_result and bridge_result.get("success") and bridge_result.get("response"):
-            db.close()
-            return jsonify(bridge_result)
-
+        from ai_agent import get_agent_config
+        effective_config = get_agent_config(business_id, selected_agent_id=agent_id)
+        bridge_result = None
         # Импортируем функции для работы с агентом
         from ai_agent import build_prompt, get_business_info, get_business_services
         from services.gigachat_client import GigaChatClient
@@ -791,6 +784,7 @@ def test_business_ai_agent(business_id, agent_id):
             'variables': json.loads(_row_get(agent_row, 'variables_json', 8)) if _row_get(agent_row, 'variables_json', 8) else {}
         }
         
+        agent_config.update(effective_config)
         default_state = 'greeting'
         
         # Строим промпт
@@ -834,6 +828,10 @@ def test_business_ai_agent(business_id, agent_id):
             "bridge_error": bridge_result.get("error") if bridge_result and bridge_result.get("error") else None,
         })
         
+    except GigaChatProviderError as e:
+        if 'db' in locals():
+            db.close()
+        return jsonify({'success': False, 'error': str(e), 'code': e.code, 'dry_run': True}), e.status_code
     except Exception as e:
         import traceback
         traceback.print_exc()
