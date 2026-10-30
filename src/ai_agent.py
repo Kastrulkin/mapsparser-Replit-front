@@ -409,7 +409,7 @@ def update_conversation_state(conversation_id: str, new_state: str):
     finally:
         db.close()
 
-def build_prompt(business_info: dict, services: list, current_state: str, message: str, conversation_history: list, agent_config: dict) -> str:
+def build_prompt(business_info: dict, services: list, current_state: str, message: str, conversation_history: list, agent_config: dict, dry_run: bool = False) -> str:
     """Построить промпт для legacy chat persona без исполнения AIAgents.workflow."""
     
     # Строим промпт
@@ -474,43 +474,39 @@ def build_prompt(business_info: dict, services: list, current_state: str, messag
         prompt += f"- Email: {business_info.get('email')}\n"
     prompt += "\n"
     
-    # Услуги
-    if services:
-        prompt += f"##### **Доступные услуги:**\n"
-        for service in services:
-            price_str = f"${service['price']}" if service['price'] else "Цена по запросу"
-            duration_str = f"{service['duration']} мин" if service['duration'] else ""
-            prompt += f"- {service['name']}: {price_str} {duration_str}\n"
-            if service.get('description'):
-                prompt += f"  Описание: {service['description']}\n"
-        prompt += "\n"
-    
+    from services.client_service_context import service_context
+    prompt += "##### **Услуги по вопросу клиента:**\n"
+    prompt += service_context(services, message, conversation_history) + "\n"
+
     # Ограничения
     restrictions = agent_config.get('restrictions', {})
     if restrictions.get('text'):
         prompt += f"##### **Ограничения:**\n{restrictions['text']}\n\n"
     
-    # Доступные tools (всегда добавляем список доступных tools)
-    prompt += f"##### **Доступные инструменты (tools):**\n"
-    prompt += "- notify_operator: Уведомить оператора о необходимости его участия. Используй, когда нужна помощь человека.\n"
-    prompt += "- create_booking: Создать бронирование/заказ. Параметры: service_id, service_name, booking_date, booking_time, notes.\n"
-    prompt += "- send_message: Отправить сообщение клиенту через WhatsApp/Telegram. Параметры: message, channel (whatsapp/telegram).\n"
-    prompt += "- get_client_info: Получить информацию о клиенте (история, бронирования).\n"
-    prompt += "- get_services: Получить список услуг бизнеса.\n"
-    prompt += "- check_availability: Проверить доступное время для записи. Параметры: date (YYYY-MM-DD), service_duration (минуты).\n"
-    prompt += "\n"
-    prompt += "**Важно:** Если тебе нужно использовать tool, укажи это в ответе в формате:\n"
-    prompt += "```json\n"
-    prompt += "{\"tool\": \"tool_name\", \"params\": {\"param1\": \"value1\", \"param2\": \"value2\"}}\n"
-    prompt += "```\n"
-    prompt += "После использования tool, продолжай общение с клиентом.\n\n"
+    if dry_run:
+        prompt += "Это тестовый диалог: инструменты не выполняются. Отвечай клиенту обычным текстом, без JSON и вызовов функций. Не утверждай, что запись, отправка или вызов сотрудника уже выполнены. Если данных недостаточно, задай уточняющий вопрос.\n\n"
+    else:
+        # Доступные tools (всегда добавляем список доступных tools)
+        prompt += f"##### **Доступные инструменты (tools):**\n"
+        prompt += "- notify_operator: Уведомить оператора о необходимости его участия. Используй, когда нужна помощь человека.\n"
+        prompt += "- create_booking: Создать бронирование/заказ. Параметры: service_id, service_name, booking_date, booking_time, notes.\n"
+        prompt += "- send_message: Отправить сообщение клиенту через WhatsApp/Telegram. Параметры: message, channel (whatsapp/telegram).\n"
+        prompt += "- get_client_info: Получить информацию о клиенте (история, бронирования).\n"
+        prompt += "- get_services: Получить список услуг бизнеса.\n"
+        prompt += "- check_availability: Проверить доступное время для записи. Параметры: date (YYYY-MM-DD), service_duration (минуты).\n"
+        prompt += "\n"
+        prompt += "**Важно:** Если тебе нужно использовать tool, укажи это в ответе в формате:\n"
+        prompt += "```json\n"
+        prompt += "{\"tool\": \"tool_name\", \"params\": {\"param1\": \"value1\", \"param2\": \"value2\"}}\n"
+        prompt += "```\n"
+        prompt += "После использования tool, продолжай общение с клиентом.\n\n"
     
     # История разговора
     prompt += f"##### **История разговора:**\n"
     if conversation_history:
         for msg in conversation_history[-5:]:  # Последние 5 сообщений
             sender = msg.get('sender', 'unknown')
-            content = msg.get('content', '')
+            content = str(msg.get('content', ''))[:700]
             prompt += f"- {sender}: {content}\n"
     else:
         prompt += "Это начало разговора.\n"
@@ -524,6 +520,8 @@ def build_prompt(business_info: dict, services: list, current_state: str, messag
     prompt += "Следуй стилю речи, указанному выше.\n"
     prompt += "Если нужно использовать tool, укажи это в формате JSON, как описано выше.\n"
     
+    if len(prompt.encode('utf-8')) > 28000:
+        raise ValueError('Контекст диалога слишком велик. Сократите сообщение или инструкции агента.')
     return prompt
 
 def process_message(business_id: str, client_phone: str, client_name: str, message: str) -> dict:
@@ -635,15 +633,19 @@ def process_message(business_id: str, client_phone: str, client_name: str, messa
                     
                     print(f"🔧 Вызов функции: {function_name} с параметрами: {function_args}")
                     
-                    # Выполняем функцию
-                    tool_result = execute_tool(
-                        tool_name=function_name,
-                        business_id=business_id,
-                        client_phone=client_phone,
-                        client_name=client_name,
-                        conversation_id=conversation_id,
-                        **function_args
-                    )
+                    if function_name == 'get_services':
+                        from services.client_service_context import service_context
+                        tool_result = {'success': True, 'service_context': service_context(services, message, conversation_history), 'partial_catalog': True}
+                    else:
+                        # Выполняем функцию
+                        tool_result = execute_tool(
+                            tool_name=function_name,
+                            business_id=business_id,
+                            client_phone=client_phone,
+                            client_name=client_name,
+                            conversation_id=conversation_id,
+                            **function_args
+                        )
                     
                     tools_executed.append({
                         'tool': function_name,

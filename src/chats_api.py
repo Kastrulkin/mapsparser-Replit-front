@@ -794,7 +794,8 @@ def test_business_ai_agent(business_id, agent_id):
             default_state,
             message,
             conversation_history,
-            agent_config
+            agent_config,
+            dry_run=True
         )
         
         # Генерируем ответ через GigaChat
@@ -806,7 +807,7 @@ def test_business_ai_agent(business_id, agent_id):
         response_text, usage_info = client.analyze_text(
             prompt=prompt,
             task_type=task_type,
-            functions=functions,
+            functions=None,
             business_id=business_id,
             user_id=user_data['user_id']
         )
