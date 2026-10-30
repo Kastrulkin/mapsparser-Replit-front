@@ -1,3 +1,4 @@
+import { ClientDialogueGraph } from './ClientDialogueGraph';
 import { ClientHandoffInbox } from './ClientHandoffInbox';
 import { AIAgentSettings } from '@/components/AIAgentSettings';
 import { Button } from '@/components/ui/button';
@@ -29,8 +30,9 @@ export const ClientCommunicationWorkspace = () => {
         { value: 'test', label: 'Проверка ответов' },
         { value: 'conversations', label: 'Диалоги' },
         { value: 'handoffs', label: 'Сотруднику' },
+        { value: 'states', label: 'Состояния' },
       ].map(item => <Button key={item.value} variant={view === item.value ? 'default' : 'outline'} aria-pressed={view === item.value} onClick={() => selectView(item.value)}>{item.label}</Button>)}
     </nav>
-    {view === 'handoffs' ? <ClientHandoffInbox key={currentBusinessId} businessId={currentBusinessId} /> : view === 'test' ? <EmployeeChatTest key={currentBusinessId} /> : view === 'conversations' ? <ChatsPage key={currentBusinessId} /> : <AIAgentSettings key={currentBusinessId} businessId={currentBusinessId} business={currentBusiness} onSaved={(config) => updateBusiness(currentBusinessId, { ai_agents_config: config })} />}
+    {view === 'states' ? <ClientDialogueGraph key={currentBusinessId} businessId={currentBusinessId}/> : view === 'handoffs' ? <ClientHandoffInbox key={currentBusinessId} businessId={currentBusinessId} /> : view === 'test' ? <EmployeeChatTest key={currentBusinessId} /> : view === 'conversations' ? <ChatsPage key={currentBusinessId} /> : <AIAgentSettings key={currentBusinessId} businessId={currentBusinessId} business={currentBusiness} onSaved={(config) => updateBusiness(currentBusinessId, { ai_agents_config: config })} />}
   </section>;
 };

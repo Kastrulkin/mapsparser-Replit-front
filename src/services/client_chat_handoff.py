@@ -3,6 +3,7 @@ import json
 import uuid
 from database_manager import DatabaseManager
 from services.business_permissions import require_permission
+from services.client_dialogue_state import STAFF_TRANSITIONS
 
 
 def _event(cursor, conversation_id, kind, payload):
@@ -19,7 +20,7 @@ def enqueue(cursor, business_id, conversation_id, reason):
     if row['current_state'] in {'waiting_for_staff','human_active'}:
         return row['current_state']
     cursor.execute("UPDATE aiagentconversations SET current_state='waiting_for_staff',is_agent_paused=1,last_message_at=NOW(),updated_at=NOW() WHERE id=%s",(conversation_id,))
-    _event(cursor,conversation_id,'handoff_requested',{'reason':reason[:500],'delivery':'localos_inbox'})
+    _event(cursor,conversation_id,'handoff_requested',{'reason':reason[:500],'delivery':'localos_inbox','from':row['current_state'],'to':'waiting_for_staff'})
     return 'waiting_for_staff'
 
 
@@ -47,8 +48,8 @@ def operate(cursor, business_id, conversation_id, user, action):
             existing=cursor.fetchone()
             if existing and json.loads(existing['content']).get('actor')==user['user_id']:
                 return {'state':current,'is_agent_paused':1,'conversation_id':conversation_id}
-        if current!='waiting_for_staff':raise ValueError('Диалог уже принят или не ожидает сотрудника.')
-        state='human_active'
+        if current!=STAFF_TRANSITIONS['accept'][0]:raise ValueError('Диалог уже принят или не ожидает сотрудника.')
+        state=STAFF_TRANSITIONS['accept'][1]
     elif action in {'close','reply'}:
         if current!='human_active':raise ValueError('Сначала примите диалог.')
         cursor.execute("SELECT content FROM aiagentmessages WHERE conversation_id=%s AND message_type='handoff_accept' ORDER BY created_at DESC LIMIT 1",(conversation_id,))
@@ -56,7 +57,7 @@ def operate(cursor, business_id, conversation_id, user, action):
         actor=json.loads(accepted['content']).get('actor') if accepted else None
         if actor!=user['user_id'] and not user.get('is_superadmin'):
             raise PermissionError('Диалог принят другим сотрудником.')
-        state='closing' if action=='close' else 'human_active'
+        state=STAFF_TRANSITIONS['close'][1] if action=='close' else 'human_active'
     else:raise ValueError('Неизвестное действие.')
     cursor.execute('UPDATE aiagentconversations SET current_state=%s,is_agent_paused=1,updated_at=NOW() WHERE id=%s',(state,conversation_id))
     _event(cursor,conversation_id,'handoff_'+action,{'actor':user['user_id'],'from':current,'to':state})

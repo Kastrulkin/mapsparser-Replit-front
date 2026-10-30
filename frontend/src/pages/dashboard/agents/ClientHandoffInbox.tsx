@@ -1,3 +1,4 @@
+import { ClientDialogueGraph } from './ClientDialogueGraph';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -73,9 +74,10 @@ export function ClientHandoffInbox({businessId}:{businessId:string}) {
     <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
       <div className="space-y-2">{items.length===0?<p>Обращений пока нет. Новый запрос на помощь появится здесь.</p>:items.map(item=><Button key={item.id} className="h-auto w-full justify-start whitespace-normal text-left" variant={selected===item.id?'default':'outline'} onClick={()=>{selection.current=item.id;setSelected(item.id);setError('');}}><span>{item.client_name || item.client_phone}<br/>{labels[item.current_state]}</span></Button>)}</div>
       <div className="space-y-3 rounded-lg border p-4">{current?<>
+        <ClientDialogueGraph key={businessId+current.id+current.current_state} businessId={businessId} conversationId={current.id}/>
         <h3 className="font-semibold">{current.client_name || current.client_phone}</h3><p role="status">{labels[current.current_state]}. Автоответы приостановлены.</p>
         {current.current_state==='waiting_for_staff'&&<Button disabled={busy} onClick={()=>void action('accept')}>Взять диалог</Button>}
-        <div className="space-y-2">{messages.map(message=><div key={message.id} className="rounded-md bg-muted p-3"><span className="text-xs text-muted-foreground">{events[message.message_type]?'Событие':message.sender==='client'?'Клиент':message.sender==='operator'?'Сотрудник':'Агент'}</span><p className="whitespace-pre-wrap">{events[message.message_type] || message.content}</p></div>)}</div>
+        <div className="space-y-2">{messages.filter(message=>message.message_type!=='dialogue_state').map(message=><div key={message.id} className="rounded-md bg-muted p-3"><span className="text-xs text-muted-foreground">{events[message.message_type]?'Событие':message.sender==='client'?'Клиент':message.sender==='operator'?'Сотрудник':'Агент'}</span><p className="whitespace-pre-wrap">{events[message.message_type] || message.content}</p></div>)}</div>
         {current.current_state==='human_active'&&<>
           {current.client_phone.startsWith('test-handoff:')?<><label htmlFor="staff-test-reply">Ответ в тестовый диалог</label><Textarea id="staff-test-reply" value={reply} onChange={event=>setReply(event.target.value)} maxLength={4000}/><Button disabled={busy||!reply.trim()} onClick={()=>void action('reply')}>Добавить тестовый ответ</Button></>:<p>Для отправки ответа клиенту нужен подключённый и проверенный клиентский канал. Пока сообщение можно обработать вручную.</p>}
           <Button variant="outline" disabled={busy} onClick={()=>void action('close')}>Завершить диалог без включения агента</Button>

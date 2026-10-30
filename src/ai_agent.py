@@ -386,12 +386,16 @@ def update_conversation_state(conversation_id: str, new_state: str):
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
+        cursor.execute('SELECT current_state FROM aiagentconversations WHERE id=%s FOR UPDATE',(conversation_id,))
+        previous=cursor.fetchone()
         cursor.execute("""
             UPDATE AIAgentConversations
             SET current_state = %s, updated_at = CURRENT_TIMESTAMP
             WHERE id = %s AND is_agent_paused = 0
         """, (new_state, conversation_id))
         updated = cursor.rowcount == 1
+        if updated and previous and _row_get(previous,'current_state',0)!=new_state:
+            cursor.execute("INSERT INTO aiagentmessages(id,conversation_id,message_type,content,sender) VALUES(%s,%s,'dialogue_state',%s,'agent')",(str(uuid.uuid4()),conversation_id,json.dumps({'from':_row_get(previous,'current_state',0),'to':new_state},ensure_ascii=False)))
         db.conn.commit()
         return updated
     finally:

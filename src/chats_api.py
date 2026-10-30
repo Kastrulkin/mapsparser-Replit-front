@@ -922,3 +922,32 @@ def operate_client_handoff(business_id,conversation_id):
     except Exception:
         db.conn.rollback();return jsonify({'error':'Не удалось изменить состояние передачи.'}),500
     finally:db.close()
+
+@chats_bp.route('/api/business/<business_id>/client-dialogue-graph', methods=['GET'])
+def client_dialogue_graph(business_id):
+    user=require_auth()
+    if not user:return jsonify({'error':'Требуется авторизация'}),401
+    db=DatabaseManager()
+    try:
+        cursor=db.conn.cursor()
+        if not _client_chat_access(cursor,business_id,user):return jsonify({'error':'Нет доступа'}),403
+        from services.client_dialogue_state import dialogue_graph
+        graph=dialogue_graph()
+        identifier=request.args.get('conversation_id')
+        history=[];current=None;truncated=False;paused=False
+        if identifier:
+            cursor.execute('SELECT current_state,is_agent_paused FROM aiagentconversations WHERE business_id=%s AND id=%s',(business_id,identifier))
+            row=cursor.fetchone()
+            if not row:return jsonify({'error':'Диалог не найден'}),404
+            current=row['current_state'];paused=bool(row['is_agent_paused'])
+            cursor.execute("SELECT id,message_type,content,created_at FROM aiagentmessages WHERE conversation_id=%s AND message_type IN ('dialogue_state','handoff_requested','handoff_accept','handoff_close') ORDER BY created_at DESC,id DESC LIMIT 501",(identifier,))
+            import json
+            recorded=cursor.fetchall()
+            truncated=len(recorded)>500
+            for event in reversed(recorded[:500]):
+                try:payload=json.loads(event['content'])
+                except (ValueError,TypeError):continue
+                if payload.get('from') and payload.get('to'):
+                    history.append({'id':event['id'],'from':payload['from'],'to':payload['to'],'at':event['created_at'].isoformat()})
+        return jsonify({'success':True,'graph':graph,'current_state':current,'is_agent_paused':paused,'history':history,'history_note':('Показаны последние 500 переходов. ' if truncated else '')+'Показаны только записанные переходы. Старые отсутствующие этапы не восстанавливаются по догадкам.'})
+    finally:db.close()

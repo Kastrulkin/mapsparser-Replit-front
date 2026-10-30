@@ -1,3 +1,4 @@
+import { ClientDialogueGraph } from './agents/ClientDialogueGraph';
 import { OutreachSandbox } from '@/components/outreach/OutreachSandbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -607,9 +608,11 @@ const ChatsWorkspace = ({ testing = false }: { testing?: boolean }) => {
               </div>
             </div>
 
+            <ClientDialogueGraph key={currentBusinessId+selectedConversation.id} businessId={currentBusinessId} conversationId={selectedConversation.id}/>
+
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-4">
-                {messages.map((msg) => (
+                {messages.filter(msg => msg.message_type !== 'dialogue_state').map((msg) => (
                   <div
                     key={msg.id}
                     className={`flex ${msg.sender === 'client' ? 'justify-start' : 'justify-end'
