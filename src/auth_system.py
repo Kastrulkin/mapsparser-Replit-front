@@ -244,9 +244,10 @@ def create_session(
     session_kind: str = "standard",
     scope_business_id: str = None,
     expires_days: int = 30,
+    connection=None,
 ) -> str:
     """Создать сессию пользователя"""
-    conn = get_db_connection()
+    conn = connection if connection is not None else get_db_connection()
     cursor = conn.cursor()
     
     try:
@@ -291,13 +292,17 @@ def create_session(
             ),
         )
         
-        conn.commit()
+        if connection is None:
+            conn.commit()
         return token
         
-    except Exception as e:
+    except Exception:
+        if connection is not None:
+            raise
         return None
     finally:
-        conn.close()
+        if connection is None:
+            conn.close()
 
 def verify_email_token(token: str) -> Dict[str, Any]:
     """Подтвердить email по verification token."""

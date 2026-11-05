@@ -54,6 +54,8 @@ export type SettingsHubState = {
 };
 
 export type SettingsHubBusiness = {
+  name?: string | null;
+  address?: string | null;
   whatsapp_phone?: string | null;
   telegram_chat_id?: string | null;
   waba_phone_id?: string | null;

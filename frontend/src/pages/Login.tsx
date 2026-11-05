@@ -40,6 +40,7 @@ const Login = () => {
   const [unavailableJourney, setUnavailableJourney] = useState(false);
   const [skipJourney, setSkipJourney] = useState(false);
   const [resendingVerification, setResendingVerification] = useState(false);
+  const [loginVerificationEmail, setLoginVerificationEmail] = useState('');
   const errorRef = useRef<HTMLDivElement>(null);
   const receiptRef = useRef<HTMLElement>(null);
   const navigate = useNavigate();
@@ -112,6 +113,7 @@ const Login = () => {
     setLoading(true);
     setError(null);
     setInfo(null);
+    setLoginVerificationEmail('');
     // A plain sign-in must not resume a different visit's saved offer.
     if (!journeyTokenParam) {
       clearLeadJourneyToken();
@@ -126,6 +128,7 @@ const Login = () => {
           // Пользователь существует, но не установил пароль
           navigate('/set-password', { state: { email: loginForm.email } });
         } else if (error.includes('EMAIL_NOT_VERIFIED')) {
+          setLoginVerificationEmail(loginForm.email);
           setError(language === 'ru' ? 'Email не подтверждён. Проверьте почту или запросите письмо ещё раз.' : language === 'es' ? 'El email no está confirmado. Revisa tu bandeja o solicita otro mensaje.' : 'Email is not verified. Check your inbox or request another email.');
         } else {
           setError(error);
@@ -280,8 +283,8 @@ const Login = () => {
     }
   };
 
-  const handleResendVerification = async () => {
-    if (!registrationReceipt?.email || resendingVerification) {
+  const handleResendVerification = async (email?: string) => {
+    if (!email || resendingVerification) {
       return;
     }
 
@@ -291,12 +294,12 @@ const Login = () => {
       const response = await fetch('/api/auth/resend-verification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: registrationReceipt.email }),
+        body: JSON.stringify({ email }),
       });
       const data = await response.json();
       if (response.ok && data.success) {
-        setRegistrationReceipt((current) => current ? { ...current, emailSent: true } : current);
-        setInfo(copy.resendVerificationDone);
+        setRegistrationReceipt((current) => current?.email === email ? { ...current, emailSent: true } : current);
+        setInfo(tab === 'login' && typeof data.message === 'string' ? data.message : copy.resendVerificationDone);
       } else {
         setError(data.error || copy.resendVerificationFailed);
       }
@@ -435,10 +438,16 @@ const Login = () => {
               <Button
                 type="submit"
                 className="w-full btn-iridescent"
-                disabled={loading}
+                disabled={loading || resendingVerification}
               >
                 {loading ? copy.signingIn : copy.signIn}
               </Button>
+              {loginVerificationEmail && loginVerificationEmail === loginForm.email && (
+                <Button type="button" variant="outline" className="w-full" disabled={resendingVerification}
+                  onClick={() => void handleResendVerification(loginVerificationEmail)}>
+                  {resendingVerification ? copy.sendingReset : copy.resendVerification}
+                </Button>
+              )}
             </form>
           )}
 
@@ -461,7 +470,7 @@ const Login = () => {
                   {copy.emailDeliveryFailed}
                 </p>
               )}
-              <Button type="button" variant="outline" className="w-full" disabled={resendingVerification} onClick={handleResendVerification}>
+              <Button type="button" variant="outline" className="w-full" disabled={resendingVerification} onClick={() => void handleResendVerification(registrationReceipt.email)}>
                 {resendingVerification ? copy.sendingReset : copy.resendVerification}
               </Button>
             </section>

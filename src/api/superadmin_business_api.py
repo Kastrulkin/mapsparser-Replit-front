@@ -43,6 +43,68 @@ def _require_superadmin(db=None):
     return user_data, None
 
 
+@superadmin_business_bp.route("/api/superadmin/businesses/<business_id>/prepared-cabinet", methods=["PUT"])
+@superadmin_business_bp.route("/api/superadmin/businesses/<business_id>/prepared-cabinet/invitation", methods=["POST", "DELETE"])
+def admin_prepared_cabinet(business_id):
+    from services import prepared_cabinet
+
+    db = DatabaseManager()
+    _, error_response = _require_superadmin(db)
+    if error_response:
+        return error_response
+    try:
+        cursor = db.conn.cursor()
+        if request.method == "PUT":
+            if not prepared_cabinet.save_materials(cursor, business_id, request.get_json(silent=True)):
+                return jsonify({"error": "Бизнес или владелец изменился."}), 409
+            db.conn.commit()
+            return jsonify({"success": True})
+        if request.method == "DELETE":
+            cursor.execute("UPDATE prepared_cabinets SET invite_hash = NULL, invite_expires_at = NULL WHERE business_id = %s", (business_id,))
+            db.conn.commit()
+            return jsonify({"success": True})
+        link = prepared_cabinet.issue_invite(cursor, business_id)
+        if not link:
+            return jsonify({"error": "Сначала подготовьте материалы. Если у владельца уже есть пароль, отправьте обычную ссылку на кабинет."}), 409
+        db.conn.commit()
+        response = jsonify({"setup_url": link})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    finally:
+        db.close()
+
+
+@superadmin_business_bp.route("/api/business/<business_id>/prepared-cabinet", methods=["GET", "POST"])
+def owner_prepared_cabinet(business_id):
+    from core.auth_helpers import require_auth_from_request
+    from pg_db_utils import get_db_connection
+    from services import prepared_cabinet
+
+    user = require_auth_from_request()
+    if not user:
+        return jsonify({"error": "Требуется вход"}), 401
+    if user.get("session_kind") == "demo":
+        return jsonify({"sections": []})
+    reviewed = None
+    if request.method == "POST":
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or data.get("key") not in prepared_cabinet.SECTIONS or not isinstance(data.get("version"), str):
+            return jsonify({"error": "Проверьте раздел и версию материалов."}), 400
+        reviewed = (data["key"], data["version"])
+    conn = get_db_connection()
+    try:
+        sections = prepared_cabinet.owner_package(conn.cursor(), business_id, user["user_id"], reviewed)
+        if reviewed:
+            conn.commit()
+        response = jsonify({"sections": sections})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    finally:
+        conn.close()
+
+
 @superadmin_business_bp.route("/api/superadmin/manual-access-grants", methods=["POST"])
 def create_manual_access_grant():
     db = DatabaseManager()
@@ -162,7 +224,7 @@ def create_business():
         description = data.get("description", "")
         industry = data.get("industry", "")
         owner_id = data.get("owner_id")
-        owner_email = data.get("owner_email")
+        owner_email = str(data.get("owner_email") or "").strip().lower()
         owner_name = data.get("owner_name", "")
         owner_phone = data.get("owner_phone", "")
 
@@ -174,7 +236,6 @@ def create_business():
             existing_user = db.get_user_by_email(owner_email)
             if existing_user:
                 owner_id = existing_user["id"]
-                print(f"✅ Найден существующий пользователь: {owner_email} (ID: {owner_id})")
             else:
                 cursor = db.conn.cursor()
                 owner_id = str(uuid.uuid4())
@@ -191,12 +252,11 @@ def create_business():
                             owner_name or None,
                             owner_phone or None,
                             datetime.now().isoformat(),
-                            1,
-                            0,
+                            True,
+                            False,
                         ),
                     )
-                    db.conn.commit()
-                    print(f"✅ Создан новый пользователь: {owner_email} (ID: {owner_id})")
+
                 except Exception:
                     exc = sys.exc_info()[1]
                     db.conn.rollback()

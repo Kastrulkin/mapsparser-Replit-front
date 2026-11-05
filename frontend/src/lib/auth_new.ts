@@ -514,7 +514,7 @@ export class NewAuth {
     token?: string,
     personalDataConsent?: boolean,
     consentVersion?: string
-  ): Promise<{ user: User | null; error: string | null }> {
+  ): Promise<{ user: User | null; error: string | null; businessId?: string }> {
     try {
       const response = await this.makeRequest('/auth/set-password', {
         method: 'POST',
@@ -543,7 +543,7 @@ export class NewAuth {
         localStorage.setItem(this.standardTokenKey, this.token);
       }
 
-      return { user: this.currentUser, error: null };
+      return { user: this.currentUser, error: null, businessId: response.business_id };
     } catch (error: unknown) {
       return { user: null, error: errorMessage(error) };
     }

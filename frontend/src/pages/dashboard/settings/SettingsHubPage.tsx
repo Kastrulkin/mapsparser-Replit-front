@@ -1,3 +1,4 @@
+import { ConnectionHelpButton } from '@/components/ConnectionHelpButton';
 import { browserBearerToken } from '@/lib/browserSessionFetch';
 import { Cable, ClipboardCheck, Settings } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -36,6 +37,7 @@ import {
 type SettingsHubOutletContext = {
   currentBusinessId?: string | null;
   currentBusiness?: SettingsHubBusiness | null;
+  demoMode?: boolean;
 };
 
 type HubLoadState = {
@@ -307,7 +309,7 @@ export const SettingsIntegrationsPage = () => {
   const location = useLocation();
   const { language } = useLanguage();
   const copy = useMemo(() => getSettingsHubCopy(language), [language]);
-  const { currentBusinessId, currentBusiness } = useOutletContext<SettingsHubOutletContext>();
+  const { currentBusinessId, currentBusiness, demoMode } = useOutletContext<SettingsHubOutletContext>();
   const params = new URLSearchParams(location.search);
   const focus = params.get('focus') || 'integrations';
   const returnTo = params.get('return_to') || null;
@@ -319,6 +321,7 @@ export const SettingsIntegrationsPage = () => {
       <IntegrationsPageV3
         currentBusinessId={currentBusinessId || null}
         currentBusiness={currentBusiness || null}
+        demoMode={Boolean(demoMode)}
         focus={focus}
         returnTo={returnTo}
         senderScope={senderScope}
@@ -328,6 +331,7 @@ export const SettingsIntegrationsPage = () => {
 
   return (
     <div className="mx-auto max-w-6xl space-y-7 pb-10">
+      <ConnectionHelpButton business={currentBusiness?.name} address={currentBusiness?.address} />
       <DashboardPageHeader
         eyebrow={copy.routes.settingsEyebrow}
         title={copy.routes.integrationsTitle}

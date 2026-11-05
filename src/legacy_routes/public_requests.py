@@ -1326,6 +1326,31 @@ def auth_set_password():
         if not personal_data_consent:
             return jsonify({"error": "Необходимо согласие на обработку персональных данных"}), 400
 
+        from services import prepared_cabinet
+        if setup_token.startswith(prepared_cabinet.TOKEN_PREFIX):
+            conn = get_db_connection()
+            try:
+                ip_address = request.headers.get("X-Forwarded-For") or request.remote_addr
+                user_agent = request.headers.get("User-Agent")
+                payload = prepared_cabinet.activate(
+                    conn.cursor(), email=email, password=password, token=setup_token,
+                    consent_version=consent_version, consent_ip=ip_address, user_agent=user_agent,
+                )
+                if payload is None:
+                    return jsonify({"error": "Ссылка истекла или уже использована. Войдите или запросите новую ссылку у команды LocalOS."}), 400
+                session_token = create_session(payload["id"], ip_address=ip_address, user_agent=user_agent, connection=conn)
+                if not session_token:
+                    raise RuntimeError("Could not create owner session")
+                conn.commit()
+                payload["success"] = True
+                if not browser_cookie_auth_enabled():
+                    payload["token"] = session_token
+                response = issue_browser_session(jsonify(payload), session_token)
+                response.headers["Cache-Control"] = "no-store"
+                return response
+            finally:
+                conn.close()
+
         conn = get_db_connection()
         try:
             cursor = conn.cursor()

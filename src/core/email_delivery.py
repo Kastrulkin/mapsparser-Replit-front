@@ -41,10 +41,11 @@ def build_email_verification_link(token):
     return f"{app_url}/verify-email?token={token}"
 
 
-def build_password_setup_link(email, token):
+def build_password_setup_link(email, token, *, private_fragment=False):
     app_url = os.getenv("PUBLIC_APP_URL", "https://localos.pro").rstrip("/")
     query = urlencode({"email": email, "token": token})
-    return f"{app_url}/set-password?{query}"
+    separator = "#" if private_fragment else "?"
+    return f"{app_url}/set-password{separator}{query}"
 
 
 def send_verification_email(email, name, token):

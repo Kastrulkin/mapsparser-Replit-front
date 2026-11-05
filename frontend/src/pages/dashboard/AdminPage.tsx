@@ -1,3 +1,4 @@
+import { PreparedCabinetInvite } from '@/components/PreparedCabinetInvite';
 import React, { Suspense, lazy, useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
@@ -2528,6 +2529,7 @@ const BusinessCard: React.FC<BusinessCardProps> = ({
           className="flex w-full items-center justify-end gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1 lg:w-auto"
           onClick={(event) => event.stopPropagation()}
         >
+          <PreparedCabinetInvite businessId={business.id} disabled={isBlocked} />
           <Button
             variant="ghost"
             size="sm"

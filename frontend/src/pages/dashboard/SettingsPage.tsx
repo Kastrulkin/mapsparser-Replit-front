@@ -1,3 +1,4 @@
+import { ConnectionHelpButton } from '@/components/ConnectionHelpButton';
 import { ExternalIntegrations } from '@/components/ExternalIntegrations';
 import FinanceCrmPanel from '@/components/FinanceCrmPanel';
 import { NetworkManagement } from '@/components/NetworkManagement';
@@ -25,6 +26,8 @@ import {
 } from './settings/SettingsHubPage';
 
 type SettingsBusiness = {
+  name?: string | null;
+  address?: string | null;
   whatsapp_phone?: string;
   whatsapp_verified?: number | boolean;
   network_id?: string | number | null;
@@ -77,6 +80,7 @@ const LegacySettingsPage = () => {
 
   return (
     <div className="mx-auto max-w-6xl space-y-7 pb-10">
+      <ConnectionHelpButton business={currentBusiness?.name} address={currentBusiness?.address} />
       <DashboardPageHeader
         eyebrow="LocalOS"
         title={t.dashboard.settings.title}

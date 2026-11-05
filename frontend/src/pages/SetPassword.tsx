@@ -1,7 +1,7 @@
 import { consumeMaxConnection } from "@/lib/maxAuthContinuation";
 import { Button } from '@/components/ui/button';
 import React, { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { newAuth } from '../lib/auth_new';
 
 const SetPassword: React.FC = () => {
@@ -17,12 +17,15 @@ const SetPassword: React.FC = () => {
   const [email, setEmail] = useState<string>('');
   const [token, setToken] = useState<string>('');
   const isResetFlow = location.pathname.includes('reset-password');
+  const isPreparedInvite = token.startsWith('prepared.');
 
   // Проверяем, что пользователь пришел с подтвержденным email или пропускаем проверку
   useEffect(() => {
     const checkUser = async () => {
       // Получаем email и токен из URL параметров
-      const urlParams = new URLSearchParams(window.location.search);
+      const fragment = new URLSearchParams(window.location.hash.slice(1));
+      const urlParams = !isResetFlow && fragment.get('token')?.startsWith('prepared.')
+        ? fragment : new URLSearchParams(window.location.search);
       const stateEmail = location.state && typeof location.state === 'object' && 'email' in location.state
         ? String(location.state.email || '')
         : '';
@@ -122,7 +125,7 @@ const SetPassword: React.FC = () => {
         } else if (result.user) {
           setInfo('Пароль успешно установлен! Выполняется вход...');
           setTimeout(() => {
-            navigate(consumeMaxConnection() ? '/dashboard/max' : '/dashboard');
+            navigate(result.businessId ? '/dashboard/today?business_id=' + encodeURIComponent(result.businessId) : consumeMaxConnection() ? '/dashboard/max' : '/dashboard', { replace: true });
           }, 2000);
         }
       }
@@ -162,6 +165,8 @@ const SetPassword: React.FC = () => {
             required
             className="border rounded px-3 py-2"
             placeholder="Новый пароль"
+            aria-label="Новый пароль"
+            autoComplete="new-password"
           />
           {!isResetFlow && (
             <label className="flex items-start gap-3 rounded border border-gray-200 px-3 py-3 text-sm text-gray-700">
@@ -191,8 +196,15 @@ const SetPassword: React.FC = () => {
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded p-3">
-          <p className="text-red-600 text-sm mb-3">{error}</p>
-          <div className="flex flex-col gap-2">
+          <p role="alert" className="text-red-600 text-sm mb-3">{error}</p>
+          {isPreparedInvite ? (
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" asChild><Link to="/login">Войти в LocalOS</Link></Button>
+              <Button variant="outline" asChild>
+                <a href="mailto:info@localos.pro?subject=Новое%20приглашение%20в%20LocalOS">Запросить новую ссылку</a>
+              </Button>
+            </div>
+          ) : <div className="flex flex-col gap-2">
             <Button
               type="button"
               onClick={handleSetPassword}
@@ -210,7 +222,7 @@ const SetPassword: React.FC = () => {
             >
               Альтернативное восстановление пароля
             </Button>
-          </div>
+          </div>}
         </div>
       )}
 

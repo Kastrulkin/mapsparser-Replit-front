@@ -1,3 +1,4 @@
+import { PreparedCabinetPanel, usePreparedCabinet } from './PreparedCabinet';
 import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { workNavigationCopy } from '@/lib/workNavigation';
@@ -110,6 +111,10 @@ export const DashboardLayout = () => {
     }
     return window.localStorage.getItem('dashboard_sidebar_collapsed') === 'true';
   });
+  const prepared = usePreparedCabinet(
+    user && !user.demo_mode && controlScope?.kind === 'business' ? currentBusinessId : null,
+    location.pathname, location.search,
+  );
   const scopeRevisionRef = useRef(0);
   const isLeadBusiness = useCallback((business: DashboardBusiness) => {
     const moderationStatus = String(business?.moderation_status || '').trim().toLowerCase();
@@ -345,6 +350,7 @@ export const DashboardLayout = () => {
         isMobile={false}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+        unreadMenus={prepared.unreadMenus}
         webTrackingAvailable={currentBusiness?.web_tracking_available === true}
       />
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:pl-24' : 'md:pl-72'}`}>
@@ -370,7 +376,13 @@ export const DashboardLayout = () => {
                   </button>
                 </div>
               ) : null}
-              {shouldLockPaidSection && lockedPaidSection ? (
+              {prepared.failed && <div role="status" className="mb-4 text-sm">
+                Не удалось обновить подготовленные материалы. <button className="underline" onClick={prepared.retry}>Повторить</button>
+              </div>}
+              {(prepared.active || location.pathname === '/dashboard/today') && (
+                <PreparedCabinetPanel sections={prepared.sections} active={prepared.active} />
+              )}
+              {shouldLockPaidSection && prepared.active ? null : shouldLockPaidSection && lockedPaidSection ? (
                 <LockedSectionPreview
                   section={lockedPaidSection}
                   currentTierName={sectionAccess?.tierName || 'Без тарифа'}
@@ -389,6 +401,7 @@ export const DashboardLayout = () => {
       <DashboardSidebar
         isMobile={true}
         onClose={() => setSidebarOpen(false)}
+        unreadMenus={prepared.unreadMenus}
         webTrackingAvailable={currentBusiness?.web_tracking_available === true}
       />
       </div>

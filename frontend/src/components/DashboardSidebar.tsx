@@ -1,3 +1,4 @@
+import { PreparedDot } from './PreparedCabinet';
 import {
 	BadgeDollarSign,
 	BarChart3,
@@ -55,6 +56,7 @@ interface DashboardSidebarProps {
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   webTrackingAvailable?: boolean;
+  unreadMenus?: string[];
 }
 
 export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
@@ -63,6 +65,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   collapsed = false,
   onToggleCollapse,
   webTrackingAvailable = false,
+  unreadMenus = [],
 }) => {
   const location = useLocation();
   const { t, language } = useLanguage();
@@ -170,6 +173,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
         {menuItems.map((item, index) => {
           const Icon = item.icon;
           const active = isActive(item.path);
+          const unread = unreadMenus.includes(item.id);
           return (
             <div key={item.id}>
             {menuItems[index - 1]?.group !== item.group ? <p className={cn("px-3 pb-1 pt-4 text-xs font-medium text-slate-500", collapsed && !isMobile && "sr-only")}>{workCopy.groups[item.group]}</p> : null}
@@ -177,7 +181,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
               <TooltipTrigger asChild>
                 <Link
                   to={item.path}
-                  aria-label={item.label}
+                  aria-label={unread ? item.label + ' · Есть новые материалы' : item.label}
                   aria-current={active ? 'page' : undefined}
                   onClick={handleLinkClick}
                   data-tour-target={`nav-${item.id}`}
@@ -197,7 +201,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
                   </div>
                   <span className={cn("tracking-wide", collapsed && !isMobile && "hidden")}>{item.label}</span>
 
-                  {active && (
+                  {unread ? <span className="absolute right-2 top-2 inline-flex"><PreparedDot /></span> : active && (
                     <div className="absolute right-3 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-white/90" />
                   )}
                 </Link>

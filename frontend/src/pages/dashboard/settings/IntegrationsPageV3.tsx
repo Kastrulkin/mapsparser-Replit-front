@@ -1,3 +1,5 @@
+import { ConnectionHelpButton } from '@/components/ConnectionHelpButton';
+import MaxChannelConnection from '@/components/MaxChannelConnection';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
@@ -71,6 +73,7 @@ type RegistryExternalAccount = SettingsHubExternalAccount & {
 type IntegrationsPageV3Props = {
   currentBusinessId?: string | null;
   currentBusiness?: SettingsHubBusiness | null;
+  demoMode?: boolean;
   focus?: string | null;
   returnTo?: string | null;
   senderScope?: 'business' | 'platform';
@@ -152,17 +155,17 @@ const serviceDescriptions: Record<string, string> = {
 };
 
 const serviceHelp: Record<string, string[]> = {
-  telegram: ['Привяжите бот LocalOS к Telegram владельца.', 'Укажите канал или чат для постов.', 'Проверьте отправку без внешней публикации.'],
+  telegram: ['В Telegram откройте нужный канал и список администраторов.', 'Добавьте бота LocalOS и разрешите ему публиковать сообщения.', 'Укажите канал здесь и проверьте права. Чтобы снять доступ, удалите бота из администраторов.'],
   whatsapp: ['Добавьте номер бизнеса.', 'Заполните WABA Phone ID и access token.', 'Проверьте статус перед отправкой сообщений.'],
   outreach_email: ['Возьмите SMTP, IMAP и пароль приложения у почтового провайдера.', 'Проверьте подключение без отправки письма.', 'Отдельно разрешите отправку; проверка ответов включится вместе с ней.'],
   outreach_vk: ['Создайте в VK-сообществе ключ доступа с правом на сообщения.', 'LocalOS покажет фактическое имя отправителя и проверит доступ без отправки.', 'Отдельно разрешите отправку; проверка ответов включится вместе с ней.'],
   outreach_max: ['Укажите номер личного MAX-аккаунта.', 'LocalOS добавит MAX в доступные ручные каналы и подготовит текст.', 'После отправки отметьте касание или ответ в LocalOS.'],
   google_sheets: ['Нажмите подключение Google.', 'Выберите аккаунт, где есть нужная таблица.', 'Вернитесь к агенту и запустите безопасный тест.'],
   google_business: ['Подключите Google-доступ.', 'Загрузите список карточек.', 'Выберите карточку компании и синхронизируйте данные.'],
-  vk: ['Укажите числовой ID сообщества.', 'Добавьте ключ сообщества с доступом к стене.', 'LocalOS проверит готовность текстовых публикаций.'],
+  vk: ['Откройте управление нужным сообществом ВКонтакте и найдите ключи доступа.', 'Создайте ключ с правом на стену. Введите ID сообщества и ключ в форму здесь.', 'Проверьте готовность подключения. Снять доступ можно, отозвав ключ в ВКонтакте.'],
   meta: ['Войдите через Meta.', 'Выберите Facebook Page.', 'Проверьте связанный Instagram Professional account.'],
-  yandex_maps: ['Подготовьте текст в LocalOS.', 'Откройте карточку Яндекс.', 'Опубликуйте вручную после проверки.'],
-  '2gis': ['Подготовьте текст в LocalOS.', 'Откройте карточку 2GIS.', 'Опубликуйте вручную после проверки.'],
+  yandex_maps: ['Откройте Яндекс Бизнес и выберите нужную организацию или филиал.', 'В разделе «Доступы» добавьте рабочий Яндекс ID команды LocalOS с ролью «Представитель». Если ID ещё не получили, напишите нам.', 'Сообщите нам, какой филиал подключили. Снять права можно в том же разделе.'],
+  '2gis': ['Откройте личный кабинет 2ГИС и выберите нужную компанию.', 'Пригласите рабочий аккаунт команды LocalOS. Если адрес для приглашения ещё не получили, напишите нам.', 'Сообщите нам, какую компанию подключили. Команда проверит доступ вместе с вами.'],
   yclients: ['Возьмите ID филиала.', 'Заполните partner token и user token.', 'Сначала проверьте preview, потом подтверждайте импорт.'],
   altegio: ['Возьмите ID филиала.', 'Заполните partner token и user token.', 'Сначала проверьте preview, потом подтверждайте импорт.'],
   maton: ['Скопируйте API-ключ Maton.ai.', 'Сохраните ключ в LocalOS.', 'Проверьте, что агент видит этот маршрут.'],
@@ -240,7 +243,7 @@ const safeDashboardReturnTo = (value?: string | null) => {
   return clean;
 };
 
-export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, returnTo, senderScope = 'business' }: IntegrationsPageV3Props) => {
+export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, demoMode = false, focus, returnTo, senderScope = 'business' }: IntegrationsPageV3Props) => {
   const { toast } = useToast();
   const [loadState, setLoadState] = useState<RegistryLoadState>(emptyLoadState);
   const [loading, setLoading] = useState(false);
@@ -248,6 +251,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [activeServiceId, setActiveServiceId] = useState<string | null>(null);
+  const [maxOpen, setMaxOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -281,8 +285,11 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     let cancelled = false;
 
     const loadRegistryState = async () => {
-      if (!currentBusinessId) {
+      if (demoMode || !currentBusinessId) {
         setLoadState(emptyLoadState);
+        setLoading(false);
+        setLoadError(null);
+        setLastCheckedAt(null);
         return;
       }
 
@@ -332,7 +339,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     return () => {
       cancelled = true;
     };
-  }, [currentBusinessId, refreshKey, senderScope]);
+  }, [currentBusinessId, demoMode, refreshKey, senderScope]);
 
   const services = useMemo(() => mapIntegrationsState({
     trelloStatus: loadState.trelloStatus,
@@ -1031,7 +1038,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
 
   const renderHelp = (service: ServiceConnection) => (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="text-base font-semibold text-slate-950">Как подключить</h3>
+      <h3 className="text-base font-semibold text-slate-950">Как дать нам доступ</h3>
       <ol className="mt-4 space-y-3">
         {(service.id === 'telegram' && senderScope === 'platform' ? [
           'Создайте Telegram API application на my.telegram.org.',
@@ -1155,6 +1162,10 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     );
   };
 
+  const helpButton = (service?: string) => (
+    <ConnectionHelpButton business={currentBusiness?.name} address={currentBusiness?.address} service={service} />
+  );
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-10" data-settings-integrations-version="v3">
       <DashboardPageHeader
@@ -1163,6 +1174,8 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
         description="Подключите сервис, проверьте его состояние и посмотрите границы безопасных действий."
         icon={ListFilter}
       />
+
+      {helpButton()}
 
       <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="grid gap-3 lg:grid-cols-[1fr_220px_220px_auto] lg:items-center">
@@ -1231,6 +1244,19 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
         ) : null}
       </div>
 
+      {currentBusinessId && !demoMode && senderScope === 'business' && (
+        <details className="space-y-4 rounded-2xl border bg-card p-5" onToggle={event => setMaxOpen(event.currentTarget.open)}>
+          <summary className="cursor-pointer font-semibold">MAX · Канал для публикаций (бета)</summary>
+          <ol className="list-decimal space-y-1 pl-5 text-sm">
+            <li>Выберите канал MAX, где вы можете назначать администраторов.</li>
+            <li>Добавьте бота канала с правом публикации и укажите данные в форме ниже.</li>
+            <li>Проверьте подключение. Пока публикации через бота недоступны, можно скопировать пост и разместить его вручную.</li>
+          </ol>
+          {maxOpen && <MaxChannelConnection key={currentBusinessId} businessId={currentBusinessId} />}
+          {helpButton('MAX')}
+        </details>
+      )}
+
       <SettingsDetailSheet
         open={Boolean(selectedService)}
         title={selectedService?.id === 'outreach_vk' && senderScope === 'platform'
@@ -1258,8 +1284,9 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
             <TabsContent value="setup" forceMount className="space-y-4 data-[state=inactive]:hidden">
               {renderSetup(selectedService)}
               {renderHelp(selectedService)}
+              {helpButton(selectedService.name)}
             </TabsContent>
-            <TabsContent value="check">{renderCheck(selectedService)}</TabsContent>
+            <TabsContent value="check" className="space-y-4">{renderCheck(selectedService)}{helpButton(selectedService.name)}</TabsContent>
             <TabsContent value="safety">{renderSafety(selectedService)}</TabsContent>
             <TabsContent value="support">
               {renderLogs(selectedService)}
