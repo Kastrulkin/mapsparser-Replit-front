@@ -2,15 +2,15 @@ import { rememberMaxConnection, consumeMaxConnection } from "@/lib/maxAuthContin
 import { featureFlags } from '@/config/featureFlags';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { countryOptionsFor, loginCopyFor } from '@/i18n/loginCopy';
-import { getLeadJourneyDirection, isLeadJourneyKey, readLeadJourneyToken, resolveStoredLeadJourney, saveLeadJourneyIntent, saveLeadJourneyToken } from "@/lib/leadJourney";
-import { useEffect, useState } from "react";
+import { clearLeadJourneyIntent, clearLeadJourneyToken, getLeadJourneyDirection, isLeadJourneyKey, resolveStoredLeadJourney, saveLeadJourneyIntent, saveLeadJourneyToken } from "@/lib/leadJourney";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Footer from "../components/Footer";
 import { Button } from "../components/ui/button";
 import { newAuth } from "../lib/auth_new";
 
 const Login = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { language } = useLanguage();
   const copy = loginCopyFor(language);
   const countryOptions = countryOptionsFor(language);
@@ -31,13 +31,28 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [registrationComplete, setRegistrationComplete] = useState(false);
+  const [registrationReceipt, setRegistrationReceipt] = useState<{
+    email: string;
+    businessName: string;
+    emailSent: boolean;
+    pending: boolean;
+  } | null>(null);
+  const [unavailableJourney, setUnavailableJourney] = useState(false);
+  const [skipJourney, setSkipJourney] = useState(false);
   const [resendingVerification, setResendingVerification] = useState(false);
+  const errorRef = useRef<HTMLDivElement>(null);
+  const receiptRef = useRef<HTMLElement>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const target = error ? errorRef.current : registrationReceipt ? receiptRef.current : null;
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView?.({ block: 'start' });
+  }, [error, registrationReceipt]);
   const journeyParam = searchParams.get('journey');
   const journeyTokenParam = searchParams.get('journey_token') || '';
   const journey = getLeadJourneyDirection(isLeadJourneyKey(journeyParam) ? journeyParam : null);
-  const tabButtonClass = "min-h-10 flex-1 rounded-md px-4 py-2 text-sm font-medium transition-[background-color,color,box-shadow,transform] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100";
+  const tabButtonClass = "min-h-10 min-w-0 flex-1 rounded-md px-2 py-2 text-xs sm:px-4 sm:text-sm font-medium transition-[background-color,color,box-shadow,transform] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100";
 
   const looksLikeUrl = (value: string) => {
     const text = value.trim().toLowerCase();
@@ -97,7 +112,11 @@ const Login = () => {
     setLoading(true);
     setError(null);
     setInfo(null);
-    setRegistrationComplete(false);
+    // A plain sign-in must not resume a different visit's saved offer.
+    if (!journeyTokenParam) {
+      clearLeadJourneyToken();
+      if (!journey) clearLeadJourneyIntent();
+    }
 
     try {
       const { user, error } = await newAuth.signIn(loginForm.email, loginForm.password);
@@ -117,7 +136,7 @@ const Login = () => {
 
         if (consumeMaxConnection() || searchParams.get("return_to") === "/dashboard/max") {
           navigate('/dashboard/max');
-        } else if (readLeadJourneyToken() && featureFlags.journeyPostAuthRedirect) {
+        } else if (journeyTokenParam && featureFlags.journeyPostAuthRedirect) {
           try {
             const resolved = await resolveStoredLeadJourney();
             navigate(resolved?.route || '/dashboard/today');
@@ -141,10 +160,18 @@ const Login = () => {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading || registrationReceipt) return;
+    setUnavailableJourney(false);
+    const registrationJourneyToken = skipJourney ? '' : journeyTokenParam;
+    // Only the current URL may opt registration into a personal offer. History
+    // from localStorage must never block plain registration or email confirmation.
+    if (!registrationJourneyToken) {
+      clearLeadJourneyToken();
+      if (!journey) clearLeadJourneyIntent();
+    }
     setLoading(true);
     setError(null);
     setInfo(null);
-    setRegistrationComplete(false);
 
     // Валидация
     if (!registerForm.email || !registerForm.password) {
@@ -197,21 +224,23 @@ const Login = () => {
           audit_public_url: searchParams.get('audit_slug')
             ? `${window.location.origin}/${searchParams.get('audit_slug') || ''}`
             : undefined,
-          journey_token: journeyTokenParam || readLeadJourneyToken() || undefined,
+          journey_token: registrationJourneyToken || undefined,
         })
       });
 
       const data = await response.json();
 
       if (response.ok && data.success) {
-        setRegistrationComplete(true);
-        if (data.business?.moderation_status === 'pending') {
-          setInfo(copy.registerPending);
-        } else {
-          setInfo(copy.registerSuccess);
-        }
+        setRegistrationReceipt({
+          email: data.user?.email || registerForm.email.trim(),
+          businessName: data.business?.name || registerForm.business_name.trim(),
+          emailSent: data.email_sent === true,
+          pending: data.business?.moderation_status === 'pending',
+        });
+        setRegisterForm((current) => ({ ...current, password: '' }));
       } else {
         setError(data.error || copy.registrationFailed);
+        setUnavailableJourney(['journey_expired', 'journey_revoked', 'journey_not_found'].includes(data.code));
       }
     } catch (error) {
       setError(copy.registerError + (error instanceof Error ? error.message : String(error)));
@@ -252,7 +281,7 @@ const Login = () => {
   };
 
   const handleResendVerification = async () => {
-    if (!registerForm.email) {
+    if (!registrationReceipt?.email || resendingVerification) {
       return;
     }
 
@@ -262,10 +291,11 @@ const Login = () => {
       const response = await fetch('/api/auth/resend-verification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: registerForm.email }),
+        body: JSON.stringify({ email: registrationReceipt.email }),
       });
       const data = await response.json();
       if (response.ok && data.success) {
+        setRegistrationReceipt((current) => current ? { ...current, emailSent: true } : current);
         setInfo(copy.resendVerificationDone);
       } else {
         setError(data.error || copy.resendVerificationFailed);
@@ -275,6 +305,26 @@ const Login = () => {
     } finally {
       setResendingVerification(false);
     }
+  };
+
+  const changeTab = (next: 'login' | 'register' | 'reset') => {
+    if (loading || resendingVerification) return;
+    setError(null);
+    setInfo(null);
+    setUnavailableJourney(false);
+    setTab(next);
+  };
+
+  const continueWithoutJourney = () => {
+    clearLeadJourneyToken();
+    clearLeadJourneyIntent();
+    setSkipJourney(true);
+    setUnavailableJourney(false);
+    setError(null);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('journey_token');
+    nextParams.delete('journey');
+    setSearchParams(nextParams, { replace: true });
   };
 
   return (
@@ -296,7 +346,8 @@ const Login = () => {
             <button
               type="button"
               aria-pressed={tab === 'login'}
-              onClick={() => setTab('login')}
+              disabled={loading || resendingVerification}
+              onClick={() => changeTab('login')}
               className={`${tabButtonClass} ${tab === 'login'
                   ? 'bg-slate-950 text-white shadow-sm'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
@@ -307,7 +358,8 @@ const Login = () => {
             <button
               type="button"
               aria-pressed={tab === 'register'}
-              onClick={() => setTab('register')}
+              disabled={loading || resendingVerification}
+              onClick={() => changeTab('register')}
               className={`${tabButtonClass} ${tab === 'register'
                   ? 'bg-slate-950 text-white shadow-sm'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
@@ -318,7 +370,8 @@ const Login = () => {
             <button
               type="button"
               aria-pressed={tab === 'reset'}
-              onClick={() => setTab('reset')}
+              disabled={loading || resendingVerification}
+              onClick={() => changeTab('reset')}
               className={`${tabButtonClass} ${tab === 'reset'
                   ? 'bg-slate-950 text-white shadow-sm'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
@@ -329,13 +382,21 @@ const Login = () => {
           </div>
 
           {error && (
-            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-              {error}
+            <div ref={errorRef} role="alert" tabIndex={-1} className="mb-4 scroll-mt-24 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              <p>{error}</p>
+              {unavailableJourney && tab === 'register' && (
+                <div className="mt-3 space-y-3">
+                  <p>{copy.journeyUnavailableHint}</p>
+                  <Button type="button" variant="outline" className="h-auto min-h-10 whitespace-normal text-left" onClick={continueWithoutJourney}>
+                    {copy.continueWithoutJourney}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
           {info && (
-            <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
+            <div role="status" className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
               {info}
             </div>
           )}
@@ -349,6 +410,7 @@ const Login = () => {
                 </label>
                 <input
                   id="login-email"
+                      autoComplete="username"
                   type="email"
                   required
                   value={loginForm.email}
@@ -362,6 +424,7 @@ const Login = () => {
                 </label>
                 <input
                   id="login-password"
+                      autoComplete="current-password"
                   type="password"
                   required
                   value={loginForm.password}
@@ -379,8 +442,33 @@ const Login = () => {
             </form>
           )}
 
+          {tab === 'register' && registrationReceipt && (
+            <section ref={receiptRef} tabIndex={-1} aria-labelledby="registration-complete-title" className="scroll-mt-24 space-y-4">
+              <h3 id="registration-complete-title" className="text-lg font-semibold text-gray-900">
+                {copy.accountCreated}
+              </h3>
+              <dl className="space-y-2 break-words text-sm text-gray-700">
+                <div><dt className="font-medium">{copy.email}</dt><dd>{registrationReceipt.email}</dd></div>
+                <div><dt className="font-medium">{copy.businessData}</dt><dd>{registrationReceipt.businessName}</dd></div>
+              </dl>
+              {registrationReceipt.emailSent ? (
+                <div role="status" className="space-y-2 text-sm text-gray-700">
+                  <p>{registrationReceipt.pending ? copy.registerPending : copy.registerSuccess}</p>
+                  <p>{copy.checkEmailHint}</p>
+                </div>
+              ) : (
+                <p role="alert" className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  {copy.emailDeliveryFailed}
+                </p>
+              )}
+              <Button type="button" variant="outline" className="w-full" disabled={resendingVerification} onClick={handleResendVerification}>
+                {resendingVerification ? copy.sendingReset : copy.resendVerification}
+              </Button>
+            </section>
+          )}
+
           {/* Форма регистрации */}
-          {tab === 'register' && (
+          {tab === 'register' && !registrationReceipt && (
             <form className="space-y-4" onSubmit={handleRegister}>
               {journey ? (
                 <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-slate-700">
@@ -397,6 +485,7 @@ const Login = () => {
                     </label>
                     <input
                       id="register-name"
+                      autoComplete="name"
                       type="text"
                       value={registerForm.name}
                       onChange={(e) => setRegisterForm({ ...registerForm, name: e.target.value })}
@@ -409,6 +498,7 @@ const Login = () => {
                     </label>
                     <input
                       id="register-email"
+                      autoComplete="email"
                       type="email"
                       required
                       value={registerForm.email}
@@ -422,6 +512,7 @@ const Login = () => {
                     </label>
                     <input
                       id="register-password"
+                      autoComplete="new-password"
                       type="password"
                       required
                       value={registerForm.password}
@@ -435,6 +526,7 @@ const Login = () => {
                     </label>
                     <input
                       id="register-phone"
+                      autoComplete="tel"
                       type="tel"
                       value={registerForm.phone}
                       onChange={(e) => setRegisterForm({ ...registerForm, phone: e.target.value })}
@@ -466,6 +558,7 @@ const Login = () => {
                     </label>
                     <input
                       id="register-business-address"
+                      autoComplete="street-address"
                       type="text"
                       required
                       value={registerForm.business_address}
@@ -481,6 +574,7 @@ const Login = () => {
                       </label>
                       <input
                         id="register-business-city"
+                      autoComplete="address-level2"
                         type="text"
                         required
                         value={registerForm.business_city}
@@ -494,6 +588,7 @@ const Login = () => {
                       </label>
                       <input
                         id="register-business-country"
+                      autoComplete="country-name"
                         list="business-country-options"
                         value={registerForm.business_country}
                         onChange={(e) =>
@@ -537,20 +632,6 @@ const Login = () => {
               >
                 {loading ? copy.signingUp : copy.signUp}
               </Button>
-              {registrationComplete && (
-                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                  <p>{info || copy.registerSuccess}</p>
-                  <p className="mt-1">{copy.checkEmailHint}</p>
-                  <button
-                    type="button"
-                    className="mt-3 inline-flex min-h-10 items-center text-sm font-medium text-emerald-800 underline transition-[color,opacity] duration-150 ease-out hover:text-emerald-950 disabled:opacity-50"
-                    disabled={resendingVerification}
-                    onClick={handleResendVerification}
-                  >
-                    {resendingVerification ? copy.sendingReset : copy.resendVerification}
-                  </button>
-                </div>
-              )}
               <p className="text-xs text-gray-500 text-center">
                 {copy.postRegisterHint}
               </p>

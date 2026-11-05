@@ -962,17 +962,63 @@ def get_business_data(business_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        # Alembic owns these canonical tables and columns. A GET must never
-        # create, alter, backfill, or commit shared tenant data.
+        # Создаем таблицу FinancialTransactions если её нет
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS FinancialTransactions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                business_id TEXT,
+                transaction_type TEXT NOT NULL,
+                amount REAL NOT NULL,
+                description TEXT,
+                category TEXT,
+                date DATE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
+                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
+            )
+        """)
+
+        # Создаем таблицу BusinessProfiles если её нет
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS BusinessProfiles (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                contact_name TEXT,
+                contact_phone TEXT,
+                contact_email TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
+            )
+        """)
+
+        # Добавляем поле business_id в UserServices если его нет
+        try:
+            cursor.execute("ALTER TABLE UserServices ADD COLUMN business_id TEXT")
+            cursor.execute("""
+                UPDATE UserServices
+                SET business_id = (
+                    SELECT b.id FROM Businesses b
+                    WHERE b.owner_id = UserServices.user_id
+                    LIMIT 1
+                )
+                WHERE business_id IS NULL
+            """)
+        except Exception:
+            # Поле уже существует или другая ошибка
+            pass
+
+        db.conn.commit()
+
+        # Проверяем доступ к бизнесу
         business = db.get_business_by_id(business_id)
         if not business:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        # Read access includes active direct and network memberships; write
-        # authorization remains governed by verify_business_write_access.
-        has_access, _owner_id = verify_business_access(cursor, business_id, user_data)
-        if not has_access:
+        # Проверяем права доступа
+        if not db.is_superadmin(user_data['user_id']) and business['owner_id'] != user_data['user_id']:
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
@@ -1377,20 +1423,13 @@ def auth_set_password():
 @rate_limit_if_available("5 per hour")
 def confirm_reset():
     """Подтверждение сброса пароля с новым паролем"""
-    conn = None
     try:
-        data = request.get_json(silent=True)
-        if not isinstance(data, dict):
-            return jsonify({"error": "Все поля обязательны"}), 400
-
-        raw_email = data.get('email')
+        data = request.get_json()
+        email = normalize_email(data.get('email'))
         token = data.get('token')
         new_password = data.get('password')
-        if not all(isinstance(value, str) and value for value in (raw_email, token, new_password)):
-            return jsonify({"error": "Все поля обязательны"}), 400
-        email = normalize_email(raw_email)
 
-        if not email:
+        if not all([email, token, new_password]):
             return jsonify({"error": "Все поля обязательны"}), 400
 
         # Проверяем токен
@@ -1400,7 +1439,6 @@ def confirm_reset():
             SELECT id, reset_token, reset_token_expires
             FROM Users
             WHERE LOWER(email) = %s AND reset_token = %s
-            FOR UPDATE
         """, (email, token))
         user = cursor.fetchone()
 
@@ -1408,53 +1446,30 @@ def confirm_reset():
             return jsonify({"error": "Неверный токен"}), 400
 
         # Проверяем срок действия токена
-        from datetime import datetime, timezone
-        if isinstance(user, dict) or hasattr(user, "keys"):
-            user_id = user["id"]
-            reset_token_expires = user["reset_token_expires"]
-        else:
-            user_id = user[0]
-            reset_token_expires = user[2]
-        if isinstance(reset_token_expires, str):
-            reset_token_expires = datetime.fromisoformat(reset_token_expires)
-        if not isinstance(reset_token_expires, datetime):
-            return jsonify({"error": "Неверный токен"}), 400
-        now = (
-            datetime.now(timezone.utc)
-            if reset_token_expires.tzinfo is not None
-            else datetime.now()
-        )
-        if now > reset_token_expires:
+        from datetime import datetime
+        if datetime.now() > datetime.fromisoformat(user[2]):
             return jsonify({"error": "Токен истек"}), 400
 
-        # Хеширование, consume reset token и отзыв всех сессий должны быть одной транзакцией.
-        from auth_system import hash_password
+        # Устанавливаем новый пароль
+        from auth_system import set_password
+        result = set_password(user[0], new_password)
+
+        if 'error' in result:
+            return jsonify(result), 400
+
+        # Очищаем токен
         cursor.execute("""
             UPDATE Users
-            SET password_hash = %s,
-                updated_at = %s,
-                reset_token = NULL,
-                reset_token_expires = NULL
+            SET reset_token = NULL, reset_token_expires = NULL
             WHERE id = %s
-        """, (hash_password(new_password), datetime.now().isoformat(), user_id))
-        cursor.execute("DELETE FROM UserSessions WHERE user_id = %s", (user_id,))
+        """, (user[0],))
         conn.commit()
+        conn.close()
 
         return jsonify({"success": True, "message": "Пароль успешно изменен"})
 
     except Exception:
-        if conn is not None:
-            try:
-                conn.rollback()
-            except Exception:
-                pass
         return internal_error_response("Не удалось подтвердить сброс пароля")
-    finally:
-        if conn is not None:
-            try:
-                conn.close()
-            except Exception:
-                pass
 
 @app.route('/api/public/request-report', methods=['POST', 'OPTIONS'])
 @rate_limit_if_available("10 per hour")
