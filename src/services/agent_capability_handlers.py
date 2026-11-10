@@ -28,6 +28,7 @@ CapabilityHandler = Callable[[Dict[str, Any], Dict[str, Any]], Dict[str, Any]]
 
 
 CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
+    'yougile.task.apply': {'risk': 'external_write', 'approval_required': True, 'side_effects': 'creates or completes one reviewed task in the selected business YouGile board'},
     'business.settings.apply_operator': {'risk': 'owner_profile_write', 'approval_required': True, 'side_effects': 'applies versioned owner-approved LocalOS profile changes'},
     'business.team.apply_operator': {'risk': 'access_change', 'approval_required': True, 'side_effects': 'grants reviewed membership and optionally sends an approved invitation'},
     "outreach.continue": {"risk":"internal_request", "side_effects":"binds an approved workflow to its existing outreach job", "approval_required":False},
@@ -158,6 +159,7 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
 
 
 CAPABILITY_RUNTIME_STATUS = {
+    'yougile.task.apply': ('production_external_write', True),
     'business.settings.apply_operator': ('production_internal_write', True),
     'business.team.apply_operator': ('production_external_write', True),
     'work.colleague.send': ('production_external_write',True),
@@ -251,6 +253,7 @@ def build_capability_handlers() -> Dict[str, CapabilityHandler]:
         "finance.transaction.create": _handle_finance_transaction_create,
         "work.policy.apply": _handle_work_policy,
         "finance.daily.apply_operator": _handle_finance_daily_apply_operator,
+        'yougile.task.apply': _handle_yougile_task,
         'business.settings.apply_operator': _handle_business_settings,
         'business.team.apply_operator': _handle_business_team,
         "finance.transaction.apply_operator": _handle_finance_transaction_apply_operator,
@@ -2222,6 +2225,11 @@ def _count_recipients(payload: Dict[str, Any]) -> int:
     if isinstance(audience, list):
         return len(audience)
     return 0
+
+
+def _handle_yougile_task(envelope, user_data):
+    from services.yougile_tasks import apply
+    return apply(envelope, user_data)
 
 
 def _handle_finance_daily_apply_operator(envelope, user_data):

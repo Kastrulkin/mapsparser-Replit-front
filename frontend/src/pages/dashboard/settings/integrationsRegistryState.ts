@@ -49,6 +49,7 @@ export type OutreachSenderAccountSummary = {
 };
 
 export type IntegrationsRegistryRawState = {
+  yougileStatus?: { connected?: boolean; configured?: boolean; needs_reauthorization?: boolean } | null;
   trelloStatus?: { connected?: boolean; needs_reauthorization?: boolean } | null;
   business?: SettingsHubBusiness | null;
   telegramOwnerLinked?: boolean | null;
@@ -163,6 +164,15 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
   const altegioProvider = crmProviders.find((provider) => provider.provider === 'altegio') || null;
 
   return [
+    {
+      id: 'yougile', name: 'YouGile', tag: 'Задачи',
+      description: 'Задачи команды, исполнители и сроки. Создание и завершение после проверки.',
+      connectionType: 'api_key',
+      status: rawState.yougileStatus?.needs_reauthorization ? 'action_required' : rawState.yougileStatus?.configured ? 'connected' : rawState.yougileStatus?.connected ? 'action_required' : 'not_connected',
+      nextAction: rawState.yougileStatus?.configured ? 'Посмотрите задачи или подготовьте поручение.' : rawState.yougileStatus?.connected ? 'Выберите рабочую доску и колонку.' : 'Подключите свою команду YouGile.',
+      primaryAction: { label: rawState.yougileStatus?.connected ? 'Открыть' : 'Подключить', type: 'drawer', target: 'yougile' },
+      hasLogs: false, hasHelp: true,
+    },
     {
       id: 'trello', name: 'Trello', tag: 'Задачи',
       description: 'Чтение выбранных досок, карточек и сроков. Обновление по кнопке.',

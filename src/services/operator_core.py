@@ -123,6 +123,7 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("services.google.add", "Добавление услуги в Google", "approval_required", "external_write", "separate_confirmation", "/dashboard/card?tab=services", ("Обнови новую услугу в Google",)),
     OperatorCapability("services.price.update", "Изменение цены одной услуги", "available", "write_internal", "explicit_command", "/dashboard/card?tab=services", ("Измени цену услуги Маникюр на 1500",)),
     OperatorCapability("work.journal", "Рабочий журнал", "available", "internal_observation_write", "none", "/dashboard/work-journal", ("Клиент отказался от ухода, дорого",)),
+    OperatorCapability("tasks.yougile", "Задачи команды в YouGile", "approval_required", "external_write", "separate_confirmation", "/dashboard/settings/integrations?focus=yougile", ("Создай поручение в YouGile",), "yougile.task.apply"),
     OperatorCapability("work.schedule", "Планёрка и расписание", "approval_required", "internal_write", "separate_confirmation", "/dashboard/operator", ("Проведи планёрку на сегодня",)),
     OperatorCapability("work.colleague", "Сообщение по планёрке", "approval_required", "external_send", "separate_confirmation", "/dashboard/operator", ("Подготовь сообщение коллеге",)),
     OperatorCapability("work.policy", "Правила рекомендаций", "approval_required", "owner_policy_write", "separate_confirmation", "/dashboard/work-journal", ("Не предлагайте домашний набор",), "work.policy.apply"),
@@ -242,6 +243,9 @@ def operator_capability_catalog(business_id=None, subscription_access=None) -> l
             from services import finance_daily, work_journal, operator_request_history
             disabled = ((item.name.startswith('work.') and not work_journal.enabled(business_id))
                         or (item.name == 'finance.daily.write' and not finance_daily.enabled(business_id)))
+            if item.name == 'tasks.yougile':
+                from services.yougile_tasks import enabled
+                disabled = not enabled()
             if item.name in {'work.schedule','work.colleague'}:
                 from services import operator_workday
                 disabled = disabled or not operator_workday.enabled(business_id)
@@ -1690,6 +1694,8 @@ def _operator_tool_catalog(
     ]
     from services import operator_business_management
     tools.extend(operator_business_management.tools(cursor,business_id,user_id,message,channel,action_orchestrator,actor_context))
+    from services import operator_yougile_tasks
+    tools.extend(operator_yougile_tasks.tools(cursor,business_id,user_id,channel,action_orchestrator))
     from services.operator_editorial import editorial_tools
     tools.extend(editorial_tools(cursor,business_id,user_id,message,channel))
     from services import finance_daily, operator_finance_daily
@@ -2737,7 +2743,7 @@ def confirm_pending_operator_action(
                 "external_writes_performed": False,
             }, False
         backend_result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
-        if capability in {"finance.daily.write","work.policy","settings.input","settings.profile","team.manage"} and backend_result.get("status") in {"blocked","error","failed"}:
+        if capability in {"tasks.yougile","finance.daily.write","work.policy","settings.input","settings.profile","team.manage"} and backend_result.get("status") in {"blocked","error","failed"}:
             return standardize_operator_result(backend_result,capability), False
         backend_chat_response = str(backend_result.get("chat_response") or "").strip()
         if backend_chat_response:
