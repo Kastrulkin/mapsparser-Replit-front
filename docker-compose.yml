@@ -42,7 +42,12 @@ services:
         VITE_BLOCK_ACCESS_V2_ENABLED: ${VITE_BLOCK_ACCESS_V2_ENABLED:-false}
         VITE_BROWSER_COOKIE_AUTH_ENABLED: ${VITE_BROWSER_COOKIE_AUTH_ENABLED:-false}
     restart: unless-stopped
+    env_file:
+      - path: ./config/outreach-search.env
+        required: false
     environment:
+      LOCALOS_PLATFORM_BUSINESS_ID: ${LOCALOS_PLATFORM_BUSINESS_ID:-localos-platform-telegram-radar}
+      OUTREACH_REPLY_SYNC_ENABLED: ${OUTREACH_REPLY_SYNC_ENABLED:-true}
       MAX_ENABLED: ${MAX_ENABLED:-false}
       MAX_PUBLISH_ENABLED: ${MAX_PUBLISH_ENABLED:-false}
       MAX_PUBLISH_CHAT_IDS: ${MAX_PUBLISH_CHAT_IDS:-}
@@ -336,7 +341,11 @@ services:
     env_file:
       - path: ./config/yougile.env
         required: false
+      - path: ./config/outreach-search.env
+        required: false
     environment:
+      LOCALOS_PLATFORM_BUSINESS_ID: ${LOCALOS_PLATFORM_BUSINESS_ID:-localos-platform-telegram-radar}
+      OUTREACH_REPLY_SYNC_ENABLED: ${OUTREACH_REPLY_SYNC_ENABLED:-true}
       OUTREACH_CONTINUATION_ENABLED: ${OUTREACH_CONTINUATION_ENABLED:-false}
       OUTREACH_CONTINUATION_BUSINESS_IDS: ${OUTREACH_CONTINUATION_BUSINESS_IDS:-}
       MAX_ENABLED: ${MAX_ENABLED:-false}
@@ -635,7 +644,14 @@ services:
     restart: unless-stopped
     # The app service owns schema migrations. The lean Telegram image starts the bot directly.
     entrypoint: []
+    env_file:
+      - path: ./config/outreach-search.env
+        required: false
     environment:
+      LOCALOS_PLATFORM_BUSINESS_ID: ${LOCALOS_PLATFORM_BUSINESS_ID:-localos-platform-telegram-radar}
+      OUTREACH_REPLY_SYNC_ENABLED: ${OUTREACH_REPLY_SYNC_ENABLED:-true}
+      OUTREACH_CONTINUATION_ENABLED: ${OUTREACH_CONTINUATION_ENABLED:-false}
+      OUTREACH_CONTINUATION_BUSINESS_IDS: ${OUTREACH_CONTINUATION_BUSINESS_IDS:-}
       EXTERNAL_AUTH_SECRET_KEY: ${EXTERNAL_AUTH_SECRET_KEY:-}
       OPERATOR_WORK_REVIEW_BUSINESS_IDS: ${OPERATOR_WORK_REVIEW_BUSINESS_IDS:-}
       DISK_IMPORT_BUSINESS_IDS: ${DISK_IMPORT_BUSINESS_IDS:-}

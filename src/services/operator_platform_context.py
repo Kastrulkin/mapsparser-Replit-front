@@ -1,7 +1,7 @@
 """The existing LocalOS system business anchors platform chat and its history.
 
 Selection never grants privileges: every aggregate read checks the current actor.
-No system business is created here and no provider synchronization is implied.
+No system business is created here. Explicit checks queue existing reply collectors.
 """
 import os
 import re
@@ -37,6 +37,13 @@ def platform_read_request(cursor, *, business_id, user_id, message):
         raise PermissionError('Нет доступа к управлению платформой LocalOS')
     scope = {'kind': 'platform', 'id': None, 'name': 'LocalOS', 'business_ids': []}
     if incoming:
+        if re.search(r'проверь|проверить|обнови|обновить|синхрониз|check|refresh', message, re.I):
+            from services.operator_platform_outreach import enqueue_reply_sync
+            job = enqueue_reply_sync(cursor, user_id=user_id)
+            return {'status': 'processing', 'capability': 'partnerships.read',
+                    'async_job_id': job['id'], 'job': job,
+                    'chat_response': 'Проверка ответов в подключённых каналах поставлена в очередь. Итог и ответы доступны в разделе «Партнёрства» для всей платформы.',
+                    'mobile_route': {'screen': 'partnerships'}, 'external_writes_performed': False}
         return _incoming(cursor, scope)
     from services.operator_scope_summary import build_operator_scope_summary, format_scope_summary_for_telegram
     summary = build_operator_scope_summary(cursor, scope=scope, user_id=user_id)
@@ -45,7 +52,7 @@ def platform_read_request(cursor, *, business_id, user_id, message):
             'mobile_route': {'screen': 'tasks'}, 'external_writes_performed': False}
 
 
-def _incoming(cursor, scope):
+def _incoming(cursor, scope, *, sync_checked=False):
     cursor.execute("SELECT to_regclass('public.outreach_inbound_events') AS table_ref")
     if not _row(cursor, cursor.fetchone()).get('table_ref'):
         return {'status': 'blocked', 'capability': 'partnerships.read',
@@ -87,7 +94,7 @@ def _incoming(cursor, scope):
                 lines.append(f"• {sender.get('channel')}: {stamp}" + (' · есть ошибка синхронизации' if sender.get('reply_sync_error') else ''))
             if len(sync) > 6:
                 lines.append('Состояние остальных отправителей — в настройках аутрича.')
-    lines.extend(['', 'Показаны полученные LocalOS ответы. Новая проверка почтовых ящиков и мессенджеров этим запросом не запускалась.'])
+    lines.extend(['', 'Один проход охватывает только подключённые источники. Личные диалоги MAX не читаются.' if sync_checked else 'Показаны полученные LocalOS ответы. Новая проверка почтовых ящиков и мессенджеров этим запросом не запускалась.'])
     return {'status': 'completed', 'capability': 'partnerships.read', 'chat_response': '\n'.join(lines),
             'scope': scope, 'as_of': datetime.now(timezone.utc).isoformat(),
             'mobile_route': {'screen': 'partnerships'}, 'external_writes_performed': False}

@@ -110,6 +110,7 @@ def _job_result_target(row, result):
     screens = {'content_draft_generate': ('content', 'Открыть публикацию'),
                'card_refresh': ('cards', 'Открыть карточку'),
                'outreach_continue': ('partnerships', 'Открыть аутрич'),
+               'outreach_inbox_sync': ('partnerships', 'Открыть входящие'),
                'finance_document_recognize': ('finance', 'Открыть продажи'),
                'finance_crm_sync': ('finance', 'Открыть финансы')}
     screen, label = screens.get(kind, ('tasks', 'Открыть задачу'))
@@ -521,7 +522,13 @@ def process_next_operator_async_job(*, background: bool = False, background_only
         if kind == "outreach_continue":
             from services.outreach_continuation import process_job
             return {"id": job_id, "kind": kind, **process_job(claimed)}
-        if kind == "partner_copy_prepare":
+        if kind == "outreach_inbox_sync":
+            from services.operator_platform_outreach import process_reply_sync
+            result = process_reply_sync(claimed)
+            status, stage, progress = 'completed', 'Проверка входящих завершена', 100
+            if result.get('sync_status') == 'partial':
+                stage = 'Часть каналов требует внимания'
+        elif kind == "partner_copy_prepare":
             from services.partnership_prepared_campaigns import process_preparation_job
             result = process_preparation_job(claimed)
             status, stage, progress = "completed", "Касания сохранены без отправки", 100

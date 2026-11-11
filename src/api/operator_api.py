@@ -4752,6 +4752,8 @@ register_business_management_routes(operator_bp)
 
 from api.operator_day_brief_api import register_day_brief_routes
 register_day_brief_routes(operator_bp)
+from api.operator_platform_outreach_api import register_platform_outreach_routes
+register_platform_outreach_routes(operator_bp)
 
 
 @operator_bp.route('/mobile/content/drafts/<draft_id>', methods=['GET'])

@@ -31,12 +31,16 @@ class QualificationUnavailable(RuntimeError):
 
 
 def continuation_enabled(business_id: str) -> bool:
+    from services.operator_platform_context import platform_business_id
     allowed = {item.strip() for item in os.getenv("OUTREACH_CONTINUATION_BUSINESS_IDS", "").split(",") if item.strip()}
-    return os.getenv("OUTREACH_CONTINUATION_ENABLED", "false").lower() in {"true", "1", "yes"} and business_id in allowed
+    return os.getenv("OUTREACH_CONTINUATION_ENABLED", "false").lower() in {"true", "1", "yes"} and (business_id in allowed or business_id == platform_business_id())
 
 
 def actor_can_write(cursor: Any, business_id: str, actor: dict[str, Any]) -> bool:
     from core.auth_helpers import verify_business_write_access
+    from services.operator_platform_context import platform_business_id, platform_chat_business
+    if business_id == platform_business_id() and not platform_chat_business(cursor, actor.get('user_id') or actor.get('id')):
+        return False
     return (actor.get("is_active") not in (False, 0, "0")
             and actor.get("session_kind") != "demo"
             and verify_business_write_access(cursor, business_id, actor)[0])

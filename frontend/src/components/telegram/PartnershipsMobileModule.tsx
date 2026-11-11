@@ -1,4 +1,5 @@
 import { PartnershipCollections } from '@/components/prospecting/PartnershipCollections';
+import { PlatformOutreach } from './PlatformOutreach';
 import { PreparedPartnershipMessages } from '@/components/prospecting/PreparedPartnershipMessages';
 import { PartnershipResultView } from './PartnershipResultView';
 import { partnershipMiniLaunch } from "@/lib/partnershipMiniLaunch";
@@ -289,7 +290,10 @@ const Empty = ({ title, text }: { title: string; text: string }) => (
   </div>
 );
 
-export const PartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onDiscuss }: { scope?: Scope; openBusiness?: (businessId: string) => void; focusItemId?: string; onDiscuss?: (lead: Lead) => void }) => {
+type PartnershipsProps = { scope?: Scope; openBusiness?: (businessId: string) => void; focusItemId?: string; onDiscuss?: (lead: Lead) => void };
+export const PartnershipsMobileModule = (props: PartnershipsProps) => props.scope?.kind === 'platform' ? <PlatformOutreach openBusiness={props.openBusiness} /> : <ScopedPartnershipsMobileModule {...props} />;
+
+const ScopedPartnershipsMobileModule = ({ scope, openBusiness, focusItemId, onDiscuss }: PartnershipsProps) => {
   const businessId = scope?.kind === "business" ? String(scope.id || "") : "";
   const requestedLeadId = focusItemId || (miniAppLaunchParams().get("item_type") === "partner"
     ? miniAppLaunchParams().get("item_id") || ""

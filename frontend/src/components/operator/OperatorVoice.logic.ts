@@ -28,7 +28,7 @@ export async function waitForOperatorResult<T extends { async_job_id?: string }>
     if(!isCurrent())return result;
     if(body.job) onProgress?.(body.job);
     if(body.job?.status==='completed')return body.job.result;
-    if(['failed','cancelled'].includes(body.job?.status))return {...result,status:body.job.status,chat_response:'Подготовить изменение не удалось. План остался прежним. '+(body.job.error || '')};
+    if(['failed','cancelled'].includes(body.job?.status))return {...result,status:body.job.status,chat_response:body.job.kind==='outreach_inbox_sync'?'Не удалось завершить проверку входящих. Сохранённые ответы доступны в «Партнёрствах».':'Подготовить изменение не удалось. План остался прежним. '+(body.job.error || '')};
     await new Promise<void>(resolve=>window.setTimeout(resolve,2000));
   }
   return result;

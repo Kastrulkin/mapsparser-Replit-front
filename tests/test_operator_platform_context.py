@@ -38,7 +38,7 @@ class PlatformCursor:
 
 def test_localos_inbox_reads_all_saved_replies_and_discloses_freshness():
     cursor = PlatformCursor(replies=[{'id': 'reply', 'lead_name': 'Партнёр', 'business_name': 'Клиент 2', 'reply_text': 'Давайте обсудим', 'channel': 'email'}])
-    result = operator_platform_context.platform_read_request(cursor, business_id=operator_platform_context.platform_business_id(), user_id='admin', message='Проверь входящие по всем бизнесам')
+    result = operator_platform_context.platform_read_request(cursor, business_id=operator_platform_context.platform_business_id(), user_id='admin', message='Покажи входящие по всем бизнесам')
     assert result['status'] == 'completed'
     assert 'Клиент 2' in result['chat_response']
     assert 'Давайте обсудим' in result['chat_response']
@@ -57,7 +57,7 @@ def test_localos_name_never_grants_platform_access():
 def test_inbox_summary_fits_a_bot_message_without_hiding_the_freshness_limit():
     cursor = PlatformCursor(replies=[{'lead_name': 'Компания' * 100, 'business_name': 'Клиент' * 100,
                                      'reply_text': 'Ответ ' * 1000, 'channel': 'email'} for _ in range(21)])
-    result = operator_platform_context.platform_read_request(cursor, business_id=operator_platform_context.platform_business_id(), user_id='admin', message='Проверь входящие')
+    result = operator_platform_context.platform_read_request(cursor, business_id=operator_platform_context.platform_business_id(), user_id='admin', message='Покажи входящие')
     assert len(result['chat_response']) < 3500
     assert 'последние 5 ответов' in result['chat_response']
     assert 'не запускалась' in result['chat_response']
