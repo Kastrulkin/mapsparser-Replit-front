@@ -2343,6 +2343,10 @@ def route_operator_message(
     subscription_access: dict | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     clean_message = str(message or "").strip()
+    from services.operator_platform_context import platform_read_request
+    platform_result = platform_read_request(cursor, business_id=business_id, user_id=user_id, message=clean_message)
+    if platform_result is not None:
+        return standardize_operator_result(platform_result, platform_result['capability']), {}
     from services import work_journal, operator_work_journal
     literal=operator_work_journal.literal_note(clean_message)
     journal_composer=(action_payload or {}).get('input_context')=='work_journal' and not (action_payload or {}).get('work_entry_id')

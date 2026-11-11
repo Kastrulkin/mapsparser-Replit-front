@@ -105,6 +105,11 @@ def query_business_ids(cursor, business_id, user_id=None):
     from core.auth_helpers import verify_business_access
     user = load_actor(cursor, user_id)
     require_permission(cursor, business_id, user, 'business.read')
+    from services.operator_platform_context import platform_business_id, platform_chat_business
+    if business_id == platform_business_id() and platform_chat_business(cursor, user_id):
+        cursor.execute("""SELECT id FROM businesses WHERE COALESCE(is_active,TRUE)
+            AND COALESCE(entity_group,'lead') IN ('client','internal','demo') ORDER BY id""")
+        return [str(_row(cursor, row)['id']) for row in cursor.fetchall()]
     cursor.execute('SELECT network_id FROM businesses WHERE id=%s', (business_id,))
     row = _row(cursor, cursor.fetchone())
     if str(row.get('network_id') or '') != str(business_id):

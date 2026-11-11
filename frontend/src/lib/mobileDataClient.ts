@@ -45,6 +45,7 @@ export const mobileAuthHeaders = () => ({ Authorization: `Bearer ${sessionToken(
 export type MobileJob = {
   id?: string;
   kind?: string;
+  business_id?: string | null;
   status?: 'queued' | 'running' | 'waiting_for_review' | 'completed' | 'failed' | 'cancelled';
   progress?: number;
   stage?: string;
@@ -52,6 +53,7 @@ export type MobileJob = {
   error?: string | null;
   terminal?: boolean;
   available_actions?: string[];
+  result_target?: { screen: string; business_id?: string; item_type?: string; item_id?: string; label?: string; review_hint?: string };
 };
 
 export type MobileActionResult = {

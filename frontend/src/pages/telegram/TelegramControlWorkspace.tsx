@@ -126,6 +126,7 @@ export const TelegramControlWorkspace = () => {
   const [messages, setMessages] = useState<OperatorMessage[]>([]);
   const [historyLoadedFor, setHistoryLoadedFor] = useState('');
   const [operatorConversationId, setOperatorConversationId] = useState<string | null>(null);
+  const [operatorBusinessId, setOperatorBusinessId] = useState('');
   const [selectedContent, setSelectedContent] = useState<(ModuleItem & { content_version?: string; selection_type?: 'content_item' | 'partner' }) | null>(null);
   const [clearWorkSelection, setClearWorkSelection] = useState(false);
   const [financeChatFor, setFinanceChatFor] = useState<string | null>(null);
@@ -468,19 +469,20 @@ export const TelegramControlWorkspace = () => {
 
   useEffect(() => {
     operatorHistoryVersion.current++;
-    setMessages([]); setSelectedContent(null); setOperatorConversationId(null); setHistoryLoadedFor(''); setOperatorBusy(false);
+    setMessages([]); setSelectedContent(null); setOperatorConversationId(null); setOperatorBusinessId(''); setHistoryLoadedFor(''); setOperatorBusy(false);
   }, [scope?.kind, scope?.id]);
   const loadOperatorHistory = async () => {
-    if (preview || scope?.kind !== 'business' || !scope.id) return;
-    const scopeKey = `${scope.kind}:${scope.id}`;
+    if (preview || !scope || scope.kind === 'network' || scope.kind === 'business' && !scope.id) return;
+    const scopeKey = `${scope.kind}:${scope.id || 'all'}`;
     if (historyLoadedFor === scopeKey) return;
     const version = scopeRequestVersion.current;
     const historyVersion = operatorHistoryVersion.current;
     try {
       const params = scopeQuery(scope);
-      const result = await fetch(`/api/operator/mobile/operator/history?${params}`, { headers: authHeaders() }).then(readJson<{ conversation?: { id?: string }; items?: Array<{ id?: string; role?: string; content?: string; status?: string; capability?: string; result_json?: { input_type?: string; mobile_route?: { screen?: string }; approval?: { action_id?: string } } }> }>);
+      const result = await fetch(`/api/operator/mobile/operator/history?${params}`, { headers: authHeaders() }).then(readJson<{ business_id?: string; conversation?: { id?: string }; items?: Array<{ id?: string; role?: string; content?: string; status?: string; capability?: string; result_json?: { input_type?: string; mobile_route?: { screen?: string }; approval?: { action_id?: string } } }> }>);
       if (version !== scopeRequestVersion.current || historyVersion !== operatorHistoryVersion.current) return;
       setOperatorConversationId(result.conversation?.id || null);
+      setOperatorBusinessId(result.business_id || '');
       setMessages((result.items || []).map((item) => ({ id: item.id, role: item.role === 'user' ? 'user' : 'operator', text: item.content || '', status: item.status, capability: item.capability, screen: item.result_json?.mobile_route?.screen, action_id: item.result_json?.approval?.action_id })));
       setHistoryLoadedFor(scopeKey);
     } catch (failure) { if (version === scopeRequestVersion.current) setError(failure instanceof Error ? failure.message : 'Не удалось загрузить историю.'); }
@@ -657,6 +659,21 @@ export const TelegramControlWorkspace = () => {
     openMobileTarget(resolveMobileAttentionScreen(item), item.target_scope);
   };
 
+  const openRestoredJobResult = async () => {
+    if (!restoredJob || restoredJobBusy) return;
+    const target = restoredJob.result_target || { screen: restoredJob.kind?.startsWith('content_') ? 'content' : 'tasks', business_id: restoredJob.business_id || undefined, item_id: '' };
+    setRestoredJobBusy(true);
+    try {
+      if (target.business_id && (scope?.kind !== 'business' || scope.id !== target.business_id)) {
+        const changed = await chooseScope('business', target.business_id);
+        if (!changed) return;
+      }
+      setRestoredJob(null);
+      setDeepLinkItemId(target.item_id || '');
+      openMobileTarget(target.screen);
+    } finally { setRestoredJobBusy(false); }
+  };
+
   const discussContent = (item: ModuleItem, selectionType: 'content_item' | 'partner' = 'content_item') => {
     if (!item.id || scope?.kind !== 'business' || item.business_id && item.business_id !== scope.id) return;
     setFinanceChatFor(null);
@@ -666,17 +683,20 @@ export const TelegramControlWorkspace = () => {
 
   const sendOperator = async (text: string, source?: VoiceSubmission) => {
     if (!text.trim() || operatorSending.current) return;
-    if (scope?.kind !== 'business' || !scope.id) { setPicker(true); setError('Для команды выберите одну точку.'); return; }
+    if (!scope || scope.kind === 'network' || scope.kind === 'business' && !scope.id) { setPicker(true); setError('Для команды выберите LocalOS или одну точку.'); return; }
     const version = scopeRequestVersion.current;
-    if (pendingOperatorRequest.current.businessId !== scope.id || pendingOperatorRequest.current.text !== `${selectedContent?.selection_type || 'content_item'}:${selectedContent?.id || ''}:${text}`) pendingOperatorRequest.current = { businessId: scope.id, text: `${selectedContent?.selection_type || 'content_item'}:${selectedContent?.id || ''}:${text}`, id: crypto.randomUUID() };
+    const scopeKey = `${scope.kind}:${scope.id || 'all'}`;
+    if (pendingOperatorRequest.current.businessId !== scopeKey || pendingOperatorRequest.current.text !== `${selectedContent?.selection_type || 'content_item'}:${selectedContent?.id || ''}:${text}`) pendingOperatorRequest.current = { businessId: scopeKey, text: `${selectedContent?.selection_type || 'content_item'}:${selectedContent?.id || ''}:${text}`, id: crypto.randomUUID() };
     operatorHistoryVersion.current++;
     operatorSending.current = true; setOperatorBusy(true); setTab('operator');
     try {
       const result = await fetch('/api/operator/chat', {
-        method: 'POST', headers: authHeaders(), body: JSON.stringify({ business_id: scope.id, message: text, channel: miniAppChannel(), conversation_id: operatorConversationId, request_id: pendingOperatorRequest.current.id, ...(clearWorkSelection ? { clear_input_context: true } : {}), ...(selectedContent?.business_id === scope.id ? { selected_object: { type: selectedContent.selection_type || 'content_item', id: selectedContent.id, ...(selectedContent.content_version ? { version: selectedContent.content_version } : { updated_at: selectedContent.updated_at }) } } : {}), ...source }),
-      }).then(readJson<{ conversation_id?: string; operator_result?: { selected_partner?: { item_id: string; version: string }; selected_item?: { item_id: string; version: string }; async_job_id?: string; message_id?: string; input_type?: string; chat_response?: string; summary?: string; status?: string; capability?: string; mobile_route?: { screen?: string }; approval?: { action_id?: string } } }>);
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ business_id: scope.kind === 'business' ? scope.id : undefined, scope_type: scope.kind, scope_id: scope.id || null, message: text, channel: miniAppChannel(), conversation_id: operatorConversationId, request_id: pendingOperatorRequest.current.id, ...(clearWorkSelection ? { clear_input_context: true } : {}), ...(selectedContent && scope.kind === 'business' && selectedContent.business_id === scope.id ? { selected_object: { type: selectedContent.selection_type || 'content_item', id: selectedContent.id, ...(selectedContent.content_version ? { version: selectedContent.content_version } : { updated_at: selectedContent.updated_at }) } } : {}), ...source }),
+      }).then(readJson<{ business_id?: string; conversation_id?: string; operator_result?: { selected_partner?: { item_id: string; version: string }; selected_item?: { item_id: string; version: string }; async_job_id?: string; message_id?: string; input_type?: string; chat_response?: string; summary?: string; status?: string; capability?: string; mobile_route?: { screen?: string }; approval?: { action_id?: string } } }>);
       if (version !== scopeRequestVersion.current) return;
-      if(result.operator_result)result.operator_result=await waitForOperatorResult(result.operator_result,scope.id,authOnlyHeaders,()=>version===scopeRequestVersion.current);
+      const resultBusinessId = result.business_id || scope.id;
+      setOperatorBusinessId(resultBusinessId || '');
+      if(result.operator_result && resultBusinessId)result.operator_result=await waitForOperatorResult(result.operator_result,resultBusinessId,authOnlyHeaders,()=>version===scopeRequestVersion.current);
       if(version!==scopeRequestVersion.current)return;
       setClearWorkSelection(false);
       const selection = result.operator_result?.selected_partner || result.operator_result?.selected_item;
@@ -697,14 +717,15 @@ export const TelegramControlWorkspace = () => {
   const askOperator = async (event: FormEvent) => { event.preventDefault(); await sendOperator(command); };
 
   const resolveOperatorAction = async (actionId: string, decision: OperatorActionDecision) => {
-    if (scope?.kind !== 'business' || !scope.id || operatorActionBusy) return;
+    const businessId = scope?.kind === 'business' ? scope.id : scope?.kind === 'platform' ? operatorBusinessId : '';
+    if (!businessId || operatorActionBusy) return;
     setOperatorActionBusy({ actionId, decision });
     setMessages((current) => current.map((item) => item.action_id === actionId ? { ...item, action_error: undefined } : item));
     try {
       const result = await fetch(`/api/operator/actions/${encodeURIComponent(actionId)}/${decision === 'confirm' ? 'confirm' : 'reject'}`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ business_id: scope.id }),
+        body: JSON.stringify({ business_id: businessId }),
       }).then(readJson<{ operator_result?: { chat_response?: string; summary?: string; status?: string } }>);
       const operatorResult = result.operator_result;
       setMessages((current) => current.map((item) => item.action_id === actionId ? {
@@ -715,7 +736,7 @@ export const TelegramControlWorkspace = () => {
         action_error: undefined,
       } : item));
       await loadWorkspace();
-      if (financeChatFor === scope.id && decision === 'confirm') await loadToday(scope, bootstrap?.today_v2_enabled !== false, true);
+      if (financeChatFor === scope?.id && decision === 'confirm') await loadToday(scope, bootstrap?.today_v2_enabled !== false, true);
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : 'Не удалось обработать решение.';
       setMessages((current) => current.map((item) => item.action_id === actionId ? { ...item, action_error: message } : item));
@@ -807,7 +828,7 @@ export const TelegramControlWorkspace = () => {
       <MobileShell
         header={<TopBar />}
         error={error}
-        overlay={<><ActionPreviewSheet preview={actionPreview} busy={reviewActionBusy === 'bulk'} confirmLabel="Подготовить ответы" onConfirm={() => void confirmSelectedReviews()} onCancel={() => setActionPreview(null)} /><JobProgressSheet job={restoredJob} busy={restoredJobBusy} onClose={() => setRestoredJob(null)} onRetry={() => void retryRestoredJob()} onCancel={() => void cancelRestoredJob()} />{paywall ? <SubscriptionPaywall item={paywall} close={() => setPaywall(null)} /> : null}{showOnboarding ? <LeadJourneyOnboarding onFinish={completeLeadJourneyOnboarding} /> : null}</>}
+        overlay={<><ActionPreviewSheet preview={actionPreview} busy={reviewActionBusy === 'bulk'} confirmLabel="Подготовить ответы" onConfirm={() => void confirmSelectedReviews()} onCancel={() => setActionPreview(null)} /><JobProgressSheet job={restoredJob} busy={restoredJobBusy} onClose={() => setRestoredJob(null)} onRetry={() => void retryRestoredJob()} onCancel={() => void cancelRestoredJob()} onOpenResult={() => void openRestoredJobResult()} />{paywall ? <SubscriptionPaywall item={paywall} close={() => setPaywall(null)} /> : null}{showOnboarding ? <LeadJourneyOnboarding onFinish={completeLeadJourneyOnboarding} /> : null}</>}
         navigation={!picker && !showOnboarding ? <BottomNav current={tab} setCurrent={(next) => openMobileTarget(next)} /> : null}
       >
         <AnimatePresence initial={false} mode="wait">
@@ -825,7 +846,7 @@ export const TelegramControlWorkspace = () => {
             {!picker && tab === 'reviews' ? bootstrap?.navigation?.find((item) => item.key === 'reviews')?.status === 'read_only' ? <Screen title="Отзывы" subtitle="Новые отзывы и подготовленные ответы."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'reviews')} /></Screen> : <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
             {!picker && tab === 'progress' ? <Screen title="Результаты" subtitle="Подтверждённая работа и доступные измерения.">{bootstrap?.navigation?.find((item) => item.key === 'progress')?.status === 'read_only' ? <LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'progress')} /> : <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} />}</Screen> : null}
             {!picker && tab === 'operator' && selectedContent && selectedContent.business_id === scope?.id && <div className="mb-3 rounded-xl border p-3"><p className="text-sm">{selectedContent.selection_type === 'partner' ? 'Обсуждаем партнёра' : 'Обсуждаем пост'}: {selectedContent.title}</p><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1"><button type="button" className="min-h-11 underline" onClick={() => openMobileTarget(selectedContent.selection_type === 'partner' ? 'partnerships' : 'content')}>{selectedContent.selection_type === 'partner' ? 'Вернуться к партнёру' : 'Вернуться к посту'}</button><button type="button" className="min-h-11 underline" disabled={operatorBusy} onClick={() => { setSelectedContent(null); setClearWorkSelection(true); setMessages([]); }}>Завершить обсуждение</button></div></div>}
-            {!picker && tab === 'operator' ? bootstrap?.navigation?.find((item) => item.key === 'operator')?.status === 'read_only' ? <Screen title="Чат с LocalOS" subtitle="Поручения, согласования и результаты работы."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'operator')} /></Screen> : <Operator workContext={selectedContent?.business_id === scope?.id ? selectedContent.selection_type === 'partner' ? 'partner' : 'content_item' : undefined} financeInput={Boolean(financeChatFor && financeChatFor === scope?.id)} businessId={scope?.kind === 'business' ? scope.id || '' : ''} conversationId={operatorConversationId} onConversation={setOperatorConversationId} sendVoice={sendOperator} messages={messages} busy={operatorBusy} actionBusy={operatorActionBusy} command={command} setCommand={setCommand} ask={askOperator} resolveAction={resolveOperatorAction} openScreen={openMobileTarget} /> : null}
+            {!picker && tab === 'operator' ? bootstrap?.navigation?.find((item) => item.key === 'operator')?.status === 'read_only' ? <Screen title="Чат с LocalOS" subtitle="Поручения, согласования и результаты работы."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'operator')} /></Screen> : <Operator workContext={selectedContent && selectedContent.business_id === scope?.id ? selectedContent.selection_type === 'partner' ? 'partner' : 'content_item' : undefined} financeInput={Boolean(financeChatFor && financeChatFor === scope?.id)} businessId={scope?.kind === 'business' ? scope.id || '' : operatorBusinessId} conversationId={operatorConversationId} onConversation={setOperatorConversationId} sendVoice={sendOperator} messages={messages} busy={operatorBusy} actionBusy={operatorActionBusy} command={command} setCommand={setCommand} ask={askOperator} resolveAction={resolveOperatorAction} openScreen={openMobileTarget} /> : null}
             {!picker && tab === 'more' && !module ? <More navigation={visibleNavigation} onOpen={openMobileTarget} openProgress={() => openMobileTarget('progress')} onLocked={setPaywall} restartTour={() => setShowOnboarding(true)} scope={scope} /> : null}
             {!picker && tab === 'menu' ? <UtilityMenu navigation={visibleNavigation} onOpen={openMobileTarget} scope={scope} /> : null}
             {!picker && tab === 'more' && module === 'settings' && scope?.kind === 'business' && scope.id ? <>{bootstrap?.max_enabled ? <MaxChannelConnection key={`max-${scope.id}`} businessId={scope.id} headers={authOnlyHeaders} /> : null}<BusinessInputSettings key={scope.id} businessId={scope.id} headers={authOnlyHeaders} /><ContentRules key={`rules-${scope.id}`} businessId={scope.id} headers={authOnlyHeaders} /></> : null}
@@ -1071,7 +1092,7 @@ export const NetworkScopePicker = ({ network, currentScope, locations, total, ne
   </Screen>;
 };
 
-const ScopePicker = ({ catalog, search, setSearch, choose, openNetwork, loadMore }: { catalog?: Catalog; search: string; setSearch: (value: string) => void; choose: (kind: string, id?: string | null) => void; openNetwork: (network: NetworkCatalogItem) => void; loadMore: () => void }) => <Screen title="Где работаем?" subtitle="Выбор сохранится для следующего запуска."><label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-muted-foreground" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, город или адрес" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-muted-foreground focus:ring-ring" /></label><div className="mt-4 space-y-2">{catalog?.platform ? <ScopeRow icon={ShieldCheck} label="Вся платформа" meta="Операционная картина ЛокалОС" onClick={() => void choose('platform')} /> : null}{catalog?.networks?.map((item) => <ScopeRow key={item.id} icon={Network} label={item.name || 'Сеть'} meta={`${locationCountLabel(item.locations_count || 0)} · Выбрать`} onClick={() => openNetwork(item)} />)}{catalog?.businesses?.filter((item) => Boolean(search.trim()) || !item.network_id).map((item) => <ScopeRow key={item.id} icon={Building2} label={item.name || 'Бизнес'} meta={[item.network_name, item.address].filter(Boolean).join(' · ') || 'Самостоятельный бизнес'} onClick={() => void choose('business', item.id)} />)}{catalog?.has_more_businesses ? <button type="button" onClick={loadMore} className="min-h-12 w-full rounded-2xl bg-white/[0.05] text-sm font-semibold text-zinc-300 shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-transform active:scale-[0.96]">Показать ещё</button> : null}</div></Screen>;
+const ScopePicker = ({ catalog, search, setSearch, choose, openNetwork, loadMore }: { catalog?: Catalog; search: string; setSearch: (value: string) => void; choose: (kind: string, id?: string | null) => void; openNetwork: (network: NetworkCatalogItem) => void; loadMore: () => void }) => <Screen title="Где работаем?" subtitle="Выбор сохранится для следующего запуска."><label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-muted-foreground" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, город или адрес" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-muted-foreground focus:ring-ring" /></label><div className="mt-4 space-y-2">{catalog?.platform ? <ScopeRow icon={ShieldCheck} label="LocalOS" meta="Вся платформа · Все бизнесы и аутрич" onClick={() => void choose('platform')} /> : null}{catalog?.networks?.map((item) => <ScopeRow key={item.id} icon={Network} label={item.name || 'Сеть'} meta={`${locationCountLabel(item.locations_count || 0)} · Выбрать`} onClick={() => openNetwork(item)} />)}{catalog?.businesses?.filter((item) => Boolean(search.trim()) || !item.network_id).map((item) => <ScopeRow key={item.id} icon={Building2} label={item.name || 'Бизнес'} meta={[item.network_name, item.address].filter(Boolean).join(' · ') || 'Самостоятельный бизнес'} onClick={() => void choose('business', item.id)} />)}{catalog?.has_more_businesses ? <button type="button" onClick={loadMore} className="min-h-12 w-full rounded-2xl bg-white/[0.05] text-sm font-semibold text-zinc-300 shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-transform active:scale-[0.96]">Показать ещё</button> : null}</div></Screen>;
 
 const BottomNav = ({ current, setCurrent }: { current: Tab; setCurrent: (tab: Tab) => void }) => {
   const { language } = useLanguage(); const copy = workNavigationCopy(language);

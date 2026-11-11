@@ -27,7 +27,7 @@ export function useContentResult(businessId: string, source: ModuleItem[], selec
   const denied = deniedBusiness === businessId && Boolean(businessId);
   const plans = denied ? [] : catalog.businessId === businessId ? catalog.plans : fallback;
   const current = currentResultPlan(plans);
-  const focused = scopedSource.find(item => item.id === focusItemId)?.plan_id;
+  const focused = plans.find(plan => plan.id === focusItemId)?.id || scopedSource.find(item => item.id === focusItemId || item.plan_id === focusItemId)?.plan_id;
   const activeId = (plans.some(plan => plan.id === selected) ? selected : focused || current?.id) || fallback[0]?.id || '';
   useEffect(() => {
     if (!businessId) return;

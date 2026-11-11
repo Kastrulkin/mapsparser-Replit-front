@@ -8,6 +8,26 @@ from services.operator_async_jobs import (
 )
 
 
+def test_renewal_review_opens_the_successor_plan_in_its_own_business():
+    from services.operator_async_jobs import _public_job
+    job = _public_job({'id': 'renewal', 'business_id': 'client-2',
+                       'kind': 'content_plan_network_renewal', 'status': 'waiting_for_review',
+                       'payload_json': {'previous_plan_id': 'previous-plan'},
+                       'result_json': {'plan_id': 'successor-plan', 'requires_owner_review': True}})
+    assert job['result_target']['screen'] == 'content'
+    assert job['result_target']['business_id'] == 'client-2'
+    assert job['result_target']['item_id'] == 'successor-plan'
+    assert 'фотографии' in job['result_target']['review_hint']
+    assert 'cancel' not in job['available_actions']
+
+
+def test_job_result_never_uses_an_external_result_url():
+    from services.operator_async_jobs import _public_job
+    job = _public_job({'id': 'unknown', 'kind': 'unknown', 'result_json': {'href': 'https://example.org'}})
+    assert job['result_target']['screen'] == 'tasks'
+    assert 'href' not in job['result_target']
+
+
 class AsyncJobCursor:
     def __init__(self):
         self.job = None

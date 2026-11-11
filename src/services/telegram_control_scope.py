@@ -297,7 +297,7 @@ def list_control_scopes(
         platform = _scope_payload(
             kind="platform",
             scope_id=None,
-            name="Вся платформа",
+            name="LocalOS",
             business_ids=[],
             can_switch=True,
         )
@@ -367,6 +367,9 @@ def _resolve_requested_scope(
     scope_id: str | None,
 ) -> dict[str, Any] | None:
     can_switch = int(catalog.get("total_choices") or 0) > 1
+    from services.operator_platform_context import platform_business_id
+    if kind == 'business' and scope_id == platform_business_id() and catalog.get('platform'):
+        kind = 'platform'
     if kind == "platform":
         platform = catalog.get("platform")
         if not isinstance(platform, dict):

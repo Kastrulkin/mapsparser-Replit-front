@@ -34,6 +34,77 @@ describe('TelegramControlPage scope integrity', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     window.localStorage.clear();
+    delete window.WebApp;
+  });
+
+  it.each(['telegram', 'max'])('sends a LocalOS platform command through %s without opening the business picker', async (platform) => {
+    window.history.replaceState({}, '', `/${platform}/control`);
+    if (platform === 'max') window.WebApp = { initData: 'signed-max-init-data' };
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === `/api/operator/${platform}/bootstrap`) return jsonResponse({
+        success: true, user: { id: 'user-1' }, web_session_token: 'session', today_v2_enabled: false,
+        selected_scope: { kind: 'platform', name: 'LocalOS', business_ids: [], can_switch: true },
+        summary: { attention_items: [] }, catalog: { platform: { name: 'LocalOS' }, businesses: [], networks: [], total_choices: 2 },
+        navigation: [{ key: 'operator', label: 'Оператор', group: 'primary', status: 'available' }],
+      });
+      if (url.startsWith('/api/operator/mobile/operator/history')) return jsonResponse({ business_id: 'localos-platform-telegram-radar', items: [] });
+      if (url === '/api/operator/chat') return jsonResponse({ business_id: 'localos-platform-telegram-radar', conversation_id: 'platform-chat', operator_result: { status: 'completed', chat_response: 'Ответы по всем бизнесам: найдено 2.' } });
+      return jsonResponse({ items: [], summary: { attention_items: [] } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<LanguageContext.Provider value={{ language: 'ru', setLanguage: vi.fn(), t: en }}><TelegramControlPage /></LanguageContext.Provider>);
+    await openOperator(user);
+    await user.type(await screen.findByPlaceholderText('Напишите задачу'), 'Проверь входящие по всем бизнесам');
+    await user.click(screen.getByRole('button', { name: 'Отправить задачу' }));
+    expect(await screen.findByText('Ответы по всем бизнесам: найдено 2.')).toBeInTheDocument();
+    expect(screen.queryByText('Где работаем?')).not.toBeInTheDocument();
+    const request = fetchMock.mock.calls.find(([input]) => String(input) === '/api/operator/chat');
+    expect(request).toBeDefined();
+    const payload = JSON.parse(String(request?.[1]?.body));
+    expect(payload.scope_type).toBe('platform');
+    expect(payload.channel).toBe(`${platform}_mini_app`);
+    expect(payload.business_id).toBeUndefined();
+  });
+
+  it('opens a waiting result in its business and selects the exact successor plan', async () => {
+    const job = { id: 'renewal', kind: 'content_plan_network_renewal', status: 'waiting_for_review', progress: 100,
+      business_id: 'business-2', result_target: { screen: 'content', business_id: 'business-2', item_id: 'next-plan', item_type: 'content_plan', label: 'Открыть контент-план' } };
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/operator/telegram/bootstrap') return jsonResponse({
+        success: true, user: { id: 'user-1' }, web_session_token: 'session', today_v2_enabled: false,
+        selected_scope: { kind: 'platform', name: 'LocalOS', business_ids: [], can_switch: true },
+        summary: { attention_items: [] }, active_job: job,
+        catalog: { platform: { name: 'LocalOS' }, businesses: [{ id: 'business-2', name: 'Клиент два' }], networks: [], total_choices: 2 },
+        navigation: [{ key: 'content', label: 'Контент', group: 'more', status: 'available' }],
+      });
+      if (url === '/api/operator/telegram/scope' && init?.method === 'POST') return jsonResponse({
+        success: true, selected_scope: { kind: 'business', id: 'business-2', name: 'Клиент два', business_ids: ['business-2'] },
+        summary: { attention_items: [] }, active_job: job,
+      });
+      if (url.startsWith('/api/operator/mobile/modules/content')) return jsonResponse({ items: [
+        { id: 'previous-item', business_id: 'business-2', plan_id: 'previous-plan', plan_title: 'Предыдущий план', title: 'Старая тема' },
+        { id: 'next-item', business_id: 'business-2', plan_id: 'next-plan', plan_title: 'Новый план', title: 'Новая тема' },
+      ] });
+      if (url.startsWith('/api/content-plans?')) return jsonResponse({ plans: [
+        { id: 'previous-plan', title: 'Предыдущий план', items_count: 1, ready_count: 1, created_at: '2026-11-10' },
+        { id: 'next-plan', title: 'Новый план', items_count: 1, ready_count: 1, created_at: '2026-11-09' },
+      ] });
+      if (url === '/api/content-plans/next-plan') return jsonResponse({ plan: { id: 'next-plan', title: 'Новый план', items: [{ id: 'next-item', business_id: 'business-2', theme: 'Новая тема' }] } });
+      if (url.startsWith('/api/operator/mobile/jobs/')) return jsonResponse({ job });
+      return jsonResponse({ items: [], summary: { attention_items: [] } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<LanguageContext.Provider value={{ language: 'ru', setLanguage: vi.fn(), t: en }}><TelegramControlPage /></LanguageContext.Provider>);
+    await user.click(await screen.findByRole('button', { name: 'Открыть контент-план' }));
+    expect(await screen.findByText('Новая тема')).toBeInTheDocument();
+    expect(screen.getByText('Новая тема')).toBeInTheDocument();
+    expect(screen.queryByText('Старая тема')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/modules/content?scope_type=business&scope_id=business-2'))).toBe(true);
   });
 
   it('does not show operator messages from the previous business while the new history loads', async () => {

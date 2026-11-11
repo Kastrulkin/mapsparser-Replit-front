@@ -1768,6 +1768,18 @@ def _build_telegram_control_summary(telegram_id: str, scope: dict[str, Any]) -> 
 
 def _control_scope_business_context(telegram_id: str, scope: dict[str, Any] | None = None) -> dict[str, Any] | None:
     selected = scope or _resolve_telegram_control_scope(telegram_id)
+    if selected and selected.get('kind') == 'platform':
+        from services.operator_platform_context import platform_chat_business
+        db_user_id = get_user_id_from_telegram(telegram_id)
+        connection = get_db_connection()
+        try:
+            business = platform_chat_business(connection.cursor(), db_user_id)
+        finally:
+            connection.close()
+        if not business:
+            return None
+        return {'user_id': db_user_id, 'business_id': str(business['id']),
+                'business_name': 'LocalOS', 'telegram_id': str(telegram_id), 'control_scope': selected}
     if not selected or selected.get("kind") != "business" or not selected.get("id"):
         return None
     db_user_id = get_user_id_from_telegram(telegram_id)
@@ -1910,7 +1922,7 @@ def _build_control_switcher(
     platform = catalog.get("platform") if isinstance(catalog.get("platform"), dict) else None
     if platform:
         marker = "✓ " if current.get("kind") == "platform" else ""
-        rows.append([InlineKeyboardButton(f"{marker}Вся платформа", callback_data="cs:p")])
+        rows.append([InlineKeyboardButton(f"{marker}LocalOS · Вся платформа", callback_data="cs:p")])
     favorites = preferences.get("favorite_scopes_json") if isinstance(preferences.get("favorite_scopes_json"), list) else []
     valid_favorites = [item for item in favorites if isinstance(item, dict)][:5]
     if valid_favorites and not search_query:
@@ -4435,7 +4447,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "client_services_regenerate_problematic",
         "client_refresh_jobs",
     }
-    if data in business_only_callbacks and (not control_scope or control_scope.get("kind") != "business"):
+    platform_chat = data == 'client_ask' and control_scope and control_scope.get('kind') == 'platform'
+    if data in business_only_callbacks and not platform_chat and (not control_scope or control_scope.get("kind") != "business"):
         await query.edit_message_text(
             "Выберите конкретный бизнес или точку сети — действие нельзя применить к агрегату неявно.",
             reply_markup=InlineKeyboardMarkup(

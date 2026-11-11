@@ -64,6 +64,10 @@ def _scope_allows(scope: dict[str, Any], business_id: str) -> bool:
 def _public_job(row: dict[str, Any]) -> dict[str, Any]:
     status = str(row.get("status") or "queued")
     kind = str(row.get("kind") or "operator_job")
+    result = _json(row.get('result_json'), {})
+    if not isinstance(result, dict):
+        result = {}
+    target = _job_result_target(row, result)
     return {
         "id": str(row.get("id") or ""),
         "action_id": str(row.get("action_id") or "") or None,
@@ -72,7 +76,8 @@ def _public_job(row: dict[str, Any]) -> dict[str, Any]:
         "status": status,
         "progress": max(0, min(100, int(row.get("progress") or 0))),
         "stage": str(row.get("stage") or ""),
-        "result": _json(row.get("result_json"), {}),
+        "result": result,
+        "result_target": target,
         "error": str(row.get("error_text") or "") or None,
         "attempt_count": int(row.get("attempt_count") or 0),
         "max_attempts": int(row.get("max_attempts") or 0),
@@ -81,12 +86,35 @@ def _public_job(row: dict[str, Any]) -> dict[str, Any]:
         "completed_at": _iso(row.get("completed_at")),
         "terminal": status in TERMINAL_JOB_STATUSES,
         "execution_status": status,
-        "delivery_status": _json(row.get("result_json"), {}).get("delivery_status", "pending" if kind in {"voice_receive", "voice_execute"} else "not_applicable"),
+        "delivery_status": result.get("delivery_status", "pending" if kind in {"voice_receive", "voice_execute"} else "not_applicable"),
         "available_actions": [
             *(["retry"] if status == "failed" and kind in RETRYABLE_JOB_KINDS else []),
             *(["cancel"] if status in {"queued", "running", "waiting_for_review"} and kind in CANCELLABLE_JOB_KINDS else []),
         ],
     }
+
+
+def _job_result_target(row, result):
+    """Expose an internal destination, never an untrusted URL from a result."""
+    kind = str(row.get('kind') or '')
+    business_id = str(row.get('business_id') or '')
+    plan = result.get('plan') if isinstance(result.get('plan'), dict) else {}
+    plan_id = result.get('plan_id') or plan.get('id')
+    if not plan_id and kind == 'content_plan_generate':
+        plan_id = result.get('id')
+    if kind in {'content_plan_generate', 'content_plan_revision', 'content_plan_network_renewal'}:
+        return {'screen': 'content', 'business_id': business_id,
+                'item_type': 'content_plan', 'item_id': str(plan_id or ''),
+                'label': 'Открыть контент-план',
+                'review_hint': 'Проверьте темы, даты, тексты и фотографии в контент-плане. Затем подтвердите нужные материалы в разделе контента.'}
+    screens = {'content_draft_generate': ('content', 'Открыть публикацию'),
+               'card_refresh': ('cards', 'Открыть карточку'),
+               'outreach_continue': ('partnerships', 'Открыть аутрич'),
+               'finance_document_recognize': ('finance', 'Открыть продажи'),
+               'finance_crm_sync': ('finance', 'Открыть финансы')}
+    screen, label = screens.get(kind, ('tasks', 'Открыть задачу'))
+    return {'screen': screen, 'business_id': business_id, 'label': label}
+
 
 
 def create_operator_async_job(

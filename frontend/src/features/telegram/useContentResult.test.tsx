@@ -34,3 +34,12 @@ it('does not show the previous business while a new scope is loading',async()=>{
  view.rerender({businessId:'other'});expect(view.result.current.items).toEqual([]);
  view.unmount();
 });
+
+it('opens the exact focused plan even when another plan is the current default',async()=>{
+ const fetch=vi.fn((url:string)=>url.includes('?')?response({plans}):response({plan:{...plans[2],items:[{id:'archived-post',business_id:'business',theme:'Нужная тема'}]}}));vi.stubGlobal('fetch',fetch);
+ const {result}=renderHook(()=>useContentResult('business',items,'','history'));
+ await waitFor(()=>expect(result.current.activeId).toBe('history'));
+ await waitFor(()=>expect(result.current.items[0]?.id).toBe('archived-post'));
+ expect(result.current.currentId).toBe('ready');
+ expect(fetch.mock.calls.some(call=>String(call[0])==='/api/content-plans/history')).toBe(true);
+});

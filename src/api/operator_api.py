@@ -1388,7 +1388,8 @@ def operator_chat():
     payload = request.get_json(silent=True) or {}
     business_id = str(payload.get("business_id") or "").strip()
     message = str(payload.get("message") or "").strip()
-    if not business_id:
+    platform_chat = payload.get('scope_type') == 'platform'
+    if not business_id and not platform_chat:
         return jsonify({"success": False, "error": "business_id обязателен"}), 400
     if not message:
         return jsonify({"success": False, "error": "message обязателен"}), 400
@@ -1396,6 +1397,15 @@ def operator_chat():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
+        if platform_chat:
+            from services.operator_platform_context import platform_chat_business
+            selected_scope = _resolve_mobile_scope(cursor, user_data, payload)
+            if not selected_scope or selected_scope.get('kind') != 'platform':
+                return jsonify({'success': False, 'error': 'Нет доступа к платформе LocalOS'}), 403
+            platform_business = platform_chat_business(cursor, str(user_data.get('user_id') or user_data.get('id') or ''))
+            if not platform_business:
+                return jsonify({'success': False, 'error': 'Рабочий контекст LocalOS недоступен'}), 403
+            business_id = str(platform_business['id'])
         has_access, owner_id = verify_business_access(cursor, business_id, user_data)
         if not has_access:
             status_code = 403 if owner_id else 404
@@ -1653,6 +1663,7 @@ def operator_chat():
         return jsonify({
             "success": status in {"completed", "queued", "processing", "clarification_required", "manual_handoff", "approval_required"},
             "conversation_id": result.get("conversation_id"),
+            "business_id": business_id,
             "operator_result": result,
         })
     except (ValueError, PermissionError):
@@ -2418,9 +2429,9 @@ def operator_review_reply_draft_mark_manual_published(draft_id: str):
         db.close()
 
 
-def _resolve_mobile_scope(cursor, user_data: dict) -> dict | None:
+def _resolve_mobile_scope(cursor, user_data: dict, payload: dict | None = None) -> dict | None:
     user_id = str(user_data.get("user_id") or user_data.get("id") or "")
-    kind, scope_id = _scope_request_values()
+    kind, scope_id = _scope_request_values(payload)
     return resolve_control_scope(
         cursor,
         user_id=user_id,
@@ -4569,7 +4580,13 @@ def operator_mobile_history():
         if not access.get("allowed"):
             return _mobile_payment_required_response(access)
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
-        if scope.get("kind") != "business":
+        platform_business = None
+        if scope.get('kind') == 'platform':
+            from services.operator_platform_context import platform_chat_business
+            platform_business = platform_chat_business(cursor, user_id)
+            if not platform_business:
+                return jsonify({'success': False, 'error': 'Рабочий контекст LocalOS недоступен'}), 403
+        if scope.get("kind") != "business" and not platform_business:
             limit = max(1, min(int(request.args.get("limit") or 100), 200))
             platform = scope.get("kind") == "platform"
             business_ids = [str(item) for item in scope.get("business_ids") or []]
@@ -4604,7 +4621,7 @@ def operator_mobile_history():
                 "available_actions": [{"key": "select_business", "label": "Выбрать точку для поручения"}],
                 "requires_business_selection": True,
             })
-        business_id = str(scope.get("id") or "")
+        business_id = str(platform_business['id'] if platform_business else scope.get("id") or "")
         conversation = find_latest_operator_conversation(
             cursor,
             business_id=business_id,
@@ -4621,6 +4638,7 @@ def operator_mobile_history():
         return jsonify({
             "success": True,
             "scope": scope,
+            "business_id": business_id,
             "conversation": conversation or None,
             "items": items,
             "counts": {"total": len(items)},

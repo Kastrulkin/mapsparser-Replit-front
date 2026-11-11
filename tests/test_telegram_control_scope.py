@@ -79,6 +79,21 @@ class NetworkLocationsCursor:
         return list(self.rows)
 
 
+def test_localos_system_business_selection_restores_platform_scope():
+    from services.operator_platform_context import platform_business_id
+    catalog = {'platform': {'kind': 'platform', 'name': 'LocalOS', 'id': None}, 'total_choices': 2}
+    scope = _resolve_requested_scope(None, catalog=catalog, kind='business', scope_id=platform_business_id())
+    assert scope['kind'] == 'platform'
+    assert scope['name'] == 'LocalOS'
+
+
+def test_localos_alias_does_not_grant_platform_to_an_ordinary_owner():
+    from services.operator_platform_context import platform_business_id
+    cursor = ScopeCursor(actor={'id': 'owner', 'is_superadmin': False})
+    catalog = {'actor': {'id': 'owner', 'is_superadmin': False}, 'platform': None, 'businesses': [], 'total_choices': 0}
+    assert _resolve_requested_scope(cursor, catalog=catalog, kind='business', scope_id=platform_business_id()) is None
+
+
 def test_single_business_owner_gets_business_without_switcher():
     cursor = ScopeCursor(
         actor={"id": "owner-1", "name": "Owner", "is_superadmin": False},
@@ -140,7 +155,7 @@ def test_superadmin_opens_platform_by_default():
 
     assert scope["kind"] == "platform"
     assert scope["id"] is None
-    assert scope["name"] == "Вся платформа"
+    assert scope["name"] == "LocalOS"
 
 
 def test_scope_search_hides_unmatched_navigation_rows():
