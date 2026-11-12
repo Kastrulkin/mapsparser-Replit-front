@@ -1,0 +1,5 @@
+{
+  "returncode": 255,
+  "stdout": "",
+  "stderr": "ssh: connect to host 80.78.242.105 port 22: Operation not permitted\n"
+}

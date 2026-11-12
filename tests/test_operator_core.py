@@ -99,22 +99,17 @@ class ConnectionsCursor:
 
     def execute(self, query, params=None):
         normalized = " ".join(str(query).split()).lower()
-        if "from externalbusinessaccounts" in normalized:
-            self.description = [
-                ("id",),
-                ("source",),
-                ("external_id",),
-                ("display_name",),
-                ("is_active",),
-                ("last_sync_at",),
-                ("last_error",),
-                ("updated_at",),
-            ]
+        self._rows = []
+        if "from users where id=" in normalized:
+            self._rows = [{"id": "user-1", "is_active": True, "is_superadmin": False}]
+        elif "from businesses b" in normalized:
+            self._rows = [{"owner_id": "user-1", "has_business_membership": False, "has_network_membership": False, "owns_network": False}]
+        elif "from externalbusinessaccounts" in normalized:
             self.params = params
-            self._rows = [("account-1", "yandex", "external-1", "Test", True, None, "", None)]
+            self._rows = [{"id": "account-1", "source": "yandex", "external_id": "external-1", "display_name": "Test", "is_active": True, "last_sync_at": None, "has_error": False, "updated_at": None}]
 
     def fetchone(self):
-        return None
+        return self._rows[0] if self._rows else None
 
     def fetchall(self):
         return self._rows

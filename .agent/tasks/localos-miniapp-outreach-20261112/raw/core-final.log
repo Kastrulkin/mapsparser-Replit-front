@@ -1,0 +1,75 @@
+.......F........F................                                        [100%]
+=================================== FAILURES ===================================
+________ test_tool_loop_can_read_finance_inside_selected_business_scope ________
+
+    def test_tool_loop_can_read_finance_inside_selected_business_scope() -> None:
+        cursor = FinanceCursor()
+        decisions = iter(
+            [
+                {"action": "tool_call", "tool": "finance.get_summary", "arguments": {"days": 30}},
+                {"action": "final", "message": "За 30 дней баланс составил 9 000 ₽."},
+            ]
+        )
+    
+        result, pending = route_operator_message(
+            cursor,
+            business_id="business-1",
+            user_id="user-1",
+            message="Покажи финансовую картину за последний месяц",
+            channel="web",
+            tool_planner=lambda _state: next(decisions),
+        )
+    
+>       assert result["status"] == "completed"
+E       AssertionError: assert 'clarification_required' == 'completed'
+E         
+E         - completed
+E         + clarification_required
+
+tests/test_operator_core.py:342: AssertionError
+______ test_deepseek_receives_complete_scoped_contract_for_required_tools ______
+
+    def test_deepseek_receives_complete_scoped_contract_for_required_tools() -> None:
+        states = []
+        route_operator_message(
+            ServiceCursor(),
+            business_id="business-1",
+            user_id="user-1",
+            message="Сопоставь данные выбранного бизнеса",
+            channel="web",
+            tool_planner=lambda state: states.append(state) or {"action": "final", "message": "Показал возможности."},
+        )
+    
+        tools = {tool["name"]: tool for tool in states[0]["tools"]}
+        required = {
+            "business.get_profile",
+            "localos.query",
+            "maps.get_latest_snapshot",
+            "maps.get_status",
+            "maps.refresh",
+            "services.prepare_updates",
+            "services.apply_updates",
+            "reviews.prepare_replies",
+            "content.create_news_draft",
+            "content.create_plan",
+            "finance.get_summary",
+            "finance.prepare_transaction",
+            "partnerships.search",
+            "partnerships.prepare_message",
+            "agents.list",
+            "settings.check_connections",
+        }
+        assert required.issubset(tools)
+        assert {"services.list", "reviews.list_unanswered", "content.list_items"}.isdisjoint(tools)
+        for name in required:
+            tool = tools[name]
+            assert tool["input_schema"]["type"] == "object"
+>           assert tool["output_schema"]["type"] == "object"
+                   ^^^^^^^^^^^^^^^^^^^^^
+E           KeyError: 'output_schema'
+
+tests/test_operator_core.py:644: KeyError
+=========================== short test summary info ============================
+FAILED tests/test_operator_core.py::test_tool_loop_can_read_finance_inside_selected_business_scope
+FAILED tests/test_operator_core.py::test_deepseek_receives_complete_scoped_contract_for_required_tools
+2 failed, 31 passed in 0.76s

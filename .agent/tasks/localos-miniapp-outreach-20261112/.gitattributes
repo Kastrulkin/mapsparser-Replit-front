@@ -1,0 +1,2 @@
+# Preserve raw verifier and test output verbatim, including pytest whitespace.
+raw/*.log -whitespace

@@ -829,40 +829,9 @@ def _read_progress_status(cursor: Any, *, business_id: str, user_id: str) -> dic
     }
 
 
-def _read_connections(cursor: Any, *, business_id: str) -> dict[str, Any]:
-    cursor.execute(
-        """
-        SELECT id, source, external_id, display_name, is_active,
-               last_sync_at, last_error, updated_at
-        FROM externalbusinessaccounts
-        WHERE business_id = %s
-        ORDER BY source, updated_at DESC NULLS LAST
-        """,
-        (business_id,),
-    )
-    accounts = _rows_from_cursor(cursor)
-    normalized = []
-    for account in accounts:
-        normalized.append({
-            "id": account.get("id"),
-            "source": account.get("source"),
-            "external_id": account.get("external_id"),
-            "display_name": account.get("display_name"),
-            "is_active": bool(account.get("is_active")),
-            "last_sync_at": account.get("last_sync_at"),
-            "last_error": str(account.get("last_error") or "")[:500],
-            "updated_at": account.get("updated_at"),
-        })
-    active_count = sum(1 for account in normalized if account.get("is_active"))
-    error_count = sum(1 for account in normalized if account.get("last_error"))
-    return {
-        "status": "completed",
-        "accounts": normalized,
-        "count": len(normalized),
-        "active_count": active_count,
-        "error_count": error_count,
-        "external_writes_performed": False,
-    }
+def _read_connections(cursor: Any, *, business_id: str, user_id: str, query: str = "", actor_context=None) -> dict[str, Any]:
+    from services.operator_connection_status import read_connection_status
+    return read_connection_status(cursor, business_id=business_id, user_id=user_id, query=query, actor=actor_context)
 
 
 def _read_mobile_module(cursor: Any, *, business_id: str, module: str) -> dict[str, Any]:
@@ -1724,10 +1693,10 @@ def _operator_tool_catalog(
             "capability": "settings.read",
             "title": "Состояние внешних подключений",
             "description": "Проверяет активность, последнюю синхронизацию и ошибки подключений выбранного бизнеса. Секреты и токены не возвращаются.",
-            "input_schema": {"type": "object", "properties": {}},
+            "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Название бизнеса или адрес подключённой почты"}}},
             "risk_class": "identity_read",
             "approval_required": False,
-            "execute": lambda _arguments: _read_connections(cursor, business_id=business_id),
+            "execute": lambda arguments: _read_connections(cursor, business_id=business_id, user_id=user_id, query=arguments.get("query", ""), actor_context=actor_context),
         },
         {
             "name": "support.get_attention",
@@ -2344,9 +2313,16 @@ def route_operator_message(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     clean_message = str(message or "").strip()
     from services.operator_platform_context import platform_read_request
-    platform_result = platform_read_request(cursor, business_id=business_id, user_id=user_id, message=clean_message)
+    platform_result = platform_read_request(cursor, business_id=business_id, user_id=user_id,
+        message=clean_message, actor=actor_context, request_id=(action_payload or {}).get('request_id'))
     if platform_result is not None:
         return standardize_operator_result(platform_result, platform_result['capability']), {}
+    from services.operator_platform_outreach import business_read_request
+    outreach_result = business_read_request(cursor, business_id=business_id, user_id=user_id,
+        message=clean_message, actor=actor_context,
+        request_id=(action_payload or {}).get('request_id'))
+    if outreach_result is not None:
+        return standardize_operator_result(outreach_result, outreach_result['capability']), {}
     from services import work_journal, operator_work_journal
     literal=operator_work_journal.literal_note(clean_message)
     journal_composer=(action_payload or {}).get('input_context')=='work_journal' and not (action_payload or {}).get('work_entry_id')

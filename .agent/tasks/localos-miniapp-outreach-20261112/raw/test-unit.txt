@@ -1,0 +1,286 @@
+
+===== backend-final.log =====
+........................................................................ [ 26%]
+........................................................................ [ 53%]
+.....ssss............................................................... [ 79%]
+.......................................................                  [100%]
+267 passed, 4 skipped in 1.69s
+
+===== frontend-final.log =====
+(node:51300) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> vite_react_shadcn_ts@0.0.0 test
+> vitest run src/components/telegram/PlatformOutreach.test.tsx src/components/telegram/PartnershipsMobileModule.test.tsx src/components/prospecting/PreparedPartnershipMessages.test.tsx src/components/prospecting/PartnershipGroupLaunch.test.tsx src/pages/TelegramControlPage.test.tsx src/components/operator/OperatorMessageText.test.tsx src/components/operator/OperatorVoice.logic.test.ts src/components/telegram/JobProgressSheet.test.tsx
+
+(node:51332) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.11 /private/tmp/localos-outreach-release-20261112/repo/frontend
+
+(node:51340) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51342) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51345) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51341) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51346) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51344) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51343) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51348) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Not implemented: navigation to another Document
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+
+ Test Files  8 passed (8)
+      Tests  73 passed (73)
+   Start at  15:21:46
+   Duration  22.87s (transform 3.51s, setup 2.36s, import 5.89s, tests 25.83s, environment 8.85s)
+
+
+===== core-final.log =====
+.......F........F................                                        [100%]
+=================================== FAILURES ===================================
+________ test_tool_loop_can_read_finance_inside_selected_business_scope ________
+
+    def test_tool_loop_can_read_finance_inside_selected_business_scope() -> None:
+        cursor = FinanceCursor()
+        decisions = iter(
+            [
+                {"action": "tool_call", "tool": "finance.get_summary", "arguments": {"days": 30}},
+                {"action": "final", "message": "За 30 дней баланс составил 9 000 ₽."},
+            ]
+        )
+    
+        result, pending = route_operator_message(
+            cursor,
+            business_id="business-1",
+            user_id="user-1",
+            message="Покажи финансовую картину за последний месяц",
+            channel="web",
+            tool_planner=lambda _state: next(decisions),
+        )
+    
+>       assert result["status"] == "completed"
+E       AssertionError: assert 'clarification_required' == 'completed'
+E         
+E         - completed
+E         + clarification_required
+
+tests/test_operator_core.py:342: AssertionError
+______ test_deepseek_receives_complete_scoped_contract_for_required_tools ______
+
+    def test_deepseek_receives_complete_scoped_contract_for_required_tools() -> None:
+        states = []
+        route_operator_message(
+            ServiceCursor(),
+            business_id="business-1",
+            user_id="user-1",
+            message="Сопоставь данные выбранного бизнеса",
+            channel="web",
+            tool_planner=lambda state: states.append(state) or {"action": "final", "message": "Показал возможности."},
+        )
+    
+        tools = {tool["name"]: tool for tool in states[0]["tools"]}
+        required = {
+            "business.get_profile",
+            "localos.query",
+            "maps.get_latest_snapshot",
+            "maps.get_status",
+            "maps.refresh",
+            "services.prepare_updates",
+            "services.apply_updates",
+            "reviews.prepare_replies",
+            "content.create_news_draft",
+            "content.create_plan",
+            "finance.get_summary",
+            "finance.prepare_transaction",
+            "partnerships.search",
+            "partnerships.prepare_message",
+            "agents.list",
+            "settings.check_connections",
+        }
+        assert required.issubset(tools)
+        assert {"services.list", "reviews.list_unanswered", "content.list_items"}.isdisjoint(tools)
+        for name in required:
+            tool = tools[name]
+            assert tool["input_schema"]["type"] == "object"
+>           assert tool["output_schema"]["type"] == "object"
+                   ^^^^^^^^^^^^^^^^^^^^^
+E           KeyError: 'output_schema'
+
+tests/test_operator_core.py:644: KeyError
+=========================== short test summary info ============================
+FAILED tests/test_operator_core.py::test_tool_loop_can_read_finance_inside_selected_business_scope
+FAILED tests/test_operator_core.py::test_deepseek_receives_complete_scoped_contract_for_required_tools
+2 failed, 31 passed in 0.76s
+
+===== core-baseline.log =====
+.......F........F....                                                    [100%]
+=================================== FAILURES ===================================
+________ test_tool_loop_can_read_finance_inside_selected_business_scope ________
+
+    def test_tool_loop_can_read_finance_inside_selected_business_scope() -> None:
+        cursor = FinanceCursor()
+        decisions = iter(
+            [
+                {"action": "tool_call", "tool": "finance.get_summary", "arguments": {"days": 30}},
+                {"action": "final", "message": "За 30 дней баланс составил 9 000 ₽."},
+            ]
+        )
+    
+        result, pending = route_operator_message(
+            cursor,
+            business_id="business-1",
+            user_id="user-1",
+            message="Покажи финансовую картину за последний месяц",
+            channel="web",
+            tool_planner=lambda _state: next(decisions),
+        )
+    
+>       assert result["status"] == "completed"
+E       AssertionError: assert 'clarification_required' == 'completed'
+E         
+E         - completed
+E         + clarification_required
+
+/tmp/localos-outreach-release-20261112/baseline/tests/test_operator_core.py:347: AssertionError
+______ test_deepseek_receives_complete_scoped_contract_for_required_tools ______
+
+    def test_deepseek_receives_complete_scoped_contract_for_required_tools() -> None:
+        states = []
+        route_operator_message(
+            ServiceCursor(),
+            business_id="business-1",
+            user_id="user-1",
+            message="Сопоставь данные выбранного бизнеса",
+            channel="web",
+            tool_planner=lambda state: states.append(state) or {"action": "final", "message": "Показал возможности."},
+        )
+    
+        tools = {tool["name"]: tool for tool in states[0]["tools"]}
+        required = {
+            "business.get_profile",
+            "localos.query",
+            "maps.get_latest_snapshot",
+            "maps.get_status",
+            "maps.refresh",
+            "services.prepare_updates",
+            "services.apply_updates",
+            "reviews.prepare_replies",
+            "content.create_news_draft",
+            "content.create_plan",
+            "finance.get_summary",
+            "finance.prepare_transaction",
+            "partnerships.search",
+            "partnerships.prepare_message",
+            "agents.list",
+            "settings.check_connections",
+        }
+        assert required.issubset(tools)
+        assert {"services.list", "reviews.list_unanswered", "content.list_items"}.isdisjoint(tools)
+        for name in required:
+            tool = tools[name]
+            assert tool["input_schema"]["type"] == "object"
+>           assert tool["output_schema"]["type"] == "object"
+                   ^^^^^^^^^^^^^^^^^^^^^
+E           KeyError: 'output_schema'
+
+/tmp/localos-outreach-release-20261112/baseline/tests/test_operator_core.py:649: KeyError
+=========================== short test summary info ============================
+FAILED ../../../../tmp/localos-outreach-release-20261112/baseline/tests/test_operator_core.py::test_tool_loop_can_read_finance_inside_selected_business_scope
+FAILED ../../../../tmp/localos-outreach-release-20261112/baseline/tests/test_operator_core.py::test_deepseek_receives_complete_scoped_contract_for_required_tools
+2 failed, 19 passed in 0.70s
+
+===== worker-baseline.log =====
+.....F..                                                                 [100%]
+=================================== FAILURES ===================================
+_______ test_worker_applies_known_telegram_failure_as_sender_only_block ________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x105fa4750>
+
+    def test_worker_applies_known_telegram_failure_as_sender_only_block(monkeypatch):
+        import worker
+        from api import admin_prospecting
+        from services import outreach_email_reply_service, outreach_vk_reply_service
+    
+        monkeypatch.setattr(
+            admin_prospecting,
+            "_sync_telegram_app_replies",
+            lambda **_kwargs: {
+                "picked": 1,
+                "imported": 0,
+                "failed": 1,
+                "sender_results": [{
+                    "sender_account_id": "sender-telegram",
+                    "status": "failed",
+                }],
+            },
+        )
+        monkeypatch.setattr(
+            outreach_email_reply_service,
+            "sync_email_replies",
+            lambda **_kwargs: {
+                "picked": 1,
+                "imported": 0,
+                "failed": 0,
+                "sender_results": [{
+                    "sender_account_id": "sender-email",
+                    "status": "ok",
+                    "receipt_complete": True,
+                }],
+            },
+        )
+        monkeypatch.setattr(
+            outreach_vk_reply_service,
+            "sync_vk_replies",
+            lambda **_kwargs: {
+                "picked": 0,
+                "imported": 0,
+                "failed": 0,
+                "sender_results": [],
+            },
+        )
+        monkeypatch.setattr(worker.time, "time", lambda: 10_000.0)
+        monkeypatch.setenv("OUTREACH_REPLY_SYNC_FAIL_CLOSED", "true")
+        monkeypatch.setenv("OUTREACH_YOUGILE_SYNC_ENABLED", "false")
+        worker._LAST_OUTREACH_REPLY_SYNC_AT = 0.0
+    
+        state = worker._sync_outreach_replies_if_due()
+    
+        assert state["healthy"] is False
+>       assert state["global_block"] is False
+E       assert True is False
+
+/tmp/localos-outreach-release-20261112/baseline/tests/test_outreach_reply_sync_failure_scope.py:181: AssertionError
+----------------------------- Captured stdout call -----------------------------
+[OUTREACH_REPLY_SYNC_STAGE] telegram_start
+[OUTREACH_REPLY_SYNC_STAGE] telegram_done vk_start
+[OUTREACH_REPLY_SYNC_STAGE] vk_done email_start
+[OUTREACH_REPLY_SYNC] error: DATABASE_URL is not set. Runtime requires PostgreSQL. Example: export DATABASE_URL='postgresql://user:pass@localhost:5432/local_db'
+=========================== short test summary info ============================
+FAILED ../../../../tmp/localos-outreach-release-20261112/baseline/tests/test_outreach_reply_sync_failure_scope.py::test_worker_applies_known_telegram_failure_as_sender_only_block
+1 failed, 7 passed in 0.78s
+
+===== sender-isolation-fix.log =====
+....................ssss..................                               [100%]
+38 passed, 4 skipped in 0.50s
+
+===== platform-session-fix.log =====
+...............................                                          [100%]
+31 passed in 0.70s
+
+===== job-session-fix.log =====
+.....................................................................    [100%]
+69 passed in 0.86s
+
+===== native-send-session-fix.log =====
+........................................................................ [ 66%]
+.....................................                                    [100%]
+109 passed in 0.71s

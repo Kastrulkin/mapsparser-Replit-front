@@ -157,6 +157,22 @@ def create_operator_async_job(
     return _public_job(_row(cursor, cursor.fetchone()))
 
 
+def _outreach_job_readable(cursor, row, user_id, scope, actor_context=None):
+    if row.get('kind') not in {'outreach_inbox_sync', 'outreach_continue'}:
+        return True
+    if str(row.get('user_id') or '') != str(user_id):
+        return False
+    from services.operator_platform_outreach import require_outreach_scope
+    try:
+        require_outreach_scope(cursor, user_id=user_id, scope_kind=scope.get('kind'),
+            scope_id=scope.get('id') if scope.get('kind') == 'business' else None, actor=actor_context)
+        if scope.get('kind') != 'platform' and str(row.get('business_id')) not in {str(value) for value in scope.get('business_ids') or [scope.get('id')]}:
+            return False
+        return True
+    except PermissionError:
+        return False
+
+
 def load_operator_async_job(
     cursor: Any,
     *,
@@ -164,6 +180,7 @@ def load_operator_async_job(
     user_id: str,
     scope: dict[str, Any],
     is_superadmin: bool = False,
+    actor_context: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     cursor.execute("SELECT * FROM operator_async_jobs WHERE id = %s", (job_id,))
     row = _row(cursor, cursor.fetchone())
@@ -175,6 +192,8 @@ def load_operator_async_job(
         return None
     if business_id and not _scope_allows(scope, business_id):
         return None
+    if not _outreach_job_readable(cursor,row,user_id,scope,actor_context):
+        return None
     return _public_job(row)
 
 
@@ -184,6 +203,7 @@ def list_operator_async_jobs(
     user_id: str,
     scope: dict[str, Any],
     is_superadmin: bool = False,
+    actor_context: dict[str, Any] | None = None,
     status: str = "",
     cursor_value: str = "",
     limit: int = 25,
@@ -222,7 +242,7 @@ def list_operator_async_jobs(
     )
     rows = [_row(cursor, item) for item in (cursor.fetchall() or [])]
     has_more = len(rows) > clean_limit
-    page = rows[:clean_limit]
+    page = [row for row in rows[:clean_limit] if _outreach_job_readable(cursor,row,user_id,scope,actor_context)]
     next_cursor = _iso(page[-1].get("updated_at")) if has_more and page else None
     counts = {key: 0 for key in JOB_STATUSES}
     for item in page:
@@ -248,6 +268,7 @@ def retry_operator_async_job(
     user_id: str,
     scope: dict[str, Any],
     is_superadmin: bool = False,
+    actor_context: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     cursor.execute(
         """
@@ -267,6 +288,8 @@ def retry_operator_async_job(
     if not owns_job and not (is_superadmin and scope.get("kind") == "platform"):
         return None
     if business_id and not _scope_allows(scope, business_id):
+        return None
+    if not _outreach_job_readable(cursor,row,user_id,scope,actor_context):
         return None
     if str(row.get("status") or "") != "failed" or str(row.get("kind") or "") not in RETRYABLE_JOB_KINDS:
         return {**_public_job(row), "blocked_reason": "retry_not_available"}
@@ -295,6 +318,7 @@ def cancel_operator_async_job(
     user_id: str,
     scope: dict[str, Any],
     is_superadmin: bool = False,
+    actor_context: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     cursor.execute("SELECT * FROM operator_async_jobs WHERE id = %s FOR UPDATE", (job_id,))
     row = _row(cursor, cursor.fetchone())
@@ -305,6 +329,8 @@ def cancel_operator_async_job(
     if not owns_job and not (is_superadmin and scope.get("kind") == "platform"):
         return None
     if business_id and not _scope_allows(scope, business_id):
+        return None
+    if not _outreach_job_readable(cursor,row,user_id,scope,actor_context):
         return None
     if str(row.get("status") or "") not in {"queued", "running", "waiting_for_review"} or str(row.get("kind") or "") not in CANCELLABLE_JOB_KINDS:
         return {**_public_job(row), "blocked_reason": "cancel_not_available"}

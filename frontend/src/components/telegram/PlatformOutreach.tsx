@@ -6,15 +6,23 @@ import { useMobileJobPolling } from './useMobileJobPolling';
 
 type Reply = { id: string; lead_name?: string; business_name?: string; business_id?: string; channel: string; reply_text?: string; occurred_at?: string };
 type Search = { id: string; business_id: string; business_name?: string; audience?: string; target_count?: string; stage?: string; status: string };
-type Workspace = { items: Reply[]; cursor?: string | null; searches: Search[]; active_job?: MobileJob | null;
-  senders: Array<{ channel: string; status: string; last_reply_sync_at?: string | null; sync_failed?: boolean }>;
+type Workspace = { items: Reply[]; cursor?: string | null; searches: Search[]; active_job?: MobileJob | null; last_check?: MobileJob | null;
+  can_write?: boolean; scope?: { kind?: string; name?: string }; senders: Array<{ id?: string; business_name?: string; sender_identity?: string; channel: string; status: string; last_reply_sync_at?: string | null; sync_failed?: boolean }>;
   readiness: { search_enabled: boolean; web_enabled: boolean; yandex_enabled: boolean; sync_enabled: boolean } };
 type Preview = { status?: string; chat_response?: string; approval?: { action_id?: string }; job_id?: string; blocked_reasons?: string[] };
-const scope = { kind: 'platform' };
-const endpoint = '/api/operator/mobile/platform/outreach';
 const dateLabel = (value?: string | null) => value ? new Date(value).toLocaleString('ru-RU') : 'Ещё не проверялся';
 
-export function PlatformOutreach({ openBusiness }: { openBusiness?: (id: string) => void }) {
+type OutreachProps = { businessId?: string; openBusiness?: (id: string) => void };
+
+export function PlatformOutreach(props: OutreachProps) {
+  return <OutreachWorkspace key={props.businessId || 'platform'} {...props} />;
+}
+
+function OutreachWorkspace({ businessId: selectedBusinessId, openBusiness }: OutreachProps) {
+  const platform = !selectedBusinessId;
+  const scope = platform ? { kind: 'platform' } : { kind: 'business', id: selectedBusinessId };
+  const endpoint = platform ? '/api/operator/mobile/platform/outreach' : '/api/operator/mobile/outreach';
+  const scopeParams = platform ? {} : { scope_kind: 'business', scope_id: selectedBusinessId || '' };
   const [data, setData] = useState<Workspace | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
@@ -30,7 +38,7 @@ export function PlatformOutreach({ openBusiness }: { openBusiness?: (id: string)
   const [businessId, setBusinessId] = useState('');
   const version = useRef(0);
   const actionLock = useRef(false);
-  const clearPrivate = () => { version.current++; setLoading(false); setData(null); setPreview(null); setJob(null); setBusinessId(''); setFormOpen(false); setAudience(''); setGeography(''); setNotice(''); setError('Доступ к платформе изменился. Откройте LocalOS заново.'); };
+  const clearPrivate = () => { version.current++; setLoading(false); setData(null); setPreview(null); setJob(null); setBusinessId(''); setFormOpen(false); setAudience(''); setGeography(''); setNotice(''); setError('Доступ изменился. Откройте выбранную область заново.'); };
   const read = async <T,>(response: Response) => {
     if ([401, 403].includes(response.status)) clearPrivate();
     return readMobileJson<T>(response);
@@ -39,9 +47,12 @@ export function PlatformOutreach({ openBusiness }: { openBusiness?: (id: string)
     const current = ++version.current;
     setLoading(true);
     try {
-      const response = await fetch(endpoint + (cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''), { headers: mobileJsonHeaders() });
+      const params = new URLSearchParams(scopeParams);
+      if (cursor) params.set('cursor', cursor);
+      const response = await fetch(endpoint + (params.size ? `?${params}` : ''), { headers: mobileJsonHeaders() });
       if (current !== version.current) return;
       const result = await read<Workspace>(response);
+      if (!result.readiness || !Array.isArray(result.items) || !Array.isArray(result.senders) || !Array.isArray(result.searches)) throw new Error('Не удалось загрузить ответы. Повторите обновление списка.');
       if (current !== version.current) return;
       setData(previous => ({ ...result, items: cursor ? [...(previous?.items || []), ...result.items] : result.items }));
       if (result.active_job) setJob(result.active_job);
@@ -55,7 +66,7 @@ export function PlatformOutreach({ openBusiness }: { openBusiness?: (id: string)
     setNotice(completed.status === 'failed' ? 'Проверка не завершена. Повторите запрос.' : state === 'partial' ? 'Часть каналов не удалось обновить. Доступные ответы показаны ниже.' : state === 'no_sources' ? 'В этом проходе не было источников или диалогов, доступных для проверки.' : 'Проверка подключённых каналов завершена в пределах одного прохода.');
     void load();
   } });
-  const post = (body: Record<string, unknown>) => fetch(endpoint, { method: 'POST', headers: mobileJsonHeaders(), body: JSON.stringify(body) });
+  const post = (body: Record<string, unknown>) => fetch(endpoint, { method: 'POST', headers: mobileJsonHeaders(), body: JSON.stringify({ ...scopeParams, ...body }) });
   const refresh = async () => {
     if (actionLock.current) return;
     const current = version.current;
@@ -95,16 +106,22 @@ export function PlatformOutreach({ openBusiness }: { openBusiness?: (id: string)
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'Не удалось подтвердить запуск'); }
     finally { actionLock.current = false; setBusy(''); }
   };
-  const searchAvailable = Boolean(data?.readiness.search_enabled && (data.readiness.web_enabled || data.readiness.yandex_enabled));
+  const canWrite = data?.can_write !== false;
+  const searchAvailable = canWrite && Boolean(data?.readiness.search_enabled && (data.readiness.web_enabled || data.readiness.yandex_enabled));
   const checking = Boolean(job?.id && !job.terminal);
-  return <section aria-label="Аутрич всей платформы" className="space-y-5">
-    <div><h2 className="text-xl font-semibold">LocalOS · Вся платформа</h2><p className="mt-2 text-sm text-muted-foreground">Ответы и поиски по всем добавленным бизнесам.</p></div>
+  const lastCheck = job?.terminal ? job : data?.last_check;
+  const checkedAt = typeof lastCheck?.result?.checked_at === 'string' ? lastCheck.result.checked_at : undefined;
+  const checkState = lastCheck?.result?.sync_status;
+  return <section aria-label={platform ? "Аутрич всей платформы" : "Поиск и ответы бизнеса"} className="space-y-5">
+    <div><h2 className="text-xl font-semibold">{platform ? 'LocalOS · Вся платформа' : 'Поиск и ответы'}</h2><p className="mt-2 text-sm text-muted-foreground">{platform ? 'Ответы и поиски по всем добавленным бизнесам.' : 'Поиск компаний и ответы на ваши письма. Отправки — в готовых подборках ниже.'}</p></div>
     {error && <p role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
-    <div className="flex flex-wrap gap-2"><Button disabled={Boolean(busy) || checking || !data?.readiness.sync_enabled} onClick={() => void refresh()}>{checking ? 'Проверяем входящие…' : 'Проверить входящие'}</Button><Button variant="outline" disabled={!searchAvailable || Boolean(busy)} onClick={() => { setFormOpen(true); setPreview(null); setProvider(data?.readiness.web_enabled ? 'auto' : 'yandex'); }}>Новый поиск</Button><Button variant="ghost" disabled={loading} onClick={() => void load()}>Обновить список</Button></div>
-    {data && !searchAvailable && <p className="text-sm text-muted-foreground">Новый поиск временно недоступен: нужно включить поиск и подключить поисковый сервис.</p>}
+    {checkedAt && <p className="text-sm text-muted-foreground">Проверка ответов: {dateLabel(checkedAt)} · {checkState === 'checked' ? 'Завершена' : checkState === 'partial' ? 'Часть источников не проверена' : 'Нет доступных источников или диалогов'}</p>}
+    <div className="flex flex-wrap gap-2"><Button disabled={Boolean(busy) || checking || !canWrite || !data?.readiness.sync_enabled} onClick={() => void refresh()}>{checking ? 'Проверяем входящие…' : 'Проверить входящие'}</Button><Button variant="outline" disabled={!searchAvailable || Boolean(busy)} onClick={() => { setFormOpen(true); setPreview(null); setProvider(data?.readiness.web_enabled ? 'auto' : 'yandex'); }}>Новый поиск</Button><Button variant="ghost" disabled={loading} onClick={() => void load()}>Обновить список</Button></div>
+    {data && !canWrite && <p className="text-sm text-muted-foreground">У вас доступ только к просмотру. Запуск поиска и проверки доступен владельцу или редактору.</p>}
+    {data && canWrite && !searchAvailable && <p className="text-sm text-muted-foreground">Новый поиск временно недоступен: нужно включить поиск и подключить поисковый сервис.</p>}
     {formOpen && <form aria-label="Новый поиск лидов" onSubmit={prepare} className="space-y-3 rounded-2xl border p-4">
-      <h3 className="font-semibold">Найти новые компании для LocalOS</h3>
+      <h3 className="font-semibold">{platform ? 'Найти новые компании для LocalOS' : 'Найти новые компании'}</h3>
       <label className="block text-sm">Кого ищем<input required maxLength={500} value={audience} disabled={Boolean(busy) || Boolean(preview?.approval)} onChange={event => setAudience(event.target.value)} className="mt-1 min-h-11 w-full rounded-lg border bg-background p-3" placeholder="Например, салоны красоты" /></label>
       <label className="block text-sm">Где ищем<input required value={geography} disabled={Boolean(busy) || Boolean(preview?.approval)} onChange={event => setGeography(event.target.value)} className="mt-1 min-h-11 w-full rounded-lg border bg-background p-3" placeholder="Города или страны через запятую" /></label>
       <label className="block text-sm">Количество компаний<input required type="number" min={1} max={1000} value={quantity} disabled={Boolean(busy) || Boolean(preview?.approval)} onChange={event => setQuantity(event.target.value)} className="mt-1 min-h-11 w-full rounded-lg border bg-background p-3" /></label>
@@ -113,13 +130,13 @@ export function PlatformOutreach({ openBusiness }: { openBusiness?: (id: string)
       {preview && <div className="whitespace-pre-wrap rounded-lg border p-3" aria-label="Условия поиска">{preview.chat_response}</div>}
       <div className="flex flex-wrap gap-2">{preview?.status === 'approval_required' && preview.approval?.action_id ? <><Button type="button" disabled={Boolean(busy)} onClick={() => void confirm()}>Подтвердить запуск поиска</Button><Button type="button" variant="outline" disabled={Boolean(busy)} onClick={() => setPreview(null)}>Изменить условия</Button></> : <Button type="submit" disabled={Boolean(busy)}>{busy === 'preview' ? 'Проверяем условия…' : 'Показать условия и стоимость'}</Button>}<Button type="button" variant="ghost" disabled={Boolean(busy)} onClick={() => { setPreview(null); setFormOpen(false); }}>Закрыть</Button></div>
     </form>}
-    <section aria-label="Входящие по всем бизнесам" className="space-y-3"><h3 className="font-semibold">Входящие ответы</h3><p className="text-sm text-muted-foreground">Сохранённые ответы. «Проверить входящие» обновляет подключённые email, Telegram и VK. Личные диалоги MAX не читаются.</p>
-      {data?.items.map(reply => <article key={reply.id} className="space-y-2 rounded-xl border p-4"><h4 className="font-semibold">{reply.lead_name || 'Компания'}</h4><p className="text-sm text-muted-foreground">{reply.business_name || 'LocalOS'} · {reply.channel} · {dateLabel(reply.occurred_at)}</p><p className="whitespace-pre-wrap break-words">{reply.reply_text || 'Текст ответа не сохранён'}</p>{reply.business_id && openBusiness && <Button variant="outline" onClick={() => openBusiness(reply.business_id || '')}>Открыть работу бизнеса</Button>}</article>)}
+    <section aria-label={platform ? "Входящие по всем бизнесам" : "Ответы бизнеса"} className="space-y-3"><h3 className="font-semibold">Входящие ответы</h3><p className="text-sm text-muted-foreground">Сохранённые ответы. «Проверить входящие» обновляет подключённые email, Telegram и VK. Личные диалоги MAX не читаются.</p>
+      {data?.items.map(reply => <article key={reply.id} className="space-y-2 rounded-xl border p-4"><h4 className="font-semibold">{reply.lead_name || 'Компания'}</h4><p className="text-sm text-muted-foreground">{reply.business_name || data?.scope?.name || (platform ? 'LocalOS' : 'Выбранный бизнес')} · {reply.channel} · {dateLabel(reply.occurred_at)}</p><p className="whitespace-pre-wrap break-words">{reply.reply_text || 'Текст ответа не сохранён'}</p>{platform && reply.business_id && openBusiness && <Button variant="outline" onClick={() => openBusiness(reply.business_id || '')}>Открыть работу бизнеса</Button>}</article>)}
       {data && !data.items.length && <p>Сохранённых ответов пока нет.</p>}
       {data?.cursor && <Button variant="outline" disabled={loading} onClick={() => void load(data.cursor || undefined)}>Ещё ответы</Button>}
       {loading && <p role="status">Загружаем ответы…</p>}
     </section>
-    <section aria-label="Поиски по всем бизнесам" className="space-y-3"><h3 className="font-semibold">Последние поиски</h3>{data?.searches.map(search => <article key={search.id} className="space-y-1 rounded-xl border p-3"><h4 className="font-semibold">{search.audience || 'Поиск компаний'}</h4><p className="text-sm text-muted-foreground">{search.business_name || 'LocalOS'}{search.target_count ? ` · Цель: ${search.target_count}` : ''}</p><p>{search.stage || search.status}</p></article>)}{data && !data.searches.length && <p>Сохранённых поисков пока нет.</p>}</section>
-    <details><summary className="min-h-11 cursor-pointer py-3">Последняя проверка каналов</summary>{data?.senders.map((sender, index) => <p key={index} className="py-1 text-sm">{sender.channel} · {dateLabel(sender.last_reply_sync_at)}{sender.sync_failed ? ' · Не удалось обновить' : ''}</p>)}</details>
+    <section aria-label={platform ? "Поиски по всем бизнесам" : "Поиски бизнеса"} className="space-y-3"><h3 className="font-semibold">Последние поиски</h3>{data?.searches.map(search => <article key={search.id} className="space-y-1 rounded-xl border p-3"><h4 className="font-semibold">{search.audience || 'Поиск компаний'}</h4><p className="text-sm text-muted-foreground">{search.business_name || data?.scope?.name || (platform ? 'LocalOS' : 'Выбранный бизнес')}{search.target_count ? ` · Цель: ${search.target_count}` : ''}</p><p>{search.stage || search.status}</p></article>)}{data && !data.searches.length && <p>Сохранённых поисков пока нет.</p>}</section>
+    <details><summary className="min-h-11 cursor-pointer py-3">Подключённые отправители</summary><p className="text-xs text-muted-foreground">Дата у отправителя относится к общей проверке его каналов. Проверка выбранных кампаний показана выше.</p>{data?.senders.map((sender, index) => <p key={sender.id || index} className="py-1 text-sm">{[sender.business_name, sender.sender_identity, sender.channel].filter(Boolean).join(' · ')} · {dateLabel(sender.last_reply_sync_at)}{sender.sync_failed ? ' · Не удалось обновить' : ''}</p>)}</details>
   </section>;
 }

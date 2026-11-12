@@ -59,7 +59,25 @@ def cold_guard(cursor,lead,workstream_id,contact):
     if suppression.get('suppressed'):raise ValueError('Компания исключена из отправки. Откройте карточку и проверьте причину в разделе «Исключения из контактов».')
 
 
+def _authorize_mutation(cursor, *, business_id, user, platform_sender=False):
+    from services.operator_owner_actions import session_write_guard
+    from core.auth_helpers import session_allows_business
+    from services.operator_audio import authorize_actor
+    from subscription_manager import capability_access_payload
+    session_write_guard(user)
+    if not session_allows_business(user,business_id):
+        raise PermissionError('Нет доступа к бизнесу в этой сессии.')
+    actor,access=authorize_actor(cursor,str(user.get('user_id') or user.get('id') or ''),
+        business_id,require_write=True,check_subscription=False)
+    if not capability_access_payload(access,'partnerships').get('allowed'):
+        raise PermissionError('Нет доступа к партнёрствам.')
+    if platform_sender and not actor.get('is_superadmin'):
+        raise PermissionError('Использование общего отправителя LocalOS доступно администратору. Подготовьте письмо с аккаунтом бизнеса.')
+    return actor
+
+
 def prepare(cursor,*,business_id,user,item):
+    _authorize_mutation(cursor,business_id=business_id,user=user,platform_sender=True)
     from services.operator_partner_work import partner_selection
     from services.contact_intelligence_service import upsert_contact_points,verify_contact_points,build_native_research_payload
     from services.prospecting_research_service import _insert_research
@@ -67,7 +85,6 @@ def prepare(cursor,*,business_id,user,item):
     from core.card_audit import build_lead_card_preview_snapshot
     from api import admin_prospecting as legacy
     validate_item(item)
-    if not user.get('is_superadmin'):raise PermissionError('Использование общего отправителя LocalOS доступно администратору. Подготовьте письмо с аккаунтом бизнеса.')
     actor=str(user.get('user_id') or user.get('id') or '')
     selection=partner_selection(cursor,user_id=actor,business_id=business_id,item_id=item['lead_id'])
     cursor.execute('SELECT pg_advisory_xact_lock(hashtext(%s))',(f'partner-prepared:{business_id}:{item["lead_id"]}',))
@@ -117,12 +134,9 @@ def check_source_freshness(cursor,workstream_id,touches):
 
 
 def review_copy(cursor,*,business_id,user,campaign_id,digest):
-    from services.operator_audio import authorize_actor
+    _authorize_mutation(cursor,business_id=business_id,user=user)
     from services.outreach_campaign_service import apply_draft_campaign_review
     from services.outreach_personalization_ai import REVIEW_PROMPT_VERSION
-    from subscription_manager import capability_access_payload
-    _,access=authorize_actor(cursor,str(user.get('user_id') or user.get('id')),business_id,require_write=True,check_subscription=False)
-    if not capability_access_payload(access,'partnerships').get('allowed'):raise PermissionError('Нет доступа к партнёрствам.')
     cursor.execute("SELECT c.*,l.company_id FROM outreach_campaigns c JOIN prospectingleads l ON l.id=c.lead_id WHERE c.id=%s AND c.business_id=%s AND c.scope_type='business' AND c.status='draft' AND c.policy_json->>'human_copy_hash' IS NOT NULL AND NOT EXISTS(SELECT 1 FROM outreach_campaigns newer WHERE newer.workstream_id=c.workstream_id AND newer.version>c.version) FOR UPDATE",(campaign_id,business_id))
     c=_row(cursor,cursor.fetchone())
     if not c:raise ValueError('Цепочка недоступна для проверки или уже изменилась.')
@@ -208,10 +222,10 @@ def check_provider_history(cursor,item):
 
 
 def enqueue_preparation(cursor,*,business_id,user,item):
+    _authorize_mutation(cursor,business_id=business_id,user=user,platform_sender=True)
     from services.operator_partner_work import partner_selection
     from services.operator_async_jobs import create_operator_async_job
     validate_item(item)
-    if not user.get('is_superadmin'):raise PermissionError('Использование общего отправителя LocalOS доступно администратору.')
     actor=str(user.get('user_id') or user.get('id') or '')
     partner_selection(cursor,user_id=actor,business_id=business_id,item_id=item['lead_id'])
     key=hashlib.sha256(json.dumps([business_id,item],ensure_ascii=False,sort_keys=True).encode()).hexdigest()

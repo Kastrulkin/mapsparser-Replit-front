@@ -68,6 +68,129 @@ describe('TelegramControlPage scope integrity', () => {
     expect(payload.business_id).toBeUndefined();
   });
 
+  it.each(['telegram', 'max'])('shows delivery before a slow %s response and preserves the next draft', async platform => {
+    window.history.replaceState({}, '', `/${platform}/control`);
+    if (platform === 'max') window.WebApp = { initData: 'signed-max-init-data' };
+    let finish: ((response: Response) => void) | undefined;
+    const delayedReply = new Promise<Response>(resolve => { finish = resolve; });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === `/api/operator/${platform}/bootstrap`) return jsonResponse({
+        success: true, user: { id: 'user-1' }, web_session_token: 'session', today_v2_enabled: false,
+        selected_scope: { kind: 'platform', name: 'LocalOS', business_ids: [], can_switch: true },
+        summary: { attention_items: [] }, catalog: { businesses: [], networks: [], total_choices: 1 },
+        navigation: [{ key: 'operator', label: 'Оператор', group: 'primary', status: 'available' }],
+      });
+      if (url.startsWith('/api/operator/mobile/operator/history')) return jsonResponse({ business_id: 'localos-platform-telegram-radar', items: [] });
+      if (url === '/api/operator/chat') return delayedReply;
+      return jsonResponse({ items: [], summary: { attention_items: [] } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<LanguageContext.Provider value={{ language: 'ru', setLanguage: vi.fn(), t: en }}><TelegramControlPage /></LanguageContext.Provider>);
+    await openOperator(user);
+    await user.type(await screen.findByPlaceholderText('Напишите задачу'), 'Покажи подключения Riderra');
+    await user.click(screen.getByRole('button', { name: 'Отправить задачу' }));
+    expect(screen.getByText('Покажи подключения Riderra')).toBeInTheDocument();
+    expect(screen.getByText('Отправляется…')).toBeInTheDocument();
+    expect(screen.queryByText('Получено LocalOS')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Отправить задачу' })).toBeDisabled();
+    expect(screen.getByPlaceholderText('Напишите задачу')).toHaveValue('');
+    await user.type(screen.getByPlaceholderText('Напишите задачу'), 'Следующий вопрос');
+    finish?.(await jsonResponse({ business_id: 'localos-platform-telegram-radar', conversation_id: 'conversation-1', operator_result: { status: 'completed', chat_response: 'Почта Riderra найдена.' } }));
+    expect(await screen.findByText('Почта Riderra найдена.')).toBeInTheDocument();
+    expect(screen.getByText('Получено LocalOS')).toBeInTheDocument();
+    expect(screen.queryByText('Ожидаю подтверждения получения…')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Покажи подключения Riderra')).toHaveLength(1);
+    expect(screen.getByPlaceholderText('Напишите задачу')).toHaveValue('Следующий вопрос');
+  });
+
+  it('retries an unconfirmed delivery with the same request id and without duplicate bubbles', async () => {
+    const requestIds: string[] = [];
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/operator/telegram/bootstrap') return jsonResponse({
+        success: true, user: { id: 'user-1' }, web_session_token: 'session', today_v2_enabled: false,
+        selected_scope: { kind: 'platform', name: 'LocalOS', business_ids: [] },
+        summary: { attention_items: [] }, catalog: { businesses: [], networks: [], total_choices: 1 },
+        navigation: [{ key: 'operator', label: 'Оператор', group: 'primary', status: 'available' }],
+      });
+      if (url.startsWith('/api/operator/mobile/operator/history')) return jsonResponse({ business_id: 'localos-platform-telegram-radar', items: [] });
+      if (url === '/api/operator/chat') {
+        requestIds.push(JSON.parse(String(init?.body)).request_id);
+        if (requestIds.length === 1) return Promise.reject(new Error('Network unavailable'));
+        return jsonResponse({ conversation_id: 'conversation-1', operator_result: { status: 'completed', chat_response: 'Ответ получен.' } });
+      }
+      return jsonResponse({ items: [], summary: { attention_items: [] } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<LanguageContext.Provider value={{ language: 'ru', setLanguage: vi.fn(), t: en }}><TelegramControlPage /></LanguageContext.Provider>);
+    await openOperator(user);
+    await user.type(await screen.findByPlaceholderText('Напишите задачу'), 'Покажи почту');
+    await user.click(screen.getByRole('button', { name: 'Отправить задачу' }));
+    expect(await screen.findByText('Получение не подтверждено')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Напишите задачу')).toHaveValue('Покажи почту');
+    await user.click(screen.getByRole('button', { name: 'Отправить задачу' }));
+    expect(await screen.findByText('Ответ получен.')).toBeInTheDocument();
+    expect(requestIds).toHaveLength(2);
+    expect(requestIds[0]).toBe(requestIds[1]);
+    expect(screen.getAllByText('Покажи почту')).toHaveLength(1);
+    expect(screen.queryByText('Получение не подтверждено')).not.toBeInTheDocument();
+  });
+
+  it('acknowledges receipt while a background response is still pending', async () => {
+    let finish: ((response: Response) => void) | undefined;
+    const delayedJob = new Promise<Response>(resolve => { finish = resolve; });
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/operator/telegram/bootstrap') return jsonResponse({
+        success: true, user: { id: 'user-1' }, web_session_token: 'session', today_v2_enabled: false,
+        selected_scope: { kind: 'platform', name: 'LocalOS', business_ids: [] },
+        summary: { attention_items: [] }, catalog: { businesses: [], networks: [], total_choices: 1 },
+        navigation: [{ key: 'operator', label: 'Оператор', group: 'primary', status: 'available' }],
+      });
+      if (url.startsWith('/api/operator/mobile/operator/history')) return jsonResponse({ business_id: 'localos-platform-telegram-radar', items: [] });
+      if (url === '/api/operator/chat') return jsonResponse({ business_id: 'localos-platform-telegram-radar', conversation_id: 'conversation-1', operator_result: { status: 'queued', async_job_id: 'job-1' } });
+      if (url.startsWith('/api/operator/mobile/jobs/job-1')) return delayedJob;
+      return jsonResponse({ items: [], summary: { attention_items: [] } });
+    }));
+    const user = userEvent.setup();
+    render(<LanguageContext.Provider value={{ language: 'ru', setLanguage: vi.fn(), t: en }}><TelegramControlPage /></LanguageContext.Provider>);
+    await openOperator(user);
+    await user.type(await screen.findByPlaceholderText('Напишите задачу'), 'Проверь входящие');
+    await user.click(screen.getByRole('button', { name: 'Отправить задачу' }));
+    expect(await screen.findByText('Получено LocalOS')).toBeInTheDocument();
+    expect(screen.getByText('Задача принята. Ожидаю выполнения…')).toBeInTheDocument();
+    expect(screen.queryByText('Найден один ответ.')).not.toBeInTheDocument();
+    finish?.(await jsonResponse({ job: { status: 'completed', result: { status: 'completed', chat_response: 'Найден один ответ.' } } }));
+    expect(await screen.findByText('Найден один ответ.')).toBeInTheDocument();
+    expect(screen.queryByText('Задача принята. Ожидаю выполнения…')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Проверь входящие')).toHaveLength(1);
+  });
+
+  it('keeps restored background work out of a modal until the user opens it', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      const job = { id: 'restored', kind: 'card_refresh', status: 'running', stage: 'Обновляем карточку', progress: 25 };
+      if (url === '/api/operator/telegram/bootstrap') return jsonResponse({
+        success: true, user: { id: 'user-1' }, web_session_token: 'session', today_v2_enabled: false,
+        selected_scope: { kind: 'platform', name: 'LocalOS', business_ids: [] }, active_job: job,
+        summary: { attention_items: [] }, catalog: { businesses: [], networks: [], total_choices: 1 },
+        navigation: [{ key: 'operator', label: 'Оператор', group: 'primary', status: 'available' }],
+      });
+      if (url.startsWith('/api/operator/mobile/jobs/')) return jsonResponse({ job });
+      return jsonResponse({ items: [], summary: { attention_items: [] } });
+    }));
+    const user = userEvent.setup();
+    render(<LanguageContext.Provider value={{ language: 'ru', setLanguage: vi.fn(), t: en }}><TelegramControlPage /></LanguageContext.Provider>);
+    await openOperator(user);
+    expect(await screen.findByRole('button', { name: 'Ход задачи' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Ход задачи' }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
   it('opens a waiting result in its business and selects the exact successor plan', async () => {
     const job = { id: 'renewal', kind: 'content_plan_network_renewal', status: 'waiting_for_review', progress: 100,
       business_id: 'business-2', result_target: { screen: 'content', business_id: 'business-2', item_id: 'next-plan', item_type: 'content_plan', label: 'Открыть контент-план' } };
@@ -759,6 +882,9 @@ describe('TelegramControlPage scope integrity', () => {
     const user = userEvent.setup();
 
     render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
+    expect(await screen.findByRole('button', { name: 'Ход задачи' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Ход задачи' }));
     expect(await screen.findByRole('dialog', { name: 'Обновляем данные карточки' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Точка один/ }));
     await user.click(await screen.findByRole('button', { name: /Точка два/ }));

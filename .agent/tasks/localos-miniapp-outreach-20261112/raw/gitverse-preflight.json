@@ -1,0 +1,5 @@
+{
+  "returncode": 128,
+  "stdout": "",
+  "stderr": "error: unable to read askpass response from '/usr/bin/false'\nfatal: could not read Username for 'https://gitverse.ru': terminal prompts disabled\n"
+}

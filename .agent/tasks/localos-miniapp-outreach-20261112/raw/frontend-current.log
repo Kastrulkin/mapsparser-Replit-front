@@ -1,0 +1,27 @@
+(node:16704) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> vite_react_shadcn_ts@0.0.0 test
+> vitest run src/components/telegram/PlatformOutreach.test.tsx src/pages/TelegramControlPage.test.tsx src/components/operator/OperatorMessageText.test.tsx src/components/operator/OperatorVoice.logic.test.ts
+
+(node:16717) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.11 /private/tmp/localos-outreach-release-20261112/repo/frontend
+
+(node:16721) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16719) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16722) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16720) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+
+ Test Files  4 passed (4)
+      Tests  32 passed (32)
+   Start at  15:13:16
+   Duration  20.00s (transform 1.31s, setup 1.11s, import 1.81s, tests 18.38s, environment 2.92s)
+

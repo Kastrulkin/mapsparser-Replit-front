@@ -690,23 +690,37 @@ def _sync_legacy_non_author_sender(
     since_at = sender.get("last_reply_sync_at")
     if not isinstance(since_at, datetime):
         since_at = datetime.now(timezone.utc) - timedelta(days=30)
-    sent_messages = fetch_mailbox_messages(
-        sender,
-        mailbox="sent",
-        since_at=since_at - timedelta(minutes=10),
-        limit=limit,
-    )
-    replies = fetch_replies(
-        sender,
-        since_at=since_at - timedelta(minutes=10),
-        limit=limit,
-    )
-    known_threads = _sync_known_email_threads(
-        sender,
-        sent_messages=sent_messages,
-        inbox_messages=replies,
-    )
     candidates = _load_non_author_queue_candidates(sender_id, campaign_id=campaign_id)
+    if campaign_id:
+        since_at = sync_started_at - timedelta(days=45)
+        # A client check must never scan a shared sender's entire mailbox or
+        # bind unrelated threads. Read only this campaign's exact recipients.
+        recipients = normalize_recipient_scope([str(item.get('recipient_value') or '') for item in candidates])
+        replies = []
+        if recipients:
+            for mailbox in COMPLETE_REPLY_MAILBOX_ROLES:
+                window = fetch_complete_mailbox_window(sender, mailbox=mailbox,
+                    since_at=since_at - timedelta(minutes=10), until_at=sync_started_at,
+                    max_messages=max(1, min(limit, 100)), recipient_emails=recipients)
+                replies.extend(window['messages'])
+        known_threads = {'imported': 0, 'duplicates': 0, 'bound': 0, 'processed_event_ids': set()}
+    else:
+        sent_messages = fetch_mailbox_messages(
+            sender,
+            mailbox="sent",
+            since_at=since_at - timedelta(minutes=10),
+            limit=limit,
+        )
+        replies = fetch_replies(
+            sender,
+            since_at=since_at - timedelta(minutes=10),
+            limit=limit,
+        )
+        known_threads = _sync_known_email_threads(
+            sender,
+            sent_messages=sent_messages,
+            inbox_messages=replies,
+        )
     counts = {
         "fetched": len(replies),
         "matched": 0,
@@ -755,20 +769,22 @@ def _sync_legacy_non_author_sender(
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            UPDATE outreach_sender_accounts
-            SET last_reply_sync_at = %s, reply_sync_error = NULL, updated_at = NOW()
-            WHERE id = %s
-            """,
-            (sync_started_at, sender_id),
-        )
+        if not campaign_id:
+            cursor.execute(
+                """
+                UPDATE outreach_sender_accounts
+                SET last_reply_sync_at = %s, reply_sync_error = NULL, updated_at = NOW()
+                WHERE id = %s
+                """,
+                (sync_started_at, sender_id),
+            )
         _record_sender_sync_event(
             cursor,
             sender_account_id=sender_id,
             event_type="reply_sync_succeeded",
             payload={
                 "receipt_version": 1,
+                "campaign_id": campaign_id,
                 "scope": "legacy_non_author_inbox_sent_limited",
                 "complete": False,
                 "fetched": counts["fetched"],
@@ -784,6 +800,37 @@ def _sync_legacy_non_author_sender(
     finally:
         conn.close()
     return counts
+
+
+def _assert_campaign_recipient_isolation(sender_account_id, campaign_id):
+    """Recipient fallback is ambiguous across tenants sharing one mailbox.
+
+    Fail before provider reads rather than assign a reply by email address to
+    the requested tenant while hiding another tenant's matching campaign.
+    """
+    connection = get_db_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute("""SELECT EXISTS (
+            SELECT 1 FROM outreachsendqueue requested
+            JOIN outreach_campaign_touches requested_touch ON requested_touch.id=requested.campaign_touch_id
+            JOIN outreach_campaigns requested_campaign ON requested_campaign.id=requested_touch.campaign_id
+            JOIN outreachsendqueue other ON other.sender_account_id=requested.sender_account_id
+                AND LOWER(BTRIM(other.recipient_value))=LOWER(BTRIM(requested.recipient_value))
+            JOIN outreach_campaign_touches other_touch ON other_touch.id=other.campaign_touch_id
+            JOIN outreach_campaigns other_campaign ON other_campaign.id=other_touch.campaign_id
+            WHERE requested.sender_account_id=%s AND requested_touch.campaign_id=%s
+              AND requested.channel='email' AND other.channel='email'
+              AND NULLIF(BTRIM(requested.recipient_value),'') IS NOT NULL
+              AND other_campaign.business_id IS DISTINCT FROM requested_campaign.business_id
+        ) AS ambiguous""", (sender_account_id, campaign_id))
+        value=cursor.fetchone()
+        ambiguous=value.get('ambiguous') if hasattr(value,'get') else value[0]
+        if ambiguous:
+            raise EmailAdapterError('email_reply_cross_business_recipient_ambiguous',
+                'Recipient belongs to more than one business on this mailbox')
+    finally:
+        connection.close()
 
 
 def sync_email_replies(
@@ -829,6 +876,8 @@ def sync_email_replies(
         recipient_emails: list[str] = []
         folder_receipts: list[dict[str, Any]] = []
         try:
+            if campaign_id:
+                _assert_campaign_recipient_isolation(sender_id, campaign_id)
             scope_candidates = _load_email_reply_scope_candidates(
                 sender_id,
                 campaign_id=campaign_id,
@@ -851,7 +900,7 @@ def sync_email_replies(
                 continue
             non_author_candidates = _load_non_author_queue_candidates(
                 sender_id,
-                campaign_id=None,
+                campaign_id=campaign_id,
             )
             recipient_emails = normalize_recipient_scope([
                 str(candidate.get("recipient_value") or "")
@@ -983,11 +1032,9 @@ def sync_email_replies(
                     if stable_key:
                         seen_non_author_messages.add(stable_key)
                     non_author_replies.append(message)
-                non_author_threads = _sync_known_email_threads(
-                    sender,
-                    sent_messages=[],
-                    inbox_messages=non_author_replies,
-                )
+                non_author_threads = ({'imported': 0, 'duplicates': 0, 'bound': 0, 'processed_event_ids': set()}
+                    if campaign_id else _sync_known_email_threads(
+                        sender, sent_messages=[], inbox_messages=non_author_replies))
                 non_author_imported += int(non_author_threads["imported"])
                 non_author_duplicates += int(non_author_threads["duplicates"])
                 non_author_bound = int(non_author_threads["bound"])
@@ -1062,19 +1109,20 @@ def sync_email_replies(
             conn = get_db_connection()
             try:
                 cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    UPDATE outreach_sender_accounts
-                    SET last_reply_sync_at = %s, reply_sync_error = NULL, updated_at = NOW()
-                    WHERE id = %s
-                    """,
-                    (sync_started_at, sender_id),
-                )
+                if not campaign_id:
+                    cursor.execute(
+                        """
+                        UPDATE outreach_sender_accounts
+                        SET last_reply_sync_at = %s, reply_sync_error = NULL, updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        (sync_started_at, sender_id),
+                    )
                 _record_sender_sync_event(
                     cursor,
                     sender_account_id=sender_id,
                     event_type="reply_sync_succeeded",
-                    payload=receipt,
+                    payload={**receipt, "campaign_id": campaign_id},
                 )
                 conn.commit()
             except Exception:
@@ -1122,20 +1170,22 @@ def sync_email_replies(
             conn = get_db_connection()
             try:
                 cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    UPDATE outreach_sender_accounts
-                    SET reply_sync_error = %s, updated_at = NOW()
-                    WHERE id = %s
-                    """,
-                    (error_code, sender_id),
-                )
+                if not campaign_id:
+                    cursor.execute(
+                        """
+                        UPDATE outreach_sender_accounts
+                        SET reply_sync_error = %s, updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        (error_code, sender_id),
+                    )
                 _record_sender_sync_event(
                     cursor,
                     sender_account_id=sender_id,
                     event_type="reply_sync_failed",
                     payload={
                         "receipt_version": EMAIL_REPLY_SYNC_RECEIPT_VERSION,
+                        "campaign_id": campaign_id,
                         "sender_account_id": sender_id,
                         "sender_scope_type": str(sender.get("scope_type") or ""),
                         "sender_business_id": str(sender.get("business_id") or "") or None,

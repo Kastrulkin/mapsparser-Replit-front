@@ -1,0 +1,23 @@
+(node:67472) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> vite_react_shadcn_ts@0.0.0 test
+> vitest run src/components/telegram/PlatformOutreach.test.tsx src/pages/TelegramControlPage.test.tsx
+
+(node:67488) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.11 /private/tmp/localos-outreach-release-20261112/repo/frontend
+
+(node:67493) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:67492) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+
+ Test Files  2 passed (2)
+      Tests  32 passed (32)
+   Start at  15:26:04
+   Duration  19.78s (transform 910ms, setup 661ms, import 1.47s, tests 18.16s, environment 1.48s)
+

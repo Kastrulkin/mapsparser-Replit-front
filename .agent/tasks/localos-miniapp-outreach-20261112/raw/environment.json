@@ -1,0 +1,8 @@
+{
+  "postgres_initdb": "BLOCKED: macOS shmget Operation not permitted; no database created",
+  "docker": "Unavailable: no daemon socket",
+  "tmux": "Operation not permitted creating socket; durable exec logs used",
+  "browser": "Earlier standard headless Chromium launch blocked by macOS MachPort permission; no screenshot exists",
+  "automatic_approval": "Sandbox escalation rejected automatically (sandbox_approval disabled). No permissions or network settings changed.",
+  "ssh_key_present": true
+}

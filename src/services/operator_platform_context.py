@@ -23,7 +23,7 @@ def platform_chat_business(cursor, user_id):
     return _row(cursor, cursor.fetchone())
 
 
-def platform_read_request(cursor, *, business_id, user_id, message):
+def platform_read_request(cursor, *, business_id, user_id, message, actor=None, request_id=None):
     if business_id != platform_business_id():
         return None
     incoming = bool(re.search(r'входящ|ответ[ыаов]*.{0,30}(?:аутрич|рассыл|партн|кампан)|inbox|incoming', message, re.I))
@@ -33,13 +33,13 @@ def platform_read_request(cursor, *, business_id, user_id, message):
     # Mutations continue through the existing preview/approval router.
     if re.search(r'отправ|опублику|удал|запуст|ответь|разошл|измени|подготов|созда', message, re.I):
         return None
-    if not platform_chat_business(cursor, user_id):
-        raise PermissionError('Нет доступа к управлению платформой LocalOS')
+    from services.operator_platform_outreach import require_platform_actor
+    require_platform_actor(cursor, user_id, actor)
     scope = {'kind': 'platform', 'id': None, 'name': 'LocalOS', 'business_ids': []}
     if incoming:
         if re.search(r'проверь|проверить|обнови|обновить|синхрониз|check|refresh', message, re.I):
             from services.operator_platform_outreach import enqueue_reply_sync
-            job = enqueue_reply_sync(cursor, user_id=user_id)
+            job = enqueue_reply_sync(cursor, user_id=user_id, actor=actor, request_id=request_id)
             return {'status': 'processing', 'capability': 'partnerships.read',
                     'async_job_id': job['id'], 'job': job,
                     'chat_response': 'Проверка ответов в подключённых каналах поставлена в очередь. Итог и ответы доступны в разделе «Партнёрства» для всей платформы.',

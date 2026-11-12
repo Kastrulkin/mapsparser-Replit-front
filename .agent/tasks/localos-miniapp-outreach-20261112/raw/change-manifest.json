@@ -1,0 +1,5 @@
+{
+  "base_commit": "f23a30ebd259df02baae3c7bff8bcf0c2f783672",
+  "scope": "delta from verified f23; live baseline must be inspected before partial deployment",
+  "files": []
+}

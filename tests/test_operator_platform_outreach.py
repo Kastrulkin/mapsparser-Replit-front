@@ -186,11 +186,11 @@ def test_shared_bot_check_command_queues_a_real_refresh(monkeypatch):
     cursor = Cursor()
     queue = Mock(return_value={'id': 'sync-job'})
     monkeypatch.setattr(operator_platform_outreach, 'enqueue_reply_sync', queue)
-    result = operator_platform_context.platform_read_request(cursor, business_id=operator_platform_context.platform_business_id(), user_id='admin', message='Проверь входящие по всем бизнесам')
+    result = operator_platform_context.platform_read_request(cursor, business_id=operator_platform_context.platform_business_id(), user_id='admin', message='Проверь входящие по всем бизнесам', actor={'session_kind':'standard'}, request_id='stable-platform-request')
     assert result['status'] == 'processing'
     assert result['async_job_id'] == 'sync-job'
     assert result['mobile_route']['screen'] == 'partnerships'
-    queue.assert_called_once_with(cursor, user_id='admin')
+    queue.assert_called_once_with(cursor, user_id='admin', actor={'session_kind':'standard'}, request_id='stable-platform-request')
 
 
 def test_sync_does_not_read_any_channel_after_access_revocation(monkeypatch):

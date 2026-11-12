@@ -357,7 +357,7 @@ def _mobile_navigation(
     return items
 
 
-def _mobile_active_job(cursor, *, user_id: str, scope: dict, is_superadmin: bool) -> dict | None:
+def _mobile_active_job(cursor, *, user_id: str, scope: dict, is_superadmin: bool, actor_context: dict | None = None) -> dict | None:
     cursor.execute("SELECT to_regclass('public.operator_async_jobs') AS table_ref")
     if not dict(cursor.fetchone() or {}).get("table_ref"):
         return None
@@ -383,6 +383,7 @@ def _mobile_active_job(cursor, *, user_id: str, scope: dict, is_superadmin: bool
         user_id=user_id,
         scope=scope,
         is_superadmin=is_superadmin,
+        actor_context=actor_context,
     )
 
 
@@ -721,6 +722,7 @@ def operator_telegram_bootstrap():
             user_id=user_id,
             scope=selected or {},
             is_superadmin=bool(user.get("is_superadmin")),
+            actor_context=user,
         )
         return jsonify(
             {
@@ -783,6 +785,7 @@ def operator_telegram_select_scope():
             user_id=user_id,
             scope=scope,
             is_superadmin=bool(user.get("is_superadmin")),
+            actor_context=user,
         )
         return jsonify({"success": True, "selected_scope": scope, "summary": summary, "active_job": active_job})
     except Exception:
@@ -4367,6 +4370,7 @@ def operator_mobile_jobs():
             user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
             scope=scope,
             is_superadmin=bool(user_data.get("is_superadmin")),
+            actor_context=user_data,
             status=str(request.args.get("status") or ""),
             cursor_value=str(request.args.get("cursor") or ""),
             limit=int(request.args.get("limit") or 25),
@@ -4394,6 +4398,7 @@ def operator_mobile_job_status(job_id: str):
             user_id=user_id,
             scope=scope,
             is_superadmin=bool(user_data.get("is_superadmin")),
+            actor_context=user_data,
         )
         if not job:
             job = load_mobile_job(
@@ -4426,6 +4431,7 @@ def operator_mobile_job_retry(job_id: str):
             user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
             scope=scope,
             is_superadmin=bool(user_data.get("is_superadmin")),
+            actor_context=user_data,
         )
         if not job:
             return jsonify({"success": False, "error": "Задача не найдена или недоступна"}), 404
@@ -4457,6 +4463,7 @@ def operator_mobile_job_cancel(job_id: str):
             user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
             scope=scope,
             is_superadmin=bool(user_data.get("is_superadmin")),
+            actor_context=user_data,
         )
         if not job:
             return jsonify({"success": False, "error": "Задача не найдена или недоступна"}), 404

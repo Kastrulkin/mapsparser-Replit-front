@@ -193,19 +193,20 @@ def sync_vk_replies(
             conn = get_db_connection()
             try:
                 cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    UPDATE outreach_sender_accounts
-                    SET last_reply_sync_at = NOW(), reply_sync_error = NULL, updated_at = NOW()
-                    WHERE id = %s
-                    """,
-                    (sender_id,),
-                )
+                if not campaign_id:
+                    cursor.execute(
+                        """
+                        UPDATE outreach_sender_accounts
+                        SET last_reply_sync_at = NOW(), reply_sync_error = NULL, updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        (sender_id,),
+                    )
                 _record_sync_event(
                     cursor,
                     sender_id,
                     "reply_sync_succeeded",
-                    {"fetched": sender_fetched, "imported": sender_imported},
+                    {"campaign_id": campaign_id, "fetched": sender_fetched, "imported": sender_imported},
                 )
                 conn.commit()
             except Exception:
@@ -225,15 +226,16 @@ def sync_vk_replies(
             conn = get_db_connection()
             try:
                 cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    UPDATE outreach_sender_accounts
-                    SET reply_sync_error = %s, updated_at = NOW()
-                    WHERE id = %s
-                    """,
-                    (error_code, sender_id),
-                )
-                _record_sync_event(cursor, sender_id, "reply_sync_failed", {"error_code": error_code})
+                if not campaign_id:
+                    cursor.execute(
+                        """
+                        UPDATE outreach_sender_accounts
+                        SET reply_sync_error = %s, updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        (error_code, sender_id),
+                    )
+                _record_sync_event(cursor, sender_id, "reply_sync_failed", {"campaign_id": campaign_id, "error_code": error_code})
                 if isinstance(exc, VkOutreachAdapterError):
                     record_sender_health_event(
                         cursor,

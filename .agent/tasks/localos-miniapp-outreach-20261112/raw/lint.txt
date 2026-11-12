@@ -1,0 +1,8 @@
+(node:55930) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+/private/tmp/localos-outreach-release-20261112/repo/frontend/src/components/telegram/PlatformOutreach.tsx
+  63:57  warning  The ref value 'version.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'version.current' to a variable inside the effect, and use that variable in the cleanup function  react-hooks/exhaustive-deps
+
+✖ 1 problem (0 errors, 1 warning)
+

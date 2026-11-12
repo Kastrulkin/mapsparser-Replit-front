@@ -1,0 +1,68 @@
+.....F..                                                                 [100%]
+=================================== FAILURES ===================================
+_______ test_worker_applies_known_telegram_failure_as_sender_only_block ________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x105fa4750>
+
+    def test_worker_applies_known_telegram_failure_as_sender_only_block(monkeypatch):
+        import worker
+        from api import admin_prospecting
+        from services import outreach_email_reply_service, outreach_vk_reply_service
+    
+        monkeypatch.setattr(
+            admin_prospecting,
+            "_sync_telegram_app_replies",
+            lambda **_kwargs: {
+                "picked": 1,
+                "imported": 0,
+                "failed": 1,
+                "sender_results": [{
+                    "sender_account_id": "sender-telegram",
+                    "status": "failed",
+                }],
+            },
+        )
+        monkeypatch.setattr(
+            outreach_email_reply_service,
+            "sync_email_replies",
+            lambda **_kwargs: {
+                "picked": 1,
+                "imported": 0,
+                "failed": 0,
+                "sender_results": [{
+                    "sender_account_id": "sender-email",
+                    "status": "ok",
+                    "receipt_complete": True,
+                }],
+            },
+        )
+        monkeypatch.setattr(
+            outreach_vk_reply_service,
+            "sync_vk_replies",
+            lambda **_kwargs: {
+                "picked": 0,
+                "imported": 0,
+                "failed": 0,
+                "sender_results": [],
+            },
+        )
+        monkeypatch.setattr(worker.time, "time", lambda: 10_000.0)
+        monkeypatch.setenv("OUTREACH_REPLY_SYNC_FAIL_CLOSED", "true")
+        monkeypatch.setenv("OUTREACH_YOUGILE_SYNC_ENABLED", "false")
+        worker._LAST_OUTREACH_REPLY_SYNC_AT = 0.0
+    
+        state = worker._sync_outreach_replies_if_due()
+    
+        assert state["healthy"] is False
+>       assert state["global_block"] is False
+E       assert True is False
+
+/tmp/localos-outreach-release-20261112/baseline/tests/test_outreach_reply_sync_failure_scope.py:181: AssertionError
+----------------------------- Captured stdout call -----------------------------
+[OUTREACH_REPLY_SYNC_STAGE] telegram_start
+[OUTREACH_REPLY_SYNC_STAGE] telegram_done vk_start
+[OUTREACH_REPLY_SYNC_STAGE] vk_done email_start
+[OUTREACH_REPLY_SYNC] error: DATABASE_URL is not set. Runtime requires PostgreSQL. Example: export DATABASE_URL='postgresql://user:pass@localhost:5432/local_db'
+=========================== short test summary info ============================
+FAILED ../../../../tmp/localos-outreach-release-20261112/baseline/tests/test_outreach_reply_sync_failure_scope.py::test_worker_applies_known_telegram_failure_as_sender_only_block
+1 failed, 7 passed in 0.78s

@@ -1,0 +1,36 @@
+(node:51300) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> vite_react_shadcn_ts@0.0.0 test
+> vitest run src/components/telegram/PlatformOutreach.test.tsx src/components/telegram/PartnershipsMobileModule.test.tsx src/components/prospecting/PreparedPartnershipMessages.test.tsx src/components/prospecting/PartnershipGroupLaunch.test.tsx src/pages/TelegramControlPage.test.tsx src/components/operator/OperatorMessageText.test.tsx src/components/operator/OperatorVoice.logic.test.ts src/components/telegram/JobProgressSheet.test.tsx
+
+(node:51332) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.11 /private/tmp/localos-outreach-release-20261112/repo/frontend
+
+(node:51340) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51342) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51345) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51341) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51346) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51344) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51343) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51348) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Not implemented: navigation to another Document
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+
+ Test Files  8 passed (8)
+      Tests  73 passed (73)
+   Start at  15:21:46
+   Duration  22.87s (transform 3.51s, setup 2.36s, import 5.89s, tests 25.83s, environment 8.85s)
+

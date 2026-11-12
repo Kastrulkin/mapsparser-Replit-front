@@ -54,6 +54,20 @@ def test_localos_name_never_grants_platform_access():
     assert len(cursor.queries) == 1
 
 
+@pytest.mark.parametrize('actor',[{'session_kind':'demo'},{'impersonating':True},{'impersonated_by':'admin'}])
+def test_restricted_platform_chat_cannot_read_or_enqueue_live_inbox(actor,monkeypatch):
+    from unittest.mock import Mock
+    from services import operator_platform_outreach
+    queue=Mock()
+    monkeypatch.setattr(operator_platform_outreach,'enqueue_reply_sync',queue)
+    cursor=PlatformCursor()
+    with pytest.raises(PermissionError):
+        operator_platform_context.platform_read_request(cursor,business_id=operator_platform_context.platform_business_id(),
+            user_id='admin',message='Проверь входящие',actor=actor,request_id='restricted')
+    assert not cursor.queries
+    queue.assert_not_called()
+
+
 def test_inbox_summary_fits_a_bot_message_without_hiding_the_freshness_limit():
     cursor = PlatformCursor(replies=[{'lead_name': 'Компания' * 100, 'business_name': 'Клиент' * 100,
                                      'reply_text': 'Ответ ' * 1000, 'channel': 'email'} for _ in range(21)])

@@ -1434,6 +1434,7 @@ def _load_telegram_reply_sync_candidates(
     limit: int = 25,
     batch_id: str | None = None,
     sender_account_id: str | None = None,
+    campaign_id: str | None = None,
 ) -> list[dict[str, Any]]:
     safe_limit = max(1, min(int(limit or 25), 200))
     conn = get_db_connection()
@@ -1475,6 +1476,9 @@ def _load_telegram_reply_sync_candidates(
               AND permission.outreach_enabled = TRUE
         """
         params: list[Any] = [QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED, TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS]
+        if campaign_id:
+            query += ' AND q.campaign_touch_id IN (SELECT id FROM outreach_campaign_touches WHERE campaign_id=%s)'
+            params.append(campaign_id)
         if batch_id:
             query += " AND q.batch_id = %s"
             params.append(batch_id)
@@ -1497,7 +1501,7 @@ def _load_telegram_reply_sync_candidates(
             for value in os.getenv("OUTREACH_THREAD_SYNC_BUSINESS_IDS", "").split(",")
             if value.strip()
         ]
-        if not remaining or batch_id or not telegram_thread_sync_enabled or not allowed_business_ids:
+        if not remaining or batch_id or campaign_id or not telegram_thread_sync_enabled or not allowed_business_ids:
             return queue_items
         binding_query = """
             SELECT
@@ -1706,11 +1710,13 @@ def _sync_telegram_app_replies(
     batch_id: str | None = None,
     limit: int = 25,
     sender_account_id: str | None = None,
+    campaign_id: str | None = None,
 ) -> dict[str, Any]:
     items = _load_telegram_reply_sync_candidates(
         limit=limit,
         batch_id=batch_id,
         sender_account_id=sender_account_id,
+        **({'campaign_id': campaign_id} if campaign_id else {}),
     )
     summary = telegram_reply_sync_summary(
         batch_id=batch_id,

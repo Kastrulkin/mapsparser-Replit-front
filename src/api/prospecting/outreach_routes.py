@@ -2180,6 +2180,12 @@ def partnership_prepared_messages():
     if not business_id:return jsonify(error='Выберите бизнес.'),400
     from core.auth_helpers import session_allows_business
     if not session_allows_business(user,business_id):return jsonify(error='Нет доступа к бизнесу в этой сессии.'),403
+    if request.method=='POST':
+        from services.operator_owner_actions import session_write_guard
+        try:
+            session_write_guard(user)
+        except PermissionError as error:
+            return jsonify(error=str(error)),403
     conn=get_db_connection()
     try:
         from services import partnership_prepared_campaigns as prepared

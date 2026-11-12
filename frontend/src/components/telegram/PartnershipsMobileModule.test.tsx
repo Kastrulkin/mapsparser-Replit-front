@@ -17,7 +17,8 @@ describe('PartnershipsMobileModule destructive actions', () => {
     let finishOld: ((value: Response) => void) | undefined;
     const calls: string[] = [];
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
-      const url = String(input); calls.push(url);
+      const url = String(input);
+      if (url.startsWith('/api/operator/mobile/outreach?')) return response({ items: [], searches: [], senders: [], readiness: { search_enabled: true, web_enabled: true, yandex_enabled: false, sync_enabled: true } }); calls.push(url);
       if (url.includes('/leads?') && url.includes('pipeline_status=replied')) return new Promise<Response>(resolve => { finishOld = resolve; });
       if (url.includes('/leads?')) return response({ items: [{ id: 'lead-1', name: url.includes('business_id=business-2') ? 'Новый результат' : 'Исходный', pipeline_status: 'converted' }] });
       return response({ drafts: [], batches: [], items: [], counts: { partners: 0, launched: 0, preparing: 0, needs_decision: 0 } });
@@ -32,6 +33,7 @@ describe('PartnershipsMobileModule destructive actions', () => {
     const resolveOld = finishOld;
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.startsWith('/api/operator/mobile/outreach?')) return response({ items: [], searches: [], senders: [], readiness: { search_enabled: true, web_enabled: true, yandex_enabled: false, sync_enabled: true } });
       if (url.includes('/leads?')) return response({ items: [{ id: 'lead-2', name: 'Новый результат', pipeline_status: 'replied' }] });
       return response({ drafts: [], batches: [], items: [], counts: { partners: 0, launched: 0, preparing: 0, needs_decision: 0 } });
     }));
@@ -47,6 +49,7 @@ describe('PartnershipsMobileModule destructive actions', () => {
     const calls: string[] = [];
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.startsWith('/api/operator/mobile/outreach?')) return response({ items: [], searches: [], senders: [], readiness: { search_enabled: true, web_enabled: true, yandex_enabled: false, sync_enabled: true } });
       calls.push(url);
       if (url.startsWith('/api/partnership/leads?')) {
         return response({
@@ -77,6 +80,7 @@ describe('PartnershipsMobileModule destructive actions', () => {
     const calls: Array<{ url: string; method: string }> = [];
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url.startsWith('/api/operator/mobile/outreach?')) return response({ items: [], searches: [], senders: [], readiness: { search_enabled: true, web_enabled: true, yandex_enabled: false, sync_enabled: true } });
       const method = String(init?.method || 'GET');
       calls.push({ url, method });
       if (url.startsWith('/api/partnership/leads?')) {
@@ -107,6 +111,7 @@ describe('PartnershipsMobileModule destructive actions', () => {
     const openWindow = vi.spyOn(window, 'open').mockImplementation(() => null);
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.startsWith('/api/operator/mobile/outreach?')) return response({ items: [], searches: [], senders: [], readiness: { search_enabled: true, web_enabled: true, yandex_enabled: false, sync_enabled: true } });
       if (url.startsWith('/api/partnership/leads?')) return response({ items: [{ id: 'lead-1', name: 'Партнёр один', city: 'Москва', pipeline_status: 'unprocessed', sales_room_slug: 'partner-room' }] });
       if (url.startsWith('/api/partnership/drafts')) return response({ drafts: [] });
       if (url.startsWith('/api/partnership/send-batches')) return response({ batches: [] });
@@ -130,6 +135,7 @@ describe('PartnershipsMobileModule destructive actions', () => {
     const browserConfirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url.startsWith('/api/operator/mobile/outreach?')) return response({ items: [], searches: [], senders: [], readiness: { search_enabled: true, web_enabled: true, yandex_enabled: false, sync_enabled: true } });
       const method = String(init?.method || 'GET');
       calls.push({ url, method });
       if (url.startsWith('/api/partnership/leads?')) return response({ items: [] });
@@ -161,6 +167,7 @@ describe('PartnershipsMobileModule destructive actions', () => {
   it('does not expose Invalid Date for a malformed send batch timestamp', async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.startsWith('/api/operator/mobile/outreach?')) return response({ items: [], searches: [], senders: [], readiness: { search_enabled: true, web_enabled: true, yandex_enabled: false, sync_enabled: true } });
       if (url.startsWith('/api/partnership/leads?')) return response({ items: [] });
       if (url.startsWith('/api/partnership/drafts?')) return response({ drafts: [] });
       if (url.startsWith('/api/partnership/send-batches')) return response({ batches: [{ id: 'batch-1', status: 'draft', created_at: 'not-a-date', items: [] }], ready_drafts: [], reactions: [] });
@@ -182,6 +189,7 @@ describe('PartnershipsMobileModule destructive actions', () => {
     const historicalMarker = 'Историческая запись: письмо отправлено вручную 25.08.2026 с localosgo@gmail.com; факт подтверждён в папке «Отправленные». Точный текст хранится у почтового провайдера и не подменяется шаблоном LocalOS.';
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.startsWith('/api/operator/mobile/outreach?')) return response({ items: [], searches: [], senders: [], readiness: { search_enabled: true, web_enabled: true, yandex_enabled: false, sync_enabled: true } });
       if (url.startsWith('/api/partnership/leads?')) return response({ items: [] });
       if (url.startsWith('/api/partnership/drafts?')) {
         return response({
@@ -217,7 +225,8 @@ describe('Draft-only saving', () => {
     const calls: string[] = [];
     const bodies: unknown[] = [];
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input); calls.push(url);
+      const url = String(input);
+      if (url.startsWith('/api/operator/mobile/outreach?')) return response({ items: [], searches: [], senders: [], readiness: { search_enabled: true, web_enabled: true, yandex_enabled: false, sync_enabled: true } }); calls.push(url);
       if (url.endsWith('/save')) { bodies.push(JSON.parse(String(init?.body))); return response({ success: true }); }
       if (url.startsWith('/api/partnership/drafts?')) return response({ drafts: [{ id: 'draft-1', lead_id: 'lead-1', lead_name: 'Клиника', status: 'generated', generated_text: 'Проверенное предложение', review_digest: 'review-v1' }] });
       return response({ items: [], batches: [], ready_drafts: [], reactions: [] });
@@ -238,6 +247,7 @@ describe('Partnership recipient review', () => {
   it('shows the stored contact and its source beside a native draft without contact research metadata', async () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.startsWith('/api/operator/mobile/outreach?')) return response({ items: [], searches: [], senders: [], readiness: { search_enabled: true, web_enabled: true, yandex_enabled: false, sync_enabled: true } });
       if (url.includes('/drafts?')) return response({ drafts: [{ id: 'draft-native', lead_id: 'lead-native', lead_name: 'Тестовый партнёр', channel: 'email', status: 'draft', generated_text: 'Тестовое письмо', recipient_value: 'jur@example.test', recipient_source_url: 'https://example.test/contacts' }] });
       return response({ drafts: [], batches: [], items: [], counts: { partners: 0, launched: 0, preparing: 0, needs_decision: 0 } });
     }));
@@ -258,7 +268,8 @@ it.each([
 ])('cancels local letter edits and unlocks return without saving: %j',async saved => {
  const calls:string[]=[];
  vi.stubGlobal('fetch',vi.fn((input:RequestInfo | URL,init?:RequestInit)=>{
-  const url=String(input);if(init?.method && init.method!=='GET')calls.push(url);
+  const url=String(input);
+      if (url.startsWith('/api/operator/mobile/outreach?')) return response({ items: [], searches: [], senders: [], readiness: { search_enabled: true, web_enabled: true, yandex_enabled: false, sync_enabled: true } });if(init?.method && init.method!=='GET')calls.push(url);
   if(url.includes('/leads?'))return response({items:[{id:'lead-cancel',name:'Партнёр отмены',created_at:'2026-10-22'}]});
   return response({drafts:[{id:'draft-cancel',lead_id:'lead-cancel',lead_name:'Партнёр отмены',status:'draft',...saved}],items:[],batches:[],counts:{}});
  }));

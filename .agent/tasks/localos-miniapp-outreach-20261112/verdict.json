@@ -1,0 +1,160 @@
+{
+  "task_id": "localos-miniapp-outreach-20261112",
+  "overall_verdict": "UNKNOWN",
+  "verified_at": "2026-11-12T12:34:58.688882+00:00",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Verified HEAD f23a30ebd259df02baae3c7bff8bcf0c2f783672; release manifest now contains 36 changed source/doc/test files, all source hashes match, and existing platform/search/send implementation is reused."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Current actor and membership checks are present at scoped requests, enqueue, provider worker and job read. Review found dropped session flags in job readers/platform chat/native sends; all were fixed and independent restricted-session regressions pass."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Scoped canonical inbox/pagination/job queries reviewed. Foreign-owned sender metadata exposure through a referenced campaign touch was fixed with platform-only shared-sender branch; unit boundary and optional PostgreSQL regression exist."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Connection status reads both canonical account sources, bounds/filter-escapes queries, reports inconclusive filtered absence and omits credentials/raw provider errors. Live Riderra mailbox verification is separately AC14."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Existing durable sync lane, same-user/scope lock/idempotency, per-source campaign restrictions, current authorization checks and cross-tenant peer collision guards are retained and tested without provider calls."
+    },
+    {
+      "id": "AC6",
+      "status": "UNKNOWN",
+      "reason": "Real PostgreSQL inbound deduplication, notification behavior and stopping applicable follow-ups after scoped sync have not been exercised end to end. Unit tests and source inspection do not fully close this criterion."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "reason": "Search preview uses real process_chat/native operator_task approval path; provider calls are fenced until native confirm. Existing continuation/cost/source controls retained and focused tests pass."
+    },
+    {
+      "id": "AC8",
+      "status": "PASS",
+      "reason": "Existing prepared-message/group preview and native queue services retained; independent native suites passed. New guards deny restricted sessions before mutation/DB/provider work and use current actor for platform sender eligibility."
+    },
+    {
+      "id": "AC9",
+      "status": "PASS",
+      "reason": "Independent UI rerun proves immediate sending/received states, stable retry and updated response, draft preservation, compact restored job and visible approval/result actions."
+    },
+    {
+      "id": "AC10",
+      "status": "UNKNOWN",
+      "reason": "Auth/scope/version/access-loss behavior has component coverage, but actual narrow viewport/MAX device interaction and durable reopen through real runtime remain unverified because browser/runtime access is blocked."
+    },
+    {
+      "id": "AC11",
+      "status": "UNKNOWN",
+      "reason": "Build/static/unit/component evidence is available; real PostgreSQL tests skip (host shmget denied). Complete local real-DB search→approval→worker→queue→mocked delivery→inbound→follow-up stop→reopen has not run."
+    },
+    {
+      "id": "AC12",
+      "status": "UNKNOWN",
+      "reason": "At verification time candidate changes are not yet committed/pushed; dual remote SHA cannot be attested. GitVerse configured credential preflight failed. Parent publication may follow this review but is not inferred here."
+    },
+    {
+      "id": "AC13",
+      "status": "UNKNOWN",
+      "reason": "SSH preflight returns Operation not permitted before remote execution, so deployed base, containers, environment, dist and HTTP behavior were not inspected or changed."
+    },
+    {
+      "id": "AC14",
+      "status": "UNKNOWN",
+      "reason": "No real MAX Riderra or ordinary-client search/send/control-reply/reopen pilot on the candidate deployed SHA exists; deployment and applicable concrete external action conditions remain gates."
+    }
+  ],
+  "resolved_review_findings": [
+    {
+      "finding": "Foreign-owned sender metadata leaked via campaign-touch EXISTS",
+      "files": [
+        "src/services/operator_platform_outreach.py",
+        "tests/test_operator_business_outreach.py",
+        "tests/test_operator_business_outreach_postgres.py"
+      ],
+      "resolution": "Shared EXISTS branch restricted to platform-scoped sender; source hashes and final tests reviewed."
+    },
+    {
+      "finding": "Job result reads discarded demo/impersonation session context",
+      "files": [
+        "src/services/operator_async_jobs.py",
+        "src/api/operator_api.py",
+        "tests/test_operator_outreach_job_sessions.py"
+      ],
+      "resolution": "Authenticated actor_context threaded through list/load/active bootstrap and restricted outreach results guarded; retry/cancel do not return private results either."
+    },
+    {
+      "finding": "Platform chat fresh-inbox path discarded session flags and request_id",
+      "files": [
+        "src/services/operator_platform_context.py",
+        "src/services/operator_core.py",
+        "tests/test_operator_platform_context.py"
+      ],
+      "resolution": "Current session guard precedes reads/queue and native idempotency key is forwarded."
+    },
+    {
+      "finding": "Native group/prepared mutations allowed restricted sessions and cached platform sender privilege",
+      "files": [
+        "src/services/partnership_group_launch.py",
+        "src/services/partnership_prepared_campaigns.py",
+        "src/api/prospecting/outreach_routes.py",
+        "tests/test_partnership_mutation_sessions.py"
+      ],
+      "resolution": "Session mutation guard before SQL; service helper reloads current actor, write/capability rights and current superadmin for platform sender."
+    }
+  ],
+  "commands_run": [
+    {
+      "command": "PYTHONPATH=src venv/bin/python -m pytest -q tests/test_operator_business_outreach.py tests/test_operator_platform_outreach.py tests/test_operator_platform_context.py tests/test_operator_platform_entrypoints.py tests/test_outreach_continuation.py tests/test_operator_async_jobs.py tests/test_telegram_control_scope.py tests/test_outreach_email_reply_receipt.py tests/test_operator_business_outreach_postgres.py tests/test_outreach_reply_tracking.py",
+      "result": "123 passed, 3 skipped before corrective changes",
+      "proof": "raw/verifier-backend.log"
+    },
+    {
+      "command": "npm --prefix frontend test -- src/components/telegram/PlatformOutreach.test.tsx src/pages/TelegramControlPage.test.tsx",
+      "result": "32 passed, 2 files",
+      "proof": "raw/verifier-frontend.log"
+    },
+    {
+      "command": "PYTHONPATH=src venv/bin/python -m pytest -q tests/test_partnership_group_launch.py tests/test_partnership_group_launch_api.py tests/test_partnership_prepared_campaigns.py",
+      "result": "81 passed before final native guard change",
+      "proof": "raw/verifier-native-send.log"
+    },
+    {
+      "command": "PYTHONPATH=src venv/bin/python -m pytest -q tests/test_partnership_mutation_sessions.py tests/test_operator_outreach_job_sessions.py tests/test_operator_platform_context.py tests/test_operator_business_outreach.py tests/test_partnership_group_launch.py tests/test_partnership_group_launch_api.py tests/test_partnership_prepared_campaigns.py",
+      "result": "165 passed on final corrected source",
+      "proof": "raw/verifier-final-fixes.log"
+    },
+    {
+      "command": "git diff --check; verify release-manifest source sha256",
+      "result": "PASS; 36 source/doc/test hashes all current; API/native guard files included",
+      "proof": "raw/release-manifest.json"
+    },
+    {
+      "command": "venv/bin/python agents/skills/repo-task-proof-loop/scripts/task_loop.py validate --task-id localos-miniapp-outreach-20261112",
+      "result": "valid:false; only missing required raw/screenshot-1.png; errors:[]; no dummy screenshot created"
+    }
+  ],
+  "artifacts_used": [
+    "spec.md",
+    "evidence.md",
+    "evidence.json",
+    "raw/release-manifest.json",
+    "raw/backend-final.log",
+    "raw/frontend-final.log",
+    "raw/typescript-comparison.json",
+    "raw/ssh-preflight.json",
+    "raw/gitverse-preflight.json",
+    "raw/environment.json"
+  ],
+  "note": "No unresolved concrete code failure found in the final corrected candidate. Overall goal is not PASS because integration, publication, deployment and live acceptance are incomplete. Verifier did not modify production code, tests or builder evidence."
+}

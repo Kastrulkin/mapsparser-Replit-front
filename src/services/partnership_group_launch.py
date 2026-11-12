@@ -101,6 +101,8 @@ def default_schedule(items, now):
 
 
 def authorize(cursor, user, business_id):
+    from services.operator_owner_actions import session_write_guard
+    session_write_guard(user)
     from core.auth_helpers import session_allows_business
     from services.operator_audio import authorize_actor
     from subscription_manager import capability_access_payload
