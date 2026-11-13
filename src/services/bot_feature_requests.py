@@ -20,7 +20,7 @@ def save_bot_feature_request(
     commit: bool = True,
 ) -> dict[str, Any]:
     payload = {
-        "id": str(uuid.uuid4()),
+        "id": str(uuid.uuid5(uuid.NAMESPACE_URL, request_key)) if request_key else str(uuid.uuid4()),
         "telegram_id": str(telegram_id or "").strip(),
         "user_id": str(user_id or "").strip() or None,
         "business_id": str(business_id or "").strip() or None,

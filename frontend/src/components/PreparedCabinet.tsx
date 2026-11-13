@@ -84,7 +84,8 @@ export function PreparedDot() {
   </>;
 }
 
-export function PreparedCabinetPanel({ sections, active }: {
+export function PreparedCabinetPanel({ sections, active, businessId }: {
+  businessId?: string | null;
   sections: Section[];
   active?: Section;
 }) {
@@ -127,6 +128,7 @@ export function PreparedCabinetPanel({ sections, active }: {
         </nav>
       )}
       <h2 id="prepared-section-title" className="text-xl font-semibold">Подготовленные материалы · {destinations[active.key].label}</h2>
+      {!active.items.length && <p className="text-sm text-muted-foreground">Материалы этого раздела сейчас недоступны. Команда может подготовить их заново.</p>}
       {active.items.map((item, index) => (
         <article className="space-y-2 rounded-xl border p-4" key={index}>
           <h3 className="font-semibold">{item.title}</h3>
@@ -135,6 +137,9 @@ export function PreparedCabinetPanel({ sections, active }: {
             try {
               await navigator.clipboard.writeText(item.text);
               toast({ title: 'Текст скопирован' });
+              if (businessId) void newAuth.makeRequest('/business/' + encodeURIComponent(businessId) + '/prepared-cabinet', {
+                method: 'POST', body: JSON.stringify({ key: active.key, version: active.version, action: 'copied' }),
+              }).catch(() => undefined);
             } catch {
               toast({ title: 'Выделите текст и скопируйте его вручную', variant: 'destructive' });
             }

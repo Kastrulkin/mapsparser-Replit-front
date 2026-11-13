@@ -380,7 +380,7 @@ export const DashboardLayout = () => {
                 Не удалось обновить подготовленные материалы. <button className="underline" onClick={prepared.retry}>Повторить</button>
               </div>}
               {(prepared.active || location.pathname === '/dashboard/today') && (
-                <PreparedCabinetPanel sections={prepared.sections} active={prepared.active} />
+                <PreparedCabinetPanel businessId={currentBusinessId} sections={prepared.sections} active={prepared.active} />
               )}
               {shouldLockPaidSection && prepared.active ? null : shouldLockPaidSection && lockedPaidSection ? (
                 <LockedSectionPreview

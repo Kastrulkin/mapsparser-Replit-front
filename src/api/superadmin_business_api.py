@@ -30,7 +30,7 @@ def _require_superadmin(db=None):
         return None, (jsonify({"error": "Требуется авторизация"}), 401)
 
     user_data = verify_session(token)
-    if not user_data:
+    if not user_data or user_data.get("session_kind") == "demo":
         if db is not None:
             db.close()
         return None, (jsonify({"error": "Недействительный токен"}), 401)
@@ -43,10 +43,10 @@ def _require_superadmin(db=None):
     return user_data, None
 
 
-@superadmin_business_bp.route("/api/superadmin/businesses/<business_id>/prepared-cabinet", methods=["PUT"])
+@superadmin_business_bp.route("/api/superadmin/businesses/<business_id>/prepared-cabinet", methods=["GET", "PUT"])
 @superadmin_business_bp.route("/api/superadmin/businesses/<business_id>/prepared-cabinet/invitation", methods=["POST", "DELETE"])
 def admin_prepared_cabinet(business_id):
-    from services import prepared_cabinet
+    from services import prepared_cabinet, prepared_cabinet_sources, connection_assistance
 
     db = DatabaseManager()
     _, error_response = _require_superadmin(db)
@@ -54,8 +54,28 @@ def admin_prepared_cabinet(business_id):
         return error_response
     try:
         cursor = db.conn.cursor()
+        cursor.execute("SELECT id,name,owner_id FROM businesses WHERE id=%s AND is_active IS NOT FALSE", (business_id,))
+        business = cursor.fetchone()
+        if not business:
+            return jsonify({"error": "Бизнес недоступен."}), 404
+        if request.method == "GET":
+            preview = prepared_cabinet_sources.preview(cursor, business_id)
+            cursor.execute("SELECT 1 FROM prepared_cabinets WHERE business_id=%s AND owner_id=%s", (business_id,business["owner_id"]))
+            preview["saved"] = bool(cursor.fetchone())
+            cursor.execute("SELECT COALESCE(password_hash,'') <> '' AS password_set,is_verified FROM users WHERE id=%s", (business["owner_id"],))
+            preview["owner_state"] = dict(cursor.fetchone() or {})
+            preview["requests"] = connection_assistance.list_requests(cursor, business_id)
+            cursor.execute("""SELECT event_name,COUNT(*) AS count FROM product_analytics_events
+                WHERE business_id=%s AND target='prepared-cabinet' GROUP BY event_name""", (business_id,))
+            preview["events"] = {row["event_name"]: row["count"] for row in cursor.fetchall()}
+            response = jsonify(preview)
+            response.headers["Cache-Control"] = "no-store"
+            return response
         if request.method == "PUT":
-            if not prepared_cabinet.save_materials(cursor, business_id, request.get_json(silent=True)):
+            data = request.get_json(silent=True)
+            references = isinstance(data, dict) and "selection" in data
+            materials = prepared_cabinet_sources.choose(cursor, business_id, data["selection"], data.get("version")) if references else data
+            if not prepared_cabinet.save_materials(cursor, business_id, materials, references=references):
                 return jsonify({"error": "Бизнес или владелец изменился."}), 409
             db.conn.commit()
             return jsonify({"success": True})
@@ -88,21 +108,104 @@ def owner_prepared_cabinet(business_id):
     if user.get("session_kind") == "demo":
         return jsonify({"sections": []})
     reviewed = None
+    copied = None
     if request.method == "POST":
         data = request.get_json(silent=True)
         if not isinstance(data, dict) or data.get("key") not in prepared_cabinet.SECTIONS or not isinstance(data.get("version"), str):
             return jsonify({"error": "Проверьте раздел и версию материалов."}), 400
-        reviewed = (data["key"], data["version"])
+        if data.get("action") == "copied":
+            copied = (data["key"], data["version"])
+        else:
+            reviewed = (data["key"], data["version"])
     conn = get_db_connection()
     try:
         sections = prepared_cabinet.owner_package(conn.cursor(), business_id, user["user_id"], reviewed)
-        if reviewed:
+        if copied and any(section["key"] == copied[0] and section["version"] == copied[1] for section in sections):
+            from services.product_telemetry_service import record_product_event
+            record_product_event(conn.cursor(), event_name="message_copied", surface="web", business_id=business_id,
+                user_id=user["user_id"], target="prepared-cabinet", properties={"section": copied[0]}, signal_source="client_observation")
+        if request.method == "POST":
             conn.commit()
         response = jsonify({"sections": sections})
         response.headers["Cache-Control"] = "no-store"
         return response
     finally:
         conn.close()
+
+
+@superadmin_business_bp.route("/api/superadmin/businesses/<business_id>/prepared-cabinet/milestone", methods=["POST"])
+def prepared_cabinet_milestone(business_id):
+    from services.product_telemetry_service import record_product_event
+
+    db = DatabaseManager()
+    user, error_response = _require_superadmin(db)
+    if error_response:
+        return error_response
+    try:
+        data = request.get_json(silent=True)
+        action = data.get("action") if isinstance(data, dict) else None
+        events = {"shared": "action_marked_sent", "agreed": "deal_started"}
+        if action not in events:
+            return jsonify({"error": "Выберите этап онбординга."}), 400
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT owner_id FROM prepared_cabinets WHERE business_id=%s", (business_id,))
+        cabinet = cursor.fetchone()
+        if not cabinet:
+            return jsonify({"error": "Сначала подготовьте кабинет."}), 409
+        record_product_event(cursor, event_name=events[action], surface="web", business_id=business_id,
+            user_id=user["user_id"], target="prepared-cabinet", properties={"confirmation": "team_reported"},
+            signal_source="confirmed_user_action", deduplication_key="prepared:" + cabinet["owner_id"] + ":" + action)
+        db.conn.commit()
+        return jsonify({"success": True})
+    finally:
+        db.close()
+
+
+@superadmin_business_bp.route("/api/business/<business_id>/connection-help", methods=["GET", "POST"])
+def request_connection_help(business_id):
+    from core.auth_helpers import require_auth_from_request
+    from services import connection_assistance
+
+    user = require_auth_from_request()
+    if not user:
+        return jsonify({"error": "Требуется вход."}), 401
+    db = DatabaseManager()
+    try:
+        if request.method == "GET":
+            from core.auth_helpers import verify_business_access
+            allowed, _ = verify_business_access(db.conn.cursor(), business_id, user)
+            if not allowed or user.get("session_kind") == "demo":
+                return jsonify({"error": "Нет доступа."}), 403
+            response = jsonify({"requests": connection_assistance.list_requests(db.conn.cursor(), business_id, user["user_id"])})
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        request_id = connection_assistance.create(db.conn, business_id, user, request.get_json(silent=True))
+        db.conn.commit()
+        return jsonify({"success": True, "request_id": request_id})
+    except PermissionError as error:
+        return jsonify({"error": str(error)}), 403
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    finally:
+        db.close()
+
+
+@superadmin_business_bp.route("/api/superadmin/businesses/<business_id>/connection-help", methods=["PATCH"])
+def update_connection_help(business_id):
+    from services import connection_assistance
+
+    db = DatabaseManager()
+    _, error_response = _require_superadmin(db)
+    if error_response:
+        return error_response
+    try:
+        connection_assistance.update(db.conn.cursor(), business_id, request.get_json(silent=True))
+        db.conn.commit()
+        return jsonify({"success": True})
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 409
+    finally:
+        db.close()
 
 
 @superadmin_business_bp.route("/api/superadmin/manual-access-grants", methods=["POST"])

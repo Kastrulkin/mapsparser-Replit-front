@@ -1163,7 +1163,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, demoMod
   };
 
   const helpButton = (service?: string) => (
-    <ConnectionHelpButton business={currentBusiness?.name} address={currentBusiness?.address} service={service} />
+    <ConnectionHelpButton businessId={currentBusinessId} business={currentBusiness?.name} address={currentBusiness?.address} service={service} />
   );
 
   return (

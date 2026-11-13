@@ -331,7 +331,7 @@ export const SettingsIntegrationsPage = () => {
 
   return (
     <div className="mx-auto max-w-6xl space-y-7 pb-10">
-      <ConnectionHelpButton business={currentBusiness?.name} address={currentBusiness?.address} />
+      <ConnectionHelpButton businessId={currentBusinessId} business={currentBusiness?.name} address={currentBusiness?.address} />
       <DashboardPageHeader
         eyebrow={copy.routes.settingsEyebrow}
         title={copy.routes.integrationsTitle}

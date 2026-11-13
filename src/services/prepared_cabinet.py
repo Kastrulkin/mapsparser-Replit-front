@@ -7,6 +7,8 @@ from psycopg2.extras import Json
 
 from auth_system import hash_password
 from core.email_delivery import build_password_setup_link
+from services import prepared_cabinet_sources
+from services.product_telemetry_service import record_product_event
 
 SECTIONS = ("services", "reviews", "content", "partnerships", "influencers")
 TOKEN_PREFIX = "prepared."
@@ -31,18 +33,25 @@ def validate_materials(value):
     return value
 
 
-def save_materials(cursor, business_id, materials):
+def save_materials(cursor, business_id, materials, *, references=False):
     cursor.execute("""
         INSERT INTO prepared_cabinets (business_id, owner_id, materials)
         SELECT id, owner_id, %s FROM businesses WHERE id = %s AND is_active IS NOT FALSE
         ON CONFLICT (business_id) DO UPDATE SET materials = EXCLUDED.materials
         WHERE prepared_cabinets.owner_id = EXCLUDED.owner_id
         RETURNING business_id
-    """, (Json(validate_materials(materials)), business_id))
+    """, (Json(materials if references else validate_materials(materials)), business_id))
     return bool(cursor.fetchone())
 
 
 def issue_invite(cursor, business_id):
+    cursor.execute("SELECT materials FROM prepared_cabinets WHERE business_id=%s", (business_id,))
+    saved = cursor.fetchone()
+    if not saved:
+        return None
+    resolved = prepared_cabinet_sources.resolve(cursor, business_id, saved["materials"])
+    if not all(resolved.get(key) for key in SECTIONS):
+        raise ValueError("Часть материалов недоступна. Обновите пакет перед приглашением.")
     token = TOKEN_PREFIX + secrets.token_urlsafe(32)
     cursor.execute("""
         UPDATE prepared_cabinets p
@@ -97,7 +106,7 @@ def owner_package(cursor, business_id, owner_id, reviewed=None):
     row = cursor.fetchone()
     if not row:
         return []
-    materials, seen = row["materials"], row["seen"]
+    materials, seen = prepared_cabinet_sources.resolve(cursor, business_id, row["materials"]), row["seen"]
     sections = [
         {"key": key, "items": materials[key], "version": _digest(json.dumps(materials[key], sort_keys=True))}
         for key in SECTIONS if key in materials
@@ -105,8 +114,11 @@ def owner_package(cursor, business_id, owner_id, reviewed=None):
     if reviewed:
         key, version = reviewed
         if any(section["key"] == key and section["version"] == version for section in sections):
+            was_unread = seen.get(key) != version
             seen[key] = version
             cursor.execute("UPDATE prepared_cabinets SET seen = %s WHERE business_id = %s", (Json(seen), business_id))
+            if was_unread:
+                record_product_event(cursor, event_name="partial_result_viewed", surface="web", business_id=business_id, user_id=owner_id, target="prepared-cabinet", properties={"section": key, "version": version})
     for section in sections:
         section["unread"] = seen.get(section["key"]) != section["version"]
     return sections
