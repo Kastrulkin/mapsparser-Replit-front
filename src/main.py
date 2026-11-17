@@ -133,6 +133,7 @@ from api.admin_knowledge_api import admin_knowledge_bp
 from api.knowledge_api import knowledge_bp
 from api.agent_security_api import agent_security_bp
 from api.agent_prospecting_api import agent_prospecting_bp
+from api.inbound_cases_api import inbound_cases_bp
 from api.agent_builder_api import agent_builder_bp
 from api.agent_blueprints_api import agent_blueprints_bp
 from api.capabilities_api import capabilities_bp, PHASE1_ACTION_ORCHESTRATOR
@@ -336,6 +337,7 @@ app.register_blueprint(admin_knowledge_bp)
 app.register_blueprint(knowledge_bp)
 app.register_blueprint(agent_security_bp)
 app.register_blueprint(agent_prospecting_bp)
+app.register_blueprint(inbound_cases_bp)
 app.register_blueprint(agent_builder_bp)
 app.register_blueprint(agent_blueprints_bp)
 app.register_blueprint(capabilities_bp)

@@ -161,6 +161,8 @@ class AgentBlueprintRunner:
         version = self._load_version(blueprint_version_id)
         if not version:
             return {"success": False, "error": "blueprint_version_not_found"}
+        if any(step.get("approval_type") == "inbound_case_review" for step in normalize_steps(version.get("steps_json"))) and not getattr(self, "_inbound_case_runtime", False):
+            return {"success": False, "error": "inbound_case_route_required"}
         if str(version.get("compiled_state") or "legacy") != "legacy":
             return {"success": False, "error": "compiled_script_requires_dedicated_runtime"}
         blueprint = self._load_blueprint(str(version.get("blueprint_id") or ""))
@@ -270,6 +272,8 @@ class AgentBlueprintRunner:
         approval = self._load_approval(run_id, approval_id)
         if not approval:
             return {"success": False, "error": "approval_not_found"}
+        if approval.get("approval_type") == "inbound_case_review":
+            return {"success": False, "error": "inbound_case_route_required"}
         if approval.get("status") != "pending":
             return {"success": False, "error": "approval_already_decided"}
         approval_type = str(approval.get("approval_type") or "").strip()
@@ -320,6 +324,8 @@ class AgentBlueprintRunner:
         approval = self._load_approval(run_id, approval_id)
         if not approval:
             return {"success": False, "error": "approval_not_found"}
+        if approval.get("approval_type") == "inbound_case_review":
+            return {"success": False, "error": "inbound_case_route_required"}
         if approval.get("status") != "pending":
             return {"success": False, "error": "approval_already_decided"}
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
@@ -378,6 +384,8 @@ class AgentBlueprintRunner:
             self._fail_run(run_id, "blueprint version missing")
             return
         steps = normalize_steps(version.get("steps_json"))
+        if any(step.get("approval_type") == "inbound_case_review" for step in steps) and not getattr(self, "_inbound_case_runtime", False):
+            return  # Source-bound cases resume only through their scoped adapter.
         completed_indexes = self._completed_step_indexes(run_id)
         next_index = 0
         while next_index in completed_indexes:

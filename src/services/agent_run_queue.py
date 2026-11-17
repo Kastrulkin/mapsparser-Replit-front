@@ -41,6 +41,9 @@ def enqueue_agent_run(
     input_snapshot: dict[str, Any] | None = None,
     require_execution_mode_confirmation: bool = False,
 ) -> dict[str, Any]:
+    if any(isinstance(step, dict) and step.get("approval_type") == "inbound_case_review"
+           for step in parse_json_field(version.get("steps_json"), [])):
+        return {"success": False, "code": "INBOUND_CASE_ROUTE_REQUIRED", "error": "inbound_case_route_required"}
     blueprint_id = str(blueprint.get("id") or "")
     business_id = str(blueprint.get("business_id") or "")
     user_id = str(user_data.get("user_id") or user_data.get("id") or "")
