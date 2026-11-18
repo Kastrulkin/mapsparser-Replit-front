@@ -1642,28 +1642,8 @@ class DatabaseManager:
         
         Оптимизировано: вместо N+1 запросов используется один запрос с JOIN и группировка в Python
         """
+        users = self.get_all_users()
         cursor = self.conn.cursor()
-
-        # Получаем всех пользователей одним запросом
-        cursor.execute("""
-            SELECT id, email, name, phone, created_at, is_active, is_verified, is_superadmin
-            FROM users 
-            ORDER BY created_at DESC
-        """)
-        user_cols = [d[0] for d in cursor.description]
-        users = []
-        for row in cursor.fetchall():
-            if hasattr(row, "keys"):
-                users.append({k: row[k] for k in row.keys()})
-            else:
-                users.append(dict(zip(user_cols, row)))
-
-        # Временный лог формата строк (dev/debug)
-        if users:
-            print(
-                "🔍 DEBUG get_all_users_with_businesses: users row "
-                f"type={type(users[0])}, keys={list(users[0].keys())}"
-            )
         
         # Все прямые бизнесы (не в сети)
         cursor.execute("""

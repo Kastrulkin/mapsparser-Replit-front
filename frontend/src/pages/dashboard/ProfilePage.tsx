@@ -992,7 +992,6 @@ export const ProfilePage = () => {
             type="button"
             variant="outline"
             onClick={() => navigate('/dashboard/card')}
-            className="border-slate-200 bg-white text-slate-800 hover:bg-slate-100"
             title={isRu ? 'Открывает раздел работы с картами, услугами, отзывами и SEO.' : 'Opens the maps workspace with services, reviews, and SEO tools.'}
           >
             <ArrowRight className="mr-2 h-4 w-4" />

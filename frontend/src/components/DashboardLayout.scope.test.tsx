@@ -157,7 +157,10 @@ describe('DashboardLayout membership scope', () => {
     configureInitialUser();
     window.localStorage.setItem('selectedBusinessId', businessA.id);
     window.localStorage.setItem('dashboard_control_scope', JSON.stringify({ kind: 'network', id: 'network-a', name: 'Сеть A' }));
-    auth.makeRequest.mockRejectedValue(new Error('network unavailable'));
+    auth.makeRequest.mockImplementation(async (path: string) => {
+      if (path === '/auth/me') throw new Error('network unavailable');
+      return { sections: [] };
+    });
 
     renderLayout();
 
