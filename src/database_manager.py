@@ -1932,61 +1932,47 @@ class DatabaseManager:
             )
             self.conn.commit()
     
-    def delete_business(self, business_id: str):
-        """Удалить бизнес навсегда (реальное удаление)"""
-        cursor = self.conn.cursor()
-        
-        # Проверяем, существует ли бизнес
-        cursor.execute("SELECT id, name FROM businesses WHERE id = %s", (business_id,))
-        business = cursor.fetchone()
-        if not business:
-            print(f"❌ Бизнес с ID {business_id} не найден")
-            return False
-        
-        biz_name = business.get('name') if hasattr(business, 'get') else (business[1] if len(business) > 1 else 'N/A')
-        print(f"🔍 Удаление бизнеса: ID={business_id}, name={biz_name}")
-        
-        # Удаляем связанные данные. Некоторые таблицы могут отсутствовать в отдельных окружениях.
-        deleted_counts = {}
-        related_tables = [
+    def delete_business(self, business_id: str) -> bool:
+        """Delete the business and its supported dependent data in one transaction."""
+        related_tables = (
             "userservices",
             "financialtransactions",
             "businessmaplinks",
             "cards",
             "parsequeue",
             "telegrambindtokens",
-        ]
-
-        for table_name in related_tables:
-            cursor.execute("SELECT to_regclass(%s)", (f"public.{table_name}",))
-            table_reg = cursor.fetchone()
-            table_exists = (table_reg[0] if table_reg and not hasattr(table_reg, "get") else table_reg.get("to_regclass")) if table_reg else None
-            if not table_exists:
-                deleted_counts[table_name] = 0
-                continue
-
-            cursor.execute(f"DELETE FROM {table_name} WHERE business_id = %s", (business_id,))
-            deleted_counts[table_name] = cursor.rowcount
-        
-        print(
-            "🔍 Удалено связанных данных: "
-            f"services={deleted_counts.get('userservices', 0)}, "
-            f"transactions={deleted_counts.get('financialtransactions', 0)}, "
-            f"links={deleted_counts.get('businessmaplinks', 0)}, "
-            f"results={deleted_counts.get('cards', 0)}, "
-            f"queue={deleted_counts.get('parsequeue', 0)}, "
-            f"tokens={deleted_counts.get('telegrambindtokens', 0)}"
+            "finance_daily_events",
+            "finance_daily_summaries",
+            "business_finance_settings",
         )
-        
-        # Удаляем сам бизнес
-        cursor.execute("DELETE FROM businesses WHERE id = %s", (business_id,))
-        deleted_count = cursor.rowcount
-        self.conn.commit()
-        
-        print(f"🔍 Удалено бизнесов: {deleted_count}")
-        
-        return deleted_count > 0
-    
+        cursor = self.conn.cursor()
+        try:
+            # Take the finance lock in the same order as profile and finance writes.
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ("finance-daily:" + business_id,))
+            cursor.execute("SELECT id FROM businesses WHERE id = %s FOR UPDATE", (business_id,))
+            if not cursor.fetchone():
+                self.conn.rollback()
+                return False
+
+            for table_name in related_tables:
+                cursor.execute("SELECT to_regclass(%s) IS NOT NULL AS present", (table_name,))
+                row = cursor.fetchone()
+                present = row["present"] if hasattr(row, "get") else row[0]
+                if present:
+                    cursor.execute(f"DELETE FROM {table_name} WHERE business_id = %s", (business_id,))
+
+            cursor.execute("DELETE FROM businesses WHERE id = %s", (business_id,))
+            if not cursor.rowcount:
+                self.conn.rollback()
+                return False
+            self.conn.commit()
+            return True
+        except Exception:
+            self.conn.rollback()
+            raise
+        finally:
+            cursor.close()
+
     def block_business(self, business_id: str, is_blocked: bool = True):
         """Заблокировать/разблокировать бизнес"""
         cursor = self.conn.cursor()
