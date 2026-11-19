@@ -48,24 +48,26 @@ def candidates(cursor, business_id, selected=None):
             item = _item("content", row, (row["plan_title"] or "Контент-план") + " · " + (row["theme"] or "Публикация"), text)
             item["has_draft"] = bool((row["draft_text"] or "").strip())
             result["content"].append(item)
+    partnership_ids = selected.get("partnerships") if selected else None
     cursor.execute("""SELECT w.id,l.name,l.address,l.source_url,l.description,w.partnership_outcome_json
         FROM lead_workstreams w JOIN prospectingleads l ON l.id=w.lead_id
         WHERE w.client_business_id=%s AND w.workstream_type='client_partnership'
           AND w.status NOT IN ('excluded','rejected','archived')
           AND COALESCE(l.disqualification_reason,'')=''
-        AND (%s IS NULL OR w.id=ANY(%s))
-        ORDER BY w.updated_at DESC,w.id LIMIT 30""", (business_id, selected.get("partnerships") if selected else None, selected.get("partnerships") if selected else None))
+        AND (%s OR w.id IN %s)
+        ORDER BY w.updated_at DESC,w.id LIMIT 30""", (business_id, partnership_ids is None, tuple(partnership_ids or (None,))))
     for row in cursor.fetchall():
         parts = [row["address"], row["description"], row["source_url"]]
         result["partnerships"].append(_item("partnerships", row, row["name"], "\n".join(str(value) for value in parts if value) or "Кандидат из подборки компании. Условия сотрудничества требуют уточнения."))
+    influencer_ids = selected.get("influencers") if selected else None
     cursor.execute(f"""SELECT r.id,p.display_name,p.description,c.canonical_url,r.reasons_json
         FROM creator_search_results r JOIN creator_search_jobs j ON j.id=r.search_job_id
         JOIN creator_profiles p ON p.id=r.creator_profile_id
         JOIN LATERAL (SELECT canonical_url FROM creator_channels WHERE creator_profile_id=p.id
             AND verification_status <> 'rejected' ORDER BY created_at,id LIMIT 1) c ON TRUE
         WHERE j.business_id=%s AND r.shortlist_status='shortlisted' AND p.verification_status <> 'rejected' AND {creator_eligibility_sql('p')}
-        AND (%s IS NULL OR r.id=ANY(%s))
-        ORDER BY r.score DESC NULLS LAST,r.id LIMIT 30""", (business_id, selected.get("influencers") if selected else None, selected.get("influencers") if selected else None))
+        AND (%s OR r.id IN %s)
+        ORDER BY r.score DESC NULLS LAST,r.id LIMIT 30""", (business_id, influencer_ids is None, tuple(influencer_ids or (None,))))
     for row in cursor.fetchall():
         reasons = row["reasons_json"]
         explanation = "\n".join(str(value) for value in reasons if isinstance(value, str)) if isinstance(reasons, list) else ""

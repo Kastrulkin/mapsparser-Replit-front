@@ -32,11 +32,11 @@ def db():
         CREATE TABLE contentplans(id text PRIMARY KEY,business_id text,title text);
         CREATE TABLE contentplanitems(id text PRIMARY KEY,plan_id text,business_id text,theme text,goal text,draft_text text,status text,scheduled_for date);
         CREATE TABLE prospectingleads(id text PRIMARY KEY,name text,address text,source_url text,description text,disqualification_reason text);
-        CREATE TABLE lead_workstreams(id text PRIMARY KEY,lead_id text,client_business_id text,workstream_type text,status text,partnership_outcome_json jsonb,updated_at timestamptz DEFAULT now());
+        CREATE TABLE lead_workstreams(id uuid PRIMARY KEY,lead_id text,client_business_id text,workstream_type text,status text,partnership_outcome_json jsonb,updated_at timestamptz DEFAULT now());
         CREATE TABLE creator_profiles(id text PRIMARY KEY,display_name text,description text,verification_status text,metadata_json jsonb);
         CREATE TABLE creator_channels(id text PRIMARY KEY,creator_profile_id text,canonical_url text,verification_status text,created_at timestamptz DEFAULT now());
         CREATE TABLE creator_search_jobs(id text PRIMARY KEY,business_id text);
-        CREATE TABLE creator_search_results(id text PRIMARY KEY,search_job_id text,creator_profile_id text,shortlist_status text,score numeric,reasons_json jsonb);
+        CREATE TABLE creator_search_results(id uuid PRIMARY KEY,search_job_id text,creator_profile_id text,shortlist_status text,score numeric,reasons_json jsonb);
         CREATE TABLE prepared_cabinets(business_id text PRIMARY KEY,owner_id text,materials jsonb,seen jsonb DEFAULT '{}');
         CREATE TABLE botfeaturerequests(id text PRIMARY KEY,telegram_id text,user_id text,business_id text,source text,category text,request_text text,metadata_json jsonb,status text,created_at timestamptz,updated_at timestamptz);
         INSERT INTO businesses VALUES ('b','Test business','Test branch','owner',true,NULL);
@@ -45,11 +45,11 @@ def db():
         INSERT INTO contentplans VALUES ('p','b','Plan');
         INSERT INTO contentplanitems VALUES ('post','p','b','Theme','Goal','Post text','edited','2026-11-13');
         INSERT INTO prospectingleads VALUES ('lead','Partner','Address','https://example.com','Reason',NULL);
-        INSERT INTO lead_workstreams VALUES ('partner','lead','b','client_partnership','active','{}',now());
+        INSERT INTO lead_workstreams VALUES ('c0071ef1-c8a9-41a6-a2e7-f0f1656bade3','lead','b','client_partnership','active','{}',now());
         INSERT INTO creator_profiles VALUES ('author','Author','Local author','verified','{}');
         INSERT INTO creator_channels VALUES ('channel','author','https://example.com/author','verified',now());
         INSERT INTO creator_search_jobs VALUES ('job','b');
-        INSERT INTO creator_search_results VALUES ('result','job','author','shortlisted',80,'["Fit"]');
+        INSERT INTO creator_search_results VALUES ('b1452d08-6918-4201-922e-c4a45992ecca','job','author','shortlisted',80,'["Fit"]');
     ''')
     conn.commit()
     try:
@@ -74,6 +74,10 @@ def test_five_existing_sources_are_resolved_and_private_records_excluded(db):
     materials = prepared_cabinet_sources.resolve(db.cursor(),'b',selection)
     assert materials['reviews'][0]['text'] == 'Edited'
     assert materials['content'][0]['text'].endswith('Post text')
+    assert materials['partnerships'][0]['title'] == 'Partner'
+    assert materials['influencers'][0]['title'] == 'Author'
+    empty = prepared_cabinet_sources.candidates(db.cursor(), 'b', {'partnerships': [], 'influencers': []})
+    assert empty['partnerships'] == empty['influencers'] == []
 
 
 def test_stale_preview_is_rejected(db):
