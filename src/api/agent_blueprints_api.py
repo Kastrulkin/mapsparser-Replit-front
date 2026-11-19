@@ -99,9 +99,25 @@ def list_agent_templates():
     if auth_error:
         return auth_error
     status_filter = str(request.args.get("status") or "").strip()
+    business_id = str(request.args.get("business_id") or "").strip()
     templates = build_agent_template_catalog()
     if status_filter:
         templates = [item for item in templates if item.get("certification_status") == status_filter]
+    if business_id:
+        db = DatabaseManager()
+        try:
+            allowed, access_error = _require_business_access(db.conn.cursor(), business_id, user_data)
+            if not allowed:
+                return access_error
+        finally:
+            db.close()
+        from importlib.util import find_spec
+
+        if find_spec("services.map_card_agents") is not None:
+            from services.map_card_agents import TEMPLATE_KEYS, pilot_allowed
+
+            if not pilot_allowed(business_id):
+                templates = [item for item in templates if item["key"] not in TEMPLATE_KEYS]
     return jsonify({"success": True, "templates": templates, "count": len(templates)})
 
 

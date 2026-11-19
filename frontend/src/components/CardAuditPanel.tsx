@@ -24,6 +24,8 @@ import React from 'react';
 interface CardAuditPanelProps {
   businessId?: string | null;
   refreshKey?: number;
+  collectionInProgress?: boolean;
+  collectionFailed?: boolean;
   onRetry?: () => void;
 }
 
@@ -197,7 +199,7 @@ const photosStateLabel = (value: string) => {
   }
 };
 
-const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey = 0, onRetry }) => {
+const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey = 0, collectionInProgress = false, collectionFailed = false, onRetry }) => {
   const { language } = useLanguage();
   const isRu = language === 'ru';
   const { data, loading, refreshing, error } = useApiData<CardAuditResponse>(
@@ -210,7 +212,7 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey 
 
   const audit = data?.audit;
   const hasSuccessfulParse = Boolean(audit?.parse_context?.has_successful_parse);
-  const showPreParsePlaceholder = !loading && !error && audit && !hasSuccessfulParse;
+  const showPreParsePlaceholder = !loading && !error && audit && !hasSuccessfulParse && !collectionInProgress;
   const heroFindings = audit
     ? [
         ...(audit.top_3_issues || []).map((item) => item.problem || item.title || '').filter(Boolean),
@@ -232,7 +234,13 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey 
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {refreshing && audit ? (
+        {collectionFailed && (
+          <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
+            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+            {isRu ? 'Не удалось собрать данные карточки.' : 'Listing data collection failed.'}
+          </div>
+        )}
+        {refreshing && hasSuccessfulParse ? (
           <div className="flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800" role="status">
             <RefreshCw className="h-4 w-4 motion-safe:animate-spin" />
             {isRu ? 'Обновляем данные… Текущий аудит остаётся на экране.' : 'Refreshing data… The current audit remains available.'}
@@ -276,8 +284,8 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey 
             </div>
             <div className="mt-2 leading-6">
               {isRu
-                ? 'Сначала перейдите во вкладку «Работа с картами» и запустите «Обновить данные карточки». Пока сбор не завершён, здесь не показываем полноценный аудит, чтобы не вводить в заблуждение.'
-                : 'First go to “Maps Management” and run “Refresh card data”. Until that collection finishes, we do not show a full audit here to avoid misleading first-time users.'}
+                ? 'В разделе «Работа с картами» нажмите «Обновить данные карточки».'
+                : 'In Maps Management, select “Refresh card data”.'}
             </div>
           </div>
         )}

@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input';
 import { newAuth } from '@/lib/auth_new';
 
-type Candidate = { title: string; text: string; source_id: string };
+type Candidate = { title: string; text: string; source_id: string; has_draft?: boolean };
 type Preview = {
   version: string;
   saved: boolean;
@@ -14,6 +14,14 @@ type Preview = {
   requests: { id: string; request_text: string; status: string; metadata_json: { service?: string; user_email?: string }; created_at: string }[];
   events: Record<string, number>;
   owner_state?: { password_set?: boolean; is_verified?: boolean };
+};
+
+const preparationSteps: Record<string, string> = {
+  services: 'Сохраните улучшенное название или описание хотя бы одной услуги.',
+  reviews: 'Подготовьте черновик ответа на отзыв.',
+  content: 'Добавьте в контент-план хотя бы один черновик поста с текстом.',
+  partnerships: 'Добавьте подходящую компанию в подборку партнёров.',
+  influencers: 'Добавьте подходящего автора в короткий список.',
 };
 
 export function PreparedCabinetInvite({ businessId, disabled }: { businessId: string; disabled: boolean }) {
@@ -39,7 +47,9 @@ function CabinetDialog({ businessId, disabled }: { businessId: string; disabled:
       setStatus(error instanceof Error ? error.message : 'Не удалось выполнить действие.');
     } finally { setBusy(false); }
   };
-  const ready = preview?.sections.every(section => selection[section.key]?.length > 0);
+  const ready = preview?.sections.every(section => section.items.some(item => (
+    selection[section.key]?.includes(item.source_id) && (section.key !== 'content' || item.has_draft)
+  )));
   const save = async () => {
     if (!preview) return;
     await newAuth.makeRequest(base, { method: 'PUT', body: JSON.stringify({ selection, version: preview.version }) });
@@ -60,16 +70,29 @@ function CabinetDialog({ businessId, disabled }: { businessId: string; disabled:
       </DialogHeader>
       <div className="space-y-4" aria-busy={busy}>
         <Button variant="outline" disabled={busy} onClick={() => void action(refresh)}>Обновить предпросмотр</Button>
-        {preview?.sections.map(section => <section key={section.key} className="space-y-2 rounded-xl border p-3">
-          <h3 className="font-semibold">{section.label} · {section.items.length}</h3>
-          {section.items.length ? section.items.map(item => <div key={item.source_id} className="rounded-lg border p-3">
-            <label className="flex items-start gap-2">
-              <Checkbox disabled={busy} checked={selection[section.key]?.includes(item.source_id) || false} onCheckedChange={checked => setSelection(previous => ({ ...previous, [section.key]: checked ? [...previous[section.key], item.source_id] : previous[section.key].filter(id => id !== item.source_id) }))} />
-              <span className="text-sm font-medium">{item.title}</span>
-            </label>
-            <details className="mt-2 text-sm"><summary className="cursor-pointer">Посмотреть текст</summary><p className="whitespace-pre-wrap break-words pt-2">{item.text}</p></details>
-          </div>) : <p className="text-sm text-muted-foreground">Подготовьте материалы в существующем разделе компании. Затем обновите предпросмотр.</p>}
-        </section>)}
+        {preview?.sections.map(section => {
+          const [pathname, query] = section.href.split('?');
+          const params = new URLSearchParams(query);
+          params.set('business_id', businessId);
+          const needsMaterial = !section.items.length || (section.key === 'content' && !section.items.some(item => item.has_draft));
+          return (
+            <section key={section.key} className="space-y-2 rounded-xl border p-3">
+              <h3 className="font-semibold">{section.label} · {section.items.length}</h3>
+              {section.items.map(item => <div key={item.source_id} className="rounded-lg border p-3">
+                <label className="flex items-start gap-2">
+                  <Checkbox disabled={busy} checked={selection[section.key]?.includes(item.source_id) || false} onCheckedChange={checked => setSelection(previous => ({ ...previous, [section.key]: checked ? [...previous[section.key], item.source_id] : previous[section.key].filter(id => id !== item.source_id) }))} />
+                  <span className="text-sm font-medium">{item.title}</span>
+                </label>
+                <details className="mt-2 text-sm"><summary className="cursor-pointer">Посмотреть текст</summary><p className="whitespace-pre-wrap break-words pt-2">{item.text}</p></details>
+              </div>)}
+              {needsMaterial && <p className="text-sm text-muted-foreground">
+                {preparationSteps[section.key]}{' '}
+                <a className="font-medium text-foreground underline underline-offset-4" href={`${pathname}?${params}`} target="_blank" rel="noopener noreferrer">Открыть раздел «{section.label}»<span className="sr-only"> в новой вкладке</span></a>
+              </p>}
+            </section>
+          );
+        })}
+        {preview && !ready && <p className="text-sm text-muted-foreground">Выберите материалы во всех пяти разделах и включите хотя бы один черновик поста с текстом.</p>}
         <Button disabled={busy || !ready} onClick={() => void action(save)}>Открыть выбранные материалы владельцу</Button>
         {preview?.saved && <section className="space-y-3 rounded-xl border p-3">
           <p className="text-sm">Кабинет подготовлен. Для нового владельца ссылка действует 7 дней.</p>

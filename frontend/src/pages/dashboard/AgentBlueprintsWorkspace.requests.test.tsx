@@ -11,6 +11,8 @@ const businessId = 'request-test-business';
 type Response = { data: Record<string, unknown> };
 type RequestOptions = { params?: { run_status?: string; business_id?: string } };
 type HarnessScope = {
+  agentTemplates: { key: string }[];
+  templatesLoading: boolean;
   selectedBlueprint: { id: string } | null;
   setSelectedBlueprintId: (id: string) => void;
   blueprintDetails: { blueprint?: { id?: string }; candidate_version_id?: string; runs?: { id: string }[] } | null;
@@ -55,6 +57,7 @@ vi.mock('./agents/view', () => ({
       <output data-testid="cached-a">{scope.agentDetailsById['agent-a']?.candidate_version_id || ''}</output>
       <output data-testid="review">{scope.agentReview?.summary || ''}</output>
       <output data-testid="error">{scope.error || ''}</output>
+      <output data-testid="templates">{scope.templatesLoading ? 'loading' : scope.agentTemplates.map(template => template.key).join(',')}</output>
     </section>
   ),
 }));
@@ -95,6 +98,7 @@ async function settle(pending: ReturnType<typeof deferred>, response: Response) 
 
 describe('Agent workspace selected-request integrity', () => {
   beforeEach(() => {
+    mocks.dashboardContext.currentBusinessId = businessId;
     vi.stubGlobal('fetch', vi.fn(() => { throw new Error('unexpected real network'); }));
     mocks.get.mockReset();
     mocks.get.mockImplementation(route);
@@ -102,6 +106,25 @@ describe('Agent workspace selected-request integrity', () => {
     mocks.post.mockImplementation(() => new Promise(() => undefined));
   });
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it('requests the catalog for the selected company and ignores a late catalog from the previous company', async () => {
+    const previous = deferred();
+    const active = deferred();
+    mocks.get.mockImplementation((url: string, options?: RequestOptions) => {
+      if (url !== '/agent-templates') return route(url, options);
+      return (options?.params?.business_id === businessId ? previous : active).promise;
+    });
+    const { rerender } = mount();
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/agent-templates', { params: { business_id: businessId } }));
+
+    mocks.dashboardContext.currentBusinessId = 'new-client';
+    rerender(<Suspense fallback={<div>Loading</div>}><AgentBlueprintsWorkspace /></Suspense>);
+    expect(screen.getByTestId('templates')).toHaveTextContent('loading');
+    expect(mocks.get).toHaveBeenCalledWith('/agent-templates', { params: { business_id: 'new-client' } });
+    await settle(active, { data: { templates: [{ key: 'daily_owner_digest' }] } });
+    await settle(previous, { data: { templates: [{ key: 'maps_initial_setup' }] } });
+    expect(screen.getByTestId('templates')).toHaveTextContent(/^daily_owner_digest$/);
+  });
 
   it('does not route a shown B approval to late A details while run loading is pending', async () => {
     const pendingA = deferred();

@@ -391,7 +391,9 @@ export const ProgressPage = () => {
           timer = window.setTimeout(() => void loadParseStatus(), 10000);
         }
       } catch {
-        if (!controller.signal.aborted) setParseStatus('error');
+        if (!controller.signal.aborted && (parseStatusRef.current === 'queued' || parseStatusRef.current === 'processing')) {
+          timer = window.setTimeout(() => void loadParseStatus(), 10000);
+        }
       }
     };
 
@@ -666,6 +668,8 @@ export const ProgressPage = () => {
           <CardAuditPanel
             businessId={selectedAuditBusinessId || currentBusinessId}
             refreshKey={auditRefreshKey}
+            collectionInProgress={parseStatus === 'queued' || parseStatus === 'processing'}
+            collectionFailed={parseStatus === 'error'}
             onRetry={() => setAuditRefreshKey((value) => value + 1)}
           />
 

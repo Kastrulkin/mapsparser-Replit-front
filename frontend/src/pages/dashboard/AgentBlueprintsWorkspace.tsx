@@ -98,8 +98,10 @@ export const AgentBlueprintsWorkspace = () => {
   const { language } = useLanguage();
   const { currentBusinessId, currentBusiness, demoMode } = useOutletContext<DashboardContext>();
   const [blueprints, setBlueprints] = useState<AgentBlueprint[]>([]);
-  const [agentTemplates, setAgentTemplates] = useState<AgentTemplate[]>([]);
-  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templateCatalog, setTemplateCatalog] = useState<{ businessId: string; templates: AgentTemplate[] } | null>(null);
+  const catalogMatchesBusiness = Boolean(templateCatalog && templateCatalog.businessId === currentBusinessId && !demoMode);
+  const agentTemplates = catalogMatchesBusiness ? templateCatalog?.templates ?? [] : [];
+  const templatesLoading = Boolean(currentBusinessId && !demoMode && !catalogMatchesBusiness);
   const [usingTemplateKey, setUsingTemplateKey] = useState('');
   const [selectedBlueprintId, setSelectedBlueprintId] = useState<string | null>(null);
   const [blueprintDetails, setBlueprintDetails] = useState<AgentBlueprintDetails | null>(null);
@@ -456,26 +458,23 @@ export const AgentBlueprintsWorkspace = () => {
     void loadBlueprints();
   }, [loadBlueprints]);
 
-  const loadAgentTemplates = useCallback(async () => {
-    if (!currentBusinessId || demoMode) {
-      setAgentTemplates([]);
-      return;
-    }
-    setTemplatesLoading(true);
-    try {
-      const response = await api.get('/agent-templates');
-      setAgentTemplates(Array.isArray(response.data?.templates) ? response.data.templates : []);
-    } catch (requestError) {
-      console.error(requestError);
-      setAgentTemplates([]);
-    } finally {
-      setTemplatesLoading(false);
-    }
-  }, [currentBusinessId, demoMode]);
-
   useEffect(() => {
-    void loadAgentTemplates();
-  }, [loadAgentTemplates]);
+    if (!currentBusinessId || demoMode) return;
+    let current = true;
+    api.get('/agent-templates', { params: { business_id: currentBusinessId } })
+      .then(({ data }) => {
+        if (current) {
+          setTemplateCatalog({ businessId: currentBusinessId, templates: Array.isArray(data?.templates) ? data.templates : [] });
+        }
+      })
+      .catch(requestError => {
+        if (current) {
+          console.error(requestError);
+          setTemplateCatalog({ businessId: currentBusinessId, templates: [] });
+        }
+      });
+    return () => { current = false; };
+  }, [currentBusinessId, demoMode]);
 
   const useAgentTemplate = useCallback(async (template: AgentTemplate) => {
     if (!currentBusinessId || usingTemplateKey) return;
