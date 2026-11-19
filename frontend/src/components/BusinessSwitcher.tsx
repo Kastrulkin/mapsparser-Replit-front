@@ -1,6 +1,7 @@
 import { useClickOutside } from '@/hooks/useClickOutside';
+import { Input } from '@/components/ui/input';
 import { Building2, ChevronDown, Users } from 'lucide-react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 interface Business {
   id: string;
@@ -32,9 +33,16 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
   isSuperadmin
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const switcherRef = useRef<HTMLDivElement | null>(null);
-  const closeSwitcher = useCallback(() => setIsOpen(false), []);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const listId = useId();
+  const closeSwitcher = useCallback(() => {
+    setIsOpen(false);
+    setQuery('');
+  }, []);
   useClickOutside(switcherRef, closeSwitcher, { enabled: isOpen });
   const isLeadBusiness = (business?: Business | null) => {
     const moderationStatus = String(business?.moderation_status || '').trim().toLowerCase();
@@ -51,37 +59,47 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
     () => businesses.filter((business) => !isLeadBusiness(business)),
     [businesses]
   );
+  const showSearch = visibleBusinesses.length > 5;
+  const term = query.trim().toLocaleLowerCase();
+  const filteredBusinesses = showSearch && term ? visibleBusinesses.filter(business => (
+    [business.name, business.address, business.network_name, isSuperadmin ? business.owner_name : '']
+      .some(value => value?.toLocaleLowerCase().includes(term))
+  )) : visibleBusinesses;
 
   const getBusinessDisplayName = (business: Business) => {
     return String(business.name || '').trim() || 'Без названия';
   };
 
   useEffect(() => {
-    if (visibleBusinesses.length > 0) {
-      const current = visibleBusinesses.find((business) => business.id === currentBusinessId);
-      if (current) {
-        setSelectedBusiness(current);
-      } else {
-        setSelectedBusiness((selected) => selected || visibleBusinesses[0]);
-      }
-    }
+    const current = visibleBusinesses.find((business) => business.id === currentBusinessId);
+    setSelectedBusiness(previous => current || visibleBusinesses.find(business => business.id === previous?.id) || visibleBusinesses[0] || null);
   }, [visibleBusinesses, currentBusinessId]);
+
+  useEffect(() => {
+    if (isOpen && showSearch) searchRef.current?.focus();
+  }, [isOpen, showSearch]);
 
   const handleBusinessSelect = (business: Business) => {
     setSelectedBusiness(business);
     onBusinessChange(business.id);
-    setIsOpen(false);
+    closeSwitcher();
+    triggerRef.current?.focus();
   };
 
-  const hasBusinesses = visibleBusinesses.length > 0;
-
   return (
-    <div ref={switcherRef} className="relative min-w-0 shrink-0">
+    <div ref={switcherRef} className="relative min-w-0 shrink-0" onKeyDown={event => {
+      if (!isOpen || event.key !== 'Escape') return;
+      event.preventDefault();
+      closeSwitcher();
+      triggerRef.current?.focus();
+    }}>
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        ref={triggerRef}
+        onClick={() => isOpen ? closeSwitcher() : setIsOpen(true)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
+        aria-controls={isOpen ? listId : undefined}
         className="flex h-12 w-[clamp(11rem,18vw,16rem)] min-w-0 max-w-full items-center gap-3 rounded-xl border border-gray-300 bg-white px-3 py-2 transition-colors hover:bg-gray-50"
       >
         <Building2 className="h-5 w-5 shrink-0 text-gray-600" />
@@ -99,8 +117,16 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
       </button>
 
       {isOpen && (
-        <div role="listbox" aria-label="Бизнесы" className="absolute left-0 top-full z-50 mt-2 max-h-[min(70vh,34rem)] w-[min(34rem,calc(100vw-2rem))] overflow-y-auto overflow-x-hidden rounded-2xl border border-gray-200 bg-white shadow-xl ring-1 ring-black/5">
-          {hasBusinesses && visibleBusinesses.map((business) => (
+        <div className="absolute left-0 top-full z-50 mt-2 flex max-h-[min(70vh,34rem)] w-[min(34rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl ring-1 ring-black/5">
+          {showSearch && <div className="shrink-0 border-b p-2">
+            <Input ref={searchRef} type="search" aria-label="Поиск бизнеса" placeholder="Название или адрес" value={query}
+              onChange={event => setQuery(event.target.value)} />
+          </div>}
+          {filteredBusinesses.length === 0 && <p role="status" className="px-4 py-3 text-sm text-muted-foreground">
+            {term ? 'Ничего не найдено' : 'Нет доступных бизнесов'}
+          </p>}
+          <div id={listId} role="listbox" aria-label="Бизнесы" className="min-h-0 overflow-y-auto overflow-x-hidden">
+          {filteredBusinesses.map((business) => (
             <button
               key={business.id}
               type="button"
@@ -136,6 +162,7 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
               </div>
             </button>
           ))}
+          </div>
         </div>
       )}
     </div>

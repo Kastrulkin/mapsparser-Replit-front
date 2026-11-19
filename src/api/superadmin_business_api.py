@@ -76,6 +76,7 @@ def create_business():
         name = data.get("name")
         description = data.get("description", "")
         industry = data.get("industry", "")
+        business_type = str(data.get("business_type") or "").strip() or None
         owner_id = data.get("owner_id")
         owner_email = data.get("owner_email")
         owner_name = data.get("owner_name", "")
@@ -84,6 +85,16 @@ def create_business():
         if not name:
             db.close()
             return jsonify({"error": "Название бизнеса обязательно"}), 400
+
+        if business_type:
+            cursor = db.conn.cursor()
+            cursor.execute("""
+                SELECT 1 FROM businesstypes
+                WHERE type_key = %s AND COALESCE(LOWER(is_active::text), '1') IN ('1', 'true', 't')
+            """, (business_type,))
+            if not cursor.fetchone():
+                db.close()
+                return jsonify({"error": "Выберите доступный тип бизнеса из списка"}), 400
 
         if owner_email and not owner_id:
             existing_user = db.get_user_by_email(owner_email)
@@ -125,7 +136,7 @@ def create_business():
             return jsonify({"error": "Необходимо указать owner_id или owner_email для создания бизнеса"}), 400
 
         try:
-            business_id = db.create_business(name, description, industry, owner_id)
+            business_id = db.create_business(name, description, industry or business_type or "", owner_id, business_type=business_type)
             db.conn.commit()
             db.close()
             return jsonify({"success": True, "business_id": business_id, "owner_id": owner_id})

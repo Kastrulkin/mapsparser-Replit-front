@@ -1,6 +1,7 @@
 import { browserBearerToken } from '@/lib/browserSessionFetch';
 import { errorMessage } from '@/lib/errorMessage';
-import React, { useRef, useState } from 'react';
+import { newAuth } from '@/lib/auth_new';
+import React, { useEffect, useRef, useState } from 'react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
@@ -20,14 +21,30 @@ export const CreateBusinessModal: React.FC<CreateBusinessModalProps> = ({
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    industry: '',
+    business_type: '',
     owner_email: '',
     owner_name: '',
     owner_phone: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [businessTypes, setBusinessTypes] = useState<{ type_key: string; label: string }[]>([]);
+  const [typesError, setTypesError] = useState(false);
+  const [typesAttempt, setTypesAttempt] = useState(0);
   const returnFocus = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let active = true;
+    setTypesError(false);
+    newAuth.makeRequest('/business-types').then(data => {
+      if (!active) return;
+      const types = Array.isArray(data.types) ? data.types : [];
+      setBusinessTypes(types);
+      setTypesError(types.length === 0);
+    }).catch(() => { if (active) setTypesError(true); });
+    return () => { active = false; };
+  }, [isOpen, typesAttempt]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,7 +65,7 @@ export const CreateBusinessModal: React.FC<CreateBusinessModalProps> = ({
         body: JSON.stringify({
           name: formData.name,
           description: formData.description || '',
-          industry: formData.industry || '',
+          business_type: formData.business_type || undefined,
           owner_email: formData.owner_email,
           owner_name: formData.owner_name || '',
           owner_phone: formData.owner_phone || ''
@@ -66,7 +83,7 @@ export const CreateBusinessModal: React.FC<CreateBusinessModalProps> = ({
       setFormData({
         name: '',
         description: '',
-        industry: '',
+        business_type: '',
         owner_email: '',
         owner_name: '',
         owner_phone: ''
@@ -126,13 +143,21 @@ export const CreateBusinessModal: React.FC<CreateBusinessModalProps> = ({
           </div>
 
           <div>
-            <Label htmlFor="industry">Отрасль</Label>
-            <Input
-              id="industry"
-              value={formData.industry}
-              onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
-              placeholder="Например: beauty_salon"
-            />
+            <Label htmlFor="business-type">Тип бизнеса</Label>
+            <select
+              id="business-type"
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              value={formData.business_type}
+              onChange={(event) => setFormData({ ...formData, business_type: event.target.value })}
+              disabled={businessTypes.length === 0}
+            >
+              <option value="">{businessTypes.length ? 'Выбрать позже' : typesError ? 'Список недоступен' : 'Загружаем список…'}</option>
+              {businessTypes.map(type => <option key={type.type_key} value={type.type_key}>{type.label}</option>)}
+            </select>
+            {typesError && <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              Можно выбрать тип позже в профиле.
+              <Button type="button" size="sm" variant="outline" onClick={() => setTypesAttempt(attempt => attempt + 1)}>Повторить</Button>
+            </div>}
           </div>
 
           <div className="border-t pt-4">

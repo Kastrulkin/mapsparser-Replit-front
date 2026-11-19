@@ -42,6 +42,21 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('creating a client from the admin panel', () => {
+  it('sends the selected catalog entry as the business type', async () => {
+    vi.mocked(newAuth.makeRequest).mockImplementation(async path => path === '/business-types'
+      ? { types: [{ type_key: 'cafe', label: 'Кафе' }] }
+      : { success: true, users: [] });
+    createBusiness.mockResolvedValue({ ok: true, json: async () => ({ business_id: 'new-cafe' }) });
+    await openForm();
+    await screen.findByRole('option', { name: 'Кафе' });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Тип бизнеса' }), { target: { value: 'cafe' } });
+    fillAndSubmit();
+    await waitFor(() => expect(createBusiness).toHaveBeenCalledWith('/api/superadmin/businesses', expect.objectContaining({
+      method: 'POST',
+      body: expect.stringContaining('"business_type":"cafe"'),
+    })));
+  });
+
   it('moves focus into the form and returns it when Escape closes the dialog', async () => {
     const trigger = await openForm();
     const dialog = screen.getByRole('dialog', { name: 'Создать новый бизнес' });

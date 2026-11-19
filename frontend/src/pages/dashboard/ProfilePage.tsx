@@ -164,6 +164,8 @@ export const ProfilePage = () => {
   const { user, currentBusinessId, currentBusiness, updateBusiness, businesses, setBusinesses, reloadBusinesses, onBusinessChange } = useOutletContext<DashboardOutletContext>();
   const [editMode, setEditMode] = useState(false);
   const [editClientInfo, setEditClientInfo] = useState(false);
+  const [clientInfoLoad, setClientInfoLoad] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [clientInfoAttempt, setClientInfoAttempt] = useState(0);
   const { t, language } = useLanguage();
   const { toast } = useToast();
   const isRu = language === 'ru';
@@ -180,6 +182,8 @@ export const ProfilePage = () => {
   };
   const [savingClientInfo, setSavingClientInfo] = useState(false);
   const [form, setForm] = useState({ email: "", phone: "", name: "" });
+  const timezoneDetailsRef = useRef<HTMLDetailsElement>(null);
+  const timezoneInputRef = useRef<HTMLInputElement>(null);
   const [clientInfo, setClientInfo] = useState({
     businessName: '',
     businessType: '',
@@ -482,10 +486,14 @@ export const ProfilePage = () => {
 
   // Populate the form on business selection; later account updates must not replace local edits.
   const loadSelectedClientInfo = useLatestCallback(() => {
+    let active = true;
+    setClientInfoLoad('loading');
+    setEditClientInfo(false);
     const loadClientInfo = async () => {
       try {
         const qs = currentBusinessId ? `?business_id=${currentBusinessId}` : '';
         const data = await newAuth.makeRequest(`/client-info${qs}`);
+        if (!active) return;
 
         // Если есть данные владельца бизнеса и это не наш бизнес, обновляем форму
         if (data.owner && currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id) {
@@ -526,13 +534,17 @@ export const ProfilePage = () => {
         };
         setClientInfo(nextClientInfo);
         setSavedClientInfo(nextClientInfo);
+        setClientInfoLoad('ready');
       } catch (error) {
+        if (!active) return;
+        setClientInfoLoad('error');
         console.error('Ошибка загрузки информации о бизнесе:', error);
       }
     };
-    loadClientInfo();
+    void loadClientInfo();
+    return () => { active = false; };
   });
-  useEffect(loadSelectedClientInfo, [currentBusinessId, loadSelectedClientInfo]);
+  useEffect(loadSelectedClientInfo, [currentBusinessId, clientInfoAttempt, loadSelectedClientInfo]);
 
   const loadParseStatus = useLatestCallback(async () => {
     if (!effectiveBusinessId) {
@@ -671,6 +683,9 @@ export const ProfilePage = () => {
   };
 
   const handleSaveClientInfo = async () => {
+    if (clientInfoLoad !== 'ready' || savingClientInfo) return;
+    setError(null);
+    setSuccess(null);
     const looksLikeUrl = (value: string) => {
       const text = value.trim().toLowerCase();
       if (!text) return false;
@@ -820,15 +835,20 @@ export const ProfilePage = () => {
 
     } catch (error: unknown) {
       console.error('Ошибка сохранения информации:', error);
+      const message = errorMessage(error);
       // Проверяем, не истёк ли токен
-      if (errorMessage(error) && errorMessage(error).includes('401')) {
+      if (message.includes('401')) {
         setError(t.common.error);
         localStorage.removeItem('auth_token');
         setTimeout(() => {
           window.location.href = '/login';
         }, 2000);
       } else {
-        setError(errorMessage(error) || t.dashboard.profile.errorSave);
+        setError(message || t.dashboard.profile.errorSave);
+        if (message === 'Укажите часовой пояс для нового города.' && timezoneDetailsRef.current) {
+          timezoneDetailsRef.current.open = true;
+          timezoneInputRef.current?.focus();
+        }
       }
     } finally {
       setSavingClientInfo(false);
@@ -883,12 +903,12 @@ export const ProfilePage = () => {
     if ((form.email || '').trim()) filled++;
     if ((form.phone || '').trim()) filled++;
     if ((form.name || '').trim()) filled++;
-    if ((clientInfo.businessName || '').trim()) filled++;
-    if ((clientInfo.businessType || '').trim()) filled++;
-    if ((clientInfo.address || '').trim()) filled++;
-    if ((clientInfo.city || '').trim()) filled++;
-    if ((clientInfo.website || '').trim()) filled++;
-    if ((clientInfo.workingHours || '').trim()) filled++;
+    if (savedClientInfo.businessName.trim()) filled++;
+    if (savedClientInfo.businessType.trim()) filled++;
+    if (savedClientInfo.address.trim()) filled++;
+    if (savedClientInfo.city.trim()) filled++;
+    if (savedClientInfo.website.trim()) filled++;
+    if (savedClientInfo.workingHours.trim()) filled++;
     if (hasSavedMapLinks) filled++;
     return Math.round((filled / fieldsTotal) * 100);
   })();
@@ -903,6 +923,7 @@ export const ProfilePage = () => {
   })();
 
   const scrollToBusinessInfo = () => {
+    if (clientInfoLoad !== 'ready') return;
     setEditClientInfo(true);
     window.requestAnimationFrame(() => {
       businessInfoSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1001,7 +1022,7 @@ export const ProfilePage = () => {
       />
 
       {error && (
-        <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50/80 px-4 py-3 text-red-700">
+        <div role="alert" className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50/80 px-4 py-3 text-red-700">
           <AlertTriangle className="w-5 h-5 shrink-0" />
           {error}
         </div>
@@ -1026,7 +1047,7 @@ export const ProfilePage = () => {
           <Button
             type="button"
             onClick={primaryProfileAction.onClick}
-            disabled={primaryProfileAction.disabled}
+            disabled={primaryProfileAction.disabled || clientInfoLoad !== 'ready'}
             className="bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-300"
             title={primaryProfileAction.title}
           >
@@ -1169,6 +1190,7 @@ export const ProfilePage = () => {
             {!editClientInfo && (
               <Button
                 onClick={() => setEditClientInfo(true)}
+                disabled={clientInfoLoad !== 'ready'}
                 variant="outline"
                 className="gap-2"
                 title={isRu ? 'Открывает редактирование данных бизнеса, ссылки на карту и параметров для аудита.' : 'Opens business details, map link, and audit-related settings for editing.'}
@@ -1180,6 +1202,17 @@ export const ProfilePage = () => {
           </div>
         }
       >
+        {clientInfoLoad === 'loading' && <p role="status" className="mb-4 text-sm text-muted-foreground">
+          {isRu ? 'Загружаем данные бизнеса…' : 'Loading business details…'}
+        </p>}
+        {clientInfoLoad === 'error' && <div className="mb-4 flex flex-wrap items-center gap-3">
+          <p role="alert" className="text-sm text-muted-foreground">
+            {isRu ? 'Не удалось загрузить данные бизнеса.' : 'Could not load the business details.'}
+          </p>
+          <Button type="button" variant="outline" onClick={() => setClientInfoAttempt(attempt => attempt + 1)}>
+            {isRu ? 'Повторить загрузку профиля' : 'Reload business details'}
+          </Button>
+        </div>}
         {isNetwork && (
           <div className="mb-6 inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1.5 text-sm font-semibold text-orange-700 ring-1 ring-orange-100">
             <Network className="h-4 w-4" />
@@ -1315,8 +1348,8 @@ export const ProfilePage = () => {
               </SelectContent>
             </Select>
             <p className="text-sm text-gray-500">{isRu ? 'Оператор использует этот город и эту валюту, в том числе для голосовых команд.' : 'The Operator uses this city and currency, including for voice commands.'}</p>
-            <details><summary className="text-sm cursor-pointer">{isRu ? 'Часовой пояс' : 'Time zone'}</summary>
-              <input aria-label={isRu ? 'Часовой пояс бизнеса' : 'Business time zone'} value={clientInfo.timezone} disabled={!editClientInfo} placeholder="Europe/Tallinn"
+            <details ref={timezoneDetailsRef}><summary className="text-sm cursor-pointer">{isRu ? 'Часовой пояс' : 'Time zone'}</summary>
+              <input ref={timezoneInputRef} aria-label={isRu ? 'Часовой пояс бизнеса' : 'Business time zone'} value={clientInfo.timezone} disabled={!editClientInfo} placeholder="Europe/Moscow"
                 onChange={event => setClientInfo({ ...clientInfo, timezone: event.target.value })} className="w-full mt-2 px-4 py-2.5 border rounded-xl disabled:bg-gray-50" />
               <p className="text-xs text-gray-500">{isRu ? 'Определяется по сохранённому городу. Для неоднозначного города укажите явно.' : 'Determined from the saved city. Specify it for an ambiguous city.'}</p>
             </details>
