@@ -64,7 +64,7 @@ describe("About pricing heading hierarchy", () => {
     expect(screen.getByText('Haritalar')).toBeInTheDocument();
     expect(screen.getByText('Müşteri Kazanımı')).toBeInTheDocument();
     expect(screen.getByText('Yönetim')).toBeInTheDocument();
-    expect(screen.getByText(/Sohbet üzerinden yönetim her planda kullanılabilir/)).toBeInTheDocument();
+    expect(screen.queryByText(/Sohbet üzerinden yönetim her planda kullanılabilir/)).toBeNull();
     expect(pricing.container.querySelector('#pricing')?.textContent).not.toMatch(/[А-Яа-яЁё]/);
     expect(pricing.container.querySelector('#pricing')?.textContent).not.toContain('Everything in Maps');
     expect(pricing.container.querySelector('#pricing')?.textContent).not.toContain('Choose the business tasks');

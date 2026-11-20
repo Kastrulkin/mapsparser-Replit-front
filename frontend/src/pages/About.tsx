@@ -217,7 +217,6 @@ const About = ({ pricingOnly = false }: AboutProps) => {
           <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-12">{planCopy.subtitle}</p>
 
           {pricingOnly && <p className="public-pricing-explanation">{isRu ? 'Здесь указана стоимость подписки LocalOS. Работу команды по продвижению и расходы на размещения рассчитываем отдельно — до начала работы.' : 'These are LocalOS subscription prices. Team marketing services and placement costs are priced separately before work starts.'}</p>}
-          <details className="mb-6 text-left text-sm text-muted-foreground"><summary className="inline-flex min-h-11 cursor-pointer items-center underline underline-offset-4">{isRu ? 'Как выполняются публикации и отправки' : 'How publishing and sending work'}</summary><p className="max-w-3xl py-3 leading-7">{planCopy.approval}</p></details>
           <div className="grid lg:grid-cols-4 gap-8 mb-8 items-stretch">
             {/* Starter */}
             <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">

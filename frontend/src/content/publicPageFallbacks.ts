@@ -59,12 +59,11 @@ export const buildPublicPageFallbacks = (): PublicPageFallbackManifest => {
       title: "Тарифы LocalOS для локального бизнеса",
       description: "Тарифы LocalOS: Карты — 1 200 ₽, Привлечение — 5 000 ₽, Управление — 25 000 ₽ в месяц. Публикации и отправки выполняются после подтверждения.",
       heading: "Тарифы LocalOS",
-      intro: [plans.subtitle, plans.approval],
+      intro: [plans.subtitle],
       sections: [
         { heading: `${plans.starter.name} — ${publicPlanPrice("starter")} в месяц`, paragraphs: [plans.starter.lead], items: plans.starter.features },
         { heading: `${plans.professional.name} — ${publicPlanPrice("professional")} в месяц`, paragraphs: [plans.professional.lead], items: plans.professional.features },
         { heading: `${plans.concierge.name} — ${publicPlanPrice("concierge")} в месяц`, paragraphs: [plans.concierge.lead], items: plans.concierge.features },
-        { heading: "Подтверждение действий", paragraphs: [plans.approval], links: [{ href: "/contact", label: "Обсудить задачу" }] },
       ],
     },
     "/cases": {
