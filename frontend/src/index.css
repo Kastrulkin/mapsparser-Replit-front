@@ -24,7 +24,7 @@
     --muted: 214 32% 91%;
     --muted-foreground: 215 25% 42%;
 
-    --accent: 18 86% 40%;
+    --accent: 222 47% 6%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
@@ -171,3 +171,21 @@
 .company-registry-map--density [class*='-copyrights-pane'] {
   z-index: 2 !important;
 }
+
+/* Crop the approved logo and remove its pale canvas without redrawing the mark. */
+.public-logo-crop { display: block; position: relative; width: 4.75rem; height: 4.5rem; overflow: hidden; }
+.public-logo-image { position: absolute; width: 8rem; height: 8rem; max-width: none; left: -1.625rem; top: -1.5rem; filter: url(#public-logo-clear-background); }
+.public-pricing #pricing { padding-top: 3rem; padding-bottom: 3rem; background: hsl(var(--background)); }
+.public-pricing #pricing > div > h1 { font-weight: 600; letter-spacing: -.03em; }
+.public-pricing #pricing .grid > div { text-align: left; border-width: 1px; border-color: hsl(var(--border)); background: hsl(var(--card)); box-shadow: none; }
+.public-pricing #pricing .grid > div:has(> div.absolute) { border-color: hsl(var(--warning)); }
+.public-pricing #pricing .grid { gap: 1rem; }
+.public-pricing #pricing .grid > div .space-y-2 { font-size: .875rem; line-height: 1.75; }
+.public-pricing .public-plan-price { display: block; margin-block: 1rem; color: hsl(var(--primary)); font-size: 1.75rem; font-weight: 600; letter-spacing: -.025em; }
+.public-plan-price small { font-size: .8rem; font-weight: 400; letter-spacing: normal; color: hsl(var(--muted-foreground)); }
+.public-plan-credits { margin-top: .5rem; font-size: .75rem; line-height: 1.75; color: hsl(var(--muted-foreground)); }
+.public-plan-credits summary { cursor: pointer; min-height: 2.75rem; display: flex; align-items: center; text-decoration: underline; text-underline-offset: .2rem; }
+.public-plan-credits summary:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.public-pricing .public-pricing-explanation { max-width: 48rem; margin: 0 auto 2rem; padding: 1rem 1.25rem; text-align: left; border-left: 2px solid hsl(var(--warning)); color: hsl(var(--foreground)); font-size: .9rem; line-height: 1.8; }
+@media (max-width: 767px) { .public-pricing #pricing { padding-block: 2rem; } .public-pricing #pricing .grid > div { padding: 1.5rem; } .public-pricing #pricing > div > p { font-size: 1rem; } }
+.public-pricing .public-plan-price { margin-block: .75rem 0; }

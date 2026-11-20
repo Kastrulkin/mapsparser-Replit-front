@@ -1,0 +1,122 @@
+[
+  {
+    "route": "/",
+    "width": 360,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/prodvizhenie-na-yandex-kartah",
+    "width": 360,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/lokalnye-blogery",
+    "width": 360,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/lokalnye-partnery",
+    "width": 360,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/pricing",
+    "width": 360,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/faq",
+    "width": 360,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/cases",
+    "width": 360,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/contact",
+    "width": 360,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/docs",
+    "width": 360,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "width": 360,
+    "loginDocumentNavigation": true,
+    "privateEntry": "/assets/index-Di4QnWWy.js",
+    "errors": []
+  },
+  {
+    "route": "/",
+    "width": 1440,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/prodvizhenie-na-yandex-kartah",
+    "width": 1440,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/lokalnye-blogery",
+    "width": 1440,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/lokalnye-partnery",
+    "width": 1440,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/pricing",
+    "width": 1440,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/faq",
+    "width": 1440,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/cases",
+    "width": 1440,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/contact",
+    "width": 1440,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/docs",
+    "width": 1440,
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "width": 1440,
+    "loginDocumentNavigation": true,
+    "privateEntry": "/assets/index-Di4QnWWy.js",
+    "errors": []
+  }
+]

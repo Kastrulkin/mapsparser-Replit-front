@@ -1,3 +1,4 @@
+import { publicPlanPrice, publicSubscriptionPrices } from '@/content/publicSubscriptionPrices';
 import Footer from "@/components/Footer";
 import SeoMeta from "@/components/SeoMeta";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,8 @@ const About = ({ pricingOnly = false }: AboutProps) => {
   const isRu = language === "ru";
   const planCopy = subscriptionPlanCopy(language);
   const story = aboutStoryCopy[language];
+  const pricingHeading = language === 'hy' ? 'LocalOS-ի սակագները' : language === 'kk' ? 'LocalOS тарифтері' : language === 'tr' ? 'LocalOS Fiyatları' : 'Тарифы LocalOS';
+  const pricingMetaTitle = language === 'tr' ? 'LocalOS Fiyatları — Yerel işletmeler için planlar' : language === 'hy' ? pricingHeading : language === 'kk' ? pricingHeading : 'Тарифы LocalOS для локального бизнеса';
 
   const handleSubscribeLanding = async (tierId: "starter" | "professional" | "concierge") => {
     const token = newAuth.getToken();
@@ -92,15 +95,17 @@ const About = ({ pricingOnly = false }: AboutProps) => {
   }, [location.hash]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={`min-h-screen bg-background ${pricingOnly ? 'public-pricing' : ''}`}>
       <SeoMeta
         description={pricingOnly ? (language === 'hy'
           ? 'LocalOS-ի սակագներ՝ Քարտեզներ, Ձեռքբերում և Կառավարում։ Հրապարակումներն ու հաղորդագրություններն ուղարկվում են միայն ձեր հաստատումից հետո։'
           : language === 'kk'
             ? 'LocalOS тарифтері: Карталар, Клиент тарту және Басқару. Жарияланымдар мен хабарламалар тек сіз растағаннан кейін жіберіледі.'
+            : language === 'tr'
+              ? 'LocalOS fiyatları: Haritalar, Müşteri Kazanımı ve Yönetim planları. Paylaşımlar ve mesajlar yalnızca onayınızdan sonra gönderilir.'
             : "Тарифы LocalOS: Карты — 1 200 ₽, Привлечение — 5 000 ₽, Управление — 25 000 ₽ в месяц. Публикации и отправки выполняются после подтверждения.") : story.metaDescription}
         path={pricingOnly ? "/pricing" : "/about"}
-        title={pricingOnly ? (language === 'hy' ? 'LocalOS-ի սակագները' : language === 'kk' ? 'LocalOS тарифтері' : "Тарифы LocalOS для локального бизнеса") : story.metaTitle}
+        title={pricingOnly ? pricingMetaTitle : story.metaTitle}
       />
 
       {!pricingOnly ? <section className="relative overflow-hidden border-b border-white/10 bg-slate-950 px-4 py-20 text-white sm:px-6 sm:py-24 lg:px-8 lg:py-32">
@@ -205,23 +210,25 @@ const About = ({ pricingOnly = false }: AboutProps) => {
       <section id="pricing" className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-orange-50/30">
         <div className="max-w-7xl mx-auto text-center">
           {pricingOnly ? (
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">{language === 'hy' ? 'LocalOS-ի սակագները' : language === 'kk' ? 'LocalOS тарифтері' : 'Тарифы LocalOS'}</h1>
+            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">{pricingHeading}</h1>
           ) : (
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">{t.about.pricingTitle}</h2>
           )}
           <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-12">{planCopy.subtitle}</p>
 
-          <p className="text-sm text-muted-foreground mb-8">{planCopy.approval}</p>
+          {pricingOnly && <p className="public-pricing-explanation">{isRu ? 'Здесь указана стоимость подписки LocalOS. Работу команды по продвижению и расходы на размещения рассчитываем отдельно — до начала работы.' : 'These are LocalOS subscription prices. Team marketing services and placement costs are priced separately before work starts.'}</p>}
+          <details className="mb-6 text-left text-sm text-muted-foreground"><summary className="inline-flex min-h-11 cursor-pointer items-center underline underline-offset-4">{isRu ? 'Как выполняются публикации и отправки' : 'How publishing and sending work'}</summary><p className="max-w-3xl py-3 leading-7">{planCopy.approval}</p></details>
           <div className="grid lg:grid-cols-4 gap-8 mb-8 items-stretch">
             {/* Starter */}
             <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0 flex flex-col flex-1">
-                <div className="text-2xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent mb-2">
+                <div className="text-2xl font-semibold text-primary mb-2">
                   {planCopy.starter.name}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
-                  {isRu ? "1200 ₽/месяц (240 кредитов)" : `$15 ${t.dashboard.subscription.perMonth}`}
+                  <span className="public-plan-price">{isRu ? <>{publicSubscriptionPrices.starter.rub.toLocaleString('ru-RU')} ₽ <small>/ месяц</small></> : `${publicPlanPrice("starter", true)} ${t.dashboard.subscription.perMonth}`}</span>
                 </div>
+                <details className="public-plan-credits"><summary>{isRu ? `${publicSubscriptionPrices.starter.credits} кредитов — что это?` : `${publicSubscriptionPrices.starter.credits} credits — what are they?`}</summary><p>{isRu ? 'Кредиты — внутренние единицы для операций в LocalOS. Они не заменяют оплату рекламы у блогеров и работу команды.' : 'Credits are internal units for LocalOS operations. They do not pay for creator placements or team services.'}</p></details>
                 <div className="text-sm text-gray-600 mb-3">{planCopy.starter.lead}</div>
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
                   {planCopy.starter.features.map((feature) => <div key={feature}>- {feature}</div>)}
@@ -245,8 +252,9 @@ const About = ({ pricingOnly = false }: AboutProps) => {
                   {planCopy.professional.name}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
-                  {isRu ? "5000 ₽/месяц (1000 кредитов)" : `$55 ${t.dashboard.subscription.perMonth}`}
+                  <span className="public-plan-price">{isRu ? <>{publicSubscriptionPrices.professional.rub.toLocaleString('ru-RU')} ₽ <small>/ месяц</small></> : `${publicPlanPrice("professional", true)} ${t.dashboard.subscription.perMonth}`}</span>
                 </div>
+                <details className="public-plan-credits"><summary>{isRu ? `${publicSubscriptionPrices.professional.credits} кредитов — что это?` : `${publicSubscriptionPrices.professional.credits} credits — what are they?`}</summary><p>{isRu ? 'Кредиты — внутренние единицы для операций в LocalOS. Они не заменяют оплату рекламы у блогеров и работу команды.' : 'Credits are internal units for LocalOS operations. They do not pay for creator placements or team services.'}</p></details>
                 <div className="text-sm text-gray-600 mb-3">{planCopy.professional.lead}</div>
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
                   {planCopy.professional.features.map((feature) => <div key={feature}>- {feature}</div>)}
@@ -269,7 +277,7 @@ const About = ({ pricingOnly = false }: AboutProps) => {
                   {planCopy.concierge.name}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
-                  {isRu ? "25000 ₽/месяц" : `$310 ${t.dashboard.subscription.perMonth}`}
+                  <span className="public-plan-price">{isRu ? <>{publicSubscriptionPrices.concierge.rub.toLocaleString('ru-RU')} ₽ <small>/ месяц</small></> : `${publicPlanPrice("concierge", true)} ${t.dashboard.subscription.perMonth}`}</span>
                 </div>
                 <div className="text-sm text-gray-600 mb-3">{planCopy.concierge.lead}</div>
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
@@ -293,7 +301,7 @@ const About = ({ pricingOnly = false }: AboutProps) => {
                   {isRu ? "Особый (Elite)" : "Elite"}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">{isRu ? "7% от оплат привлечённых клиентов" : t.about.pricingOption2Subtitle}</div>
-                {isRu ? <div className="text-sm text-gray-600 mb-3">(Мы делаем всё за вас и даже больше)</div> : null}
+                {isRu ? <div className="text-sm text-gray-600 mb-3">Индивидуальный состав работ</div> : null}
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
                   <div>- {isRu ? "Привлечение клиентов онлайн" : t.about.pricingOption2Point1}</div>
                   <div>- {isRu ? "Коммуникация с клиентами" : t.about.pricingOption2Point2}</div>

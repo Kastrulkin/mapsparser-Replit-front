@@ -7,6 +7,8 @@ import { Language, useLanguage } from '../i18n/LanguageContext.logic';
 import { newAuth } from "../lib/auth_new";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { Button } from "./ui/button";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from './ui/dropdown-menu';
+import { promotionContent, promotionLinkSearch, promotionContextSearch, readPromotionDirection } from '@/content/promotionContent';
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -28,6 +30,13 @@ const Header = () => {
         el.scrollIntoView({ behavior: "smooth" });
       }
     }
+  }, []);
+
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 640px)');
+    const closeMobileMenu = () => setIsMenuOpen(false);
+    desktop.addEventListener('change', closeMobileMenu);
+    return () => desktop.removeEventListener('change', closeMobileMenu);
   }, []);
 
   // Handle scroll effect
@@ -67,18 +76,28 @@ const Header = () => {
     kk: { how: "LocalOS қалай жұмыс істейді", about: "LocalOS туралы" },
   };
 
+  const promotion = promotionContent(language !== 'ru');
+  const directions = Object.values(promotion).filter((page) => page.key !== 'home');
+  const currentDirection = directions.find((page) => page.path === location.pathname)?.key;
+  const selectedDirection = currentDirection || readPromotionDirection(location.search);
+  const context = promotionContextSearch(location.search, selectedDirection);
+  const directionLabel = language === 'ru' ? 'Направления' : 'Directions';
   const navigation = [
-    { name: publicNavigationCopy[language].how, href: '/#agents' },
-    { name: publicNavigationCopy[language].about, href: '/about' },
-    { name: t.header.prices, href: '/pricing' },
+    { name: directionLabel, href: '#directions' },
+    { name: language === 'ru' ? 'Как работаем' : 'How we work', href: '/#how-it-works' },
+    { name: language === 'ru' ? 'Кейсы' : 'Cases', href: '/cases' + promotionLinkSearch(location.search) },
+    { name: language === 'ru' ? 'Тарифы' : 'Pricing', href: '/pricing' + context },
+    { name: language === 'ru' ? 'Вопросы' : 'Questions', href: '/faq' + context },
   ];
 
   const materialsCopy = contentCopy[language];
   const materialsNavigation = [
+    { name: publicNavigationCopy[language].about, description: language === 'ru' ? 'Команда и история LocalOS' : 'The LocalOS team and story', href: '/about' },
     { ...materialsCopy.navigation.articles, href: "/articles" },
     { ...materialsCopy.navigation.documents, href: "/documents" },
     { ...materialsCopy.navigation.cases, href: "/cases" },
     { ...materialsCopy.navigation.documentation, href: "/docs" },
+    { name: language === 'ru' ? 'Контакты' : 'Contact', description: language === 'ru' ? 'Связаться с командой' : 'Contact the team', href: '/contact' },
   ];
 
   // Не показываем Header на страницах кабинета (/dashboard...)
@@ -93,83 +112,42 @@ const Header = () => {
         : "border-transparent bg-[#f7f7f5]/72"
         }`}
     >
+      <svg width="0" height="0" className="absolute pointer-events-none" aria-hidden="true" focusable="false">
+        <defs>
+          <filter id="public-logo-clear-background" colorInterpolationFilters="sRGB">
+            <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  -1 -1 -1 0 3" />
+            <feComponentTransfer><feFuncA type="linear" slope="1.2" intercept="-0.12" /></feComponentTransfer>
+          </filter>
+        </defs>
+      </svg>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex min-h-[4.5rem] justify-between items-center py-2.5">
+        <div className="flex min-h-[4.5rem] flex-wrap justify-between items-center py-2.5">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <Link to="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex min-h-11 items-center rounded-lg pr-2 transition-opacity hover:opacity-75" style={{ textDecoration: 'none' }}>
-                <img
+              <Link to={`/${promotionLinkSearch(location.search)}`} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex min-h-11 items-center rounded-lg pr-2 transition-opacity hover:opacity-75" style={{ textDecoration: 'none' }}>
+                <span className="public-logo-crop"><img
                   src={logo}
                   alt="Local OS"
-                  className="h-10 w-auto"
-                />
+                  className="public-logo-image"
+                /></span>
               </Link>
             </div>
           </div>
 
-          <nav className="hidden items-center gap-8 lg:flex">
-            {navigation.map((item) => (
-              item.href === '/#agents' ? (
-                <a
-                  key={item.name}
-                  href="/#agents"
-                  className="inline-flex min-h-11 items-center text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950"
-                >
-                  {item.name}
-                </a>
-              ) : item.href === '/about#pricing' ? (
-                <Link
-                  key={item.name}
-                  to={{ pathname: "/about", hash: "#pricing" }}
-                  className="inline-flex min-h-11 items-center text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950"
-                  onClick={(e) => {
-                    // Если уже на странице /about, прокручиваем сразу
-                    if (location.pathname === '/about') {
-                      e.preventDefault();
-                      const el = document.getElementById("pricing");
-                      if (el) {
-                        el.scrollIntoView({ behavior: "smooth" });
-                        // Обновляем URL без перезагрузки
-                        window.history.pushState(null, '', '/about#pricing');
-                      }
-                    }
-                  }}
-                >
-                  {item.name}
-                </Link>
-              ) : (
-                <a
-                  key={item.name}
-                  href={item.href}
-                  className="inline-flex min-h-11 items-center text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950"
-                >
-                  {item.name}
-                </a>
-              )
-            ))}
-            <div className="group relative">
-              <button className="flex min-h-11 items-center gap-1 text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950" type="button">
-                {materialsCopy.materials}
-                <ChevronDown className="h-4 w-4 transition-transform group-hover:rotate-180" />
-              </button>
-              <div className="invisible absolute left-1/2 top-full w-72 -translate-x-1/2 pt-3 opacity-0 transition-[opacity,visibility] group-hover:visible group-hover:opacity-100">
-                <div className="rounded-2xl bg-white p-2 shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_18px_45px_rgba(15,23,42,0.12)]">
-                  {materialsNavigation.map((item) => (
-                    <Link
-                      className="block rounded-xl px-4 py-3 transition-colors hover:bg-orange-50"
-                      key={item.href}
-                      to={item.href}
-                    >
-                      <span className="block font-semibold text-gray-950">{item.name}</span>
-                      <span className="mt-1 block text-sm text-muted-foreground">{item.description}</span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </div>
+          <nav aria-label={language === 'ru' ? 'Основная навигация' : 'Main navigation'} className="order-3 mt-2 hidden w-full flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t border-border pt-2 sm:flex xl:order-none xl:mt-0 xl:w-auto xl:gap-7 xl:border-0 xl:pt-0">
+            {navigation.map((item) => item.href === '#directions' ? (
+              <DropdownMenu key={item.href}>
+                <DropdownMenuTrigger aria-current={currentDirection ? 'true' : undefined} className={`inline-flex min-h-11 items-center gap-1 text-sm font-semibold ${currentDirection ? 'text-primary' : 'text-slate-600'} hover:text-slate-950`}>{directionLabel}<ChevronDown size={14} aria-hidden="true" /></DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64 rounded-xl p-2">{directions.map((page) => <DropdownMenuItem key={page.key} asChild><Link className={`min-h-11 ${page.key === currentDirection ? 'bg-secondary font-semibold' : ''}`} aria-current={page.key === currentDirection ? 'page' : undefined} to={page.path + promotionLinkSearch(location.search)}>{page.label}</Link></DropdownMenuItem>)}</DropdownMenuContent>
+              </DropdownMenu>
+            ) : <Link key={item.href} to={item.href} aria-current={location.pathname === item.href.split('?')[0] ? 'page' : undefined} className={`inline-flex min-h-11 items-center text-sm font-semibold transition-colors hover:text-slate-950 ${location.pathname === item.href.split('?')[0] ? 'text-primary underline underline-offset-8' : 'text-slate-600'}`}>{item.name}</Link>)}
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex min-h-11 items-center gap-1 text-sm font-semibold text-slate-600 hover:text-slate-950">{materialsCopy.materials}<ChevronDown size={14} aria-hidden="true" /></DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72 rounded-xl p-2">{materialsNavigation.map((item) => <DropdownMenuItem key={item.href} asChild><Link className="block px-4 py-3" to={item.href}><span className="block font-semibold">{item.name}</span><span className="mt-1 block text-xs text-muted-foreground">{item.description}</span></Link></DropdownMenuItem>)}</DropdownMenuContent>
+            </DropdownMenu>
           </nav>
 
-          <div className="hidden items-center gap-3 lg:flex">
+          <div className="hidden items-center gap-3 sm:flex">
             <LanguageSwitcher />
             <Button
               asChild
@@ -182,13 +160,15 @@ const Header = () => {
                 <span>{t.header.login}</span>
               </Link>
             </Button>
-            <Button asChild className="btn-iridescent min-h-10 rounded-xl px-4">
-              <a href="/demo" rel="noopener noreferrer" target="_blank">{t.header.tryFree}</a>
+            <Button asChild variant="outline" className="min-h-10 rounded-xl px-4">
+              <a href="/demo" rel="noopener noreferrer" target="_blank">{language === 'ru' ? 'Посмотреть демо' : 'View demo'}</a>
             </Button>
           </div>
 
-          <div className="lg:hidden">
+          <div className="sm:hidden">
             <Button
+              aria-expanded={isMenuOpen}
+              aria-controls="public-mobile-menu"
               aria-label={isMenuOpen ? (language === 'ru' ? 'Закрыть меню' : 'Close menu') : (language === 'ru' ? 'Открыть меню' : 'Open menu')}
               variant="ghost"
               size="icon"
@@ -201,52 +181,11 @@ const Header = () => {
         </div>
 
         {isMenuOpen && (
-          <div className="absolute left-0 right-0 border-b border-black/5 bg-[#f7f7f5] shadow-[0_18px_45px_rgba(15,23,42,0.12)] lg:hidden">
+          <div id="public-mobile-menu" className="absolute left-0 right-0 max-h-[calc(100dvh-4.5rem)] overflow-y-auto border-b border-black/5 bg-[#f7f7f5] shadow-[0_18px_45px_rgba(15,23,42,0.12)] sm:hidden">
             <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-              {navigation.map((item) => (
-                item.href === '/#agents' ? (
-                  <a
-                    key={item.name}
-                    href="/#agents"
-                    className="block px-3 py-2 text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                    }}
-                  >
-                    {item.name}
-                  </a>
-                ) : item.href === '/about#pricing' ? (
-                  <Link
-                    key={item.name}
-                    to={{ pathname: "/about", hash: "#pricing" }}
-                    className="block px-3 py-2 text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={(e) => {
-                      // Если уже на странице /about, прокручиваем сразу
-                      if (location.pathname === '/about') {
-                        e.preventDefault();
-                        const el = document.getElementById("pricing");
-                        if (el) {
-                          el.scrollIntoView({ behavior: "smooth" });
-                          // Обновляем URL без перезагрузки
-                          window.history.pushState(null, '', '/about#pricing');
-                        }
-                      }
-                      setIsMenuOpen(false);
-                    }}
-                  >
-                    {item.name}
-                  </Link>
-                ) : (
-                  <a
-                    key={item.name}
-                    href={item.href}
-                    className="block px-3 py-2 text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    {item.name}
-                  </a>
-                )
-              ))}
+              {navigation.map((item) => item.href === '#directions' ? (
+                <details key={item.href} className="px-3"><summary className="flex min-h-11 cursor-pointer items-center gap-2 text-muted-foreground">{directionLabel}<ChevronDown size={14} aria-hidden="true" /></summary><div className="border-s border-border ps-3">{directions.map((page) => <Link key={page.key} className={`flex min-h-11 items-center text-sm ${page.key === currentDirection ? 'font-semibold text-primary underline underline-offset-4' : 'text-foreground'}`} aria-current={page.key === currentDirection ? 'page' : undefined} to={page.path + promotionLinkSearch(location.search)} onClick={() => setIsMenuOpen(false)}>{page.label}</Link>)}</div></details>
+              ) : <Link key={item.href} to={item.href} aria-current={location.pathname === item.href.split('?')[0] ? 'page' : undefined} className="flex min-h-11 items-center px-3 text-muted-foreground hover:text-foreground" onClick={() => setIsMenuOpen(false)}>{item.name}</Link>)}
               <div className="border-t border-border pt-3">
                 <div className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                   {materialsCopy.materials}
@@ -277,8 +216,8 @@ const Header = () => {
                     {t.header.login}
                   </Link>
                 </Button>
-                <Button asChild className="mx-3 w-[calc(100%-1.5rem)] justify-start btn-iridescent">
-                  <a href="/demo" onClick={() => setIsMenuOpen(false)} rel="noopener noreferrer" target="_blank">{t.header.tryFree}</a>
+                <Button asChild variant="outline" className="mx-3 w-[calc(100%-1.5rem)] justify-start">
+                  <a href="/demo" onClick={() => setIsMenuOpen(false)} rel="noopener noreferrer" target="_blank">{language === 'ru' ? 'Посмотреть демо' : 'View demo'}</a>
                 </Button>
               </div>
             </div>

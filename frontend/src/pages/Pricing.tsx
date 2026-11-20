@@ -1,5 +1,4 @@
 import About from "./About";
-
-const Pricing = () => <About pricingOnly />;
-
+import { PromotionContextBar } from '@/components/promotion/PromotionContextBar';
+const Pricing = () => <><PromotionContextBar /><About pricingOnly /></>;
 export default Pricing;

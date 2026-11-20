@@ -131,19 +131,19 @@ def public_contact():
         if not isinstance(data, dict):
             return jsonify({"error": "Invalid JSON"}), 400
 
-        name = data.get('name', '').strip()
-        email = data.get('email', '').strip()
-        phone = data.get('phone', '').strip()
-        message = data.get('message', '').strip()
-
-        if not name or not email or not message:
-            return jsonify({"error": "Имя, email и сообщение обязательны"}), 400
-
-        # Логирование в консоль
-        print(f"📧 НОВОЕ СООБЩЕНИЕ ОТ {name} ({email}):")
-        print(f"📞 Телефон: {phone}")
-        print(f"💬 Сообщение: {message}")
-        print("-" * 50)
+        if data.get('request_kind') == 'promotion':
+            from core.promotion_contact import promotion_contact_fields
+            try:
+                name, email, phone, message = promotion_contact_fields(data)
+            except ValueError as error:
+                return jsonify({"error": str(error)}), 400
+        else:
+            fields = [data.get(key, '') for key in ('name', 'email', 'phone', 'message')]
+            if not all(isinstance(value, str) for value in fields):
+                return jsonify({"error": "Некорректные поля формы"}), 400
+            name, email, phone, message = [value.strip() for value in fields]
+            if not name or not email or not message:
+                return jsonify({"error": "Имя, email и сообщение обязательны"}), 400
 
         # Отправка email
         email_sent = send_contact_email(name, email, phone, message)
@@ -155,7 +155,7 @@ def public_contact():
 
     except Exception as e:
         print(f"❌ Ошибка обработки формы обратной связи: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Не удалось отправить сообщение. Попробуйте позже."}), 500
 
 def _slugify_public_report_name(name: str) -> str:
     raw = str(name or "").strip().lower()

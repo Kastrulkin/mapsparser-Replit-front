@@ -4,10 +4,13 @@ import path from "path";
 import { readFileSync, copyFileSync } from "node:fs";
 import { buildPublicPageFallbacks } from "./src/content/publicPageFallbacks";
 
-const publicPageFallbacks = (): Plugin => ({
+const publicPageFallbacks = (): Plugin => {
+  let outputDirectory = path.resolve(__dirname, "dist");
+  return ({
   name: "public-page-fallbacks",
-  closeBundle() {
-    copyFileSync(path.resolve(__dirname, "dist/index.html"), path.resolve(__dirname, "dist/public-seo-index.html"));
+  configResolved(config) { outputDirectory = path.resolve(config.root, config.build.outDir); },
+  writeBundle() {
+    copyFileSync(path.resolve(outputDirectory, "index.html"), path.resolve(outputDirectory, "public-seo-index.html"));
   },
   generateBundle() {
     const manifest = buildPublicPageFallbacks();
@@ -19,6 +22,7 @@ const publicPageFallbacks = (): Plugin => ({
     this.emitFile({ type: "asset", fileName: "localos-logo.png", source: readFileSync(path.resolve(__dirname, "src/assets/images/logo.png")) });
   },
 });
+};
 
 export default defineConfig({
   plugins: [react(), publicPageFallbacks()],

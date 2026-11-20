@@ -1,0 +1,29 @@
+{
+  "release": "site-polish-20261120-1795185775",
+  "result": "success",
+  "containers_before": {
+    "a38967e795ce32ebfebbc5360c0ba7dca2469c075a5b6fa3e28f832b24b6d170": "2026-11-20T14:06:50.759323021Z",
+    "58f12568b4e7e768ba581894df6025a75e744328d89a18105e481cddcb45e8cd": "2026-11-20T10:43:38.673492002Z",
+    "b7140effed10832e2a922ee07d483dd810bdee7aae386ec82be5ef3691c0c018": "2026-11-20T10:43:38.613599022Z",
+    "7fb2a8967b67cf9227fc5bcd3543d6ab4cca6bd9b8e5406f76be422cd35f3c35": "2026-11-20T10:43:38.64099403Z",
+    "83e0dc9c089569d1dc30303184071c38a3bd1dbbe25d3fa0aa3fba08413e5d64": "2026-11-20T13:42:18.376974629Z",
+    "3c70d7811d71bcf13bd0182815faad5666477a3a1576f66c832d28c4712e3676": "2026-11-20T14:08:23.516033766Z",
+    "b51285d74a25bc67233a73b36d7b53df3db09d9e77c15a3748ad780aa4bbbd72": "2026-11-20T10:43:38.677688973Z",
+    "6e4002e02c6b54f841b69b0083cedcc4e17dd70a887a81f82baa0b44713d588f": "2026-11-20T10:43:38.641329419Z",
+    "3705c66c7f634ea72e1828a437fff0d9dc5ea2d0c1b88d6e604bee366c88292f": "2026-11-20T11:04:33.007466713Z",
+    "7f4eacefd7ab07d413abb2575894e44e453debb4c14e15ed1bb4b354ac65defc": "2026-11-20T14:06:49.452127491Z"
+  },
+  "phase": "verification",
+  "compose_ps": "NAME                               IMAGE                                                                                                            COMMAND                  SERVICE                  CREATED        STATUS                 PORTS\nseo-app-app-1                      sha256:9c80f46a92f4cf5066b2e5f9fb55a21207416dba9d1197ac370f52096599129b                                          \"/app/entrypoint.sh …\"   app                      2 days ago     Up 36 minutes          0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp\nseo-app-clamav-1                   clamav/clamav:1.4                                                                                                \"/init\"                  clamav                   2 months ago   Up 4 hours (healthy)   3310/tcp, 7357/tcp\nseo-app-compiled-script-runner-1   127.0.0.1:18851/localos-content-runner@sha256:82a565862e6df9effd2e7cd9d78c732fbcddc385fa25bad3eb8588d5ea54561b   \"python -I /runner/s…\"   compiled-script-runner   6 weeks ago    Up 4 hours             8091/tcp\nseo-app-compliance-worker-1        sha256:cda8652bfaea0c334f2d554d780109e889e0457881c2dabb2ea45ba4a38f5b84                                          \"python -m services.…\"   compliance-worker        2 months ago   Up 4 hours             \nseo-app-operator-worker-1          sha256:9c80f46a92f4cf5066b2e5f9fb55a21207416dba9d1197ac370f52096599129b                                          \"/app/entrypoint.sh …\"   operator-worker          2 days ago     Up About an hour       \nseo-app-outreach-worker-1          sha256:9c80f46a92f4cf5066b2e5f9fb55a21207416dba9d1197ac370f52096599129b                                          \"/app/entrypoint.sh …\"   outreach-worker          29 hours ago   Up 34 minutes          \nseo-app-postgres-1                 pgvector/pgvector:0.8.0-pg16-trixie                                                                              \"docker-entrypoint.s…\"   postgres                 4 months ago   Up 4 hours (healthy)   5432/tcp\nseo-app-redis-1                    redis:7.4-alpine                                                                                                 \"docker-entrypoint.s…\"   redis                    3 months ago   Up 4 hours (healthy)   6379/tcp\nseo-app-telegram-bot-1             sha256:ba649754daa9448a4ec24e6597bc618db8c07daa6bd57e31ca3bcbb1e59ba5d9                                          \"/bin/sh -c 'if [ -z…\"   telegram-bot             2 days ago     Up 4 hours (healthy)   8000/tcp\nseo-app-worker-1                   sha256:9c80f46a92f4cf5066b2e5f9fb55a21207416dba9d1197ac370f52096599129b                                          \"/app/entrypoint.sh …\"   worker                   2 days ago     Up 36 minutes          \n",
+  "log_lines_checked": 22,
+  "applied": [
+    "frontend/dist/content-seo.json",
+    "frontend/dist/public-page-fallbacks.json",
+    "frontend/dist/public-seo-index.html",
+    "frontend/dist/sitemap.xml",
+    "src/core/promotion_contact.py",
+    "src/legacy_routes/core_public.py",
+    "src/legacy_routes/report_pipeline.py"
+  ],
+  "private_entry_preserved": true
+}

@@ -11,7 +11,7 @@ import { buildPublicPageFallbacks } from "./publicPageFallbacks";
 describe("public page fallback manifest", () => {
   it("has the exact finite public route set and renderer contract", () => {
     const manifest = buildPublicPageFallbacks();
-    const expectedRoutes = ["/growth", ...leadJourneyDirections.map((item) => `/growth?direction=${item.key}`), ...ruSections.map((item) => item.slug === "overview" ? "/docs" : `/docs/${item.slug}`), "/", "/about", "/pricing", "/cases", ...publishedCases.map((caseItem) => `/cases/${caseItem.slug}`), "/articles", "/documents", ...publishedArticles.map((item) => `/articles/${item.slug}`), ...publishedDocuments.map((item) => `/documents/${item.slug}`), ...solutions.map((item) => `/solutions/${item.slug}`)].sort();
+    const expectedRoutes = ["/faq", "/prodvizhenie-na-yandex-kartah", "/lokalnye-blogery", "/lokalnye-partnery", "/growth", ...leadJourneyDirections.map((item) => `/growth?direction=${item.key}`), ...ruSections.map((item) => item.slug === "overview" ? "/docs" : `/docs/${item.slug}`), "/", "/about", "/pricing", "/cases", ...publishedCases.map((caseItem) => `/cases/${caseItem.slug}`), "/articles", "/documents", ...publishedArticles.map((item) => `/articles/${item.slug}`), ...publishedDocuments.map((item) => `/documents/${item.slug}`), ...solutions.map((item) => `/solutions/${item.slug}`)].sort();
 
     expect(manifest.version).toBe(1);
     expect(Object.keys(manifest.routes).sort()).toEqual(expectedRoutes);
@@ -35,8 +35,11 @@ describe("public page fallback manifest", () => {
     expect(home.description).toBe(publicHomeContent.description);
     expect(home.heading).toBe(publicHomeContent.heading);
     expect(home.intro).toEqual(publicHomeContent.intro);
-    expect(JSON.stringify(home)).toMatch(/Яндекс Картах и 2ГИС/);
-    expect(JSON.stringify(home)).toMatch(/1 200 ₽.*5 000 ₽.*25 000 ₽/);
+    expect(JSON.stringify(home)).toContain("команда LocalOS");
+    expect(home.sections.some((section) => section.links?.some((link) => link.href.startsWith('/pricing')))).toBe(true);
+    expect(JSON.stringify(home)).not.toMatch(/1 200 ₽|5 000 ₽/);
+    expect(home.sections.some((section) => section.heading === 'Сколько это стоит?')).toBe(false);
+    expect(manifest.routes['/faq'].sections.some((section) => section.heading === 'Сколько это стоит?')).toBe(true);
     expect(pricing.sections.map((section) => section.heading)).toEqual(expect.arrayContaining([
       expect.stringContaining("1 200 ₽"),
       expect.stringContaining("5 000 ₽"),
@@ -57,7 +60,10 @@ describe("public page fallback manifest", () => {
         expect.objectContaining({ heading: "Что сделали", items: caseItem.actions }),
         expect.objectContaining({ heading: "Результат", paragraphs: [caseItem.result] }),
       ]));
-      expect(manifest.routes["/"].sections).toEqual(expect.arrayContaining([
+      const mainCase = manifest.routes['/'].sections.filter((section) => publishedCases.some((item) => item.title === section.heading));
+      expect(mainCase).toHaveLength(1);
+      expect(mainCase[0].heading).toBe(publishedCases[0].title);
+      expect(manifest.routes['/prodvizhenie-na-yandex-kartah'].sections).toEqual(expect.arrayContaining([
         expect.objectContaining({ heading: caseItem.title, items: caseItem.metrics.map((metric) => `${metric.label}: ${metric.value}`) }),
       ]));
       expect(manifest.routes["/cases"].sections).toEqual(expect.arrayContaining([

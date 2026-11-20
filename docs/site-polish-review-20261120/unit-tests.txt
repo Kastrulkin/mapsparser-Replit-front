@@ -1,0 +1,8 @@
+
+ RUN  v4.1.11 /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend
+
+
+ Test Files  4 passed (4)
+      Tests  17 passed (17)
+   Start at  17:12:57
+   Duration  3.92s (transform 1.94s, setup 2.06s, import 1.75s, tests 1.50s, environment 5.69s)

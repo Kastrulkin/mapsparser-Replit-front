@@ -1,0 +1,2 @@
+⚠️ Не удалось отправить email с формы обратной связи
+{"phone_only_contract": true, "legacy_contract": true, "consent_validation": true, "failed_delivery_not_success": true, "smtp_password_configured": true, "real_messages_sent": 0}

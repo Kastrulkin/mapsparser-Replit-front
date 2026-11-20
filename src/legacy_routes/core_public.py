@@ -324,6 +324,9 @@ def _render_spa_index(path: str = "", status_code: int = 200):
             response.headers["X-Robots-Tag"] = "noindex"
         return response
 
+    if route_path in {"/contact", "/policy", "/privacy", "/requisites", "/data-deletion"}:
+        index_html = load_public_shell(FRONTEND_DIST_DIR, index_html)
+
     seo_data = _load_content_seo_data()
     routes = seo_data.get("routes") if isinstance(seo_data.get("routes"), dict) else {}
     default_seo = seo_data.get("default") if isinstance(seo_data.get("default"), dict) else {}

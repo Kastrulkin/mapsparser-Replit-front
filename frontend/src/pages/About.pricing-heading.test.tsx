@@ -53,4 +53,20 @@ describe("About pricing heading hierarchy", () => {
     expect(screen.getByText('$15 /ай')).toBeInTheDocument();
     expect(screen.queryByText('Choose the business tasks you want LocalOS to help with')).toBeNull();
   });
+
+  it("shows a coherent Turkish pricing page on a shared language link", async () => {
+    window.localStorage.setItem("language", "en");
+    window.history.replaceState({}, '', '/pricing?lang=tr');
+    const pricing = renderAbout(true);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "LocalOS Fiyatları" })).toBeInTheDocument();
+    expect(screen.getByText('LocalOS’un işletmenize hangi konularda yardımcı olacağını seçin')).toBeInTheDocument();
+    expect(screen.getByText('Haritalar')).toBeInTheDocument();
+    expect(screen.getByText('Müşteri Kazanımı')).toBeInTheDocument();
+    expect(screen.getByText('Yönetim')).toBeInTheDocument();
+    expect(screen.getByText(/Sohbet üzerinden yönetim her planda kullanılabilir/)).toBeInTheDocument();
+    expect(pricing.container.querySelector('#pricing')?.textContent).not.toMatch(/[А-Яа-яЁё]/);
+    expect(pricing.container.querySelector('#pricing')?.textContent).not.toContain('Everything in Maps');
+    expect(pricing.container.querySelector('#pricing')?.textContent).not.toContain('Choose the business tasks');
+  });
 });

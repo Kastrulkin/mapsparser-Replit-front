@@ -1,0 +1,33 @@
+
+Running 24 tests using 2 workers
+
+(node:25592) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25591) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   2 [mobile] › e2e/promotion-review.spec.ts:6:3 › promotion page / has one H1, coherent source and usable form (1.7s)
+  ✓   1 [desktop] › e2e/promotion-review.spec.ts:6:3 › promotion page / has one H1, coherent source and usable form (1.7s)
+  ✓   3 [mobile] › e2e/promotion-review.spec.ts:6:3 › promotion page /prodvizhenie-na-yandex-kartah has one H1, coherent source and usable form (971ms)
+  ✓   4 [desktop] › e2e/promotion-review.spec.ts:6:3 › promotion page /prodvizhenie-na-yandex-kartah has one H1, coherent source and usable form (1.3s)
+  ✓   5 [mobile] › e2e/promotion-review.spec.ts:6:3 › promotion page /lokalnye-blogery has one H1, coherent source and usable form (957ms)
+  ✓   6 [desktop] › e2e/promotion-review.spec.ts:6:3 › promotion page /lokalnye-blogery has one H1, coherent source and usable form (1.2s)
+  ✓   7 [mobile] › e2e/promotion-review.spec.ts:6:3 › promotion page /lokalnye-partnery has one H1, coherent source and usable form (937ms)
+  ✓   8 [desktop] › e2e/promotion-review.spec.ts:6:3 › promotion page /lokalnye-partnery has one H1, coherent source and usable form (1.0s)
+  ✓   9 [mobile] › e2e/promotion-review.spec.ts:34:1 › direction selection preserves attribution and only sends one pending request (944ms)
+  ✓  11 [mobile] › e2e/promotion-review.spec.ts:57:1 › navigation, FAQ and alternate language remain available (648ms)
+  ✓  10 [desktop] › e2e/promotion-review.spec.ts:34:1 › direction selection preserves attribution and only sends one pending request (1.0s)
+  ✓  12 [mobile] › e2e/promotion-review.spec.ts:77:1 › keeps navigation visible in a narrow desktop window and resets the mobile menu on resize (440ms)
+  ✓  14 [mobile] › e2e/promotion-review.spec.ts:96:1 › home is a short direction chooser and the landing has a different hero (458ms)
+  ✓  13 [desktop] › e2e/promotion-review.spec.ts:57:1 › navigation, FAQ and alternate language remain available (1.3s)
+  ✓  16 [desktop] › e2e/promotion-review.spec.ts:77:1 › keeps navigation visible in a narrow desktop window and resets the mobile menu on resize (437ms)
+  ✓  15 [mobile] › e2e/promotion-review.spec.ts:113:1 › pricing and FAQ preserve the selected direction and source through the request (970ms)
+  ✓  18 [mobile] › e2e/promotion-review.spec.ts:136:1 › FAQ opens directly and rejects an unknown selected direction (501ms)
+  ✓  17 [desktop] › e2e/promotion-review.spec.ts:96:1 › home is a short direction chooser and the landing has a different hero (616ms)
+  ✓  19 [mobile] › e2e/promotion-review.spec.ts:146:1 › direction artwork is clickable and keyboard links preserve attribution (694ms)
+  ✓  21 [mobile] › e2e/promotion-review.spec.ts:157:1 › pricing explains team services and keeps credits in an accessible disclosure (358ms)
+  ✓  20 [desktop] › e2e/promotion-review.spec.ts:113:1 › pricing and FAQ preserve the selected direction and source through the request (1.1s)
+  ✓  22 [desktop] › e2e/promotion-review.spec.ts:136:1 › FAQ opens directly and rejects an unknown selected direction (513ms)
+  ✓  23 [desktop] › e2e/promotion-review.spec.ts:146:1 › direction artwork is clickable and keyboard links preserve attribution (618ms)
+  ✓  24 [desktop] › e2e/promotion-review.spec.ts:157:1 › pricing explains team services and keeps credits in an accessible disclosure (416ms)
+
+  24 passed (13.7s)

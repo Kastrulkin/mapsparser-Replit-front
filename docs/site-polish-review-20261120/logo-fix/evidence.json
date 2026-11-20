@@ -1,0 +1,156 @@
+[
+  {
+    "route": "/",
+    "width": 360,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/",
+    "width": 1440,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/prodvizhenie-na-yandex-kartah",
+    "width": 360,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/prodvizhenie-na-yandex-kartah",
+    "width": 1440,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/lokalnye-blogery",
+    "width": 360,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/lokalnye-blogery",
+    "width": 1440,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/lokalnye-partnery",
+    "width": 360,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/lokalnye-partnery",
+    "width": 1440,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/pricing",
+    "width": 360,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/pricing",
+    "width": 1440,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/faq",
+    "width": 360,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/faq",
+    "width": 1440,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/cases",
+    "width": 360,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/cases",
+    "width": 1440,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/articles",
+    "width": 360,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/articles",
+    "width": 1440,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/documents",
+    "width": 360,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/documents",
+    "width": 1440,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/about",
+    "width": 360,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/about",
+    "width": 1440,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/contact",
+    "width": 360,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  },
+  {
+    "route": "/contact",
+    "width": 1440,
+    "errors": [],
+    "filter": true,
+    "overflow": false
+  }
+]

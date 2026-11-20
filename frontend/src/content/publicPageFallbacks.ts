@@ -1,3 +1,5 @@
+import { promotionContent, promotionKeys, promotionTrust, promotionExamples, promotionFaqGroups, promotionWorkSteps } from './promotionContent';
+import { publicPlanPrice } from './publicSubscriptionPrices';
 import { ruSections, ruAgentQuickstart } from "./publicDocsContent";
 import { leadJourneyDirections } from "./growthDirections";
 import { publicGrowthCopy } from "./publicGrowthCopy";
@@ -8,7 +10,6 @@ import { solutions } from "./solutions";
 import { aboutStoryCopy } from "./aboutStoryCopy";
 import { publishedCases } from "./cases";
 import { collectionCopy } from "./collectionCopy";
-import { publicHomeContent } from "./publicHomeContent";
 import { subscriptionPlanCopy } from "./subscriptionPlanCopy";
 
 export type PublicPageSection = {
@@ -40,22 +41,6 @@ export const buildPublicPageFallbacks = (): PublicPageFallbackManifest => {
   const plans = subscriptionPlanCopy("ru");
   const caseCollection = collectionCopy.ru.cases;
   const routes: Record<string, PublicPageFallback> = {
-    "/": {
-      title: publicHomeContent.title,
-      description: publicHomeContent.description,
-      heading: publicHomeContent.heading,
-      intro: [...publicHomeContent.intro],
-      sections: [
-        { heading: "Что помогает делать LocalOS", items: ["Проверять карточки в Яндекс Картах и 2ГИС: услуги, отзывы, фото и обновления.", "Готовить черновики ответов на отзывы, новости для карт и другие материалы для контента.", "Помогать с местными авторами и партнёрствами: отбором, предложениями и подготовкой сообщений.", "Подготавливать регулярные задачи для ИИ-сотрудников и автоматизации, сохраняя контроль владельца."] },
-        { heading: "Тарифы", paragraphs: ["«Карты» — 1 200 ₽ в месяц, «Привлечение» — 5 000 ₽ в месяц, «Управление» — 25 000 ₽ в месяц."], links: [{ href: "/pricing", label: "Посмотреть тарифы" }] },
-        ...publishedCases.map((caseItem) => ({
-          heading: caseItem.title,
-          items: caseItem.metrics.map((metric) => `${metric.label}: ${metric.value}`),
-          links: [{ href: `/cases/${caseItem.slug}`, label: "Читать кейс" }],
-        })),
-        { heading: "Контроль остаётся у владельца", paragraphs: ["Публикации, внешние отправки, платежи и массовые изменения выполняются только после явного подтверждения человека."], links: [{ href: "/pricing", label: "Посмотреть тарифы" }, { href: "/cases", label: "Посмотреть кейсы" }] },
-      ],
-    },
     "/about": {
       title: about.metaTitle,
       description: about.metaDescription,
@@ -76,9 +61,9 @@ export const buildPublicPageFallbacks = (): PublicPageFallbackManifest => {
       heading: "Тарифы LocalOS",
       intro: [plans.subtitle, plans.approval],
       sections: [
-        { heading: `${plans.starter.name} — 1 200 ₽ в месяц`, paragraphs: [plans.starter.lead], items: plans.starter.features },
-        { heading: `${plans.professional.name} — 5 000 ₽ в месяц`, paragraphs: [plans.professional.lead], items: plans.professional.features },
-        { heading: `${plans.concierge.name} — 25 000 ₽ в месяц`, paragraphs: [plans.concierge.lead], items: plans.concierge.features },
+        { heading: `${plans.starter.name} — ${publicPlanPrice("starter")} в месяц`, paragraphs: [plans.starter.lead], items: plans.starter.features },
+        { heading: `${plans.professional.name} — ${publicPlanPrice("professional")} в месяц`, paragraphs: [plans.professional.lead], items: plans.professional.features },
+        { heading: `${plans.concierge.name} — ${publicPlanPrice("concierge")} в месяц`, paragraphs: [plans.concierge.lead], items: plans.concierge.features },
         { heading: "Подтверждение действий", paragraphs: [plans.approval], links: [{ href: "/contact", label: "Обсудить задачу" }] },
       ],
     },
@@ -134,5 +119,39 @@ export const buildPublicPageFallbacks = (): PublicPageFallbackManifest => {
     const route = section.slug === "overview" ? "/docs" : `/docs/${section.slug}`;
     routes[route] = { title: `${section.title} - Документация LocalOS`, description: section.summary, heading: section.title, intro: [section.summary], sections: [...section.items.map((item) => ({ heading: item.title, paragraphs: [item.text, ...(item.status ? [item.status] : [])] })), { heading: "Как подключить агента", paragraphs: [ruAgentQuickstart], links: [{ href: "/api/agent-api/openapi.json", label: "Контракт Agent API" }, { href: "/localos-agents-ru.txt", label: "Инструкция для агентов" }] }, { heading: "Разделы документации", links: ruSections.map((item) => ({ href: item.slug === "overview" ? "/docs" : `/docs/${item.slug}`, label: item.title })) }] };
   }
+  const promotion = promotionContent();
+  for (const key of promotionKeys) {
+    const page = promotion[key];
+    const home = key === 'home';
+    const routeCases = home ? publishedCases.slice(0, 1) : key === 'maps' ? publishedCases : [];
+    routes[page.path] = {
+      title: page.seoTitle, description: page.description, heading: page.title,
+      intro: [page.description],
+      sections: [
+        ...(promotionTrust ? [{ heading: 'LocalOS', paragraphs: [promotionTrust.text] }] : []),
+        ...(!home ? [{ heading: 'Направление', links: [{ href: '/', label: 'Главная' }], paragraphs: [page.label] }] : []),
+        { heading: home ? 'С чего хотите начать?' : 'Работа по направлению', paragraphs: [page.reason], links: home ? promotionKeys.filter((direction) => direction !== 'home').map((direction) => ({ href: promotion[direction].path, label: promotion[direction].label })) : [] },
+        ...page.sections.map((section) => ({ heading: section.title, paragraphs: [section.text], items: section.items || [] })),
+        ...(!home ? [{ heading: 'Пример работы', paragraphs: ['Тексты для вашей компании подготовим с учётом её услуг и цен.'] }] : []),
+        ...(key === 'maps' ? promotionExamples().map((item) => ({ heading: item.title, paragraphs: [item.text] })) : []),
+        { heading: 'Как начнём работу', items: promotionWorkSteps().map((step) => `${step.title}. ${step.text}`) },
+        ...routeCases.map((item) => ({ heading: item.title, paragraphs: [item.excerpt, 'Кейс по продвижению на Картах.'], items: item.metrics.map((metric) => `${metric.label}: ${metric.value}`), links: [{ href: `/cases/${item.slug}`, label: 'Читать кейс' }] })),
+        { heading: home ? 'Тарифы и ответы на вопросы' : 'Условия и стоимость', paragraphs: ['Тарифы подписки собраны на отдельной странице. Работу команды и расходы на размещения обсудим до начала.'], links: [{ href: `/pricing?direction=${key}`, label: 'Посмотреть тарифы' }, { href: `/faq?direction=${key}`, label: 'Вопросы и ответы' }] },
+        { heading: home ? 'Поможем выбрать способ продвижения' : `Обсудим направление «${page.label}»`, paragraphs: ['Оставьте имя и телефон. Менеджер обсудит задачу, состав работ и стоимость.'], links: [{ href: '/contact', label: 'Контакты' }] },
+      ],
+    };
+  }
+  routes['/faq'] = {
+    title: 'Вопросы и ответы о продвижении — LocalOS',
+    description: 'Как начать работу с LocalOS, предоставить доступы и согласовать материалы. Ответы о Картах, блогерах, партнёрах и стоимости.',
+    heading: 'Вопросы и ответы', intro: ['Как начинаем работу, какие доступы нужны и что входит в продвижение.'],
+    sections: [
+      ...promotionFaqGroups().flatMap((group) => [
+        { heading: group.title, paragraphs: [] },
+        ...group.questions.map((item) => ({ heading: item.question, paragraphs: [item.answer] })),
+      ]),
+      { heading: 'Не нашли ответ?', paragraphs: ['Оставьте заявку. Менеджер свяжется с вами и ответит на вопросы.'], links: [{ href: '/contact', label: 'Контакты' }, { href: '/pricing', label: 'Посмотреть тарифы' }] },
+    ],
+  };
   return { version: 1, publicShell: "public-seo-index.html", routes };
 };

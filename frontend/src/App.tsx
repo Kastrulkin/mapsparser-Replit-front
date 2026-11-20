@@ -1,6 +1,7 @@
 import SolutionPage from "./pages/content/SolutionPage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Suspense, lazy, useEffect, useState } from "react";
+import { buildPublicPageFallbacks } from "@/content/publicPageFallbacks";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { JourneyWorkspaceFocus } from "./components/journey/JourneyWorkspaceFocus";
 import { Toaster as Sonner } from "./components/ui/sonner";
@@ -11,7 +12,8 @@ import { CurrencyProvider } from "./contexts/CurrencyContext";
 import { LanguageProvider } from './i18n/LanguageContext';
 import { useLanguage } from './i18n/LanguageContext.logic';
 
-const Index = lazy(() => import("./pages/Index"));
+const Index = lazy(() => import("./pages/PromotionLanding"));
+const PromotionFaq = lazy(() => import("./pages/PromotionFaq"));
 const About = lazy(() => import("./pages/About"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const Login = lazy(() => import("./pages/Login"));
@@ -330,6 +332,10 @@ const AppShell = () => {
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/prodvizhenie-na-yandex-kartah" element={<Index direction="maps" />} />
+          <Route path="/lokalnye-blogery" element={<Index direction="bloggers" />} />
+          <Route path="/lokalnye-partnery" element={<Index direction="partners" />} />
+          <Route path="/faq" element={<PromotionFaq />} />
           <Route path="/about" element={<About />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/contact" element={<Contact />} />
@@ -419,6 +425,23 @@ const AppShell = () => {
   );
 };
 
+// Public-only releases retain the deployed login and dashboard entry.
+const publicReleaseRoutes = import.meta.env.VITE_PUBLIC_SITE_RELEASE === '1'
+  ? new Set([...Object.keys(buildPublicPageFallbacks().routes), '/contact', '/policy', '/privacy', '/requisites', '/data-deletion', '/docs/overview'])
+  : new Set<string>();
+
+const PublicReleaseBoundary = () => {
+  const location = useLocation();
+  const pathname = location.pathname === '/' ? '/' : location.pathname.replace(/\/+$/, '');
+  const preservedEntry = import.meta.env.VITE_PUBLIC_SITE_RELEASE === '1'
+    && !publicReleaseRoutes.has(pathname)
+    && !publicReleaseRoutes.has(`${pathname}${location.search}`);
+  useEffect(() => {
+    if (preservedEntry) window.location.replace(window.location.href);
+  }, [preservedEntry, location.pathname, location.search, location.hash]);
+  return preservedEntry ? null : <AppShell />;
+};
+
 const AppContent = () => {
   const { t } = useLanguage();
 
@@ -431,7 +454,7 @@ const AppContent = () => {
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AppShell />
+        <PublicReleaseBoundary />
       </BrowserRouter>
     </TooltipProvider>
   );

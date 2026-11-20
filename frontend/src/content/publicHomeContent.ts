@@ -1,16 +1,8 @@
-type PublicHomeContent = {
-  title: string;
-  description: string;
-  heading: string;
-  intro: string[];
-};
-
-export const publicHomeContent: PublicHomeContent = {
-  title: "LocalOS — Яндекс Карты, 2ГИС и привлечение без рекламного бюджета",
-  description: "LocalOS помогает локальному бизнесу работать с Яндекс Картами, 2ГИС, отзывами, контентом и органическими каналами привлечения без рекламного бюджета, сохраняя подтверждение владельца для важных действий.",
-  heading: "Не держите весь бизнес в голове",
-  intro: [
-    "LocalOS помогает привлекать клиентов с карт, находить нужные бизнесу контакты и вести переписку, подбирать блогеров для продвижения и автоматизировать повседневные задачи.",
-    "Система готовит материалы и следующие действия, а публикации, отправки, платежи и массовые изменения остаются за подтверждением владельца.",
-  ],
+import { promotionContent } from './promotionContent';
+const home = promotionContent().home;
+export const publicHomeContent = {
+  title: home.seoTitle,
+  description: home.description,
+  heading: home.title,
+  intro: [home.description],
 };
