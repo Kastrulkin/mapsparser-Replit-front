@@ -35,7 +35,7 @@ describe("public page fallback manifest", () => {
     expect(home.description).toBe(publicHomeContent.description);
     expect(home.heading).toBe(publicHomeContent.heading);
     expect(home.intro).toEqual(publicHomeContent.intro);
-    expect(JSON.stringify(home)).toContain("команда LocalOS");
+    expect(home.description).toContain("LocalOS помогает готовить материалы и предложения");
     expect(home.sections.some((section) => section.links?.some((link) => link.href.startsWith('/pricing')))).toBe(true);
     expect(JSON.stringify(home)).not.toMatch(/1 200 ₽|5 000 ₽/);
     expect(home.sections.some((section) => section.heading === 'Сколько это стоит?')).toBe(false);

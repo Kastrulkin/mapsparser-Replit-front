@@ -17,9 +17,9 @@ export const promotionContent = (english = false): Record<PromotionKey, Promotio
   return {
     home: {
       key: 'home', path: '/', label: 'LocalOS', eyebrow: l('Продвижение локального бизнеса', 'Marketing for local businesses'),
-      title: l('Клиенты рядом.\nПродвижение — на нас.', 'Customers nearby.\nWe handle the marketing.'),
+      title: l("Привлекайте клиентов рядом, даже когда некогда заниматься продвижением", "Attract customers nearby, even when you have no time for marketing"),
       seoTitle: l('Продвижение локального бизнеса на Картах, у блогеров и партнёров — LocalOS', 'Local business marketing: maps, creators and partnerships — LocalOS'),
-      description: l('Поможем с карточками на Картах, рекламой у местных блогеров и сотрудничеством с соседними бизнесами. Вы предоставляете доступы, команда LocalOS настраивает и ведёт продвижение.', 'Maps, local creators and nearby partners. You provide access — the LocalOS team handles setup and the work. We agree the necessary decisions with you and show what has been done.'),
+      description: l("Карты, локальные блогеры и партнёры по соседству — три способа познакомить с вашим бизнесом людей, которым удобно к вам прийти. LocalOS помогает готовить материалы и предложения для каждого из них", "Maps, local creators and neighbouring businesses are three ways to introduce your business to people who can conveniently visit. LocalOS helps prepare materials and proposals for each channel."),
       reason: l('Выберите, откуда хотите получать обращения: с Карт, от местных блогеров или по рекомендациям соседних компаний.', 'Three ways to reach people who can conveniently visit your business.'),
       sections: [
         { title: l('Карты', 'Maps'), text: l('Когда вашу услугу уже ищут рядом', 'When people are already looking nearby'), items: [l('Понятная карточка и услуги', 'A clear listing and services'), l('Отзывы и регулярные обновления', 'Reviews and regular updates')] },
@@ -29,9 +29,9 @@ export const promotionContent = (english = false): Record<PromotionKey, Promotio
     },
     maps: {
       key: 'maps', path: '/prodvizhenie-na-yandex-kartah', label: l('Карты', 'Maps'), eyebrow: l('Продвижение бизнеса на Яндекс Картах', 'Local business map marketing'),
-      title: l('Продвижение на Картах.\nРаботу возьмём на себя.', 'People search on maps.\nHelp them choose you.'),
+      title: l("Увеличивайте поток клиентов с Карт — без ручной работы", "Increase customer traffic from maps — without manual work"),
       seoTitle: l('Продвижение на Яндекс Картах с сопровождением команды — LocalOS', 'Map marketing with team support — LocalOS'),
-      description: l('Оформим карточку, опишем услуги, подготовим публикации и ответы на отзывы. Для начала нужны сведения о бизнесе и доступы.', 'We handle your listing: presentation, service descriptions, posts and review replies. You provide access and approve decisions — our team handles the rest.'),
+      description: l("LocalOS готовит оформление карточки, SEO-описания услуг, публикации и ответы на отзывы — чтобы повышать видимость на картах и привлекать клиентов рядом", "LocalOS prepares your business listing, SEO service descriptions, posts and review replies to improve map visibility and attract customers nearby."),
       reason: l('Клиент ищет услугу, сравнивает компании и решает, куда обратиться. Поможем подготовить карточку к каждому из этих шагов.', 'Yandex Maps, Google Maps and 2GIS — scope and available actions are agreed for each platform.'),
       sections: [
         { title: l('Ищет услугу рядом', 'Searches for a nearby service'), text: l('Укажем услуги и категории, по которым клиенты ищут ваш бизнес.', 'We help describe services so the listing answers the customer’s need.') },
@@ -44,9 +44,9 @@ export const promotionContent = (english = false): Record<PromotionKey, Promotio
     },
     bloggers: {
       key: 'bloggers', path: '/lokalnye-blogery', label: l('Локальные блогеры', 'Local creators'), eyebrow: l('Реклама у локальных блогеров', 'Local creator marketing'),
-      title: l('Реклама вашего бизнеса\nу местных блогеров.', 'Reach people\nwho live nearby.'),
+      title: l("Привлекайте внимание к бизнесу через локальных блогеров", "Attract attention to your business through local creators"),
       seoTitle: l('Локальные блогеры для рекламы бизнеса — подбор и сопровождение | LocalOS', 'Local creators for your business — selection and support | LocalOS'),
-      description: l('Найдём местных авторов, предложим формат рекламы и подготовим обращение. Поможем организовать размещение.', 'We shortlist local creators and prepare a collaboration proposal. Our team handles the organisation while you approve the creator, format and terms.'),
+      description: l("LocalOS помогает найти местных авторов и подготовить предложение о сотрудничестве, чтобы познакомить с вашей точкой людей, которым удобно стать вашими клиентами", "LocalOS helps find local creators and prepare a collaboration proposal to introduce your location to people who can conveniently become your customers."),
       reason: l('Проверяем, о чём пишет автор, где живут его читатели и подойдёт ли им ваша услуга.', 'Follower count is not enough: location and relevance to your business matter.'),
       sections: [
         { title: l('Подходящий автор', 'A relevant creator'), text: l('Изучаем публикации и сведения об аудитории. При необходимости запрашиваем статистику у автора.', 'We review topics, location signals and available audience information, noting what still needs verification.') },
@@ -58,10 +58,10 @@ export const promotionContent = (english = false): Record<PromotionKey, Promotio
       ],
     },
     partners: {
-      key: 'partners', path: '/lokalnye-partnery', label: l('Локальные партнёры', 'Nearby partners'), eyebrow: l('Взаимопиар и совместные акции', 'Cross-promotion and joint offers'),
-      title: l('Найдём партнёров\nв вашем районе.', 'Your future customers\nalready visit your neighbours.'),
+      key: 'partners', path: '/lokalnye-partnery', label: l('Локальные партнёры', 'Nearby partners'), eyebrow: l('Локальные партнёры для взаимопиара и совместных акций', 'Local partners for cross-promotion and joint offers'),
+      title: l("Привлекайте клиентов через рекомендации бизнесов по соседству", "Attract customers through recommendations from nearby businesses"),
       seoTitle: l('Локальные партнёры для взаимопиара и совместных акций — LocalOS', 'Nearby business partners for cross-promotion — LocalOS'),
-      description: l('Подберём соседние компании и предложим, как рекомендовать друг друга или провести общую акцию. Подготовим предложение для партнёра.', 'We shortlist nearby businesses and prepare a proposal for mutual recommendations or a joint offer. Our team prepares the partner proposal and organises the work.'),
+      description: l("Найдите локальных партнёров рядом с вашей точкой на Яндекс Картах и предложите взаимные рекомендации или общую акцию. LocalOS помогает подобрать бизнес и подготовить предложение с выгодой для обеих сторон", "Find local partners near your location on Yandex Maps and propose mutual recommendations or a joint offer. LocalOS helps select businesses and prepare a proposal that benefits both sides."),
       reason: l('Ищем компании, чьи услуги дополняют ваши: например, кофейню рядом со студией тренировок.', 'Proximity opens the conversation. Compatibility and mutual value make collaboration worthwhile.'),
       sections: [
         { title: l('Подходящие соседи', 'Relevant neighbours'), text: l('Выбираем компании поблизости, которым могут быть интересны ваши клиенты.', 'We look for nearby businesses with complementary services and a clear reason to recommend each other.') },

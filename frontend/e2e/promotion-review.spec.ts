@@ -71,7 +71,7 @@ test('navigation, FAQ and alternate language remain available', async ({ page, i
   await page.getByText('Как понять, что аудитория местная?', { exact: true }).click();
   await expect(page.getByText(/Оцениваем географию контента/)).toBeVisible();
   await page.goto('/lokalnye-blogery?lang=en');
-  await expect(page.locator('h1')).toContainText('Reach people');
+  await expect(page.locator('h1')).toContainText('local creators');
 });
 
 test('keeps navigation visible in a narrow desktop window and resets the mobile menu on resize', async ({ page }) => {
