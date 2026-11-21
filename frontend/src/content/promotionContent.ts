@@ -39,7 +39,7 @@ export const promotionContent = (english = false): Record<PromotionKey, Promotio
         { title: l('Выбирает и обращается', 'Chooses and gets in touch'), text: l('Проверим контакты, часы работы и способы записи.', 'We check that services, terms and ways to contact you are clear.') },
       ], questions: [
         { question: l('Подойдёт, если карточка уже есть?', 'Does this work with an existing listing?'), answer: l('Да. Проверим вашу карточку и предложим, что исправить. Если карточки ещё нет, обсудим создание и подтверждение.', 'Yes. We start with your current listing, services, reviews and access. If you do not have a listing, we discuss creation and verification.') },
-        { question: l('Что означает SEO для Карт?', 'What does SEO for maps mean?'), answer: l('Понятные категории и описания услуг, актуальные сведения и полезное содержание карточки. Позиции зависят и от других факторов, поэтому конкретное место в выдаче и число клиентов не гарантируем.', 'Clear categories and service descriptions, current business details and useful listing content. Rankings also depend on other factors, so we do not guarantee a position or number of customers.') }, ...commonQuestions,
+        { question: l('Что означает SEO для Карт?', 'What does SEO for maps mean?'), answer: l('Понятные категории и описания услуг, актуальные сведения и полезное содержание карточки. Позиции зависят и от других факторов, поэтому конкретное место в выдаче и число клиентов не гарантируем.', 'Clear categories and service descriptions, current business details and useful listing content. Rankings also depend on other factors, so we do not guarantee a position or number of customers.') },
       ],
     },
     bloggers: {
@@ -53,8 +53,10 @@ export const promotionContent = (english = false): Record<PromotionKey, Promotio
         { title: l('Понятный формат', 'A clear format'), text: l('Предлагаем обзор, знакомство с услугой или акцию для подписчиков.', 'A service introduction, review or subscriber offer matched to your business task.') },
         { title: l('Подготовка размещения', 'Placement preparation'), text: l('Готовим обращение к автору. До размещения согласуем цену, содержание и дату публикации.', 'We prepare a personalised proposal. Creator participation, fees and publication are agreed separately.') },
       ], questions: [
+        { question: l('Как выбираете блогеров?', 'How do you choose creators?'), answer: l('Смотрим, о чём пишет автор, насколько его аудитория близка к вашей точке и подходит ли ей ваша услуга. При необходимости запрашиваем статистику аудитории.', 'We check the creator’s topics, how close their audience is to your location, and whether your service is relevant to them. We ask for audience statistics when needed.') },
+        { question: l('Какие форматы рекламы можно предложить?', 'Which placement formats can you suggest?'), answer: l('Обзор, знакомство с услугой или предложение для подписчиков. Подбираем формат под задачу бизнеса и то, как автор обычно общается с аудиторией.', 'A review, a service introduction or an offer for followers. We match the format to your goal and the creator’s usual style.') },
         { question: l('Как понять, что аудитория местная?', 'How do you verify a local audience?'), answer: l('Оцениваем географию контента и доступные подтверждения. До размещения запрашиваем у автора статистику аудитории, если она нужна для решения. Место жительства автора само по себе не подтверждает географию его подписчиков.', 'We assess content geography and available evidence. Audience statistics may need to be requested before a placement. A local creator does not mean all followers live nearby.') },
-        { question: l('Как учитывать обращения?', 'How can enquiries be measured?'), answer: l('До размещения выбираем способ учёта: отдельная ссылка, кодовое слово или вопрос при записи. Согласуем его с вами и автором; точность зависит от выбранного способа.', 'Before placement, we agree a tracking method: a dedicated link, code word or booking question. Accuracy depends on the method used.') }, ...commonQuestions,
+        { question: l('Как учитывать обращения?', 'How can enquiries be measured?'), answer: l('До размещения выбираем способ учёта: отдельная ссылка, кодовое слово или вопрос при записи. Согласуем его с вами и автором; точность зависит от выбранного способа.', 'Before placement, we agree a tracking method: a dedicated link, code word or booking question. Accuracy depends on the method used.') },
       ],
     },
     partners: {
@@ -68,8 +70,9 @@ export const promotionContent = (english = false): Record<PromotionKey, Promotio
         { title: l('Выгода обеим сторонам', 'Value for both sides'), text: l('Предлагаем, что каждый партнёр даст клиентам: скидку, бонус или рекомендацию.', 'We define what each participant contributes and what the customer receives.') },
         { title: l('Совместная акция', 'A joint offer'), text: l('Пишем партнёру, что предлагаем и на каких условиях. Запуск и расходы согласуем с обеими сторонами.', 'We prepare the promotion mechanics and partner proposal. Terms, costs and launch require agreement.') },
       ], questions: [
+        { question: l('Как учитывать отклики на совместную акцию?', 'How can we track responses to a joint offer?'), answer: l('Выберите с партнёром способ учёта до запуска: отдельную ссылку, кодовое слово или вопрос при записи. Считайте обращения и записи по акции отдельно.', 'Before launch, agree how to track responses with your partner: a dedicated link, a code word or a question at booking. Count enquiries and bookings from the offer separately.') },
         { question: l('Партнёрами могут быть только соседи?', 'Do partners have to be next door?'), answer: l('Нет. Главное, чтобы клиентам были нужны услуги обеих компаний. Обсудим подходящие категории и расстояние от вашей точки.', 'Proximity matters, but is not enough. We consider your task, complementary services and customer convenience. We agree a suitable search radius.') },
-        { question: l('Что, если бизнес откажется?', 'What if a business declines?'), answer: l('Предложим другого партнёра или пересмотрим условия. Сотрудничество начнётся, когда обе стороны договорятся.', 'Partner acceptance is not guaranteed. We record the response and discuss another candidate or an adjusted proposal. A declined proposal is not a launched partnership.') }, ...commonQuestions,
+        { question: l('Что, если бизнес откажется?', 'What if a business declines?'), answer: l('Предложим другого партнёра или пересмотрим условия. Сотрудничество начнётся, когда обе стороны договорятся.', 'Partner acceptance is not guaranteed. We record the response and discuss another candidate or an adjusted proposal. A declined proposal is not a launched partnership.') },
       ],
     },
   };
@@ -79,13 +82,15 @@ export const promotionContent = (english = false): Record<PromotionKey, Promotio
 export const promotionTrust: { text: string; evidence: string } | null = null;
 
 export const promotionExamples = (english = false) => english ? [
-  { title: 'Listing presentation', text: 'Check the business name, hours, contacts, categories and service descriptions against the business facts.' },
-  { title: 'A business post', text: '“Tell us what you need when booking. We will explain the available services and help choose a convenient time.”' },
-  { title: 'A review reply', text: '“Thank you for sharing your experience. We are glad you visited. We would be happy to see you again.”' },
+  { title: 'Listing presentation', text: 'Massage studio · Massage category · Opening hours, entrance photo and booking contacts.' },
+  { title: 'SEO service description', text: 'Back massage in the studio. Ask the receptionist about session length, price and availability when booking.' },
+  { title: 'A business post', text: 'Looking for a back massage this week? Message us through the listing and we will help you find a time.' },
+  { title: 'A review reply', text: 'Thank you for your review! We’re glad you enjoyed your visit. See you next time.' },
 ] : [
-  { title: 'Оформление карточки', text: 'Проверим название, часы работы, контакты и категории. Добавим недостающие сведения.' },
-  { title: 'Публикация о бизнесе', text: '«Чтобы записаться, позвоните нам или напишите в сообщения. Администратор подскажет стоимость и свободное время».' },
-  { title: 'Ответ на отзыв', text: '«Спасибо за отзыв! Рады, что вам понравилось. До следующей встречи».' },
+  { title: 'Оформление карточки', text: 'Студия массажа · Категория «Массаж» · Часы работы, фото входа и контакты для записи.' },
+  { title: 'SEO-описание услуги', text: 'Массаж спины в студии. При записи администратор подскажет продолжительность сеанса, стоимость и свободное время.' },
+  { title: 'Публикация о бизнесе', text: 'Хотите записаться на массаж спины на этой неделе? Напишите нам через карточку, подберём удобное время.' },
+  { title: 'Ответ на отзыв', text: 'Спасибо за отзыв! Рады, что вам понравилось. До следующей встречи.' },
 ];
 
 // Preserve only marketing context and locale in links, never arbitrary URL fields.
@@ -124,7 +129,7 @@ export const promotionContextSearch = (search: string, direction?: PromotionKey)
   return result ? `?${result}` : '';
 };
 
-export const promotionWorkSteps = (english = false) => english ? [
+const commonWorkSteps = (english: boolean) => english ? [
   { title: 'Tell us your task', text: 'A manager will discuss your business, the work and the price.' },
   { title: 'Provide access', text: 'We help connect your accounts, prepare materials and agree them with you.' },
   { title: 'Receive reports', text: 'See completed work and enquiries, and discuss what to do next.' },
@@ -133,6 +138,28 @@ export const promotionWorkSteps = (english = false) => english ? [
   { title: 'Предоставьте доступы', text: 'Поможем подключить аккаунты. Подготовим материалы и согласуем их с вами.' },
   { title: 'Получайте отчёты', text: 'Покажем, что изменили и какие отклики получили. Обсудим, что делать дальше.' },
 ];
+
+export const promotionWorkSteps = (english = false, direction: PromotionKey = 'home') => {
+  const steps = commonWorkSteps(english);
+  if (direction === 'home') return steps;
+
+  const l = (ru: string, en: string) => english ? en : ru;
+  const startingWork = {
+    maps: {
+      title: l('Подключим карточку', 'Connect your listing'),
+      text: l('Поможем предоставить доступ, проверим карточку и подготовим первые улучшения.', 'We help you grant access, review your listing and prepare the first improvements.'),
+    },
+    bloggers: {
+      title: l('Начнём подбор авторов', 'Start finding creators'),
+      text: l('Уточним район и аудиторию, подберём первых авторов и предложим формат размещения.', 'We confirm the area and audience, shortlist the first creators and suggest a placement format.'),
+    },
+    partners: {
+      title: l('Найдём подходящих соседей', 'Find suitable nearby businesses'),
+      text: l('Определим, какие компании подходят, и подготовим предложение о сотрудничестве.', 'We identify suitable businesses and prepare a collaboration proposal.'),
+    },
+  };
+  return [steps[0], startingWork[direction], steps[2]];
+};
 
 export const promotionFaqGroups = (english = false) => {
   const pages = promotionContent(english);
@@ -145,8 +172,8 @@ export const promotionFaqGroups = (english = false) => {
       common[2],
     ] },
     { id: 'pricing', title: l('Стоимость', 'Pricing'), questions: [common[3]] },
-    { id: 'maps', title: pages.maps.label, questions: pages.maps.questions.slice(0, 2) },
-    { id: 'bloggers', title: pages.bloggers.label, questions: pages.bloggers.questions.slice(0, 2) },
-    { id: 'partners', title: pages.partners.label, questions: pages.partners.questions.slice(0, 2) },
+    { id: 'maps', title: pages.maps.label, questions: pages.maps.questions },
+    { id: 'bloggers', title: pages.bloggers.label, questions: pages.bloggers.questions },
+    { id: 'partners', title: pages.partners.label, questions: pages.partners.questions },
   ];
 };

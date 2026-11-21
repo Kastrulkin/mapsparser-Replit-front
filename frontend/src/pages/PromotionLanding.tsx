@@ -1,3 +1,6 @@
+import yandexMapsLogo from '@/assets/promotion/yandex-maps.png';
+import googleMapsLogo from '@/assets/promotion/google-maps.png';
+import twoGisLogo from '@/assets/promotion/2gis.png';
 import directionMap from '@/assets/promotion/petersburg-map-clean-v2.webp';
 import creatorPhoto from '@/assets/promotion/local-creator-v1.webp';
 import { ArrowDown, ArrowRight, Check, MapPin, MoveUpRight } from 'lucide-react';
@@ -45,7 +48,11 @@ export default function PromotionLanding({ direction = 'home' }: { direction?: P
       <section className={`promotion-hero grid items-center gap-10 lg:grid-cols-2 lg:gap-12 ${home ? 'py-8 lg:py-16' : 'pb-8 pt-4 lg:pb-14 lg:pt-6'}`} aria-labelledby="promotion-title">
         <div>
           <p className="promotion-eyebrow"><span />{page.eyebrow}</p>
-          {maps && <p className="mb-5 flex flex-wrap gap-4 text-xs font-medium text-muted-foreground"><span>Яндекс Карты</span><span>Google Maps</span><span>2ГИС</span></p>}
+          {maps && <ul className="mb-5 flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium text-muted-foreground">
+            <li className="flex items-center gap-1.5"><img src={yandexMapsLogo} alt="" width={18} height={18} />{l('Яндекс Карты', 'Yandex Maps')}</li>
+            <li className="flex items-center gap-1.5"><img src={googleMapsLogo} alt="" width={18} height={18} />Google Maps</li>
+            <li className="flex items-center gap-1.5"><img src={twoGisLogo} alt="" width={18} height={18} />{l('2ГИС', '2GIS')}</li>
+          </ul>}
           <h1 id="promotion-title" className="whitespace-normal sm:whitespace-pre-line text-balance text-4xl font-semibold leading-[1.1] tracking-tight text-primary sm:text-5xl">{page.title}</h1>
           <p className="mt-6 max-w-xl text-base leading-8 text-muted-foreground sm:text-lg">{page.description}</p>
           <div className="mt-8 flex flex-wrap items-center gap-5">
@@ -86,8 +93,8 @@ export default function PromotionLanding({ direction = 'home' }: { direction?: P
 
       <section id="how-it-works" className="promotion-section scroll-mt-24 sm:scroll-mt-36 xl:scroll-mt-24" aria-labelledby="process-title">
         {home && <span id="agents" className="block scroll-mt-36" aria-hidden="true" />}
-        <div className="promotion-section-heading"><p className="promotion-eyebrow">{l('Начало работы', 'Getting started')}</p><h2 id="process-title">{l('Как начнём работу', 'How we get started')}</h2><p>{l('Вы рассказываете о бизнесе и предоставляете доступы. Мы занимаемся продвижением и показываем результат.', 'You share business details and provide access. We handle marketing and report on the work.')}</p></div>
-        <ol className="promotion-process grid gap-5 md:grid-cols-3">{promotionWorkSteps(english).map((step, index) => <li key={step.title} className="border-t border-border pt-5"><span className="text-xs font-medium text-muted-foreground">0{index + 1}</span><h3 className="mt-4 text-lg font-semibold text-primary">{step.title}</h3><p className="mt-3 text-sm leading-7 text-muted-foreground">{step.text}</p></li>)}</ol>
+        <div className="promotion-section-heading"><p className="promotion-eyebrow">{l('Начало работы', 'Getting started')}</p><h2 id="process-title">{l('Как начнём работу', 'How we get started')}</h2>{home && <p>{l('Вы рассказываете о бизнесе и предоставляете доступы. Мы занимаемся продвижением и показываем результат.', 'You share business details and provide access. We handle marketing and report on the work.')}</p>}</div>
+        <ol className="promotion-process grid gap-5 md:grid-cols-3">{promotionWorkSteps(english, direction).map((step, index) => <li key={step.title} className="border-t border-border pt-5"><span className="text-xs font-medium text-muted-foreground">0{index + 1}</span><h3 className="mt-4 text-lg font-semibold text-primary">{step.title}</h3><p className="mt-3 text-sm leading-7 text-muted-foreground">{step.text}</p></li>)}</ol>
       </section>
 
       {(home || maps) && <section className="promotion-section promotion-cases-section" aria-labelledby="case-title">
@@ -115,7 +122,7 @@ export default function PromotionLanding({ direction = 'home' }: { direction?: P
         <h2 id="final-title" className="mx-auto max-w-2xl text-balance text-3xl font-semibold tracking-tight text-primary sm:text-4xl">{home ? l('Поможем выбрать способ продвижения', 'We can help you choose a marketing direction') : maps ? l('Обсудим продвижение на Картах', 'Let’s discuss map marketing') : direction === 'bloggers' ? l('Подберём блогеров для вашего бизнеса', 'Find creators for your business') : l('Найдём партнёров для совместной акции', 'Find partners for a joint offer')}</h2>
         <p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-muted-foreground">{home ? l('Оставьте заявку. Менеджер уточнит задачу и предложит, с чего начать.', 'Send a request. A manager will discuss your task and suggest where to start.') : l('Менеджер уточнит задачу, состав работ и стоимость.', 'A manager will discuss the task, scope and cost.')}</p>
         <div className="mt-7"><PromotionLeadDialog key={page.key} page={page} english={english} /></div>
-        {!home && <div className="mt-8 flex flex-wrap justify-center gap-x-7 gap-y-3">{directions.filter((key) => key !== direction).map((key) => <Link key={key} to={`${content[key].path}${promotionLinkSearch(location.search)}`} className="inline-flex min-h-11 items-center gap-1 text-xs text-muted-foreground underline underline-offset-4">{content[key].label}<ArrowRight size={12} aria-hidden="true" /></Link>)}</div>}
+        <nav aria-label={l('Направления продвижения', 'Marketing directions')} className="mt-8 flex flex-wrap justify-center gap-x-7 gap-y-3">{directions.filter((key) => key !== direction).map((key) => <Link key={key} to={`${content[key].path}${promotionLinkSearch(location.search)}`} className="inline-flex min-h-11 items-center gap-1 text-xs text-muted-foreground underline underline-offset-4">{content[key].label}<ArrowRight size={12} aria-hidden="true" /></Link>)}</nav>
       </section>
     </main><Footer />
   </div>;

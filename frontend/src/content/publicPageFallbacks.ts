@@ -133,10 +133,10 @@ export const buildPublicPageFallbacks = (): PublicPageFallbackManifest => {
         ...page.sections.map((section) => ({ heading: section.title, paragraphs: [section.text], items: section.items || [] })),
         ...(!home ? [{ heading: 'Пример работы', paragraphs: ['Тексты для вашей компании подготовим с учётом её услуг и цен.'] }] : []),
         ...(key === 'maps' ? promotionExamples().map((item) => ({ heading: item.title, paragraphs: [item.text] })) : []),
-        { heading: 'Как начнём работу', items: promotionWorkSteps().map((step) => `${step.title}. ${step.text}`) },
+        { heading: 'Как начнём работу', items: promotionWorkSteps(false, key).map((step) => `${step.title}. ${step.text}`) },
         ...routeCases.map((item) => ({ heading: item.title, paragraphs: [item.excerpt, 'Кейс по продвижению на Картах.'], items: item.metrics.map((metric) => `${metric.label}: ${metric.value}`), links: [{ href: `/cases/${item.slug}`, label: 'Читать кейс' }] })),
         { heading: home ? 'Тарифы и ответы на вопросы' : 'Условия и стоимость', paragraphs: ['Тарифы подписки собраны на отдельной странице. Работу команды и расходы на размещения обсудим до начала.'], links: [{ href: `/pricing?direction=${key}`, label: 'Посмотреть тарифы' }, { href: `/faq?direction=${key}`, label: 'Вопросы и ответы' }] },
-        { heading: home ? 'Поможем выбрать способ продвижения' : `Обсудим направление «${page.label}»`, paragraphs: ['Оставьте имя и телефон. Менеджер обсудит задачу, состав работ и стоимость.'], links: [{ href: '/contact', label: 'Контакты' }] },
+        { heading: home ? 'Поможем выбрать способ продвижения' : `Обсудим направление «${page.label}»`, paragraphs: ['Оставьте имя и телефон. Менеджер обсудит задачу, состав работ и стоимость.'], links: [{ href: '/contact', label: 'Контакты' }, ...(home ? promotionKeys.filter((direction) => direction !== 'home').map((direction) => ({ href: promotion[direction].path, label: promotion[direction].label })) : [])] },
       ],
     };
   }
