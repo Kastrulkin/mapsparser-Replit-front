@@ -45,11 +45,38 @@ def run_migrations_offline():
         context.run_migrations()
 
 
+def prepare_version_table(connection):
+    # Read-only commands such as "current" have no destination revision.
+    try:
+        context.get_revision_argument()
+    except KeyError:
+        return
+    connection.exec_driver_sql("""
+        DO $$
+        BEGIN
+            IF to_regclass('alembic_version') IS NULL THEN
+                CREATE TABLE alembic_version (
+                    version_num text NOT NULL CONSTRAINT alembic_version_pkc PRIMARY KEY
+                );
+            ELSIF EXISTS (
+                SELECT 1 FROM pg_attribute
+                WHERE attrelid = 'alembic_version'::regclass
+                  AND attname = 'version_num' AND atttypmod > 0
+            ) THEN
+                -- Keep existing revision IDs that exceed Alembic's default VARCHAR(32).
+                ALTER TABLE alembic_version ALTER COLUMN version_num TYPE text;
+            END IF;
+        END $$;
+    """)
+
+
 def run_migrations_online():
     connectable = get_engine()
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=get_metadata())
         with context.begin_transaction():
+            if connection.dialect.name == "postgresql":
+                prepare_version_table(connection)
             context.run_migrations()
 
 
