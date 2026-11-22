@@ -29,7 +29,7 @@ describe('FinanceCrmMobilePanel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Загрузить файл из CRM' }));
     expect(onOpenFileImport).toHaveBeenCalledOnce();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Заказать подключение' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Указать мою CRM' }));
     await userEvent.type(screen.getByLabelText('Название CRM'), 'Bitrix24');
     await userEvent.type(screen.getByLabelText(/Что хотите загружать/), 'Продажи за месяц');
     await userEvent.click(screen.getByRole('button', { name: 'Отправить запрос' }));
@@ -42,7 +42,7 @@ describe('FinanceCrmMobilePanel', () => {
     const onRequestCrm = vi.fn().mockRejectedValue(new Error('Сервис временно недоступен'));
     render(<FinanceCrmMobilePanel onOpenFileImport={vi.fn()} onRequestCrm={onRequestCrm} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Заказать подключение' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Указать мою CRM' }));
     await userEvent.type(screen.getByLabelText('Название CRM'), 'amoCRM');
     await userEvent.click(screen.getByRole('button', { name: 'Отправить запрос' }));
 

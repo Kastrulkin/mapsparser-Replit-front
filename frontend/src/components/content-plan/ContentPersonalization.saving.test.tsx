@@ -14,11 +14,11 @@ describe.each(['telegram','max'])('%s content facts',platform=>{
   const close=vi.fn();render(<ContentPersonalization businessId="b" open onOpenChange={close} headers={headers}/>);
   const story=await screen.findByRole('textbox',{name:'История основателя'});
   fireEvent.change(story,{target:{value:'Основатель лично проверяет образцы.'}});
-  fireEvent.click(screen.getByRole('button',{name:'Как писать',exact:true}));
-  fireEvent.click(screen.getByRole('button',{name:'Сохранить',exact:true}));
+  fireEvent.click(screen.getByRole('button',{name:'Как писать'}));
+  fireEvent.click(screen.getByRole('button',{name:'Сохранить'}));
   await waitFor(()=>expect(contentRequest).toHaveBeenCalledWith('/content-voice',expect.objectContaining({method:'PATCH'}),headers));
   expect(screen.getByRole('textbox',{name:'Как должны звучать тексты'})).toBeDisabled();
-  expect(screen.getByRole('button',{name:'О бизнесе',exact:true})).toBeDisabled();
+  expect(screen.getByRole('button',{name:'О бизнесе'})).toBeDisabled();
   fireEvent.keyDown(screen.getByRole('dialog'),{key:'Escape',code:'Escape'});
   expect(close).not.toHaveBeenCalled();
   const call=vi.mocked(contentRequest).mock.calls.find(([,init])=>init?.method==='PATCH');
@@ -30,8 +30,8 @@ describe.each(['telegram','max'])('%s content facts',platform=>{
   vi.mocked(contentRequest).mockImplementation(async(path,init)=>{if(init?.method==='PATCH')throw new Error('Нет сети');return {profile};});
   render(<ContentPersonalization businessId="b" open onOpenChange={vi.fn()} headers={headers}/>);
   fireEvent.change(await screen.findByRole('textbox',{name:'История основателя'}),{target:{value:'Собственный рассказ'}});
-  fireEvent.click(screen.getByRole('button',{name:'Как писать',exact:true}));fireEvent.click(screen.getByRole('button',{name:'Сохранить',exact:true}));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Нет сети');fireEvent.click(screen.getByRole('button',{name:'О бизнесе',exact:true}));
+  fireEvent.click(screen.getByRole('button',{name:'Как писать'}));fireEvent.click(screen.getByRole('button',{name:'Сохранить'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Нет сети');fireEvent.click(screen.getByRole('button',{name:'О бизнесе'}));
   expect(screen.getByRole('textbox',{name:'История основателя'})).toHaveValue('Собственный рассказ');
   expect(screen.getByRole('textbox',{name:'Что важно знать о бизнесе'})).toHaveValue('Свои изделия');
  });

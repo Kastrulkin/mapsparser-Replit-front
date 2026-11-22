@@ -20,7 +20,7 @@ describe('source approaches before planning', () => {
   it('puts the observed example, citation, approach and adaptation together', () => {
     const updated = { ...report, purpose: 'pre_plan_source_research', sources: [{ ...report.sources[0], application: 'Предлагаем показать собственную проверку образца.', suggested_example: 'Что проверяем до запуска?', agreement_question: 'Какие этапы подтверждены?' }] };
     render(<ContentReferenceAnalysis items={[source]} industryLabel="Пошив" canManage={false} busy={false} ru onToggle={vi.fn()} onRemove={vi.fn()} research={updated} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Фабрика', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Фабрика' }));
     expect(screen.getByText('«Test the sample first»')).toBeVisible();
     expect(screen.getByText('Как пишет источник')).toBeVisible();
     expect(screen.getByText('Изучено 20.10.2026')).toBeVisible();
@@ -41,7 +41,7 @@ describe('source approaches before planning', () => {
     expect(screen.queryByText('Сохранённый пост')).not.toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Фабрика', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Фабрика' }));
     expect(screen.queryByText('В текущем посте нет примерки.')).not.toBeInTheDocument();
     expect(screen.getByText(/Приёмы нужно согласовать/)).toBeVisible();
     expect(screen.queryByRole('button', { name: /генер|сохранить|опубликовать/i })).not.toBeInTheDocument();

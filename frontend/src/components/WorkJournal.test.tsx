@@ -189,9 +189,9 @@ it('explains an empty filtered journal and restores entries when filters are res
  vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL)=>String(input).includes('/audio/')?reply({input_enabled:false}):reply({enabled:true,items:String(input).includes('query=')?[]:[note]})));
  const user=userEvent.setup();render(<WorkJournal businessId="b" headers={headers}/>, { wrapper: MemoryRouter });
  await screen.findAllByText('Клиент отказался');
- await user.type(screen.getByRole('textbox',{name:'Поиск',exact:true}),'нет-совпадений');
+ await user.type(screen.getByRole('textbox',{name:'Поиск'}),'нет-совпадений');
  expect(await screen.findByText('По этим условиям записей нет. Измените поиск или дату.')).toBeVisible();
  await user.click(screen.getByRole('button',{name:'Сбросить фильтры'}));
  expect(await screen.findAllByText('Клиент отказался')).not.toHaveLength(0);
- expect(screen.getByRole('textbox',{name:'Поиск',exact:true})).toHaveValue('');
+ expect(screen.getByRole('textbox',{name:'Поиск'})).toHaveValue('');
 });

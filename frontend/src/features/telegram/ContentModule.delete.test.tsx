@@ -16,10 +16,10 @@ it('checks one post before deletion and cancellation never confirms it',async()=
  expect(screen.queryByRole('button',{name:'Удалить пост «Только тестовый пост»'})).toBeNull();
  fireEvent.click(screen.getByRole('button',{name:'Изменить план'}));
  fireEvent.click(await screen.findByRole('button',{name:'Удалить пост «Только тестовый пост»'}));
- await screen.findByRole('button',{name:'Удалить пост',exact:true});
+ await screen.findByRole('button',{name:'Удалить пост'});
  const request=JSON.parse(fetcher.mock.calls[0][1].body);
  expect(request.capability).toBe('content.item.delete');
  expect(request.input).toEqual({item_id:'qa-item',business_id:'b'});
- fireEvent.click(screen.getByRole('button',{name:'Отмена',exact:true}));
+ fireEvent.click(screen.getByRole('button',{name:'Отмена'}));
  expect(fetcher).toHaveBeenCalledTimes(1);
 });

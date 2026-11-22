@@ -5,6 +5,7 @@ import { ChevronRight, FileSpreadsheet, MessageCircle, Upload } from 'lucide-rea
 type FinanceCrmMobilePanelProps = {
   onOpenFileImport: () => void;
   onRequestCrm: (values: { crmName: string; crmUrl: string; contact: string; comment: string }) => Promise<void>;
+  requestOnly?: boolean;
   currentRequest?: { crm_name?: string; status?: string } | null;
 };
 
@@ -19,7 +20,7 @@ const requestStatusLabel = (status?: string) => {
   return 'Запрос получен';
 };
 
-const FinanceCrmMobilePanel = ({ onOpenFileImport, onRequestCrm, currentRequest }: FinanceCrmMobilePanelProps) => {
+const FinanceCrmMobilePanel = ({ onOpenFileImport, onRequestCrm, currentRequest, requestOnly = false }: FinanceCrmMobilePanelProps) => {
   const [instructionOpen, setInstructionOpen] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
   const [crmName, setCrmName] = useState('');
@@ -43,7 +44,7 @@ const FinanceCrmMobilePanel = ({ onOpenFileImport, onRequestCrm, currentRequest 
 
   return (
     <section className="overflow-hidden rounded-[24px] bg-white/[0.04] ring-1 ring-inset ring-white/[0.07]">
-      <div className="p-4">
+      {!requestOnly && <div className="p-4">
         <div className="flex items-start gap-3">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[15px] bg-primary/15 text-primary">
             <FileSpreadsheet className="h-5 w-5" />
@@ -109,7 +110,7 @@ const FinanceCrmMobilePanel = ({ onOpenFileImport, onRequestCrm, currentRequest 
           <Upload className="h-4 w-4" />
           Загрузить файл из CRM
         </button>
-      </div>
+      </div>}
 
       <div className="border-t border-white/[0.06] p-4">
         <div className="flex items-start gap-3">
@@ -117,21 +118,21 @@ const FinanceCrmMobilePanel = ({ onOpenFileImport, onRequestCrm, currentRequest 
             <MessageCircle className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <b className="block text-sm">Нужно прямое подключение к CRM?</b>
-            <p className="mt-1 text-pretty text-xs leading-5 text-zinc-600">Для загрузки файла подключение не нужно. Оставьте запрос, если хотите автоматическую синхронизацию.</p>
+            <b className="block text-sm">Моей CRM нет в списке</b>
+            <p className="mt-1 text-pretty text-xs leading-5 text-zinc-600">Укажите, какой CRM вы пользуетесь, чтобы мы добавили её подключение. Например, DIKIDI или другую систему.</p>
           </div>
         </div>
         {currentRequest && requestState !== 'success' ? <div className="mt-3 rounded-[15px] bg-sky-500/10 p-3 text-xs leading-5 text-sky-100 ring-1 ring-inset ring-sky-400/20"><b>{currentRequest.crm_name}</b> · {requestStatusLabel(currentRequest.status)}</div> : null}
-        {requestState === 'success' ? <div role="status" className="mt-3 rounded-[15px] bg-emerald-500/10 p-3 text-xs leading-5 text-emerald-100 ring-1 ring-inset ring-emerald-400/20">Запрос отправлен. Мы учтём CRM и подскажем, когда появится подходящий способ загрузки.</div> : requestOpen ? (
+        {requestState === 'success' ? <div role="status" className="mt-3 rounded-[15px] bg-emerald-500/10 p-3 text-xs leading-5 text-emerald-100 ring-1 ring-inset ring-emerald-400/20">Запрос отправлен. CRM передана в список запросов на добавление подключения. Статус появится здесь.</div> : requestOpen ? (
           <form className="mt-3 space-y-2" onSubmit={(event) => void submitRequest(event)}>
-            <label className="block text-[10px] font-medium text-zinc-500">Название CRM<input autoFocus value={crmName} onChange={(event) => { setCrmName(event.target.value); setRequestState('idle'); }} placeholder="Например, Bitrix24" className="mt-1 min-h-11 w-full rounded-[13px] bg-black/20 px-3 text-sm text-zinc-100 outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label>
+            <label className="block text-[10px] font-medium text-zinc-500">Название CRM<input autoFocus value={crmName} onChange={(event) => { setCrmName(event.target.value); setRequestState('idle'); }} placeholder="Например, DIKIDI" className="mt-1 min-h-11 w-full rounded-[13px] bg-black/20 px-3 text-sm text-zinc-100 outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label>
             <label className="block text-[10px] font-medium text-zinc-500">Ссылка на CRM <span className="text-zinc-700">(необязательно)</span><input inputMode="url" value={crmUrl} onChange={(event) => setCrmUrl(event.target.value)} placeholder="https://..." className="mt-1 min-h-11 w-full rounded-[13px] bg-black/20 px-3 text-sm text-zinc-100 outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label>
             <label className="block text-[10px] font-medium text-zinc-500">Как связаться <span className="text-zinc-700">(необязательно)</span><input value={contact} onChange={(event) => setContact(event.target.value)} placeholder="Telegram, email или телефон" className="mt-1 min-h-11 w-full rounded-[13px] bg-black/20 px-3 text-sm text-zinc-100 outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label>
             <label className="block text-[10px] font-medium text-zinc-500">Что хотите загружать? <span className="text-zinc-700">(необязательно)</span><textarea value={comment} onChange={(event) => setComment(event.target.value)} rows={2} placeholder="Например, продажи за месяц" className="mt-1 w-full resize-none rounded-[13px] bg-black/20 px-3 py-2 text-sm text-zinc-100 outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label>
             {requestState === 'error' ? <p role="alert" className="text-xs leading-5 text-rose-200">{requestError}</p> : null}
             <button type="submit" disabled={!crmName.trim() || requestState === 'pending'} className="flex min-h-12 w-full items-center justify-center rounded-[15px] bg-white/[0.08] px-4 text-sm font-semibold text-zinc-100 ring-1 ring-inset ring-white/[0.08] transition-[background-color,transform] active:scale-[0.96] disabled:opacity-45">{requestState === 'pending' ? 'Отправляем запрос…' : 'Отправить запрос'}</button>
           </form>
-        ) : <button type="button" onClick={() => setRequestOpen(true)} className="mt-3 min-h-12 w-full rounded-[15px] bg-white/[0.055] px-4 text-sm font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.08] transition-[background-color,transform] active:scale-[0.96]">Заказать подключение</button>}
+        ) : <button type="button" onClick={() => setRequestOpen(true)} className="mt-3 min-h-12 w-full rounded-[15px] bg-white/[0.055] px-4 text-sm font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.08] transition-[background-color,transform] active:scale-[0.96]">Указать мою CRM</button>}
       </div>
     </section>
   );

@@ -244,7 +244,7 @@ describe('Partnership recipient review', () => {
     const user = userEvent.setup();
     render(<PartnershipsMobileModule scope={{ kind: 'business', id: 'business-1' }} />);
     await user.click(await screen.findByRole('button', { name: 'Новая подборка' }));
-    await user.click(await screen.findByRole('button', { name: 'Письма', exact: true }));
+    await user.click(await screen.findByRole('button', { name: 'Письма' }));
     expect(await screen.findByText('Кому: jur@example.test')).toBeVisible();
     expect(screen.getByRole('link', { name: 'Источник контакта' })).toHaveAttribute('href', 'https://example.test/contacts');
     expect(screen.getByRole('note')).toHaveTextContent('служебный или юридический');
@@ -264,7 +264,7 @@ it.each([
  }));
  const user=userEvent.setup();render(<PartnershipsMobileModule scope={{kind:'business',id:'business-cancel'}}/>);
  await user.click(await screen.findByRole('button',{name:'Изменить подборку'}));
- await user.click(screen.getByRole('button',{name:'Письма',exact:true}));
+ await user.click(screen.getByRole('button',{name:'Письма'}));
  const field=await screen.findByRole('textbox',{name:'Текст письма: Партнёр отмены'});
  const original=saved.approved_text || saved.edited_text || saved.generated_text;
  await user.clear(field);await user.type(field,'Нежелательная правка');

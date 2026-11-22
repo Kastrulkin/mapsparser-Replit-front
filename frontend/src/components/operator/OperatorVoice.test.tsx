@@ -148,7 +148,7 @@ it.each([false,true])('clears a recording on business switch after cancellation=
  }
  vi.stubGlobal('MediaRecorder',Recording);
  const stop=vi.fn();vi.stubGlobal('navigator',{mediaDevices:{getUserMedia:vi.fn(async()=>({getTracks:()=>[{stop}]}))}});
- const mock=vi.fn(()=>reply({input_enabled:true}));vi.stubGlobal('fetch',mock);
+ const mock=vi.fn<typeof fetch>(()=>reply({input_enabled:true}));vi.stubGlobal('fetch',mock);
  const submit=vi.fn(async()=>{});const user=userEvent.setup();
  const view=render(<OperatorVoiceInput businessId="first" channel="telegram_mini_app" directSubmit={false} onSubmit={submit} headers={headers}/>);
  await user.click(await screen.findByRole('button',{name:'Записать голосом'}));

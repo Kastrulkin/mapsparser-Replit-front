@@ -39,7 +39,7 @@ describe('content references', () => {
     request.mockResolvedValueOnce(catalogue).mockResolvedValueOnce({ ...catalogue,
       settings_version: 1, items: [{ ...catalogue.items[0], enabled: false }] });
     render(<ContentReferences businessId="a" open onOpenChange={vi.fn()} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'BOMONTI', exact: true }));
+    fireEvent.click(await screen.findByRole('button', { name: 'BOMONTI' }));
     fireEvent.click(screen.getByText('Учитывать в новых черновиках'));
     fireEvent.click(await screen.findByRole('button', { name: 'Отключить BOMONTI' }));
     await screen.findByRole('button', { name: 'Включить BOMONTI' });

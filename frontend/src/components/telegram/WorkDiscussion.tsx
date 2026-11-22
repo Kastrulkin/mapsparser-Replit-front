@@ -4,7 +4,7 @@ import { closeMiniAppForBotHandoff, miniAppLabel, miniAppPlatform, openMiniAppLi
 import { mobileJsonHeaders, readMobileJson } from '@/lib/mobileDataClient';
 
 export function WorkDiscussion({ businessId, itemId, updatedAt, onDiscuss, disabled, itemType = 'content_item' }: {
-  itemType?: 'content_item' | 'partner' | 'day_brief'; businessId: string; itemId: string; updatedAt?: string; onDiscuss?: () => void; disabled?: boolean;
+  itemType?: 'content_item' | 'partner' | 'day_brief' | 'finance_input'; businessId: string; itemId: string; updatedAt?: string; onDiscuss?: () => void; disabled?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -29,8 +29,8 @@ export function WorkDiscussion({ businessId, itemId, updatedAt, onDiscuss, disab
   };
   return <div className="space-y-2 border-t pt-3">
     <div className="flex flex-wrap gap-2">
-      {onDiscuss && <Button variant="outline" disabled={disabled || busy} onClick={onDiscuss}>{itemType === 'partner' ? 'Обсудить партнёра' : 'Обсудить этот пост'}</Button>}
-      <Button variant="ghost" disabled={disabled || busy} onClick={() => void openBot()}>{busy ? 'Открываем…' : `Продолжить в боте ${miniAppLabel()}`}</Button>
+      {onDiscuss && <Button variant="outline" disabled={disabled || busy} onClick={onDiscuss}>{itemType === 'finance_input' ? 'Текст, голос или фото в миниаппе' : itemType === 'partner' ? 'Обсудить партнёра' : 'Обсудить этот пост'}</Button>}
+      <Button variant="ghost" disabled={disabled || busy} onClick={() => void openBot()}>{busy ? 'Открываем…' : `${itemType === 'finance_input' ? 'Текст, голос или фото боту' : 'Продолжить в боте'} ${miniAppLabel()}`}</Button>
     </div>
     {disabled && <p className="text-sm text-muted-foreground">Сохраните правки или закройте редактор перед переходом.</p>}
     {handoffNotice && <p role="status" className="text-sm text-muted-foreground">{handoffNotice}</p>}

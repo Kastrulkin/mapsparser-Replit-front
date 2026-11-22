@@ -101,10 +101,10 @@ describe('ContentPage story-facts deep link', () => {
     await user.clear(text);
     await user.type(text, 'Несохранённый текст для проверки фото');
     await user.click(await screen.findByRole('button', { name: 'Увеличить фото публикации' }));
-    expect(await screen.findByRole('dialog', { name: 'Фото публикации', exact: true })).toBeVisible();
+    expect(await screen.findByRole('dialog', { name: 'Фото публикации' })).toBeVisible();
     expect(screen.getByRole('img', { name: 'Фото публикации крупно' })).toHaveAttribute('src', 'https://example.test/reference.jpg');
-    await user.click(screen.getByRole('button', { name: 'Закрыть фото', exact: true }));
-    expect(screen.queryByRole('dialog', { name: 'Фото публикации', exact: true })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Закрыть фото' }));
+    expect(screen.queryByRole('dialog', { name: 'Фото публикации' })).not.toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Текст публикации' })).toHaveValue('Несохранённый текст для проверки фото');
     expect(screen.getByRole('button', { name: 'Увеличить фото публикации' })).toHaveFocus();
   });
@@ -113,11 +113,11 @@ describe('ContentPage story-facts deep link', () => {
     render(<MemoryRouter initialEntries={['/dashboard/content?plan_id=plan-1&item_id=item-1']}><LanguageProvider><Routes><Route element={<ContextRoute />}><Route path="/dashboard/content" element={<ContentPage />} /></Route></Routes></LanguageProvider></MemoryRouter>);
     const user = userEvent.setup();
     await user.type(await screen.findByRole('textbox', { name: 'Текст публикации' }), 'Несохранённый текст');
-    await user.click(screen.getByRole('button', { name: 'Закрыть', exact: true }));
+    await user.click(screen.getByRole('button', { name: 'Закрыть' }));
     expect(await screen.findByRole('alertdialog', { name: 'Закрыть без сохранения?' })).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Продолжить редактирование' }));
     expect(screen.getByRole('textbox', { name: 'Текст публикации' })).toHaveValue('Несохранённый текст');
-    await user.click(screen.getByRole('button', { name: 'Закрыть', exact: true }));
+    await user.click(screen.getByRole('button', { name: 'Закрыть' }));
     await user.click(screen.getByRole('button', { name: 'Не сохранять и закрыть' }));
     expect(screen.queryByRole('dialog', { name: 'Публикация' })).not.toBeInTheDocument();
     expect(vi.mocked(newAuth.makeRequest).mock.calls.some(([, options]) => options?.method && options.method !== 'GET')).toBe(false);
@@ -141,7 +141,7 @@ describe('ContentPage story-facts deep link', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось загрузить фото');
     await user.click(screen.getByRole('button', { name: 'Повторить загрузку фото' }));
     expect(screen.getByRole('img', { name: 'Фото публикации крупно' })).toHaveAttribute('src', 'https://example.test/missing.jpg');
-    await user.click(screen.getByRole('button', { name: 'Закрыть фото', exact: true }));
+    await user.click(screen.getByRole('button', { name: 'Закрыть фото' }));
     expect(screen.getByRole('textbox', { name: 'Текст публикации' })).toHaveValue('Не терять правку при ошибке фото');
   });
 });

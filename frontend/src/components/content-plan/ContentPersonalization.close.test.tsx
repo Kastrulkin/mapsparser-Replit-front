@@ -13,12 +13,12 @@ it.each(['web', 'telegram', 'max'])('keeps %s profile changes until explicit dis
   render(<ContentPersonalization businessId="qa-business" open onOpenChange={close} headers={platform === 'web' ? undefined : () => ({ Authorization: 'Bearer qa-session' })} />);
   await screen.findByLabelText('История основателя');
   fireEvent.change(screen.getByLabelText('История основателя'), { target: { value: 'Незавершённый рассказ' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Закрыть', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
   expect(close).not.toHaveBeenCalled();
   await screen.findByRole('alertdialog');
   fireEvent.click(screen.getByRole('button', { name: 'Продолжить заполнение' }));
   expect(screen.getByLabelText('История основателя')).toHaveValue('Незавершённый рассказ');
-  fireEvent.click(screen.getByRole('button', { name: 'Закрыть', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Не сохранять и закрыть' }));
   expect(close).toHaveBeenCalledExactlyOnceWith(false);
   expect(request.mock.calls.every(call => !call[1]?.method)).toBe(true);
@@ -37,7 +37,7 @@ it('closes unchanged fields without confirmation', async () => {
   const close = vi.fn();
   render(<ContentPersonalization businessId="qa-business" open onOpenChange={close} />);
   await screen.findByLabelText('История основателя');
-  fireEvent.click(screen.getByRole('button', { name: 'Закрыть', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
   expect(close).toHaveBeenCalledExactlyOnceWith(false);
   expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
 });

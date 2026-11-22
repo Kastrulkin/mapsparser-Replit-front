@@ -21,7 +21,7 @@ it('opens an existing letter without queuing another generation',async()=>{
  const {calls,user}=setup(true);
  await user.click(await screen.findByRole('button',{name:'Кандидаты'}));
  await user.click(await screen.findByRole('button',{name:/QA Партнёр/}));
- await user.click(await screen.findByRole('button',{name:'Открыть письмо',exact:true}));
+ await user.click(await screen.findByRole('button',{name:'Открыть письмо'}));
  expect(await screen.findByText('Тестовое письмо для проверки, без отправки.')).toBeVisible();
  expect(calls.every(c=>c.method==='GET')).toBe(true);
 });
@@ -30,7 +30,7 @@ it.each(['queued','failed','needs_contact'])('shows %s preparation state inside 
  await user.click(await screen.findByRole('button',{name:'Кандидаты'}));
  await user.click(await screen.findByRole('button',{name:/QA Партнёр/}));
  const card=screen.getByRole('dialog');
- await user.click(within(card).getByRole('button',{name:'Подготовить письмо',exact:true}));
+ await user.click(within(card).getByRole('button',{name:'Подготовить письмо'}));
  expect(await within(card).findByRole('status')).toBeVisible();
  expect(within(card).queryByText('Готово. Данные обновлены.')).not.toBeInTheDocument();
  expect(within(card).queryByText('private provider failure')).not.toBeInTheDocument();
@@ -44,8 +44,8 @@ it('opens the result after a ready check without repeating generation',async()=>
  const {calls,user}=setup(false,'ready');
  await user.click(await screen.findByRole('button',{name:'Кандидаты'}));
  await user.click(await screen.findByRole('button',{name:/QA Партнёр/}));
- await user.click(screen.getByRole('button',{name:'Подготовить письмо',exact:true}));
- await user.click(await screen.findByRole('button',{name:'Открыть письмо',exact:true}));
+ await user.click(screen.getByRole('button',{name:'Подготовить письмо'}));
+ await user.click(await screen.findByRole('button',{name:'Открыть письмо'}));
  expect(await screen.findByText('Тестовое письмо для проверки, без отправки.')).toBeVisible();
  expect(calls.filter(c=>c.url.endsWith('/draft-offer'))).toHaveLength(1);
  expect(calls.some(c=>/send|approve/.test(c.url)&&c.method==='POST')).toBe(false);
@@ -57,7 +57,7 @@ it.each(['network','server'])('retains a draft with a clear %s error and no inte
   if(String(input).endsWith('/save'))return failure==='network'?Promise.reject(new TypeError('Failed to fetch')):response({error:'private SQL detail'},503);
   return original(input,init);
  }));
- await user.click(await screen.findByRole('button',{name:'Письма',exact:true}));
+ await user.click(await screen.findByRole('button',{name:'Письма'}));
  const field=await screen.findByRole('textbox',{name:'Текст письма: QA Партнёр'});
  await user.clear(field); await user.type(field,'Несохранённая правка');
  await user.click(screen.getByRole('button',{name:'Сохранить черновик без отправки'}));
@@ -70,20 +70,20 @@ it('explains a provider limit without claiming a new letter is ready',async()=>{
  const {user}=setup(false,'limited');
  await user.click(await screen.findByRole('button',{name:'Кандидаты'}));
  await user.click(await screen.findByRole('button',{name:/QA Партнёр/}));
- await user.click(screen.getByRole('button',{name:'Подготовить письмо',exact:true}));
+ await user.click(screen.getByRole('button',{name:'Подготовить письмо'}));
  expect(await screen.findByRole('status')).toHaveTextContent('Лимит генерации исчерпан');
 });
 it('protects letter edits and review controls while a save response is pending',async()=>{
  const {user}=setup(true);const original=window.fetch;let finish:(value:Response)=>void=()=>{};
  vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>String(input).endsWith('/save')?new Promise<Response>(resolve=>{finish=resolve}):original(input,init)));
- await user.click(await screen.findByRole('button',{name:'Письма',exact:true}));
+ await user.click(await screen.findByRole('button',{name:'Письма'}));
  const field=await screen.findByRole('textbox',{name:'Текст письма: QA Партнёр'});
  await user.clear(field);await user.type(field,'Проверяемая версия');
  await user.click(screen.getByRole('button',{name:'Сохранить черновик без отправки'}));
  expect(field).toBeDisabled();
  expect(screen.getByRole('button',{name:'Утвердить письмо'})).toBeDisabled();
  expect(screen.getByRole('button',{name:'Удалить черновик'})).toBeDisabled();
- expect(screen.getByRole('button',{name:'Сохраняем…',exact:true})).toBeDisabled();
+ expect(screen.getByRole('button',{name:'Сохраняем…'})).toBeDisabled();
  await user.type(field,' это нельзя потерять');expect(field).toHaveValue('Проверяемая версия');
  finish(new Response(JSON.stringify({success:true}),{status:200}));
  await screen.findByText('Черновик сохранён. Отправка не разрешена.');

@@ -20,7 +20,7 @@ export function useContentResult(businessId: string, source: ModuleItem[], selec
   const [deniedBusiness, setDeniedBusiness] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const fallback = useMemo(() => [...new Set(scopedSource.map(item => item.plan_id).filter(Boolean))].map(id => {
+  const fallback = useMemo<ResultPlan[]>(() => [...new Set(scopedSource.map(item => item.plan_id).filter(Boolean))].map(id => {
     const items = scopedSource.filter(item => item.plan_id === id);
     return { id: id || '', title: items[0]?.plan_title, items_count: items.length, ready_count: items.filter(item => item.draft_text?.trim()).length };
   }), [scopedSource]);

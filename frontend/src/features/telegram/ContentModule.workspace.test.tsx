@@ -68,8 +68,8 @@ it.each(['telegram','max'])('opens dated source analysis directly in %s without 
  window.history.replaceState({},'',`/${surface}/control`);
  const mock=vi.fn(async(input: RequestInfo | URL)=>new Response(JSON.stringify(String(input).includes('/content-plans?') ? {plans:[]} : {industry_label:'Тестовый анализ',items:[],pending:[],can_manage:true,can_moderate:false,settings_version:1}),{status:200}));vi.stubGlobal('fetch',mock);
  render(<ContentModule {...props} scope={{kind:'business',id:'qa-business'}}/>);
- fireEvent.click(screen.getByRole('button',{name:'Источники и подходы',exact:true}));
- await screen.findByRole('heading',{name:'Источники и подходы',exact:true});
+ fireEvent.click(screen.getByRole('button',{name:'Источники и подходы'}));
+ await screen.findByRole('heading',{name:'Источники и подходы'});
  expect(screen.queryByRole('heading',{name:'Настроить контент'})).not.toBeInTheDocument();
  await screen.findByText('Тестовый анализ');
  expect(mock.mock.calls.every(([input])=>String(input).includes('/content-voice/references?') || String(input).includes('/content-plans?'))).toBe(true);

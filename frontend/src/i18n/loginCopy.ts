@@ -41,6 +41,10 @@ type LoginCopy = {
   signingUp: string;
   postRegisterHint: string;
   checkEmailHint: string;
+  accountCreated: string;
+  emailDeliveryFailed: string;
+  journeyUnavailableHint: string;
+  continueWithoutJourney: string;
   resendVerification: string;
   resendVerificationDone: string;
   resendVerificationFailed: string;
@@ -53,6 +57,10 @@ type LoginCopy = {
 };
 
 const ru: LoginCopy = {
+  accountCreated: "Аккаунт и бизнес созданы",
+  emailDeliveryFailed: "Аккаунт создан, но письмо подтверждения не отправлено. Отправьте его ещё раз.",
+  journeyUnavailableHint: "Персональная ссылка больше недоступна. Можно зарегистрироваться без неё: введённые данные сохранятся, а предложение по ссылке не будет перенесено.",
+  continueWithoutJourney: "Продолжить без персональной ссылки",
   loginTitle: 'Вход в систему', registerTitle: 'Регистрация', resetTitle: 'Восстановление пароля', journeyTitle: 'Завершите первое действие', loginSubtitle: 'Новые клиенты для вашего бизнеса',
   loginTab: 'Вход', registerTab: 'Регистрация', resetTab: 'Восстановление', loginError: 'Ошибка входа: ', registerError: 'Ошибка регистрации: ', registrationFailed: 'Ошибка регистрации',
   registerRequired: 'Email и пароль обязательны', businessRequired: 'Название бизнеса, адрес и город обязательны', consentRequired: 'Нужно согласие на обработку персональных данных',
@@ -70,6 +78,10 @@ const ru: LoginCopy = {
 };
 
 const en: LoginCopy = {
+  accountCreated: "Account and business created",
+  emailDeliveryFailed: "Your account was created, but the confirmation email was not sent. Please try sending it again.",
+  journeyUnavailableHint: "This personal link is no longer available. You can register without it: your entered details will be kept, but the linked offer will not be transferred.",
+  continueWithoutJourney: "Continue without the personal link",
   loginTitle: 'Sign in', registerTitle: 'Create an account', resetTitle: 'Reset your password', journeyTitle: 'Complete your first action', loginSubtitle: 'New clients for your business',
   loginTab: 'Login', registerTab: 'Register', resetTab: 'Reset', loginError: 'Sign-in error: ', registerError: 'Registration error: ', registrationFailed: 'Registration failed',
   registerRequired: 'Email and password are required', businessRequired: 'Business name, address, and city are required', consentRequired: 'Personal data consent is required',
@@ -87,6 +99,10 @@ const en: LoginCopy = {
 };
 
 const hy: LoginCopy = {
+  accountCreated: "Հաշիվը և բիզնեսը ստեղծված են",
+  emailDeliveryFailed: "Հաշիվը ստեղծվել է, բայց հաստատման նամակը չի ուղարկվել։ Փորձեք նորից ուղարկել։",
+  journeyUnavailableHint: "Անձնական հղումն այլևս հասանելի չէ։ Կարող եք գրանցվել առանց դրա․ մուտքագրված տվյալները կպահպանվեն, իսկ հղման առաջարկը չի փոխանցվի։",
+  continueWithoutJourney: "Շարունակել առանց անձնական հղման",
   loginTitle: "Մուտք գործեք", registerTitle: "Ստեղծեք հաշիվ", resetTitle: "Վերականգնել ձեր գաղտնաբառը", journeyTitle: "Կատարեք ձեր առաջին գործողությունը", loginSubtitle: "Նոր հաճախորդներ ձեր բիզնեսի համար",
   loginTab: "Մուտք գործել", registerTab: "Գրանցվել", resetTab: "Վերականգնել", loginError: "Մուտքի սխալ.", registerError: "Գրանցման սխալ.", registrationFailed: "Գրանցումը ձախողվեց",
   registerRequired: "Պահանջվում է էլ.փոստ և գաղտնաբառը", businessRequired: "Բիզնեսի անվանումը, հասցեն և քաղաքը պարտադիր են", consentRequired: "Անձնական տվյալների համաձայնությունը պարտադիր է",
@@ -103,6 +119,10 @@ const hy: LoginCopy = {
   journeyResultTitle: "Ձեր ընտրած ուղղությունը պահպանված է", journeyResultText: "Գրանցվելուց հետո կբացվի համապատասխան LocalOS բաժինը։",
 };
 const kk: LoginCopy = {
+  accountCreated: "Тіркелгі мен бизнес құрылды",
+  emailDeliveryFailed: "Тіркелгі құрылды, бірақ растау хаты жіберілмеді. Қайта жіберіп көріңіз.",
+  journeyUnavailableHint: "Жеке сілтеме енді қолжетімсіз. Онсыз тіркелуге болады: енгізілген деректер сақталады, ал сілтемедегі ұсыныс көшірілмейді.",
+  continueWithoutJourney: "Жеке сілтемесіз жалғастыру",
   loginTitle: "Жүйеге кіру", registerTitle: "Тіркеу", resetTitle: "Құпия сөзді қалпына келтіру", journeyTitle: "Бірінші әрекетті орындаңыз", loginSubtitle: "Сіздің бизнесіңіз үшін жаңа клиенттер",
   loginTab: "Жүйеге кіру", registerTab: "Тіркеу", resetTab: "Қалпына келтіру", loginError: "Жүйеге кіру қатесі:", registerError: "Тіркеу қатесі:", registrationFailed: "Тіркеу қатесі",
   registerRequired: "Электрондық пошта мен құпия сөз қажет", businessRequired: "Кәсіпорын атауы, мекенжайы және қаласы қажет", consentRequired: "Жеке деректерді өңдеуге келісім қажет",
@@ -120,6 +140,10 @@ const kk: LoginCopy = {
 };
 
 const es: LoginCopy = {
+  accountCreated: "Cuenta y negocio creados",
+  emailDeliveryFailed: "Tu cuenta se ha creado, pero no se ha enviado el email de confirmación. Intenta enviarlo de nuevo.",
+  journeyUnavailableHint: "Este enlace personal ya no está disponible. Puedes registrarte sin él: se conservarán tus datos, pero no se transferirá la oferta del enlace.",
+  continueWithoutJourney: "Continuar sin el enlace personal",
   loginTitle: 'Iniciar sesión', registerTitle: 'Crea tu cuenta', resetTitle: 'Recupera tu contraseña', journeyTitle: 'Completa el primer paso', loginSubtitle: 'Más clientes para tu negocio',
   loginTab: 'Acceso', registerTab: 'Registro', resetTab: 'Recuperar', loginError: 'Error al iniciar sesión: ', registerError: 'Error al registrarse: ', registrationFailed: 'No se pudo completar el registro',
   registerRequired: 'El email y la contraseña son obligatorios', businessRequired: 'El nombre del negocio, la dirección y la ciudad son obligatorios', consentRequired: 'Debes aceptar el tratamiento de datos personales',
